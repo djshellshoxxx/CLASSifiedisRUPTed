@@ -1,35 +1,12 @@
-# PS-002-02 — validation rules
+# PS-002-02 — Create validation and exact errors
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-02. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — pending architecture/security review; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Contract references: [API/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [listing model](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md), [security threats](../../../planning/SECURITY_PRIVACY_THREAT_MODEL.md), [test gates](../../../planning/RELEASE_AND_TEST_GATES.md). All examples are proposed v1 contracts.
 
-## Purpose and scope
-Define the validation rules process for create within 01_listings. Do not assume implementation or successful external settlement.
-
-## Requirements to specify
-- [ ] PS-002-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Requirements
+- PS-002-02.R01: Validate JSON object <=256KiB with no unknown fields; NFC normalization before 3..120 Unicode character title limit; reject NUL, bidi override and unsupported control codepoints, sanitize on HTML render.
+- PS-002-02.R02: Reject decimal/floating/exponent money and price <=0; positive quantity integer 1..100000; giveaway has no price; allow drafts missing description/title/area; publication gate later requires title and approved coarse area.
+- PS-002-02.R03: Server validates requested public_area_id against F06 catalog. F18 category policy and F12 rate/account restrictions checked before insert; fail closed for unavailable required policy. Never accept exact addresses or coordinates in public listing JSON.
+## Errors
+400 MALFORMED_JSON for invalid JSON; 413 PAYLOAD_TOO_LARGE; 422 VALIDATION_FAILED with field_errors array of JSON-pointer path and stable TOO_LONG, UNKNOWN_FIELD, INVALID_ENUM, INVALID_CURRENCY, INVALID_INTEGER, AMOUNT_OUT_OF_RANGE, AREA_INVALID, CATEGORY_NOT_ALLOWED; 401 UNAUTHENTICATED; 403 FEATURE_DISABLED/FORBIDDEN; 429 RATE_LIMITED with Retry-After; 503 DEPENDENCY_UNAVAILABLE for policy DB outage. No echo of unsafe content.
+## UX/tests
+Inline localized field summary and focus first error. TEST-PS-002-02 boundary and fuzz Unicode, XSS text, invalid currency, hidden geo fields, policy outage. No tests run.

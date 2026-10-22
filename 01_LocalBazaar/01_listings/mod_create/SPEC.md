@@ -1,44 +1,19 @@
-# F01.S01.M01 — create
-
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F01.S01.
-
-## Purpose and business behavior
-Provide create as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
-
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
-
-## Scope
-- Required process spec: `create_domain_model.md` (not yet authored)
-- Required process spec: `create_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `create_validation_and_authorization.md` (not yet authored)
-- Required process spec: `create_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `create_interfaces_and_events.md` (not yet authored)
-- Required process spec: `create_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `create_acceptance_and_property_tests.md` (not yet authored)
-
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
-
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
-
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
-
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
-
-## Required process specification inventory
-- [ ] `create_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+# F01.S01.M01 — Create listing module
+**Status:** SPECIFIED — REVIEW PENDING. **Feature:** F01 LocalBazaar. **Subfeature:** F01.S01 listings. **Owner:** F01.S01.M01. **No application implementation.**
+## Purpose / assembly
+The creation command validates one member's proposed draft, authorizes it, persists it atomically with idempotency receipt and outbox, then returns a private draft. This module does not publish, index, reserve, finalize payment or federate listings. Depend on F07 identity, F10 retention, F12 moderation, F15 persistence and F16 ABAC; inherit coarse area from F06 and forbidden category rules from F18. Other listing lifecycle steps belong to sibling modules; API/outbox are canonical F15 contracts.
+## Process contracts (registry PS-002-01..10)
+1. [domain_schema.md](domain_schema.md) — typed fields, authoritative ownership and constraints (PS-002-01)
+2. [validation_rules.md](validation_rules.md) — exact parsing, errors, category and geo validations (PS-002-02)
+3. [workflow_state_machine.md](workflow_state_machine.md) — absent->draft and atomic event (PS-002-03)
+4. [commands_queries_events.md](commands_queries_events.md) — POST and listing.created event (PS-002-04)
+5. [authorization_capabilities.md](authorization_capabilities.md) — tenant/owner/role checks (PS-002-05)
+6. [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — receipts, CAS, rollback/retry (PS-002-06)
+7. [privacy_retention_abuse.md](privacy_retention_abuse.md) — exact-location restriction, deletion, rate abuse (PS-002-07)
+8. [observability_performance.md](observability_performance.md) — telemetry and latency targets (PS-002-08)
+9. [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — unit/integration/e2e/property mapping (PS-002-09)
+10. [import_export_backup_rollback.md](import_export_backup_rollback.md) — data-rights and disaster recovery (PS-002-10)
+## Module composition
+Client pending-draft form -> F16+F07 auth -> PS-002-02+05 validate/authorize -> PS-002-06 transactional idempotency guard -> PS-002-01 authoritative listings row -> PS-002-03+04 listing.created outbox -> PS-002-08 monitoring -> F15 response ack; PS-002-07,09,10 constrain the entire flow. Downstream F01 mod_edit and mod_publish may act only on the returned stable ID and current revision. F06/F11 must ignore private draft.
+## Acceptance
+All ten process contracts have specification text; their status is review-pending, NOT implementation or verification. Before acceptance: resolve F07 identity FK, canonical schema/OpenAPI generation, test and reviewer links, privacy/abuse test evidence and F17 gate. A sibling or feature cannot inherit a passing status from this document until its own contracts are complete.

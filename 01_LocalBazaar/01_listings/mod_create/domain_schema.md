@@ -1,35 +1,13 @@
-# PS-002-01 — domain schema
+# PS-002-01 — Creation data model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-01. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — pending architecture/security review; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Contract references: [API/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [listing model](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md), [security threats](../../../planning/SECURITY_PRIVACY_THREAT_MODEL.md), [test gates](../../../planning/RELEASE_AND_TEST_GATES.md). All examples are proposed v1 contracts.
 
-## Purpose and scope
-Define the domain schema process for create within 01_listings. Do not assume implementation or successful external settlement.
-
-## Requirements to specify
-- [ ] PS-002-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-01`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Requirements and typed data
+- PS-002-01.R01: Authorized member creates exactly one draft listing scoped to the authenticated tenant. Server generates UUIDv7 id, owner_id from session, timestamps and revision 1.
+- PS-002-01.R02: Draft input fields: kind (enum sell/wanted/giveaway, required); title (NFC Unicode text 3..120, optional until publish); description (text 0..10000, default empty); condition (new/used/for_parts/unspecified); public_area_id (3..64 approved coarse code, optional for draft); quantity (integer 1..100000); price (optional object {currency ISO4217 uppercase code, amount_minor canonical positive 64-bit integer decimal string}); price_on_request (boolean, false default). Reject owner_id, tenant_id, state, revision and private address in request.
+- PS-002-01.R03: Persist in listings relation as detailed in CLASSIFIED_LISTING_CONTRACT: primary key(tenant_id,id), CHECK kind enum, quantity>=0, revision>=1, price minor positive, paired nullable currency/amount and giveaway prohibits price. Account/session FK links to F07 canonical user table; final FK DDL depends on F07 schema ratification. Never copy F07 credentials into listing.
+- PS-002-01.R04: Public listing must have title and coarse area; server draft state always private. F06 search stores only published projection. Monetary field stored SQL BIGINT with JSON decimal string, never IEEE754 double.
+## SQL mutation rule
+INSERT listings tenant/owner/id/state='draft'/revision=1 together with outbox listing.created and idempotency receipt inside one transaction. SQL CHECK ensures price fields paired; indexes owner(tenant_id,owner_id,updated_at), public visibility index only after F01 publish rules. On DB failure rollback entire transaction.
+## Acceptance
+TEST-PS-002-01 includes zero/overflow price, unset draft fields, tenant collisions and DB constraint matrices; 100 concurrent identical creates yield one authoritative row. Pending test execution.

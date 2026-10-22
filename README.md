@@ -11,7 +11,19 @@ A modular, mobile-first, privacy-aware PWA for local commerce, classifieds (Loca
 
 ## Planning status
 
-Hierarchy and module-level specification inventories only. Process specifications remain to be written in Prompt 2. No application implementation, security certification or production deployment is claimed.
+Prompt 2 has registered 1,480 structured process-spec placeholders across 148 modules. Prompt 3 foundation work is in progress on a documentation branch: 10 F01 listing-creation process documents are specified pending review; 1,470 remain DRAFT. Canonical API, listing, cycle, messaging, payment and federation baseline documents are proposed, not formally accepted. Stage 4 implementation is blocked by [SPEC_COMPLETENESS_REPORT.md](SPEC_COMPLETENESS_REPORT.md) (**NO-GO**). No application code, security audit or production deployment is claimed.
+
+## Prompt 3 foundations
+- [Completeness and gap report](SPEC_COMPLETENESS_REPORT.md)
+- [Process specification registry](planning/SPEC_REGISTRY.md) · [Machine-readable registry](planning/SPEC_REGISTRY.csv)
+- [Integration ownership and dependency graph](planning/INTEGRATION_DEPENDENCIES.md) · [End-to-end flows](planning/END_TO_END_FLOWS.md)
+- [Canonical core API/events/data](planning/contracts/CORE_API_EVENTS_DATA.md)
+- [Classified listing contract](planning/contracts/CLASSIFIED_LISTING_CONTRACT.md)
+- [Cycle/barter contract](planning/contracts/CYCLE_BARTER_EXECUTION.md)
+- [Messages/payments/federation contract](planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md)
+- [Security/privacy threat model](planning/SECURITY_PRIVACY_THREAT_MODEL.md)
+- [Provisional ADRs](planning/ADR_PROVISIONAL_DECISIONS.md) · [Library research](planning/THIRD_PARTY_RESEARCH.md)
+- [Release and acceptance gates](planning/RELEASE_AND_TEST_GATES.md)
 
 ## Principles
 

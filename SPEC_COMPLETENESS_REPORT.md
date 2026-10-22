@@ -8,7 +8,7 @@
 - Inspected INDEX.md and existing root architecture docs plus representative module process files (listing creation, N-party matching, noncustodial payment and federation signature). The majority of their source text remains a structured draft checklist; the ten F01.S01.M01 process documents have now been expanded but await review.
 - Parent folder hierarchy count is supported by HIERARCHY_AUDIT.md (18 features/50 subfeatures/148 modules) and INDEX.md. A fresh recursive Git tree/path-file existence scan of every registry path was NOT executed because the current connector lacks a recursive tree listing action; sampled process files exist. Therefore complete path integrity cannot be certified.
 - Authored ten expanded listing-creation process contracts plus separate proposed cross-module baseline contracts for API/events/SQL, listings, barter cycles, messaging/payment/federation, dependency integration, end-to-end journeys, threat model, library evidence, ADRs and quality gates. These DO NOT automatically complete the 1,480 leaf specifications and do not retroactively update registry status.
-- No application code, CI, database, deployment, audit, penetration test, benchmarks, or accessibility testing performed.
+- Root ROADMAP.md was missing on inspected main; reconstructed it on this documentation branch with stage-specific gates, owner responsibilities, MVP vs deferred waves. No application code, CI, database, deployment, audit, penetration test, benchmarks, or accessibility testing performed.
 
 ## Gap register — every feature's draft leaf scope
 Counts represent exact numbers of open (DRAFT or SPECIFIED_REVIEW_PENDING) rows from the registry; the linked CSV enumerates the individual specification path and future TEST-PS ID for **every item**.

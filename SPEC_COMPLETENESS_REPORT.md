@@ -1,21 +1,21 @@
 # SPEC_COMPLETENESS_REPORT — 2026-10-22
 
-**Decision: NO-GO for Prompt 4 / application implementation.** This is a documentation milestone, not security or production approval. Review scope: 18 features, 50 subfeatures, 148 modules, 1,480 registered process specifications. Registry at planning/SPEC_REGISTRY.csv is the authoritative **full per-file gap ledger**; every DRAFT row is an open implementation-specification gap, not completed acceptance criteria.
+**Decision: NO-GO for Prompt 4 / application implementation.** This is a documentation milestone, not security or production approval. Review scope: 18 features, 50 subfeatures, 148 modules, 1,480 registered process specifications. Registry at planning/SPEC_REGISTRY.csv is the authoritative **full per-file gap ledger**; every DRAFT or SPECIFIED_REVIEW_PENDING row remains an unapproved implementation-specification gap, not completed acceptance criteria.
 
 ## What was verified
 - Repository default branch main with only one discoverable branch before this documentation branch.
-- Parsed all 1,480 rows in planning/SPEC_REGISTRY.csv: 1,480 unique IDs, 148 distinct module owner paths, 1,480 assigned future test IDs, **1,480 status DRAFT**. Unique-ID and future-test-presence checks passed. These are test placeholders, not linked runnable tests.
-- Inspected INDEX.md and existing root architecture docs plus representative module process files (listing creation, N-party matching, noncustodial payment and federation signature). Their source text is structured draft checklist rather than detailed normative implementation contract.
+- Parsed all 1,480 rows in planning/SPEC_REGISTRY.csv: 1,480 unique IDs, 148 distinct module owner paths, 1,480 assigned future test IDs, **1,470 status DRAFT and 10 status SPECIFIED_REVIEW_PENDING**. Unique-ID and future-test-presence checks passed. These are test placeholders, not linked runnable tests.
+- Inspected INDEX.md and existing root architecture docs plus representative module process files (listing creation, N-party matching, noncustodial payment and federation signature). The majority of their source text remains a structured draft checklist; the ten F01.S01.M01 process documents have now been expanded but await review.
 - Parent folder hierarchy count is supported by HIERARCHY_AUDIT.md (18 features/50 subfeatures/148 modules) and INDEX.md. A fresh recursive Git tree/path-file existence scan of every registry path was NOT executed because the current connector lacks a recursive tree listing action; sampled process files exist. Therefore complete path integrity cannot be certified.
-- Authored separate proposed cross-module baseline contracts for API/events/SQL, listings, barter cycles, messaging/payment/federation, dependency integration, end-to-end journeys, threat model, library evidence, ADRs and quality gates. These DO NOT automatically complete the 1,480 leaf specifications and do not retroactively update registry status.
+- Authored ten expanded listing-creation process contracts plus separate proposed cross-module baseline contracts for API/events/SQL, listings, barter cycles, messaging/payment/federation, dependency integration, end-to-end journeys, threat model, library evidence, ADRs and quality gates. These DO NOT automatically complete the 1,480 leaf specifications and do not retroactively update registry status.
 - No application code, CI, database, deployment, audit, penetration test, benchmarks, or accessibility testing performed.
 
 ## Gap register — every feature's draft leaf scope
-Counts are exact counts of DRAFT rows from the registry; the linked CSV enumerates the individual specification path and future TEST-PS ID for **every item**.
+Counts represent exact numbers of open (DRAFT or SPECIFIED_REVIEW_PENDING) rows from the registry; the linked CSV enumerates the individual specification path and future TEST-PS ID for **every item**.
 
 | Gap | Feature | Draft process specs | Required action before GO |
 |---|---|---:|---|
-| GAP-F01 | LocalBazaar classifieds | 110 | Complete all listing, inventory, price and listing-type process contracts, examples, schemas, lifecycle/UX/tests |
+| GAP-F01 | LocalBazaar classifieds | 110 (100 DRAFT + 10 review pending) | Complete all listing, inventory, price and listing-type process contracts, examples, schemas, lifecycle/UX/tests |
 | GAP-F02 | LocalMutiny barter | 160 | Fully specify offer revisions, 2/3/4/N graph candidate constraints, lock state, compensation, recovery |
 | GAP-F03 | Services | 50 | Complete service quote, calendar, milestones, dispute contracts or ratify disabled deferral |
 | GAP-F04 | Auctions | 60 | Complete bids, anti-sniping, reserve, close and fraud invariants or ratify disabled deferral |
@@ -33,12 +33,12 @@ Counts are exact counts of DRAFT rows from the registry; the linked CSV enumerat
 | GAP-F16 | Security | 80 | Complete key lifecycle, authentication authorization, incident response, test verification |
 | GAP-F17 | Quality | 100 | Complete property/e2e/chaos/test requirements and release proof mapping |
 | GAP-F18 | Governance | 50 | Complete region-specific jurisdiction and prohibited-item policies and evidence |
-| **TOTAL** | **18** | **1,480** | **All 1,480 still in registry as DRAFT** |
+| **TOTAL** | **18** | **1,480** | **1,470 DRAFT; 10 SPECIFIED_REVIEW_PENDING; 0 approved** |
 
 ## Cross-cutting blockers and audit findings
 - GAP-C01 (BLOCKER): Unratified D01..D10 in DECISIONS.md; planning/ADR_PROVISIONAL_DECISIONS.md gives defaults but no authorized ratification. Protocol and security decisions can change downstream contracts.
 - GAP-C02 (BLOCKER): Root DEPENDENCY_MATRIX.md is mechanically broad (same F07/F10/F15/F16 dependencies for every module) and contains self-dependency ambiguity. New planning/INTEGRATION_DEPENDENCIES.md defines proposed actual ownership/event consumers but all leaf references must be checked.
-- GAP-C03 (BLOCKER): Required process content still includes numerous checklist TODO items, DRAFT labels, missing exact constraints, acceptance proof and placeholder text; root module SPEC.md references earlier seven placeholder names while registry uses ten other filenames. Must reconcile SPEC/TODO with registry, create stable links, then remove stale references.
+- GAP-C03 (BLOCKER): 1,470 process files still contain draft checklists lacking exact constraints and acceptance proof; most module SPEC.md entries list outdated seven proposed filenames while registry tracks ten existing paths. F01.S01.M01 was reconciled; 147 other modules must be reconciled, links checked and legacy checklists removed.
 - GAP-C04 (BLOCKER): Database FKs, canonical auth actor and tenant constraints, public/private field visibility, event schema discriminators, version policy, error semantic consistency require schema-level compatibility validation across ALL consuming leaf specs.
 - GAP-C05 (BLOCKER): No actual executable contract tests or registry-to-test-file mappings; future_test fields exist but no test fixtures and evidence. QA readiness cannot be marked passed.
 - GAP-C06 (BLOCKER): Threat analysis is a proposed model only; no demonstrated privacy tests for geolocation, graph deanonymization, Sybil attacks, crypto verification/reorg, federation reintroduction or moderation escalation. No independent security review.
@@ -54,7 +54,7 @@ Counts are exact counts of DRAFT rows from the registry; the linked CSV enumerat
 |---|---|---|
 | Hierarchy/registry count | all in-scope parent/child references and files | PARTIAL: count/owner/ID audit only |
 | Stable IDs | no duplicate registry process ID, each test ID assigned | PASS for registry IDs and presence |
-| Complete leaf specs | no placeholder requirement/TBD/TODO, concrete field/error/test contracts | FAIL: 1,480 DRAFT |
+| Complete leaf specs | no placeholder requirement/TBD/TODO, concrete field/error/test contracts | FAIL: 1,470 DRAFT + 10 review pending |
 | Canonical schema/event consistency | single owner, test-generated consumer contracts | NOT VERIFIED |
 | Permissions/privacy/security | reviewer approved + attack/abuse negative tests specified per leaf | FAIL |
 | Dependency/ADR resolution | all current decisions ratified, no upstream ambiguity | FAIL |
@@ -70,6 +70,6 @@ Counts are exact counts of DRAFT rows from the registry; the linked CSV enumerat
 6. Run automated documentation completeness gate and human architecture/security/jurisdiction review. Regenerate this report and change to GO only after zero blocking gaps. No application implementation under the present report.
 
 ## Audit reproducibility
-Source of totals: planning/SPEC_REGISTRY.csv, rows excluding header, grouped by first two digits of owner_module path; 1,480 unique process IDs, 148 unique owner_module values, all 1,480 DRAFT. Explicitly scoped to observed default branch snapshot prior to this branch's documentation changes, not a claim about unrelated concurrent branches. Future CI should compute these values from Git tree and fail for stale statuses and missing paths.
+Source of totals: planning/SPEC_REGISTRY.csv, rows excluding header, grouped by first two digits of owner_module path; 1,480 unique process IDs, 148 unique owner_module values, 1,470 DRAFT and 10 SPECIFIED_REVIEW_PENDING. Measured on the current documentation branch after the F01.S01.M01 process updates; not a claim about unrelated concurrent branches. Future CI should compute these values from Git tree and fail for stale statuses and missing paths.
 
 **Final status: NO-GO.**

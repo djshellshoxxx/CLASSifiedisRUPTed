@@ -4,7 +4,7 @@ A modular, mobile-first, privacy-aware PWA for local commerce, classifieds (Loca
 
 ## Navigation
 
-- [Project specification](PROJECT_SPEC.md) · [Project TODO](PROJECT_TODO.md) · [Full hierarchy and traceability](INDEX.md)
+- [Project specification](PROJECT_SPEC.md) · [Root roadmap](ROADMAP.md) · [Project TODO](PROJECT_TODO.md) · [Full hierarchy and traceability](INDEX.md)
 - [Feature inventory](FEATURE_INVENTORY.md) · [Dependency matrix](DEPENDENCY_MATRIX.md) · [Risk register](RISK_REGISTER.md)
 - [Glossary](GLOSSARY.md) · [Research notes](RESEARCH_NOTES.md) · [ADR index](ADR_INDEX.md) · [Hierarchy audit](HIERARCHY_AUDIT.md)
 - [Execution prompts](planning/metaprompts/README.md)

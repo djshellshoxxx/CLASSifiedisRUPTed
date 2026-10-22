@@ -1,0 +1,18 @@
+- F01: LocalBazaar classifieds — 4 subfeatures
+- F02: LocalMutiny barter and cyclic exchange — 4 subfeatures
+- F03: Services marketplace — 2 subfeatures
+- F04: Auctions — 2 subfeatures
+- F05: Rentals — 2 subfeatures
+- F06: Local discovery — 3 subfeatures
+- F07: Identity and reputation — 3 subfeatures
+- F08: Communications — 3 subfeatures
+- F09: Commerce and evidence — 3 subfeatures
+- F10: Privacy and data rights — 2 subfeatures
+- F11: Federation and portability — 3 subfeatures
+- F12: Moderation and safety — 3 subfeatures
+- F13: Notifications — 2 subfeatures
+- F14: Accessibility and localization — 2 subfeatures
+- F15: Platform operations — 4 subfeatures
+- F16: Security architecture — 3 subfeatures
+- F17: Quality engineering — 3 subfeatures
+- F18: Governance and compliance — 2 subfeatures

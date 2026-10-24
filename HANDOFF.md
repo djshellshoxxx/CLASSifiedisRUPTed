@@ -66,3 +66,10 @@ Latest parent instruction resolves D13 direction: strong auction/global-winner/t
 - No execution/access blocker remains for independent documentation. Product implementation is pending (not denied) because whole-spec NO-GO: 1,450 DRAFT bodies, thirty unapproved proposals, unresolved upstream storage/key/peer/preference/policy contracts and omitted original assistant descriptions. Continue independent local/spec work; only the affected protocol/strong-guarantee paths stay disabled.
 
 M2 final validation: thirteen audit unit tests passed; structural audit exit 0/zero errors; semantic audit exit 1 as expected (1,450 placeholder specs and 1,480 pending approvals). Whitespace check passed. All thirty current architecture hashes and both twelve-file local-module review manifests match. One verification-script path join initially double-prefixed the offline report's already absolute repository-relative paths; the checker was corrected and both manifests verified. This was not a source/test failure.
+
+## Published milestone M2
+
+- Source checkpoint `d5fafbcebe1759cf69b38f62f2514d53132729f5` pushed and verified on `docs/client-owned-foundations-20261024`; draft PR2 description updated with 30 pending proposals / 1,450 DRAFT / zero approved and M2 source SHA.
+- Remote main remains `95c46be41233520382566360e7135011412e8e6e`; historical docs/PR1 remain `39ac847870746e14b466d5706ebe5b00dddbaadb`. No merge/deployment/release/payment occurred.
+- M2 limited staged secret-pattern scan: 49 Markdown/CSV/JSON files, zero findings; no product/dependency/workflow files. Validation and review source hashes listed above passed; semantic gate remains NO-GO intentionally.
+- This final handoff-only publication commit records the verified source checkpoint. Retrieve its own tip with git log / ls-remote; never rewrite a self-referential SHA into its own commit. There is no access-denied/uncertain mutation outstanding. Remaining work is unfinished specification/producer/protocol/policy review, with precise disabled paths and next independent modules recorded above.

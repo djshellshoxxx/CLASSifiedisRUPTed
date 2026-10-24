@@ -1,35 +1,11 @@
-# PS-116-01 — domain schema
+# PS-116-01 — Offline view model and ownership
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-01. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the domain schema process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-01.R01: Own an ephemeral, per-unlocked-vault presentation snapshot, not a duplicate domain database: `OfflineViewV1 {schema_version:1,view_epoch:UUIDv4,generation:uint,sampled_at:client_timestamp,hint:unknown|browser_offline|browser_online,storage:locked|profile_unreviewed|available|unavailable|quota_exceeded|schema_incompatible,runner:idle|running|paused|stopped,reason_code?,items:OperationView[],next_cursor:string|null,truncated:boolean}`. Integer generation 0..9007199254740991 changes on visible state changes; before overflow discard the ephemeral snapshot/cursors, allocate a new random UUIDv4 view_epoch and restart generation at0. Old-epoch cursors return CURSOR_STALE, never wrap within an epoch; sampled_at is advisory and never proves freshness. `OperationView {view_item_id:UUIDv4,command_id:UUIDv4|null,object_ref?,queue_entry_ref?,local:memory_only|local_pending|local_committed|failed|outcome_unknown|deleted,delivery:not_requested|queued|attempting|retry_wait|peer_acknowledged|dead_letter|cancelled_local|unknown,destination_ref?,last_error_code?,attempts?,source_revision?}`. A memory_only editor gets ephemeral view_item_id with command_id=null; it is not an accepted command. On actual submit the domain owner allocates/returns command_id and the view links it without changing view_item_id. Other local states require command_id; a queue-only item may use command_id=null with authorized object_ref/queue_entry_ref. `object_ref?:{type:listing|offer|cycle|handoff|dispute|payment_claim|federation_record,id:UUIDv4}` and `queue_entry_ref?:{event_id:UUIDv4,destination_id:UUIDv4}` are local opaque references only; unknown type is rejected. destination_ref, if present, is the same configured destination UUIDv4, never a URL/key/label. attempts is integer0..20; source_revision is owner-local CAS safe positive integer or absent. reason_code and last_error_code are allowlisted CR-002 Problem codes or the local-only values BROWSER_OFFLINE_HINT, USER_PAUSED and OUTCOME_UNCERTAIN; missing means no recorded reason. No raw adapter error is accepted. IDs/reference types come from core; display obtains human labels through authorized domain query, not transport payload.
+- PS-116-01.R02: Storage/persistence owner is sole source of local receipts/queue status; F11 adapter owner supplies transport attempts/ACK evidence. F01/F02/F09 own economic_revision/economic_digest, local CAS revisions, consent, holds, handoff/payment evidence and are queried separately, never merged into a boolean synced/success. Local holds or queue bookkeeping cannot advance economic revision or invalidate consent; status references preserve separate owner-local CAS and signed economic revision meanings. This module cannot synthesize domain outcome, sign, encrypt, open storage independently or infer missing record deletion. List page <=100; next_cursor is null only when no further currently eligible items remain in that snapshot. truncated=true means owner traversal/summary budget stopped before completeness could be established; it is independent of whether an ordinary next page exists. Source enumeration examines at most1000 references per query, then returns truncated=true and a continuation cursor when safe; no completeness claim without full traversal; no full queue/body copy.
+- PS-116-01.R03: Memory-only drafts show “Not saved — this tab only”; reviewed protected storage and successful transaction completion are prerequisites for local_committed. Hint online means browser reports a network interface only; hint offline cannot invalidate an already committed receipt. No selected adapter is normal `not_requested`, with local use available. Accessible text, provenance and last known state shown independently of connectivity icon.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-01`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-01 fixtures cross all three hints with memory/pending/committed/unknown and missing adapters. Oracle: only source receipt moves local to committed; no combination creates consent/payment state or claims off-device backup. Reject snapshots from other vaults; no private body exists in view schema.

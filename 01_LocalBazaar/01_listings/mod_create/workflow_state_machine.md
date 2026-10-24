@@ -1,35 +1,14 @@
-# PS-002-03 — workflow state machine
+# PS-002-03 — Draft creation state and transitions
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-03. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the workflow state machine process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-03.R01: Domain transition ABSENT -> DRAFT/private/revision1 only. UI operation state `local_pending -> local_committed` after IndexedDB transaction completion, or typed failure with no acknowledged mutation. Offline completion is valid; no remote submission required.
+- PS-002-03.R02: listing.created v1 plus receipt and object are one local transaction. Draft event remains private; never enqueue draft payload for peer sharing or public search. Local outbox consumers can process at least once, deduplicated by event ID.
+- PS-002-03.R03: F01 mod_edit owns later revisions, mod_publish local review/export eligibility, mod_archive local archive/delete. F10 governs user-controlled retention. No server moderation queue or universal deletion effect; publication/sharing need their own reviewed disclosure/crypto gates.
 
-## Requirements to specify
-- [ ] PS-002-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Failure and race behavior
+Transaction abort leaves no object/event/receipt; quota/schema/locked vault fail closed. Interrupted callback/reload queries command receipt before retrying same ID. Same-vault tab races re-read principal/local policy and command key inside readwrite transaction; UI mutex alone insufficient. Separate vaults may create independently and cannot enforce global ownership. Neither local commit nor future peer ACK means consent/payment/handover.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance
+TEST-PS-002-03 proves sole creation transition, atomic rollback, one logical event, no public projection and valid network-blocked local commit. Browser crash/transaction-completion behavior requires real-browser evidence; not run.

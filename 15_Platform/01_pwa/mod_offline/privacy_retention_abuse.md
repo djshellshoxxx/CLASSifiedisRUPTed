@@ -1,35 +1,11 @@
-# PS-116-07 — privacy retention abuse
+# PS-116-07 — Connectivity privacy and bounded UI state
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-07. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the privacy retention abuse process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-07.R01: No endpoint probing, IP collection, centralized uptime monitor, contact discovery or automatic telemetry upload. Connectivity hint comes from browser event/read only and remains advisory. Status adapter receives only currently authorized public projection/reviewed opaque envelope through owner; this module never accesses body, signing key, exact home address, private graph or payment credentials. Memory draft text remains in its domain editor, excluded from offline snapshot and diagnostics.
+- PS-116-07.R02: View/cache/listeners/runner IDs are memory-only and cleared on lock, principal deletion, vault switch or document close; do not persist UI copies in Cache API, localStorage or service-worker response cache. Domain/outbox/receipt/tombstone retention/deletion follows owners/core: deleting a view cannot delete evidence; actual domain delete scrubs body/history and leaves minimal non-content anti-replay marker, no private-text digest. User pause prevents new attempts without pretending copied peer data erased.
+- PS-116-07.R03: Cap snapshot page100, configured destinations20/run, due entries20/run, aggregate owner-authorized local inflight slots2 per vault across all tabs/runs; event floods coalesce 500ms and schedule at most one pending refresh/run. A malicious adapter must not inflate queue counts, inject labels/HTML or spin automatic resume indefinitely; schema reject and owner-specific pause. Escape status text, render allowlisted localized codes only, show destination label only after authorized local lookup. These caps protect one device, not global spam/Sybil control.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-07`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-07 synthetic address/key/message canaries in source objects and poisoned adapter errors must not appear in snapshot, log, DOM status or network probes. Inspect browser caches after lock/close; no view/body artifact. 10000 event flood leaves one pending refresh and responsive local editor.

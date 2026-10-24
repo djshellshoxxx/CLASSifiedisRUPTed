@@ -1,43 +1,41 @@
-# Threat model and security acceptance plan
-Status: DESIGN REVIEW REQUIRED; no audit, pentest or security certification performed. Scope: browser PWA, authenticated API, SQL/outbox, media storage, notifications, imported federation records, external payment evidence and physical exchange. Threat frameworks: STRIDE, LINDDUN privacy lenses, OWASP ASVS 5.0 verification mapping.
+# Client-owned threat model and security acceptance
 
-## Trust boundaries and attacker capabilities
-B1 Browser ↔ API: compromised device/browser script, XSS, CSRF, cookie theft, malicious network, replay, untrusted uploads.
-B2 API ↔ datastore: tenant IDOR, injection, concurrent writes, rollback/recovery leakage, privileged insider, compromised backups.
-B3 API ↔ event workers/cache/search: cross-tenant projections, missed tombstones, duplicated delivery, stale data.
-B4 API ↔ external payment rails/wallets: untrusted redirect, forged webhook, stolen provider key, double-spend, reorg, chargeback.
-B5 Local ↔ federation peers: Sybil peers, stolen/rotated keys, graph scraping, denial of service, malicious signed payloads, removal reintroduction.
-B6 User ↔ user physical exchange: coercion, theft, unsafe meetup, counterfeit object, conflicting condition, incomplete N-party chain. Physical asset atomicity is impossible to guarantee through ClassRup; claims are not enforcement.
-Assume a legitimate seller may be adversarial, a peer may possess a valid signature key and still publish falsehoods, and anonymous/low-cost accounts may be created en masse.
+Status: design review required, no audit/pentest/security certification. Scope: installed static PWA, user-controlled local vault/keys, optional public interchange, reviewed encrypted messaging, chosen external sources and physical exchange. [Architecture](CLIENT_SIDE_ARCHITECTURE.md) controls; inherited API/SQL/account/session assumptions are superseded.
 
-## Threat register and required controls
-| ID | Attack / impact | Required mitigation | Verification gate |
+## Trust boundaries
+
+B1 Distributor/dependency/update -> executing browser code: malicious update, XSS, compromised package or extension can read data/use unlocked keys. HTTPS/nonextractable keys do not solve malicious same-origin code.
+B2 Browser/principal -> local storage: shared device, locked vault, wrong principal, eviction/quota, interrupted migration, rollback, export theft and key loss. Product has no recovery escrow or privileged account reset.
+B3 Vault -> optional transport/peer: metadata leakage, false receipts, replay, signed lies, unknown/revoked keys, same-revision fork, withheld consent/revocation, stale discovery and Sybil floods.
+B4 Client -> external wallet/source: untrusted UI, observation provenance, compromised RPC/provider, reorg/reversal. No product webhook service/secrets or fund custody.
+B5 User -> other people/physical goods: double promises, unsafe meetup, counterfeit object, coercion, partial N-party handoff. Digital signatures cannot prove goods or enforce recovery.
+
+## Threat register
+
+| ID | Threat | Required client control and honest limit | Test obligation |
 |---|---|---|---|
-| SEC-01 | exact home-address leak via listing, EXIF, uploads, search, geo coordinates | public coarse area only; EXIF strip all metadata at ingest; private address separate storage/explicit recipient access; suppress in events/logs/federation | synthetic canary secret never appears in public/index/export/telemetry/EXIF |
-| SEC-02 | metadata correlation of trade graph | no private edge enumeration; bounded query; participant pseudonym consent reveal only after proposal; randomized public stats aggregation, no per-target graph queries | adversary probing tests reveal no hidden node identity; privacy UX documents residual risk |
-| SEC-03 | Sybil, reputation farming, spam and scraping | account creation throttles, risk-evidenced reversible limits, per-tenant quotas, velocity/rate budgets, abuse escalation and appeal | 1,000 synthetic accounts do not bypass recipient invite/rate quotas in staging |
-| SEC-04 | stolen auth / horizontal privilege escalation | secure cookie+CSRF, session rotation, actor/tenant binding, authorization before ID lookup, deny-by-default ABAC, token expiry | role/tenant/IDOR matrix across every endpoint; no data crossover |
-| SEC-05 | replay/idempotency collision | signed scope, command receipts, content digest, revision guard, unique constraints, bounded retry | 100 duplicate/reordered operations produce one mutation; mismatched reuse 409 |
-| SEC-06 | double-reserve/race across cycles | transactional row locks, deterministic ordering, CAS, lease sweeper, no cross-relay atomicity claim | race test with concurrent cycles accepts <=1 conflicting lock |
-| SEC-07 | false payment confirmation | separate claims/verification, independent signed provider checks, chain finality/reorg policy, source provenance | forged webhook and screenshot never mark verified; reorg revokes |
-| SEC-08 | crypto/key compromise | vetted library and WebCrypto/libSodium, no own primitives, secure secret vault, audited key rotation/revocation, domain-separated signed bytes | known-answer vectors, key rotation, revoked key and tamper tests |
-| SEC-09 | malicious federated peer | explicit allowlist/feature OFF default, quarantine+moderation, size/shape limits, signature+version+origin checks, peer block, tombstones | malicious input corpus + replay and bulk-DOS tests; local moderation cannot be bypassed |
-| SEC-10 | moderator overreach/privacy | separate scoped roles, evidence minimization and audit log, no unrestricted private message access, dual review of sensitive export | privileges verified; access auditable and user appeal retained |
-| SEC-11 | unsafe file/media/script | content-type sniff & allowlist, malware scan, AV rejection fail closed, EXIF strip, filename randomization, CSP, sanitization | polyglot/XSS/zip bomb/oversize upload tests, no executable delivery |
-| SEC-12 | offline/outage confusion | pending UI not success, epoch-based cache invalidation, retry receipt, no local verified claim | disconnected session cannot approve/revoke/payment-confirm remotely; consistency tests |
-| SEC-13 | deletion and legal hold abuse | data-rights request validated, record scoped exception purpose/expiry, backup TTL enforcement, tombstone outbox | deletion audit over all stores incl media/cache/backup; peer deletion is best effort |
-| SEC-14 | physical transaction fraud/coercion | safe meetup recommendations, opt-out exact location sharing, one-way cancellation/dispute, no platform guarantee of delivery | complaint, partial-hand-off and emergency stop workflows reviewed |
-| SEC-15 | payment provider supply chain/regulatory compliance | separate vendor review, no direct platform custody, payment method disabled absent jurisdiction and provider signoff | approved providers, jurisdictional policy and signed verification tests |
+| SEC-01 | precise address/EXIF leak | local private storage, public allowlist, metadata stripping before explicit export; no automatic uploads | canary address/key/EXIF absent from projection/adapters/logs |
+| SEC-02 | graph/network correlation | no private graph export; disclosure preview and bounded local query; peers still see timing/IP/public linkage | probing corpus and UI disclosures, no anonymity claim |
+| SEC-03 | spam/Sybil/reputation fraud | recipient opt-in/block/quarantine and locally bounded inbox; no global account quota or Sybil-proof trust | flood cannot exhaust bounded local queue; known blocked peer hidden |
+| SEC-04 | wrong principal/unlocked key use | vault selection/unlock, deny-by-default local capabilities and data segregation; compromised active script remains privileged risk | two-vault isolation and locked-vault error matrix |
+| SEC-05 | replay/idempotency mismatch | scoped command ID and live canonical request/receipt; after deletion keep scope/ID/object-ID/deletion marker only, no body/fingerprint, and return OBJECT_DELETED for every payload | duplicate/reordered live command one local mutation, different live payload conflict; deleted command always OBJECT_DELETED |
+| SEC-06 | double reservation | local atomic revision checks; peer commitments are evidence only; known cross-vault equivocation freezes coordination | two tabs one local hold; two vaults can conflict and quarantine exchanged evidence |
+| SEC-07 | false payment | claim/ack/source observation distinct; selected rail/finality policy; no redirect/hash/screenshot as verified | forged/unknown source and reorg never silently confirmed |
+| SEC-08 | key/crypto compromise | vetted primitives/protocol, domain separation, known-answer vectors, explicit device key verification and rotation/backup review | unsupported/revoked/unknown key fails; lost key cannot be server-recovered |
+| SEC-09 | malicious peer | bounded parse/schema/signature/version/predecessor/local policy checks, quarantine forks; optional adapter isolation | mutated corpus, tombstone/replay/fork tests; no script execution/network fetching from payload |
+| SEC-10 | reviewer overreach | reports local unless user selects disclosed evidence/recipient; no default private inbox/secret access | exact evidence preview and local sharing-consent tests |
+| SEC-11 | media/script attacks | escaped text, restrictive CSP, strict size/MIME/decoder limits, EXIF strip; no unsupported AV service guarantee | malformed image/polyglot/SVG/zip bomb/oversize rejected locally; unsupported parsing fails closed |
+| SEC-12 | offline confusion | local committed distinct from remote receipt, consent and observation; no closed-browser delivery promise | offline save succeeds but missing peers remain pending/unknown |
+| SEC-13 | stale restore/deletion | explicit local purge and export consequences; preserve known revocation/fork markers on restore, copied public data cannot be recalled | old snapshot cannot silently reactivate known revoked key/consent; peer erase best effort |
+| SEC-14 | physical fraud/coercion | explicit voluntary terms, coarse location, per-party handoff assertions, emergency local stop and evidence sharing | no automatic completion/reroute/real-world rollback after dropout |
+| SEC-15 | provider/policy assumptions | selected source review and target jurisdiction before enabled verified rails/paid placement | unavailable policy/provider keeps affected path disabled, no legal certificate claim |
+| SEC-16 | static update compromise | reviewed reproducible artifact/dependency/CSP policy, explicit schema/version compatibility, no automatic remote config execution | malicious update/config and wrong-origin import tests; browser trust limits disclosed |
+| SEC-17 | data loss/backup secrets | local storage status, explicit encrypted export/restore using reviewed format; no default cloud/seed upload | eviction/denied persistence/quota/migration abort; backup corruption/wrong key fail closed |
 
-## Defense detail
-- Public location: no latitude/longitude or street/address field in exported public schema. Public-area taxonomy must be size/precision reviewed to avoid unique household inference in sparse regions; frequent randomized scanning must not reveal live moves. Never assert perfect anonymity; counterparties and peer timings remain correlation risks.
-- Pseudonym identity: stable graph IDs permit linkage. Rotate public key only with signed proof-of-control and privacy warnings; old IDs must not be silently mapped across export. Reputation does not guarantee authenticity.
-- Commerce: malicious sellers can claim completion, counterfeit receipt or social-engineer exchange. Distinguish actor attestations, partner acknowledgement and independent verifier. Contract cannot make physical exchanges atomic.
-- Federation: exported signatures are integrity of assertions, not reliability or safety. Signed records still go through local moderation. A blocklisted peer's historical objects may be quarantined, and stale replicas will persist until peers cooperate.
-- Noncustodial: no signing of funds by server or private-key storage. Native wallet UI under users' custody. External balances only observed with bounded proof and chain-specific confidence. Disable unreviewed crypto rail.
-- Crypto: rely on WebCrypto/jose or vetted wrappers. Domain separation, exact canonical JCS bytes, test vectors, upgrade discipline. Confidentiality claims limited to actual implementation design.
-- Observability: event payload redaction, deterministic correlation IDs with retention and access policy; logging high-cardinality user identifiers has privacy cost; use pseudonymized bounded metrics.
-- Operations: secrets in secret manager, scoped IAM/DB roles, encryption at rest, restore tests and tamper-evident admin audit, reproducible builds, signed supply-chain provenance. Fail closed on authorization/provider verification outage.
+## Protocol decisions still required
 
-## Security gate prerequisites
-Signed risk acceptance for all SEC IDs, asset/control matrices, complete OWASP ASVS 5.0 mapping by feature, dependency SBOM and transitive license review, automated SAST/SCA/secret scan, structured threat simulation, independent pentest against staging before real-money integration, incident tabletop, restore and backup decryption rehearsal. Track exploitability not just checklist presence. Nothing in this file asserts tests have passed.
+The current baseline does not select a production encryption/key-wrapping/KDF/device-recovery suite. It may specify local draft data and disabled send paths; it cannot enable remote private messaging or portable secret export merely because WebCrypto exists. F16/F07/F08 contracts must pin protocol/algorithms/version, byte canonicalization, key identity binding, nonces/epochs/replay, verification UX, loss/compromise/revocation and compatibility vectors. Independent review is a prerequisite to those security-sensitive specifications being accepted. No homemade cryptography.
+
+## Acceptance evidence
+
+Map SEC-01..17 and T-ARCH-01..07 to concrete leaf requirements, fixtures and attack oracles before spec GO. Later product acceptance needs actual browser/device storage/crypto tests, SAST/SCA/SBOM/license/secret scans, update review, privacy/export audit, restore exercise and independent security assessment of enabled money/peer protocols. Local permissions can constrain honest software only; they do not enforce policy on a malicious owner. No global rate-limit, account suspension, server-side encryption-at-rest, trusted timestamp or distributed lock may be smuggled into these gates.

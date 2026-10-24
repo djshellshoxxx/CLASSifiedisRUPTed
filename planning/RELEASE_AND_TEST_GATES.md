@@ -1,30 +1,35 @@
-# Specification verification, build and deployment reliability gates
-Status: PROPOSED test and deployment design; no implementation/test run. Documents only.
-Owners F17 F15 F16. Every candidate build requires complete per-process cross-reference to tests; no gate can be satisfied by text existence alone.
+# Specification and client build acceptance gates
 
-## Implementation order and dependencies (QG-001)
-0. Ratify canonical contracts, ADRs, privacy and forbidden-jurisdiction policy; resolve all cross-feature shared ownership.
-1. Set up CI, Node/TypeScript release pin, PostgreSQL migration/test harness, outbox/inbox and basic structured logging (F15/F17); threat gating (F16).
-2. Sessions, account recovery, roles, tenant scoping (F07/F16), privacy retention/export and coarse geography (F10), moderation + policy (F12/F18), accessible base UI (F14).
-3. Fixed-price listings, inventory guarded locking, index/search and messages (F01/F06/F08).
-4. Settlement claim evidence (F09), offers and 2-party exchange (F02).
-5. 3/4/N bounded cycle matching + unanimous consent + dropout/dispute (F02).
-6. Notifications and field operations, read-only offline PWA (F13/F15).
-7. Controlled pilot, backup/recovery, privacy impact assessment and rate abuse tuning (F15/F17).
-8. Independent feature gates: services F03; auction F04; rentals F05; paid placement provider; external payment verification F09; federation F11; cross-currency FX and expanded cycle scope. Do not enable unreviewed components.
+Status: planned obligations, no product implementation/test/build claim. Owners F17/F15/F16. Architecture: [client-side mandate](CLIENT_SIDE_ARCHITECTURE.md).
 
-## Verifiable checks (QG-002)
-- Spec lint: parse INDEX.md and registry 1480 rows, check referenced files exist, every owner module parent SPEC/TODO exists, ID path uniqueness, process header IDs match registry, every process has non-placeholder requirements and test fixtures, registry status matches content.
-- Schema drift: generate/validate JSON schema and SQL DDL contracts; verify field type/enum and canonical source on all consumers; reject unknown fields and inconsistent versions.
-- Unit and property: validation Unicode/overflow, permission matrix, states and forbidden transitions, money normalization and rounding, graph cycle completeness under fixed bounds, dedup and event schemas.
-- Integration: test real PostgreSQL transactional reserve races, outbox after crash, consumer dedup, search takedown consistency, stale revisions, account deletion, event payload privacy, provider signature mocks and federated quarantine.
-- E2E: every FLOW-01..FLOW-15 supported or explicitly disabled as deferred, keyboard-only and screen readers, localization and mobile narrow widths, offline forced disconnect and reconnect, cancellation/dispute. Test against Chromium, Firefox and WebKit.
-- Security: ASVS5 mapping, code review/SAST/SCA, secret scan, SBOM/transitive-license review, privacy threats SEC-01..15, load-based anti-abuse throttling and incident drills.
-- Performance (proposed baseline): P95 GET 300ms, write 700ms @100 requests/sec; barter matcher <=250ms CPU/query at <=500 vertices & <=2k edges; search result stale deletion <=60s P99; 99.9% monthly service availability. Load tests must provide fixture volume, hardware and repeated confidence intervals. No measured claim until run.
-- Reliability: CI reproducible clean build with locked dependencies, lint/typecheck/migrations+rollback simulation, test gating, artifact checksums and supply chain signatures; staged rollout with health/rollback metrics; Redis/search/notification outages do not permit authorization bypass, partial write, or fabricated payment confirmation.
-- Backup & restore: encrypted immutable DB PITR and object storage, RPO <=15m, RTO <=4h target; quarterly restoration to isolated environment proves decrypt/migrate/role ACLs. Retention must preserve revocation/tombstone state or purge in defined compliant manner.
-- Deployment: separate API, worker, SQL, object storage, secret manager, static PWA host; health/readiness, migrating with expand/contract, ACME TLS, strict CSP, service-worker rollback and offline cache schema/version invalidation; API backward compatibility N-1 contract for 30d.
-- Observability: SLO probes, redacted structured logs, tracing correlation, per-event delivery lag, queue DLQ, lock contention, payment verification provenance, abuse metrics with privacy controls. Never include message plaintext/home address in telemetry.
+## QG-001 — Order
 
-## Acceptance protocol (QG-003)
-For every registry process: owner-approved behavior + schema + validation/error matrix + authorization policy + concurrency/idempotency + data rights + negative cases + unit/integration/e2e mapping + per-budget acceptance + test fixture. Attach links to tests/PRs/CI evidence after implementation. Only a coordinated NO-GO -> GO transition approved through SPEC_COMPLETENESS_REPORT.md can permit application implementation; specification GO does NOT imply production security or actual passing tests.
+1. Reconcile hierarchy/registry/requirements, ARCH/ADR and shared contracts; complete independent architecture review.
+2. Complete all required leaf and parent contracts; resolve owner/security/source decisions; independent whole-spec review gives evidence-backed GO or NO-GO.
+3. Only after specification GO: pin reviewed browser tooling/dependencies and create static build/test harness, local storage/keys/permissions/disclosure. No API, SQL server, cookie sessions, secret manager or product account infrastructure.
+4. Implement local listings/discovery/evidence, approved encryption/peer exchange and bounded 2/3/4/N barter; integrate in-app notices/accessibility.
+5. Implement remaining specified features with exact dependency/failure contracts, then product security/device/acceptance review and reproducible build. No deployment/release authorized by this plan alone.
+
+## QG-002 — Verifiable checks
+
+| Gate | Required evidence |
+|---|---|
+| Structural documentation | audit all 1,480 IDs/paths/owners, hierarchy SPEC/TODO, real inventory paths, CSV/MD/content/checklist statuses and requirement IDs; broken links/duplicates rejected |
+| Semantic documentation | exact fields/bounds/unknown-field rules, interfaces, state preconditions, typed errors, permissions, privacy/retention, concurrency/retry/offline behavior, fixtures/oracles and parent integration for every required contract; independent review evidence |
+| Protocol consistency | shared canonical schema/version and real consumer compatibility matrix; reviewed signature/key lifecycle/encryption/backup format; no server authority inherited |
+| Unit/property | Unicode/overflow/amount/rounding, local permission matrices, state transitions, bounded cycle oracle, duplicate/reordered messages/events and canonical signature vectors |
+| Local integration | real IndexedDB abort/quota/migration/tab-race tests, local receipts/events atomic, restore/fork/revocation/quarantine, projection takedown; independent vaults explicitly may conflict |
+| Peer/network faults | offline and missing adapter, lost/lying/reordered receipt, signature failure, stale revocation and clock, peer equivocation, source outage/reorg; no fabricated global lock/consent/payment confirmation |
+| Privacy/security | canary key/address/message never exported/logged, XSS/CSP/dependency/update/key-use audit, unknown peer denied, local reports require sharing consent; no product telemetry or plaintext relay |
+| Browser/accessibility | Chromium/Firefox/WebKit, narrow mobile, install/cache/update, keyboard and screen reader, WCAG 2.2 AA, localized canonical money, all FLOW-01..15 implemented or individually owner-approved deferral with exact disabled-path tests |
+| Performance | reference hardware/fixtures/browser fixed in test plan; proposed 500 vertices/2,000 edges, matching 250ms CPU budget, incomplete flag; local draft commit target p95 200ms/p99 1000ms excluding unlock and local indexed query p95 100ms over 10k records; targets await measurement/review |
+| Reliability | clean lockfile build, lint/typecheck/tests, static artifact checksum, storage denial/eviction, local export/restore, service-worker schema/update rollback; no forced remote backup or unverifiable RPO |
+| Supply chain | exact release versions/hashes/licenses, SCA/SBOM/advisories, secret scan, offline/static-host origin and CSP review; no credential acquisition or package purchase |
+
+## QG-003 — Specification versus build approval
+
+Specification GO requires complete behavior/test contracts and independent review; executable product tests cannot be required before permission to implement them. Product acceptance later requires those tests actually run with fixture/source/build/CI evidence. Audit tooling tests prove tooling only. A simple marker scan cannot certify developer readiness or security. `SPECIFIED_REVIEW_PENDING` and structural PASS never mean APPROVED. Production money-moving protocols require separate independent security/policy review; no autonomous release.
+
+## QG-004 — Milestone checkpoint
+
+For each small milestone record completion/remaining scope, base and checkpoint refs, ownership, exact commands/results/failures, blockers/decisions and reproducible next steps in HANDOFF.md. Review changes/secret scan and workflow side effects before push; verify remote SHA after push. Re-read remote heads to detect concurrent authors. Merge only the concrete reviewed/tested scope; preserve unique drafts and never merge unfinished specifications as completed.

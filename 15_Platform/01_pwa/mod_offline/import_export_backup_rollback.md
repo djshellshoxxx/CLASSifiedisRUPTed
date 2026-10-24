@@ -1,35 +1,11 @@
-# PS-116-10 — import export backup rollback
+# PS-116-10 — Reopening, restore and undo boundaries
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-10. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the import export backup rollback process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-10.R01: Offline views/run IDs are not portable data and have no automatic export/import. Optional user diagnostic export is the allowlisted redacted ring of PS-116-08 with schema_version1, at most1000 entries/256KiB and explicit preview; imported diagnostic files are inert review text, never commands. Durable domain/outbox/key backup belongs to F15 storage/F10/F16 and remains gated by reviewed restore/protection profile; this module cannot export recovery keys or call local commit a backup.
+- PS-116-10.R02: On reopen/owner-restored vault, initialize delivery unknown/runner paused until authorized QueueCoordinator.reconcile validates source receipts, deletion markers, pending attempt status, disclosure consent, known revocations/conflicts and adapter config. Restore does not reactivate selected destinations or resend old messages automatically. Memory-only drafts are lost on document close; warn before navigational close where browser permits, never promise browser crash recovery. Unknown schema/storage error remains read-only unavailable without destructive migration.
+- PS-116-10.R03: Pause/resume/view reset is reversible presentation/control state, cannot roll back completed IndexedDB commit, delete core history, retract already transmitted export or reverse payment/handoff. Explicit user domain undo routes to owner archive/delete/cancel with new revision/receipt; after deletion display deleted and preserve minimal owner anti-replay marker semantics. Downgrade incompatible view module may display generic unavailable, never erase storage to regain compatibility. Browser update/cache rollback belongs to install/cache owners; this module provides no silent code-update trust.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-10`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-10 restored stale queue plus known revocation/tombstone/contradictory history must stay paused with zero sends; diagnostic import containing commands/URLs is inert/rejected, no disclosure bypass. Reopen committed operation reconciles original receipt; deleted operation returns OBJECT_DELETED without original text; lost memory draft never labeled saved. Undo after late peer ACK warns copies may remain, does not invent remote erasure. Restore protocol evidence remains pending owner review.

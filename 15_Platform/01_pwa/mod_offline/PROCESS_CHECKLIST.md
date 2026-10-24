@@ -1,65 +1,65 @@
 # Process inventory and integration checklist
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPECIFIED_REVIEW_PENDING. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
 - Registered process contracts: 10. Statuses below mirror the registry and do not assert semantic completion.
 
-- [x] [domain_schema.md](domain_schema.md) — `PS-116-01`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [domain_schema.md](domain_schema.md) — `PS-116-01`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [validation_rules.md](validation_rules.md) — `PS-116-02`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [validation_rules.md](validation_rules.md) — `PS-116-02`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — `PS-116-03`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — `PS-116-03`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [commands_queries_events.md](commands_queries_events.md) — `PS-116-04`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [commands_queries_events.md](commands_queries_events.md) — `PS-116-04`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — `PS-116-05`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — `PS-116-05`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — `PS-116-06`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — `PS-116-06`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — `PS-116-07`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — `PS-116-07`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [observability_performance.md](observability_performance.md) — `PS-116-08`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [observability_performance.md](observability_performance.md) — `PS-116-08`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — `PS-116-09`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — `PS-116-09`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.
 
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — `PS-116-10`, registry status: **DRAFT**; placeholder/specification file exists.
-- [ ] Expand measurable requirements and state/error contracts for this process.
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — `PS-116-10`, registry status: **SPECIFIED_REVIEW_PENDING**; placeholder/specification file exists.
+- [x] Draft measurable requirements and state/error contracts; dependency and independent approval remain pending.
 - [ ] Map upstream producers, downstream consumers and canonical contracts.
 - [ ] Review privacy, security, accessibility, offline and abuse cases.
 - [ ] Link test cases to executable fixtures and CI artifacts when implemented.

@@ -7,8 +7,8 @@
     "requirements": 4444
   },
   "registry_status_counts": {
-    "DRAFT": 1470,
-    "SPECIFIED_REVIEW_PENDING": 10
+    "DRAFT": 1450,
+    "SPECIFIED_REVIEW_PENDING": 30
   },
   "hierarchy_exceptions": {
     ".": "root project documents use PROJECT_SPEC.md and PROJECT_TODO.md",
@@ -43,12 +43,12 @@
     "modules_with_current_stale_entries": 0
   },
   "missing_test_artifact_count": 1480,
-  "placeholder_spec_count": 1470,
+  "placeholder_spec_count": 1450,
   "structural_pass": true,
   "structural_errors": [],
   "semantic_gate": "NO-GO",
   "semantic_findings": [
-    "1470 process specs contain unresolved placeholder markers",
+    "1450 process specs contain unresolved placeholder markers",
     "specification review gate PENDING: 1480 contracts await approval, 0 approved contracts lack evidence, 0 approval records are invalid"
   ]
 }

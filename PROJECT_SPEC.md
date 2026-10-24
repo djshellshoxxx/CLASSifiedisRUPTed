@@ -6,7 +6,7 @@ ClassRup is a **software artwork**, currently in specification development. Its 
 
 ## Product and available scope
 
-Mobile-first installable PWA for local commerce (LocalBazaar), cyclic 2..N participant barter (LocalMutiny), services, auctions, rentals, discovery, portable pseudonymous identity, messaging, noncustodial settlement evidence, optional federation, local moderation and accessibility. Available recorded scope: 18 features, 148 modules and 1,480 process contracts. Unseen private original-idea discussions have not been recovered or certified covered. No registered feature is removed by implementation order or a local feature flag.
+Mobile-first installable PWA for local commerce (LocalBazaar), cyclic 2..N participant barter (LocalMutiny), services, auctions, rentals, discovery, portable pseudonymous identity, messaging, noncustodial settlement evidence, optional federation, local moderation and accessibility. Available recorded scope: 18 features, 148 modules and 1,480 process contracts. A [partial original-idea provenance summary](planning/REQUIREMENT_PROVENANCE.md) is available from user messages; assistant idea descriptions remain omitted and full coverage is uncertified. No registered feature is removed by implementation order or a local feature flag.
 
 ## Trust boundaries
 

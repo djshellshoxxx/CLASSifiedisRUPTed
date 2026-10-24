@@ -16,8 +16,8 @@ Owner mandate is settled: client-side CLASS, local user keys/data, no mandatory 
 | D10 | Identity | user-owned keys initially; pseudonyms only | reviewed vault unlock/rotation/recovery/backup protocol |
 | D11 | Messaging | drafts local, send gated pending encryption review | protocol/library/device verification/multi-device design |
 | D12 | Notifications | in-app baseline, no always-on promise | chosen push/mail dependency/privacy contract if enabled |
-| D13 | Auctions/paid placement | remain tracked; trusted close time/shared paid reach cannot be guaranteed locally | owner chooses voluntary peer protocol with explicit limits or exact approved disabled/deferred behavior; product backend forbidden |
-| D14 | Original coverage | repository/current instruction is available evidence | missing private original-idea source needed to certify exhaustive coverage |
+| D13 | Auctions/paid placement | remain tracked; trusted close time/shared paid reach cannot be guaranteed locally | latest parent instruction fixes strong guarantees disabled pending selected validated external protocol; full fail-closed contracts remain required, no weaker substitute; product backend forbidden |
+| D14 | Original coverage | repository/current instruction plus partially retrieved original user messages | assistant idea descriptions remain content_omitted; exhaustive coverage still uncertified |
 | D15 | Content/jurisdiction | no fabricated legal approval/universal prohibited list | owner-selected jurisdiction and reviewed policy before real-world public-commerce release; local design continues |
 
-D13..15 require actual owner/source/policy input, not generated approval. D01/D07/D10/D11 require independent security evidence. No row approves a registered DRAFT process. [Architecture](planning/CLIENT_SIDE_ARCHITECTURE.md) and [handoff](HANDOFF.md) contain affected paths and next steps.
+D13 disabled direction is now instructed; protocol selection/acceptance remains unresolved. D14 partial provenance is recorded in [REQUIREMENT_PROVENANCE.md](planning/REQUIREMENT_PROVENANCE.md); missing descriptions and D15 policy require actual source/owner input. D01/D07/D10/D11 require independent security evidence. No row approves a registered DRAFT process. [Architecture](planning/CLIENT_SIDE_ARCHITECTURE.md) and [handoff](HANDOFF.md) contain affected paths and next steps.

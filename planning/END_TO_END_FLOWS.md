@@ -4,7 +4,7 @@ Status: specified scenarios, NOT executed product tests. [ARCH-001..010](CLIENT_
 
 | ID | Journey | Ordered client flow | Failure / acceptance oracle |
 |---|---|---|---|
-| FLOW-01 | Paid placement | local listing -> explicit public projection -> selected audience/promotion terms -> external claim/evidence -> local display under reviewed agreement | shared paid audience has no client-only guarantee; D13 unresolved, activation gated; redirect never grants verified placement |
+| FLOW-01 | Paid placement | local listing -> explicit public projection -> selected audience/promotion terms -> external claim/evidence -> local display under reviewed agreement | shared paid audience has no client-only guarantee; D13 direction fixed: strong activation disabled pending selected validated external protocol; no local substitute; redirect never grants verified placement |
 | FLOW-02 | Local sale | local draft/commit -> public export preview -> retained peer search -> exact offer accepted -> seller local reservation -> off-platform exchange -> per-party claims | another device may double-promise; known conflicts freeze; no global exclusivity/verified money from claims |
 | FLOW-03 | Two-party barter | local A->B->A proposal -> current item refs and digest -> both reviewed signatures -> each own local reservation -> optional transport exchange -> handoff assertions | edit resets consent; absent peer receipt remains pending; no atomic lock |
 | FLOW-04 | Three-party cycle | A->B->C->A -> unique principals/items -> same digest signed by all -> each verifies known evidence -> independent handoffs | missing C prevents locally known readiness; revocation may be delayed; no automatic transfer/rollback |
@@ -18,7 +18,7 @@ Status: specified scenarios, NOT executed product tests. [ARCH-001..010](CLIENT_
 | FLOW-12 | Public export | disclosure preview -> allowlisted public fields -> reviewed canonical signature -> file/chosen transport -> separate receipt | private address/contact/message/key canary rejected; delivery remains unknown absent evidence |
 | FLOW-13 | Public import | bounded bytes -> key/version/signature/predecessor checks -> quarantine/policy -> retained search projection -> later validated tombstone | same-revision fork/revocation/unknown schema fail closed; no erasure of independent replicas |
 | FLOW-14 | Service booking | proposed availability/terms -> counterparty commitments -> work assertions -> payment claims/dispute | no global calendar/guaranteed delivery; full F03 contracts needed |
-| FLOW-15 | Auction/rental | bid/rental terms -> agreed peer evidence/time assumptions -> local view/commitments -> condition/deposit assertions | trusted close time/global exclusive booking impossible locally; D13/D09 gates explicit, no fabricated final winner/escrow |
+| FLOW-15 | Auction/rental | bid/rental terms -> agreed peer evidence/time assumptions -> local view/commitments -> condition/deposit assertions | trusted close time/global exclusive booking impossible locally; GG-001..005/D09 gates explicit, no fabricated final winner/escrow |
 
 ## Common quality checks
 

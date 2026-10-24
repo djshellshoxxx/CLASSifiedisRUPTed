@@ -7,8 +7,8 @@ Inventory: 18 features, 148 modules, 1480 process contracts and 4444 requirement
 
 ## Registry statuses
 
-- DRAFT: 1470
-- SPECIFIED_REVIEW_PENDING: 10
+- DRAFT: 1450
+- SPECIFIED_REVIEW_PENDING: 30
 
 ## Structural errors
 
@@ -16,7 +16,7 @@ Inventory: 18 features, 148 modules, 1480 process contracts and 4444 requirement
 
 ## Semantic findings
 
-- 1470 process specs contain unresolved placeholder markers
+- 1450 process specs contain unresolved placeholder markers
 - specification review gate PENDING: 1480 contracts await approval, 0 approved contracts lack evidence, 0 approval records are invalid
 
 ## Reconciled baseline

@@ -1,35 +1,11 @@
-# PS-116-05 — authorization capabilities
+# PS-116-05 — Vault-scoped status and dispatch authorization
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-05. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the authorization capabilities process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-05.R01: Bind status/subscription/control to current unlocked vault context supplied by identity owner, never caller-selected principal claims. Locked UI may show generic “Vault locked”/browser hint only, no queue counts/destination/objects. Switching vault clears DOM/view/cursors/listeners, pauses old runner and ignores delayed results carrying old context generation. Foreign object/status request NOT_FOUND; invalid context FORBIDDEN. No accounts, tenants, global operator or cookie/CSRF dependency.
+- PS-116-05.R02: Resume is authorized only for previously consented selected destination entries after reviewed protocol/storage checks by owner at claim/send boundary. A wake-up signal grants no new export/messaging/payment permission. No destination configured returns nothing_due without error or endpoint discovery. Local UI toggles cannot enable unreviewed messaging/verification paths; PROTOCOL_NOT_REVIEWED/FEATURE_DISABLED, no side effects. No delegation/background privileged key use specified here.
+- PS-116-05.R03: Lock/revocation/deletion notifications immediately clear sensitive view and request pause; in-flight data may already have been transmitted, which cannot be recalled. Owner rechecks authorization at claim and immediately before dispatch/result commit and rejects stale state once observed; a concurrent cross-tab lock/revocation can occur after that check but before network transmission. There is no atomic transaction between local authorization and remote send. Such late/in-flight dispatch may transmit; retain visible uncertain/acknowledged outcome and quarantine conflicting evidence, never claim recall or zero transmission after wall-clock revocation. UI accurately distinguishes known revocation from uncertain offline freshness. F13 consumers receive only authorized status refs through their own local event contracts; this module grants no blanket notification content access.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-05`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-05 principal×lock×destination×review-state table plus race: A resume -> switch B -> A response/ACK. Oracle: no A identifiers in B DOM/status callback, no new dispatch after runner observes old context invalidation; explicitly interleave revocation between final check and send and allow uncertain late transmission with visible warning, already-issued attempt can remain uncertain/acknowledged without rewriting authority.

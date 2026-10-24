@@ -1,35 +1,11 @@
-# PS-116-09 — contract and acceptance tests
+# PS-116-09 — Offline integration acceptance matrix
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-09. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the contract and acceptance tests process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-09.R01: Deterministic harness provides fake platform hints/visibility clock, storage/profile state, core receipts/deletion markers, selected adapter, queue coordinator with claim guards and separate F01/F02/F09 evidence stores. Fixed cases: hint online with unreachable peer; hint offline with successful local save; memory-only draft; denied storage/quota/schema; no adapter; locked/revoked principal; restored queue; clock rollback; duplicate/reordered/late ACK. Oracle snapshot derived only from owning source state, independent of hint.
+- PS-116-09.R02: Map TEST-PS-116-01 schema ownership; TEST-PS-116-02 bounds/poisoning; TEST-PS-116-03 state timelines; TEST-PS-116-04 port/event schema; TEST-PS-116-05 vault isolation; TEST-PS-116-06 claim/retry/crash; TEST-PS-116-07 canary/cache/flood; TEST-PS-116-08 responsiveness; TEST-PS-116-09 aggregate; TEST-PS-116-10 restore/undo. Property sweep hint×local×delivery states: no browser event/ACK can change any consent, payment, economic revision or local receipt. Generate 1000 fixed-seed interleavings of pause, lock, close, hint, save/ACK callback and vault switch; stale-context callbacks must never leak or advance state.
+- PS-116-09.R03: Specification review checks the planned fixture inputs/oracles, port signatures and acceptance mapping, without requiring implemented tests or a passing build. Later product acceptance requires the following actual evidence. Real-browser post-implementation tests use network blocked after static installation, two tabs, document suspension/reload and IndexedDB fault injection through owner. Protected durable save tests run only against reviewed storage implementation; before review assert PROTOCOL_NOT_REVIEWED and “Not saved” memory-only path, never report durable feature passing. Keyboard-only/screenreader at320/375/768px: independent save/delivery/consent/payment labels, no color-only connectivity status, focus remains in editor on hint changes. Product acceptance exit, after implementation, requires all named oracles, owner port agreement, privacy/accessibility and independent review. No product tests executed by this documentation.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-09`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Integration coverage maps T-ARCH-01..06 (local use, races, dishonest ACK, privacy, restore, accessibility) and CR/MPF semantics; their original IDs remain owned by shared contracts. Open owner/storage/protocol decisions block dependent enablement and are not approved product deferrals; whole-suite tracked scope unchanged.

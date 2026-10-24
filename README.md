@@ -17,7 +17,7 @@ The entire CLASS suite runs client-side with user-controlled local keys/data. No
 
 ## Planning status
 
-Prompt 2 has registered 1,480 structured process-spec placeholders across 148 modules. Prompt 3 foundation work is in progress on a documentation branch: 10 F01 listing-creation process documents have been reconciled to local authority pending review; 1,470 remain DRAFT. Canonical local API, listing, cycle, messaging, payment and federation baselines are proposed, not formally accepted. Inventories/checklists were repaired; [reproducible audit](planning/audits/spec_audit.md) and [restart handoff](HANDOFF.md) track actual evidence. Stage 4 implementation is blocked by [SPEC_COMPLETENESS_REPORT.md](SPEC_COMPLETENESS_REPORT.md) (**NO-GO**). No application code, security audit or production deployment is claimed.
+Prompt 2 has registered 1,480 structured process-spec placeholders across 148 modules. Prompt 3 foundation work is in progress on a documentation branch: 30 process proposals across listing creation, offline state and in-app notices have concrete contract bodies pending dependency/independent approval; 1,450 remain DRAFT. Canonical local API, listing, cycle, messaging, payment and federation baselines are proposed, not formally accepted. Inventories/checklists were repaired; [reproducible audit](planning/audits/spec_audit.md) and [restart handoff](HANDOFF.md) track actual evidence. Stage 4 implementation is blocked by [SPEC_COMPLETENESS_REPORT.md](SPEC_COMPLETENESS_REPORT.md) (**NO-GO**). No application code, security audit or production deployment is claimed.
 
 ## Prompt 3 foundations
 - [Completeness and gap report](SPEC_COMPLETENESS_REPORT.md)

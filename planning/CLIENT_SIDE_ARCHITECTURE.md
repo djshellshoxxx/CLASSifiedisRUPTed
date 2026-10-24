@@ -43,7 +43,7 @@ ARCH-009: F12 moderation is local filtering plus optionally subscribed signed po
 | Payments | manual claim/acknowledgement evidence | external wallet, chain/RPC or chosen verifier | `unverified`/`unknown`; no webhook receiver or product API required |
 | Storage/recovery | local vault and explicit export | user-selected encrypted backup location | last backup unknown/stale; data loss possible without export |
 | Auctions/rentals | local proposals and availability notes | explicitly agreed peer protocol/time source if needed | no sealed-bid fairness, trusted close time or global booking exclusivity claim |
-| Paid placement | local display preference only | owner-approved audience/payment policy and optional external data source | no shared audience/paid reach guarantee; remain gated |
+| Paid placement | strong paid-audience activation disabled; local preferences are not substitutes | selected validated external publisher/payment protocol | FEATURE_DISABLED; no audience/reach claim or payment side effect |
 | Federation | user-approved signed public file interchange | chosen peer/relay; no ActivityPub compatibility assumed | no delivery/freshness/deletion guarantee |
 
 ARCH-010: Feature flags are local controls and default off for unreviewed transports/protocols. A local flag cannot enforce rules on a modified client. Disabled operations return `FEATURE_DISABLED` or `PROTOCOL_NOT_REVIEWED` without network side effects. A documented gate is not an approved product-scope deferral; all 1,480 process specifications remain tracked.
@@ -69,8 +69,10 @@ These are specified test obligations, not executed product tests. The engineerin
 | Atomic reservations across people | CB-003/006; F01/F02 | local-only guarantees plus signed commitments; owner must accept limitation before any stronger product claim |
 | Always-on push/email | F13 PS-102..108 | in-app baseline; optional chosen service requires separate dependency/privacy contract |
 | Global enforcement, erase and single time | F04/F05/F10/F12/F18 | impossible under this architecture without additional trust; no silent substitution with centralized infrastructure |
-| All original ideas covered | private original-idea conversation absent | root files/registry define available scope only; owner must supply missing requirements before exhaustive original-idea coverage can be certified |
+| All original ideas covered | original user messages partially retrieved; assistant designs content_omitted | [partial provenance](REQUIREMENT_PROVENANCE.md), no full recovery/coverage certification |
 
 ## Evidence
 
 Reviewed 2026-10-24: [IndexedDB specification](https://www.w3.org/TR/IndexedDB/) describes scoped local transactions; [Storage Standard](https://storage.spec.whatwg.org/) defines storage persistence permission and quota; [Push API](https://www.w3.org/TR/push-api/) describes the external sender/push-service path. The local-authority and failure policies above are engineering decisions derived from these platform constraints. They are not guarantees made by those standards.
+
+Current auction/global-winner/trusted-close and paid-audience requirements remain disabled pending a selected validated external protocol; [GG-001..005](contracts/SHARED_GUARANTEE_GATES.md) specifies the fail-closed behavior. No local guarantee may replace the stronger requirement silently.

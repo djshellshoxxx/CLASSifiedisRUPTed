@@ -15327,152 +15327,152 @@
     },
     {
       "id": "PS-103-01.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/domain_schema.md"
     },
     {
       "id": "PS-103-01.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/domain_schema.md"
     },
     {
       "id": "PS-103-01.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/domain_schema.md"
     },
     {
       "id": "PS-103-02.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/validation_rules.md"
     },
     {
       "id": "PS-103-02.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/validation_rules.md"
     },
     {
       "id": "PS-103-02.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/validation_rules.md"
     },
     {
       "id": "PS-103-03.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/workflow_state_machine.md"
     },
     {
       "id": "PS-103-03.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/workflow_state_machine.md"
     },
     {
       "id": "PS-103-03.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/workflow_state_machine.md"
     },
     {
       "id": "PS-103-04.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/commands_queries_events.md"
     },
     {
       "id": "PS-103-04.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/commands_queries_events.md"
     },
     {
       "id": "PS-103-04.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/commands_queries_events.md"
     },
     {
       "id": "PS-103-05.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/authorization_capabilities.md"
     },
     {
       "id": "PS-103-05.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/authorization_capabilities.md"
     },
     {
       "id": "PS-103-05.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/authorization_capabilities.md"
     },
     {
       "id": "PS-103-06.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-103-06.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-103-06.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-103-07.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/privacy_retention_abuse.md"
     },
     {
       "id": "PS-103-07.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/privacy_retention_abuse.md"
     },
     {
       "id": "PS-103-07.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/privacy_retention_abuse.md"
     },
     {
       "id": "PS-103-08.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/observability_performance.md"
     },
     {
       "id": "PS-103-08.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/observability_performance.md"
     },
     {
       "id": "PS-103-08.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/observability_performance.md"
     },
     {
       "id": "PS-103-09.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-103-09.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-103-09.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-103-10.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/import_export_backup_rollback.md"
     },
     {
       "id": "PS-103-10.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/import_export_backup_rollback.md"
     },
     {
       "id": "PS-103-10.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "13_Notifications/01_delivery/mod_inapp/import_export_backup_rollback.md"
     },
     {
@@ -17277,152 +17277,152 @@
     },
     {
       "id": "PS-116-01.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/domain_schema.md"
     },
     {
       "id": "PS-116-01.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/domain_schema.md"
     },
     {
       "id": "PS-116-01.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/domain_schema.md"
     },
     {
       "id": "PS-116-02.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/validation_rules.md"
     },
     {
       "id": "PS-116-02.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/validation_rules.md"
     },
     {
       "id": "PS-116-02.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/validation_rules.md"
     },
     {
       "id": "PS-116-03.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/workflow_state_machine.md"
     },
     {
       "id": "PS-116-03.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/workflow_state_machine.md"
     },
     {
       "id": "PS-116-03.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/workflow_state_machine.md"
     },
     {
       "id": "PS-116-04.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/commands_queries_events.md"
     },
     {
       "id": "PS-116-04.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/commands_queries_events.md"
     },
     {
       "id": "PS-116-04.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/commands_queries_events.md"
     },
     {
       "id": "PS-116-05.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/authorization_capabilities.md"
     },
     {
       "id": "PS-116-05.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/authorization_capabilities.md"
     },
     {
       "id": "PS-116-05.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/authorization_capabilities.md"
     },
     {
       "id": "PS-116-06.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-116-06.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-116-06.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/failure_recovery_idempotency.md"
     },
     {
       "id": "PS-116-07.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/privacy_retention_abuse.md"
     },
     {
       "id": "PS-116-07.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/privacy_retention_abuse.md"
     },
     {
       "id": "PS-116-07.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/privacy_retention_abuse.md"
     },
     {
       "id": "PS-116-08.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/observability_performance.md"
     },
     {
       "id": "PS-116-08.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/observability_performance.md"
     },
     {
       "id": "PS-116-08.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/observability_performance.md"
     },
     {
       "id": "PS-116-09.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-116-09.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-116-09.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/contract_and_acceptance_tests.md"
     },
     {
       "id": "PS-116-10.R01",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/import_export_backup_rollback.md"
     },
     {
       "id": "PS-116-10.R02",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/import_export_backup_rollback.md"
     },
     {
       "id": "PS-116-10.R03",
-      "status": "DRAFT",
+      "status": "SPECIFIED_REVIEW_PENDING",
       "spec": "15_Platform/01_pwa/mod_offline/import_export_backup_rollback.md"
     },
     {

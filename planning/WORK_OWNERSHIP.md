@@ -21,3 +21,7 @@ Repository scope: **djshellshoxxx/CLASSifiedisRUPTed only**. Integration owner: 
 | independent reviewer | gpt-6-astra | review report only | CAR-01..08 resolved; direction approved subject protocol gates, not whole-spec GO |
 
 Workers share this branch and do not commit/push/switch; integration owner reviews staged paths and commits. No other author ownership file existed in the starting tree. Before each push re-read remote heads and inspect workflow/config changes. Future agents must check this record and `HANDOFF.md`, then reconcile remote evidence again rather than assume an exclusive lock.
+
+## M2 ownership update after published M1
+
+M1 source `0f395d18decb88a7b5e013deae7b1b83ebaca54a`, draft PR2; independent architecture manifest complete. New disjoint documentation slice: contracts worker owns F15 `15_Platform/01_pwa/mod_offline` process bodies/SPEC/TODO; inexpensive inventory worker owns F13 `13_Notifications/01_delivery/mod_inapp` process bodies/SPEC/TODO. Root retains registry/checklist/audit/handoff integration ownership. Old M1 scopes are complete. No worker writes another module or product code.

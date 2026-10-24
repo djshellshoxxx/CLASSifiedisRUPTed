@@ -41,3 +41,11 @@ Unresolved owner/source choices: D13 auction trusted-time/global-winner/paid-aud
 5. Complete every remaining leaf and parent contract with exact interface/schema/state/error/privacy/security/UX/oracle/acceptance mappings. Obtain actual owner/source/security decisions where required. No template bulk approval or fabricated policy/crypto safety.
 6. Independent whole-spec review and zero-blocker GO precede product implementation. Only then write concrete code/test plan and implement to actual static build/acceptance; no purchases/security changes/destructive operations/releases/deployments/payments.
 7. At EVERY small milestone update this handoff with refs/results/blockers/next steps, secret-check, inspect workflow side effects, push named branch and verify remote SHA. Merge only an appropriate reviewed/tested scope; never merge unfinished drafts as approved specs.
+
+## Published milestone M1
+
+- Source checkpoint pushed and verified: `0f395d18decb88a7b5e013deae7b1b83ebaca54a` on `docs/client-owned-foundations-20261024`.
+- GitHub draft [PR #2](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/2) created successfully against main. It explicitly preserves PR1, reports documentation-only progress and whole-suite NO-GO. No merge attempted.
+- `git ls-remote --heads origin` confirmed the new branch SHA; old docs `39ac847` and main `95c46be` unchanged. Limited secret scan zero findings, no workflow/hook changes, 28/28 reviewed-file hashes match.
+- Current handoff-only follow-up commit records this published source SHA; its own exact tip is verified after push rather than self-referentially embedded.
+- Next independent M2 slice: contracts worker owns F15 `mod_offline` process bodies/SPEC/TODO; inventory worker (gpt-6-luna) owns F13 `mod_inapp` process bodies/SPEC/TODO. Root integrates/status/audits/checklists. Neither worker commits/pushes. Owner/protocol questions remain pending; independent local-only specifications continue.

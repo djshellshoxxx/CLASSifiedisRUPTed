@@ -15,3 +15,9 @@ test('rejects malformed or over-precise amounts', () => {
     assert.equal(parseMinor(bad), null, `expected null for "${bad}"`);
   }
 });
+
+test('returns null when the minor-unit value is not a safe integer', () => {
+  assert.equal(parseMinor('99999999999999999999'), null);
+  assert.equal(parseMinor('90071992547409.93'), null);
+  assert.equal(parseMinor('9007199254740.99'), 900719925474099);
+});

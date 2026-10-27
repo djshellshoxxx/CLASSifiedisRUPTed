@@ -74,7 +74,9 @@ export function sortListings(listings, sort = 'newest') {
 
 export function paginate(items, page = 1, pageSize = PAGE_SIZE) {
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
-  const safePage = Math.min(Math.max(1, page), pageCount);
+  const requested = Number(page);
+  const whole = Number.isFinite(requested) ? Math.floor(requested) : 1;
+  const safePage = Math.min(Math.max(1, whole), pageCount);
   const start = (safePage - 1) * pageSize;
   return { items: items.slice(start, start + pageSize), page: safePage, pageCount, total: items.length };
 }

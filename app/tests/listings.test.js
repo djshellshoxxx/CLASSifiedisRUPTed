@@ -76,3 +76,45 @@ test('pagination clamps page numbers and reports totals', () => {
   assert.ok(page.items.length <= PAGE_SIZE);
   assert.equal(paginate([], 1).pageCount, 1);
 });
+
+import { toListingRecord } from '../src/domain/listings.js';
+
+test('title of exactly 3 and exactly 80 characters after trimming is accepted', () => {
+  assert.equal(validateListing({ ...valid, title: 'abc' }).title, undefined);
+  assert.equal(validateListing({ ...valid, title: `  ${'x'.repeat(80)}  ` }).title, undefined);
+});
+
+test('title of 2 characters and whitespace-only title are rejected', () => {
+  assert.ok(validateListing({ ...valid, title: 'ab' }).title);
+  assert.ok(validateListing({ ...valid, title: '   ' }).title);
+});
+
+test('description of exactly 1000 characters is accepted and 1001 rejected', () => {
+  assert.equal(validateListing({ ...valid, description: 'd'.repeat(1000) }).description, undefined);
+  assert.ok(validateListing({ ...valid, description: 'd'.repeat(1001) }).description);
+});
+
+test('price is required for buy and ignored for giveaway and trade even when malformed', () => {
+  assert.ok(validateListing({ ...valid, kind: 'buy', price: '' }).price);
+  assert.ok(validateListing({ ...valid, kind: 'sell', price: '' }).price);
+  assert.equal(validateListing({ ...valid, kind: 'giveaway', price: 'free please' }).price, undefined);
+  assert.equal(validateListing({ ...valid, kind: 'trade', price: '-5' }).price, undefined);
+});
+
+test('unknown kind or category is rejected', () => {
+  assert.ok(validateListing({ ...valid, kind: 'auction' }).kind);
+  assert.ok(validateListing({ ...valid, category: 'cars' }).category);
+});
+
+test('toListingRecord trims title and description', () => {
+  const record = toListingRecord({ ...valid, title: '  Garden bench  ', description: '  Solid wood.  ' }, { id: 'x1', now: 5 });
+  assert.equal(record.title, 'Garden bench');
+  assert.equal(record.description, 'Solid wood.');
+  assert.equal(record.priceMinor, 4500);
+  assert.equal(record.createdAt, 5);
+});
+
+test('toListingRecord stores priceMinor 0 for giveaway and trade', () => {
+  assert.equal(toListingRecord({ ...valid, kind: 'giveaway', price: '12' }, { id: 'x2', now: 1 }).priceMinor, 0);
+  assert.equal(toListingRecord({ ...valid, kind: 'trade', price: '12' }, { id: 'x3', now: 1 }).priceMinor, 0);
+});

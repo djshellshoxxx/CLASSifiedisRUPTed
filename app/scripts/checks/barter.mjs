@@ -97,8 +97,13 @@ try {
   // (f) At 1280px the region needs no horizontal scroll.
   {
     const { page, context } = await open(1280);
-    const metrics = await page.getByRole('region', { name: REGION_NAME }).and(page.locator('[tabindex="0"]')).evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
-    check(`(f) region does not need horizontal scroll at 1280px (scrollWidth ${metrics.scrollWidth}, clientWidth ${metrics.clientWidth})`, metrics.scrollWidth <= metrics.clientWidth);
+    const regionLocator = page.getByRole('region', { name: REGION_NAME }).and(page.locator('[tabindex="0"]'));
+    if ((await regionLocator.count()) !== 1) {
+      check('(f) region does not need horizontal scroll at 1280px (region not found)', false);
+    } else {
+      const metrics = await regionLocator.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+      check(`(f) region does not need horizontal scroll at 1280px (scrollWidth ${metrics.scrollWidth}, clientWidth ${metrics.clientWidth})`, metrics.scrollWidth <= metrics.clientWidth);
+    }
     await context.close();
   }
 } finally {

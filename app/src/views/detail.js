@@ -23,7 +23,7 @@ export function renderDetail(root, { id, listings, saved, onSavedChange }) {
     const nowSaved = saved.toggle(item.id);
     paintSave();
     onSavedChange?.(item.id);
-    announce(nowSaved ? 'Listing saved.' : 'Listing removed from saved.');
+    announce(nowSaved ? `Listing saved: ${item.title}.` : `Listing removed from saved: ${item.title}.`);
   });
   paintSave();
 

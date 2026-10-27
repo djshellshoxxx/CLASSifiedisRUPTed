@@ -140,12 +140,20 @@ export function renderBrowse(root, { listings, saved, onSavedChange }) {
     Object.assign(state, { query: '', category: '', kind: '', maxPrice: '', sort: 'newest', page: 1 });
     form.reset();
     draw();
+    // The Clear filters button sits in the empty state that draw() just removed, so move focus to the results.
+    results.focus();
   }
 
   function toggleSave(id) {
-    saved.toggle(id);
+    const nowSaved = saved.toggle(id);
     onSavedChange?.(id);
     draw();
+    // draw() rebuilt every card, so the pressed Save button is new. Focus the one for this listing, if it is still shown.
+    const button = [...results.querySelectorAll('button[data-listing-id]')].find((node) => node.dataset.listingId === id);
+    if (button) button.focus();
+    else results.focus();
+    const title = listings.find((item) => item.id === id)?.title ?? 'this listing';
+    announce(nowSaved ? `Listing saved: ${title}.` : `Listing removed from saved: ${title}.`);
   }
 
   draw();

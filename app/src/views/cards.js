@@ -22,6 +22,8 @@ export function listingCard(item, { isSaved, onToggleSave }) {
   const saveButton = h('button', {
     type: 'button',
     class: 'btn btn-small',
+    // Lets a view find this button again after it rebuilds the card list.
+    dataset: { listingId: item.id },
     onClick: () => onToggleSave(item.id, saveButton),
   });
   paintSaveButton(saveButton, item.title, isSaved);

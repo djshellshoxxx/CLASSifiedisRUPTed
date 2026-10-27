@@ -1,0 +1,10 @@
+{
+  "name": "ClassRup demo",
+  "short_name": "ClassRup",
+  "description": "Mock-backed framework demo with synthetic data.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#1f4d3a",
+  "icons": []
+}

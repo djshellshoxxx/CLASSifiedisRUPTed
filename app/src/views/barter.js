@@ -16,11 +16,15 @@ export function renderBarter(root, { listings }) {
       h('h2', { id: 'offers-heading' }, 'Trade offers'),
       BARTER_OFFERS.length
         ? h(
-            'table',
-            { class: 'table' },
-            h('caption', { class: 'sr-only' }, 'Demo trade offers, read-only'),
-            h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Offered'), h('th', { scope: 'col' }, 'Wanted'), h('th', { scope: 'col' }, 'Status'))),
-            h('tbody', {}, BARTER_OFFERS.map((offer) => h('tr', {}, h('td', {}, nameOf(offer.offered)), h('td', {}, nameOf(offer.wanted)), h('td', {}, STATUS[offer.status] ?? offer.status)))),
+            'div',
+            { class: 'table-scroll', tabindex: '0', role: 'region', 'aria-labelledby': 'offers-heading' },
+            h(
+              'table',
+              { class: 'table' },
+              h('caption', { class: 'sr-only' }, 'Demo trade offers, read-only'),
+              h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Offered'), h('th', { scope: 'col' }, 'Wanted'), h('th', { scope: 'col' }, 'Status'))),
+              h('tbody', {}, BARTER_OFFERS.map((offer) => h('tr', {}, h('td', {}, nameOf(offer.offered)), h('td', {}, nameOf(offer.wanted)), h('td', {}, STATUS[offer.status] ?? offer.status)))),
+            ),
           )
         : emptyState('No offers in the demo data.'),
     ),

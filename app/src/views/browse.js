@@ -1,4 +1,4 @@
-import { h, clear, emptyState } from '../lib/dom.js';
+import { h, clear, emptyState, announce } from '../lib/dom.js';
 import { CATEGORIES, KINDS, SORTS, filterListings, sortListings, paginate } from '../domain/listings.js';
 import { parseMinor } from '../lib/money.js';
 import { listingCard } from './cards.js';
@@ -64,7 +64,8 @@ export function renderBrowse(root, { listings, saved, onSavedChange }) {
   );
 
   const summary = h('p', { class: 'results-summary', 'aria-live': 'polite' });
-  const results = h('div', { class: 'results' });
+  // Focus target after paging. Only Next and Previous move focus here, never filter or search input.
+  const results = h('div', { class: 'results', role: 'region', 'aria-label': 'Listing results', tabindex: '-1' });
   const pager = h('nav', { class: 'pager', 'aria-label': 'Pagination' });
 
   root.replaceChildren(
@@ -124,12 +125,15 @@ export function renderBrowse(root, { listings, saved, onSavedChange }) {
         h('button', { type: 'button', class: 'btn', disabled: page.page === page.pageCount, onClick: () => goTo(page.page + 1) }, 'Next'),
       );
     }
+    return page;
   }
 
   function goTo(page) {
     state.page = page;
-    draw();
-    summary.focus?.();
+    const current = draw();
+    // The pressed pager button is re-rendered away, so move focus to the results before it is lost.
+    results.focus();
+    announce(`Page ${current.page} of ${current.pageCount}`);
   }
 
   function resetFilters() {

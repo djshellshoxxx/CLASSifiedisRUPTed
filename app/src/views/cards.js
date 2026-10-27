@@ -9,18 +9,22 @@ export function priceLabel(item) {
   return formatMinor(item.priceMinor, item.currency);
 }
 
+// Sets aria-pressed, aria-label and text together so every view paints the save state the same way.
+export function paintSaveButton(button, title, isSaved) {
+  button.setAttribute('aria-pressed', String(isSaved));
+  button.setAttribute('aria-label', `${isSaved ? 'Unsave' : 'Save'} ${title}`);
+  button.textContent = isSaved ? 'Saved' : 'Save';
+  return button;
+}
+
+// onToggleSave receives the listing id and the button that was pressed.
 export function listingCard(item, { isSaved, onToggleSave }) {
-  const saveButton = h(
-    'button',
-    {
-      type: 'button',
-      class: 'btn btn-small',
-      'aria-pressed': String(isSaved),
-      'aria-label': `${isSaved ? 'Unsave' : 'Save'} ${item.title}`,
-      onClick: () => onToggleSave(item.id),
-    },
-    isSaved ? 'Saved' : 'Save',
-  );
+  const saveButton = h('button', {
+    type: 'button',
+    class: 'btn btn-small',
+    onClick: () => onToggleSave(item.id, saveButton),
+  });
+  paintSaveButton(saveButton, item.title, isSaved);
   return h(
     'article',
     { class: 'card' },

@@ -1,10 +1,11 @@
-import { h, clear, emptyState } from '../lib/dom.js';
+import { h, clear, emptyState, announce } from '../lib/dom.js';
 import { DEMO_USER } from '../data/fixtures.js';
-import { listingCard } from './cards.js';
+import { listingCard, paintSaveButton } from './cards.js';
 
 export function renderAccount(root, { listings, saved }) {
   clear(root);
   const mine = listings.list().filter((item) => item.seller === DEMO_USER.id);
+  const savedCount = h('dd', {}, String(saved.list().length));
 
   root.append(
     h('header', { class: 'page-head' }, h('h1', {}, 'Your account (demo)')),
@@ -15,7 +16,7 @@ export function renderAccount(root, { listings, saved }) {
       h('dl', { class: 'facts' },
         h('dt', {}, 'Name'), h('dd', {}, DEMO_USER.displayName),
         h('dt', {}, 'Coarse area'), h('dd', {}, DEMO_USER.region),
-        h('dt', {}, 'Saved listings'), h('dd', {}, String(saved.list().length)),
+        h('dt', {}, 'Saved listings'), savedCount,
         h('dt', {}, 'Your listings'), h('dd', {}, String(mine.length)),
       ),
       h('p', { class: 'muted small' }, DEMO_USER.note),
@@ -23,10 +24,29 @@ export function renderAccount(root, { listings, saved }) {
     h('section', { class: 'panel', 'aria-labelledby': 'mine-heading' }, h('h2', { id: 'mine-heading' }, 'Your listings')),
   );
 
+  // Same saved repository and toggle as browse. The button is repainted in place so focus stays on it.
+  const toggleSave = (item, button) => {
+    const nowSaved = saved.toggle(item.id);
+    paintSaveButton(button, item.title, nowSaved);
+    savedCount.textContent = String(saved.list().length);
+    announce(nowSaved ? `Listing saved: ${item.title}.` : `Listing removed from saved: ${item.title}.`);
+  };
+
   const section = root.lastElementChild;
   if (mine.length === 0) {
     section.append(emptyState('You have no listings yet.', h('a', { class: 'btn', href: '#/sell' }, 'Create a listing')));
   } else {
-    section.append(h('ul', { class: 'card-grid' }, mine.map((item) => h('li', {}, listingCard(item, { isSaved: saved.has(item.id), onToggleSave: () => {} })))));
+    section.append(
+      h(
+        'ul',
+        { class: 'card-grid' },
+        mine.map((item) =>
+          h('li', {}, listingCard(item, {
+            isSaved: saved.has(item.id),
+            onToggleSave: (_id, button) => toggleSave(item, button),
+          })),
+        ),
+      ),
+    );
   }
 }

@@ -1,35 +1,25 @@
-# PS-103-06 — failure recovery idempotency
+# PS-103-06 — failure recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-06. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-06 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the failure recovery idempotency process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-06.R01 — failure model
 
-## Requirements to specify
-- [ ] PS-103-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+Failures include duplicate/out-of-order local event delivery, tab races, transaction abort/quota, locked or unavailable vault, unavailable preference/capability resolver, corrupt schema, cursor mismatch, restoration fork, and volatile-memory loss. None may be converted into a remote delivery success or inferred user consent.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## PS-103-06.R02 — dedupe and atomic recovery
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+The unique local key is `(consumer_id="F13.inapp.v1", source_event_id)` within one vault/principal. In one F15 transaction: re-read the marker and current revision, recheck capability/policy, insert at most one row, apply permitted pruning, and persist marker/cursor. A transaction abort leaves all of these unchanged. Replayed identical events return the recorded local outcome. If an event ID is reused with conflicting event type/version/aggregate reference, keep the original row, quarantine the conflicting source, and return `CONFLICT_QUARANTINED`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Commands use CR-002 idempotency `(vault_id, principal_id, operation, command_id)`. For an active receipt, same canonical request bytes returns the original receipt; changed bytes returns `IDEMPOTENCY_MISMATCH`. CR-002 deleted-scope behavior takes precedence: after a deletion marker exists, any replay payload returns `OBJECT_DELETED` without comparing bytes or returning original request/receipt content. Do not silently mint a fresh command ID after an unknown outcome. Read/delete and cursor advancement cannot race past `expected_revision`; retry after `REVISION_CONFLICT` requires a fresh query and explicit user action. Row revision begins at 1 and increments once for each committed nonterminal mutation below MAX_SAFE_INTEGER. After receipt/marker lookup, authorization and CAS check, matching already-read is a no-op even at maximum; only unread-to-read mutation at maximum revision returns `RATE_LIMITED_LOCAL` / `revision: REVISION_EXHAUSTED`, retryable=false. Authorized delete still succeeds with matching expected_revision at maximum; it records that max as the content-free final-revision marker without incrementing. Per-vault local sequence increments once per committed notice in the same transaction as row and event marker; it never resets or wraps. Sequence exhaustion returns `RATE_LIMITED_LOCAL` / `local_sequence: SEQUENCE_EXHAUSTED`, retryable=false.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## PS-103-06.R03 — recovery outcomes
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-06`; scenarios and fixtures to be detailed in Prompt 3.
+- `VAULT_LOCKED`, `STORAGE_UNAVAILABLE`, or `POLICY_UNAVAILABLE`: show a local unavailable state; do not advance source cursor or claim persistence.
+- `STORAGE_QUOTA_EXCEEDED` or logical cap: prune read rows under the approved policy; if still full, pause at the pending event and return `RATE_LIMITED_LOCAL`.
+- Corrupt/unknown schema or restore disagreement: quarantine, stop writes for the affected inbox and require reviewed repair; never choose latest timestamp/arrival or replay blindly.
+- Volatile mode: explicitly transient, no durable receipt/read state, clear on lock/reload/close. Reopening may not recover those notices.
+- Lost/evicted local storage: disclose possible loss; no product backup or cross-device recovery is promised.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance mapping
+
+- `TEST-PS-103-06`: crash/fault injection before and after each transaction step; same/different command retry; duplicate event; event-ID conflict; quota; independent tab races; schema migration failure; restore fork; memory-mode loss. No actual recovery tests have run.

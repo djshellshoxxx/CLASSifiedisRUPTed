@@ -1,35 +1,21 @@
-# PS-103-08 — observability performance
+# PS-103-08 — local diagnostics and performance budgets
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-08. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-08 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the observability performance process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-08.R01 — observability boundary
 
-## Requirements to specify
-- [ ] PS-103-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+This module has no hosted service, telemetry collector, remote crash reporting or global delivery metric. Default diagnostics are off. If F15's opt-in local diagnostic ring is later enabled, record only aggregate counters and typed error codes, never notice text, event payload/IDs, principal/vault IDs, target IDs, correlation IDs, locale text, or preference values. F15 owns diagnostic storage and its 1,000-entry/7-day cap.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## PS-103-08.R02 — proposed local budgets
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+On a declared reference device with an unlocked vault and available local store, proposed targets are: p95 event-to-row transaction <=100 ms for an individual event; p95 query/render <=200 ms for 100 rows; virtualized scrolling remains responsive at 1,000 rows; catch-up processes <=100 source events per transaction before yielding. These are engineering targets, not service SLOs or measured claims. Data set, browser/version, device profile, storage mode and measurement harness must accompany future results.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+No timing target applies when the browser is closed, storage is denied/evicted, vault is locked, or optional preference/persistence dependencies are unavailable. UI must distinguish `local_pending`, `locally recorded`, `suppressed by preference`, `session only`, `pending retry`, and `inbox full`; none may be rendered as remote delivery or read receipt.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## PS-103-08.R03 — accessibility and operating states
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-08`; scenarios and fixtures to be detailed in Prompt 3.
+Use a semantic inbox list, a named `Mark read` action, visible status text and a polite live region for a generic newly-created notice. Do not rely on color, animation, sound or timing alone. Respect reduced motion, zoom/reflow, keyboard operation and screen-reader naming. Quiet hours suppress live-region interruptions; an enabled inbox remains navigable. Localization uses fixed keys with plural/RTL support; no formatted money/date conversion changes the underlying record.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance mapping
+
+- `TEST-PS-103-08`: benchmark the named data set/device/browser; verify yield and virtualization; ensure diagnostics are off by default and redact IDs/content; keyboard/screen-reader/reduced-motion/contrast/RTL review; verify states are text-labelled. These targets are unmeasured and tests unexecuted.

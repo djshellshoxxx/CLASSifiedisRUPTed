@@ -1,44 +1,23 @@
-# F01.S01.M01 — create
+# F01.S01.M01 — Create listing module
+**Status:** SPECIFIED — REVIEW PENDING. **Feature:** F01 LocalBazaar. **Subfeature:** F01.S01 listings. **Owner:** F01.S01.M01. **No application implementation.**
+## Purpose / assembly
+An unlocked local principal validates a proposed private draft and commits its owned object, receipt and local event atomically in one IndexedDB vault. No account/tenant/cookie/API/SQL dependency. F07/F16 provide local principal/unlock/protection policy, F10 retention/disclosure, F06 coarse region and F12/F18 locally selected content rules. Draft creation does not publish/export, reserve, send messages or verify settlement. Shared local types/events belong to F15.
+## Process specification inventory (planning/SPEC_REGISTRY.csv is canonical)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F01.S01.
+**Inventory:** 10 registered contracts; status reflects the registry only.
+- [domain_schema.md](domain_schema.md) — `PS-002-01`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [validation_rules.md](validation_rules.md) — `PS-002-02`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [workflow_state_machine.md](workflow_state_machine.md) — `PS-002-03`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [commands_queries_events.md](commands_queries_events.md) — `PS-002-04`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [authorization_capabilities.md](authorization_capabilities.md) — `PS-002-05`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — `PS-002-06`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — `PS-002-07`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [observability_performance.md](observability_performance.md) — `PS-002-08`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — `PS-002-09`; registry status: **SPECIFIED_REVIEW_PENDING**.
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — `PS-002-10`; registry status: **SPECIFIED_REVIEW_PENDING**.
 
-## Purpose and business behavior
-Provide create as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+## Module composition
+Local form -> unlocked principal/context -> PS-002-02/05 validation/permission -> PS-002-06 exact command receipt -> PS-002-01/03 atomic local object/event -> PS-002-04 typed receipt -> PS-002-08 opt-in local diagnostics. PS-002-07/09/10 constrain privacy/tests/export/restore. Sibling edits/publish use current economic revision and local storage guards; private drafts never reach F06/F11. Persistence of sensitive drafts is blocked until storage/key protection review; memory-only composition has no durable-commit label.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
-
-## Scope
-- Required process spec: `create_domain_model.md` (not yet authored)
-- Required process spec: `create_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `create_validation_and_authorization.md` (not yet authored)
-- Required process spec: `create_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `create_interfaces_and_events.md` (not yet authored)
-- Required process spec: `create_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `create_acceptance_and_property_tests.md` (not yet authored)
-
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
-
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
-
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
-
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
-
-## Required process specification inventory
-- [ ] `create_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `create_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+## Acceptance
+Ten process contracts are review pending. Required evidence: reviewed local principal/key/storage protection profile, versioned in-process schemas and error matrices, conflict/deletion/receipt semantics, browser transaction/quota/tab-race fixtures, privacy/accessibility tests specified and independent review links. No SQL FK or OpenAPI gate. This module cannot confer approval on its siblings or parent feature. Product tests execute only after whole-spec GO.

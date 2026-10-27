@@ -1,0 +1,54 @@
+{
+  "audit_version": 1,
+  "counts": {
+    "features": 18,
+    "modules": 148,
+    "process_contracts": 1480,
+    "requirements": 4444
+  },
+  "registry_status_counts": {
+    "DRAFT": 1450,
+    "SPECIFIED_REVIEW_PENDING": 30
+  },
+  "hierarchy_exceptions": {
+    ".": "root project documents use PROJECT_SPEC.md and PROJECT_TODO.md",
+    "scripts": "audit tooling, excluded from product hierarchy",
+    "planning/contracts": "shared contract library, not a feature hierarchy node",
+    "planning/audits": "generated audit reports",
+    "planning/audits/reviews": "per-contract approval records"
+  },
+  "review_gate": "PENDING",
+  "review_pending_contract_count": 1480,
+  "review_evidence": {
+    "gate": "PENDING",
+    "verified_approval_count": 0,
+    "pending_approval_count": 1480,
+    "missing_evidence_count": 0,
+    "invalid_evidence_count": 0,
+    "unsupported_git_revision_count": 0,
+    "source_binding": "SHA-256 of current process-spec bytes",
+    "reviewer_identity_authenticated": false
+  },
+  "baseline_reconciliation": {
+    "reference": "39ac847",
+    "baseline_requirement_status_mismatches": 30,
+    "affected_process_contracts": 10,
+    "current_requirement_status_mismatches": 0,
+    "resolved_mismatch_count": 30
+  },
+  "scope_reconciliation": {
+    "legacy_modules_reconciled": 147,
+    "baseline_stale_scope_entries": 1029,
+    "current_stale_scope_entries": 0,
+    "modules_with_current_stale_entries": 0
+  },
+  "missing_test_artifact_count": 1480,
+  "placeholder_spec_count": 1450,
+  "structural_pass": true,
+  "structural_errors": [],
+  "semantic_gate": "NO-GO",
+  "semantic_findings": [
+    "1450 process specs contain unresolved placeholder markers",
+    "specification review gate PENDING: 1480 contracts await approval, 0 approved contracts lack evidence, 0 approval records are invalid"
+  ]
+}

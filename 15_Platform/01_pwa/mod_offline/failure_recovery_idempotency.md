@@ -1,35 +1,11 @@
-# PS-116-06 — failure recovery idempotency
+# PS-116-06 — Interrupted results, retries and competing tabs
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-06. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the failure recovery idempotency process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-06.R01: Offline module never resubmits a domain operation with a new command ID. Reconcile unknown save using core queryCommand; existing live receipt is authoritative, deleted marker returns OBJECT_DELETED and cannot recreate content. Missing receipt after known abort permits owner-controlled same-ID retry; unknown storage outcome stays unknown. Retries resolve receipt before create quotas per core. Queue replay uses immutable original record/event/destination refs, never signs new economic terms or creates new consent.
+- PS-116-06.R02: At most one coalesced local run request per active document; inter-tab exclusivity and aggregate in-flight limit belong to QueueCoordinator's atomic IndexedDB claim/revision guard, not BroadcastChannel mutex. Integration requires exactly two logical local slot records keyed `[vault_id,slot:0|1]`, shared across all run IDs/tabs; claiming a due entry and free slot plus its attempt/revision is one transaction, and only matching owner attempt may release/complete it. No run-local counter can bypass these slots. Suspended/uncertain sends retain occupied/uncertain slot state until reconciliation or explicit risk-aware owner recovery; local slot ownership cannot prove a remote transfer stopped. Integration requires attempt record `{attempt_id,entry_ref,claim_revision,runner_id,claim_state,deadline_hint}` and stale-claim reconciliation: no network inside claim transaction; owner checks claim before dispatch/result commit; stale callbacks cannot overwrite newer outcome. A crash after send before ACK is delivery_unknown; retry can duplicate transmission and requires receiver dedup, never exactly-once guarantee. No coordinator port/atomic claim support means pause dispatch, not unsafe fallback.
+- PS-116-06.R03: Reuse MPF owner retry policy full-jitter exponential 1s..6h, max20 attempts then dead_letter; offline view does not start an independent retry loop or reset counters on hints/reload. Batch <=20 due entries; <=2 owner-authorized active local attempt slots per vault across all runs/tabs, each adapter attempt timeout <=30s then uncertain/retry policy; document suspension is not a reliable timeout clock. Backward clock/expired claim/snapshot restore triggers reconciliation and paused uncertainty, never trusted expiry. Manual retry after dead-letter requires user action and owner authorization with original record ID; clearing display error cannot clear evidence.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-06`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-06 two-tab fake-coordinator CAS race, lost receipt, duplicate resume IDs, send-then-crash, stale callback and 20th failed attempt. Oracle: one active claim per entry, at most two owner-authorized active local attempts per vault across all runs/tabs as enforced by atomic slots, immutable record IDs, no receipt reconstruction or silent counter reset. Slot recovery after timeout/crash may overlap a previously transmitted request whose remote outcome is unknown; expose uncertainty and require dedup, never promise at most two remote requests still executing or exactly-once delivery. Real-browser coordinator tests required after owner implementation.

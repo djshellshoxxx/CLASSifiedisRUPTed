@@ -10,10 +10,21 @@ export function renderEditor(root, { listings, drafts }) {
   let draft = { ...EMPTY_DRAFT, ...(restored ?? {}) };
   let errors = {};
 
-  const summary = h('div', { class: 'error-summary', role: 'alert', hidden: true });
+  const summary = h('div', { class: 'error-summary', role: 'alert', tabindex: '-1', hidden: true });
   const notice = h('p', { class: 'notice', role: 'status' });
   const submitBtn = h('button', { type: 'submit', class: 'btn btn-primary' }, 'Submit (simulated)');
   const form = h('form', { class: 'editor', novalidate: true, onSubmit: onSubmit });
+
+  // Error links point at field ids. Handle them here so the hash router never sees '#price'.
+  summary.addEventListener('click', (event) => {
+    const link = event.target.closest('a');
+    if (!link) return;
+    event.preventDefault();
+    const control = form.querySelector(`[name="${link.getAttribute('href').slice(1)}"]`);
+    if (!control) return;
+    control.focus();
+    control.scrollIntoView({ block: 'center' });
+  });
 
   root.replaceChildren(
     h('header', { class: 'page-head' }, h('h1', {}, 'Create a listing'), h('p', { class: 'muted' }, 'Demo mode: submissions stay in this session only and are not published.')),
@@ -116,8 +127,7 @@ export function renderEditor(root, { listings, drafts }) {
     errors = validateListing(draft);
     paintErrors();
     if (Object.keys(errors).length) {
-      summary.focus?.();
-      form.querySelector('[aria-invalid="true"]')?.focus();
+      summary.focus();
       return;
     }
     submitBtn.disabled = true;
@@ -128,6 +138,7 @@ export function renderEditor(root, { listings, drafts }) {
     if (!result.ok) {
       errors = result.errors;
       paintErrors();
+      summary.focus();
       return;
     }
     drafts.clear();

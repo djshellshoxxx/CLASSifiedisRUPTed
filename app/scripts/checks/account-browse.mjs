@@ -9,15 +9,20 @@ const MOBILE = { width: 390, height: 844 };
 
 const browser = await chromium.launch();
 const errors = [];
+const consoleIssues = [];
 
 // Each newPage() gets its own browser context, so localStorage starts empty for every section.
 async function freshPage(viewport = MOBILE) {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning') consoleIssues.push(`${message.type()}: ${message.text()}`);
+  });
   return page;
 }
 
 const activeIsBody = (page) => page.evaluate(() => document.activeElement === document.body || document.activeElement === null);
+const waitForStatusExact = (page, text) => page.waitForFunction((t) => document.getElementById('status')?.textContent === t, text, { timeout: 2000 }).then(() => true, () => false);
 const focusInResults = (page) =>
   page.evaluate(() => {
     const region = document.querySelector('.results');
@@ -139,6 +144,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelectorAll('.card').length === 1);
   check('saved: one card remains after unsaving the first', (await page.locator('.card').count()) === 1);
+  check('saved: removal is announced with the title', await waitForStatusExact(page, 'Listing removed from saved: Oak dining table.'));
   check('saved: focus after unsave is not body', !(await activeIsBody(page)));
   check('saved: focus after unsave lands on the page heading', await page.evaluate(() => document.activeElement?.tagName === 'H1'));
 
@@ -147,6 +153,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
   await page.keyboard.press('Enter');
   await page.waitForSelector('.state-empty');
   check('saved: empty state shown after the last unsave', await page.getByText('Nothing saved yet.').isVisible());
+  check('saved: last removal is announced with the title', await waitForStatusExact(page, 'Listing removed from saved: Bicycle, city model.'));
   check('saved: focus after last unsave is not body', !(await activeIsBody(page)));
   check('saved: focus after last unsave lands on the empty-state link', await page.evaluate(() => document.activeElement?.textContent === 'Browse listings'));
   await page.close();
@@ -176,5 +183,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
 }
 
 check('no uncaught page errors during account and browse checks', errors.length === 0);
+check(
+  `no console errors or warnings on #/account, #/ and #/saved (${consoleIssues.length} recorded${consoleIssues.length ? `: ${consoleIssues.slice(0, 3).join(' | ')}` : ''})`,
+  consoleIssues.length === 0,
+);
 await browser.close();
 finish();

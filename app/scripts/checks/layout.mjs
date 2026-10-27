@@ -98,9 +98,19 @@ try {
     await context.close();
   }
 
-  // 2. Focus is visible: first link and first button reached by keyboard on each route.
+  // 2. Focus is visible, reached by keyboard on each route: the skip link (outside main), the first link inside main, and the first button.
+  // A route with no link or button inside main is SKIPped with the reason. SKIP is neither a pass nor a failure.
+  let skipped = 0;
+  const skip = (name, reason) => {
+    skipped += 1;
+    console.log(`SKIP ${name}: ${reason}`);
+  };
   for (const route of ROUTES) {
     const { page, context } = await open(route);
+    const inMain = await page.evaluate(() => ({
+      links: document.querySelectorAll('#main a[href]').length,
+      focusable: document.querySelectorAll('#main a[href], #main button:not([disabled]), #main input:not([disabled]), #main select:not([disabled]), #main textarea:not([disabled]), #main [tabindex]:not([tabindex="-1"])').length,
+    }));
     // The view moves focus to <main> on render, so walk back to the first focusable element (the skip link) before tabbing forward.
     for (let i = 0; i < 30; i += 1) {
       const atSkipLink = await page.evaluate(() => document.activeElement?.classList.contains('skip-link') ?? false);
@@ -117,31 +127,43 @@ try {
           outlineStyle: cs.outlineStyle,
           outlineWidth: cs.outlineWidth,
           focusVisible: el.matches(':focus-visible'),
+          inMain: Boolean(el.closest('main')),
         };
       });
     let firstLink = null;
+    let firstMainLink = null;
     let firstButton = null;
     let info = await probe();
     for (let i = 0; i < 40; i += 1) {
       if (info.tag === 'A' && !firstLink) firstLink = info;
+      if (info.tag === 'A' && info.inMain && !firstMainLink) firstMainLink = info;
       if (info.tag === 'BUTTON' && !firstButton) firstButton = info;
-      if (firstLink && firstButton) break;
+      if (firstLink && firstMainLink && firstButton) break;
       await page.keyboard.press('Tab');
       info = await probe();
     }
     const visibleOutline = (info) => info.focusVisible && info.outlineStyle !== 'none' && parseFloat(info.outlineWidth) > 0;
     const describe = (info) => `"${info.label}" outline ${info.outlineStyle} ${info.outlineWidth}, focus-visible ${info.focusVisible}`;
     check(
-      `focus visible on first link on ${route}: ${firstLink ? describe(firstLink) : 'no link reached'}`,
+      `focus visible on first link on ${route} (skip link, outside main): ${firstLink ? describe(firstLink) : 'no link reached'}`,
       Boolean(firstLink) && visibleOutline(firstLink),
     );
+    if (inMain.links === 0) {
+      skip(`focus visible on first link inside main on ${route}`, `no link inside main on this route (focusable controls inside main: ${inMain.focusable}, none is a link)`);
+    } else {
+      check(
+        `focus visible on first link inside main on ${route}: ${firstMainLink ? describe(firstMainLink) : 'no link inside main reached by Tab'}`,
+        Boolean(firstMainLink) && visibleOutline(firstMainLink),
+      );
+    }
     if (firstButton) {
       check(`focus visible on first button on ${route}: ${describe(firstButton)}`, visibleOutline(firstButton));
     } else {
-      check(`focus visible on first button on ${route}: no button on this route, nothing to check`, true);
+      skip(`focus visible on first button on ${route}`, 'no button is reachable by Tab on this route; the first link inside main is checked above');
     }
     await context.close();
   }
+  console.log(`${skipped} focus check(s) skipped with a reason (not counted as passes)`);
 
   // 3. Touch targets at 390px: visible buttons and links in main and header nav are at least 24x24 CSS px.
   for (const route of ROUTES) {

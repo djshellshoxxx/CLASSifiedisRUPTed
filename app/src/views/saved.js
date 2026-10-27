@@ -23,7 +23,7 @@ export function renderSaved(root, { listings, saved, onSavedChange }) {
           isSaved: true,
           onToggleSave: (id) => {
             saved.unsave(id);
-            announce('Listing removed from saved.');
+            announce(`Listing removed from saved: ${item.title}.`);
             onSavedChange?.(id);
             renderSaved(root, { listings, saved, onSavedChange });
             // The card that held focus was removed by the re-render. Move focus to the empty-state link or the heading.

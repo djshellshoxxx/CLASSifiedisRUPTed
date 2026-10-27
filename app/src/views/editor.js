@@ -15,12 +15,12 @@ export function renderEditor(root, { listings, drafts }) {
   const submitBtn = h('button', { type: 'submit', class: 'btn btn-primary' }, 'Submit (simulated)');
   const form = h('form', { class: 'editor', novalidate: true, onSubmit: onSubmit });
 
-  // Error links point at field ids. Handle them here so the hash router never sees '#price'.
+  // Error links are '#/sell/<field>' so that a new tab still lands on the sell page. A normal click only focuses the field.
   summary.addEventListener('click', (event) => {
     const link = event.target.closest('a');
     if (!link) return;
     event.preventDefault();
-    const control = form.querySelector(`[name="${link.getAttribute('href').slice(1)}"]`);
+    const control = form.querySelector(`[name="${link.getAttribute('href').split('/').pop()}"]`);
     if (!control) return;
     control.focus();
     control.scrollIntoView({ block: 'center' });
@@ -118,7 +118,7 @@ export function renderEditor(root, { listings, drafts }) {
     summary.hidden = keys.length === 0;
     summary.replaceChildren(
       keys.length ? h('p', {}, `Fix ${keys.length} field${keys.length === 1 ? '' : 's'} to continue:`) : '',
-      keys.length ? h('ul', {}, keys.map((key) => h('li', {}, h('a', { href: `#${key}` }, errors[key])))) : '',
+      keys.length ? h('ul', {}, keys.map((key) => h('li', {}, h('a', { href: `#/sell/${key}` }, errors[key])))) : '',
     );
   }
 

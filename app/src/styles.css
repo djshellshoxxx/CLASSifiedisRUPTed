@@ -81,6 +81,7 @@ main a { padding-block: 4px; }
 main:focus { outline: none; }
 .page-head p { margin: 0 0 12px; }
 .muted { color: var(--muted); }
+input::placeholder, textarea::placeholder { color: var(--muted); }
 .small { font-size: 0.85rem; }
 
 .btn {

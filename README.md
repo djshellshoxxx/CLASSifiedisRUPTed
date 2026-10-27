@@ -11,7 +11,7 @@ A modular, mobile-first, privacy-aware PWA for local commerce, classifieds (Loca
 
 ## Planning status
 
-Hierarchy and module-level specification inventories only. Process specifications remain to be written in Prompt 2. No application implementation, security certification or production deployment is claimed.
+Hierarchy and module-level specification inventories are in this repository. Process specifications are still largely draft. A mock-backed framework demo lives in [app/](app/README.md): synthetic data, no server, no authentication, no payments, nothing published. The demo is not a product implementation of the specifications, and no security certification or production deployment is claimed. The specification completeness gate is not passed (see the completeness report on the open documentation PR).
 
 ## Principles
 

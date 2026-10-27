@@ -87,23 +87,23 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
   const page = await freshPage(viewport);
   await page.goto(route('#/'));
   await page.waitForSelector('.card-grid');
-  check(`browse ${size}: 18 listings found (fixture has 18, not 17)`, (await page.locator('.results-summary').textContent())?.includes('18 listings found'));
+  check(`browse ${size}: 18 listings found`, (await page.locator('.results-summary').textContent())?.includes('18 listings found'));
   check(`browse ${size}: 6 cards on page 1`, (await page.locator('.card').count()) === 6);
-  check(`browse ${size}: Page 1 of 3 visible before paging`, await page.getByText('Page 1 of 3').isVisible());
+  check(`browse ${size}: Page 1 of 3 visible before paging`, await page.locator('.pager').getByText('Page 1 of 3').isVisible());
 
   await page.getByRole('button', { name: 'Next' }).click();
-  check(`browse ${size}: Next shows "Page 2 of 3"`, await page.getByText('Page 2 of 3').isVisible());
+  check(`browse ${size}: Next shows "Page 2 of 3"`, await page.locator('.pager').getByText('Page 2 of 3').isVisible());
   check(`browse ${size}: focus after Next is inside the results region`, await focusInResults(page));
   check(`browse ${size}: focus after Next is not body`, !(await activeIsBody(page)));
   check(`browse ${size}: Next announces "Page 2 of 3"`, await waitForStatus(page, 'Page 2 of 3'));
 
   await page.getByRole('button', { name: 'Next' }).click();
-  check(`browse ${size}: Next to last page shows "Page 3 of 3"`, await page.getByText('Page 3 of 3').isVisible());
+  check(`browse ${size}: Next to last page shows "Page 3 of 3"`, await page.locator('.pager').getByText('Page 3 of 3').isVisible());
   check(`browse ${size}: focus on last page stays in results, not body`, (await focusInResults(page)) && !(await activeIsBody(page)));
   check(`browse ${size}: last page has 6 cards (18 listings, 6 per page)`, (await page.locator('.card').count()) === 6);
 
   await page.getByRole('button', { name: 'Previous' }).click();
-  check(`browse ${size}: Previous shows "Page 2 of 3"`, await page.getByText('Page 2 of 3').isVisible());
+  check(`browse ${size}: Previous shows "Page 2 of 3"`, await page.locator('.pager').getByText('Page 2 of 3').isVisible());
   check(`browse ${size}: focus after Previous is inside the results region`, await focusInResults(page));
   check(`browse ${size}: Previous announces "Page 2 of 3"`, await waitForStatus(page, 'Page 2 of 3'));
   await page.close();

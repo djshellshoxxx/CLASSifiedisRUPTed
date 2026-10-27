@@ -5,9 +5,16 @@ Mock-backed, zero-dependency PWA shell. Synthetic data only. Not production: no 
 ## Run
 
     cd app
-    npm start            # http://localhost:4173/
+    npm start            # http://localhost:4173/  (PORT=... to change the port)
     npm test             # unit tests (node:test)
-    npm run smoke        # browser journeys; needs npm start running, uses Playwright from the environment
+    npm run smoke        # browser smoke journeys; needs npm start running
+    npm run check:browser  # every file in scripts/checks/*.mjs; needs npm start running
+
+Status, verification and open gaps: [STATUS.md](STATUS.md).
+
+Browser checks use Playwright, which this app does not install (it has no dependencies). They load it
+from the environment. If it is not found, install it or set `NODE_PATH` to a folder that contains
+`playwright`. Point a run at another server with `BASE=http://localhost:4173/`.
 
 ## Layout
 

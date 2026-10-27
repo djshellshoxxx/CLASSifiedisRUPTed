@@ -40,7 +40,7 @@ try {
     check(`error summary takes focus after a failed submit at ${label}`, await summary.evaluate((node) => node === document.activeElement));
 
     const first = links.first();
-    const targetId = (await first.getAttribute('href')).slice(1);
+    const targetId = (await first.getAttribute('href')).split('/').pop();
     await first.click();
     // A hash change, if one happened, renders the router's not-found page a moment later. Let it settle before reading the page.
     await page.waitForTimeout(300);
@@ -55,6 +55,13 @@ try {
       return box.top >= 0 && box.bottom <= window.innerHeight;
     }, targetId);
     check(`clicking an error link scrolls its field into view at ${label}`, inView);
+    // Middle-click opens the link in a new tab. That tab must land on the sell page, not on the not-found page.
+    const [popup] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), first.click({ button: 'middle' })]);
+    await popup.waitForLoadState('domcontentloaded');
+    await popup.waitForSelector('.editor', { timeout: 5000 }).catch(() => {});
+    check(`middle-click on an error link opens the sell page at ${label}`, popup.url().includes('#/sell/') && (await popup.locator('.editor').count()) === 1);
+    check(`middle-click on an error link does not show the not-found page at ${label}`, !(await popup.locator('body').innerText()).includes('That page does not exist'));
+    await popup.close();
     check(`no uncaught page errors at ${label}`, pageErrors.length === 0);
     await context.close();
   }

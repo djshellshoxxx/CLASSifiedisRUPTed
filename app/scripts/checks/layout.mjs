@@ -170,7 +170,7 @@ try {
 
   // 4. Text contrast in light and dark colour schemes, computed from the rendered colours.
   for (const colorScheme of ['light', 'dark']) {
-    const found = { body: [], muted: [] };
+    const found = { body: [], muted: [], placeholder: [] };
     for (const route of ROUTES) {
       const { page, context } = await open(route, { colorScheme });
       const samples = await page.evaluate(() => {
@@ -209,9 +209,15 @@ try {
         const texts = [...document.querySelectorAll('main *, header *')].filter((el) =>
           [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()),
         );
+        const placeholders = [...document.querySelectorAll('input[placeholder], textarea[placeholder]')].map((el) => ({
+          color: getComputedStyle(el, '::placeholder').color,
+          bg: background(el),
+          label: `placeholder "${el.getAttribute('placeholder')}"`,
+        }));
         return {
           bodyColor,
           mutedColor,
+          placeholders,
           items: texts.map((el) => {
             const cs = getComputedStyle(el);
             return { color: cs.color, bg: background(el), label: (el.textContent || '').trim().slice(0, 40) };
@@ -239,9 +245,12 @@ try {
         if (item.color === samples.bodyColor) found.body.push(entry);
         if (item.color === samples.mutedColor) found.muted.push(entry);
       }
+      for (const item of samples.placeholders) {
+        found.placeholder.push({ route, label: item.label, ratio: ratio(parseRgb(item.color), item.bg), color: item.color });
+      }
       await context.close();
     }
-    for (const kind of ['body', 'muted']) {
+    for (const kind of ['body', 'muted', 'placeholder']) {
       const list = found[kind];
       const worst = list.reduce((min, entry) => (min === null || entry.ratio < min.ratio ? entry : min), null);
       check(

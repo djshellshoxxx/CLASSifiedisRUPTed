@@ -38,13 +38,13 @@ Commits added on top of PR #3's `52bed39`, oldest first:
     export NODE_PATH=/opt/npm-tools/node_modules   # only if Playwright is not installed in app/
     npm test                                       # 31 unit tests
     PORT=4173 npm start &                          # then, in another shell:
-    BASE=http://localhost:4173/ npm run check:browser   # 7 files
+    BASE=http://localhost:4173/ npm run check:browser   # 8 files
     BASE=http://localhost:4173/ npm run smoke           # 26 checks
     cd .. && python3 -m unittest discover -s scripts -p 'test_*.py'   # 14 audit tests
     python3 scripts/spec_audit.py --check          # structural: PASS expected
     python3 scripts/spec_audit.py --semantic       # NO-GO expected (exit 1)
 
-Last recorded results (continuation slices, Chromium only): unit 31/31; `check:browser` 7 of 7 files (221 PASS lines); smoke 26/26;
+Last recorded results (continuation slices, Chromium only): unit 31/31; `check:browser` 8 of 8 files (227 PASS lines); smoke 26/26;
 audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, by design). `check:browser` reports
 5 focus checks skipped with a stated reason; these are not counted as passes.
 
@@ -134,9 +134,12 @@ audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, b
 - PUSHED: branch `claude/classifiedisrupted-continue-lcuuwg`. Slice 1 is `a88dc33`, fast-forwarded from `main` `95c46be`
   through `work/classrup-haiku-framework` `0ac7f96`. Slice 2 is the commit after it. Verify with `git ls-remote --heads origin`.
   Draft PR #5 (base `main`) carries the branch. PR #4 is unchanged.
+- DONE (slice 3): added `scripts/checks/editor-focus-visible.mjs`. A keyboard submit with empty required fields moves focus
+  to the error summary, the summary matches `:focus-visible`, and its computed outline is at least 2px and not `none`, at 390 and 1280px.
+  editor.mjs covers focus only after a mouse click, which does not set `:focus-visible`. Negative check: removing the summary outline fails (c) at both widths. Open item 2's editor part is closed; the screen-reader part stays open.
 - BLOCKED: Firefox/WebKit (not installed); screen-reader pass (no assistive technology here); rotating the pasted token
   (owner action); the Infinity pagination decision (owner decision, see Decisions).
-- NEXT (at most three ready tasks, each mock-only with an objective acceptance test):
-  1. Open item 2 (editor part): after a failed submit, the error summary receives focus and its focus outline is visible (computed-style check).
-  2. Open item 4: read `browse.js`, then either remove the unreachable results-focus fallback or cover it with a unit test. Pick whichever keeps behaviour unchanged.
+- NEXT (ready, mock-only, objective acceptance test):
+  1. Open item 4: read `browse.js`, then either remove the unreachable results-focus fallback or cover it with a unit test. Pick whichever keeps behaviour unchanged.
+  2. Open item 2 (barter region naming and browse focus after Save) needs a screen reader; not ready. Record only.
   3. Open item 3 stays BLOCKED on an owner decision; do not change pagination behaviour without it.

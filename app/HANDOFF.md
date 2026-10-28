@@ -38,13 +38,13 @@ Commits added on top of PR #3's `52bed39`, oldest first:
     export NODE_PATH=/opt/npm-tools/node_modules   # only if Playwright is not installed in app/
     npm test                                       # 31 unit tests
     PORT=4173 npm start &                          # then, in another shell:
-    BASE=http://localhost:4173/ npm run check:browser   # 6 files
+    BASE=http://localhost:4173/ npm run check:browser   # 7 files
     BASE=http://localhost:4173/ npm run smoke           # 26 checks
     cd .. && python3 -m unittest discover -s scripts -p 'test_*.py'   # 14 audit tests
     python3 scripts/spec_audit.py --check          # structural: PASS expected
     python3 scripts/spec_audit.py --semantic       # NO-GO expected (exit 1)
 
-Last recorded results (continuation slice, Chromium only): unit 31/31; `check:browser` 6 of 6 files; smoke 26/26;
+Last recorded results (continuation slices, Chromium only): unit 31/31; `check:browser` 7 of 7 files (221 PASS lines); smoke 26/26;
 audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, by design). `check:browser` reports
 5 focus checks skipped with a stated reason; these are not counted as passes.
 
@@ -85,7 +85,9 @@ audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, b
    naming, and browse focus after Save.
 3. **Infinity page behaviour** (see Decisions). Confirm or revert.
 4. **Browse fallback** that focuses the results when a saved listing leaves the page is code-only. The UI cannot reach it today.
-5. **Saved page with items**: the Unsave buttons are covered only by `account-browse.mjs`, not by `layout.mjs`.
+5. **Closed in the second continuation slice.** `layout.mjs` only sees the empty saved page. `scripts/checks/saved-layout.mjs`
+   seeds three saved listings and checks overflow at 320/390/768/1280px and 24px touch targets at 390px. Unsave behaviour
+   stays covered by `account-browse.mjs`. A shrunken Save/Unsave button fails the new check (self-check on a scratch copy).
 6. **Closed in the continuation slice.** `scripts/checks/detail.mjs` now checks the detail page's Save, Unsave and demo-messaging announcements. A deliberately broken Unsave wording fails it (self-check on a scratch copy, not committed).
 7. **Stale historical claims**: the `docs/...` PRs describe the NO-GO state as of their dates. Re-check them before
    relying on them.
@@ -124,15 +126,17 @@ audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, b
 - DONE: added `scripts/checks/detail.mjs`, a browser regression for the listing detail page: Save and Unsave announce
   `Listing saved: <title>.` / `Listing removed from saved: <title>.` and toggle `aria-pressed`; demo messaging announces
   that nothing was sent. Closes open item 6. No application source changed.
+- DONE (slice 2): added `scripts/checks/saved-layout.mjs`, layout checks for the populated saved page (3 seeded cards;
+  no horizontal overflow at 320/390/768/1280px; 24px touch targets at 390px). Closes open item 5 as narrowed. No application source changed.
 - TESTS: all results listed under "How to verify" above, run on the working tree before this handoff was written.
-  The new check passes on the current code (5/5) and fails when the Unsave wording is broken (1 failure, exit 1).
-  Self-review of the diff only; not independent review.
-- PUSHED: branch `claude/classifiedisrupted-continue-lcuuwg` (fast-forward from `main` `95c46be` through
-  `work/classrup-haiku-framework` `0ac7f96`, then the slice commit). Verify with `git ls-remote --heads origin`.
-  Draft PR for the designated branch is opened against `main`; PR #4 is unchanged.
+  Each new check passes on current code and fails on a deliberately broken scratch copy (exit 1): Unsave wording for
+  slice 1; a 10px Save/Unsave button for slice 2. Self-review of the diffs only; not independent review.
+- PUSHED: branch `claude/classifiedisrupted-continue-lcuuwg`. Slice 1 is `a88dc33`, fast-forwarded from `main` `95c46be`
+  through `work/classrup-haiku-framework` `0ac7f96`. Slice 2 is the commit after it. Verify with `git ls-remote --heads origin`.
+  Draft PR #5 (base `main`) carries the branch. PR #4 is unchanged.
 - BLOCKED: Firefox/WebKit (not installed); screen-reader pass (no assistive technology here); rotating the pasted token
   (owner action); the Infinity pagination decision (owner decision, see Decisions).
 - NEXT (at most three ready tasks, each mock-only with an objective acceptance test):
-  1. Open item 5: `layout.mjs` asserts a populated saved page shows Unsave buttons with `aria-pressed="true"` at 390px and 1280px.
-  2. Open item 2 (editor part): after a failed submit, the error summary is focused and its focus ring is visible (computed outline check).
-  3. Remove the unreachable browse fallback (open item 4) or cover it with a unit test; choose after reading `browse.js`.
+  1. Open item 2 (editor part): after a failed submit, the error summary receives focus and its focus outline is visible (computed-style check).
+  2. Open item 4: read `browse.js`, then either remove the unreachable results-focus fallback or cover it with a unit test. Pick whichever keeps behaviour unchanged.
+  3. Open item 3 stays BLOCKED on an owner decision; do not change pagination behaviour without it.

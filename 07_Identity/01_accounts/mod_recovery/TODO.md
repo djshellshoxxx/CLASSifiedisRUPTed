@@ -1,10 +1,13 @@
-# TODO
+# TODO: F07.S01.M03 recovery
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Ten recovery codes at registration or via signed re-issue; shown once (src/accounts/recovery.ts)
+- [x] Recovery consumes a code, revokes all old device keys and sessions, emits event, notifies via NotifyPort
+- [x] Rate limit consumed before the transaction so failures count
+- [x] Device add/revoke authorized by an active key signature bound to keyEpoch; last device cannot be revoked (src/accounts/devices.ts)
+
+## Remaining
+- [ ] Social or guardian recovery (out of scope).
+- [ ] Process specifications in this directory are still placeholders; requirements were taken from PROJECT_SPEC.md and docs/adr.

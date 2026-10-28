@@ -1,0 +1,89 @@
+[
+  {
+    "module": "F10.S01.M01",
+    "path": "10_Privacy/01_data_controls/mod_consent",
+    "code": [
+      "packages/privacy/src/consent/consent.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/consent.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Six purposes, grant/withdraw with policy version, append-only history, O(1) hasConsent(accountId, purpose, policyVersion?)."
+  },
+  {
+    "module": "F10.S01.M02",
+    "path": "10_Privacy/01_data_controls/mod_retention",
+    "code": [
+      "packages/privacy/src/retention/retention.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/retention.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Default table per RetentionClass, bounded tenant overrides, legal holds on accounts/records, sweep planner that only plans. Owners perform purges and call assertNotHeld."
+  },
+  {
+    "module": "F10.S01.M03",
+    "path": "10_Privacy/01_data_controls/mod_export",
+    "code": [
+      "packages/privacy/src/data/export.ts",
+      "packages/privacy/src/registry.ts",
+      "packages/privacy/src/data/builtin.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/export.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Exporter registry, synchronous bundle build with sha256 manifest, 7 day availability, owner-only; any exporter failure fails the export. Download drops the idempotency key."
+  },
+  {
+    "module": "F10.S01.M04",
+    "path": "10_Privacy/01_data_controls/mod_delete",
+    "code": [
+      "packages/privacy/src/data/delete.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/delete.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "request -> grace 7d (cancellable) -> executing -> completed, blocked_by_hold or failed (retried). Erasers registered per area; report lists erased and retained with policy reasons."
+  },
+  {
+    "module": "F10.S02.M01",
+    "path": "10_Privacy/02_security_boundaries/mod_threat",
+    "code": [
+      "packages/privacy/src/boundaries/threats.ts",
+      "packages/privacy/src/boundaries/view.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/boundaries.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Typed register of 15 threats incl. geolocation triangulation, graph deanonymisation, Sybil, metadata leakage; every control reference is verified to exist by a test."
+  },
+  {
+    "module": "F10.S02.M02",
+    "path": "10_Privacy/02_security_boundaries/mod_model",
+    "code": [
+      "packages/privacy/src/boundaries/model.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/boundaries.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Assets, adversaries, trust boundaries and the disclosure matrix (viewer relation x disclosure class) as typed data."
+  },
+  {
+    "module": "F10.S02.M03",
+    "path": "10_Privacy/02_security_boundaries/mod_metadata",
+    "code": [
+      "packages/privacy/src/boundaries/metadata.ts"
+    ],
+    "tests": [
+      "packages/privacy/test/boundaries.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "filterByDisclosure, coarsenTimestamp, truncateIp (v4 /24, v6 /48), assertNoSensitiveKeys with path reporting; all property-tested."
+  }
+]

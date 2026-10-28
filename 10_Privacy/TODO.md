@@ -1,10 +1,12 @@
-# TODO
+# TODO: F10 Privacy and data rights
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Package @classrup/privacy (packages/privacy): 20 operations, 7 modules, 17 policies, 15 event types
+- [x] Tests: packages/privacy/test (consent, retention, export, delete, boundaries, contract)
+- [x] See packages/privacy/README.md and traceability.json
+
+## Remaining
+- [ ] Relay wiring: register exporters/erasers for every feature, schedule export.expire_due and deletion.process_due.
+- [ ] Other packages adopt hasConsent, assertNotHeld and the metadata utilities.

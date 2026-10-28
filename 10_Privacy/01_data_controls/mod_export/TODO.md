@@ -1,10 +1,14 @@
-# TODO
+# TODO: F10.S01.M03 export
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] registerExporter(area, fn)
+- [x] Manifest with per-section contentHash and bundleHash
+- [x] Expiry sweeper drops personal data
+- [x] Failure marks export failed instead of partial
+
+## Remaining
+- [ ] Asynchronous/streamed builds for very large accounts.
+- [ ] Encrypting the stored bundle at rest (relay storage concern).
+- [ ] Process specifications in this directory are still placeholders; requirements were taken from PROJECT_SPEC.md and docs/adr.

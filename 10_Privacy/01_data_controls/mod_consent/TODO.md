@@ -1,10 +1,12 @@
-# TODO
+# TODO: F10.S01.M01 consent
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Grant/withdraw idempotent by state, history append-only
+- [x] hasConsent for other features
+- [x] Owner-only authorization
+
+## Remaining
+- [ ] Per-purpose required policy version registry (callers pass a version if they need it).
+- [ ] Process specifications in this directory are still placeholders; requirements were taken from PROJECT_SPEC.md and docs/adr.

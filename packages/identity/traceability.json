@@ -1,0 +1,90 @@
+[
+  {
+    "module": "F07.S01.M01",
+    "path": "07_Identity/01_accounts/mod_pseudonyms",
+    "code": [
+      "packages/identity/src/accounts/pseudonyms.ts",
+      "packages/identity/src/accounts/naming.ts",
+      "packages/identity/src/accounts/model.ts"
+    ],
+    "tests": [
+      "packages/identity/test/accounts.test.ts",
+      "packages/identity/test/contract.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Pseudonym rules, registration with proven device keys, status lifecycle, roles, erasure/export hooks, AccountLookup. No uniqueness check of device keys across accounts."
+  },
+  {
+    "module": "F07.S01.M02",
+    "path": "07_Identity/01_accounts/mod_sessions",
+    "code": [
+      "packages/identity/src/accounts/sessions.ts"
+    ],
+    "tests": [
+      "packages/identity/test/sessions.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Challenge-response login, hashed bearer tokens, 30d absolute / 7d sliding idle expiry, list/revoke, authenticate(token) for the relay, expire_due sweeper."
+  },
+  {
+    "module": "F07.S01.M03",
+    "path": "07_Identity/01_accounts/mod_recovery",
+    "code": [
+      "packages/identity/src/accounts/recovery.ts",
+      "packages/identity/src/accounts/devices.ts"
+    ],
+    "tests": [
+      "packages/identity/test/recovery.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Ten 80-bit single-use recovery codes (hashes only), recovery with proven new keys revokes old keys and sessions, per-account RateLimitPort, signed device add/revoke with keyEpoch replay defence."
+  },
+  {
+    "module": "F07.S02.M01",
+    "path": "07_Identity/02_profiles/mod_portable",
+    "code": [
+      "packages/identity/src/profiles/portable.ts"
+    ],
+    "tests": [
+      "packages/identity/test/profiles.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Versioned classrup.identity document built by relay, signed by client device key; verify and key-continuity import with 30 day age window. No automatic cross-relay fetch."
+  },
+  {
+    "module": "F07.S02.M02",
+    "path": "07_Identity/02_profiles/mod_profiles",
+    "code": [
+      "packages/identity/src/profiles/profiles.ts"
+    ],
+    "tests": [
+      "packages/identity/test/profiles.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Profile fields with per-field visibility (public/participants/private), coarse regionCell only, viewer-filtered DTOs, blocked viewers see nothing. Avatar is an attachment ref only."
+  },
+  {
+    "module": "F07.S03.M01",
+    "path": "07_Identity/03_trust/mod_reputation",
+    "code": [
+      "packages/identity/src/trust/reputation.ts"
+    ],
+    "tests": [
+      "packages/identity/test/trust.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Counterparty-verified feedback via InteractionVerifier (default deny), one per subject, 14 day edit, moderator removal, Bayesian aggregate (prior 3.5, weight 5)."
+  },
+  {
+    "module": "F07.S03.M02",
+    "path": "07_Identity/03_trust/mod_evidence",
+    "code": [
+      "packages/identity/src/trust/evidence.ts"
+    ],
+    "tests": [
+      "packages/identity/test/trust.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Self-attested claims vs attester-signed verified evidence; trusted attester registry; revocation and expiry; public DTO shows kind and verified flag only."
+  }
+]

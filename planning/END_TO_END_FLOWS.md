@@ -1,0 +1,25 @@
+# End-to-end client-side acceptance flows
+
+Status: specified scenarios, NOT executed product tests. [ARCH-001..010](CLIENT_SIDE_ARCHITECTURE.md) applies to every flow. All 15 journeys remain tracked; gated paths do not constitute approved scope reductions. No central account/tenant, trusted clock, global lock or global enforcement is presumed.
+
+| ID | Journey | Ordered client flow | Failure / acceptance oracle |
+|---|---|---|---|
+| FLOW-01 | Paid placement | local listing -> explicit public projection -> selected audience/promotion terms -> external claim/evidence -> local display under reviewed agreement | shared paid audience has no client-only guarantee; D13 direction fixed: strong activation disabled pending selected validated external protocol; no local substitute; redirect never grants verified placement |
+| FLOW-02 | Local sale | local draft/commit -> public export preview -> retained peer search -> exact offer accepted -> seller local reservation -> off-platform exchange -> per-party claims | another device may double-promise; known conflicts freeze; no global exclusivity/verified money from claims |
+| FLOW-03 | Two-party barter | local A->B->A proposal -> current item refs and digest -> both reviewed signatures -> each own local reservation -> optional transport exchange -> handoff assertions | edit resets consent; absent peer receipt remains pending; no atomic lock |
+| FLOW-04 | Three-party cycle | A->B->C->A -> unique principals/items -> same digest signed by all -> each verifies known evidence -> independent handoffs | missing C prevents locally known readiness; revocation may be delayed; no automatic transfer/rollback |
+| FLOW-05 | Four-party cycle | four directed edges/commitments -> all current digest consents -> four local commitments -> handoff evidence | stale D blocks coordination in observing vault; other vaults may retain local reservations until informed/expired |
+| FLOW-06 | General N | 2..8 distinct actors/items -> bounded deterministic graph search -> canonical rotation -> digest/consents -> local commitments | search truncation explicit incomplete; no global optimality/consensus/time claim |
+| FLOW-07 | Compensation | explicit integer obligations -> each payer/payee consents -> separate external claim/observation -> handoff | per-currency net zero, unknown exponent/overflow/stale quote rejected; no automatic debt/payment |
+| FLOW-08 | Cancellation/dispute | local revoke with signed evidence -> prepare peer notice -> clear own eligible reservation; partial handoff freezes local plan -> voluntary case evidence | cannot revoke unseen remote state/undo goods; never silently substitute party or delete evidence |
+| FLOW-09 | Fraud/moderation | local report -> optional chosen reviewer disclosure -> local hide -> retained search purge -> user-approved tombstone -> voluntary appeal | no global ban/takedown; signed falsehood remains possible; no moderator message/key access |
+| FLOW-10 | Messaging | local draft -> verified recipient/device keys under reviewed encryption -> encrypted payload -> chosen transport receipt -> separate recipient evidence | sending returns PROTOCOL_NOT_REVIEWED until reviewed; no plaintext fallback, server sequence or delivery guarantee |
+| FLOW-11 | External payment | external wallet/provider UI -> local claim -> chosen source observation under network policy -> provenance/freshness -> downgrade on observed reorg/reversal | no keys/PAN/provider secrets product-held; claim/screenshot/receipt never independent settlement |
+| FLOW-12 | Public export | disclosure preview -> allowlisted public fields -> reviewed canonical signature -> file/chosen transport -> separate receipt | private address/contact/message/key canary rejected; delivery remains unknown absent evidence |
+| FLOW-13 | Public import | bounded bytes -> key/version/signature/predecessor checks -> quarantine/policy -> retained search projection -> later validated tombstone | same-revision fork/revocation/unknown schema fail closed; no erasure of independent replicas |
+| FLOW-14 | Service booking | proposed availability/terms -> counterparty commitments -> work assertions -> payment claims/dispute | no global calendar/guaranteed delivery; full F03 contracts needed |
+| FLOW-15 | Auction/rental | bid/rental terms -> agreed peer evidence/time assumptions -> local view/commitments -> condition/deposit assertions | trusted close time/global exclusive booking impossible locally; GG-001..005/D09 gates explicit, no fabricated final winner/escrow |
+
+## Common quality checks
+
+Every flow includes locked vault, storage quota/abort, duplicate receipt, stale revision, unknown peer, revoked/unknown key, clock skew, no transport, restart/restore and independent-device forks. UI announces exact local/remote state accessibly. No precise location/private data leaks through projections, notices, logs or attachments. Test mapping binds flow, requirement, fixture/oracle, actual test path, build and reviewer; prose is not execution evidence.

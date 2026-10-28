@@ -1,14 +1,16 @@
-# Canonical cross-module contract placeholders
+# Canonical cross-module contract map
 
-**Status:** DRAFT. These are single-owner design locations, not approved wire formats.
+**Status:** local baseline review pending; no approved wire/crypto protocol. All CLASS consumers inherit [ARCH-001..010](CLIENT_SIDE_ARCHITECTURE.md).
 
-- `CTR-ID-001`: Stable IDs and versioning; owner F15; UUID/ULID choice OPEN.
-- `CTR-EVT-001`: Event envelope (event ID, aggregate, revision, actor, timestamp, provenance, signature when needed, correlation/idempotency IDs); owner F15.
-- `CTR-ERR-001`: Typed errors, retryability, localized presentation and privacy-safe diagnostics; owner F15.
-- `CTR-CAP-001`: Capability/permission matrix, actor/resource/action and revocation; owner F16 with F07 identity.
-- `CTR-SCH-001`: Schema registry, compatibility and migration; owner F15.
-- `CTR-PRV-001`: Location, retention and disclosure classes; owner F10.
-- `CTR-COM-001`: Payment evidence claims, verification source and finality; owner F09.
-- `CTR-FED-001`: Federated envelope, provenance, deduplication, tombstones and rejection; owner F11.
+| Stable contract | Owner | Canonical specification |
+|---|---|---|
+| CTR-ID-001 | F15 | CR-001 in [core](contracts/CORE_API_EVENTS_DATA.md): random UUIDv4, local revision/advisory clock |
+| CTR-EVT-001 | F15 | CR-003: private local events, separate approved public projection |
+| CTR-ERR-001 | F15 | CR-002: typed in-process errors, no mandatory HTTP API |
+| CTR-CAP-001 | F16/F07 | CR-005: unlocked local principal, scoped permissions, peer keys not central accounts |
+| CTR-SCH-001 | F15 | CR-004: per-vault IndexedDB schema/migrations; semantic consumer review outstanding |
+| CTR-PRV-001 | F10 | CR-006 and ARCH: local retention, exact private/public disclosure, no remote-erasure guarantee |
+| CTR-COM-001 | F09 | MPF-002 in [evidence](contracts/MESSAGING_PAYMENTS_FEDERATION.md): claim/ack/selected source observations |
+| CTR-FED-001 | F11/F16 | MPF-003: public signed interchange; protocol/key profile gated |
 
-Consumers reference these contract IDs; specific schemas and event subscriber maps require Prompt 3 expansion.
+[Consumer/event ownership](INTEGRATION_DEPENDENCIES.md) and [test gates](RELEASE_AND_TEST_GATES.md) must agree with each leaf. Stable IDs survive revised local semantics. Old server-issued IDs/cookie sessions/SQL workers never remain implicit requirements. Canonical encryption/backup/peer protocol selection needs independent review, and all 1,480 process contracts still require complete domain-specific specifications.

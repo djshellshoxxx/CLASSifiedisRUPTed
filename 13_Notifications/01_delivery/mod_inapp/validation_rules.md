@@ -1,35 +1,29 @@
-# PS-103-02 — validation rules
+# PS-103-02 — event and notice validation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-02. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-02 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the validation rules process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-02.R01 — acceptance boundary
 
-## Requirements to specify
-- [ ] PS-103-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+Only F15-validated local CR-003 v1 events in the active unlocked vault may enter the consumer. This module validates the event metadata it relies on, never upgrades an event's trust level, and never turns imported peer data into a local authoritative event. Unknown event names and versions are suppressed without rendering or payload inspection beyond bounded schema checks.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## PS-103-02.R02 — exact validation sequence
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+For each candidate, in order:
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+1. Require an unlocked F07 local principal and matching `vault_id`/`principal_id` from the vault context; caller-supplied ownership is ignored.
+2. Require `event_version=1`, a UUIDv4 `event_id`, UUIDv4 `vault_id`, `principal_id`, and `aggregate_id`, a positive safe `aggregate_revision` in `1..9,007,199,254,740,991`, and an F15 committed-local status.
+3. Match the exact source event name against the module's four-event allowlist. Slash aliases, prefixes, historical aliases, `message.sent`, `payment.*`, imported/federated events, and unknown versions are ineligible.
+4. Verify the event belongs to this vault/principal and is not marked quarantined or deleted. A changed event under an existing `event_id` returns `CONFLICT_QUARANTINED` and does not overwrite prior output.
+5. Derive category and `message_key` from the fixed table. Do not read, interpolate, log, or persist event text/payload. Only validated IDs/revision are retained.
+6. Resolve F13.S02 preference decision. `DISABLED` suppresses and advances the local consumer marker with no notice. `{state: UNAVAILABLE}`, malformed output, including any disabled-inbox/non-disabled-banner combination, or resolver error returns `POLICY_UNAVAILABLE` and leaves the event pending. `QUIET` permits the inbox item but suppresses a live banner.
+7. Verify the resulting record is within schema bounds, <=4,096 UTF-8 bytes, and within per-vault cap rules before atomic insertion.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+`occurred_at` and wall-clock values are advisory only. No event is accepted as newer, expired, settled, globally ordered, or peer acknowledged based on timestamp. The parent CR-002 command limit of 256 KiB applies before F15 dispatch; this consumer accepts only the fixed small event fields and does not copy a large input body. Query cursors must match `n1:<vault_uuid>:<principal_uuid>:<high_watermark>:<after_sequence>`, ASCII length <=128 bytes, canonical lowercase UUIDv4 values, canonical decimal nonnegative safe integers without leading zeroes (except `0`). `after_sequence <= high_watermark` is required. Cursor owner mismatch, invalid bounds, or a cursor from another query contract returns `CURSOR_STALE`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-02`; scenarios and fixtures to be detailed in Prompt 3.
+## PS-103-02.R03 — rejection and privacy cases
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Malformed IDs/revisions, wrong owner, locked vault, invalid source state, unsupported event/version, policy unavailability, cap exhaustion, unknown localization key and schema mismatch each follow the typed outcomes in [commands and errors](commands_queries_events.md). No user-controlled string may enter a banner, accessibility label or log. Quiet-hour boundaries use the preference resolver's advisory local decision; clock skew cannot cause a claim about remote deadline or delivery. The notification view's CAS revision must be a positive safe integer; expected revision must exactly match the row before mutation. Sequence allocation must be within the positive safe-integer range; exhaustion fails with `RATE_LIMITED_LOCAL` and a typed field reason, never wraps.
+
+## Acceptance mapping
+
+- `TEST-PS-103-02`: allowlist positive/negative corpus; cross-vault/principal injection; unsupported aliases/version; altered duplicate event ID; locked/unavailable store; preference disabled/unavailable/quiet; invalid timestamp and maximum-size cases; payload canaries never rendered or retained. No product tests are claimed.

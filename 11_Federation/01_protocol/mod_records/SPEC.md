@@ -11,14 +11,16 @@ Provide records as an independently configurable responsibility in ClassRup. All
 - As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
 ## Scope
-- Required process spec: `records_domain_model.md` (not yet authored)
-- Required process spec: `records_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `records_validation_and_authorization.md` (not yet authored)
-- Required process spec: `records_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `records_interfaces_and_events.md` (not yet authored)
-- Required process spec: `records_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `records_acceptance_and_property_tests.md` (not yet authored)
 
+
+Canonical process responsibilities:
+- Legacy domain-model responsibility maps to [domain_schema.md](domain_schema.md).
+- Legacy commands-and-state-transitions responsibility maps to [workflow_state_machine.md](workflow_state_machine.md) and [commands_queries_events.md](commands_queries_events.md).
+- Legacy validation-and-authorization responsibility maps to [validation_rules.md](validation_rules.md) and [authorization_capabilities.md](authorization_capabilities.md).
+- Legacy failure-recovery-and-idempotency responsibility maps to [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+- Legacy interfaces-and-events responsibility maps to [commands_queries_events.md](commands_queries_events.md), with canonical data ownership in [domain_schema.md](domain_schema.md).
+- Legacy privacy-security-and-abuse responsibility maps to [privacy_retention_abuse.md](privacy_retention_abuse.md).
+- Legacy acceptance-and-property-tests responsibility maps to [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md); operational budgets and recovery evidence are covered by [observability_performance.md](observability_performance.md) and [import_export_backup_rollback.md](import_export_backup_rollback.md).
 ## Public interfaces
 Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
 
@@ -34,11 +36,16 @@ Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessib
 ## Completion criteria
 All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
 
-## Required process specification inventory
-- [ ] `records_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+## Process specification inventory (planning/SPEC_REGISTRY.csv is canonical)
+
+**Inventory:** 10 registered contracts; status reflects the registry only.
+- [domain_schema.md](domain_schema.md) — `PS-084-01`; registry status: **DRAFT**.
+- [validation_rules.md](validation_rules.md) — `PS-084-02`; registry status: **DRAFT**.
+- [workflow_state_machine.md](workflow_state_machine.md) — `PS-084-03`; registry status: **DRAFT**.
+- [commands_queries_events.md](commands_queries_events.md) — `PS-084-04`; registry status: **DRAFT**.
+- [authorization_capabilities.md](authorization_capabilities.md) — `PS-084-05`; registry status: **DRAFT**.
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — `PS-084-06`; registry status: **DRAFT**.
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — `PS-084-07`; registry status: **DRAFT**.
+- [observability_performance.md](observability_performance.md) — `PS-084-08`; registry status: **DRAFT**.
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — `PS-084-09`; registry status: **DRAFT**.
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — `PS-084-10`; registry status: **DRAFT**.

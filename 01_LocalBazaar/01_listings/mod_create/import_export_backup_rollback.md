@@ -1,35 +1,12 @@
-# PS-002-10 — import export backup rollback
+# PS-002-10 — User export/import, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-10. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the import export backup rollback process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-10.R01: Unlocked owner explicit JSON v1 export `{schema_version,export_id,source_principal_id,exported_at,records,provenance}` includes selected own drafts/revisions/state and no foreign private data, key secrets or diagnostic risk judgments. Preview private contents and destination; user-initiated local plaintext draft export warns of exposure. Never call it encrypted backup or send it automatically. Encrypted/key-inclusive backup requires reviewed wrapping/KDF/recovery profile and stays disabled meanwhile.
+- PS-002-10.R02: Copy-import own draft package uses strict size/schema validation, new local IDs, active vault owner context, state forced private draft and full local validation; imported claimed authorship cannot grant ownership. Limit package <=10MiB/1000 records; staged preview then atomic batch <=100 records/transaction, visible progress/checkpoint and explicit partial-batch outcome on later failure. Peer public projections use F11 verification/quarantine, not this ownership-copy path. Never import keys/active outbox commands from an arbitrary draft package.
+- PS-002-10.R03: No product backup/PITR/RPO/RTO service. Show last user export, storage persistence/eviction risk and restore instructions. Vault restoration is separate versioned reviewed protocol: read-only staging, preserve principal/revocation/conflict/tombstone/receipt history, quarantine inconsistent revisions, validate migration, pause outbound queue and require explicit reconciliation before activation. Lost tombstones/keys cannot be reconstructed by a product account reset; no guaranteed loss window.
+- PS-002-10.R04: Precommit failure atomically aborts draft/event/receipt; postcommit undo is explicit archive/delete revision/event, never invisible rollback. Deletion follows CR-002 content scrubbing across requests, history and content-bearing events/outbox; retain only disclosed minimal anti-replay metadata and return OBJECT_DELETED on deleted-command replay, not the original receipt body. Copy import does not revive sharing consent or prior payments. Local deletion/export cancellation cannot erase previously copied peer records; remote revocation/tombstone cooperation is best effort, and forks cannot be silently selected by backup timestamp.
 
-## Requirements to specify
-- [ ] PS-002-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-10`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance
+TEST-PS-002-10 covers owner versus foreign/locked export, private-content preview, bounded malicious package/import abort/partial batch, no imported ownership/keys/send capability, read-only restore with known revocations/tombstones/forks, outbound paused and postcommit undo evidence. User export/restore drills are specified, not executed; encrypted recovery remains review-blocked.

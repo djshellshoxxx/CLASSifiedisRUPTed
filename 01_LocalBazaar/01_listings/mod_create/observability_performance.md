@@ -1,35 +1,11 @@
-# PS-002-08 — observability performance
+# PS-002-08 — Local performance and diagnostics
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-08. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the observability performance process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-08.R01: Proposed local target p95 create <=200ms/p99 <=1000ms over 100 serialized creates on a declared reference browser/device with 10000 existing drafts, measured input-to-transaction-complete. Performance fixture explicitly sets local create cap to 1000/hour and 1000/day; this test-only configuration is recorded with results and never changes shipped 10/hour/30/day defaults. Additional two-tab race test exercises contention. No 100RPS regional API or monthly availability claim. Network-blocked local operations remain usable; browser storage denial is visible typed failure.
+- PS-002-08.R02: Optional local counters create outcomes, duration, retry count, queue depth/oldest age. Diagnostics off by default; capped ring 1000 entries/7 days, no automatic upload. No listing text, actor/vault IDs, addresses, key handles, payment refs or message drafts. User-controlled diagnostic export previews fields and redacts before consent.
+- PS-002-08.R03: Local request/correlation IDs and coarse error code suffice for diagnosis. Show storage quota/persistence status, paused worker and queue age in-app; no guaranteed alert while browser closed. Runbook: inspect outcome receipt -> storage support/quota/schema -> export own data if possible -> bounded retry. Never clear vault or replay outbound exports automatically to fix an error.
 
-## Requirements to specify
-- [ ] PS-002-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-08`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance
+TEST-PS-002-08 runs stated fixture/load, forced transaction latency, suspended browser/local worker, quota/storage denial and canary scan of diagnostics/export. Attach device/browser/fixture/percentiles after implementation; no measurements exist.

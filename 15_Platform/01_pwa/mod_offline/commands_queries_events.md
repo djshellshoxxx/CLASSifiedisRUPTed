@@ -1,35 +1,11 @@
-# PS-116-04 — commands queries events
+# PS-116-04 — Owner interfaces and local subscriptions
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-04. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the commands queries events process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-04.R01: Public in-process API `offline.getView({vault_context,cursor?,limit:1..100}) -> Result<OfflineViewV1,Problem>`; `offline.subscribe({vault_context,onChange}) -> unsubscribe`; `offline.resume({vault_context,request_id,destination_ids?,reason}) -> Result<{request_id,run_id,status:scheduled|already_running|nothing_due|paused},Problem>`; `offline.pause({vault_context,request_id}) -> Result<{status:paused},Problem>`. Resume result is orchestration acknowledgment only, never domain/local commit or remote delivery receipt. Every query returns the complete hint/storage/runner metadata plus the selected item page, view_epoch, generation, next_cursor and truncated per PS-116-01. Cursor is ephemeral opaque base64url JSON, <=1024 ASCII bytes before decode/<=768 decoded UTF-8 bytes, exact keys `{v:1,view_epoch:UUIDv4,generation:safe_uint,position:safe_uint,limit:1..100}`. No unknown fields, padding or alternate integer encodings; position<=1000000. Bind serverlessly to the active context instance and fixed authorized item ordering (view_item_id ascending) in memory, never use it as authorization. Cursor limit must equal query limit. Malformed/bounds/unknown-field/limit mismatch returns VALIDATION_FAILED with field path /cursor and code INVALID_CURSOR; valid cursor with absent epoch, changed generation/context or no matching snapshot returns CURSOR_STALE and requires restart. No caller cursor can select a vault, destination or hidden object. next_cursor is null on end; traversal truncation remains explicit. Snapshot overflow creates new epoch as PS-116-01. Repeated resume request_id with identical inputs reuses one active run result within document lifetime; changed input returns IDEMPOTENCY_MISMATCH. Across reload, run requests can repeat but coordinator claims/dedup, not ephemeral UI request history, prevent concurrent entry dispatch. Pause is idempotent, does not cancel domain transactions already accepted.
+- PS-116-04.R02: Required dependency ports, proposals awaiting owner integration review: `VaultStatus.read(context)` -> storage/profile state; `OperationStatus.page(context,cursor,limit)`/`queryCommand` -> core receipts/deletion markers; `QueueCoordinator.requestRun(context,{run_id,destinations,max_items:20,vault_max_inflight:2})` -> bounded owner-run summary; `QueueCoordinator.pause(context)`; `QueueCoordinator.reconcile(context)` -> ready|blocked. vault_max_inflight is one aggregate ceiling for the vault across every run ID, tab and coordinator instance, enforced by atomic owner slot claims, not a per-run allowance. Ports expose references/status only; actual transaction/attempt ownership remains F15 persistence/F11. Port unavailable reports DEPENDENCY_UNAVAILABLE with unknown source state; never fall back to product service or guessed success.
+- PS-116-04.R03: Subscribe to authorized local owner changes as invalidation hints, then requery: listing.created/updated/published/archived, reservation.created/released, offer.proposed/countered, cycle.proposed/consent_recorded/locked/cancelled, handoff.attested, dispute.opened, payment.claimed/observed/verification_revoked, moderation.local_hidden, federation.record_imported and principal.deletion_requested. These are exact core domain names grouped for readability, no slash alias emitted. message.sent remains reserved and cannot fire pre-review. Queue owner may expose a local callback `onQueueStatusChanged` (not a new durable domain event). This module emits only ephemeral `onChange({generation})`, never payment/consent/listing events or an invented synced event. Principal deletion immediately clears view/cancels subscriptions and pauses attempts.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-04`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-04 fake ports record calls: one event invalidates view, duplicated event coalesces query, unsubscribe removes listeners, unsupported historical payment.verified/moderation.actioned does not become new authority. Contract schema tests distinguish scheduled result from committed receipt. Actual owner port signatures remain integration-review gate.

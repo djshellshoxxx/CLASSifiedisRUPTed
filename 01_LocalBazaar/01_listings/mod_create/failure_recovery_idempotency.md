@@ -1,35 +1,14 @@
-# PS-002-06 — failure recovery idempotency
+# PS-002-06 — Idempotency, retries and local consistency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-06. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the failure recovery idempotency process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-06.R01: CR-002 durable receipt key `[principal_id,listing.create,command_id]` stores canonical request bytes and original receipt in same vault transaction as draft/event. Resolve existing receipt/deletion marker before local create quotas; identical active-object replay returns original receipt without quota charge; changed payload IDEMPOTENCY_MISMATCH, no second draft. Keep body/receipt only for object lifetime. Deletion atomically scrubs request body, content-bearing events/outbox and private history; retain command scope/ID, object ID and deletion marker only, no request fingerprint/digest. Any replay/query under a deleted command scope/ID returns OBJECT_DELETED without comparing payload, including a changed body without original content and never recreates the draft; explicit marker erasure loses replay protection. No 24-hour forget-and-duplicate window. Canonical encoding awaits reviewed profile; no ad hoc hash protocol approved.
+- PS-002-06.R02: No network/signing work inside IndexedDB transaction. Abort retries same command only after classified transient storage failure, at most three attempts with bounded 20..200ms jitter; quota/permission/schema failures require user action and are not blind retries. Outbox is local at-least-once; consumer receipt/event projection transaction deduplicates. Consumer crash cannot turn a draft into public record.
+- PS-002-06.R03: Lost response/reload first queries command receipt. Absent receipt after known abort permits same-ID retry; uncertain storage state stays `outcome_unknown` and blocks new-ID replacement. Cancellation of UI callback cannot undo committed state. Wiped/evicted vault loses local dedup evidence; restore must reconcile explicitly rather than claim remote success.
 
-## Requirements to specify
-- [ ] PS-002-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Offline and conflicts
+Offline create is local committed, not unsent-to-server. Public delivery is a later explicit optional command with separate outbox state. Tabs serialize database transactions and check object revisions. Imported forks never overwrite own draft; conflicting same-revision signatures quarantine affected shared projection. No automatic last-write-wins on restoration.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-06`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance
+TEST-PS-002-06 uses real browser 100 replays, changed bytes, dropped callback, transaction abort, quota failure, close/reopen and consumer crash. Verify replay is quota-exempt, one object/event/receipt, deleted-command OBJECT_DELETED with no body/history resurrection and independent peer delivery state; not run.

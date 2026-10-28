@@ -1,35 +1,28 @@
-# PS-103-07 — privacy retention abuse
+# PS-103-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-07. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-07 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the privacy retention abuse process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-07.R01 — minimization
 
-## Requirements to specify
-- [ ] PS-103-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+Store only notice IDs, local owner scope, source event ID/type/version, aggregate ID/revision, fixed category/message key, optional authorized local target, advisory created/read times and read state. Never copy event payload, free text, private messages, exact location, payment details, credentials, keys, contact data, consent evidence, or correlation/causation IDs into a notice. The UI preview and accessibility announcement use the same generic allowlisted localized copy. No dynamic payload interpolation or public projection.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+The opt-in preference decision is evaluated before persistence. Missing/unavailable policy suppresses creation. Quiet hours suppress live banners while leaving an explicitly enabled inbox item available without interruption. A notice never triggers an OS notification, remote request, external adapter, analytics upload or automatic export.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## PS-103-07.R02 — retention and deletion
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+F10 owns the user-facing retention/erase policy; the proposed age cleanup is 30 advisory local days for read rows and the count cap is 1,000/vault. Read rows may be automatically removed by age only when local clock validity/order is available. Unread rows are never removed automatically by age or to make room; the user must explicitly delete them. Clock uncertainty pauses age cleanup and is never evidence of expiry or deadline. Keep no content after deletion; retain only the F15 consumer dedupe marker while its source event can be replayed. Default public export excludes both notice content and targets. User-initiated local deletion is scoped to this vault and cannot erase copies in a separately chosen backup.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+F15 protected persistence is not approved here. No plaintext persistence fallback is allowed. If F15 supplies volatile mode, show “This session only; not saved”, never place content in browser notification surfaces, and clear it on lock, reload, close, or principal switch. User should be able to disable the feature and clear its local rows through the approved F10/F15 controls.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-07`; scenarios and fixtures to be detailed in Prompt 3.
+## PS-103-07.R03 — abuse cases and response
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+- Forged or imported events: accept only F15-validated local event records from the current vault; otherwise suppress/quarantine.
+- Event flooding: process at most 100 events per transaction, enforce the 1,000-row and 4,096-byte caps, and leave the cursor pending when full; never evict unread rows without explicit user action.
+- Payload injection/XSS: render only fixed message keys as text; no HTML, markdown, URL or untrusted attribute interpolation.
+- Cross-principal snooping: bind every query to current vault/principal/capability and return uniform `NOT_FOUND`.
+- Misleading semantics: all messages state local scope; never say delivered, accepted by peers, paid, settled, globally locked, or read by another person.
+- Correlation leakage: do not expose source IDs, correlation IDs, or hidden object existence in previews, logs or public interchange.
+
+## Acceptance mapping
+
+- `TEST-PS-103-07`: private-content canaries through all four event types; unexpected fields; XSS strings; cross-vault lookup; flood/cap; quiet/opt-out; export exclusions; deleted row retention and no remote calls. No privacy test evidence exists yet.

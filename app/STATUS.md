@@ -22,6 +22,7 @@ not passed (see the root README).
 
 - `npm test`: 31 unit tests pass (baseline 18).
 - `npm run check:browser`: 5 check files pass (editor, account-browse, layout, barter, browse-focus).
+- Barter: the outer section no longer has its own region name, so 'Trade offers' is one region (the scroll area).
 - `npm run smoke`: 26 checks pass.
 - Each wave's diffs were reviewed by a separate Haiku reviewer. Coordinator edits after review (guarded barter check
   (f); detail.js removal wording) were not re-reviewed; detail.js wording is covered by code reading only.
@@ -34,19 +35,16 @@ not passed (see the root README).
   real messaging, matching or settlement of barter (the barter page is read-only fixtures).
 - Money: no maximum price was added. Choosing a cap is a product decision.
 - Pagination: a fractional page is floored (2.7 becomes page 2), and a non-finite page becomes page 1.
-- Barter: the outer section and the new scroll region both have the accessible name 'Trade offers', so screen
-  readers may announce it twice. Fix by making the outer element a plain div (not verified with a screen reader).
 - Browse: the fallback that focuses the results region when a saved listing leaves the page is code-only; the UI
   cannot reach it today.
 - Saved page with items: the populated Unsave buttons are covered only by account-browse, not by layout.mjs.
 - Summary focus after a failed submit has not been checked for a visible focus ring or for double announcements
   with screen readers.
-- Only Chromium was run. Firefox and WebKit were not run.
+- Only Chromium was run. Firefox and WebKit were not run; they are not installed in this environment.
+- Screen-reader behaviour (editor summary focus, barter region) has not been tested with a real assistive technology.
 
 ## Restart handoff
 
 1. `git log --oneline 52bed39..work/classrup-haiku-framework` shows the batch.
 2. Run `npm test`, `npm start` on a free port, then `BASE=http://localhost:<port>/ npm run check:browser` and `BASE=... npm run smoke`.
-3. Next candidate work: a Firefox or WebKit run (browsers not installed in this environment); the outer barter section
-   naming fix; a checked decision on the Infinity page behaviour (it now returns page 1); a screen-reader pass on
-   the editor summary focus.
+3. Next candidate work: see app/HANDOFF.md, section "Open items".

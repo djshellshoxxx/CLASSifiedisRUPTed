@@ -12,7 +12,7 @@ export function renderBarter(root, { listings }) {
     h('header', { class: 'page-head' }, h('h1', {}, 'Barter (read-only demo)'), h('p', { class: 'muted' }, 'Fixture offers only. Nothing here can be accepted, countered or executed.')),
     h(
       'section',
-      { class: 'panel', 'aria-labelledby': 'offers-heading' },
+      { class: 'panel' },
       h('h2', { id: 'offers-heading' }, 'Trade offers'),
       BARTER_OFFERS.length
         ? h(

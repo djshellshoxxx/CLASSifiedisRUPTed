@@ -1,0 +1,9 @@
+{
+  "name": "@classrup/kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared kernel: canonical contracts CTR-ID/EVT/ERR/SCH/CAP/PRV, ports, money primitives",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "zod": "4.6.6" }
+}

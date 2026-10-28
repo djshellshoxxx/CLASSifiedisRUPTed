@@ -1,0 +1,12 @@
+{
+  "name": "@classrup/identity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F07 (07_Identity) domain modules",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@classrup/kernel": "workspace:*",
+    "@classrup/security": "workspace:*"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@classrup/security",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F16 security: signatures, encryption, hashing, authorization, secrets, replay protection",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@classrup/kernel": "workspace:*",
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  }
+}

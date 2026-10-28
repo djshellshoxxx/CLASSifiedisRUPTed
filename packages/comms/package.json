@@ -1,0 +1,12 @@
+{
+  "name": "@classrup/comms",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F08 (08_Communications) domain modules",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@classrup/kernel": "workspace:*",
+    "@classrup/security": "workspace:*"
+  }
+}

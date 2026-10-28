@@ -1,0 +1,12 @@
+{
+  "name": "@classrup/notifications",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F13 (13_Notifications) domain modules",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@classrup/kernel": "workspace:*",
+    "@classrup/security": "workspace:*"
+  }
+}

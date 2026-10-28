@@ -1,10 +1,7 @@
-# TODO
+# TODO: F15.S03 operations
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED in `packages/platform`; integration pending.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+Observability, signed backups and recovery tooling are implemented in `packages/platform/src/ops`; relay-side wiring (sinks, storage, scheduling) is pending.
+
+Per-module checklists are in the `mod_*` directories.

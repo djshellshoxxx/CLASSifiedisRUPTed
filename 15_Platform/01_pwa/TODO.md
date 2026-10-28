@@ -1,10 +1,7 @@
-# TODO
+# TODO: F15.S01 pwa
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED in `packages/platform`; integration pending.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+Client-side offline queue, cache policy and install logic are implemented in `packages/platform/src/pwa`; the PWA app that wires them (`apps/pwa`) is not built yet.
+
+Per-module checklists are in the `mod_*` directories.

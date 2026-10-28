@@ -1,0 +1,105 @@
+import { defineModules } from '@classrup/kernel';
+import { PERM } from './policies';
+
+const OPS = 'platform.operations';
+
+/** One descriptor per hierarchy module owned by the platform package. */
+export const MODULES = defineModules([
+  { id: 'F15.S01.M01', path: '15_Platform/01_pwa/mod_offline', flag: 'platform.pwa', summary: 'Offline write queue with ordered, idempotent, retrying sync (client side)' },
+  {
+    id: 'F15.S01.M02',
+    path: '15_Platform/01_pwa/mod_cache',
+    flag: 'platform.pwa',
+    summary: 'Service-worker cache policy, versioning and purge rules',
+    permissions: [PERM.pwaCachePolicy],
+  },
+  {
+    id: 'F15.S01.M03',
+    path: '15_Platform/01_pwa/mod_install',
+    flag: 'platform.pwa',
+    summary: 'Web app manifest builder and install-prompt state machine',
+    permissions: [PERM.pwaManifest],
+  },
+  {
+    id: 'F15.S03.M01',
+    path: '15_Platform/03_operations/mod_observability',
+    flag: OPS,
+    summary: 'Structured logging, metrics with Prometheus export, health checks and SLO budgets',
+    permissions: [PERM.healthCheck, PERM.healthReport, PERM.metricsExport],
+  },
+  {
+    id: 'F15.S03.M02',
+    path: '15_Platform/03_operations/mod_backups',
+    flag: OPS,
+    summary: 'Signed, verifiable backup snapshots, restore into an empty store, retention pruning',
+    permissions: [PERM.backupCreate, PERM.backupVerify, PERM.backupPrune, PERM.backupRead],
+    events: ['platform.backup.created', 'platform.backup.verified', 'platform.backup.pruned'],
+    collections: ['platform_backups'],
+  },
+  {
+    id: 'F15.S03.M03',
+    path: '15_Platform/03_operations/mod_recovery',
+    flag: OPS,
+    summary: 'Checkpointed event replay, projection rebuild, outbox redelivery, DR runbooks and drills',
+    permissions: [PERM.runbookRead, PERM.drillManage, PERM.drillRead],
+    events: ['platform.drill.scheduled', 'platform.drill.started', 'platform.drill.step_completed', 'platform.drill.completed', 'platform.drill.aborted'],
+    collections: ['platform_drills', 'platform_checkpoints'],
+  },
+  {
+    id: 'F15.S04.M01',
+    path: '15_Platform/04_configuration/mod_feature',
+    flag: 'platform.configuration',
+    summary: 'Module registry with flag validation, dependency report and per-tenant listing',
+    permissions: [PERM.moduleList, PERM.moduleReport],
+  },
+  {
+    id: 'F15.S04.M02',
+    path: '15_Platform/04_configuration/mod_flags',
+    flag: 'platform.configuration',
+    summary: 'Feature flags with dependencies, tenant overrides and kill switches',
+    permissions: [PERM.flagRead, PERM.flagOverride, PERM.flagKill],
+    events: ['platform.flag.override_set', 'platform.flag.override_cleared', 'platform.flag.kill_engaged', 'platform.flag.kill_released'],
+    collections: ['platform_flags'],
+  },
+  {
+    id: 'F15.S04.M03',
+    path: '15_Platform/04_configuration/mod_tenants',
+    flag: 'platform.configuration',
+    summary: 'Tenant configuration, limits and suspension',
+    permissions: [PERM.tenantCreate, PERM.tenantUpdate, PERM.tenantSuspend, PERM.tenantRead],
+    events: ['platform.tenant.created', 'platform.tenant.updated', 'platform.tenant.suspended', 'platform.tenant.reactivated'],
+    collections: ['platform_tenants'],
+  },
+  {
+    id: 'F16.S03.M01',
+    path: '16_Security/03_assurance/mod_threats',
+    flag: 'platform.assurance',
+    summary: 'STRIDE threat register with controls, status and reviews',
+    permissions: [PERM.threatRead, PERM.threatReview],
+    events: ['platform.threat.reviewed'],
+    collections: ['platform_threat_reviews'],
+  },
+  {
+    id: 'F16.S03.M02',
+    path: '16_Security/03_assurance/mod_incident',
+    flag: 'platform.assurance',
+    summary: 'Incident lifecycle, severity targets, append-only timeline and SLA sweeper',
+    permissions: [PERM.incidentReport, PERM.incidentRead, PERM.incidentTriage, PERM.incidentAnnotate, PERM.incidentManage, PERM.incidentSweep],
+    events: [
+      'platform.incident.reported',
+      'platform.incident.status_changed',
+      'platform.incident.severity_changed',
+      'platform.incident.note_added',
+      'platform.incident.sla_breached',
+    ],
+    collections: ['platform_incidents'],
+  },
+  {
+    id: 'F16.S03.M03',
+    path: '16_Security/03_assurance/mod_response',
+    flag: 'platform.assurance',
+    summary: 'Response playbooks and tracked execution per incident',
+    permissions: [PERM.playbookRead, PERM.incidentManage],
+    events: ['platform.incident.playbook_started', 'platform.incident.playbook_step_completed', 'platform.incident.playbook_completed'],
+  },
+]);

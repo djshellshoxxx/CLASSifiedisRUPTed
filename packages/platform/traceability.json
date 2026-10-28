@@ -1,0 +1,163 @@
+[
+  {
+    "module": "F15.S01.M01",
+    "path": "15_Platform/01_pwa/mod_offline",
+    "code": [
+      "packages/platform/src/pwa/offline.ts"
+    ],
+    "tests": [
+      "packages/platform/test/pwa.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "ADR-0009 queue: per-aggregate FIFO, stable idempotency keys, backoff+jitter, 8 attempts, conflict surfaced. Storage port; IndexedDB adapter and UI banner belong to apps/pwa."
+  },
+  {
+    "module": "F15.S01.M02",
+    "path": "15_Platform/01_pwa/mod_cache",
+    "code": [
+      "packages/platform/src/pwa/cache.ts",
+      "packages/platform/src/pwa/operations.ts"
+    ],
+    "tests": [
+      "packages/platform/test/pwa.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Pure cache policy, response cacheability, versioned cache names and purge lists. Service worker registration itself lives in apps/pwa."
+  },
+  {
+    "module": "F15.S01.M03",
+    "path": "15_Platform/01_pwa/mod_install",
+    "code": [
+      "packages/platform/src/pwa/install.ts",
+      "packages/platform/src/pwa/operations.ts"
+    ],
+    "tests": [
+      "packages/platform/test/pwa.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Manifest builder/validator and install-prompt state machine with 14 day cooldown. Persisting InstallState (localStorage) is the PWA's job."
+  },
+  {
+    "module": "F15.S03.M01",
+    "path": "15_Platform/03_operations/mod_observability",
+    "code": [
+      "packages/platform/src/ops/logger.ts",
+      "packages/platform/src/ops/metrics.ts",
+      "packages/platform/src/ops/health.ts",
+      "packages/platform/src/ops/slo.ts",
+      "packages/platform/src/ops/observability-ops.ts"
+    ],
+    "tests": [
+      "packages/platform/test/observability.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "JSON logger, metrics + Prometheus text, health registry, SLO budgets. Relay must supply sink, scrape endpoint and checks; no tracing."
+  },
+  {
+    "module": "F15.S03.M02",
+    "path": "15_Platform/03_operations/mod_backups",
+    "code": [
+      "packages/platform/src/ops/backups.ts",
+      "packages/platform/src/ops/backup-service.ts",
+      "packages/platform/src/ports.ts"
+    ],
+    "tests": [
+      "packages/platform/test/backups.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Signed v1 snapshots, verify, empty-store restore, GFS retention. Blob encryption at rest is the BackupStore's job; restore is a library call, not an operation."
+  },
+  {
+    "module": "F15.S03.M03",
+    "path": "15_Platform/03_operations/mod_recovery",
+    "code": [
+      "packages/platform/src/ops/recovery.ts",
+      "packages/platform/src/ops/runbooks.ts",
+      "packages/platform/src/ops/drills.ts"
+    ],
+    "tests": [
+      "packages/platform/test/recovery.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Checkpointed replay, projection rebuild, outbox redelivery, three DR runbooks, drill tracking with RTO judgement. Replay is synchronous (matches the sync store)."
+  },
+  {
+    "module": "F15.S04.M01",
+    "path": "15_Platform/04_configuration/mod_feature",
+    "code": [
+      "packages/platform/src/config/registry.ts",
+      "packages/platform/src/config/operations.ts"
+    ],
+    "tests": [
+      "packages/platform/test/config.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Module registry: unique ids, flag validation, single owner per event/collection, dependency report, per-tenant listing. Other packages register via registerModules."
+  },
+  {
+    "module": "F15.S04.M02",
+    "path": "15_Platform/04_configuration/mod_flags",
+    "code": [
+      "packages/platform/src/config/flags.ts",
+      "packages/platform/src/config/catalog.ts",
+      "packages/platform/src/config/operations.ts"
+    ],
+    "tests": [
+      "packages/platform/test/config.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "FlagService: dependencies with cycle detection, tenant overrides, static+runtime kill switch, cached evaluation, audited admin ops. Catalog names must be reconciled with packages."
+  },
+  {
+    "module": "F15.S04.M03",
+    "path": "15_Platform/04_configuration/mod_tenants",
+    "code": [
+      "packages/platform/src/config/tenants.ts",
+      "packages/platform/src/config/operations.ts"
+    ],
+    "tests": [
+      "packages/platform/test/config.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Tenant CRUD with expectedVersion, active/suspended machine, limits overrides, operator payee account, assertTenantActive. Enforcement in other packages is the relay's wiring."
+  },
+  {
+    "module": "F16.S03.M01",
+    "path": "16_Security/03_assurance/mod_threats",
+    "code": [
+      "packages/platform/src/assurance/threats.ts",
+      "packages/platform/src/assurance/threat-ops.ts"
+    ],
+    "tests": [
+      "packages/platform/test/assurance.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "37 STRIDE threats over six assets with controls, planned work and status; reviews per tenant. Statuses are claims to re-verify at integration; one threat is open."
+  },
+  {
+    "module": "F16.S03.M02",
+    "path": "16_Security/03_assurance/mod_incident",
+    "code": [
+      "packages/platform/src/assurance/incidents.ts",
+      "packages/platform/src/assurance/incident-ops.ts"
+    ],
+    "tests": [
+      "packages/platform/test/assurance.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Forward-only incident lifecycle, SEV1-4 targets, append-only timeline, postmortem, SLA sweeper. Paging/notification of responders is left to the relay (events only)."
+  },
+  {
+    "module": "F16.S03.M03",
+    "path": "16_Security/03_assurance/mod_response",
+    "code": [
+      "packages/platform/src/assurance/playbooks.ts",
+      "packages/platform/src/assurance/incident-ops.ts"
+    ],
+    "tests": [
+      "packages/platform/test/assurance.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Four playbooks (key compromise, data exposure, relay compromise, fraud wave) with tracked execution; recovery blocked while steps are pending. Steps are manual checklists, not automation."
+  }
+]

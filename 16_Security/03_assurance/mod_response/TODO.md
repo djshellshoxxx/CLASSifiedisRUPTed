@@ -1,10 +1,12 @@
-# TODO
+# TODO: F16.S03.M03 response
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED (checklists with tracking).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Playbooks: key compromise, data exposure, relay compromise, fraud wave (`packages/platform/src/assurance/playbooks.ts`; `packages/platform/test/assurance.test.ts`)
+- [x] Execution tracking per incident: start, complete/skip step with required reason, run completion, recovery blocked by pending steps (`packages/platform/src/assurance/incident-ops.ts`)
+
+## Remaining
+- [ ] Steps are manual; no automated key rotation or session revocation is triggered from here (needs identity/security tooling)
+
+Package overview: `packages/platform/README.md`. Traceability: `packages/platform/traceability.json`.

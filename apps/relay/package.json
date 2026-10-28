@@ -1,0 +1,36 @@
+{
+  "name": "@classrup/relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F15.S02 relay/backend: composes feature packages, HTTP API, SQLite storage",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/relay.mjs"
+  },
+  "dependencies": {
+    "@classrup/auctions": "workspace:*",
+    "@classrup/bazaar": "workspace:*",
+    "@classrup/commerce": "workspace:*",
+    "@classrup/comms": "workspace:*",
+    "@classrup/discovery": "workspace:*",
+    "@classrup/federation": "workspace:*",
+    "@classrup/governance": "workspace:*",
+    "@classrup/i18n": "workspace:*",
+    "@classrup/identity": "workspace:*",
+    "@classrup/kernel": "workspace:*",
+    "@classrup/moderation": "workspace:*",
+    "@classrup/mutiny": "workspace:*",
+    "@classrup/notifications": "workspace:*",
+    "@classrup/platform": "workspace:*",
+    "@classrup/privacy": "workspace:*",
+    "@classrup/rentals": "workspace:*",
+    "@classrup/security": "workspace:*",
+    "@classrup/services": "workspace:*",
+    "@hono/node-server": "2.1.4",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@classrup/pwa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "F15.S01 installable mobile-first PWA client",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@classrup/i18n": "workspace:*",
+    "@classrup/kernel": "workspace:*",
+    "@classrup/platform": "workspace:*",
+    "@classrup/security": "workspace:*",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@preact/preset-vite": "2.10.6",
+    "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0"
+  }
+}

@@ -1,35 +1,11 @@
-# PS-116-03 — workflow state machine
+# PS-116-03 — Hints, local outcome and runner transitions
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-03. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the workflow state machine process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-03.R01: On mount read platform hint, subscribe to online/offline/pageshow/visibility signals, then query authorized owner snapshot; until resolved use unknown/locked, never assume saved. Local operation transition: memory_only -> local_pending only when explicit domain save accepted with reviewed storage; pending -> committed solely receipt; pending -> failed on known abort; pending -> outcome_unknown on lost result; unknown -> committed/failed/deleted only via owner reconciliation. Closing memory draft loses it with visible warning. Connectivity alone changes none of these states.
+- PS-116-03.R02: Runner `idle -> running` on eligible bounded resume; running -> idle at batch completion, -> paused on local pause/lock/protocol/config conflict, -> stopped when document closes. Browser offline suppresses new automatic attempts, but user may explicitly try selected adapter; online hint schedules one coalesced eligibility check, never marks reachable. In-flight ACK after pause/cancel may still have reached peer: owner records evidence, label possible/acknowledged delivery, never claim retraction. Delivery transitions only from queue owner: queued -> attempting -> peer_acknowledged|retry_wait|dead_letter; local cancel -> cancelled_local, cannot erase remote copy.
+- PS-116-03.R03: Browser freeze/close/background timer suspension makes progress unknown, not failed or delivered. On resume requery receipts and reconcile any expired attempt claims before bounded dispatch. Once observed by the runner, revoke/lock cancels not-yet-issued work; a concurrent check/send race can still transmit after another tab revokes, which must stay visibly uncertain rather than promise atomic prevention; no cross-vault carryover. Coalesce hint flicker for 500ms while preserving immediate explicit pause. Announce stable state changes once via polite live region; urgent storage loss gets focusable alert without stealing editing focus.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-03 deterministic timeline: pending save, offline event, transaction complete, online hint, withheld ACK, close/reopen, late ACK, pause. Oracle: save stays committed, no consent/payment change, late delivery honestly labeled and no progress asserted while closed. Run clock rollback and restored queue as paused reconciliation cases.

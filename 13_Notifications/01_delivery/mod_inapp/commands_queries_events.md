@@ -1,35 +1,29 @@
-# PS-103-04 — commands queries events
+# PS-103-04 — local commands, queries and consumed events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-04. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-04 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the commands queries events process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-04.R01 — interface boundary
 
-## Requirements to specify
-- [ ] PS-103-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+All operations are in-process F15 CR-002 calls scoped to the unlocked vault/principal. There is no HTTP route, API key, remote push endpoint, email sender, websocket, browser push subscription, or receipt from another device. F15 remains owner of canonical command envelopes, `Result<Receipt,Problem>`, revisions, request limits and receipts.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## PS-103-04.R02 — command and query shapes
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+The consumer exposes these local operations; field names are module input/output projections, not replacements for F15's canonical envelope:
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- `queryInbox({cursor?: string, limit?: integer}) -> Result<Page<NoticeView>, Problem>`; `limit` defaults to 50 and is 1..100. On a first page, capture `NoticeSequenceStateV1.last_local_sequence` as `high_watermark` (0 if empty), set `after_sequence=0`, and return the cursor `n1:<vault_uuid>:<principal_uuid>:<high_watermark>:<last_returned_sequence>`. UUIDs are canonical lowercase UUIDv4; sequence values are canonical decimal nonnegative safe integers without leading zeroes; total ASCII cursor length is <=128 bytes. Results are ascending by `local_sequence`, restricted to `after_sequence < local_sequence <= high_watermark`, so later inserts wait for a new query. The next cursor uses the last returned sequence; if no more rows remain through the watermark, return `next_cursor=null`. Deleted rows leave gaps and do not change order. Cursor owner/format mismatch or `after_sequence > high_watermark` returns `CURSOR_STALE`. This is a per-vault ordering only, not a global or timestamp order.
+- `markNoticeRead({notice_id: UUIDv4, expected_revision: positive safe integer}) -> Result<Receipt, Problem>`; explicit user action only. After active-receipt/deletion-marker resolution and authorization, compare expected_revision first; stale CAS returns REVISION_CONFLICT. A matching-CAS already-read row is a successful no-op even at maximum revision, without increment. A genuine unread-to-read change at maximum revision returns RATE_LIMITED_LOCAL / revision: REVISION_EXHAUSTED. No event ACK is emitted.
+- `deleteNotice({notice_id: UUIDv4, expected_revision: positive safe integer, confirmation: true}) -> Result<Receipt, Problem>`; explicit confirmation is required for unread or read rows. It deletes only this local view row and is terminal.
+- `clearReadNotices({items: [{notice_id: UUIDv4, expected_revision: positive safe integer}], confirmation: true}) -> Result<Receipt, Problem>`; 1..1000 unique explicitly selected read rows, bounded by the canonical request byte limit. This command requires no separate envelope expected_revision: each selected row has its own CAS token. In one transaction authorize/check all selected rows still exist, are read and match their revisions before deleting any. Missing/foreign row returns NOT_FOUND; stale revision or row now unread returns REVISION_CONFLICT; any failure aborts the whole batch. Rows not explicitly selected, including newly read/inserted rows, are excluded. Return a local receipt whose object_id is the command_id as the terminal batch-operation reference; retain its deleted-scope marker, so replay returns OBJECT_DELETED without scanning/deleting a new set. Clearing unread items uses deleteNotice individually after visible confirmation.
+- Internal `consumeLocalEvent(event)`; accepts only the four event types and preference contract in [SPEC](SPEC.md), deduplicates by `(F13.inapp.v1,event_id)`, and atomically writes row plus local marker.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Every mutating command includes the F15-required `command_id`, `vault_id`, `principal_id`, in the canonical CR-002 envelope. Single-row commands also require expected_revision; the explicit bounded bulk command uses only per-row revision tokens as specified above. Idempotency scope is `(vault_id, principal_id, operation, command_id)`. For an active command receipt, same command ID and same canonical request bytes returns the original receipt; changed bytes returns `IDEMPOTENCY_MISMATCH`. If that command scope has a deletion marker, `OBJECT_DELETED` takes precedence for any replay bytes, without payload comparison or returning the old body/receipt. Query output contains only fixed localization keys, local IDs, category, read state, advisory time, positive row revision, per-vault local sequence and authorized local route reference.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-04`; scenarios and fixtures to be detailed in Prompt 3.
+## PS-103-04.R03 — typed failures and event semantics
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Use CR-002 codes: `MALFORMED_INPUT`, `PAYLOAD_TOO_LARGE`, `VAULT_LOCKED`, `FORBIDDEN`, `REVISION_CONFLICT`, `IDEMPOTENCY_MISMATCH`, `NOT_FOUND`, `POLICY_UNAVAILABLE`, `STORAGE_UNAVAILABLE`, `STORAGE_QUOTA_EXCEEDED`, `RATE_LIMITED_LOCAL`, `CONFLICT_QUARANTINED`, `CURSOR_STALE`, `OBJECT_DELETED`. A disabled feature returns `FEATURE_DISABLED`. Hidden/foreign notices return `NOT_FOUND` without existence disclosure. Unsupported source events are marked ineligible locally and never mapped to an invented alias.
+
+A successfully stored notice starts with revision=1 and receives NoticeSequenceStateV1.last_local_sequence + 1 as its per-vault local_sequence; F15 advances that counter in the same transaction as the notice and event marker. expected_revision must match exactly; a successful read increments it once when below MAX_SAFE_INTEGER. Delete remains available at MAX_SAFE_INTEGER with a matching expected_revision: below max it stores the incremented final revision in the content-free deletion marker; at max it stores the max value without increment. clearReadNotices re-reads the set and atomically writes a final-revision deletion marker for each deleted read row. Nonterminal revision exhaustion and sequence exhaustion use RATE_LIMITED_LOCAL, retryable=false, with field_errors [{path: revision, code: REVISION_EXHAUSTED}] or [{path: local_sequence, code: SEQUENCE_EXHAUSTED}]. Terminal delete is never blocked by revision exhaustion. This consumer emits no new cross-module business event. The F15 source event remains unchanged; reading/deleting a notice is a local projection mutation, not `peer.ack`, `consent_recorded`, `payment.observed`, or handoff evidence. Receipts mean local transaction only.
+
+## Acceptance mapping
+
+- `TEST-PS-103-04`: command schema/unknown fields, query bounds/cursor binding, same/different-body idempotency, typed errors, no remote network calls, no business-event emission for read/delete, and receipt semantics. No executable test is present.

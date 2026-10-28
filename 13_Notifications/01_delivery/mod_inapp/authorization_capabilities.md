@@ -1,35 +1,21 @@
-# PS-103-05 — authorization capabilities
+# PS-103-05 — local capability checks
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-05. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — REVIEW PENDING. **Requirement family:** PS-103-05 (R01–R03). **Owner:** [module](SPEC.md). **Implementation:** none.
 
-## Purpose and scope
-Define the authorization capabilities process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## PS-103-05.R01 — principal and trust boundary
 
-## Requirements to specify
-- [ ] PS-103-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+A notice belongs to one local principal in one F15 vault. F07 establishes the active principal through explicit unlock; a pseudonym is only a local display label. F16 is the authority for default-deny local capabilities. No global member, admin, moderator, sender account, device identity service, or Sybil resistance is assumed. Imported peer objects have read/projection permissions only and cannot write this inbox.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## PS-103-05.R02 — operation capabilities
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+The future F16 local policy must authorize scoped operations equivalent to `notice.inbox.read`, `notice.read_state.write`, and `notice.delete`. `consumeLocalEvent` is service-internal and may write only when F15 marks the source event committed for the same active vault/principal. `clearReadNotices` requires the same delete scope and an explicit UI confirmation. This specification names consumer scopes only; F16 owns capability issuance, revocation, persistence and protocol review.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Check vault/principal binding and capability again inside the write transaction. Do not rely on a hidden UI control, cached boolean, JavaScript mutex, caller-provided owner ID, banner token, or stale capability snapshot. A principal switch or lock revokes the in-memory view and requires fresh authorization. If F16 cannot provide the required scope or its decision is unavailable, fail closed with `FORBIDDEN` or `POLICY_UNAVAILABLE`; do not fall back to broad app authority.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## PS-103-05.R03 — denial and leakage behavior
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-05`; scenarios and fixtures to be detailed in Prompt 3.
+An unauthorized query for an unknown, foreign, deleted or hidden notice returns the same `NOT_FOUND` shape. Unauthorized mutation cannot change read state, delete a row, advance the event cursor, or reveal title/category/source event. No capability grants remote delivery, acknowledgment, consent, payment confirmation, moderation power, export authority, or control over another vault.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance mapping
+
+- `TEST-PS-103-05`: locked vault, wrong principal/vault, forged owner, missing/revoked capability, stale tab grant, read-only imported event and hidden-notice non-disclosure. These are planned security oracles only.

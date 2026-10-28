@@ -1,5 +1,7 @@
 # F07.S01 — accounts
 
+> **2026-10-24 architecture override:** [Client-owned CLASS](../../planning/CLIENT_SIDE_ARCHITECTURE.md) is mandatory. This folder name is preserved for traceability. No required product backend/accounts/server secrets; local identity and vault authority, optional chosen transport, in-app notices and explicit external failure limits. Existing planned children require semantic reconciliation and are not approved by this note.
+
 **Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.
 
 ## Purpose and business behavior

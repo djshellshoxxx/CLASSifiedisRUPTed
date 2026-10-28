@@ -1,35 +1,11 @@
-# PS-116-02 — validation rules
+# PS-116-02 — Snapshot and resume validation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-02. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING. **Owner:** F15.S01.M01. Proposed documentation only; no implementation, executed tests or protocol approval. Inherits [architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core](../../../planning/contracts/CORE_API_EVENTS_DATA.md), [peer transport](../../../planning/contracts/MESSAGING_PAYMENTS_FEDERATION.md) and [module scope](SPEC.md). F15 persistence/F16 protocol owners retain storage, keys and cryptographic decisions.
 
-## Purpose and scope
-Define the validation rules process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Contract
 
-## Requirements to specify
-- [ ] PS-116-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+- PS-116-02.R01: Validate all in-process input objects, rejecting unknown keys, noncanonical IDs, enum values, non-safe/negative counters, >100 item page, invalid object/queue reference shape, cursor outside PS-116-04 bounds or >256KiB UTF-8 snapshot before presentation. Validate source_revision against owner snapshot, not local clock. Hints accept only platform online/offline observations; arbitrary peer “online” assertions do not replace them. No app heartbeat URL, ping, tracking pixel or automatic reachability probe.
+- PS-116-02.R02: `resume` accepts only selected active vault, locally configured destination IDs (max20 per call), reason:user|app_resume|browser_hint and a UUIDv4 request_id. Caller cannot supply endpoint, payload, receipt, payment result, consent, attempt count or next_attempt time. Unsupported schema returns VALIDATION_FAILED with field code UNSUPPORTED_SCHEMA; wrong field shape VALIDATION_FAILED; locked/profile-unreviewed storage VAULT_LOCKED/PROTOCOL_NOT_REVIEWED. Use core Problem fields without echoing input or private references. UI reads remain safe unknown on invalid source snapshot; never replace last source receipt with forged committed state.
+- PS-116-02.R03: Owner queue service validates current disclosure consent, destination configuration, protocol profile, revocations/conflicts and due-time eligibility immediately before each claim; failed check pauses that entry, not unrelated local work. Restored stale queue or wall-clock rollback requires reconciliation; this view cannot treat timestamp freshness as authority. Outbound data limits/verification belong to MPF/F11, never bypassed by resume. Feature unavailable returns FEATURE_DISABLED; stale snapshot refresh returns CURSOR_STALE (retryable query), no blind write.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+TEST-PS-116-02 boundary corpus includes unknown fields, 101 rows/21 destinations, unsafe integer, poisoned endpoint and stale/foreign-vault snapshot. Oracle: no attempt/network call on rejection; safe typed problem and keyboard-focusable localized error summary.

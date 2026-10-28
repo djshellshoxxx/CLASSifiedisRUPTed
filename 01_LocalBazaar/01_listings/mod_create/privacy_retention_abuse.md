@@ -1,35 +1,12 @@
-# PS-002-07 — privacy retention abuse
+# PS-002-07 — Privacy, retention and local abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-07. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the privacy retention abuse process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-07.R01: Private drafts are never public/cache-shared/exported by default. No precise geo/contact/keys in events/telemetry; local free-text draft may contain personal text, so no automatic peer transmission. Public disclosure preview warns about free text; strip EXIF before future media sharing and require reviewed parser/profile. Manual coarse area without GPS.
+- PS-002-07.R02: User controls local export/delete and retention. Draft retained until explicit deletion; removal atomically scrubs request bodies, content-bearing event/outbox payloads, private history and local projections, retaining only disclosed minimal command-ID/object-ID/deletion/tombstone anti-replay metadata, without request body or fingerprint/digest. Deleted-command replay returns OBJECT_DELETED, never restored private content. Optional marker erasure warns of replay/resurrection risk. Browser erase cannot guarantee physical device wiping, backup purge or peer erasure; no central legal hold/30-day purge promise. Old restore requires tombstone/revocation reconciliation before sharing.
+- PS-002-07.R03: Proposed configurable device-protection caps 10 create attempts/hour/principal and 30 new drafts/day using advisory local clock; resolve existing command receipt/deletion marker before counting any attempt, so same-command replay is exempt. Count only new command IDs once; changed-body replay of a live receipt returns IDEMPOTENCY_MISMATCH; any replay under a deleted command ID returns OBJECT_DELETED without new draft or quota charge. Return RATE_LIMITED_LOCAL with local retry hint for new commands above cap. Clock reset or modified client bypasses quotas; no Sybil/global ban guarantee. Local category filters/advisory feeds inform review with provenance/appeal to chosen reviewer, never global account sanctions. Missing remote feed cannot block unrelated private drafting.
+- PS-002-07.R04: No encryption-at-rest claim absent reviewed vault/key design. Sensitive draft fields stay memory-only or persistence is refused when protection unavailable. Keys/secrets never uploaded; messaging send/relay disabled pending reviewed encryption protocol with no plaintext fallback.
 
-## Requirements to specify
-- [ ] PS-002-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-07`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Acceptance
+TEST-PS-002-07 uses synthetic canary addresses/EXIF/keys: no automatic adapter/index/log leakage, export requires preview, geo denial works, local caps bounded and clock caveats visible, restore cannot silently resurrect shared deletion. Authorized private export can contain own private fields only with explicit warning; no impossible promise of zero private text in all owner exports. Tests specified, not run.

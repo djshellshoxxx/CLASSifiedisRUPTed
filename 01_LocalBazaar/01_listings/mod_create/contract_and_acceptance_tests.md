@@ -1,35 +1,12 @@
-# PS-002-09 — contract and acceptance tests
+# PS-002-09 — Process acceptance and test matrix
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-09. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED_REVIEW_PENDING — architecture/security/protocol review outstanding; application not implemented. **Owner:** F01.S01.M01. **Parent:** [SPEC.md](SPEC.md). Inherits [client-owned architecture](../../../planning/CLIENT_SIDE_ARCHITECTURE.md), [core commands/events](../../../planning/contracts/CORE_API_EVENTS_DATA.md) and [listing contract](../../../planning/contracts/CLASSIFIED_LISTING_CONTRACT.md). These contracts supersede conflicting backend assumptions in historical parent text. Stable requirement/test IDs retained with explicitly revised local semantics.
 
-## Purpose and scope
-Define the contract and acceptance tests process for create within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-002-09.R01: Fixtures cover kind/defaults, Unicode/code-point boundaries, integer-string overflow, principal/vault authorization, command replay/mismatch and local typed problems. Expected outcomes derive from validation_rules and CR-002.
+- PS-002-09.R02: Real browser IndexedDB transaction tests run 100 concurrent identical commands across tabs: one object/event/receipt; injected abort creates none. Browser reload after completed commit returns same receipt. F06 never returns private draft; peer imports cannot create owned drafts. Separate vaults do not falsely share identity or exclusivity. Existing receipt lookup precedes quotas: 100 identical replays succeed under default cap and count as one attempt. For 100 distinct-command race/stress tests explicitly configure local cap >=100 attempts/hour and >=100 drafts/day; test default cap separately. Deleted-command replay returns OBJECT_DELETED with private body/history scrubbed.
+- PS-002-09.R03: Deterministic seeded 10000-input schema fuzz, foreign-vault/key negatives, XSS escaping, stale local catalog and unavailable policy, storage quota/eviction and unknown result. E2E widths 320/375/768px, keyboard and screenreader error summary. Network-blocked creation succeeds after installation without account/API; no plaintext/secret/draft adapter traffic.
+- PS-002-09.R04: Link TEST-PS-002-01, TEST-PS-002-02, TEST-PS-002-03, TEST-PS-002-04, TEST-PS-002-05, TEST-PS-002-06, TEST-PS-002-07, TEST-PS-002-08, TEST-PS-002-09 and TEST-PS-002-10 to actual future CI/browser artifacts; this file is TEST-PS-002-09 aggregate map, no current execution evidence. Retain original requirement/test IDs; old SQL/tenant/global server expectations are explicitly replaced by local authority equivalents, never reported passed.
 
-## Requirements to specify
-- [ ] PS-002-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-09`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Exit criteria
+Each process's named acceptance test passes with no atomicity/authorization/schema failures; local performance fixture meets PS-002-08 targets; accessibility review meets WCAG2.2 AA; independent architecture/security/privacy review resolves high/critical findings. Protocol-dependent capabilities remain disabled until separate review/test vectors; completion of draft tests cannot approve encryption/federation. No implementation or test result claimed.

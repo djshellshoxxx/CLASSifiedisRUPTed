@@ -1,10 +1,10 @@
 # TODO
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED (package `@classrup/moderation`).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] block / unblock / list own blocks; events carry no account ids (code: `packages/moderation/src/policy/abuse.ts`, tests: `packages/moderation/test/policy.test.ts`)
+- [x] BlockPort.isBlocked in both directions (code: `packages/moderation/src/policy/abuse.ts`, tests: `packages/moderation/test/policy.test.ts`)
+- [x] Harassment pattern raises priority of all open cases about the account (code: `packages/moderation/src/policy/abuse.ts`, tests: `packages/moderation/test/reporting.test.ts`)
+- [ ] Blocks are not propagated to federated peers
+
+Operations, permissions and events: see `packages/moderation/README.md`.

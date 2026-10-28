@@ -1,0 +1,127 @@
+[
+  {
+    "module": "F12.S01.M01",
+    "path": "12_Moderation/01_reporting/mod_flags",
+    "code": [
+      "packages/moderation/src/reporting/flags.ts",
+      "packages/moderation/src/reporting/cases.ts",
+      "packages/moderation/src/reporting/priority.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/reporting.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Reports (12 reasons, message excerpt by reporter), merged duplicates, one case per subject, priority/SLA queue, claim/assign/release. Reporter hidden in events/DTOs. Scans, no secondary indexes."
+  },
+  {
+    "module": "F12.S01.M02",
+    "path": "12_Moderation/01_reporting/mod_evidence",
+    "code": [
+      "packages/moderation/src/reporting/evidence.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/reporting.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Append-only per-case SHA-256 hash chain (item hash covers prevHash); verifyEvidenceChain detects altered, gapped, relinked and truncated chains. Only hashes and refs stored."
+  },
+  {
+    "module": "F12.S01.M03",
+    "path": "12_Moderation/01_reporting/mod_appeals",
+    "code": [
+      "packages/moderation/src/reporting/appeals.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/appeals.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "One appeal per enforcement within 14 days; reviewer differs from decider/approver; upheld/overturned/modified; overturn reverses via SubjectActionsPort; full history kept."
+  },
+  {
+    "module": "F12.S02.M01",
+    "path": "12_Moderation/02_policy/mod_enforcement",
+    "code": [
+      "packages/moderation/src/policy/enforcement.ts",
+      "packages/moderation/src/policy/strikes.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/enforcement.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "dismiss/warn/remove_content/restrict/suspend/ban with policy clause and reason, strikes (180d decay, 3 -> recommendation), four-eyes for ban and minor safety, notify subject, expiry sweeper."
+  },
+  {
+    "module": "F12.S02.M02",
+    "path": "12_Moderation/02_policy/mod_spam",
+    "code": [
+      "packages/moderation/src/policy/spam.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/policy.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "assessContent scores duplicate hashes across accounts, link density, posting velocity, new-account bursts (0..100, allow/review/block, reasons). Text never stored; each call is one attempt."
+  },
+  {
+    "module": "F12.S02.M03",
+    "path": "12_Moderation/02_policy/mod_abuse",
+    "code": [
+      "packages/moderation/src/policy/abuse.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/policy.test.ts",
+      "packages/moderation/test/reporting.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Private user blocks, BlockPort (bidirectional, O(1) index), capped at 1000; harassment pattern (>=3 distinct reporters in 7 days) escalates open cases about the account."
+  },
+  {
+    "module": "F12.S03.M01",
+    "path": "12_Moderation/03_antifraud/mod_risk",
+    "code": [
+      "packages/moderation/src/antifraud/risk.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/antifraud.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "RiskPort: decayed signal total scaled by action sensitivity (low 0.6, standard 1, high 1.5); allow <40, challenge <75, deny; reasons list top signals. Amount is not yet used."
+  },
+  {
+    "module": "F12.S03.M02",
+    "path": "12_Moderation/03_antifraud/mod_signals",
+    "code": [
+      "packages/moderation/src/antifraud/signals.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/antifraud.test.ts",
+      "packages/moderation/test/appeals.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Signal store (7 kinds, default weights, override 1..100) with 30-day half-life decay, 300-day horizon and revocation by source (overturned decisions). System-write, staff-read."
+  },
+  {
+    "module": "F12.S03.M03",
+    "path": "12_Moderation/03_antifraud/mod_rate",
+    "code": [
+      "packages/moderation/src/antifraud/rate.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/antifraud.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "RateLimitPort: persisted token bucket with exact integer refill arithmetic, per-prefix policy table, RATE.LIMITED with retryAfterMs. Properties: bound, exact retryAfter, determinism."
+  },
+  {
+    "module": "F12.S03.M04",
+    "path": "12_Moderation/03_antifraud/mod_limits",
+    "code": [
+      "packages/moderation/src/antifraud/limits.ts"
+    ],
+    "tests": [
+      "packages/moderation/test/antifraud.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Tiers new (<7d) / established / trusted (>=90d, no strikes, low risk) with limits for listings/day, open offers, open trades, messages/hour, auction max value (USD cents, bigint)."
+  }
+]

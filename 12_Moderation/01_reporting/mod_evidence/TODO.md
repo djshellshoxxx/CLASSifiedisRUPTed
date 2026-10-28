@@ -1,10 +1,12 @@
 # TODO
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED (package `@classrup/moderation`).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Evidence items {kind, contentHash, ref, addedBy, at, prevHash} chained from a genesis hash (code: `packages/moderation/src/reporting/evidence.ts`, tests: `packages/moderation/test/reporting.test.ts`)
+- [x] Chain head record detects truncation (code: `packages/moderation/src/reporting/evidence.ts`, tests: `packages/moderation/test/reporting.test.ts`)
+- [x] verifyEvidenceChain + staff verify query; tamper tests (code: `packages/moderation/src/reporting/evidence.ts`, tests: `packages/moderation/test/reporting.test.ts`)
+- [x] System-written links for reports, message excerpts, decisions, appeal outcomes (code: `packages/moderation/src/reporting/flags.ts`, tests: `packages/moderation/test/appeals.test.ts`)
+- [ ] Evidence blobs live outside this package; only hashes and opaque refs are kept
+- [ ] Hash chain proves integrity of this store, not authenticity of the uploaded material
+
+Operations, permissions and events: see `packages/moderation/README.md`.

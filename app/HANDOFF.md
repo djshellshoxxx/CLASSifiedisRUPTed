@@ -84,7 +84,8 @@ audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, b
 2. **Screen-reader behaviour** is untested: editor summary focus (possible double announcement), barter region
    naming, and browse focus after Save.
 3. **Infinity page behaviour** (see Decisions). Confirm or revert.
-4. **Browse fallback** that focuses the results when a saved listing leaves the page is code-only. The UI cannot reach it today.
+4. **Closed as a decision, no code change.** The `else results.focus()` branch in `browse.js` after a Save is kept as a focus
+   safety net. Browse never removes a listing's Save button, so the branch is unreachable today. `browse-focus.mjs` covers the reachable focus paths. Remove the branch only by an explicit decision.
 5. **Closed in the second continuation slice.** `layout.mjs` only sees the empty saved page. `scripts/checks/saved-layout.mjs`
    seeds three saved listings and checks overflow at 320/390/768/1280px and 24px touch targets at 390px. Unsave behaviour
    stays covered by `account-browse.mjs`. A shrunken Save/Unsave button fails the new check (self-check on a scratch copy).
@@ -139,7 +140,10 @@ audit unit tests 14/14; structural audit exit 0; semantic audit exit 1 (NO-GO, b
   editor.mjs covers focus only after a mouse click, which does not set `:focus-visible`. Negative check: removing the summary outline fails (c) at both widths. Open item 2's editor part is closed; the screen-reader part stays open.
 - BLOCKED: Firefox/WebKit (not installed); screen-reader pass (no assistive technology here); rotating the pasted token
   (owner action); the Infinity pagination decision (owner decision, see Decisions).
-- NEXT (ready, mock-only, objective acceptance test):
-  1. Open item 4: read `browse.js`, then either remove the unreachable results-focus fallback or cover it with a unit test. Pick whichever keeps behaviour unchanged.
-  2. Open item 2 (barter region naming and browse focus after Save) needs a screen reader; not ready. Record only.
-  3. Open item 3 stays BLOCKED on an owner decision; do not change pagination behaviour without it.
+- DONE (slice 4, decision only): open item 4 closed without code change. No application or check code changed after slice 3,
+  so the slice 3 results still describe the tree.
+- NEXT: no ready mock-only work remains with an objective acceptance test in the items above. Remaining items are gated:
+  1. Screen-reader pass (open item 2): needs assistive technology not present here.
+  2. Firefox and WebKit (open item 1): not installed here.
+  3. Infinity pagination (open item 3): owner decision; do not change pagination behaviour without it.
+  4. Token rotation and closing PRs #1–#3 (open items and Security notes): owner actions.

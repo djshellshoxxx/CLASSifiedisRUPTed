@@ -9,7 +9,7 @@ import type { CommandContext } from './runtime';
 
 // ---- Listings (owner F01 bazaar) -------------------------------------------------------------
 export type ListingKind = 'sell' | 'wanted' | 'giveaway' | 'barter' | 'service' | 'rental' | 'auction';
-export type ListingStatus = 'draft' | 'published' | 'paused' | 'reserved' | 'sold' | 'expired' | 'archived' | 'removed';
+export type ListingStatus = 'draft' | 'pending_review' | 'published' | 'paused' | 'reserved' | 'sold' | 'expired' | 'archived' | 'removed';
 
 export interface ListingSnapshot {
   readonly id: string;
@@ -153,6 +153,32 @@ export interface QuotePort {
   latest(base: string, quote: string, now: number): FxQuote | undefined;
   get(quoteId: string): FxQuote | undefined;
 }
+
+// ---- Payment status (owner F09.S01 payments) ---------------------------------------------------
+/**
+ * `claimed` = payer self-attested; `confirmed` = payee acknowledged receipt; `verified` = independent
+ * verification (e.g. chain confirmations reached); `final` = past finality/reorg window.
+ * Only `confirmed`, `verified` and `final` may be treated as paid by consumers; `final` for crypto.
+ */
+export type PaymentStatus = 'created' | 'claimed' | 'confirmed' | 'verified' | 'final' | 'disputed' | 'reorged' | 'failed' | 'cancelled';
+
+export interface PaymentStatusSnapshot {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly payerId: string;
+  readonly payeeId: string;
+  readonly amount: MoneyJson;
+  readonly method: 'cash' | 'crypto' | 'external';
+  readonly subjectType: string;
+  readonly subjectId: string;
+  readonly status: PaymentStatus;
+}
+
+export interface PaymentStatusPort {
+  get(paymentId: string): PaymentStatusSnapshot | undefined;
+}
+
+export const isSettledStatus = (s: PaymentStatus): boolean => s === 'confirmed' || s === 'verified' || s === 'final';
 
 // ---- Safe defaults for tests and for running a module standalone --------------------------------
 export const noBlocks: BlockPort = { isBlocked: () => false };

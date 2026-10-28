@@ -1,10 +1,6 @@
-# TODO
+# TODO — F11.S01 protocol
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED: `packages/federation/src/protocol/`.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] M01 portable, M02 records, M03 signatures
+- [ ] Record schema versions beyond v1

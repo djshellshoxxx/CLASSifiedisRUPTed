@@ -1,10 +1,8 @@
-# TODO
+# TODO — F08 Communications
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED in `packages/comms` (7 modules implemented, 1 partial). See `packages/comms/README.md` and `packages/comms/traceability.json`.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Messaging, negotiation and meetups implemented with tests (`packages/comms/test/`)
+- [ ] Relay wiring: AccountLookup, BlockPort, RateLimitPort, NotifyPort, sweeper schedule (`apps/relay`)
+- [ ] PWA screens, client key storage and attachment blob transport
+- [ ] Independent security review of the E2E message flow

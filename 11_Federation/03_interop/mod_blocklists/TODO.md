@@ -1,10 +1,14 @@
-# TODO
+# TODO — F11.S03.M02 mod_blocklists
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED — Peer/domain(+subdomains)/author-key lists, signed export, import from trusted pinned peers into review queue only. Records from blocked sources rejected with reason.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Peer, domain (with subdomains) and author-key entries; revoke
+- [x] Signed export; import from trusted pinned peers into review queue; approval required
+
+## Code and tests
+- Code: `packages/federation/src/interop/blocklists.ts`
+- Tests: `packages/federation/test/interop.test.ts`, `packages/federation/test/sync.test.ts`
+
+## Remaining
+- [ ] Scheduled automatic import with diff alerts

@@ -1,10 +1,16 @@
-# TODO
+# TODO — F08.S02.M02 mod_consent
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED — Signed per-revision consent (context 'consent'), key checked against identity, append-only, verifyConsent/hasAllConsent for other features. Signature is evidence of assertion only.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Signed consent statements (context 'consent') verified against identity signing keys
+- [x] Per-revision records, accept/decline/revoke transition table, freshness window, replay-safe
+- [x] verifyConsent and hasAllConsent for other features; status query per thread
+
+## Code and tests
+- Code: `packages/comms/src/negotiation/consent.ts`
+- Tests: `packages/comms/test/negotiation.test.ts`
+
+## Remaining
+- [ ] Mutiny/bazaar adopting verifyConsent through a kernel port
+- [ ] Consent receipts export for evidence bundles

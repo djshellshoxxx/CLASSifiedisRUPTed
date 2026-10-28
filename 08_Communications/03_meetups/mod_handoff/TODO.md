@@ -1,10 +1,17 @@
-# TODO
+# TODO — F08.S03.M02 mod_handoff
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED — Check-in claims, hashed 6-digit receiver code with 5-attempt lock and expiry, bilateral evidence event, trusted-contact token (window + safe-spot name only). Not proof of delivery.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Check-in claims around the meetup window
+- [x] Receiver-set hashed 6-digit code, giver confirmation, 5-attempt lock, expiry, code bound to meetup revision
+- [x] Evidence event comms.handoff.confirmed_by_code
+- [x] Trusted-contact share token (hashed at rest, expiring, revocable) revealing only window + safe-spot name
+
+## Code and tests
+- Code: `packages/comms/src/meetups/handoff.ts`, `packages/comms/src/client.ts`
+- Tests: `packages/comms/test/meetups.test.ts`
+
+## Remaining
+- [ ] Live location sharing is intentionally not provided
+- [ ] Handing the evidence event to rentals/commerce handoff flows (relay wiring)

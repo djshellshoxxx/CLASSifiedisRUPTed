@@ -1,10 +1,16 @@
-# TODO
+# TODO — F08.S03.M03 mod_coordination
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED — Propose/accept/counter/reschedule/cancel with per-revision consent, encrypted private place, expiry sweeper, no-show claims flagged when contradicted by check-in.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Propose with safe spot or sealed private place; accept, counter, reschedule, cancel with per-revision consent
+- [x] Explicit transition table, expiry sweeper, optimistic concurrency
+- [x] No-show claims, flagged when contradicted by a check-in
+
+## Code and tests
+- Code: `packages/comms/src/meetups/coordination.ts`
+- Tests: `packages/comms/test/meetups.test.ts`
+
+## Remaining
+- [ ] Calendar export
+- [ ] Reminder notifications scheduling (notifications module)

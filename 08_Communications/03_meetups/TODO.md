@@ -1,10 +1,6 @@
-# TODO
+# TODO — F08.S03 meetups
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED: `packages/comms/src/meetups/`.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] M01 safe spots, M02 handoff codes and trusted-contact links, M03 coordination
+- [ ] Nearby safe-spot suggestions (needs discovery geo index)

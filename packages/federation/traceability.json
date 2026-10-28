@@ -1,0 +1,118 @@
+[
+  {
+    "module": "F11.S01.M01",
+    "path": "11_Federation/01_protocol/mod_portable",
+    "code": [
+      "packages/federation/src/protocol/portable.ts"
+    ],
+    "tests": [
+      "packages/federation/test/portable.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Per-record opt-in with live consent, author-signed publish, relay countersign, tombstone withdrawal, own-record export, relay-signed labels. Clients must sign; relay never holds author keys."
+  },
+  {
+    "module": "F11.S01.M02",
+    "path": "11_Federation/01_protocol/mod_records",
+    "code": [
+      "packages/federation/src/protocol/records.ts",
+      "packages/federation/src/types.ts"
+    ],
+    "tests": [
+      "packages/federation/test/records.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Envelope v1, 4 payload schemas, 32KB limit, deep privacy scan (keys, emails, coordinate pairs), regionCell<=5. Forwarding of third-party-origin records is not supported (origin must equal sender)."
+  },
+  {
+    "module": "F11.S01.M03",
+    "path": "11_Federation/01_protocol/mod_signatures",
+    "code": [
+      "packages/federation/src/protocol/signatures.ts"
+    ],
+    "tests": [
+      "packages/federation/test/records.test.ts",
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Ed25519 author sig, relay countersign bound to hash+authorSig, signed batches, dual-signed migration proofs; domain-separated contexts. Signatures prove assertion, not truth."
+  },
+  {
+    "module": "F11.S02.M01",
+    "path": "11_Federation/02_relay_sync/mod_delivery",
+    "code": [
+      "packages/federation/src/sync/delivery.ts",
+      "packages/federation/src/sync/outbox.ts"
+    ],
+    "tests": [
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Per-peer outbox, 100-record batches, exponential backoff + injected jitter, dead letter after 8, requeue, status. Transport is a port (default always retry); real HTTP lives in the relay."
+  },
+  {
+    "module": "F11.S02.M02",
+    "path": "11_Federation/02_relay_sync/mod_dedup",
+    "code": [
+      "packages/federation/src/sync/dedup.ts",
+      "packages/federation/src/sync/inbound.ts"
+    ],
+    "tests": [
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Persistent nonce store + ReplayGuard, duplicate registry, idempotent import, malicious-peer scenarios covered. Seen markers kept 30 days then purged by sweeper."
+  },
+  {
+    "module": "F11.S02.M03",
+    "path": "11_Federation/02_relay_sync/mod_conflicts",
+    "code": [
+      "packages/federation/src/sync/conflicts.ts",
+      "packages/federation/src/sync/inbound.ts"
+    ],
+    "tests": [
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Total order (revision, tombstone, smaller hash) so arrival order never matters; author-key continuity incl. migration successors; rollback/fork/override/author conflicts logged."
+  },
+  {
+    "module": "F11.S03.M01",
+    "path": "11_Federation/03_interop/mod_trust",
+    "code": [
+      "packages/federation/src/interop/trust.ts"
+    ],
+    "tests": [
+      "packages/federation/test/interop.test.ts",
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Pending/trusted/suspended/blocked, pinned key with reset-on-rotate, per-minute record limit, daily byte quota, reputation counters, auto-suspend after 25 consecutive rejections."
+  },
+  {
+    "module": "F11.S03.M02",
+    "path": "11_Federation/03_interop/mod_blocklists",
+    "code": [
+      "packages/federation/src/interop/blocklists.ts"
+    ],
+    "tests": [
+      "packages/federation/test/interop.test.ts",
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Peer/domain(+subdomains)/author-key lists, signed export, import from trusted pinned peers into review queue only. Records from blocked sources rejected with reason."
+  },
+  {
+    "module": "F11.S03.M03",
+    "path": "11_Federation/03_interop/mod_migration",
+    "code": [
+      "packages/federation/src/interop/migration.ts"
+    ],
+    "tests": [
+      "packages/federation/test/interop.test.ts",
+      "packages/federation/test/sync.test.ts"
+    ],
+    "status": "partial",
+    "notes": "Dual-signed statements, successor keys, redirect tombstones on old relay, learned by peers from them. Rotation statements for other relays enter only via operator submit; no destination-side import."
+  }
+]

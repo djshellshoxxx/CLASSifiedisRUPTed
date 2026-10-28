@@ -1,10 +1,8 @@
-# TODO
+# TODO — F11 Federation and portability
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED in `packages/federation` (8 modules implemented, 1 partial). See `packages/federation/README.md` and `packages/federation/traceability.json`.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Protocol, relay sync and interop implemented with malicious-peer tests (`packages/federation/test/`)
+- [ ] Relay wiring: transport adapter, consent port, listing lookup, sweeper schedule (`apps/relay`)
+- [ ] Destination-side migration import; transitive forwarding
+- [ ] External protocol review before enabling federation by default

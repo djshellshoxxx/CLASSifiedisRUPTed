@@ -1,10 +1,6 @@
-# TODO
+# TODO — F11.S03 interop
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED (M01, M02) / PARTIAL (M03 migration: no destination-side import).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] M01 trust, M02 blocklists, M03 migration core: `packages/federation/src/interop/`
+- [ ] Destination import of migrated records

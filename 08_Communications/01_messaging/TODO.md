@@ -1,10 +1,7 @@
-# TODO
+# TODO — F08.S01 messaging
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED (M01, M02) / PARTIAL (M03: WebP and PDF stripping, blob storage).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] M01 private, M02 threads: `packages/comms/src/messaging/`
+- [x] M03 attachment metadata and JPEG/PNG stripping
+- [ ] WebP/PDF stripping; blob storage endpoint

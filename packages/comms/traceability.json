@@ -1,0 +1,104 @@
+[
+  {
+    "module": "F08.S01.M01",
+    "path": "08_Communications/01_messaging/mod_private",
+    "code": [
+      "packages/comms/src/messaging/private.ts",
+      "packages/comms/src/client.ts",
+      "packages/comms/src/schemas.ts",
+      "packages/comms/src/support.ts"
+    ],
+    "tests": [
+      "packages/comms/test/messaging.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "E2E ciphertext only, gapless seq, TTL purge, opt-in receipts, delete-for-me. Sender attribution is relay-asserted; no server-side retention for threads with no active member."
+  },
+  {
+    "module": "F08.S01.M02",
+    "path": "08_Communications/01_messaging/mod_threads",
+    "code": [
+      "packages/comms/src/messaging/threads.ts",
+      "packages/comms/src/support.ts"
+    ],
+    "tests": [
+      "packages/comms/test/threads.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "2..20 participants, invite+accept, leave/re-invite, per-participant archive/mute, block checks. Subject binding is by id prefix; existence of the subject is not verified (no port)."
+  },
+  {
+    "module": "F08.S01.M03",
+    "path": "08_Communications/01_messaging/mod_attachments",
+    "code": [
+      "packages/comms/src/messaging/attachments.ts",
+      "packages/comms/src/messaging/strip.ts"
+    ],
+    "tests": [
+      "packages/comms/test/attachments.test.ts"
+    ],
+    "status": "partial",
+    "notes": "Metadata, 10MB cap, mime allowlist, 24h pending expiry; JPEG/PNG strippers fuzzed. Blob upload/storage is relay-side; WebP and PDF metadata stripping not implemented."
+  },
+  {
+    "module": "F08.S02.M01",
+    "path": "08_Communications/02_negotiation/mod_offers",
+    "code": [
+      "packages/comms/src/negotiation/offers.ts"
+    ],
+    "tests": [
+      "packages/comms/test/negotiation.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Cards reference offer/proposal/cycle by id + revisionHash; new revision supersedes. Existence and hash of the referenced record are not verified (owner ports not in kernel)."
+  },
+  {
+    "module": "F08.S02.M02",
+    "path": "08_Communications/02_negotiation/mod_consent",
+    "code": [
+      "packages/comms/src/negotiation/consent.ts"
+    ],
+    "tests": [
+      "packages/comms/test/negotiation.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Signed per-revision consent (context 'consent'), key checked against identity, append-only, verifyConsent/hasAllConsent for other features. Signature is evidence of assertion only."
+  },
+  {
+    "module": "F08.S03.M01",
+    "path": "08_Communications/03_meetups/mod_safe",
+    "code": [
+      "packages/comms/src/meetups/safe.ts"
+    ],
+    "tests": [
+      "packages/comms/test/meetups.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Moderator-curated public spots (name, kind, regionCell<=5), public list, safety tips. No address or coordinates stored; names are free text curated by moderators."
+  },
+  {
+    "module": "F08.S03.M02",
+    "path": "08_Communications/03_meetups/mod_handoff",
+    "code": [
+      "packages/comms/src/meetups/handoff.ts",
+      "packages/comms/src/client.ts"
+    ],
+    "tests": [
+      "packages/comms/test/meetups.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Check-in claims, hashed 6-digit receiver code with 5-attempt lock and expiry, bilateral evidence event, trusted-contact token (window + safe-spot name only). Not proof of delivery."
+  },
+  {
+    "module": "F08.S03.M03",
+    "path": "08_Communications/03_meetups/mod_coordination",
+    "code": [
+      "packages/comms/src/meetups/coordination.ts"
+    ],
+    "tests": [
+      "packages/comms/test/meetups.test.ts"
+    ],
+    "status": "implemented",
+    "notes": "Propose/accept/counter/reschedule/cancel with per-revision consent, encrypted private place, expiry sweeper, no-show claims flagged when contradicted by check-in."
+  }
+]

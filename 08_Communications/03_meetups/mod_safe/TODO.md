@@ -1,10 +1,16 @@
-# TODO
+# TODO — F08.S03.M01 mod_safe
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** IMPLEMENTED — Moderator-curated public spots (name, kind, regionCell<=5), public list, safety tips. No address or coordinates stored; names are free text curated by moderators.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+## Implemented
+- [x] Moderator-only create/retire, public list by region/kind, regionCell <= 5
+- [x] Safety tips query
+- [x] No exact address or coordinates stored
+
+## Code and tests
+- Code: `packages/comms/src/meetups/safe.ts`
+- Tests: `packages/comms/test/meetups.test.ts`
+
+## Remaining
+- [ ] Suggested spots by proximity (needs discovery geo index)
+- [ ] Community nomination and review workflow

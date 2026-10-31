@@ -172,3 +172,30 @@ class HierarchyExemptionTests(unittest.TestCase):
         self.assertTrue(hierarchy_exempt("planning/contracts", exceptions))
         self.assertFalse(hierarchy_exempt("01_LocalBazaar", exceptions))
         self.assertFalse(hierarchy_exempt("application-notes", exceptions))
+
+
+class RepositoryTraversalTests(unittest.TestCase):
+    def test_generated_dependencies_and_reports_cannot_supply_audit_evidence(self):
+        from scripts import spec_audit
+        self.assertTrue(callable(getattr(spec_audit, "repository_paths", None)))
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            included = ["planning/contracts/SPEC.md", "app/README.md", "app/tests/real.test.js", ".github/workflows/demo.yml"]
+            excluded = [".git/nested/private.md", "app/node_modules/vendor/README.md", "app/node_modules/vendor/tests/test_fake.py", "app/playwright-report/index.html", "app/test-results/failure.md", "scripts/__pycache__/cache.pyc"]
+            for name in included + excluded:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("fixture", encoding="utf-8")
+            actual = {p.relative_to(root).as_posix() for p in spec_audit.repository_paths(root) if p.is_file()}
+            self.assertEqual(actual, set(included))
+
+    def test_module_inventory_ignores_generated_specifications(self):
+        from scripts import spec_audit
+        self.assertTrue(callable(getattr(spec_audit, "module_spec_directories", None)))
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ["01_LocalBazaar/mod_real/SPEC.md", "app/node_modules/vendor/mod_fake/SPEC.md", "app/test-results/mod_fake/SPEC.md"]:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("fixture", encoding="utf-8")
+            self.assertEqual(spec_audit.module_spec_directories(root), [root / "01_LocalBazaar/mod_real"])

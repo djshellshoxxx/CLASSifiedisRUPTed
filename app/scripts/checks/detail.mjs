@@ -1,8 +1,7 @@
 // Browser checks for the listing detail page: Save and Unsave announce the listing title, and the demo messaging button
 // announces that nothing was sent. Start the demo first (`PORT=4173 npm start`), then run `BASE=http://localhost:4173/ node scripts/checks/detail.mjs`.
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const root = BASE.endsWith('/') ? BASE : `${BASE}/`;
 const ROUTE = '#/listing/demo-001';
@@ -11,7 +10,7 @@ const MESSAGE_DEMO = 'Demo only: messaging is not implemented, nothing was sent.
 const waitForStatusExact = (page, text) =>
   page.waitForFunction((t) => document.getElementById('status')?.textContent === t, text, { timeout: 2000 }).then(() => true, () => false);
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 try {
   // Fresh context so no earlier saved-listing state from another check leaks into this one.

@@ -1,0 +1,56 @@
+name: Mock demo verification
+on:
+  pull_request:
+    branches: [work/classrup-haiku-framework]
+  push:
+    branches: [work/classrup-haiku-framework]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s scripts -p 'test_*.py'
+      - run: python scripts/spec_audit.py --check
+      - name: Confirm specification gate remains NO-GO
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from scripts.spec_audit import audit
+          result = audit(Path('.'))
+          assert result['semantic_gate'] == 'NO-GO', result['semantic_gate']
+          PY
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm test
+      - run: npm run verify:browser -- --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-${{ matrix.browser }}
+          path: |
+            app/playwright-report/
+            app/test-results/
+          retention-days: 7

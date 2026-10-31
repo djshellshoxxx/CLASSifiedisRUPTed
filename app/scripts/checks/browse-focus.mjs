@@ -1,13 +1,12 @@
 // Browser checks for focus on the browse page: Save and Unsave keep focus on the same listing's button,
 // typing and filter changes keep focus in the form, and Clear filters moves focus into the results region.
 // Start the demo first and set BASE, for example: PORT=4186 node scripts/serve.mjs & BASE=http://localhost:4186/ node scripts/checks/browse-focus.mjs
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const route = (hash) => new URL(hash, BASE).href;
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const errors = [];
 
 // Each page gets its own browser context, so localStorage starts empty for every section.

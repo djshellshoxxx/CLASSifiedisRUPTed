@@ -1,9 +1,8 @@
 // Layout checks for the saved page with populated cards. layout.mjs only sees the empty saved state, so this file seeds
 // saved listings through the app's own storage key and checks overflow and touch targets on the cards.
 // Start the demo first (`PORT=4173 npm start`), then run `BASE=http://localhost:4173/ node scripts/checks/saved-layout.mjs`.
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const root = BASE.endsWith('/') ? BASE : `${BASE}/`;
 const ROUTE = '#/saved';
@@ -11,7 +10,7 @@ const SAVED_KEY = 'classrup.saved';
 const SEEDED_IDS = ['demo-001', 'demo-002', 'demo-003'];
 const WIDTHS = [320, 390, 768, 1280];
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 // Saved state lives in localStorage per origin. Seed it from the home route, then move to the saved route. The saved view reads storage on each render.
 async function openSavedWithItems(width) {

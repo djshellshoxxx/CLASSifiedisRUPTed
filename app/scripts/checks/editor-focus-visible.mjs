@@ -1,11 +1,10 @@
 // Browser checks for keyboard-initiated failed submits on the create-listing page: the error summary takes focus and shows
 // a visible focus indicator. editor.mjs checks focus with a mouse click, which does not set :focus-visible, so this file uses the keyboard.
 // Start the demo first (`PORT=4173 npm start`), then run `BASE=http://localhost:4173/ node scripts/checks/editor-focus-visible.mjs`.
-import { BASE, createChecker, loadPlaywright } from './lib.mjs';
+import { BASE, createChecker, launchBrowser } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 // The browser's default focus ring is at least 2px wide. A 'none' or zero-width outline counts as invisible.
 const MIN_OUTLINE_PX = 2;

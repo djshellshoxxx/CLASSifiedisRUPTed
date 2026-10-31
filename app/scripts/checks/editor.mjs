@@ -1,10 +1,9 @@
 // Browser checks for the create-listing page: error summary links, summary focus, price errors, double submit, discard.
 // Start the demo first (`npm start`, or set BASE), then run this file directly or through `npm run check:browser`.
-import { BASE, createChecker, loadPlaywright } from './lib.mjs';
+import { BASE, createChecker, launchBrowser } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 const VALID_FIELDS = { title: 'Test bench', price: '12.5', category: 'garden', condition: 'good', region: 'Harbour' };
 

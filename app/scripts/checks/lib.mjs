@@ -3,12 +3,12 @@ import { createRequire } from 'node:module';
 
 export const BASE = process.env.BASE ?? 'http://localhost:4173/';
 
-// Playwright is not a dependency of this zero-dependency app. Resolve it from the environment, or from NODE_PATH.
+// Development tooling only; the static application has no runtime dependencies.
 export function loadPlaywright() {
   try {
     return createRequire(import.meta.url)('playwright');
   } catch (error) {
-    throw new Error(`Playwright is not resolvable from app/. Install it or set NODE_PATH to a folder that contains it. (${error.message})`);
+    throw new Error(`Playwright is not resolvable from app/. Run npm ci in app/. (${error.message})`);
   }
 }
 
@@ -28,4 +28,18 @@ export function createChecker() {
     }
   };
   return { check, finish, failures };
+}
+
+// Fail closed: a misspelled engine must never silently run a different browser.
+export function browserName(value = 'chromium') {
+  if (!['chromium', 'firefox', 'webkit'].includes(value)) {
+    throw new Error('Unsupported BROWSER: ' + value + '. Use chromium, firefox, or webkit.');
+  }
+  return value;
+}
+
+export async function launchBrowser() {
+  const name = browserName(process.env.BROWSER);
+  console.log('Browser engine: ' + name);
+  return loadPlaywright()[name].launch();
 }

@@ -7,6 +7,7 @@ import csv
 import json
 import re
 import hashlib
+import os
 from collections import Counter, defaultdict
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -26,6 +27,28 @@ PLACEHOLDER_PATTERNS = (
     r"placeholder exists",
     r"TODO",
 )
+
+
+
+def repository_paths(root: Path):
+    """Walk source only: generated dependencies/reports cannot provide audit evidence."""
+    for current, directories, files in os.walk(root):
+        directory = Path(current)
+        directories[:] = sorted(
+            name for name in directories
+            if name not in {'.git', 'node_modules', '__pycache__'}
+            and (directory / name).relative_to(root).as_posix()
+            not in {'app/playwright-report', 'app/test-results'}
+        )
+        yield from (directory / name for name in directories)
+        yield from (directory / name for name in sorted(files))
+
+
+def module_spec_directories(root: Path) -> list[Path]:
+    return sorted(
+        path.parent for path in repository_paths(root)
+        if path.name == 'SPEC.md' and path.parent.name.startswith('mod_') and path.is_file()
+    )
 
 
 def read_registry(root: Path) -> list[dict[str, str]]:
@@ -208,7 +231,7 @@ def registry_markdown_findings(rows: list[dict], text: str) -> list[str]:
 def markdown_link_findings(root: Path) -> list[str]:
     problems: list[str] = []
     link_re = re.compile(r"(?<!!)\[[^]]*\]\(([^)]+)\)")
-    for source in sorted(root.rglob("*.md")):
+    for source in sorted(path for path in repository_paths(root) if path.suffix == ".md"):
         if ".git" in source.parts or "scripts" in source.parts:
             continue
         text = source.read_text(encoding="utf-8", errors="ignore")
@@ -248,7 +271,7 @@ def audit(root: Path) -> dict:
     errors.extend(f"duplicate registry path {key}" for key, n in sorted(duplicate_paths.items()) if n > 1)
     by_id = {row["id"]: row for row in rows}
 
-    module_dirs = sorted(p.parent for p in root.glob("*/**/mod_*/SPEC.md"))
+    module_dirs = module_spec_directories(root)
     features = [p for p in root.iterdir() if p.is_dir() and re.match(r"^\d{2}_", p.name)]
     if len(features) != EXPECTED_FEATURES:
         errors.append(f"expected {EXPECTED_FEATURES} feature directories; found {len(features)}")
@@ -342,12 +365,14 @@ def audit(root: Path) -> dict:
     hierarchy_exceptions = {
         ".": "root project documents use PROJECT_SPEC.md and PROJECT_TODO.md",
         "scripts": "audit tooling, excluded from product hierarchy",
+        ".github": "repository automation, not a planning node",
+        ".github/workflows": "CI workflows, not a planning node",
         "planning/contracts": "shared contract library, not a feature hierarchy node",
         "planning/audits": "generated audit reports",
         "planning/audits/reviews": "per-contract approval records",
     }
     hierarchy_missing = []
-    hierarchy_directories = [root, *(path for path in root.rglob("*") if path.is_dir() and ".git" not in path.parts and "scripts" not in path.parts)]
+    hierarchy_directories = [root, *(path for path in repository_paths(root) if path.is_dir() and ".git" not in path.parts and "scripts" not in path.parts)]
     for directory in sorted(hierarchy_directories):
         rel = directory.relative_to(root).as_posix()
         missing = [name for name in ("SPEC.md", "TODO.md") if not (directory / name).is_file()]
@@ -357,7 +382,7 @@ def audit(root: Path) -> dict:
 
     missing_tests = []
     searchable = []
-    for candidate in root.rglob("*"):
+    for candidate in repository_paths(root):
         if not candidate.is_file() or ".git" in candidate.parts or candidate == root / "planning/audits/spec_audit.json":
             continue
         if candidate.suffix.lower() not in {".py", ".md", ".json", ".yml", ".yaml", ".toml"}:

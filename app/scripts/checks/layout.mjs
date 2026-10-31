@@ -1,15 +1,14 @@
 // Responsive, focus, touch-target, contrast and reduced-motion checks for the existing views.
 // Start the demo first (`PORT=4183 node scripts/serve.mjs`), then run `BASE=http://localhost:4183/ node scripts/checks/layout.mjs`.
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const root = BASE.endsWith('/') ? BASE : `${BASE}/`;
 const ROUTES = ['#/', '#/sell', '#/saved', '#/barter', '#/account', '#/listing/demo-001', '#/nope'];
 const WIDTHS = [320, 390, 768, 1280];
 const LONG_TITLE = 'x'.repeat(80);
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 async function open(route, options = {}) {
   const { width = 1280, colorScheme, reducedMotion } = options;

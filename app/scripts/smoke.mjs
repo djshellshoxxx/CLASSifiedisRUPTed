@@ -1,10 +1,8 @@
 // Browser smoke test for the demo journeys. Run `npm start` first, or set BASE.
-import { createRequire } from 'node:module';
-
-const { chromium } = createRequire(import.meta.url)('playwright');
+import { launchBrowser } from './checks/lib.mjs';
 
 const base = process.env.BASE ?? 'http://localhost:4173/';
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const failures = [];
 const check = (name, ok) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`);

@@ -15,8 +15,8 @@ The product roadmap's next major milestone is M2 (foundational specifications), 
 Reuse the standalone journey scripts, select their browser through one shared helper, and wrap each as a Playwright Test case with three projects and managed webServer. This preserves existing oracles and gives reliable server cleanup, timeouts and failure artifacts. Rewriting journeys or adding a separate custom process supervisor would add unnecessary complexity.
 
 ## Implementation plan
-- [ ] Add and run failing engine-selection tests; implement shared helper and migrate all launch sites.
-- [ ] Pin Playwright Test, commit lockfile and ignore generated dependencies/artifacts; configure managed server and three browser projects. Add wrappers preserving script exit codes/stdout/stderr.
+- [x] Add and run failing engine-selection tests; implement shared helper and migrate all launch sites.
+- [x] Pin Playwright Test, commit lockfile and ignore generated dependencies/artifacts; configure managed server and three browser projects. Add wrappers preserving script exit codes/stdout/stderr.
 - [ ] Install browser binaries in workspace; run unit tests, all browser projects and root audits. Diagnose and fix failures with regression coverage.
 - [ ] Add read-only CI, document exact commands, evidence and limitations; independent review and fixes.
 - [ ] Push using GitHub connector, PR into work/classrup-haiku-framework, inspect checks and merge; verify remote revision and rerun integration checks.

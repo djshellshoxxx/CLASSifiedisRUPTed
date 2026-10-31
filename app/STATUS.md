@@ -1,50 +1,53 @@
-# Framework demo status (app/)
+# Framework demo status — 2026-10-30
 
-Scope: mock-backed, synthetic-data demo only. It is not a product implementation of the specifications in this
-repository, and no security, privacy or production readiness is claimed. The repository's specification gate is
-not passed (see the root README).
+Mock-only, synthetic-data framework. No product implementation, specification approval, security certification,
+release or deployment is claimed. The specification gate remains NO-GO. Roadmap M2 (foundational specifications)
+is still blocked on the security/source/policy evidence recorded in the root decision register.
 
-## Baseline and integration
+## Integration
 
-- Baseline: PR #3 head `52bed39dda52c680a4299e20aaefe0f4695b2d58` (`feat(app): mock-backed ClassRup framework demo`).
-- Integration branch: `work/classrup-haiku-framework`, based on that baseline. Commits after the baseline:
-  - test harness: `npm run check:browser` runs every `scripts/checks/*.mjs` file.
-  - domain and money: exact integers for unsafe amounts (rejected); non-finite or fractional pages handled in pagination.
-  - editor: error-summary links focus their field; their href is `#/sell/<field>`, so a new tab lands on the sell page.
-  - account and browse: the account page Save buttons toggle saved state; paging moves focus to the results region.
-  - styles: responsive overflow, 24px touch-target minimum, and placeholder and dark-mode contrast fixes.
-  - barter: the trade-offers table sits in a focusable, named scroll region (keyboard reachable).
-  - browse: focus stays on Save or Unsave after a toggle; Clear filters moves focus to the results region.
-  - checks: layout check has no trivially true PASS lines (routes without a button check their first link in main, or SKIP with a reason); account check records console errors and warnings.
-  - announcements: removal messages include the listing title on the account, browse, saved and detail pages.
+- Demo integration: work/classrup-haiku-framework, as designated by the previous handoff.
+- This milestone preserves PR #5 continuation history and adds reproducible verification via PR #7.
+- Main remains gated. Existing draft PRs #1–#6 are preserved; no duplicate-history PR is silently closed.
 
-## Verification (Chromium only, via Playwright)
+## Verification tooling
 
-- `npm test`: 31 unit tests pass (baseline 18).
-- `npm run check:browser`: 5 check files pass (editor, account-browse, layout, barter, browse-focus).
-- Barter: the outer section no longer has its own region name, so 'Trade offers' is one region (the scroll area).
-- `npm run smoke`: 26 checks pass.
-- Each wave's diffs were reviewed by a separate Haiku reviewer. Coordinator edits after review (guarded barter check
-  (f); detail.js removal wording) were not re-reviewed; detail.js wording is covered by code reading only.
-- The new checks were run against the defective code and fail there (editor middle-click and link focus; the
-  placeholder contrast check fails without the CSS rule; account and browse focus checks fail on the baseline).
+- Exact development dependency: @playwright/test 1.64.1 and its locked dependencies. No runtime dependencies.
+- npm ci, install browser binaries, npm test, then npm run verify:browser (see README).
+- Managed server on port 4173 with reuse disabled; each script has a 150-second child timeout, each case 180 seconds,
+  full run 15 minutes, one worker, no retries. Failure output includes script, engine, signal and captured assertions.
+- All eight existing detailed check files plus smoke run as nine journeys per browser: Chromium, Firefox, WebKit.
+  Journey passes are not counts of individual assertions. Existing explicit focus SKIPs remain visible in attached output.
+- Checks cover listing detail/demo messaging announcements, browse/account/saved toggles, editor validation/drafts/
+  double-submit/discard, keyboard focus, narrow layouts (320/390/768/1280), contrast, and reduced motion.
+- Browser-specific HTML reports and script output are retained as CI artifacts for seven days.
+- The specification auditor excludes generated dependencies/reports from all source evidence and module discovery.
+  Registered specifications and approval requirements are unchanged.
 
-## Known gaps and open decisions
+## Verification evidence
 
-- Not implemented on purpose: localization (English only), service worker or offline behaviour, real authentication,
-  real messaging, matching or settlement of barter (the barter page is read-only fixtures).
-- Money: no maximum price was added. Choosing a cap is a product decision.
-- Pagination: a fractional page is floored (2.7 becomes page 2), and a non-finite page becomes page 1.
-- Browse: the fallback that focuses the results region when a saved listing leaves the page is code-only; the UI
-  cannot reach it today.
-- Saved page with items: the populated Unsave buttons are covered only by account-browse, not by layout.mjs.
-- Summary focus after a failed submit has not been checked for a visible focus ring or for double announcements
-  with screen readers.
-- Only Chromium was run. Firefox and WebKit were not run; they are not installed in this environment.
-- Screen-reader behaviour (editor summary focus, barter region) has not been tested with a real assistive technology.
+- Local unit suite: 33 passed; audit tooling: 16 passed; structural audit: PASS, zero errors.
+- Semantic audit: NO-GO remains expected (1,450 DRAFT, 30 SPECIFIED_REVIEW_PENDING, zero APPROVED).
+- First Linux CI matrix: all three browser jobs and audit passed:
+  https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/41165843722
+- Updated-source CI and final integration evidence are recorded in the dated post-merge handoff linked from HANDOFF.md.
+- Local Chromium: eight detailed journey files passed. Smoke exposed an ambiguous pagination locator (navigation and
+  live region contained identical text); the assertion now scopes to the visible pagination navigation.
+- Local Windows Firefox: isolated launch timed out before a page was opened. Linux Firefox CI passed; Windows Firefox
+  compatibility is not certified by that result. Browser binaries installed locally are not committed.
+- Independent review identified an unfiltered module discovery path; fixed with a failing-then-passing regression.
+  Review disposition: no remaining findings, conditional on verification. Follow-up changes remain test tooling only.
 
-## Restart handoff
+## Remaining limits and next work
 
-1. `git log --oneline 52bed39..work/classrup-haiku-framework` shows the batch.
-2. Run `npm test`, `npm start` on a free port, then `BASE=http://localhost:<port>/ npm run check:browser` and `BASE=... npm run smoke`.
-3. Next candidate work: see app/HANDOFF.md, section "Open items".
+- Real assistive-technology testing remains unperformed: editor summary announcements, barter region naming and browse focus.
+  DOM/keyboard checks do not certify screen-reader speech behavior.
+- This is Linux engine coverage, not real iOS/Safari/Android device certification or broad WCAG compliance.
+- No service worker/offline product behavior, auth, real messaging, matching, consent, settlement, payments or federation.
+- Submitted listings are memory-only; saved listings/drafts use browser storage; account and barter are fixtures.
+- English only. No maximum price was selected. Existing Infinity-to-page-1 pagination behavior is unchanged.
+- Follow ROADMAP.md M2 and DECISIONS.md: obtain actual reviewed D01/D07/D10/D11 security protocol evidence,
+  D05 region taxonomy, D14 omitted source descriptions and D15 owner policy/jurisdiction input. Complete dependency-ready
+  foundational contracts and source-bound independent reviews without inventing approvals. Main needs evidence-backed GO.
+
+Use app/HANDOFF.md for historical checkpoints and the latest dated continuation handoff.

@@ -54,3 +54,5 @@ work/classrup-haiku-framework; it does not deploy or approve specifications.
 - No real authentication or permissions; the account page is a fixed demo profile.
 - No service worker: installable manifest only, no offline behaviour.
 - Localization: English strings only; no i18n framework was added.
+
+Tooling references: [Playwright browsers](https://playwright.dev/docs/browsers), [managed web server](https://playwright.dev/docs/test-webserver), and [CI setup](https://playwright.dev/docs/ci-intro).

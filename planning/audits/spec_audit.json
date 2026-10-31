@@ -13,6 +13,8 @@
   "hierarchy_exceptions": {
     ".": "root project documents use PROJECT_SPEC.md and PROJECT_TODO.md",
     "scripts": "audit tooling, excluded from product hierarchy",
+    ".github": "repository automation, not a planning node",
+    ".github/workflows": "CI workflows, not a planning node",
     "planning/contracts": "shared contract library, not a feature hierarchy node",
     "planning/audits": "generated audit reports",
     "planning/audits/reviews": "per-contract approval records"

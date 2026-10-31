@@ -1,10 +1,8 @@
 // Browser smoke test for the demo journeys. Run `npm start` first, or set BASE.
-import { createRequire } from 'node:module';
-
-const { chromium } = createRequire(import.meta.url)('playwright');
+import { launchBrowser } from './checks/lib.mjs';
 
 const base = process.env.BASE ?? 'http://localhost:4173/';
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const failures = [];
 const check = (name, ok) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}`);
@@ -55,7 +53,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
 
   await page.goto(`${base}#/`);
   await page.getByRole('button', { name: 'Next' }).click();
-  check('pagination moves to page 2', await page.getByText('Page 2 of').isVisible());
+  check('pagination moves to page 2', await page.getByRole('navigation', { name: 'Pagination' }).getByText('Page 2 of').isVisible());
 
   await page.goto(`${base}#/sell`);
   await page.getByLabel('Title').fill('Draft only');

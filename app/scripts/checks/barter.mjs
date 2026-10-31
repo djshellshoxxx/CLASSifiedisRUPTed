@@ -1,16 +1,15 @@
 // Browser checks for the read-only barter page: the trade-offers scroll region is a focusable, named region.
 // Start the demo first (`PORT=4185 node scripts/serve.mjs`), then run `BASE=http://localhost:4185/ node scripts/checks/barter.mjs`.
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 import { BARTER_OFFERS } from '../../src/data/fixtures.js';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const root = BASE.endsWith('/') ? BASE : `${BASE}/`;
 const ROUTE = '#/barter';
 const REGION_NAME = 'Trade offers';
 const MAX_TABS = 6;
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 
 async function open(width) {
   const context = await browser.newContext({ viewport: { width, height: 900 } });

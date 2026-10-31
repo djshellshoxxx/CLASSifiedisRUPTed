@@ -1,13 +1,12 @@
 // Browser checks for the account save toggle, browse paging focus, saved-page focus and 390px overflow.
 // Start the demo first and set BASE, for example: PORT=4182 node scripts/serve.mjs & BASE=http://localhost:4182/ node scripts/checks/account-browse.mjs
-import { BASE, loadPlaywright, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, createChecker } from './lib.mjs';
 
-const { chromium } = loadPlaywright();
 const { check, finish } = createChecker();
 const route = (hash) => new URL(hash, BASE).href;
 const MOBILE = { width: 390, height: 844 };
 
-const browser = await chromium.launch();
+const browser = await launchBrowser();
 const errors = [];
 const consoleIssues = [];
 

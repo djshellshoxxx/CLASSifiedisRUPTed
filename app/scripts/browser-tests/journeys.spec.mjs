@@ -22,6 +22,9 @@ for (const script of [...checks.map(name => 'scripts/checks/' + name), 'scripts/
       });
     } catch (error) {
       result = error;
+      console.error('Journey failed:', script, 'engine:', testInfo.project.name,
+        'killed:', error.killed, 'signal:', error.signal);
+      console.error(error.stdout ?? '');
       throw error;
     } finally {
       await testInfo.attach('journey-output', {

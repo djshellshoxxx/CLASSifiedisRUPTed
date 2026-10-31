@@ -53,7 +53,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
 
   await page.goto(`${base}#/`);
   await page.getByRole('button', { name: 'Next' }).click();
-  check('pagination moves to page 2', await page.getByText('Page 2 of').isVisible());
+  check('pagination moves to page 2', await page.getByRole('navigation', { name: 'Pagination' }).getByText('Page 2 of').isVisible());
 
   await page.goto(`${base}#/sell`);
   await page.getByLabel('Title').fill('Draft only');

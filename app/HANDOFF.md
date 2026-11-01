@@ -1,5 +1,7 @@
 # Restart handoff: ClassRup framework demo (app/)
 
+Latest continuation: [2026-11-01 storage fallback fix and source-pinned restart evidence](handoffs/2026-11-01-storage-fallback.md). The historical checkpoint below is preserved; consult the latest continuation for current refs and validation limits.
+
 Last updated: 2026-10-27. Scope: mock-only, synthetic-data framework demo. Not a product implementation.
 The repository's specification completeness gate is NO-GO and no specification is approved. Do not treat
 this demo, or any historical planning document, as approval to activate production payments, identity,

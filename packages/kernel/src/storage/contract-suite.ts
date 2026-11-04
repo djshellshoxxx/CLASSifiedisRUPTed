@@ -231,6 +231,57 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(() => writeScope({ tx: {} as Tx, tenantId: 't', clock: c, ids, deliveryEligible: false }).sync.enqueue('x', { cid: 'c', type: 't' })).toThrow('deliveryEligible');
     });
 
+    it(`TEST-PS-119-09.T17 ${adapter}: MediaBlob content addressing, 5 MiB limit, dedupe and refcounted delete with records`, async () => {
+      const s = await make();
+      const listing = defineRepo({ type: 'test.listing', schema: z.strictObject({ photos: z.array(z.string()) }), blobs: (d) => d.photos });
+      const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+      const jpg = new Uint8Array([255, 216, 255, 9, 9]);
+      const put = (bytes: Uint8Array, privacy: 'P0' | 'P2' | 'P3' = 'P0', encrypted = false) => s.transaction((tx) => scoped(tx).blobs.put(bytes, { contentType: 'image/png', privacy, encrypted }));
+      const a = await put(png);
+      expect(a.ok && a.value).toMatchObject({ ref: expect.stringMatching(/^blob:sha256-[A-Za-z0-9_-]{43}$/), size: 7, privacy: 'P0', holders: 0 });
+      const refA = a.ok ? a.value.ref : '';
+      const again = await put(png);
+      expect(again.ok && again.value.ref).toBe(refA);
+      expect(await s.read((tx) => Array.from(scoped(tx).blobs.get(refA)?.bytes ?? []))).toEqual(Array.from(png));
+      const tooBig = await put(new Uint8Array(5 * 1024 * 1024 + 1));
+      expect(!tooBig.ok && tooBig.error.code).toBe('PAYLOAD_TOO_LARGE');
+      const badType = await s.transaction((tx) => scoped(tx).blobs.put(png, { contentType: 'PNG', privacy: 'P0' }));
+      expect(!badType.ok && badType.error.code).toBe('VALIDATION_FAILED');
+      const plain = await put(jpg, 'P2', false);
+      expect(plain.ok).toBe(s.kind !== 'sqlite');
+      const sealed = await put(new Uint8Array([1, 1, 1]), 'P2', true);
+      expect(sealed.ok).toBe(true);
+      const refS = sealed.ok ? sealed.value.ref : '';
+      const b = await put(jpg, 'P0');
+      const refB = b.ok ? b.value.ref : '';
+      await s.transaction((tx) => scoped(tx).repo(listing).put('L1', { photos: [refA, refB] }, { expectedRevision: 0 }));
+      await s.transaction((tx) => scoped(tx).repo(listing).put('L2', { photos: [refA] }, { expectedRevision: 0 }));
+      expect(await s.read((tx) => [scoped(tx).blobs.info(refA)?.holders, scoped(tx).blobs.info(refB)?.holders])).toEqual([2, 1]);
+      await s.transaction((tx) => scoped(tx).repo(listing).put('L1', { photos: [refA] }, { expectedRevision: 1 }));
+      expect(await s.read((tx) => [scoped(tx).blobs.info(refA)?.holders, scoped(tx).blobs.info(refB)])).toEqual([2, undefined]);
+      const failing = await s.transaction((tx) => {
+        scoped(tx).repo(listing).remove('L2', { expectedRevision: 1 });
+        return err(appError('CONFLICT_STATE'));
+      });
+      expect(failing.ok).toBe(false);
+      expect(await s.read((tx) => scoped(tx).blobs.info(refA)?.holders)).toBe(2);
+      await s.transaction((tx) => scoped(tx).repo(listing).remove('L2', { expectedRevision: 1 }));
+      await s.transaction((tx) => scoped(tx).repo(listing).remove('L1', { expectedRevision: 2 }));
+      expect(await s.read((tx) => scoped(tx).blobs.get(refA))).toBeUndefined();
+      const attached = await s.transaction((tx) => scoped(tx).blobs.attach(refS, 'test.thread/T1'));
+      expect(attached.ok && attached.value).toEqual({ holders: 1, present: true });
+      const shred = await s.transaction((tx) => ok(scoped(tx).blobs.detach(refS, 'test.thread/T1')));
+      expect(shred.ok && shred.value).toEqual({ deleted: true, shred: true });
+      const bad = await s.transaction((tx) => scoped(tx).blobs.attach('blob:md5-x', 'h'));
+      expect(!bad.ok && bad.error.code).toBe('VALIDATION_FAILED');
+      await put(new Uint8Array([7, 7, 7]), 'P3', true);
+      const orphanCount = await s.transaction((tx) => ok(tx.blobs.collectOrphans(clock.now() + 1)));
+      expect(orphanCount.ok && orphanCount.value).toBe(1);
+      const draft = await put(new Uint8Array([4, 2]), 'P3', true);
+      const published = await put(new Uint8Array([4, 2]), 'P0', true);
+      expect([draft.ok && draft.value.privacy, published.ok && published.value.privacy]).toEqual(['P3', 'P0']);
+    });
+
     it(`TEST-PS-119-09.T09 ${adapter}: purge removes expired idempotency rows and outbox rows older than the cutoff`, async () => {
       const s = await make();
       await s.transaction((tx) => {

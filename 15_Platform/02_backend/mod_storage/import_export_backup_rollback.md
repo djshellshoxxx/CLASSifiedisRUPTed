@@ -1,35 +1,31 @@
-# PS-119-10 — import export backup rollback
+# PS-119-10 — Import, export, backup and rollback: Storage
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-10. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M03 Storage](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/storage` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for storage within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-119-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-119-10.R01** Records are exported by their owning modules (IOX-5); storage provides an ordered cursor scan per tenant and type and a restore that keeps IDs, revisions and timestamps and rejects conflicting copies.
+- **PS-119-10.R02** Relay SQLite schema changes are forward-only kernel migrations recorded in schema_migrations, and data migrations run once each in their own transaction.
+- **PS-119-10.R03** Rollback to N-1 is safe because kernel schema changes are additive, and drift between code and recorded kernel migrations stops startup with PLATFORM_STORE_MIGRATION_DRIFT.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** No section of its own; owning modules page through repo.query (cursor scan) and write classrup-export/v1 lines; blobs referenced by exported records are exported by the owning module with their refs.
+- **import:** repo.restore writes absent records as-is, skips identical ones and returns CONFLICT_REVISION for conflicting copies (IOX-2); blob refs of restored records are re-attached.
+- **backup:** Relay: SQLite online backup and WAL archiving (F15.S03.M02, IOX-3). Vault: the user's export is the primary backup (IOX-6); IndexedDB itself is not backed up by the relay.
+- **migration rollback:** Kernel migrations kernel:0001_base and kernel:0002_media_blobs are additive; the IndexedDB vault creates missing object stores on upgrade; data rollback only by restore to a new instance (IOX-4).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-119-09.T13 | integration | PS-119-10.R01 | export 120 records from memory by cursor scan and restore into SQLite, then restore identical and forged copies | identical export; identical restore skipped; forged copy CONFLICT_REVISION |
+| TEST-PS-119-09.T14 | integration | PS-119-10.R02, PS-119-10.R03 | reopen a database, run data migrations twice and a failing one, then tamper with a kernel checksum | kernel migrations recorded once; data migrations once; failing one not recorded; PLATFORM_STORE_MIGRATION_DRIFT on open |
+
+## Dependencies
+
+Module depends on: F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-IOX-001, CTR-FLG-001, CTR-OBS-001, CTR-TST-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

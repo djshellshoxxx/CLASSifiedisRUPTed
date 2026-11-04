@@ -128,7 +128,7 @@ describe('SQLite relay adapter (PS-119)', () => {
     await s1.close();
     const s2 = openSqliteStorage({ path });
     const kernelRows = await s2.read((tx) => tx.migrations.list().map((m) => m.id));
-    expect(kernelRows).toEqual(['kernel:0001_base']);
+    expect(kernelRows).toEqual(['kernel:0001_base', 'kernel:0002_media_blobs']);
     const backfill = { id: 'test:0002_backfill', up: (tx: Tx, now: number) => scope(tx).repo(note).put('seed', { owner: 'sys', text: String(now) }, { expectedRevision: 0 }).ok ? ok(undefined) : err(appError('CONFLICT_STATE')) };
     const broken = { id: 'test:0003_broken', up: () => err(appError('PRECONDITION_FAILED')) };
     for (const st of [s2, createMemoryStorage()]) {

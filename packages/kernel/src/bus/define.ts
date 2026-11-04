@@ -57,9 +57,9 @@ export interface CommandSpec<I extends z.ZodType, O> {
   readonly deliveryEligible?: boolean;
   /** Map FORBIDDEN to NOT_FOUND for resources the actor may not know exist (ERR-4). */
   readonly hideForbidden?: boolean;
-  readonly resource?: (input: z.output<I>) => ResourceRef | undefined;
+  resource?(input: z.output<I>): ResourceRef | undefined;
   readonly successStatus?: 200 | 201 | 202;
-  readonly handler: (ctx: CommandContext, input: z.output<I>) => Awaitable<Result<O, AppError>>;
+  handler(ctx: CommandContext, input: z.output<I>): Awaitable<Result<O, AppError>>;
 }
 
 export interface QuerySpec<I extends z.ZodType, O> {
@@ -71,8 +71,8 @@ export interface QuerySpec<I extends z.ZodType, O> {
   readonly surface?: Surface;
   readonly auth?: 'required' | 'public';
   readonly hideForbidden?: boolean;
-  readonly resource?: (input: z.output<I>) => ResourceRef | undefined;
-  readonly handler: (ctx: QueryContext, input: z.output<I>) => Awaitable<Result<O, AppError>>;
+  resource?(input: z.output<I>): ResourceRef | undefined;
+  handler(ctx: QueryContext, input: z.output<I>): Awaitable<Result<O, AppError>>;
 }
 
 export interface SubscriberSpec<D extends EventDef> {
@@ -81,17 +81,18 @@ export interface SubscriberSpec<D extends EventDef> {
   readonly module: string;
   readonly events: readonly D[];
   readonly deliveryEligible?: boolean;
-  readonly handler: (ctx: ConsumerContext, envelope: EventEnvelope<PayloadOf<D>>) => Awaitable<Result<void, AppError>>;
+  handler(ctx: ConsumerContext, envelope: EventEnvelope<PayloadOf<D>>): Awaitable<Result<void, AppError>>;
 }
 
 export type CommandDef<I extends z.ZodType = z.ZodType, O = unknown> = CommandSpec<I, O> & { readonly kind: 'command'; readonly surface: Surface; readonly auth: 'required' | 'public' };
 export type QueryDef<I extends z.ZodType = z.ZodType, O = unknown> = QuerySpec<I, O> & { readonly kind: 'query'; readonly surface: Surface; readonly auth: 'required' | 'public' };
 export type SubscriberDef<D extends EventDef = EventDef> = SubscriberSpec<D> & { readonly kind: 'subscriber'; readonly types: readonly string[] };
 
-// Definitions are stored type-erased in the registry; handlers keep their precise types at definition.
-export type AnyCommand = CommandDef<z.ZodType, any>;
-export type AnyQuery = QueryDef<z.ZodType, any>;
-export type AnySubscriber = SubscriberDef<any>;
+// Definitions are stored type-erased in the registry (handlers are declared as methods, so their
+// parameters are bivariant); each handler keeps its precise types where it is defined.
+export type AnyCommand = CommandDef<z.ZodType, unknown>;
+export type AnyQuery = QueryDef<z.ZodType, unknown>;
+export type AnySubscriber = SubscriberDef<EventDef>;
 export type AnyDefinition = AnyCommand | AnyQuery | AnySubscriber;
 
 const OP_RE = EVENT_TYPE_RE;

@@ -462,13 +462,17 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     return { deleted: true, shred: blob.encrypted };
   };
   return {
-    /** Stores bytes under their content address; storing identical bytes again returns the existing blob. */
+    /**
+     * Stores bytes under their content address. Storing identical bytes again returns the existing blob;
+     * a more public class (e.g. a draft photo being published) lowers the stored class.
+     */
     async put(input: PutBlobInput): Promise<Result<BlobInfo, AppError>> {
       const bad = blobCheck(input, kind);
       if (bad) return err(bad);
       const ref = await blobRefOf(input.bytes);
       const existing = d.blobs.get(input.tenant, ref);
-      if (existing) return ok(toBlobInfo(existing, d.blobs.holders(input.tenant, ref)));
+      if (existing && input.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: input.privacy });
+      if (existing) return ok(toBlobInfo({ ...existing, privacy: input.privacy < existing.privacy ? input.privacy : existing.privacy }, d.blobs.holders(input.tenant, ref)));
       const row: BlobRow = { tenant: input.tenant, ref, bytes: input.bytes, size: input.bytes.byteLength, contentType: input.contentType, privacy: input.privacy, encrypted: input.encrypted === true, createdAt: toIso(input.now) };
       d.blobs.upsert(row);
       return ok(toBlobInfo(row, d.blobs.holders(input.tenant, ref)));

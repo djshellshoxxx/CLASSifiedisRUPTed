@@ -32,7 +32,11 @@ describe('IndexedDB vault adapter (PS-119)', () => {
     await s1.close();
     const s2 = await openIndexedDbStorage({ name: 'vault-a', indexedDB: factory });
     expect(await s2.read((tx) => repo(tx).get('d1')?.data)).toEqual({ title: 'first' });
-    const seq = await s2.transaction((tx) => ok(tx.outbox.append({ ...((tx.outbox.get('e1') ?? {}) as never), eventId: 'e2' })));
+    const seq = await s2.transaction((tx) => {
+      const e1 = tx.outbox.get('e1');
+      if (!e1) throw new Error('e1 missing after reopen');
+      return ok(tx.outbox.append({ ...e1, eventId: 'e2' }));
+    });
     expect(seq.ok && seq.value).toBe(2);
     await s2.close();
 

@@ -4,7 +4,8 @@ import type { AppError } from '../errors/app-error.ts';
 import type { Result } from '../errors/result.ts';
 import type { IdGen } from '../ids/uuidv7.ts';
 import { readRepo, writeRepo, type ReadRepo, type Repo, type RepoDef } from './repo.ts';
-import type { Lease, SignedEnvelope, SyncEntry, Tx } from './tx.ts';
+import type { BlobInfo, Lease, MediaBlob, SignedEnvelope, SyncEntry, Tx } from './tx.ts';
+import type { BlobPrivacy } from './driver.ts';
 
 export interface ScopedLeases {
   acquire(resourceId: string, holder: string, ttlMs?: number): Result<Lease, AppError>;
@@ -24,14 +25,28 @@ export interface ScopedSync {
   retry(id: string): Result<SyncEntry, AppError>;
 }
 
+export interface ReadBlobs {
+  get(ref: string): MediaBlob | undefined;
+  info(ref: string): BlobInfo | undefined;
+}
+
+export interface ScopedBlobs extends ReadBlobs {
+  /** Stores metadata-stripped bytes (≤ 5 MiB) under `blob:sha256-…`; identical bytes dedupe. */
+  put(bytes: Uint8Array, meta: { readonly contentType: string; readonly privacy: BlobPrivacy; readonly encrypted?: boolean }): Promise<Result<BlobInfo, AppError>>;
+  attach(ref: string, holder: string): Result<{ holders: number; present: boolean }, AppError>;
+  detach(ref: string, holder: string): { deleted: boolean; shred: boolean };
+}
+
 export interface ReadScope {
   repo<T, K extends string>(def: RepoDef<T, K>): ReadRepo<T, K>;
+  readonly blobs: ReadBlobs;
 }
 
 export interface WriteScope {
   repo<T, K extends string>(def: RepoDef<T, K>): Repo<T, K>;
   readonly leases: ScopedLeases;
   readonly sync: ScopedSync;
+  readonly blobs: ScopedBlobs;
 }
 
 export interface ScopeOptions {
@@ -43,9 +58,22 @@ export interface ScopeOptions {
   readonly deliveryEligible: boolean;
 }
 
+function readBlobs(tx: Tx, tenantId: string): ReadBlobs {
+  return { get: (ref) => tx.blobs.get(tenantId, ref), info: (ref) => tx.blobs.info(tenantId, ref) };
+}
+
 export function readScope(o: Pick<ScopeOptions, 'tx' | 'tenantId' | 'clock'>): ReadScope {
   const s = { tx: o.tx, tenantId: o.tenantId, now: () => o.clock.now() };
-  return { repo: (def) => readRepo(s, def) };
+  return { repo: (def) => readRepo(s, def), blobs: readBlobs(o.tx, o.tenantId) };
+}
+
+function scopedBlobs(o: ScopeOptions): ScopedBlobs {
+  return {
+    ...readBlobs(o.tx, o.tenantId),
+    put: (bytes, meta) => o.tx.blobs.put({ tenant: o.tenantId, bytes, ...meta, now: o.clock.now() }),
+    attach: (ref, holder) => o.tx.blobs.attach(o.tenantId, ref, holder),
+    detach: (ref, holder) => o.tx.blobs.detach(o.tenantId, ref, holder),
+  };
 }
 
 function scopedLeases(o: ScopeOptions): ScopedLeases {
@@ -85,5 +113,5 @@ function scopedSync(o: ScopeOptions): ScopedSync {
 
 export function writeScope(o: ScopeOptions): WriteScope {
   const s = { tx: o.tx, tenantId: o.tenantId, now: () => o.clock.now() };
-  return { repo: (def) => writeRepo(s, def), leases: scopedLeases(o), sync: scopedSync(o) };
+  return { repo: (def) => writeRepo(s, def), leases: scopedLeases(o), sync: scopedSync(o), blobs: scopedBlobs(o) };
 }

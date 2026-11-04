@@ -3,7 +3,10 @@ import { createFakeClock } from '../clock/clock.ts';
 import { createDeterministicIds, createSeededRandom } from '../ids/uuidv7.ts';
 import { sha256Hex } from '../hash/canonical.ts';
 import { createMemoryStorage } from '../storage/storage.ts';
-import { createRelayAccess, loginMessage } from './access.ts';
+import { createRelayAccess, loginMessage, relayAccessDefinitions } from './access.ts';
+import { createBus } from './bus.ts';
+import { createRegistry } from './define.ts';
+import { ANONYMOUS, createRoleTableAuthz } from './ports.ts';
 
 describe('relay access tokens (CTR-CAP-001 sessions, CAP-10)', () => {
   it('TEST-PS-117-09.T26 challenge–response issues hashed opaque tokens; bad, replayed or expired proofs are UNAUTHENTICATED', async () => {
@@ -55,5 +58,17 @@ describe('relay access tokens (CTR-CAP-001 sessions, CAP-10)', () => {
     const t4 = l4.ok ? l4.value.token : '';
     await access.revoke(t4);
     expect((await access.resolve(t4)).ok).toBe(false);
+
+    const defs = relayAccessDefinitions(access);
+    const bus = createBus({ registry: createRegistry().add(...defs.all), storage, clock, ids: createDeterministicIds({ seed: 2, now: () => clock.now() }), authz: createRoleTableAuthz({ 'platform.access_token.challenge': ['anonymous'], 'platform.access_token.login': ['anonymous'], 'platform.access_token.revoke': ['anonymous'] }) });
+    const remote = { actor: ANONYMOUS, tenantId: 'tenant-r', origin: 'remote' as const };
+    const ch = await bus.dispatch(remote, 'platform.access_token.challenge', {});
+    const chv = (ch.ok ? ch.value.value : {}) as { nonce: string; message: string };
+    const lg = await bus.dispatch(remote, 'platform.access_token.login', { principal: did, nonce: chv.nonce, signature: `sig(${did}|${chv.message})` });
+    const tok = (lg.ok ? lg.value.value : {}) as { token: string };
+    expect((await access.resolve(tok.token)).ok).toBe(true);
+    const rv = await bus.dispatch(remote, 'platform.access_token.revoke', { token: tok.token }, { idempotencyKey: createDeterministicIds({ seed: 4, now: () => clock.now() }).next() });
+    expect(rv.ok && rv.value.value).toEqual({ revoked: true });
+    expect((await access.resolve(tok.token)).ok).toBe(false);
   });
 });

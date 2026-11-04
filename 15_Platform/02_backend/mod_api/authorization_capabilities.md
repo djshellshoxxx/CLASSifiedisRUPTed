@@ -1,35 +1,36 @@
-# PS-117-05 — authorization capabilities
+# PS-117-05 — Authorization and capabilities: API and command bus
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-05. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M02 API and command bus](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/bus` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for api within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-117-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-117-05.R01** The bus calls AuthzPort.authorize(actor, capability, resource, context) before the handler and denies by default; the vault composition passes the local principal with vault policy, the relay composition passes the relay actor with relay policy.
+- **PS-117-05.R02** FORBIDDEN is mapped to NOT_FOUND when a definition sets hideForbidden (ERR-4), and vault-surface definitions are not reachable from a remote transport.
+- **PS-117-05.R03** Every allow and deny decision for a state-changing command is recorded through AuditPort with actor, capability, operation, resource reference, decision and code, never payload content (CAP-7).
+- **PS-117-05.R04** A missing session on a definition that requires authentication, or an invalid relay access token, yields UNAUTHENTICATED before rate limiting and validation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| platform.access_token.challenge | anonymous (relay policy) | relay rate limit per network prefix; no vault capability involved |
+| platform.access_token.login | anonymous (relay policy) | valid unexpired single-use nonce and a signature by a device key the relay accepts for the principal |
+| platform.access_token.revoke | anonymous (relay policy) | caller presents the token itself; possession is the authorization |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Vault policy: only the unlocked local principal dispatches vault commands; incoming signed statements are verified by their owning modules before any consumer runs. Relay policy: relay roles (member, moderator, operator, admin) exist per relay only (CAP-9) and are re-read on every request (CAP-6).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-05`; scenarios and fixtures to be detailed in Prompt 3.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-117-09.T14 | abuse | PS-117-05.R01, PS-117-05.R02, PS-117-05.R04 | denied member, hidden resource, anonymous caller, remote call of a vault command, public relay command | FORBIDDEN, NOT_FOUND, UNAUTHENTICATED, NOT_FOUND, ok |
+| TEST-PS-117-09.T15 | abuse | PS-117-05.R03 | deny then allow with a secret value in the input | two audit entries with decision, capability and resource; no input value in audit |
+| TEST-PS-117-09.T26 | integration | PS-117-04.R05, PS-117-05.R04 | challenge, forged signature, login, nonce replay, expired nonce, idle expiry, revoke, and the same through the relay commands | tokens issued and stored hashed; all bad proofs UNAUTHENTICATED; revoked token rejected |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

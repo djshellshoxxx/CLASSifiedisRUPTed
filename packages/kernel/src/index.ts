@@ -101,7 +101,7 @@ export {
   type Session,
   type SessionPort,
 } from './bus/ports.ts';
-export { createRelayAccess, loginMessage, type Challenge, type RelayAccess, type RelayAccessOptions, type SignatureVerifier } from './bus/access.ts';
+export { createRelayAccess, loginMessage, relayAccessDefinitions, type Challenge, type LoginInput, type LoginResult, type RelayAccess, type RelayAccessOptions, type SignatureVerifier } from './bus/access.ts';
 export { createStorage, createMemoryStorage, type Storage, type TxMode } from './storage/storage.ts';
 export { DEFAULT_LEASE_TTL_MS, type DeadLetter, type IdempotencyRecord, type Lease, type SignedEnvelope, type StoredRecord, type SyncEntry, type Tx } from './storage/tx.ts';
 export { defineRepo, type IndexFn, type Page, type Range, type ReadRepo, type Repo, type RepoDef, type RepoQuery } from './storage/repo.ts';

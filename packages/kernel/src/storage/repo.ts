@@ -13,6 +13,8 @@ export interface RepoDef<T, K extends string = string> {
   readonly schema: z.ZodType<T>;
   readonly indexes: Readonly<Record<K, IndexFn<T>>>;
   readonly slots: Readonly<Record<K, IndexSlot>>;
+  /** MediaBlob refs held by a record; put/remove keep blob reference counts in step. */
+  readonly blobs?: (data: T) => readonly string[];
 }
 
 const TYPE_RE = /^[a-z0-9]+\.[a-z0-9_]+$/;
@@ -25,13 +27,14 @@ export function defineRepo<S extends z.ZodType, const K extends string = never>(
   readonly type: string;
   readonly schema: S;
   readonly indexes?: { readonly [P in K]: IndexFn<z.output<S>> };
+  readonly blobs?: (data: z.output<S>) => readonly string[];
 }): RepoDef<z.output<S>, K> {
   if (!TYPE_RE.test(def.type)) throw new Error(`defineRepo: type ${def.type} must be <slug>.<entity>`);
   const indexes = (def.indexes ?? {}) as Record<K, IndexFn<z.output<S>>>;
   const names = Object.keys(indexes) as K[];
   if (names.length > 4) throw new Error(`defineRepo: ${def.type} declares more than 4 indexes`);
   const slots = Object.fromEntries(names.map((n, i) => [n, (i + 1) as IndexSlot])) as Record<K, IndexSlot>;
-  return Object.freeze({ type: def.type, schema: def.schema as z.ZodType<z.output<S>>, indexes, slots });
+  return Object.freeze({ type: def.type, schema: def.schema as z.ZodType<z.output<S>>, indexes, slots, ...(def.blobs ? { blobs: def.blobs } : {}) });
 }
 
 export interface Range {
@@ -142,19 +145,45 @@ export function readRepo<T, K extends string>(s: RepoScope, def: RepoDef<T, K>):
   };
 }
 
+function syncBlobRefs<T, K extends string>(s: RepoScope, def: RepoDef<T, K>, id: string, before: T | undefined, after: T | undefined): Result<void, AppError> {
+  if (!def.blobs) return ok(undefined);
+  const holder = `${def.type}/${id}`;
+  const old = new Set(before === undefined ? [] : def.blobs(before));
+  const next = new Set(after === undefined ? [] : def.blobs(after));
+  for (const ref of next) {
+    if (old.has(ref)) continue;
+    const r = s.tx.blobs.attach(s.tenantId, ref, holder);
+    if (!r.ok) return r;
+  }
+  for (const ref of old) if (!next.has(ref)) s.tx.blobs.detach(s.tenantId, ref, holder);
+  return ok(undefined);
+}
+
 export function writeRepo<T, K extends string>(s: RepoScope, def: RepoDef<T, K>): Repo<T, K> {
+  const current = (id: string) => s.tx.records.get<T>(s.tenantId, def.type, id);
   return {
     ...readRepo(s, def),
     put: (id, data, opts) => {
       const parsed = def.schema.safeParse(data);
       if (!parsed.success) throw new Error(`repo ${def.type}: data does not match its schema`);
-      return s.tx.records.put<T>({ tenant: s.tenantId, type: def.type, id, data: parsed.data, idx: indexValues(def, parsed.data), expectedRevision: opts.expectedRevision, now: s.now() });
+      const before = def.blobs ? current(id)?.data : undefined;
+      const r = s.tx.records.put<T>({ tenant: s.tenantId, type: def.type, id, data: parsed.data, idx: indexValues(def, parsed.data), expectedRevision: opts.expectedRevision, now: s.now() });
+      if (!r.ok) return r;
+      const refs = syncBlobRefs(s, def, id, before, parsed.data);
+      return refs.ok ? r : refs;
     },
-    remove: (id, opts) => s.tx.records.remove(s.tenantId, def.type, id, opts.expectedRevision),
+    remove: (id, opts) => {
+      const before = def.blobs ? current(id)?.data : undefined;
+      const r = s.tx.records.remove(s.tenantId, def.type, id, opts.expectedRevision);
+      return r.ok ? syncBlobRefs(s, def, id, before, undefined) : r;
+    },
     restore: (record) => {
       const parsed = def.schema.safeParse(record.data);
       if (!parsed.success) return err(invalid('data', 'SCHEMA_MISMATCH'));
-      return s.tx.records.restore({ ...record, tenantId: s.tenantId, type: def.type, data: parsed.data }, indexValues(def, parsed.data));
+      const r = s.tx.records.restore({ ...record, tenantId: s.tenantId, type: def.type, data: parsed.data }, indexValues(def, parsed.data));
+      if (!r.ok || r.value === 'identical') return r;
+      const refs = syncBlobRefs(s, def, record.id, undefined, parsed.data);
+      return refs.ok ? r : refs;
     },
   };
 }

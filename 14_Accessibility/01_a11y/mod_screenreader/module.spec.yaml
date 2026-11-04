@@ -1,0 +1,174 @@
+id: F14.S01.M02
+scope: MVP
+summary: >-
+  UI library and CI rules that give every screen a semantic structure for screen readers: one set of landmarks
+  per page, programmatic labels and error associations on every form control, a shared live-region announcer
+  for asynchronous state, and spoken accessible names for money, distance, time and sync-state values. It uses
+  the money formatter of F14.S02.M02 and the message catalogs of F14.S02.M01 so spoken text is localized. It
+  runs in the browser and sends no telemetry.
+responsibilities:
+  - Provide page shell components with exactly one banner, one main, one navigation per purpose with a unique accessible name and one contentinfo landmark, and a heading outline that starts at one h1 and never skips levels.
+  - Provide form components that tie label, hint and error to the control with for, aria-describedby and aria-invalid, and move focus to the first invalid field after a failed submit while announcing the error count.
+  - Provide a single live-region announcer (aria-live polite for status, assertive only for blocking errors) with de-duplication and a rate limit of one announcement per 2 s per region (CTR-UX-001 UX-2).
+  - Provide spoken-name helpers for Money, distance buckets, relative times and delivery or sync states (local committed, queued, relay received, recipient confirmed) that read naturally in every shipped locale.
+  - Provide rules for images and icons, namely required alt text of at most 140 characters for user photos with a prompt for authors, empty alt for decoration, and visible text or aria-label for icon-only buttons.
+non_responsibilities:
+  - Keyboard behaviour and focus visibility (F14.S01.M01).
+  - The conformance gate and axe runs (F14.S01.M03).
+  - Formatting of money and numbers for display (F14.S02.M02) and message catalogs (F14.S02.M01); this module only composes them into spoken names.
+  - "Future: optional audio descriptions for user videos and automatic alt-text suggestions; MVP requires author-written alt text."
+depends_on: [F14.S02.M01, F14.S02.M02, CTR-UX-001, CTR-MNY-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
+user_stories:
+  - As a screen reader user, I can jump between landmarks and headings to find the listing list, the filters and the main content.
+  - As a screen reader user, I hear "Price 45 euros" and "less than 5 kilometres away" rather than symbols and raw numbers.
+  - As a screen reader user, I am told when my offer was saved on this device and when the relay received it, without stealing focus.
+  - As a seller using a screen reader, I am asked for alt text for each photo before publishing.
+edge_cases:
+  - Two navigation landmarks exist (main menu and filters); each has a unique aria-label.
+  - A list updates ten times in two seconds; the announcer sends one summary announcement and drops duplicates.
+  - Money with a large value of 123456789012 minor units in a locale with grouping; the spoken name says the full amount with the currency name, not a truncated figure.
+  - An approximate converted price is shown; the spoken name includes "approximately" and the quote source and time (UX-4).
+  - Error text arrives after the field lost focus; the error is associated by aria-describedby and announced once.
+  - A photo has no alt text from an imported listing; the app uses "Photo 2 of 5, no description" and flags the listing for the author.
+  - The locale is right to left; landmarks and reading order follow the DOM order, which matches the visual order.
+ux:
+  screens:
+    - "Every screen uses the shared page shell with landmarks and a single h1."
+    - "Form screens show inline errors tied to fields and an error summary at the top of the form with links to each field."
+    - "Photo upload dialogs have a required alt text field with a counter (max 140)."
+  states: [loading, empty, error, offline-pending, conflict, success]
+  a11y:
+    - Loading states expose role=status text, not only spinners; empty states describe the next action.
+    - Error summaries are focused after submit and each link moves focus to the field.
+    - Tables have captions, header cells with scope and no layout tables are used.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; its artifacts are page shell and form components, the announcer service and spoken-name helpers with typed inputs.
+      - Spoken-name helpers take typed values (Money, DistanceBucket, Instant, SyncState) and a locale and return a plain string; they never take pre-formatted strings.
+      - Alt text is stored by the owning feature module (for example listing photos in F01) with a 140 character limit and is passed in, not owned here.
+    entities: []
+    note: "UI library and tooling; it stores no data and owns no catalog entity."
+  validation_rules:
+    requirements:
+      - Lint and unit checks reject markup that breaks screen reader structure.
+      - Each failure has one stable code printed in CI and in the development overlay.
+      - Rules run on every pull request and waivers require an expiring entry in tests/a11y/waivers.yaml (F14.S01.M03).
+    rules:
+      - "V01 | each page has exactly one main landmark and one h1, headings do not skip levels, and repeated landmark types have unique accessible names | I18N_A11Y_LANDMARKS"
+      - "V02 | every form control has an accessible name and errors are linked by aria-describedby with aria-invalid set | I18N_A11Y_FORM_LABEL"
+      - "V03 | icon-only buttons and links have an accessible name from visible text or aria-label | I18N_A11Y_NAME_MISSING"
+      - "V04 | user photos have alt text of 1 to 140 characters or are marked decorative by the author | I18N_A11Y_ALT_TEXT"
+      - "V05 | status changes use the announcer, assertive is used only for blocking errors, and no region announces more than once per 2 s | I18N_A11Y_LIVE_REGION"
+      - "V06 | Money, distance and time values rendered visually have a matching spoken name from the helpers | I18N_A11Y_SPOKEN_VALUE"
+  workflow_state_machine:
+    requirements:
+      - The announcer is a queue with deterministic rules for priority, de-duplication and rate limiting.
+      - Polite messages never interrupt assertive messages and an assertive message replaces queued polite ones of the same region.
+      - There is no persisted lifecycle, so no entity state machine is declared.
+    machines: []
+    timeouts:
+      - "Announcer clears each live region text 5 s after announcement so repeated identical messages are announced again."
+    note: "Stateless UI services; the announcer queue exists only in memory for the page lifetime."
+  commands_queries_events:
+    requirements:
+      - The module exposes component and helper APIs and no vault or relay commands or queries.
+      - It emits DOM events only and no domain events.
+      - Failures are developer-facing lint and test codes and never shown to end users.
+    commands: []
+    queries: []
+    note: "API: <PageShell/>, <Field/> with label hint error, <ErrorSummary/>, announce(message, { priority, region }), spokenMoney(money, locale, opts), spokenDistance(bucket, locale), spokenTime(instant, now, locale), spokenSync(state, locale), <Photo alt/>."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "I18N_A11Y_LANDMARKS | 400 | no | landmark or heading structure rule failed"
+      - "I18N_A11Y_FORM_LABEL | 400 | no | form control lacks a name or error association"
+      - "I18N_A11Y_NAME_MISSING | 400 | no | interactive element without accessible name"
+      - "I18N_A11Y_ALT_TEXT | 400 | no | photo alt text missing or longer than 140 characters"
+      - "I18N_A11Y_LIVE_REGION | 400 | no | live region misuse or announcement flood"
+      - "I18N_A11Y_SPOKEN_VALUE | 400 | no | value displayed without a spoken name"
+    example: |
+      spokenMoney({ amount: "4500", currency: "EUR" }, "en") // "45 euros"
+      spokenMoney({ amount: "4210", currency: "EUR" }, "en", { approximate: { source: "ECB", asOf: "2026-11-04T10:15:00Z" } })
+        // "approximately 42 euros 10 cents, quote from ECB at 10:15"
+      spokenDistance("<5km", "en") // "less than 5 kilometres away"
+      announce(t("offer.saved_local"), { priority: "polite", region: "status" })
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization and has no roles; it runs under the unlocked local principal in the browser.
+      - It never reads vault data on its own; callers pass values in.
+      - Announcements must not contain P3 or P4 data, so callers pass only the same text that is visible on screen.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Announcing the same message twice within 2 s results in one announcement.
+      - If a locale lacks a spoken-name pattern, the helper falls back to English patterns and logs a development warning, never to an empty string.
+      - Helpers are pure and total, returning a string for every valid typed input.
+    idempotency: "announce() de-duplicates identical text per region within 2 s; helpers are pure functions."
+    concurrency: "Single-threaded UI; the announcer serializes messages per region."
+    retries: "Not applicable; no network or storage operations."
+    offline: "Fully offline; all patterns are bundled in the locale catalogs."
+    partial_failure: "If the Intl formatter throws for an unknown currency, spokenMoney falls back to digits plus the currency code spelled out, so the value is never silent."
+  privacy_retention_abuse:
+    requirements:
+      - Nothing is collected, and announcement text is held in memory only until cleared after 5 s.
+      - Alt text written by authors is public content under the privacy class of the listing and is limited to 140 characters of plain text.
+      - Live regions never include secrets such as recovery codes or key material.
+    data:
+      - "Announcement text: transient, mirrors visible UI text."
+      - "Alt text: P0 when the listing is public, otherwise follows the listing class."
+    retention:
+      - "None for announcements; alt text follows the owning record retention."
+    threats:
+      - "T01 | Announcement flood by remote content causing denial of service for screen reader users | rate limit 1 per 2 s per region, de-duplication, polite default"
+      - "T02 | Alt text used for spam or tracking links | plain text only, 140 characters, links not rendered, spam heuristics of the owning feature apply"
+      - "T03 | Secrets spoken aloud in a shared space | secret fields use password type and are never announced; recovery code reveal requires an explicit action"
+    abuse_controls:
+      - "At most 3 assertive announcements per minute per page; further ones are downgraded to polite."
+  observability_performance:
+    requirements:
+      - CI reports rule violations per screen as artifacts; production builds send no metrics.
+      - Spoken-name helpers run in at most 0.2 ms p95 per call.
+      - The announcer adds no more than 2 KiB gzip to the initial bundle.
+    metrics:
+      - "ci_a11y_sr_violations_total{rule} (CI artifact)"
+      - "ci_a11y_sr_screens_checked_total (CI artifact)"
+    logs:
+      - "dev-only console.warn i18n.a11y.spoken_fallback {locale, helper} — no values; removed from production builds."
+    budgets:
+      - "spoken helper call p95 ≤ 0.2 ms; announcer enqueue ≤ 1 ms."
+      - "Screen reader structure checks for all screens complete ≤ 5 min in CI."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Structure rules are tested with positive and negative fixtures and with axe-core rules for landmarks, labels and names.
+      - Spoken names are tested per shipped locale with golden strings reviewed by a native speaker.
+    fixtures: "Fixture pages with correct and broken landmarks, forms and icon buttons; golden spoken strings for en, de, fr, es and the pseudolocales; Money values 0, 1, 4500, 123456789012 and -250 in EUR, USD, JPY, BTC."
+    tests:
+      - "T01 | unit | 01.R01,02.R01 | lint fixtures with 2 main landmarks, skipped heading, duplicate nav names | V01 raised; compliant page passes"
+      - "T02 | unit | 01.R02,02.R02,03.R01 | form fixtures without labels or error associations; submit with 3 errors | V02 raised; compliant form focuses the first invalid field and announces 3 errors"
+      - "T03 | unit | 02.R03,05.R03,07.R02 | icon-only button without name; photo without alt; alt of 141 characters; decorative photo | V03 and V04 raised; decorative accepted; no tracking links rendered"
+      - "T04 | property | 03.R01,03.R02,06.R01 | random sequences of announce() calls (200 runs) | at most one message per 2 s per region; assertive never interrupted by polite; duplicates dropped"
+      - "T05 | contract | 04.R01,04.R02,04.R03,01.R03 | inspect exports and run spoken helpers on typed inputs | no vault or network access; pure typed functions; Result for invalid input"
+      - "T06 | unit | 01.R03,06.R02,05.R01 | spokenMoney golden values per locale including 123456789012 and -250 and approximate label | strings equal the reviewed goldens and include quote source and time when approximate"
+      - "T07 | unit | 06.R02,06.R03 | missing locale pattern; unknown currency | English fallback with dev warning; digits plus spelled code; never empty"
+      - "T08 | unit | 01.R03,03.R03,09.R02 | spokenSync for local committed, prepared, transport acknowledged, peer accepted | wording matches the state and never claims more"
+      - "T09 | abuse | 05.R02,07.R01,07.R03 | announcements containing recovery code or password; 10 assertive messages per minute | secrets never reach live regions; 4th assertive downgraded to polite"
+      - "T10 | a11y | 01.R01,02.R01,06.R01 | axe via Playwright on every screen with screen reader rule set | zero serious or critical findings"
+      - "T11 | e2e | 03.R02,04.R01 | VoiceOver on iPhone 14 and TalkBack on Pixel 7 manual-assisted run of listing create and offer flows | landmarks navigable, values spoken in full, status announced without focus loss"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 helper calls and 1000 announce calls | p95 ≤ 0.2 ms, enqueue ≤ 1 ms, bundle ≤ 2 KiB gzip"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-110 requirement maps to a passing test"
+      - "T14 | unit | 10.R01,10.R02,10.R03 | update a golden string file; roll back | tests fail on unreviewed change; rollback restores previous strings without migration"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - Every screen has valid landmarks, labelled controls and spoken names for money, distance and time (axe and lint).
+      - Manual VoiceOver and TalkBack runs of the core flows find no blocking issue.
+  import_export_backup_rollback:
+    requirements:
+      - The module stores no user data, so a user export contains nothing from it.
+      - Spoken-name patterns live in the locale catalogs of F14.S02.M01 and follow their versioning.
+      - Rollback restores the previous release patterns without data migration.
+    export: "No module data is exported; spoken-name patterns are part of the message catalogs."
+    import: "Nothing is imported; user alt text arrives with the owning feature's records."
+    backup: "Nothing to back up; code and catalogs ship with the app bundle."
+    migration_rollback: "Pattern keys are additive; rollback to the previous release restores previous strings and helpers with no data migration."

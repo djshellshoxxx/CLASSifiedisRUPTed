@@ -1,35 +1,31 @@
-# PS-118-05 — authorization capabilities
+# PS-118-05 — Authorization and capabilities: Relay service
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-118-05. **Owner:** [15_Platform/02_backend/mod_relays](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_relays. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M01 Relay service](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/relays` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for relays within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-118-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-118-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-118-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-118-05.R01** Relay policy applies, so identity and status reads are public or operator-only, and rotation requires the relay operator role, a per-relay role that governs nothing beyond this relay (CTR-CAP-001 CAP-9).
+- **PS-118-05.R02** The relay holds no user credentials; operator actions are authorized by signed requests from a device key registered as operator in the relay's own configuration, or by the local CLI with filesystem access to the key file.
+- **PS-118-05.R03** Receipts and announcements are signed with the relay key under context strings, so a relay signature never authorizes any action on a vault.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| platform.relay_identity.read_public | anonymous, member, moderator, operator, admin | none; response contains only public data |
+| platform.relay.read_status | operator, admin | signed request by a registered relay operator device key |
+| platform.relay_identity.rotate | operator | signed request by a registered relay operator device key, or local CLI with access to the key file; at most 1 rotation per 24 h |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-118-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-118-09.T09 | abuse | PS-118-05.R01, PS-118-05.R02, PS-118-05.R03 | non-operator rotates and reads status; relay signature presented as vault authorization | FORBIDDEN; relay signature ignored by vault verification test |
+
+## Dependencies
+
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

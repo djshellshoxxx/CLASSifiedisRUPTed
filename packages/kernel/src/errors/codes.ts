@@ -28,9 +28,9 @@ export type CommonCode = keyof typeof COMMON_ERRORS;
 
 /** Kernel-owned module codes (PLATFORM_*), declared in the F15 module specs. */
 export const PLATFORM_ERRORS = {
-  PLATFORM_UNSUPPORTED_MEDIA_TYPE: { status: 415, retryable: false },
-  PLATFORM_METHOD_NOT_ALLOWED: { status: 405, retryable: false },
-  PLATFORM_MIGRATION_DRIFT: { status: 500, retryable: false },
+  PLATFORM_BUS_UNSUPPORTED_MEDIA_TYPE: { status: 415, retryable: false },
+  PLATFORM_BUS_METHOD_NOT_ALLOWED: { status: 405, retryable: false },
+  PLATFORM_STORE_MIGRATION_DRIFT: { status: 500, retryable: false },
 } as const satisfies Record<string, ErrorSpec>;
 
 export type PlatformCode = keyof typeof PLATFORM_ERRORS;

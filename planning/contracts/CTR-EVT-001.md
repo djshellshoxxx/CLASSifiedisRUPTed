@@ -16,7 +16,7 @@
 - **EVT-3** Consumers are idempotent: they record `(consumer, eventId)` in `inbox` before side effects; a duplicate is acknowledged and skipped.
 - **EVT-4** Payload privacy class (CTR-PRV-001) is declared per event type. Events with class ≥ P2 are never federated or sent to notification channels in plain form; notifications carry only a reference and a localized template key.
 - **EVT-5** Payloads contain IDs and minimal changed fields, never secrets (P4) or exact location (L4).
-- **EVT-6** Consumer failure: retry with CTR-IDM-001 backoff; after 8 attempts the event moves to `dead_letter` with error code; operators replay via `platform.events.replay` (operator capability).
+- **EVT-6** Consumer failure: retry with CTR-IDM-001 backoff; after 8 attempts the event moves to `dead_letter` with error code; operators replay via `platform.deadletter.replay` (relay operator capability, F15.S03.M03).
 - **EVT-7** `actor.kind` ∈ `user | system | relay | federated | operator`. `federated` events require verified `provenance.sig`.
 
 ## ADR-0016 amendment (local-first)

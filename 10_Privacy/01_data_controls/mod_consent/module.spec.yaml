@@ -1,0 +1,238 @@
+# F10.S01.M01 Privacy consent (ADR-0015, ADR-0016). Consents live in the user's vault; relays receive only signed consent statements.
+id: F10.S01.M01
+scope: MVP
+summary: >-
+  Purpose-based, revocable consent kept in the user's vault. Five purposes exist: publishing to federation, notifications by
+  email, notifications by Web Push, optional analytics sharing, and precise location sharing. Every purpose is off by default.
+  A grant records the exact policy text version and its SHA-256 hash that the user saw. Other modules call a local check before
+  processing for a purpose. When a purpose involves a relay, the grant also produces a signed consent statement for that relay,
+  and withdrawal produces a signed withdrawal; copies already fetched by others cannot be recalled and the UI says so.
+responsibilities:
+  - Own PrivacyConsent records (append-only history per purpose and scope) with policy id, version and hash.
+  - Provide privacy.consent.check, the single local decision function other modules call before processing for a purpose.
+  - Produce signed statements classrup.privacy.consent/v1 and classrup.privacy.consent_withdrawal/v1 addressed to a named relay when the purpose is relay-scoped.
+  - Lapse consents whose policy hash has a material change, requiring a fresh informed grant.
+  - Withdraw consent immediately and locally, including when an unsubscribe happens elsewhere (notify.channel.opted_out) or a deletion is requested.
+non_responsibilities:
+  - Per-channel notification preferences, quiet hours and unsubscribe tokens (F13.S02), which read consent from this module.
+  - Precise location storage and sharing mechanics (F06.S02.M02); this module only records consent for them.
+  - Relay-side enforcement of consent statements (F11 federation and F13 push modules on the relay).
+  - "Future: age-based consent rules and guardian consent; MVP assumes users meet the minimum age of the community and records no age."
+depends_on: [F07.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a user, I decide separately whether my listings may be published to federated relays, whether I get email or push notifications, and whether I share precise location, and everything is off until I say yes.
+  - As a user, I can see the exact policy text version I agreed to and withdraw with one tap.
+  - As a user, I am told honestly that withdrawing stops future processing but cannot recall copies others already fetched.
+edge_cases:
+  - Policy text changes materially after a grant; the consent lapses and processing stops until the user re-grants with the new hash.
+  - The user grants federation consent for relay A, then withdraws; the signed withdrawal is queued for relay A while offline and shows prepared until peer_accepted.
+  - A grant is attempted with an outdated policy hash from a cached screen; it is refused with PRIVACY_POLICY_STALE.
+  - An unsubscribe link elsewhere withdraws email notification consent; the vault records withdrawal with source unsubscribe within the same session.
+  - Two tabs grant and withdraw the same purpose at the same moment; the later revision wins locally in order of the vault transaction and both entries stay in history.
+  - Deletion is requested; all active consents are withdrawn with reason account_deletion, and cancelling the deletion does not restore them.
+  - Import from an older export carries consents with an unknown policy hash; they import as lapsed.
+ux:
+  screens:
+    - "Privacy settings: one row per purpose with plain-language description, current state, policy version and Read the text link, and a switch."
+    - "Grant sheet: shows the policy text for the purpose, the relay it applies to, what cannot be undone ('copies already fetched by others cannot be recalled'), and a Grant button."
+    - "History: list of grants and withdrawals with dates and policy versions."
+  states: [loading, off-default, granted, withdrawn, lapsed-needs-regrant, pending-offline, error]
+  a11y:
+    - Each switch has a visible label and a description linked with aria-describedby, and state changes are announced politely.
+    - The policy text is readable at 200 percent zoom and reachable by keyboard in a dialog with focus trap and Escape to close.
+    - Switch targets are at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A PrivacyConsent stores purpose, scope (relay and record kinds), policy id, version and SHA-256 hash, locale of the text shown, grant and withdrawal times, status and source.
+      - The history is append-only; a new grant creates a new row and supersedes the previous one rather than editing it.
+      - Consents are P3 in the vault and retained as RET-EVIDENCE (2 years after withdrawal) as proof of what was agreed; the statement sent to a relay contains only purpose, scope, policy hash and times.
+    entities:
+      - name: PrivacyConsent
+        schema: classrup.privacy.consent/v1
+        storage: device
+        privacy: P3
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "purpose: enum — federation_publish | notify_email | notify_push | analytics_share | location_precise"
+          - "scope: object — {relayId?: string, recordKinds?: string[] up to 20}; relayId required for federation_publish and notify_push"
+          - "policyId: string — e.g. privacy.federation.v3"
+          - "policyVersion: int — ≥ 1"
+          - "policyHash: string — sha256 hex of the canonical policy text shown"
+          - "locale: string — BCP 47 locale of the text shown"
+          - "status: enum — granted | withdrawn | superseded | lapsed"
+          - "source: enum — ui | unsubscribe | deletion | import"
+          - "grantedAt: timestamp — RFC 3339 UTC, local clock"
+          - "withdrawnAt?: timestamp — RFC 3339 UTC, local clock"
+          - "statementCid?: string — cid of the signed consent statement sent to the relay"
+          - "peerSync?: string — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one row with status granted per (purpose, scope.relayId).
+          - No purpose is granted by default; absence of a row means not granted.
+          - policyHash equals the hash of the bundled policy text of policyId at policyVersion when the row is created.
+    sql: |
+      CREATE TABLE privacy_consent (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, purpose TEXT NOT NULL, relay_id TEXT, status TEXT NOT NULL,
+        policy_hash TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX privacy_consent_active ON privacy_consent(vault_id, purpose, ifnull(relay_id,'')) WHERE status = 'granted';
+  validation_rules:
+    requirements:
+      - Grant input is validated strictly, including purpose, scope and policy hash.
+      - A grant is accepted only for the currently bundled policy version of the purpose.
+      - Defaults are enforced in code, so processing is allowed only when a granted, non-lapsed consent exists.
+    rules:
+      - "V01 | purpose is one of the five defined purposes | VALIDATION_FAILED"
+      - "V02 | relayId is present for federation_publish and notify_push and refers to a relay the user selected | VALIDATION_FAILED"
+      - "V03 | policyHash equals the hash of the current bundled policy text for the purpose | PRIVACY_POLICY_STALE"
+      - "V04 | the purpose is available in this build and not disabled by a feature flag | FEATURE_DISABLED"
+      - "V05 | withdraw targets a granted consent | CONFLICT_STATE"
+      - "V06 | scope.recordKinds has at most 20 entries from the known record kinds | VALIDATION_FAILED"
+      - "V07 | at most 30 grant or withdraw operations per hour per vault | RATE_LIMITED"
+  workflow_state_machine:
+    requirements:
+      - A consent is granted until it is withdrawn, superseded by a newer grant or lapsed by a material policy change.
+      - Withdrawal takes effect in the same local transaction and is final for that row; consent again means a new grant.
+      - Lapse is evaluated at unlock and daily against the bundled policy versions.
+    machines:
+      - entity: PrivacyConsent
+        initial: granted
+        terminal: [withdrawn, superseded, lapsed]
+        transitions:
+          - "granted -> withdrawn | privacy.consent.withdraw, notify.channel.opted_out event, or deletion request | emits privacy.consent.withdrawn and queues signed withdrawal statement for relay-scoped purposes"
+          - "granted -> superseded | privacy.consent.grant with newer policy version for the same purpose and scope | no event for the superseded row; the new row emits privacy.consent.granted"
+          - "granted -> lapsed | policy sweep finds a material change in policy hash | emits privacy.consent.withdrawn with reason policy_changed"
+    timeouts:
+      - "Policy sweep at vault unlock and every 24 h while open."
+  commands_queries_events:
+    requirements:
+      - Grant and withdraw are vault commands; for relay-scoped purposes they also produce the signed statements classrup.privacy.consent/v1 and classrup.privacy.consent_withdrawal/v1; check and list are vault queries; there is no relay command in this module.
+      - Grant and withdraw emit events into the vault outbox in the same IndexedDB transaction as the state change.
+      - Other modules must call privacy.consent.check before processing for a purpose and treat any failure as not granted.
+    commands:
+      - name: privacy.consent.grant
+        capability: privacy.consent.grant
+        input: "[vault command, produces signed statement classrup.privacy.consent/v1 when scope.relayId is set] { purpose, scope?: {relayId?, recordKinds?}, policyId, policyVersion, policyHash, locale }"
+        output: "{ consentId, revision: 1, status: granted, statementCid?, peerSync? }"
+        errors: [VALIDATION_FAILED, PRIVACY_POLICY_STALE, FEATURE_DISABLED, RATE_LIMITED]
+        emits: [privacy.consent.granted]
+        idempotent: true
+      - name: privacy.consent.withdraw
+        capability: privacy.consent.withdraw
+        input: "[vault command, produces signed statement classrup.privacy.consent_withdrawal/v1 when relay-scoped] { consentId, expectedRevision }"
+        output: "{ consentId, revision, status: withdrawn, statementCid?, peerSync? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RATE_LIMITED]
+        emits: [privacy.consent.withdrawn]
+        idempotent: true
+    queries:
+      - name: privacy.consent.check
+        capability: privacy.consent.check
+        input: "{ purpose, relayId?, recordKind? }"
+        output: "{ granted: boolean, consentId?, policyVersion?, reason?: none|withdrawn|lapsed|scope }"
+        errors: []
+      - name: privacy.consent.list_mine
+        capability: privacy.consent.read
+        input: "{ purpose?, status?, cursor?, limit ≤ 100 }"
+        output: "{ items: PrivacyConsent[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: privacy.consent.granted, privacy: P3, payload: "{ consentId, purpose, scope, policyId, policyVersion }"}
+      - {type: privacy.consent.withdrawn, privacy: P3, payload: "{ consentId, purpose, scope, reason: user|unsubscribe|account_deletion|policy_changed }"}
+    events_consumed:
+      - {type: notify.channel.opted_out, effect: "withdraw the granted consent for the matching notify purpose with source unsubscribe"}
+      - {type: privacy.deletion.requested, effect: "withdraw all granted consents with source deletion; cancelling the deletion does not restore them"}
+    errors:
+      - "PRIVACY_POLICY_STALE | 409 | no | the policy hash does not match the current policy text; reload and read the new text"
+    example: |
+      vault command privacy.consent.grant
+      { "purpose": "federation_publish", "scope": { "relayId": "relay.example.org" }, "policyId": "privacy.federation.v3",
+        "policyVersion": 3, "policyHash": "9c1185a5c5e9fc54612808977ee8f548b2258d31…", "locale": "en" }
+      => { "consentId": "0192f3b0-…", "revision": 1, "status": "granted", "statementCid": "sha256-e01c…", "peerSync": "prepared" }
+      query privacy.consent.check { "purpose": "federation_publish", "relayId": "relay.example.org" } => { "granted": true, "policyVersion": 3 }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked local principal grants, withdraws or reads its own consents.
+      - privacy.consent.check is callable by other modules in the same vault in-process; it never reveals consent state to other principals.
+      - Relays authorize receipt of consent statements under their own relay policy; they cannot grant or alter consent.
+    capabilities:
+      - "privacy.consent.grant | local-principal | vault unlocked; current policy hash supplied"
+      - "privacy.consent.withdraw | local-principal | vault unlocked; consent granted"
+      - "privacy.consent.check | local-principal | in-process call from a module of the unlocked vault"
+      - "privacy.consent.read | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 using vault command IDs and expectedRevision on withdrawal.
+      - Withdrawal commits locally first; relay delivery of the signed withdrawal retries until peer_accepted or the relay is removed.
+      - The check function fails closed, so any error means not granted.
+    idempotency: "Vault command ID recorded for 24 h; grant of the same purpose, scope and policy hash while already granted returns the existing consent."
+    concurrency: "Partial unique index allows one granted row per purpose and relay; Web Lock privacy-consent serializes tabs; check reads a consistent snapshot."
+    retries: "Signed statements retry 5 s, 30 s, 5 min, 1 h, then every 6 h up to 30 days."
+    offline: "Grant and withdrawal work offline and apply locally at once; relay statements wait in the sync outbox and the UI shows prepared."
+    partial_failure: "If the relay never receives the withdrawal, local processing for the purpose has already stopped; the UI shows the relay may still hold copies and offers export of the statement."
+  privacy_retention_abuse:
+    requirements:
+      - Consent records are P3 and never leave the vault except the signed statement to the named relay and the user's own export.
+      - Consent is never pre-ticked, bundled or inferred, and each purpose is a separate decision with its own text.
+      - The UI states the limits of withdrawal, namely that future processing stops, copies already fetched by other vaults and relays cannot be recalled.
+    data:
+      - "PrivacyConsent: P3. Signed statement to relay: purpose, scope, policy hash, did and times, P2 to that relay."
+    retention:
+      - "RET-EVIDENCE (2 years after withdrawal) as proof of consent; deletable earlier on account deletion except under a relay-side legal hold."
+    threats:
+      - "T01 | Dark pattern obtains consent by default | all purposes off by default, no pre-ticked controls, separate text per purpose, tested by a UI test"
+      - "T02 | Module processes without checking consent | single check function, lint rule requiring a check call in code paths tagged with a purpose, integration tests per consumer"
+      - "T03 | Relay keeps indexing after withdrawal | signed withdrawal statement, relay obligation to honour tombstones (PRV-6), UI states copies cannot be recalled"
+      - "T04 | Consent replay or forgery toward a relay | statements signed over JCS with Ed25519 and carrying policy hash and times; relays verify and dedupe by cid"
+    abuse_controls:
+      - "Grant and withdraw limited to 30 per hour per vault; consent statements to a relay limited to 20 per hour."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); consent counts and check latency stay in local diagnostics.
+      - The check function meets a low latency budget with an in-memory cache invalidated on change.
+      - Lapse and withdrawal propagation are observable locally.
+    metrics:
+      - "Local diagnostics: classrup_privacy_consent_changes_total{purpose,action=granted|withdrawn|lapsed}"
+      - "Local diagnostics: classrup_privacy_consent_check_ms (histogram)"
+    logs:
+      - "info consent.changed {consentId, purpose, action, correlationId} — no relay URLs and no policy text."
+    budgets:
+      - "check p99 ≤ 2 ms with cache; grant and withdraw p95 ≤ 100 ms local commit."
+      - "Withdrawal reaches every in-vault consumer within 1 s of commit."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command outputs, statements and event payloads against the schema registry.
+      - Default-off behavior is covered by a test that enumerates every purpose on a fresh vault.
+    fixtures: "Fresh vault; bundled policies for five purposes with fixed hashes; relay double; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | grant federation_publish for a relay with the current hash | row stored granted, statement signed with policy hash"
+      - "T02 | unit | 01.R02,03.R01 | grant, regrant with new version, withdraw | history keeps three rows with statuses superseded, then withdrawn; none edited"
+      - "T03 | unit | 02.R02,02.R03 | rules V01 to V07 violated in turn | documented error code and nothing stored"
+      - "T04 | unit | 02.R03,07.R01 | fresh vault, check every purpose | all return granted false"
+      - "T05 | property | 03.R01,03.R02 | random grant and withdraw sequences | at most one granted row per purpose and relay; withdrawn rows never return to granted"
+      - "T06 | integration | 03.R03 | change policy hash with materialChange | consent lapses at unlock, privacy.consent.withdrawn emitted with reason policy_changed, check returns false"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | execute each command and query | outputs, statements and events validate against registry schemas"
+      - "T08 | integration | 04.R03,02.R03 | consumer without consent tries processing; error injected into check | processing blocked in both cases"
+      - "T09 | integration | 04.R03,03.R01 | notify.channel.opted_out and privacy.deletion.requested delivered | matching consents withdrawn with the right source; replay is a no-op"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | another module of a different vault tries to read; relay tries to alter | no access; statements from non-owner rejected"
+      - "T11 | integration | 06.R01,06.R02,06.R03 | replay command ID; relay offline during withdrawal | original result; local processing stops at once; UI shows prepared"
+      - "T12 | abuse | 07.R02,07.R03 | 31 grants in an hour; UI inspection of the grant sheet | 31st RATE_LIMITED; no pre-ticked control; limits of withdrawal stated"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 10 000 checks and 100 changes | check p99 ≤ 2 ms, propagation ≤ 1 s, no telemetry sent"
+      - "T14 | a11y | 07.R02,01.R03 | privacy settings and grant sheet | axe zero serious issues; keyboard-only completion; switches announced"
+      - "T15 | unit | 09.R01,09.R03 | traceability tool run | every PS-076 requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export, import with unknown policy hash, roll back one release | history round-trips; unknown hash imports as lapsed"
+    acceptance:
+      - All tests T01 to T16 pass in CI.
+      - On a fresh vault every purpose reports not granted and no consumer processes for any purpose.
+      - Withdrawal stops in-vault processing within 1 second and the UI states that copies cannot be recalled.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the full consent history in the section privacy.consents.
+      - Import re-evaluates each consent against the bundled policy hashes and lapses any whose hash is unknown or outdated.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section privacy.consents in classrup-export/v1; one line per PrivacyConsent (schema classrup.privacy.consent/v1) including signed statements."
+    import: "Granted consents import as lapsed unless the policy hash equals the current bundled hash; no import ever grants a consent that the user did not hold at export time."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only the signed consent statements they received."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore unknown optional fields; the default-off rule is never relaxed by a migration."

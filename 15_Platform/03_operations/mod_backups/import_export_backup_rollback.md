@@ -1,35 +1,31 @@
-# PS-120-10 — import export backup rollback
+# PS-120-10 — Import, export, backup and rollback: Backups
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-10. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M02 Backups](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/backups` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for backups within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-120-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-120-10.R01** The operator export is the list of BackupRecords and manifests, not user data; user exports are produced by vaults (CTR-IOX-001 IOX-6) and never by this module.
+- **PS-120-10.R02** A snapshot restores only into a new relay instance (IOX-4) and the identity key file must be provided separately, otherwise the instance has a different identity.
+- **PS-120-10.R03** Backup schema changes follow expand/contract and manifests stay readable for at least 400 days.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** JSON Lines of BackupRecord (schema classrup.platform.backup_record/v1) via relay backup list --json; manifests are standalone JSON files next to artifacts.
+- **import:** relay backup import-catalog <dir> rebuilds BackupRecords from manifests after a restore; artifacts are never decrypted by the import.
+- **backup:** This module is the relay backup. The backup key and relay identity key file are backed up by the operator separately and never inside backup artifacts. Vault export remains the primary backup of private records.
+- **migration rollback:** Manifest format carries formatVersion 1; unknown future versions are skipped with a warning. Rolling back the relay release leaves artifacts untouched; restore always creates a new instance and never downgrades data in place.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-120-09.T16 | integration | PS-120-09.R02, PS-120-09.R03, PS-120-10.R03 | restore drill of the 100 000-row database to a fresh directory plus WAL segments | content hashes equal, integrity ok, procedure time recorded |
+| TEST-PS-120-09.T17 | integration | PS-120-10.R01, PS-120-10.R02 | export manifest list and check that vault data is absent; attempt to restore on a different relay key | manifests list only relay data; restore without the identity key file refused |
+
+## Dependencies
+
+Module depends on: F15.S02.M01, F15.S02.M03, F15.S03.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

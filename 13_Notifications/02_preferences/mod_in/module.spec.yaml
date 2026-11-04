@@ -1,0 +1,229 @@
+id: F13.S02.M04
+scope: MVP
+summary: >-
+  The per-category by channel notification matrix. Categories are offers, cycles, messages, auctions, bookings,
+  moderation and security; channels are in-app, push and email. The matrix lives in the user's vault and
+  decides which in-app notifications appear and which categories a relay may push or email. Security is always on
+  in-app and cannot be switched off. Only the push and email columns, which a relay needs, are mirrored to the
+  relays the user chose as a signed statement; the in-app column never leaves the device. Channel permission
+  itself (consent) is F13.S02.M03 and quiet hours are F13.S02.M02 and F13.S02.M01.
+responsibilities:
+  - Own the NotificationPreference records, one per user and category, holding the in-app, push and email flags and their lock state.
+  - Provide the default matrix and apply it for new vaults and for the reset command.
+  - Enforce that the security category stays on in-app and that no flag is stored for a channel the user has not consented to, which is shown as inactive instead of silently enabled.
+  - Produce the signed mirror statement classrup.notify.preference_mirror/v1 with the push and email columns only, and accept it at relays that hold the user's channel consent.
+  - Answer relay-side lookups of whether a category may be sent over a channel for a user.
+non_responsibilities:
+  - Channel consent (F13.S02.M03), schedules (F13.S02.M02), deferral (F13.S02.M01).
+  - Routing of events to categories and templates (F13.S01.M03 owns the routing table).
+  - Per-thread mute (F08.S01.M02) and per-listing alerts (F06.S01.M02 saved searches).
+  - "Future: per-event-type overrides within a category, digest frequency, per-relay overrides, a discovery category for saved-search matches."
+depends_on: [F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+user_stories:
+  - As a member, I can turn off push for auctions but keep it for messages and see the whole matrix on one screen.
+  - As a member, I cannot turn off in-app security notices and the screen explains why.
+  - As a member, I can reset everything to defaults in one tap.
+  - As a member, I see that email is inactive because I have not enabled the email channel.
+edge_cases:
+  - User sets push for a category while the push channel is not consented; the flag is saved but displayed inactive with a link to enable the channel.
+  - User tries to switch off security in-app; the command refuses with NOTIFY_PREF_LOCKED and the UI keeps the switch on.
+  - Mirror statement reaches the relay twice or out of order; the relay applies only the highest seq.
+  - Relay is unreachable when preferences change; the vault applies locally and the UI says the relay will use the old push settings until it confirms.
+  - Two devices of one user change different cells at the same time; both changes are kept per cell and the later seq of the mirror carries the merged matrix.
+  - Unknown category arrives from a newer app version; it is stored with defaults of in-app on and push and email off and shown in a generic Other row.
+ux:
+  screens:
+    - "Notification settings matrix: 7 category rows by 3 channel columns of switches, channel status line (inactive when not consented), security row with locked in-app switch."
+    - "Reset to defaults confirmation."
+    - "Channel inactive banner with Enable button leading to F13.S02.M03."
+  states: [loading, ready, saving, saved-local, relay-pending, relay-confirmed, locked-cell, channel-inactive, offline]
+  a11y:
+    - Matrix is a table with row and column headers; each switch has an accessible name such as Auctions, push.
+    - Locked switch is exposed as disabled with an explanation linked by aria-describedby.
+    - All switches are at least 44 by 44 px and changes are announced politely.
+processes:
+  domain_schema:
+    requirements:
+      - A NotificationPreference stores user DID, category, the three channel flags, the lock flag for in-app, a per-cell revision and the mirror sequence last sent, with tenant and revision per CTR-ID-001.
+      - Preferences are P2, held in the vault; relays hold only the push and email flags and a sequence number per user, retained as long as the user's channel consent at that relay is granted plus 30 days.
+      - The default matrix is fixed and versioned: in-app on for all categories, push on for offers, cycles, messages, auctions, bookings and security, push off for moderation, email on only for security, all others off.
+    entities:
+      - name: NotificationPreference
+        schema: classrup.notify.preference/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "userDid: did:key — owner"
+          - "category: enum — offers | cycles | messages | auctions | bookings | moderation | security"
+          - "inApp: boolean — in-app notifications for this category; vault only, never mirrored"
+          - "push: boolean — allow push for this category (mirrored to relays with push consent)"
+          - "email: boolean — allow email for this category (mirrored to relays with email consent)"
+          - "inAppLocked: boolean — true only for security"
+          - "defaultsVersion: int — version of the default matrix applied"
+          - "mirrorSeq: int — sequence of the last mirror statement that included this cell"
+          - "updatedAtClaim: timestamp — user clock, a claim"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - Exactly one record per (userDid, category) and exactly 7 known categories exist in v1.
+          - category security always has inApp true and inAppLocked true.
+          - The mirror statement contains only category, push and email, plus userDid and a strictly increasing seq.
+  validation_rules:
+    requirements:
+      - Matrix changes are validated for category, lock rules and size before they are stored.
+      - Relay mirror statements are validated for signature, schema and sequence.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | each cell names a known category and boolean flags only; at most 21 cells per request | VALIDATION_FAILED"
+      - "V02 | security inApp is not set to false | NOTIFY_PREF_LOCKED"
+      - "V03 | reset requires confirmation flag true | VALIDATION_FAILED"
+      - "V04 | mirror statement signature verifies against a device key of userDid and the relay holds a granted channel consent for that user | NOTIFY_CONSENT_REQUIRED"
+      - "V05 | mirror seq is greater than the stored seq, otherwise the statement is acknowledged without change | CONFLICT_STATE"
+      - "V06 | a user changes preferences at most 60 times per hour | RATE_LIMITED"
+      - "V07 | expectedRevision equals the stored cell revision | CONFLICT_REVISION"
+  workflow_state_machine:
+    requirements:
+      - The matrix is plain settings without a lifecycle; every cell is edited in place with a revision counter and no cell is ever deleted.
+      - The only enforced transition rule is the security lock, which refuses any change that would turn security in-app off.
+      - Mirror status per relay moves forward through local committed, prepared, transport acknowledged and peer accepted and never claims more than the relay receipt.
+    machines: []
+    note: "Settings record with no lifecycle states; invariants and the security lock are enforced by validation rules V02 and V07."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - Matrix changes and reset are vault commands; the mirror is a relay command accepting a signed statement; relay-side lookup is an internal query.
+      - Each vault command emits notify.preference.changed in the same IndexedDB transaction as the change.
+      - The module consumes channel consent events to show channel status and to trigger mirroring when a channel is enabled.
+    commands:
+      - name: notify.preference.set
+        capability: notify.preference.set
+        input: "[vault command; produces signed statement classrup.notify.preference_mirror/v1 when a relay holds push or email consent] { cells: [{ category, inApp?, push?, email?, expectedRevision }] (≤ 21) }"
+        output: "{ cells: NotificationPreference[], mirrorState: none|local_committed|prepared|transport_acknowledged|peer_accepted }"
+        errors: [VALIDATION_FAILED, NOTIFY_PREF_LOCKED, CONFLICT_REVISION, RATE_LIMITED]
+        emits: [notify.preference.changed]
+        idempotent: true
+      - name: notify.preference.reset
+        capability: notify.preference.set
+        input: "[vault command; produces signed mirror statement] { confirm: true }"
+        output: "{ cells: NotificationPreference[], defaultsVersion }"
+        errors: [VALIDATION_FAILED, RATE_LIMITED]
+        emits: [notify.preference.changed]
+        idempotent: true
+      - name: notify.preference.mirror
+        capability: notify.preference.mirror
+        input: "[relay command, relay access token] { statement: { userDid, seq, cells: [{ category, push, email }] (7), sig } }"
+        output: "{ seq, relayReceiptAt, relayReceiptSig }"
+        errors: [VALIDATION_FAILED, NOTIFY_CONSENT_REQUIRED, CONFLICT_STATE, UNAUTHENTICATED, RATE_LIMITED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: notify.preference.get_matrix
+        capability: notify.preference.read_own
+        input: "[vault query] {}"
+        output: "{ cells: NotificationPreference[] (7), channelStatus: { push, email }, defaultsVersion }"
+        errors: []
+      - name: notify.preference.resolve
+        capability: notify.preference.resolve
+        input: "[relay internal query] { userDid, category, channel: push|email }"
+        output: "{ allowed: boolean, seq }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: notify.preference.changed, privacy: P2, payload: "{ userDid, categories[], channelsChanged[], mirrorSeq?, defaultsVersion }"}
+    events_consumed:
+      - {type: notify.channel.opted_in, effect: "mark the channel active in the matrix and send a mirror statement to the relay that now holds the consent"}
+      - {type: notify.channel.opted_out, effect: "mark the channel inactive in the UI while keeping stored flags; the relay already stops sending"}
+    errors:
+      - "NOTIFY_PREF_LOCKED | 422 | no | the security category in-app notifications cannot be switched off"
+      - "NOTIFY_CONSENT_REQUIRED | 403 | no | the relay holds no granted channel consent for this user"
+    example: |
+      vault command notify.preference.set  { "cells": [ { "category": "auctions", "push": false, "expectedRevision": 1 } ] }
+      -> { "cells": [ { "category": "auctions", "inApp": true, "push": false, "email": false, "revision": 2 } ], "mirrorState": "local_committed" }
+      vault command notify.preference.set  { "cells": [ { "category": "security", "inApp": false, "expectedRevision": 1 } ] }
+      -> 422 NOTIFY_PREF_LOCKED
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the local principal edit its matrix.
+      - Relay policy lets a registered device key mirror its owner's push and email columns, only where the relay holds a granted channel consent for that user.
+      - Relay operators and other users cannot read or edit a user's matrix; the relay-side resolve query is internal to the relay's dispatch gate.
+    capabilities:
+      - "notify.preference.set | local principal | vault policy; owner of the matrix"
+      - "notify.preference.read_own | local principal | owner of the matrix"
+      - "notify.preference.mirror | registered relay device | relay policy; statement signed by a device key of the user; granted channel consent exists at this relay"
+      - "notify.preference.resolve | relay service | relay internal; used by the dispatch gate of F13.S02.M01 only"
+  failure_recovery_idempotency:
+    requirements:
+      - Vault commands commit locally first; mirroring is a retried outbox step with states prepared, transport acknowledged and peer accepted.
+      - Mirror statements are idempotent on seq and applied only if seq is higher than the stored one.
+      - Concurrent edits from two devices merge per cell by cell revision; there is no distributed lock and no destructive overwrite of unrelated cells.
+    idempotency: "Vault set is idempotent on the resulting cell values and expectedRevision; relay mirror is idempotent on (userDid, seq) with Idempotency-Key replay window 24 h."
+    concurrency: "expectedRevision per cell; each command is one IndexedDB transaction; the mirror always sends the complete push and email columns with a strictly increasing seq so the relay holds one consistent snapshot."
+    retries: "Outbox retries the mirror with backoff base 1 s, factor 2, cap 15 min for 14 days."
+    offline: "All edits work offline and show saved on this device; the mirror is sent when online; the UI says the relay still uses previous push settings until confirmed."
+    partial_failure: "If mirroring fails the local matrix stays authoritative for in-app and the relay keeps the previous snapshot; a failed mirror never blocks local changes."
+  privacy_retention_abuse:
+    requirements:
+      - The in-app column and the existence of preferences for categories never leave the device; relays learn only seven booleans per channel for users who consented to that channel.
+      - Mirror statements are signed and contain no content, no thread or listing identifiers and no schedule.
+      - Preferences are deleted from the relay 30 days after the channel consent ends and on vault wipe requests.
+    data:
+      - "NotificationPreference: P2; in-app flags device only; push and email flags mirrored to consented relays."
+    retention:
+      - "Vault records: RET-STANDARD until the user deletes the vault."
+      - "Relay mirror: deleted 30 days after the corresponding channel consent ends."
+    threats:
+      - "T01 | Relay learns usage patterns from the matrix | only seven booleans per channel are mirrored and only to relays with consent; the UI states this"
+      - "T02 | Attacker disables a victim's security alerts | edits require the vault; mirror requires a device-key signature; in-app security cannot be turned off; push security can be disabled only by the owner and the UI warns"
+      - "T03 | Replay of an old mirror to re-enable categories | strictly increasing seq per user at the relay"
+      - "T04 | Dark patterns re-enabling categories after updates | defaults apply only to new vaults and to categories added later; existing user choices are never reset by app updates"
+    abuse_controls:
+      - "Rate limit 60 edits per hour per vault and 30 mirror calls per hour per user at the relay."
+      - "Relay can refuse mirror from blocked device keys under its hosting policy."
+  observability_performance:
+    requirements:
+      - Relay mirror and resolve calls are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
+      - Vault set meets p95 ≤ 50 ms and relay mirror p95 ≤ 300 ms at 50 req/s; resolve p95 ≤ 20 ms.
+      - Mirror lag is visible in local diagnostics.
+    metrics:
+      - "classrup_notify_pref_mirror_total{outcome=ok|stale|rejected} (relay)"
+      - "classrup_notify_pref_resolve_ms (histogram, relay)"
+      - "classrup_notify_pref_changes_total (local diagnostics)"
+    logs:
+      - "relay info preference.mirrored {userHash, seq, correlationId} — no categories."
+    budgets:
+      - "set p95 ≤ 50 ms; relay mirror p95 ≤ 300 ms at 50 req/s; resolve p95 ≤ 20 ms with 100 000 users."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check commands, mirror statements and event payloads against the schema registry.
+      - The default matrix is verified against a golden table.
+    fixtures: "Vault U with default matrix version 1, relay R holding push consent for U, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | create a new vault and read the matrix | 7 records equal the golden default table; security inApp true and locked"
+      - "T02 | unit | 01.R02,02.R02,02.R03 | each rule V01 to V07 violated in turn including security in-app off | documented error code returned and nothing changed"
+      - "T03 | unit | 03.R01,03.R02 | edit cells across categories and channels | edits in place with revision increments; no cell deleted; security lock held"
+      - "T04 | integration | 03.R03,06.R01 | edit while relay down then relay up | mirror shows local_committed, prepared, transport_acknowledged in order, never ahead"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs, statements and event payloads validate against registry schemas"
+      - "T06 | integration | 04.R03 | channel opted in and opted out events delivered | channel shown active or inactive; relay snapshot sent on opt-in"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | forged mirror from another key; mirror without relay consent; third party read | rejected; operator cannot read in-app column"
+      - "T08 | integration | 06.R02,06.R03 | replay mirror seq 5 after seq 7; two devices edit different cells | stale replay ignored; merged cells preserved"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect mirror statement and relay storage; app update with a new category | only 7 booleans per channel present; user choices preserved"
+      - "T10 | abuse | 07.R03,02.R06 | 61st edit in an hour | RATE_LIMITED"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 50 mirror per second for 2 minutes and 100 000 resolve calls | budgets met"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-106 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup | matrix round trips; unknown categories kept with defaults"
+      - "T14 | a11y | 04.R01 | matrix with screen reader and keyboard | table semantics, locked switch explained, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T14 pass in CI.
+      - The security category in-app flag can never be false through any command, import or merge.
+      - Relay storage and traffic captures contain no in-app column and no content.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains their matrix cells with revisions.
+      - Import validates categories and the security lock, keeps unknown categories with defaults and does not mirror to relays without a fresh user action.
+      - Schema changes follow expand and contract; new categories are additive and default to in-app on and push and email off.
+    export: "Section notify.preferences in classrup-export/v1; 7 lines per user (schema classrup.notify.preference/v1)."
+    import: "Cells validated; security inApp forced true; existing newer revisions kept; relay mirror re-sent only after the user opens the settings and confirms."
+    backup: "The vault export is the backup (IOX-6); relay snapshots are operational data restored with relay SQLite backup (IOX-3, IOX-7)."
+    migration_rollback: "Additive categories only; rollback is safe because older apps show unknown categories as Other with defaults and do not delete them."

@@ -63,7 +63,7 @@ processes:
     note: "No entity lifecycle. Secret loading is a startup and reload procedure, not a stateful entity."
     machines: []
     requirements:
-      - Startup is all-or-nothing: if any required secret fails validation the relay does not open its listener.
+      - Startup is all-or-nothing, so if any required secret fails validation the relay does not open its listener.
       - Reload on SIGHUP loads new values atomically and keeps the previous value valid for the configured overlap of at most 300 seconds.
       - Rotation of the relay data key re-wraps stored per-object keys in batches of 1 000 and records progress so it is resumable.
     timeouts:
@@ -109,7 +109,7 @@ processes:
     partial_failure: "If rotation stops midway, objects wrapped under either key version stay readable because both versions are kept until the rotation completes and a verify pass reports zero remaining on the old version."
   privacy_retention_abuse:
     requirements:
-      - Secret values are P4: never logged, never serialized, never in metrics labels, never in error messages, and never in crash reports.
+      - Secret values are P4 and are never logged, never serialized, never in metrics labels, never in error messages, and never in crash reports.
       - Secret metadata (name, source, length, loaded time) is not secret and may be logged.
       - Leak attempts through logs, errors, process listings, core dumps and repository history are addressed by redaction, file loading, disabled core dumps and scanning.
     data:
@@ -152,11 +152,11 @@ processes:
     tests:
       - "T01 | unit | 01.R01,02.R01,02.R03 | manifest with all secrets present once | all loaded; names match pattern; minimum sizes enforced"
       - "T02 | unit | 02.R01,02.R02 | missing, ambiguous, permissive, symlinked, short secrets | documented SECURITY_SECRET_* code each; relay does not start"
-      - "T03 | property | 01.R02,07.R01 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms"
-      - "T04 | unit | 03.R02,04.R01 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch"
+      - "T03 | property | 01.R02,07.R01,07.R03 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms"
+      - "T04 | unit | 03.R02,04.R01,04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch"
       - "T05 | unit | 01.R03,02.R03 | hashToken for 43-character token and malformed tokens | SHA-256 of decoded bytes for valid; UNAUTHENTICATED for malformed"
-      - "T06 | integration | 03.R01,03.R02,06.R01,06.R02 | SIGHUP reload with overlap 120 s; failed reload; key rotation interrupted and resumed | atomic swap; old value valid within overlap only; failed reload keeps previous; rotation resumes without double work"
-      - "T07 | integration | 04.R03,02.R02 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file"
+      - "T06 | integration | 03.R01,03.R02,03.R03,06.R01,06.R02 | SIGHUP reload with overlap 120 s; failed reload; key rotation interrupted and resumed | atomic swap; old value valid within overlap only; failed reload keeps previous; rotation resumes without double work"
+      - "T07 | integration | 04.R03,02.R02,09.R02 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file"
       - "T08 | abuse | 05.R01,05.R02,05.R03,07.R02 | attempt to read secrets via any command or query; scanner run with write token | no route exposes secrets; scanner cannot publish"
       - "T09 | chaos | 06.R03,08.R01 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; one log line per secret without values"
       - "T10 | load | 08.R02,08.R03 | 100 000 hashToken calls and 100 000 log lines; scan of 10 000-commit repository | latency budgets met; full-history scan ≤ 10 minutes"

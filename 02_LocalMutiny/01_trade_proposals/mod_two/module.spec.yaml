@@ -1,0 +1,318 @@
+# F02.S01.M01 Two-party barter proposals (ADR-0016 local-first, ADR-0007).
+id: F02.S01.M01
+scope: MVP
+summary: >-
+  A direct item-for-item(s) proposal between two members, with an optional compensation leg. Each member keeps their own TradeProposal in their own vault.
+  The proposal is a conversation of immutable signed revisions (F02.S01.M04); a party is bound only by their own Ed25519 consent on the exact revision hash
+  and by their own signed reservation of their own items. The proposal is accepted, as judged separately by each vault, when both consents on the same head
+  hash and both reservation statements are present, valid and unexpired before the deadline on that vault's clock. Acceptance hands the exchange to the
+  cycle execution saga as a 2-party cycle. The platform takes no payment, relays only carry encrypted statements, and nothing is atomic across the two vaults.
+responsibilities:
+  - Own the TradeProposal aggregate (local view per vault) with states draft, open, accepted, rejected, withdrawn, expired and frozen.
+  - Create proposals and counters by orchestrating legs, revision, the principal's own reservation and the principal's signed consent in one local transaction.
+  - Route incoming signed statements (revision, consent, reservation, response) to the owning modules and re-evaluate the local acceptance verdict.
+  - Expire proposals by the local clock (default 72 h, range 1 h to 14 d) and treat any clock disagreement as expired.
+non_responsibilities:
+  - Signature format of consent (F08.S02.M02), revision snapshots (F02.S01.M04), legs (F02.S01.M03), roster (F02.S01.M02), reservations (F02.S03.M02).
+  - Executing the exchange, handover attestations and recovery (F02.S03.M04) and dropouts after acceptance (F02.S03.M03).
+  - Money offers on a sell listing (F01.S04.M01 offers) and price negotiation (F01.S04.M02).
+  - "Future: proposals with more than two parties as editable drafts, and multi-currency compensation negotiation UIs."
+depends_on: [F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S02.M05, F02.S03.M02, F01.S03.M01, F07.S01.M01, F07.S02.M02, F08.S02.M02, F12.S03.M04, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a member, I propose my guitar for a member's bicycle, review the exact terms I am signing, and see that it is sent only to that member in an encrypted envelope.
+  - As a recipient, I can accept, reject or counter, and when I accept I see precisely what I reserved of my own and what the other person has signed.
+  - As either party, I see the true sync state of every statement: saved here, prepared, relay received, or acknowledged by the other person.
+edge_cases:
+  - Both parties counter at the same time offline; the vaults detect the fork, freeze the proposal and the parties renegotiate as a new proposal.
+  - The recipient accepts after the proposer's local deadline but before the recipient's own; each vault decides with its own clock and disagreement is treated as expired.
+  - The proposer's item was sold elsewhere after the proposal was sent; the proposer's reservation was refused earlier, or the recipient's feasibility check flags the signed reservation as expired, so the proposal never becomes accepted.
+  - The recipient's acceptance reaches the proposer after the proposer withdrew; the proposer's vault ignores it because the proposal is already terminal and the recipient is told only if a withdrawal notice reaches them.
+  - A consent statement signed for revision 2 arrives after revision 3 exists; it is stored as void evidence and does not count.
+  - The same two members propose the same item sets twice; the second proposal is refused as a duplicate.
+  - Compensation is included; acceptance records the payer's obligation, but no money moves through ClassRup and payment evidence is a claim handled by F02.S04.M01 and F09.
+ux:
+  screens:
+    - "Compose proposal: pick my items, pick their items, optional compensation, expiry selector (default 72 h), summary with value gap and tolerance, Send (signs consent and reserves my items)."
+    - "Proposal thread card: status, current revision number and hash fragment, who must act, sync state per statement (saved here, prepared, relay received, acknowledged by peer)."
+    - "Review and accept sheet: exact terms, feasibility checklist with basis chips, 'What I am signing' statement, buttons Accept, Counter, Reject."
+  states: [loading, empty, draft, open, awaiting-peer, awaiting-me, accepted, rejected, withdrawn, expired, frozen, pending-offline, error]
+  a11y:
+    - The consent statement is plain text above the Accept button and Accept has the accessible name 'Sign and accept revision N'.
+    - Status and sync changes are announced through an aria-live polite region and never by color alone.
+    - All buttons are at least 44 by 44 px and the review sheet is fully keyboard operable.
+processes:
+  domain_schema:
+    requirements:
+      - A TradeProposal is the local aggregate of one vault and stores the two parties, head revision pointer and hash, status, deadline claim and verified consent and reservation references, with the revision chain held by F02.S01.M04.
+      - The record is P2, retained as RET-EVIDENCE, and never stored or federated in plaintext on a relay; only signed envelopes encrypted to the two parties are exchanged.
+      - Consent and reservation facts are stored as references to the verified signed statements with their direction and local receive time, and the local receive time is the only time used for decisions.
+    entities:
+      - name: TradeProposal
+        schema: classrup.mutiny.trade_proposal/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key; generated by the proposer and identical in both vaults"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "proposerId: did — member who created revision 1"
+          - "counterpartyId: did — the other member; differs from proposerId"
+          - "headRevisionId: uuidv7 — current ProposalRevision id (F02.S01.M04)"
+          - "headRevisionNo: int — 1..20"
+          - "headRevisionHash: cid — digest all consents must sign"
+          - "headAuthorId: did — author of the head revision"
+          - "status: enum — draft | open | accepted | rejected | withdrawn | expired | frozen"
+          - "closeReason?: enum — rejected_by_peer | withdrawn_by_author | timeout | item_unavailable | blocked_locally | fork_detected | clock_disagreement"
+          - "expiresAt: timestamp — deadline claimed in the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 14 d"
+          - "consents: array — 0..2 items {actorId, statementId, revisionHash, direction own|peer, signedAtClaim, receivedAtLocal, valid boolean}"
+          - "reservations: array — 0..2 items {actorId, lockId, expiresAt, direction own|peer, valid boolean}"
+          - "hasCompensation: boolean — true when the head revision contains a compensation leg"
+          - "syncStates: object — per outgoing statement {statementCid: local_committed|prepared|transport_acknowledged|peer_accepted}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - proposerId differs from counterpartyId and exactly these two DIDs are parties.
+          - status accepted implies consents contains a valid consent from each party on headRevisionHash and reservations contains a valid unexpired reservation from each party, as verified in this vault.
+          - A consent on any hash other than headRevisionHash has valid false and never counts.
+          - At most one non-terminal TradeProposal exists per (proposerId, counterpartyId, item-set hash).
+    sql: |
+      CREATE TABLE mutiny_trade_proposal (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, proposer_id TEXT NOT NULL, counterparty_id TEXT NOT NULL,
+        status TEXT NOT NULL, head_revision_hash TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX mutiny_proposal_status ON mutiny_trade_proposal(tenant_id, status, expires_at);
+  validation_rules:
+    requirements:
+      - Inputs are validated strictly and business rules on parties, legs, deadline, limits and duplicates run before anything is stored or signed.
+      - A consent is valid only if it signs the exact current head hash with a registered, non-revoked device key of the party.
+      - Incoming statements are accepted only from the two parties of the proposal; all others are quarantined with a reason code.
+    rules:
+      - "V01 | counterparty is a valid DID differing from the proposer, has a mailbox hint, and neither is in the other's local block list | MUTINY_PROPOSAL_LEGS_INVALID"
+      - "V02 | exactly 2 legs, one in each direction, each with 1..5 item lines, all items distinct | MUTINY_PROPOSAL_LEGS_INVALID"
+      - "V03 | expiresInMs is between 3600000 and 1209600000 (default 259200000) | MUTINY_PROPOSAL_DEADLINE_INVALID"
+      - "V04 | proposer has ≤ 5 non-terminal proposals and cycles combined and is within the F12.S03.M04 local limit | MUTINY_PROPOSAL_LIMIT"
+      - "V05 | no non-terminal proposal exists for the same pair and item-set hash | MUTINY_PROPOSAL_DUPLICATE"
+      - "V06 | accept presents revisionHash equal to headRevisionHash | MUTINY_PROPOSAL_CONSENT_STALE"
+      - "V07 | latest feasibility report for the head hash is fresh (≤ 10 min) and overall is not infeasible | MUTINY_PROPOSAL_INFEASIBLE"
+      - "V08 | own items reserved all-or-nothing and reservation statement signed before the consent is signed | MUTINY_PROPOSAL_RESERVATION_FAILED"
+      - "V09 | incoming statement signature verifies and signer is proposer or counterparty with the role the statement claims | MUTINY_PROPOSAL_STATEMENT_INVALID"
+      - "V10 | local clock is before expiresAt and before any relay receipt time that is later than expiresAt | EXPIRED"
+      - "V11 | reject is made by the party who is not the head author, withdraw by the head author | MUTINY_PROPOSAL_ROLE"
+      - "V12 | acting on a terminal proposal | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Acceptance is a local verdict derived from verified statements, not a message that either party can force on the other, and it is re-evaluated whenever a consent, reservation or revision arrives.
+      - Any new revision voids all consents and returns the proposal to draft until the author's consent on the new hash is signed, which makes it open again.
+      - Terminal states never reopen; a forked or expired proposal is renegotiated as a new proposal that cites the old one.
+      - Expiry is decided by the vault's own clock; if the vault's clock and a relay receipt time disagree about the deadline, the proposal is expired.
+    machines:
+      - entity: TradeProposal
+        initial: draft
+        terminal: [accepted, rejected, withdrawn, expired, frozen]
+        transitions:
+          - "draft -> open | head author signs consent (create, counter or accept by the author) | own items reserved and reservation and consent statements prepared; emits mutiny.proposal.created on first open"
+          - "open -> accepted | both consents on headRevisionHash and both reservation statements valid and unexpired verified locally | emits mutiny.proposal.accepted with cycleId reserved for F02.S03.M01"
+          - "open -> draft | mutiny.proposal.revised | all consents void; own reservation released and re-made if the leg items changed"
+          - "draft -> rejected | reject by the non-author party or a verified rejection statement | emits mutiny.proposal.rejected"
+          - "open -> rejected | reject by the non-author party or a verified rejection statement | emits mutiny.proposal.rejected"
+          - "draft -> withdrawn | withdraw by the head author | releases own reservation; emits mutiny.proposal.withdrawn"
+          - "open -> withdrawn | withdraw by the head author or own item becomes unavailable | releases own reservation; emits mutiny.proposal.withdrawn"
+          - "draft -> expired | local clock reaches expiresAt | releases own reservation; emits mutiny.proposal.expired"
+          - "open -> expired | local clock reaches expiresAt or clocks disagree | releases own reservation; emits mutiny.proposal.expired"
+          - "draft -> frozen | mutiny.revision.forked | releases own reservation; no signature is produced"
+          - "open -> frozen | mutiny.revision.forked | releases own reservation; no signature is produced"
+    timeouts:
+      - "Proposal expiry evaluated on vault open and every 60 s while the PWA is open; default 72 h from creation, extended by a counter to at most 14 d after the first revision."
+      - "A draft that is not signed within 24 h is withdrawn locally with reason timeout."
+  commands_queries_events:
+    requirements:
+      - create, accept, counter, reject and withdraw are vault commands; each names the signed statements it produces, and ingest is a vault command that produces none.
+      - Every command writes its record, events and outbox entries in one IndexedDB transaction (EVT-8) and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
+      - The module consumes revision, consent, reservation, roster, block and inventory events only to re-evaluate the local verdict and never acts for another party.
+    commands:
+      - name: mutiny.proposal.create
+        capability: mutiny.proposal.create
+        input: "{ counterpartyId, giveItems[1..5], wantItems[1..5], compensation? { payerId, amount: Money }, expiresInMs?, note? ≤ 500 } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1), classrup.comms.consent/v1 (proposer consent on the revision hash) and classrup.mutiny.cycle_lock/v1 (proposer reservation)"
+        output: "{ proposalId, revisionNo: 1, revisionHash, status: open, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, MUTINY_PROPOSAL_LEGS_INVALID, MUTINY_PROPOSAL_DEADLINE_INVALID, MUTINY_PROPOSAL_LIMIT, MUTINY_PROPOSAL_DUPLICATE, MUTINY_PROPOSAL_INFEASIBLE, MUTINY_PROPOSAL_RESERVATION_FAILED, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [mutiny.proposal.created]
+        idempotent: true
+      - name: mutiny.proposal.accept
+        capability: mutiny.proposal.accept
+        input: "{ proposalId, revisionHash, acceptedImbalance? Money, expectedRevision } — vault command; produces statements classrup.comms.consent/v1 and classrup.mutiny.cycle_lock/v1 for the principal, and the local verdict may complete acceptance"
+        output: "{ proposalId, status: open | accepted, localVerdict: accepted | awaiting_peer, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, MUTINY_PROPOSAL_CONSENT_STALE, MUTINY_PROPOSAL_INFEASIBLE, MUTINY_PROPOSAL_RESERVATION_FAILED, MUTINY_PROPOSAL_ROLE]
+        emits: [mutiny.proposal.accepted]
+        idempotent: true
+      - name: mutiny.proposal.counter
+        capability: mutiny.proposal.counter
+        input: "{ proposalId, expectedRevision, giveItems[1..5], wantItems[1..5], compensation?, expiresInMs? } — vault command; produces classrup.mutiny.proposal_revision/v1 (next number), classrup.comms.consent/v1 and classrup.mutiny.cycle_lock/v1 for the principal"
+        output: "{ proposalId, revisionNo, revisionHash, status: open, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_PROPOSAL_REVISION_LIMIT, MUTINY_PROPOSAL_ROLE, MUTINY_PROPOSAL_LEGS_INVALID, MUTINY_PROPOSAL_INFEASIBLE, MUTINY_PROPOSAL_RESERVATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: mutiny.proposal.reject
+        capability: mutiny.proposal.reject
+        input: "{ proposalId, expectedRevision, reasonCode? } — vault command; produces statement classrup.mutiny.proposal_response/v1 decision reject signed by the principal"
+        output: "{ proposalId, revision, status: rejected, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_PROPOSAL_ROLE]
+        emits: [mutiny.proposal.rejected]
+        idempotent: true
+      - name: mutiny.proposal.withdraw
+        capability: mutiny.proposal.withdraw
+        input: "{ proposalId, expectedRevision } — vault command; produces statement classrup.mutiny.proposal_response/v1 decision withdraw signed by the principal"
+        output: "{ proposalId, revision, status: withdrawn, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_PROPOSAL_ROLE]
+        emits: [mutiny.proposal.withdrawn]
+        idempotent: true
+      - name: mutiny.proposal.ingest
+        capability: mutiny.proposal.ingest
+        input: "{ envelope: classrup.mutiny.proposal_revision/v1 | classrup.comms.consent/v1 | classrup.mutiny.cycle_lock/v1 | classrup.mutiny.proposal_response/v1, provenance } — vault command; produces no statement"
+        output: "{ accepted: boolean, quarantineReason?, localVerdict? }"
+        errors: [MUTINY_PROPOSAL_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED, NOT_FOUND]
+        emits: [mutiny.proposal.accepted, mutiny.proposal.rejected, mutiny.proposal.expired]
+        idempotent: true
+    queries:
+      - name: mutiny.proposal.get
+        capability: mutiny.proposal.read
+        input: "{ proposalId }"
+        output: "{ proposal: TradeProposal, revisions: ProposalRevision[], feasibility?: FeasibilityReport, awaiting: me | peer | none }"
+        errors: [NOT_FOUND]
+      - name: mutiny.proposal.list_mine
+        capability: mutiny.proposal.read
+        input: "{ status?, role?: proposer|counterparty, cursor?, limit ≤ 50 }"
+        output: "{ items: TradeProposal[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: mutiny.proposal.created, privacy: P2, payload: "{ proposalId, proposerId, counterpartyId, revisionNo, revisionHash, expiresAt, origin }"}
+      - {type: mutiny.proposal.accepted, privacy: P2, payload: "{ proposalId, cycleId, proposerId, counterpartyId, revisionHash, hasCompensation, consentStatementIds, reservationIds }"}
+      - {type: mutiny.proposal.rejected, privacy: P2, payload: "{ proposalId, rejectedBy, reason }"}
+      - {type: mutiny.proposal.expired, privacy: P2, payload: "{ proposalId, reason: timeout|clock_disagreement }"}
+      - {type: mutiny.proposal.withdrawn, privacy: P2, payload: "{ proposalId, withdrawnBy, reason }"}
+    events_consumed:
+      - {type: mutiny.proposal.revised, effect: "set head pointer and hash, void all consents, release and re-make own reservation if leg items changed, move open to draft"}
+      - {type: mutiny.revision.forked, effect: "freeze the proposal and release the principal's own reservation"}
+      - {type: comms.consent.signed, effect: "verify a peer consent statement for this proposal and re-evaluate the local verdict"}
+      - {type: mutiny.cycle.locked, effect: "record a verified peer reservation and re-evaluate the local verdict"}
+      - {type: mutiny.cycle.unlocked, effect: "mark the reservation invalid; if it is the principal's own and the proposal is open, withdraw with reason item_unavailable"}
+      - {type: mutiny.party.left, effect: "treat a party that left as rejecting or withdrawing, closing the proposal without a statement unless the principal is the leaver"}
+      - {type: identity.block.added, effect: "close open proposals with the blocked DID locally as rejected with reason blocked_locally, sending nothing"}
+      - {type: bazaar.inventory.depleted, effect: "if an own item of the proposal depleted, withdraw with reason item_unavailable"}
+    errors:
+      - "MUTINY_PROPOSAL_LEGS_INVALID | 422 | no | legs, items or parties of the proposal are invalid"
+      - "MUTINY_PROPOSAL_DEADLINE_INVALID | 422 | no | expiry is outside 1 h to 14 d"
+      - "MUTINY_PROPOSAL_REVISION_LIMIT | 409 | no | the proposal already has 20 revisions"
+      - "MUTINY_PROPOSAL_LIMIT | 409 | no | the principal already has the maximum number of open proposals and cycles"
+      - "MUTINY_PROPOSAL_DUPLICATE | 409 | no | an open proposal for the same pair and items exists"
+      - "MUTINY_PROPOSAL_CONSENT_STALE | 409 | no | the revision hash presented is not the current head"
+      - "MUTINY_PROPOSAL_INFEASIBLE | 422 | no | the feasibility report is missing, stale or infeasible"
+      - "MUTINY_PROPOSAL_RESERVATION_FAILED | 409 | no | the principal's own items could not be reserved all-or-nothing"
+      - "MUTINY_PROPOSAL_STATEMENT_INVALID | 422 | no | a statement failed signature, signer role or claimed-time checks and was quarantined"
+      - "MUTINY_PROPOSAL_ROLE | 403 | no | the principal is not the right party for this action on the head revision"
+    example: |
+      # 2-party: Alice (did:key:z6MkAlice) proposes guitar for Bob's bicycle, plus 5.00 EUR from Bob to Alice
+      mutiny.proposal.create  Idempotency-Key: 0192f410-0000-7000-8000-000000000001
+      { "counterpartyId": "did:key:z6MkBob", "giveItems": [{"inventoryItemId":"0192f411-…","quantity":1}], "wantItems": [{"inventoryItemId":"0192f412-…","quantity":1}],
+        "compensation": {"payerId":"did:key:z6MkBob","amount":{"amount":"500","currency":"EUR"}}, "expiresInMs": 259200000 }
+      -> 201 { "proposalId":"0192f413-…", "revisionNo":1, "revisionHash":"sha256-Zk8…", "status":"open", "syncState":"prepared" }
+      Bob's vault ingests 3 envelopes (revision, Alice consent, Alice reservation), runs feasibility, then Bob signs:
+      mutiny.proposal.accept { "proposalId":"0192f413-…", "revisionHash":"sha256-Zk8…", "expectedRevision": 2 }
+      -> 200 { "status":"accepted", "localVerdict":"accepted", "syncState":"prepared" }
+      Alice's vault becomes accepted only after it receives Bob's consent and reservation, and shows 'waiting for Bob's signature' until then.
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal create, accept, counter, reject or withdraw, and only when the principal is one of the two parties and the role rule for the head revision holds.
+      - Incoming statements are accepted only when signed by a registered device key of the proposer or counterparty with the role the statement claims; everything else is quarantined.
+      - Relays have no capability over proposals; they carry ciphertext and cannot read, accept or alter anything.
+    capabilities:
+      - "mutiny.proposal.create | principal | vault unlocked; not blockedWith(counterparty); participation limit not exceeded"
+      - "mutiny.proposal.accept | principal | principal is a party; proposal open or draft; principal has not consented to the head hash"
+      - "mutiny.proposal.counter | principal | principal is a party and not the author of the head revision"
+      - "mutiny.proposal.reject | principal | principal is the party who is not the head author"
+      - "mutiny.proposal.withdraw | principal | principal is the head author"
+      - "mutiny.proposal.ingest | principal | envelope signer is proposer or counterparty with a non-revoked device key"
+      - "mutiny.proposal.read | principal | proposal stored in this vault"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands carry expectedRevision for the local aggregate.
+      - Each command is one IndexedDB transaction covering the aggregate, reservation, consent record, events and outbox entries, so a crash leaves either the old or the new state.
+      - Forked or conflicting signed promises are detected, frozen and renegotiated explicitly; consent, money and inventory are never resolved by last-writer-wins.
+      - Cross-vault outcomes are never presented as certain; the UI shows the highest sync state reached.
+    idempotency: "Idempotency-Key required on create, accept, counter, reject, withdraw; replay within 24 h returns the stored result; ingest dedupes by envelope cid."
+    concurrency: "expectedRevision on the aggregate; Web Locks mutex per proposalId within the vault; cross-party races produce forks that freeze the proposal, not merges."
+    retries: "Outbox retries per IDM-4 (base 500 ms, cap 30 s, max 6 attempts per relay or direct endpoint) with the sync states prepared, transport_acknowledged, peer_accepted; consent is never re-signed on retry, the same envelope is re-sent."
+    offline: "All commands work offline and commit locally; the proposal shows 'saved on this device' until the outbox delivers, and the deadline keeps running on the local clock."
+    partial_failure: "If the principal's consent was delivered but the reservation statement was not, the peer's vault does not count the consent toward acceptance until the reservation arrives; if reservation succeeded locally but signing failed, the transaction aborts and the reservation is not kept."
+  privacy_retention_abuse:
+    requirements:
+      - Proposal content is P2 and travels only as end-to-end encrypted envelopes to the other party; relays see recipient mailbox id, size and time only (PRV-5).
+      - Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a party erases their local identity, because the counterparty's signed copies remain valid.
+      - Harassment by unwanted proposals is limited by recipient-side muting, per-sender quarantine and proposer-side limits, since no central moderation exists (ADR-0016).
+    data:
+      - "TradeProposal: P2, device only; consent and reservation envelopes referenced by id."
+      - "note: P2 free text up to 500 code points, never indexed by a relay."
+    retention:
+      - "Terminal proposals: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT 30 days."
+    threats:
+      - "T01 | Proposer shows terms A and has the recipient sign terms B | consent signs the revision hash; each vault recomputes the hash of the displayed snapshot before enabling Accept"
+      - "T02 | Replay of an old accept statement to bind a party to a changed proposal | consent is bound to the exact head hash; old hashes count as void evidence"
+      - "T03 | Recipient accepts but proposer's item was already sold | commit needs the proposer's signed reservation; a reservation statement cannot be forged and vault-local reservation prevents double use within the proposer's vault, but cross-vault double promises are only detected, not prevented"
+      - "T04 | Fork: proposer sends different revisions to different recipients as the same id | recipients compare cids with the other party when a statement arrives; two valid revisions with the same number freeze the proposal"
+      - "T05 | Spam proposals to harass | recipient vault auto-quarantines senders above 10 proposals per 24 h and honors local blocks silently; proposer limit of 5 open"
+      - "T06 | Clock manipulation to extend a deadline | deadlines are claims; each vault uses its own clock and treats any disagreement with a relay receipt time as expired"
+    abuse_controls:
+      - "Proposer limit of 5 non-terminal proposals and cycles combined, and 20 create commands per day per vault."
+      - "Recipient-side quarantine and mute; reports to a relay moderator are optional and local to that relay's hosting policy."
+  observability_performance:
+    requirements:
+      - Local diagnostics record command outcomes and sync-state transitions without DIDs, item names or values; nothing is transmitted (OBS-7).
+      - create and accept complete locally within 300 ms at p95 on a mid-range phone including hashing, reservation and signing.
+      - Relays that carry statements expose only ciphertext sizes and delivery counts under CTR-OBS-001.
+    metrics:
+      - "classrup_mutiny_proposals_total{outcome=created|accepted|rejected|withdrawn|expired|frozen} (local diagnostics)"
+      - "classrup_mutiny_proposal_sync_ms{state=prepared|transport_acknowledged|peer_accepted} (local diagnostics)"
+      - "classrup_mutiny_mailbox_deliveries_total{outcome} (relay)"
+    logs:
+      - "info proposal.accepted {proposalId, revisionNo, correlationId} — no DIDs, values or note."
+      - "warn proposal.statement_quarantined {code, correlationId}"
+    budgets:
+      - "create and accept p95 ≤ 300 ms locally; ingest of one envelope p95 ≤ 80 ms including signature verification."
+      - "list_mine p95 ≤ 50 ms for 200 proposals."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify all four statement schemas and the sync-state progression against fake relays.
+      - The two-vault flow is tested end to end with two in-memory vaults, a fake relay and an injected clock, including forks and clock disagreement.
+    fixtures: "Two in-memory vaults Alice and Bob with keys, items (Alice guitar I1, Bob bicycle I2), a fake relay that can drop, delay and duplicate, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R01,01.R03,03.R01 | Alice creates, Bob accepts, statements delivered | both vaults reach accepted after receiving the other's consent and reservation; acceptance event carries both statement ids"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01..V12 violated in turn | documented error code returned and nothing stored or signed"
+      - "T03 | property | 03.R01,03.R03 | random interleavings of counters, accepts, rejects, drops and duplicates | accepted only with both valid consents on the head hash; terminal states never change"
+      - "T04 | integration | 03.R02,02.R02 | counter after Bob signed consent on revision 1 | revision 2 voids Bob's consent; proposal returns to draft then open after author signs"
+      - "T05 | integration | 03.R03,06.R03 | both parties counter revision 3 offline | fork detected in both vaults, proposal frozen, reservations released, no consent counted"
+      - "T06 | integration | 03.R04,07.R01 | Bob's deadline passes while Alice's has not, and relay receipt time later than deadline | each vault expires on its own clock; disagreement yields expired"
+      - "T07 | contract | 04.R01,04.R02,09.R02,09.R03 | all commands | outputs, events and statements validate against registry schemas; syncState moves through prepared, transport_acknowledged, peer_accepted only as acknowledged"
+      - "T08 | integration | 04.R03,06.R04 | revision, consent, reservation arrive out of order and duplicated | verdict re-evaluated after each, duplicates skipped, state converges"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | other principal calls commands; statement signed by non-party; statement from relay not by party | FORBIDDEN or quarantine; relay cannot read plaintext"
+      - "T10 | integration | 06.R01,06.R02 | replay commands with same key; crash between reservation and consent signing | stored response replayed; no leaked reservation"
+      - "T11 | abuse | 07.R03,07.R01 | 11 proposals from one DID in 24 h; blocked sender; 6th open proposal at proposer | quarantine, silent hide, MUTINY_PROPOSAL_LIMIT"
+      - "T12 | abuse | 07.R02 | proposer erases identity, counterparty exports evidence | evidence retained and pseudonymized; signatures still verify"
+      - "T13 | load | 08.R02,08.R03 | 200 proposals list and 100 creates on emulated Moto G | p95 within budgets"
+      - "T14 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no identifiers in diagnostics; every PS-015 requirement maps to a passing test"
+      - "T15 | e2e | 01.R02,02.R03 | two mobile browsers propose and accept with 5.00 EUR compensation | UI shows prepared, relay received, acknowledged by peer truthfully; axe zero serious issues"
+      - "T16 | chaos | 06.R04,03.R01 | relay down for 30 min then up | outbox delivers, no state ever claims peer acknowledgement before it arrives"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, rollback | proposals round-trip with statements verified; open proposals import frozen"
+    acceptance:
+      - All tests T01–T17 pass in CI.
+      - A party is never shown as bound to a revision unless a valid signature on that exact hash was verified in the viewing vault.
+      - Forks and clock disagreement always end in frozen or expired, never in acceptance.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the user's proposals with all referenced signed statements, because they are evidence of what was signed.
+      - Import verifies every statement and hash, skips identical records, rejects conflicting IDs and imports non-terminal proposals as frozen so no stale consent is acted upon.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.proposals in classrup-export/v1; one line per TradeProposal (schema classrup.mutiny.trade_proposal/v1) followed by its statements with provenance."
+    import: "Terminal proposals import as read-only history; open and draft proposals import as frozen with reason import, the user may start a new proposal that cites them."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext in mailboxes and can be lost without losing user data (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback to the previous release ignores unknown fields; the state enum only grows and unknown states read as frozen."

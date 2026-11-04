@@ -58,10 +58,12 @@ function scopedLeases(o: ScopeOptions): ScopedLeases {
   };
 }
 
+/** Peer-ack primitive (IDM-7): idempotent for an already accepted statement; NOT_FOUND when unknown. */
 export function recordPeerAck(tx: Tx, tenantId: string, destination: string, ref: string, ack: unknown, now: number): Result<SyncEntry, AppError> {
-  const entries = tx.sync.list({ tenant: tenantId, destination, ref, limit: 1 });
-  const entry = entries[0];
-  return tx.sync.transition(entry ? entry.id : '', 'peer_ack', { receipt: { peerAck: ack }, nextAttemptAt: null }, now);
+  const entries = tx.sync.list({ tenant: tenantId, destination, ref, limit: 100 });
+  const open = entries.find((e) => e.state !== 'peer_accepted');
+  if (!open && entries[0]) return { ok: true, value: entries[0] };
+  return tx.sync.transition(open ? open.id : '', 'peer_ack', { receipt: { peerAck: ack }, nextAttemptAt: null }, now);
 }
 
 function scopedSync(o: ScopeOptions): ScopedSync {

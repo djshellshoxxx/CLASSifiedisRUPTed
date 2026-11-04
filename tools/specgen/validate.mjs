@@ -18,7 +18,7 @@ function nonEmptyStr(v) { return typeof v === 'string' && v.trim().length >= 8; 
 function arr(v, min = 1) { return Array.isArray(v) && v.length >= min; }
 
 /** Validates one module; returns {errors[], warnings[], facts} where facts feed cross-module checks. */
-export function validateModule(id, entry, catalog) {
+export function validateModule(id, entry, catalog, errorOwners = new Map()) {
   const errors = []; const warnings = [];
   const E = (m) => errors.push(`${id}: ${m}`);
   const { cat, spec, parseError } = entry;
@@ -85,7 +85,9 @@ export function validateModule(id, entry, catalog) {
     if (!nonEmptyStr(meaning)) E(`error ${code}: meaning`);
     facts.errors.set(code, meaning);
   }
-  const knownErr = (c) => COMMON_ERRORS.has(c) || facts.errors.has(c);
+  // Error codes: common, defined here, or defined by a module this one depends on (define once, reference elsewhere).
+  const depIds = new Set((spec.depends_on || []).filter((d) => !d.startsWith('CTR-')));
+  const knownErr = (c) => COMMON_ERRORS.has(c) || facts.errors.has(c) || depIds.has(errorOwners.get(c));
   for (const ev of cq.events_produced || []) {
     const m = RE.event.exec(ev.type || ''); if (!m) { E(`event ${ev.type} invalid`); continue; }
     if (m[1] !== slug) E(`event ${ev.type}: must start with ${slug}.`);
@@ -183,11 +185,24 @@ export function validateModule(id, entry, catalog) {
   return { errors, warnings, facts };
 }
 
+/** Pre-pass: first module (catalog order) defining each error code owns it. */
+function collectErrorOwners(specs) {
+  const owners = new Map();
+  for (const [id, { spec }] of specs) {
+    for (const row of spec?.processes?.commands_queries_events?.errors || []) {
+      const code = cells(row)[0];
+      if (code && !owners.has(code)) owners.set(code, id);
+    }
+  }
+  return owners;
+}
+
 /** Cross-module checks over all loaded specs. */
 export function validateAll(specs, catalog, { strict = false } = {}) {
   const errors = []; const warnings = []; const results = new Map(); let missing = 0;
+  const errorOwners = collectErrorOwners(specs);
   for (const [id, entry] of specs) {
-    const r = validateModule(id, entry, catalog); results.set(id, r);
+    const r = validateModule(id, entry, catalog, errorOwners); results.set(id, r);
     if (r.missing) missing++;
     errors.push(...r.errors); warnings.push(...r.warnings);
   }
@@ -195,7 +210,7 @@ export function validateAll(specs, catalog, { strict = false } = {}) {
   const producers = new Map(); const errOwners = new Map(); const capOwners = new Map();
   for (const [id, r] of results) {
     for (const e of r.facts.produced) { if (producers.has(e)) errors.push(`event ${e} produced by ${producers.get(e)} and ${id}`); producers.set(e, id); }
-    for (const c of r.facts.errors.keys()) { if (errOwners.has(c)) warnings.push(`error ${c} defined in ${errOwners.get(c)} and ${id} (define once, reference elsewhere)`); else errOwners.set(c, id); }
+    for (const c of r.facts.errors.keys()) { if (errOwners.has(c)) warnings.push(`error ${c} defined in ${errOwners.get(c)} and ${id} (define once in the owner; reference it by listing the owner in depends_on)`); else errOwners.set(c, id); }
     for (const c of r.facts.caps) { if (capOwners.has(c)) errors.push(`capability ${c} defined in ${capOwners.get(c)} and ${id}`); capOwners.set(c, id); }
   }
   for (const [id, r] of results) for (const e of r.facts.consumed) if (!producers.has(e)) (strict ? errors : warnings).push(`${id}: consumes ${e} but no module produces it`);

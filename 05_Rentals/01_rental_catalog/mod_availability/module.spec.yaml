@@ -1,0 +1,351 @@
+id: F05.S01.M01
+scope: MVP
+summary: >-
+  Owners list rentable items (hourly and/or daily rate, quantity, buffers, lead time, blackout dates, late-fee terms) and keep
+  the reservation calendar in their own vault. A renter sends a signed rental request; the owner's vault checks the requested
+  interval, extended by the buffer before and after, against its own confirmed reservations with a half-open interval test and,
+  if free, the owner signs a confirmation. Overlap prevention exists only inside the owner's vault; the renter's copy is a claim
+  until the owner's signed confirmation is held. The platform holds no funds; the rent is a payment claim between the parties through F09, and deposits are F05.S01.M02.
+responsibilities:
+  - Own RentalOffering and RentalReservation records in the owner and renter vaults and the statements offering projection, rental_request, rental_confirmation and rental_cancellation (classrup.rentals.*/v1).
+  - Check overlap in UTC with half-open intervals [start - bufferBefore, end + bufferAfter), capacity quantity (1..20), lead time, horizon of 365 days, maximum duration of 90 days and blackout dates in the offering time zone.
+  - On confirmation, store the signed confirmation, compute the rent from the chosen unit as integer minor units, and open a local Deal in F09.S01.M01 in the same vault transaction.
+  - Track reservation status from handoff, return and closure events, shorten the occupied interval on early return and extend it while overdue.
+non_responsibilities:
+  - Deposit terms and release or forfeit (F05.S01.M02).
+  - Condition reports and attestations at pickup and return (F05.S02.M01, F05.S02.M02), damage claims (F05.S02.M03) and disputes (F09.S02.M02).
+  - Cross-vault locking; two renters can each hold an unconfirmed request, and only the owner's signed confirmation reserves the interval.
+  - "Future: multi-owner pooled inventory, recurring rentals and delivery logistics."
+depends_on: [F01.S01.M01, F09.S01.M01, F09.S03.M01, F08.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M03, F06.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As an owner, I list a tent with a daily rate, a 2 hour buffer after each rental and a late fee, and see my calendar of reservations.
+  - As a renter, I pick dates, see the exact price and the owner's rules, send a request, and see honestly whether the owner has confirmed.
+  - As an owner, I confirm a request only if it fits, and the vault stops me from confirming overlapping reservations.
+  - As either party, I cancel under the stated terms and the interval is freed in the owner's calendar.
+edge_cases:
+  - Two renters request overlapping dates; both requests stay requested, the owner confirms one, and the other cannot be confirmed (RENTALS_INTERVAL_CONFLICT) and is answered with a signed declined cancellation.
+  - Back-to-back rentals where the next start is inside the previous buffer; refused by the buffer rule, shown to the renter as unavailable at the conflicting time.
+  - Interval touching exactly at the boundary (end of one equals start of the next with zero buffers) is allowed because intervals are half-open.
+  - Daylight saving change inside the rental; duration is elapsed time in UTC, a day is 24 elapsed hours, and blackout dates are evaluated by local calendar date in the offering time zone.
+  - Early return frees the tail of the occupied interval after the return buffer; late return keeps the interval blocked until the return is attested, and a pending next request is flagged.
+  - Owner confirms on two devices at once; a Web Locks lock serializes tabs, and forked devices that sign overlapping confirmations are detected on merge and both reservations are frozen for explicit renegotiation.
+  - Request arrives after the owner paused or archived the offering; refused with RENTALS_OFFERING_UNAVAILABLE and a signed declined statement.
+  - Renter's clock is wrong; interval times are UTC instants chosen in the UI by date pickers, and the owner vault validates them against its own clock for lead time.
+  - Quantity is 3 and three overlapping rentals exist; a fourth overlapping request is refused, a request overlapping only two is allowed.
+ux:
+  screens:
+    - "Offering editor: item details from the listing, hourly rate, daily rate, quantity, minimum and maximum duration, buffer before and after, lead time, blackout dates, auto-confirm switch (works only while the owner's app is open), late-fee terms."
+    - "Date picker for renters: shows busy blocks from the owner's latest signed busy summary, with a note that only the owner's confirmation reserves the dates."
+    - "Owner calendar: month and agenda views of reservations with status chips and conflict warnings; Confirm and Decline buttons with the exact interval."
+  states: [loading, empty, requested, confirmed, in-use, overdue, returned, closed, cancelled, frozen, pending-offline]
+  a11y:
+    - Date and time inputs are native controls with labels that include the zone name; duration and price are announced as text after each change.
+    - Calendar is a keyboard-navigable grid; each day cell has an accessible name with date and number of reservations.
+    - Confirm, Decline and Cancel buttons are at least 44x44 px with accessible names including the interval.
+processes:
+  domain_schema:
+    requirements:
+      - A RentalOffering stores owner, listing, rates, quantity, durations, buffers, lead time, horizon, blackouts, late-fee terms, time zone and status, with revision per CTR-ID-001; its public projection is a signed P0 statement.
+      - A RentalReservation stores offering, renter, owner, interval, occupied interval including buffers, units, price, rate unit, status and the cids of its signed statements, and is P2 in both vaults.
+      - Rent, late-fee rate and cap are integer minor units per CTR-MNY-001; the rent is computed once, with ceiling on rate units and no rounding of minor units.
+    entities:
+      - name: RentalOffering
+        schema: classrup.rentals.offering/v1
+        storage: device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "ownerId: actorId — did:key of the owner; signs the projection"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing of subtype rental"
+          - "hourlyRate?: Money — CTR-MNY-001; > 0; at least one of hourlyRate and dailyRate is required"
+          - "dailyRate?: Money — CTR-MNY-001; > 0; same currency as hourlyRate"
+          - "quantity: int — 1..20 identical units"
+          - "minDurationMinutes: int — 60..1440"
+          - "maxDurationDays: int — 1..90"
+          - "bufferBeforeMinutes: int — 0..1440"
+          - "bufferAfterMinutes: int — 0..1440"
+          - "leadTimeMinutes: int — 0..43200"
+          - "horizonDays: int — 1..365"
+          - "timeZone: string — IANA zone used for blackout dates and local display"
+          - "blackoutDates: string[] — 0..100 local dates YYYY-MM-DD in timeZone"
+          - "lateFee: object — {graceMinutes 0..1440 default 60, ratePerHour: Money, capAmount: Money}; capAmount ≤ 1 000 000 000 000"
+          - "autoConfirm: boolean — confirm automatically when the owner's app is open and the interval is free"
+          - "pickupAreaCell: string — geohash of length 4 or 5; never finer; exact address stays P3 and is shared by explicit user action"
+          - "status: enum — draft | active | paused | archived"
+          - "projectionCid?: string — cid of the signed public projection"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - Currency is identical for hourlyRate, dailyRate and lateFee.
+          - pickupAreaCell has length 4 or 5; no exact address field exists in the offering or its projection.
+          - bufferBeforeMinutes plus bufferAfterMinutes plus minDurationMinutes is at most 4 320 minutes.
+      - name: RentalReservation
+        schema: classrup.rentals.reservation/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, generated by the renter vault with the request"
+          - "offeringId: uuidv7 — ref RentalOffering"
+          - "renterId: actorId — signer of the request"
+          - "ownerId: actorId — must equal the offering owner key"
+          - "startsAt: timestamp — RFC 3339 UTC, claimed pickup start"
+          - "endsAt: timestamp — RFC 3339 UTC, after startsAt; duration between minDurationMinutes and maxDurationDays"
+          - "occupiedFrom: timestamp — startsAt minus bufferBeforeMinutes"
+          - "occupiedUntil: timestamp — endsAt plus bufferAfterMinutes; adjusted on early or late return"
+          - "units: int — 1..quantity"
+          - "rateUnit: enum — hour | day"
+          - "rent: Money — CTR-MNY-001; units times ceil(duration / unit) times rate"
+          - "lateFeeTerms: object — copy of the offering lateFee at confirmation"
+          - "status: enum — requested | confirmed | frozen | in_use | overdue | returned | closed | cancelled"
+          - "cancelReason?: enum — renter | owner | declined | expired | no_handoff | blocked | conflict | offering_unavailable"
+          - "requestCid: string — cid of the signed rental_request"
+          - "confirmationCid?: string — cid of the owner's rental_confirmation"
+          - "dealId?: uuidv7 — local ref F09.S01.M01 Deal for the rent"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - In the owner vault, at any instant the number of reservations with status confirmed, in_use or overdue whose occupied intervals contain that instant is at most the offering quantity.
+          - status confirmed or later implies confirmationCid is set and both signatures verified.
+          - occupiedFrom is before occupiedUntil and startsAt is before endsAt.
+    sql: |
+      CREATE TABLE rentals_reservation (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, offering_id TEXT NOT NULL, renter_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+        occupied_from TEXT NOT NULL, occupied_until TEXT NOT NULL, units INTEGER NOT NULL, status TEXT NOT NULL,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX rentals_reservation_range ON rentals_reservation(tenant_id, offering_id, status, occupied_from, occupied_until);
+  validation_rules:
+    requirements:
+      - Inbound statements are validated in a fixed order - schema, signature, signer role, offering state, interval, capacity - and the first failure decides the error.
+      - Interval checks use UTC half-open intervals [occupiedFrom, occupiedUntil) and count units against quantity.
+      - Every violation maps to one stable error code with a localized message key; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the renter for requests and the offering owner for confirmations | RENTALS_STATEMENT_INVALID"
+      - "V02 | offering is active and the owner key matches | RENTALS_OFFERING_UNAVAILABLE"
+      - "V03 | startsAt is at least leadTimeMinutes from now, within horizonDays, and endsAt gives a duration within minimum and maximum | VALIDATION_FAILED"
+      - "V04 | interval does not fall on a blackout date in the offering time zone | RENTALS_BLACKOUT"
+      - "V05 | for every instant in [occupiedFrom, occupiedUntil) the overlapping confirmed, in_use and overdue units plus requested units are at most quantity | RENTALS_INTERVAL_CONFLICT"
+      - "V06 | rate unit exists on the offering and rent equals the computed amount | VALIDATION_FAILED"
+      - "V07 | renter has fewer than 5 open requests and fewer than 2 per offering | RENTALS_REQUEST_LIMIT"
+      - "V08 | neither party has blocked the other | BLOCKED_PARTY"
+      - "V09 | rate and fee amounts are positive integer strings in one registered currency | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Reservations follow requested, confirmed, in_use, optionally overdue, returned, closed with cancelled as an exit before use; transitions driven by other modules arrive only as events.
+      - A reservation is confirmed only by the owner's signed confirmation; the overlap check and the confirmation commit in one vault transaction.
+      - Conflicting signed confirmations from forked owner devices freeze the affected reservations and require explicit renegotiation, never last-writer-wins.
+    machines:
+      - entity: RentalReservation
+        initial: requested
+        terminal: [closed, cancelled]
+        transitions:
+          - "requested -> confirmed | rentals.reservation.confirm by owner | overlap check passes, Deal opened; emits rentals.reservation.confirmed"
+          - "requested -> cancelled | decline, renter cancel, 48 h expiry, block, or offering unavailable | emits rentals.reservation.cancelled"
+          - "confirmed -> cancelled | rentals.reservation.cancel by either party, or no handoff 24 h after startsAt | frees the interval; emits rentals.reservation.cancelled"
+          - "confirmed -> in_use | rentals.handoff.attested consumed | start of the rental period"
+          - "confirmed -> frozen | fork conflict detected on merge | both reservations frozen"
+          - "frozen -> confirmed | mutual renegotiation statements signed by owner and renter | interval re-checked"
+          - "frozen -> cancelled | mutual cancellation or owner decline after renegotiation fails | emits rentals.reservation.cancelled"
+          - "in_use -> overdue | rentals.rental.overdue consumed | occupied interval extended until return"
+          - "in_use -> returned | rentals.return.attested consumed | occupiedUntil shortened to return time plus buffer"
+          - "overdue -> returned | rentals.return.attested consumed | occupiedUntil set to return time plus buffer"
+          - "returned -> closed | rentals.rental.closed consumed | final"
+    timeouts:
+      - "Requests expire 48 hours after the owner vault receives them (owner clock); confirmed reservations with no handoff 24 hours after startsAt are cancelled with reason no_handoff. A vault sweep runs at app start, on every command and every 60 s while the PWA is open, and every read applies expiry on the fly."
+  commands_queries_events:
+    requirements:
+      - Offering and reservation commands are vault commands; request, confirm, decline, cancel and publish produce named signed statements and sync outbox entries in the same vault transaction.
+      - One ingestion command applies inbound statements, deduplicates by cid and derives local events with actor.kind federated; failures are quarantined with a reason.
+      - Events are local (EVT-8) and leave the device only as the statements named below; the module consumes lifecycle events from handoff, return and listing modules.
+    commands:
+      - name: rentals.offering.create
+        capability: rentals.offering.manage
+        input: "[vault-local] { listingId, hourlyRate?, dailyRate?, quantity, minDurationMinutes, maxDurationDays, bufferBeforeMinutes, bufferAfterMinutes, leadTimeMinutes, horizonDays, timeZone, blackoutDates?, lateFee, autoConfirm, pickupAreaCell }"
+        output: "{ offeringId, revision: 1, status: draft }"
+        errors: [VALIDATION_FAILED, RENTALS_TZ_UNKNOWN]
+        emits: []
+        idempotent: true
+      - name: rentals.offering.revise
+        capability: rentals.offering.manage
+        input: "[vault-local] { offeringId, expectedRevision, patch }"
+        output: "{ offeringId, revision, affectedReservationIds[] }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, VALIDATION_FAILED, RENTALS_TZ_UNKNOWN]
+        emits: []
+        idempotent: true
+      - name: rentals.offering.publish
+        capability: rentals.offering.publish
+        input: "[statement classrup.rentals.offering/v1 signed by owner, uploaded to user-selected relays] { offeringId, expectedRevision, relayIds? (max 5) }"
+        output: "{ offeringId, revision, projectionCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [rentals.offering.published]
+        idempotent: true
+      - name: rentals.availability.publish_busy
+        capability: rentals.offering.publish
+        input: "[statement classrup.rentals.busy_blocks/v1 signed by owner, expiry 24 h, intervals only without identities] { offeringId, fromUtc, toUtc (≤ 365 days) }"
+        output: "{ summaryCid, blockCount (≤ 500), syncState }"
+        errors: [NOT_FOUND, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.reservation.request
+        capability: rentals.reservation.request
+        input: "[statement classrup.rentals.rental_request/v1 signed by renter, E2E encrypted to owner] { offeringId, startsAt, endsAt, units, rateUnit, note? (≤ 500) }"
+        output: "{ reservationId, requestCid, rent: Money, syncState }"
+        errors: [VALIDATION_FAILED, RENTALS_OFFERING_UNAVAILABLE, RENTALS_BLACKOUT, RENTALS_REQUEST_LIMIT, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [rentals.reservation.requested]
+        idempotent: true
+      - name: rentals.reservation.confirm
+        capability: rentals.reservation.decide
+        input: "[statement classrup.rentals.rental_confirmation/v1 signed by owner over the request cid] { reservationId, expectedRevision }"
+        output: "{ reservationId, revision, confirmationCid, dealId, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, RENTALS_INTERVAL_CONFLICT, RENTALS_BLACKOUT, DEPENDENCY_UNAVAILABLE]
+        emits: [rentals.reservation.confirmed]
+        idempotent: true
+      - name: rentals.reservation.cancel
+        capability: rentals.reservation.cancel
+        input: "[statement classrup.rentals.rental_cancellation/v1 signed by the cancelling party; also used by the owner to decline] { reservationId, expectedRevision, reason }"
+        output: "{ reservationId, revision, freedFrom, freedUntil }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [rentals.reservation.cancelled]
+        idempotent: true
+      - name: rentals.reservation.receive
+        capability: rentals.reservation.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [RENTALS_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, RENTALS_INTERVAL_CONFLICT, CONFLICT_STATE]
+        emits: [rentals.reservation.requested, rentals.reservation.confirmed, rentals.reservation.cancelled]
+        idempotent: true
+    queries:
+      - name: rentals.offering.get
+        capability: rentals.offering.read
+        input: "[vault-local] { offeringId }"
+        output: "{ offering: RentalOffering (own, or verified received projection) }"
+        errors: [NOT_FOUND]
+      - name: rentals.availability.list_busy
+        capability: rentals.offering.read
+        input: "[vault-local] { offeringId, fromUtc, toUtc (≤ 365 days) }"
+        output: "{ blocks: [{ fromUtc, untilUtc, units }] (≤ 500), source: own | signed_summary, asOf }"
+        errors: [NOT_FOUND]
+      - name: rentals.reservation.list_mine
+        capability: rentals.reservation.read_own
+        input: "[vault-local] { role?: owner|renter, status?, cursor?, limit ≤ 50 }"
+        output: "{ items: RentalReservation[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: rentals.reservation.requested, privacy: P2, payload: "{ reservationId, offeringId, renterId, ownerId, startsAt, endsAt, units, requestCid }"}
+      - {type: rentals.reservation.confirmed, privacy: P2, payload: "{ reservationId, offeringId, renterId, ownerId, startsAt, endsAt, occupiedFrom, occupiedUntil, rent, lateFeeTerms, dealId, confirmationCid }"}
+      - {type: rentals.reservation.cancelled, privacy: P2, payload: "{ reservationId, cancelledBy, reason, freedFrom, freedUntil }"}
+      - {type: rentals.offering.published, privacy: P0, payload: "{ offeringId, ownerId, listingId, projectionCid }"}
+    events_consumed:
+      - {type: rentals.handoff.attested, effect: "move a confirmed reservation to in_use"}
+      - {type: rentals.rental.overdue, effect: "move an in_use reservation to overdue and extend its occupied interval to the present"}
+      - {type: rentals.return.attested, effect: "move to returned and set occupiedUntil to return time plus bufferAfter"}
+      - {type: rentals.rental.closed, effect: "move a returned reservation to closed"}
+      - {type: bazaar.listing.unpublished, effect: "pause the linked offering and cancel requested reservations with reason offering_unavailable"}
+      - {type: identity.block.added, effect: "cancel requested reservations between the two parties with reason blocked"}
+    errors:
+      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role, schema or referenced cid check failed; statement quarantined"
+      - "RENTALS_OFFERING_UNAVAILABLE | 409 | no | offering is not active, or the owner key differs"
+      - "RENTALS_BLACKOUT | 409 | no | the interval touches a blackout date in the offering time zone"
+      - "RENTALS_INTERVAL_CONFLICT | 409 | no | the interval including buffers exceeds the offering quantity"
+      - "RENTALS_REQUEST_LIMIT | 409 | no | renter has too many open requests"
+      - "RENTALS_TZ_UNKNOWN | 422 | no | time zone is not in the bundled tz database"
+    example: |
+      renter vault: rentals.reservation.request { "offeringId": "0192f500-0001-…", "startsAt": "2026-12-05T09:00:00.000Z", "endsAt": "2026-12-07T09:00:00.000Z",
+        "units": 1, "rateUnit": "day" } -> { "reservationId": "0192f500-0002-…", "rent": { "amount": "4000", "currency": "EUR" }, "syncState": "prepared" }
+      owner vault receives, checks [2026-12-05T07:00Z, 2026-12-07T11:00Z) with buffers 2 h, then confirms -> status confirmed, dealId set
+      renter sees confirmed only after the owner's signed confirmation is held locally
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who owns an offering manages it, publishes it and confirms, declines or cancels its reservations; only the principal who signed a request is the renter for it.
+      - Inbound statements are accepted only when the signer's key matches the role required for that statement in this reservation; otherwise they are quarantined.
+      - No relay role is involved; a relay can only carry ciphertext or host the signed public projection and busy summary under its own hosting policy.
+    capabilities:
+      - "rentals.offering.manage | principal | offering.ownerId = local principal; listing owned by local principal"
+      - "rentals.offering.publish | principal | offering.ownerId = local principal; relay accepts the upload by its own policy"
+      - "rentals.offering.read | principal, anonymous | own offering, or a stored projection whose signature verified"
+      - "rentals.reservation.request | principal | local principal is not the owner; not blocked locally; fewer than 5 open requests"
+      - "rentals.reservation.decide | principal | local principal is the offering owner"
+      - "rentals.reservation.cancel | principal | local principal is renter or owner of the reservation"
+      - "rentals.reservation.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "rentals.reservation.read_own | principal | local principal is renter or owner of the reservation"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements through cid, so duplicate delivery through two relays is harmless.
+      - The overlap check and the confirmation write are one IndexedDB transaction under a Web Locks lock per offering.
+      - Conflicting signed promises from forked owner devices are detected on merge, freeze the reservations and require renegotiation; there is no last-writer-wins.
+    idempotency: "Local command id stored 24 h; inbound statements deduplicated by cid in the inbox table (EVT-3); a repeated confirm returns the same confirmationCid and dealId."
+    concurrency: "Web Locks lock rentals-offering-<id> around check-and-confirm and around busy publication; across vaults no lock exists - requests are claims and only the owner's signed confirmation reserves the interval; owner devices that fork are detected through the signed seq/prev chain."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination, then shows needs attention; a request is retried until confirmation, cancellation or the 48 h expiry."
+    offline: "Requests, cancellations and offering edits work offline and commit locally with prepared sync state; confirmation works offline in the owner vault and is delivered later; the UI never shows confirmed to the renter before the signed confirmation is held."
+    partial_failure: "If Deal creation fails during confirmation nothing is signed and the reservation stays requested; if relay delivery fails after local commit the local state stands and the sync state shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Reservations are P2 and travel only as end-to-end encrypted envelopes to the two parties; the public busy summary holds intervals and unit counts only, with no identities, and expires in 24 hours.
+      - Exact pickup address is P3, never part of the offering or the projection, and is shared in the encrypted thread by explicit user action (L3 at most by default).
+      - Request spam and calendar scraping are limited by local quotas, short busy-summary expiry and each relay's hosting policy.
+    data:
+      - "RentalOffering: P3 draft in the vault, P0 signed projection with area at most L2."
+      - "RentalReservation: P2 in both vaults."
+    retention:
+      - "Terminal reservations: RET-EVIDENCE (2 years after last related activity)."
+      - "Busy summaries: dropped by receivers 24 h after their expiry; quarantined statements RET-SHORT (30 days)."
+    threats:
+      - "T01 | Forged confirmation or request | Ed25519 signature over JCS bytes, signer must equal the offering owner or request author key, cid binding to the request"
+      - "T02 | Owner double-sells an interval | check inside the owner vault under a lock; forked devices detected through seq/prev chain and frozen; renter sees confirmed only with the signed statement"
+      - "T03 | Scraping when an item is unattended | busy summary shows blocks without identities, expires in 24 h, can be coarsened to whole days, and the UI warns that copies cannot be recalled"
+      - "T04 | Request flooding | per-sender quota 20 inbound requests per day in the owner vault, 5 open requests per renter, relay mailbox quotas, local block"
+      - "T05 | Backdated cancellation to dodge terms | effective cancellation time is the claimed time only if within 72 h before local receipt time, else the receipt time; relay-signed receipt time evidences that relay's clock only"
+    abuse_controls:
+      - "Local per-sender quotas and quarantine for malformed or unauthorized statements."
+      - "Relay hosting policy may rate limit uploads; the module surfaces refusals in the sync state."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Overlap check and confirm meet p95 ≤ 100 ms with 5 000 reservations and quantity 20 on a mid-range phone.
+      - Busy summary generation for 365 days meets p95 ≤ 150 ms.
+    metrics:
+      - "classrup_rentals_reservations_total{outcome=requested|confirmed|cancelled|expired} (local counter)"
+      - "classrup_rentals_interval_conflicts_total (local counter)"
+      - "classrup_rentals_statements_quarantined_total{code} (local counter)"
+    logs:
+      - "info reservation.confirmed {reservationId, correlationId} in the local diagnostics log - no identities, no address, no amounts."
+    budgets:
+      - "overlap check plus confirm p95 ≤ 100 ms with 5 000 reservations; list queries p95 ≤ 80 ms for 50 items; busy summary p95 ≤ 150 ms."
+      - "Sweep over 5 000 reservations ≤ 150 ms in slices of at most 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The interval logic is covered by property tests against a brute-force minute-by-minute reference model for quantities 1 to 20.
+      - Cross-vault flows are covered by two-vault tests with a hostile in-memory relay and by a forked-owner-device test.
+    fixtures: "Owner vault O and renter vaults R1, R2 with hostile in-memory relay; offering tent (quantity 1, daily EUR 20.00, buffers 120 minutes after, zone Europe/Berlin); fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R03 | compute rent for 25 h on day unit, 90 min on hour unit, and JPY and BHD currencies | ceiling units, integer minor units, no rounding of minor units"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01–V09 violated in turn | documented code returned and nothing stored; bad statements quarantined"
+      - "T03 | property | 02.R02,01.R02 | random reservations for quantities 1 to 20 against brute-force reference | accept/refuse decisions identical; never more than quantity units at any minute"
+      - "T04 | unit | 02.R02,03.R01 | boundary cases - touching intervals with zero buffers, one minute inside the buffer, DST change inside the rental | half-open rule respected; elapsed-time durations; blackout by local date"
+      - "T05 | property | 03.R01 | random command and event sequences | only declared transitions succeed; closed and cancelled never change"
+      - "T06 | integration | 03.R02,06.R02 | confirm with Deal creation failing; crash between check and write | reservation stays requested, no signature, no partial state"
+      - "T07 | integration | 03.R03,06.R03,07.R02 | two owner devices sign overlapping confirmations and then merge | both reservations frozen; renegotiation required; no last-writer-wins"
+      - "T08 | integration | 04.R02,06.R01,09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on confirmed with identical cids; duplicates skipped"
+      - "T09 | contract | 04.R01,04.R03,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T10 | abuse | 05.R01,05.R02,05.R03,07.R01 | confirmation signed by renter; request signed by third key; relay alters ciphertext | quarantined with RENTALS_STATEMENT_INVALID; no state change; busy summary has no identities"
+      - "T11 | integration | 04.R03,03.R01 | handoff, overdue, return and closed events delivered twice and out of order | reservation follows the machine; early return frees tail after buffer; overdue extends blocking"
+      - "T12 | abuse | 07.R03 | 21 inbound requests in a day from one sender; 6th open request by one renter | 21st dropped and counted; 6th RENTALS_REQUEST_LIMIT"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 5 000 reservations, quantity 20, throttled mobile profile | check p95 ≤ 100 ms, busy summary p95 ≤ 150 ms, no telemetry request"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-039 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | records round-trip; in-flight requests re-enter outbox; open requests import as expired"
+      - "T16 | e2e | 01.R01,02.R01 | mobile renter requests, owner confirms in second browser | both show confirmed; busy blocks update; axe zero serious issues"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - No renter is ever shown a confirmed reservation without the owner's verified signed confirmation held in the vault.
+      - In the owner vault no instant ever exceeds the offering quantity, verified against the brute-force model.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains offerings, reservations and all signed statements with their cids so evidence survives vault loss.
+      - Import verifies every signature and cid before restoring; unverifiable items stay read-only history; overlap is re-validated for confirmed reservations and violations are frozen.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section rentals.reservations in classrup-export/v1 with offering, reservation lines and the original statement envelopes."
+    import: "Verified terminal records import as history; requested reservations import as expired so no stale claim is restored; confirmed, in_use and overdue reservations import as is after the overlap re-check."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext mailboxes and signed public projections (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

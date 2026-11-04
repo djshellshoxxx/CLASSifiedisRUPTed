@@ -19,7 +19,7 @@ non_responsibilities:
   - Restore tooling, runbook, RPO/RTO drills and dead-letter replay (F15.S03.M03 mod_recovery).
   - The user's vault export and its 30-day reminder (F10.S01.M03 and F15.S01.M01); this module never reads vaults.
   - Backup of the relay identity key file and the backup key; the operator stores them separately.
-  - Offsite transport beyond a mounted filesystem path. Future: native S3-compatible and SFTP targets; Future: incremental block-level snapshots.
+  - "Offsite transport beyond a mounted filesystem path. Future: native S3-compatible and SFTP targets; Future: incremental block-level snapshots."
 depends_on: [F15.S02.M01, F15.S02.M03, F15.S03.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001]
 user_stories:
   - As a relay operator, I get an encrypted verified backup every 6 hours without stopping the relay, and an alert if one fails or none succeeded in 7 hours.
@@ -111,7 +111,7 @@ processes:
           - "completed -> expired | retention elapsed | artifact deleted, record kept"
     timeouts:
       - "Full snapshot every 21600000 ms (6 h) at offsets derived from the relayId (so relays do not all run at the same minute); WAL archive every 300000 ms (5 min)."
-      - "A run exceeding 1800000 ms (30 min) is aborted as failed with PLATFORM_BACKUP_TIMEOUT-class IO error reported as INTERNAL."
+      - "A run exceeding 1800000 ms (30 min) is aborted as failed with errorCode INTERNAL."
       - "Alert if no verified snapshot exists in the last 25200000 ms (7 h); weekly checksum re-verification of all retained artifacts."
   commands_queries_events:
     requirements:
@@ -174,7 +174,7 @@ processes:
     requirements:
       - A scheduled run that crashes leaves no partial artifact visible and is retried at the next slot; a manual rerun after failure starts a new record.
       - Backups never block relay writes beyond 50 ms and never run concurrently with each other.
-      - A missing or failing backup is loud: failure events, an alert after 7 h without a verified snapshot, and an extra snapshot after any integrity failure.
+      - A missing or failing backup is loud, with failure events, an alert after 7 h without a verified snapshot, and an extra snapshot after any integrity failure.
     idempotency: "Artifacts are written to a .partial name and renamed only after fsync, so a rerun never exposes partial data. The run command is not idempotent by design (it creates a new snapshot), but a second call while one is running returns CONFLICT_STATE with the running backupId. Verification is idempotent and read-only except for verifiedAt."
     concurrency: "A single-flight lock row (local to this relay, IDM-8) allows one running backup; WAL archiving uses its own lock and a read transaction that only blocks checkpoint resets, never writers. SQLite online backup steps 100 pages with 5 ms pauses."
     retries: "A failed snapshot is retried once after 5 minutes, then at the next 6 h slot; failure events fire on each failure. IO errors use IDM-4 backoff (base 500 ms, cap 30 s, 6 attempts) inside a run."

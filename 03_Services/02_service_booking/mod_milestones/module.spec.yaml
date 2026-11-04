@@ -1,0 +1,281 @@
+id: F03.S02.M02
+scope: MVP
+summary: >-
+  When a booking is confirmed, each party's vault creates the milestones named in the signed booking confirmation. The
+  provider submits a milestone with deliverable references and hashes as a signed statement; the client approves the exact
+  submission by signing its cid or requests changes. Approval makes a payment due between the parties; payment is a claim
+  recorded through F09 (CTR-COM-001), never a platform transfer. A milestone is settled only when the payee acknowledged the
+  claim or a chain verifier reports finality. When every non-cancelled milestone is settled the booking completes.
+responsibilities:
+  - Own Milestone records in both participants' vaults, created deterministically from the milestone plan (with provider-assigned milestoneIds) in the signed booking confirmation.
+  - Define and verify the statements milestone_submission, milestone_approval and milestone_changes_request (classrup.services.*/v1); approval signs the exact submission cid.
+  - Register each approved milestone's payment context with the local Deal (F09.S01.M01) and track claim status from F09 events, labelling it claimed (unverified), acknowledged or final exactly as CTR-COM-001 requires.
+  - Emit services.booking.completed locally when all non-cancelled milestones are settled and at least one was settled.
+non_responsibilities:
+  - Quotes, booking creation and cancellation terms (F03.S02.M01).
+  - Dispute intake and case handling (F03.S02.M03 and F09.S02.M02).
+  - Payment claims, acknowledgements, receipts and chain verification (F09).
+  - Judging quality of work; a signature evidences the assertion made, not delivery or quality.
+  - "Future: mid-flight milestone amendments by mutual signature and automatic partial-delivery splits."
+depends_on: [F03.S02.M01, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a provider, I submit a milestone with files and a note and see whether the client has received and acted on it.
+  - As a client, I approve a milestone, then pay the provider directly and record my payment claim, seeing whether the provider has acknowledged it.
+  - As a client, I request changes up to three times with a reason before approving.
+  - As a provider, I see which milestones are settled and when the booking is complete, with the proof level shown for each payment.
+edge_cases:
+  - Client approves a submission that was already superseded by a newer submission; the approval signature names the older cid and is refused with SERVICES_SUBMISSION_STALE.
+  - Client never answers a submission; nothing auto-approves, and after 14 days the provider is offered the dispute path (F03.S02.M03).
+  - Payment claim is marked claimed but never acknowledged; the milestone stays approved, the claim expires after 14 days (COM-3) and the UI shows expired without completing the booking.
+  - Crypto payment is claimed but only confirming; the milestone stays approved and shows confirmations N of M until final.
+  - Booking is cancelled while a milestone is submitted; unapproved milestones become cancelled and approved ones keep their payment obligation.
+  - Both parties sign contradictory states (provider says submitted, client signs approval for a cid the provider never signed); the approval is quarantined and the milestone is not changed.
+  - Total of milestone amounts after rounding differs from the booking total; confirmation is refused upstream, and here a plan whose sum differs is quarantined.
+  - Deliverable file hash does not match the hash in the submission; the client UI marks the file as altered and approval is disabled for that file.
+ux:
+  screens:
+    - "Milestone list for a booking: title, amount, status chip, proof level for payment (claimed (unverified), acknowledged by payee, confirmed N/M, final), sync line."
+    - "Submission sheet (provider): note up to 2000 characters, up to 10 deliverables with hashes shown as short fingerprints."
+    - "Review sheet (client): deliverables with integrity check result, Approve button naming the amount, Request changes with required reason, and a Pay directly instructions panel with a record payment claim action."
+  states: [loading, empty, pending, submitted, changes-requested, approved, payment-claimed, settled, cancelled, disputed, pending-offline]
+  a11y:
+    - Status chips are text with an icon, never colour alone, and are announced through an aria-live polite region.
+    - Approve and Request changes are buttons of at least 44x44 px with accessible names that include the milestone title and amount.
+    - Deliverable integrity results are text such as hash matches or hash differs.
+processes:
+  domain_schema:
+    requirements:
+      - A Milestone stores booking, sequence, title, amount, due date, status, the ordered list of submissions with their cids, the approval cid and the derived payment proof level, with revision per CTR-ID-001.
+      - Milestones are P2, stored in both participants' vaults, kept under RET-EVIDENCE, and the amounts of one booking sum exactly to the booking total in one currency.
+      - Submission and approval records are immutable once signed; a new submission supersedes the previous one and never edits it.
+    entities:
+      - name: Milestone
+        schema: classrup.services.milestone/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — milestoneId assigned by the provider in the signed booking confirmation"
+          - "bookingId: uuidv7 — ref F03.S02.M01 Booking"
+          - "seq: int — 1..10, unique per booking"
+          - "title: string — 1..120 code points"
+          - "amount: Money — CTR-MNY-001; > 0"
+          - "dueAt?: timestamp — claim by the provider, RFC 3339 UTC"
+          - "status: enum — pending | submitted | changes_requested | approved | settled | disputed | cancelled"
+          - "submissions: Submission[] — 0..4 items {cid, deliverables[] {attachmentId, sha256, name ≤ 120}, note ≤ 2000, claimedAt}"
+          - "changeRounds: int — 0..3"
+          - "approvalCid?: string — cid of milestone_approval; refers to one submission cid"
+          - "payment: object — {claimId?, proof: none | claimed | acknowledged | confirming | final | disputed | expired, confirmations?, finalityPolicy?}"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - status settled implies payment.proof is acknowledged (cash or external) or final (chain) per CTR-COM-001 COM-4.
+          - approvalCid refers to the latest submission cid of this milestone.
+          - Sum of amounts over the non-cancelled milestones of a booking equals the booking total.
+    sql: |
+      CREATE TABLE services_milestone (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, booking_id TEXT NOT NULL, seq INTEGER NOT NULL, amount_minor TEXT NOT NULL,
+        currency TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX services_milestone_seq ON services_milestone(tenant_id, booking_id, seq);
+  validation_rules:
+    requirements:
+      - Statements are validated in the order schema, signature, signer role, booking and milestone references, cid binding, business rules.
+      - Submissions, approvals and change requests are checked against the milestone state and round limits before any change.
+      - Every violation maps to one stable error code with a localized message key; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the booking provider for submissions and the booking client for approvals and change requests | SERVICES_STATEMENT_INVALID"
+      - "V02 | submission has 1..10 deliverables each with a 64-hex SHA-256 and note up to 2000 code points | VALIDATION_FAILED"
+      - "V03 | approval or change request names the cid of the latest submission | SERVICES_SUBMISSION_STALE"
+      - "V04 | change request carries a reason of 10..1000 code points and changeRounds is below 3 | SERVICES_CHANGE_LIMIT"
+      - "V05 | booking status is in_progress or confirmed and not disputed or cancelled | SERVICES_BOOKING_NOT_ACTIVE"
+      - "V06 | milestones are submitted in sequence order unless the provider marks a milestone parallel in the plan | SERVICES_MILESTONE_ORDER"
+      - "V07 | milestone plan amounts sum exactly to the booking total in one currency | SERVICES_MILESTONE_SUM_MISMATCH"
+      - "V08 | payment claim context references an approved milestone of this booking with the same amount and currency | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Milestones follow pending, submitted, approved, settled with a change loop; cancelled and settled are terminal.
+      - Approval requires the exact current submission cid; payment never changes approval and approval never implies payment.
+      - Settlement requires payee acknowledgement or chain finality; a claim alone never completes a milestone or the booking.
+    machines:
+      - entity: Milestone
+        initial: pending
+        terminal: [settled, cancelled]
+        transitions:
+          - "pending -> submitted | services.milestone.submit by provider | statement verified; emits services.milestone.submitted"
+          - "changes_requested -> submitted | services.milestone.submit by provider | new submission supersedes previous; emits services.milestone.submitted"
+          - "submitted -> changes_requested | services.milestone.request_changes by client | changeRounds below 3; emits services.milestone.changes_requested"
+          - "submitted -> approved | services.milestone.approve by client | approval names the latest submission cid; registers payment context with Deal; emits services.milestone.approved"
+          - "approved -> settled | commerce.payment.acknowledged or commerce.payment.finalized consumed for this milestone | proof acknowledged or final; emits services.milestone.settled"
+          - "submitted -> disputed | services.dispute.opened consumed with this milestone in scope | freezes approval"
+          - "approved -> disputed | services.dispute.opened consumed with this milestone in scope | payment proof kept"
+          - "disputed -> approved | commerce.dispute.resolved outcome favours provider | payment obligation restored"
+          - "disputed -> cancelled | commerce.dispute.resolved outcome favours client with no payment owed | no payment obligation"
+          - "pending -> cancelled | services.booking.cancelled consumed | no obligation"
+          - "submitted -> cancelled | services.booking.cancelled consumed | no obligation unless already approved"
+          - "changes_requested -> cancelled | services.booking.cancelled consumed | no obligation"
+    timeouts:
+      - "A submitted milestone with no client action for 14 days raises a dispute prompt to the provider; nothing is auto-approved. A claim without progress for 14 days becomes expired through F09 (COM-3) and is shown as such."
+  commands_queries_events:
+    requirements:
+      - The module exposes vault commands for submit, approve and request_changes; each produces a named signed statement and a sync outbox entry in the same vault transaction.
+      - Inbound statements are applied by an ingestion command that verifies, deduplicates by cid and derives local events with actor.kind federated.
+      - Milestones are created locally on services.booking.confirmed and payment status is derived from F09 events whose context reference is a milestone of this module.
+    commands:
+      - name: services.milestone.submit
+        capability: services.milestone.submit
+        input: "[statement classrup.services.milestone_submission/v1 signed by provider, E2E encrypted to client] { milestoneId, expectedRevision, deliverables[], note }"
+        output: "{ milestoneId, revision, submissionCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_BOOKING_NOT_ACTIVE, SERVICES_MILESTONE_ORDER]
+        emits: [services.milestone.submitted]
+        idempotent: true
+      - name: services.milestone.approve
+        capability: services.milestone.approve
+        input: "[statement classrup.services.milestone_approval/v1 signed by client over the submission cid] { milestoneId, expectedRevision, submissionCid }"
+        output: "{ milestoneId, revision, approvalCid, paymentContext, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, SERVICES_SUBMISSION_STALE, SERVICES_BOOKING_NOT_ACTIVE]
+        emits: [services.milestone.approved]
+        idempotent: true
+      - name: services.milestone.request_changes
+        capability: services.milestone.request_changes
+        input: "[statement classrup.services.milestone_changes_request/v1 signed by client over the submission cid] { milestoneId, expectedRevision, submissionCid, reason }"
+        output: "{ milestoneId, revision, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, SERVICES_SUBMISSION_STALE, SERVICES_CHANGE_LIMIT, VALIDATION_FAILED]
+        emits: [services.milestone.changes_requested]
+        idempotent: true
+      - name: services.milestone.receive
+        capability: services.milestone.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code? }"
+        errors: [SERVICES_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, SERVICES_SUBMISSION_STALE, CONFLICT_STATE]
+        emits: [services.milestone.submitted, services.milestone.approved, services.milestone.changes_requested]
+        idempotent: true
+    queries:
+      - name: services.milestone.list_for_booking
+        capability: services.milestone.read_own
+        input: "[vault-local] { bookingId }"
+        output: "{ items: Milestone[] ordered by seq, bookingProgress: { settledCount, totalCount, settledAmount: Money } }"
+        errors: [NOT_FOUND]
+      - name: services.milestone.get
+        capability: services.milestone.read_own
+        input: "[vault-local] { milestoneId }"
+        output: "{ milestone: Milestone }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: services.milestone.submitted, privacy: P2, payload: "{ milestoneId, bookingId, submissionCid, deliverableCount }"}
+      - {type: services.milestone.approved, privacy: P2, payload: "{ milestoneId, bookingId, approvalCid, amount }"}
+      - {type: services.booking.completed, privacy: P2, payload: "{ bookingId, settledAmount, milestoneCount }"}
+      - {type: services.milestone.changes_requested, privacy: P2, payload: "{ milestoneId, bookingId, round }"}
+      - {type: services.milestone.settled, privacy: P2, payload: "{ milestoneId, bookingId, proof }"}
+    events_consumed:
+      - {type: services.booking.confirmed, effect: "create the Milestone records from the plan in the confirmation, or one implicit milestone for the full total when the plan is empty"}
+      - {type: services.booking.cancelled, effect: "cancel pending, submitted and changes_requested milestones; approved ones keep their payment obligation"}
+      - {type: commerce.payment.claimed, effect: "for context type service_milestone set payment.proof to claimed (unverified)"}
+      - {type: commerce.payment.acknowledged, effect: "for context type service_milestone set proof acknowledged and settle the milestone"}
+      - {type: commerce.payment.finalized, effect: "for context type service_milestone set proof final and settle the milestone"}
+      - {type: commerce.payment.confirming, effect: "for context type service_milestone set proof confirming with confirmations N of M"}
+      - {type: commerce.payment.disputed, effect: "for context type service_milestone set proof disputed and prompt the dispute flow"}
+      - {type: commerce.payment.expired, effect: "for context type service_milestone set proof expired; the milestone stays approved"}
+      - {type: services.dispute.opened, effect: "freeze the milestones in dispute scope"}
+      - {type: commerce.dispute.resolved, effect: "leave disputed according to the resolution outcome"}
+    errors:
+      - "SERVICES_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
+      - "SERVICES_SUBMISSION_STALE | 409 | no | statement names a submission cid that is not the latest"
+      - "SERVICES_CHANGE_LIMIT | 409 | no | three change rounds already used for this milestone"
+      - "SERVICES_BOOKING_NOT_ACTIVE | 409 | no | booking is not confirmed or in progress, or is disputed or cancelled"
+      - "SERVICES_MILESTONE_ORDER | 409 | no | an earlier milestone is not yet approved"
+      - "SERVICES_MILESTONE_SUM_MISMATCH | 422 | no | milestone amounts do not sum to the booking total"
+    example: |
+      provider vault services.milestone.submit { "milestoneId": "0192f3d0-0001-…", "expectedRevision": 1,
+        "deliverables": [{ "attachmentId": "0192f3d0-00a1-…", "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "name": "report.pdf" }], "note": "Phase 1 done." }
+      -> { "milestoneId": "0192f3d0-0001-…", "revision": 2, "submissionCid": "sha256-Hk…", "syncState": "prepared" }
+      client vault services.milestone.approve { "milestoneId": "0192f3d0-0001-…", "expectedRevision": 2, "submissionCid": "sha256-Hk…" }
+      -> { "revision": 3, "approvalCid": "sha256-Jp…", "paymentContext": { "type": "service_milestone", "id": "0192f3d0-0001-…" } }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who is the booking provider may submit; only the principal who is the booking client may approve or request changes.
+      - Inbound statements are accepted only when the signer's key matches the role for that statement in this booking; otherwise quarantine with a reason code.
+      - Payment events are applied only when their context reference points to a milestone of a booking in this vault; relays have no role.
+    capabilities:
+      - "services.milestone.submit | principal | local principal is the booking provider; booking confirmed or in progress"
+      - "services.milestone.approve | principal | local principal is the booking client; milestone submitted"
+      - "services.milestone.request_changes | principal | local principal is the booking client; milestone submitted; changeRounds below 3"
+      - "services.milestone.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "services.milestone.read_own | principal | local principal is client or provider of the booking"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements are idempotent by cid; replays and duplicate relay deliveries never advance a milestone twice.
+      - Contradictory signed statements for one milestone (two submissions with the same predecessor, or approvals of different cids) freeze the milestone and require explicit renegotiation, never last-writer-wins.
+      - Each state change, its event and its sync outbox entry commit in one IndexedDB transaction.
+    idempotency: "Local command id stored 24 h; submission cid and approval cid are content hashes so a repeated statement yields the same result; payment events are deduplicated by (consumer, eventId) in the inbox."
+    concurrency: "Web Locks lock services-booking-<bookingId> around milestone commands and payment event handling; expectedRevision on every command; forked devices of one party are detected through the seq/prev chain and freeze the milestone."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; local payment-event handlers retry per EVT-6."
+    offline: "Submit, approve and request_changes work offline and commit locally; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the counterparty saw it before the signed acknowledgement."
+    partial_failure: "If registering the payment context with the Deal fails, approval is not signed and the milestone stays submitted; if relay delivery fails the local state remains and the sync line shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Milestone content, deliverables and notes are P2, travel only as end-to-end encrypted envelopes to the two participants, and never appear in logs or notifications.
+      - Deliverable hashes bind evidence to files without exposing them; relays see ciphertext and size only.
+      - Approval pressure, dummy deliverables and fake payment claims are limited by hash checks, explicit proof labels and the dispute path.
+    data:
+      - "Milestone, Submission: P2."
+      - "Deliverable files: P2 attachments by reference (F08.S01.M03), SHA-256 recorded in the signed submission."
+    retention:
+      - "Terminal milestones: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days) with the failure code."
+    threats:
+      - "T01 | Provider submits empty or dummy files to trigger payment | client sees deliverable fingerprints and integrity result, can request changes up to 3 times, and the dispute path stays open"
+      - "T02 | Client falsely says paid | payment shows claimed (unverified) until the payee acknowledges or the chain is final; the booking does not complete on a claim"
+      - "T03 | Provider alters a file after submission | the signed submission carries SHA-256; a mismatch is shown as hash differs and approval is disabled for that file"
+      - "T04 | Replay of an old approval onto a new submission | approval names the exact submission cid; mismatch returns SERVICES_SUBMISSION_STALE"
+      - "T05 | Relay tampers with or reorders statements | signatures cover JCS bytes; reordering is harmless because each statement names its predecessor cid"
+    abuse_controls:
+      - "Local quarantine and per-sender quota of 100 inbound milestone statements per day per booking counterparty."
+      - "Reports and dispute opening are available on every milestone (F03.S02.M03)."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and diagnostics stay in the vault.
+      - Milestone commands meet p95 ≤ 150 ms excluding attachment hashing, and hashing of 25 MB runs in a worker without blocking the UI longer than 50 ms per slice.
+      - Payment event handling meets p95 ≤ 50 ms per event.
+    metrics:
+      - "classrup_services_milestones_total{outcome=submitted|approved|changes_requested|settled|cancelled} (local counter)"
+      - "classrup_services_milestone_hash_mismatch_total (local counter)"
+    logs:
+      - "info milestone.approved {milestoneId, correlationId} in the local diagnostics log - no file names, notes or amounts."
+    budgets:
+      - "vault command p95 ≤ 150 ms; payment event p95 ≤ 50 ms; list_for_booking p95 ≤ 80 ms for 10 milestones."
+      - "SHA-256 of 25 MB in a Web Worker ≤ 600 ms on a mid-range phone."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests validate statements, events and the payment-context reference against the schema registry and F09 contract.
+      - Two-vault integration tests with a hostile in-memory relay cover duplicate, dropped and reordered statements.
+    fixtures: "Two vaults - client C and provider P - confirmed booking B with three milestones of EUR 100.00, 150.00, 250.00; hostile in-memory relay; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R01,01.R02,04.R03 | booking.confirmed event delivered twice with a 3-milestone plan | exactly 3 milestones per vault with identical ids; sum equals total"
+      - "T02 | unit | 01.R03,02.R01,02.R02,02.R03 | each rule V01–V08 violated in turn | documented code returned and nothing stored, bad statements quarantined"
+      - "T03 | property | 03.R01 | random statement and event sequences on one milestone | only declared transitions succeed; settled and cancelled never change"
+      - "T04 | integration | 03.R02 | approval naming an older submission cid, then the latest | first SERVICES_SUBMISSION_STALE; second approved"
+      - "T05 | integration | 03.R03,04.R03 | payment claimed, confirming, expired, acknowledged, finalized events in turn | proof labels follow COM-4; settled only at acknowledged or final; booking completes only after all non-cancelled milestones settled"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | approval signed by provider key; submission signed by client; payment event with foreign context | all quarantined or ignored; no state change"
+      - "T08 | integration | 06.R01,06.R02,09.R03 | relay duplicates, drops and reorders; two forked provider devices sign different submissions | duplicates skipped; fork freezes the milestone for renegotiation"
+      - "T09 | integration | 06.R03 | fail Deal registration during approval | approval not signed; milestone stays submitted"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | alter a file after submission; 101 inbound statements from one counterparty | hash differs shown and approval disabled; 101st dropped and counted"
+      - "T11 | load | 08.R01,08.R02,08.R03 | hash 25 MB file and run 100 mixed commands on throttled mobile profile | hashing ≤ 600 ms in worker, command p95 ≤ 150 ms, no telemetry request"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-031 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | milestones and statements round-trip; unverifiable statements kept as read-only history"
+      - "T14 | e2e | 01.R01,02.R01 | mobile provider submits, client approves and records payment claim, provider acknowledges | milestone settled in both vaults; booking completed; axe zero serious issues"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - A milestone is never shown settled on a claim alone and the proof level is always displayed.
+      - Duplicated, reordered or replayed statements never advance a milestone twice.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains milestones, submissions and the signed statements with their cids so approval evidence survives vault loss.
+      - Import verifies each signature and cid before restoring and keeps unverifiable records as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section services.milestones in classrup-export/v1 with one line per Milestone and the original statement envelopes."
+    import: "Verified milestones import as is; milestones in disputed state import as disputed and are re-linked when the dispute case is imported; deliverable attachments import by reference and show missing when absent."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

@@ -1,35 +1,33 @@
-# PS-115-06 — failure recovery idempotency
+# PS-115-06 — Failure recovery and idempotency: PWA install
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-06. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M03 PWA install](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/install` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for install within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-115-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-115-06.R01** Repeated install() or applyUpdate() calls are safe and have the effect of one call.
+- **PS-115-06.R02** A failed activation leaves the previous version running and the banner available.
+- **PS-115-06.R03** Everything works with no connectivity; update checks simply fail silently and retry at the next trigger.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** install() uses the single deferred prompt event and clears it after use; applyUpdate() posts SKIP_WAITING at most once per waiting worker. Preferences writes are last-value.
+- **concurrency:** Several tabs use BroadcastChannel classrup-install to share dismissal and update state; the first tab to accept performs the update and others show the updated-elsewhere state.
+- **retries:** Update checks retry at the next trigger (hourly, foreground); there is no tight retry loop. A stuck activation after 10 s returns to update_available.
+- **offline:** Install card and update banner logic work offline; an update is only detected when the static host is reachable. The installed app never needs the network to start.
+- **partial failure:** If the reload after controllerchange is interrupted, the next start runs the new worker with the new shell; state in the vault is not affected. If the manifest is cached stale, the browser refreshes it on its own schedule and no data is lost.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-115-09.T04 | e2e | PS-115-03.R02, PS-115-02.R03, PS-115-06.R01 | build B deployed while A is open with an unsaved draft | banner appears; Update now saves the draft first then activates; reload shows B with draft restored; no update without a click |
+| TEST-PS-115-09.T05 | e2e | PS-115-03.R02, PS-115-06.R02 | activation does not complete within 10 s (simulated) | state returns to update_available with explanation; A still works |
+| TEST-PS-115-09.T09 | e2e | PS-115-06.R03, PS-115-01.R03 | open the installed app offline with localStorage blocked | app starts, card hidden, no exception, update check fails silently |
+
+## Dependencies
+
+Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

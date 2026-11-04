@@ -1,35 +1,37 @@
-# PS-145-02 — validation rules
+# PS-145-02 — Validation rules: Jurisdiction profiles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-145-02. **Owner:** [18_Governance/01_policy/mod_jurisdictions](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_jurisdictions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S01.M01 Jurisdiction profiles](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/policy/jurisdictions` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the validation rules process for jurisdictions within 01_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-145-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-145-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-145-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-145-02.R01** Profile content is validated against bounds and privacy floors before it is staged, released or applied.
+- **PS-145-02.R02** Selection and resolution validate trust in the publisher and the profile status.
+- **PS-145-02.R03** Every violation maps to one stable error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | code matches [a-z0-9-]{2,32}; names 1..60 code points with en present | VALIDATION_FAILED |
+| V02 | evidenceDays in 180..3650, standardPurgeDays in 7..90, auditDays in 90..730 | GOVERNANCE_PROFILE_BOUNDS |
+| V03 | no field requests public location above L2, exposure of exact addresses or federation of P2 data | GOVERNANCE_PROFILE_PRIVACY_FLOOR |
+| V04 | minimumAge between 13 and 21 | GOVERNANCE_PROFILE_BOUNDS |
+| V05 | at most 20 notices, each with a textKey, and at most 200 restricted category ids | VALIDATION_FAILED |
+| V06 | disclaimerKey present | VALIDATION_FAILED |
+| V07 | activation of a changed profile cites a proposal verified by F18.S02.M01 for this profile code | GOVERNANCE_PROFILE_PROPOSAL_REQUIRED |
+| V08 | profile signature verifies and publisher is trusted by this vault when selecting | GOVERNANCE_PROFILE_UNTRUSTED |
+| V09 | version is greater than the stored version for the same publisher and code | CONFLICT_STATE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-145-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-145-09.T01 | unit | PS-145-01.R01, PS-145-02.R01, PS-145-02.R02 | draft a valid profile and one with bad code | stored revision 1; invalid input rejected with documented code |
+| TEST-PS-145-09.T02 | unit | PS-145-01.R02, PS-145-01.R03, PS-145-02.R03 | violate each rule V01-V09 | documented error code returned; nothing released or stored |
+| TEST-PS-145-09.T03 | property | PS-145-01.R03, PS-145-02.R02 | random retention and location values | values outside bounds or above L2 never accepted |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F18.S01.M03, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

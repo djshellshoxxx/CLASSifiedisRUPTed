@@ -1,35 +1,31 @@
-# PS-121-03 — workflow state machine
+# PS-121-03 — Workflow state machine: Observability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-121-03. **Owner:** [15_Platform/03_operations/mod_observability](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_observability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M01 Observability](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/observability` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for observability within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-121-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-121-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-121-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-121-03.R01** GET /healthz returns 200 with status ok while the process serves requests and performs no dependency checks.
+- **PS-121-03.R02** GET /readyz returns 200 only when storage is writable, migrations are current and outbox lag is below 60 s, otherwise 503 with the per-check booleans.
+- **PS-121-03.R03** During graceful shutdown readiness turns unready before connections close so load balancers drain traffic.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** No lifecycle entities. Readiness is a pure function of the current probes; the only stateful switch is the HTTP adapter's draining flag set by graceful close (F15.S02.M01 shutdown sequence).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-121-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Readiness outbox-lag threshold: 60 s (OBS-6).
+- Graceful close waits up to the configured grace period (default 10 s) for in-flight requests while /readyz reports draining.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-121-09.T08 | integration | PS-121-01.R03, PS-121-03.R02, PS-121-06.R03 | pending migration, lag 60 s, throwing lag probe, failing ping, closed storage | unready with the failing check false; ready only when all pass |
+| TEST-PS-121-09.T09 | integration | PS-121-03.R01, PS-121-03.R03, PS-121-05.R02 | GET /healthz and /readyz on a relay, then draining, then lag 61 s, then closed server | 200 ok; 200 ready with booleans; 503 draining; 503 outboxLag false; connection refused after close |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001, CTR-ERR-001, CTR-TST-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

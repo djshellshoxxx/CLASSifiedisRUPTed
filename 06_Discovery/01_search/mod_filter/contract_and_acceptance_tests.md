@@ -1,35 +1,45 @@
-# PS-044-09 — contract and acceptance tests
+# PS-044-09 — Contract and acceptance tests: Search filters
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-09. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S01.M03 Search filters](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/search/filter` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for filter within 01_search. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-044-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-044-09.R01** Every requirement is covered by at least one automated test, including property tests on canonicalization.
+- **PS-044-09.R02** A golden test fixes the SQL fragment text and parameter order for each filter key.
+- **PS-044-09.R03** Injection and limit tests run against a real SQLite database.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds and 20 categories; fixed clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-044-09.T01 | unit | PS-044-01.R01, PS-044-02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden |
+| TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km | the documented error code each time with the field path |
+| TEST-PS-044-09.T03 | property | PS-044-01.R03 | random key order and equivalent values | canonicalize returns identical bytes and cache keys |
+| TEST-PS-044-09.T04 | unit | PS-044-01.R02, PS-044-03.R01 | compile each key alone and all together | SQL text and params equal golden fixtures |
+| TEST-PS-044-09.T05 | property | PS-044-03.R02, PS-044-03.R03 | 200 runs of the same filter with the same clock | identical SQL and params; compile never reads the system clock |
+| TEST-PS-044-09.T06 | integration | PS-044-01.R02, PS-044-07.R01 | compiled filter run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data |
+| TEST-PS-044-09.T07 | abuse | PS-044-07.R02, PS-044-07.R03, PS-044-08.R01 | 10 000 fuzz strings with SQL metacharacters and 5 000-item lists | no SQL injection, errors for oversize lists, validation under 1 ms p95 |
+| TEST-PS-044-09.T08 | unit | PS-044-04.R01, PS-044-04.R02, PS-044-04.R03 | inspect module exports and error mapping | no commands, queries or events exist and errors map to documented codes |
+| TEST-PS-044-09.T09 | unit | PS-044-05.R01, PS-044-05.R02, PS-044-05.R03 | attempt to filter on a private column name | rejected as unknown key; no capability is defined |
+| TEST-PS-044-09.T10 | integration | PS-044-06.R01, PS-044-06.R02, PS-044-06.R03 | taxonomy port unavailable and stale snapshot | DEPENDENCY_UNAVAILABLE without partial output; stale snapshot validates with a hint |
+| TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance and category filters | index used, metrics counted by code without values |
+| TEST-PS-044-09.T12 | unit | PS-044-09.R01, PS-044-09.R02, PS-044-09.R03 | traceability run over PS-044 | every requirement maps to a passing test; golden files unchanged |
+| TEST-PS-044-09.T13 | unit | PS-044-10.R01, PS-044-10.R02, PS-044-10.R03 | load a v1 filter stored inside a saved search export | parsed unchanged; unknown key rejected on import |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01-T13 pass in CI.
+- Compiled queries return exactly the brute-force result on the 1 000 document fixture.
+- No filter value can alter SQL structure (fuzz suite green).
+
+## Dependencies
+
+Module depends on: F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-PRV-001, CTR-MNY-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

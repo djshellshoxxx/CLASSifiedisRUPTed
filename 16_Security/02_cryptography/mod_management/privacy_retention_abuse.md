@@ -1,35 +1,51 @@
-# PS-129-07 — privacy retention abuse
+# PS-129-07 — Privacy, retention and abuse: Key registry and revocation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-129-07. **Owner:** [16_Security/02_cryptography/mod_management](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_management. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S02.M02 Key registry and revocation](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/cryptography/management` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for management within 02_cryptography. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-129-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-129-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-129-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-129-07.R01** Public keys, status and revocations are P1 or P0 once published, contain no personal data, and the revocation list reveals only key IDs, reasons and times.
+- **PS-129-07.R02** Records are retained under RET-EVIDENCE because old signatures are judged against historical status, and revoked keys are kept indefinitely as revoked records without private material.
+- **PS-129-07.R03** Abuse (false revocations, registry flooding, revocation suppression, rollback of revocation) is limited by signer authority checks, limits and monotonic revocation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- KeyRecord: P1 public key material and status.
+- Local notes on counterparty keys: P3 in the vault only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Key records: RET-EVIDENCE (2 years after last related activity), revoked records kept as tombstone-like entries for 5 years for dispute evidence.
+- Pending revocations without a matching key: 180 days.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-129-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Attacker with a stolen key revokes the victim's other keys | such revocations require the signer to be active in the principal chain and are flagged for recovery-key confirmation within 7 days; recovery-key revocations always win |
+| T02 | Revocation suppression by a malicious relay | vaults poll more than one source, record the source and age of knowledge, and show freshness; revocation statements are signed by the key owner so any relay or peer can carry them |
+| T03 | Backdated compromise date to invalidate old consents | effectiveFrom limited to 30 days before receipt, and affected consents are labelled rather than silently invalidated |
+| T04 | Registry flooding with junk keys | 10 active device keys per principal, relay rate limits via F12.S03.M03 class key.register fail-closed, signed self-registration only |
+| T05 | Rollback of a revocation (key resurrection) | revoked status is permanent in the state machine and in the unique index; no command can set active again |
+| T06 | Stale knowledge treated as safe offline | freshness class shown on every verification result; high-stakes actions require fresh or an explicit user acknowledgement |
+
+**Abuse controls**
+- Registration limited to 20 per day per principal and revocation to 50 per day via F12.S03.M03.
+- Relay refuses statements larger than 8 KiB.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-129-09.T08 | abuse | PS-129-05.R01, PS-129-05.R02, PS-129-05.R03, PS-129-07.R01 | stolen K3 revokes K1 and K2; unauthorized signer revokes; recovery key revokes K3 | flagged pending confirmation; SECURITY_KEY_UNAUTHORIZED; recovery revocation wins |
+| TEST-PS-129-09.T09 | abuse | PS-129-07.R03, PS-129-02.R01 | 11th device key; 21st registration in a day; 51st revocation | SECURITY_KEY_LIMIT, RATE_LIMITED, RATE_LIMITED; oversized statement rejected |
+| TEST-PS-129-09.T11 | integration | PS-129-07.R02, PS-129-07.R03 | backdated effectiveFrom 31 days; consent received in the 20-day window | rejected for 31 days; accepted for 20 days with 'signed during claimed compromise' label |
+| TEST-PS-129-09.T12 | integration | PS-129-02.R03, PS-129-07.R01 | peer relay unreachable for 8 days | freshness class unknown; high-stakes verify returns the warning |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

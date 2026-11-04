@@ -1,35 +1,36 @@
-# PS-115-08 — observability performance
+# PS-115-08 — Observability and performance: PWA install
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-08. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M03 PWA install](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/install` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the observability performance process for install within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-115-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-115-08.R01** Install and update outcomes are counted locally and viewable in the diagnostics panel; no telemetry is sent.
+- **PS-115-08.R02** The install card and update banner must not worsen CLS (≤ 0.1) or INP (≤ 200 ms) per CTR-OBS-001 OBS-5.
+- **PS-115-08.R03** The module adds at most 6 KiB gzip to the initial bundle.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- local counters install_prompt_shown, install_accepted, install_dismissed, update_prompted, update_accepted, update_deferred (never transmitted)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- Local diagnostic log lines install.state {state} and update.state {state}; exportable by the user, never uploaded.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- Initial bundle contribution ≤ 6 KiB gzip; banner render ≤ 16 ms; layout reserves space so CLS contribution is 0.
+- Update now to reloaded app ≤ 3 s on a Moto G-class device with warm cache.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-115-09.T11 | a11y | PS-115-07.R03, PS-115-08.R02 | install card, iOS sheet and update banner scanned with axe | zero serious issues; targets ≥ 44 px; CLS contribution 0 |
+| TEST-PS-115-09.T12 | load | PS-115-08.R01, PS-115-08.R03 | Lighthouse CI installability and bundle check | installable, module ≤ 6 KiB gzip, LCP ≤ 2.5 s, INP ≤ 200 ms |
+
+## Dependencies
+
+Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

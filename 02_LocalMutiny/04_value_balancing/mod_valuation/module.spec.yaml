@@ -1,0 +1,278 @@
+# F02.S04.M03 Participant valuation (ADR-0016 local-first). Declared values only, never a platform appraisal.
+id: F02.S04.M03
+scope: MVP
+summary: >-
+  Each owner declares what an item is worth to them as a Money amount with a basis and an optional reference taken from the listing's asking price.
+  The declaration is a signed public projection (classrup.mutiny.item_valuation/v1) so that matching and other participants can compare values.
+  Implausible values (below 20 percent or above 500 percent of a same-currency reference) are flagged automatically; participants of an active proposal can flag an item to the owner,
+  who can acknowledge with a short justification or redeclare. ClassRup never appraises items: values are the declarer's claims, they feed the MNY-5 tolerance checks and they never imply a market price.
+responsibilities:
+  - Own the ItemValuation record per owned item with Money amount, basis, optional note and reference price, plausibility verdict and status.
+  - Publish the owner's valuation as a signed projection with a per-author sequence chain, and verify and store other owners' valuation projections.
+  - Detect implausible values against the listing's asking price (same currency only) and block flagged items from matching and commit until acknowledged.
+  - Accept flags from participants of a non-terminal proposal or cycle that includes the item, deliver them to the owner as signed statements, and freeze valuations of items under an active reservation.
+non_responsibilities:
+  - Appraisal, price guidance or market data; the platform never states what an item is worth.
+  - Currency conversion and quote pinning (F02.S04.M02) and tolerance comparison (F02.S02.M05).
+  - Listing price terms (F01.S02.M01) and listing content moderation, which is local filtering plus relay hosting policy (ADR-0016).
+  - "Future: valuation history charts, optional external price reference adapters, and bundled-item valuations."
+depends_on: [F01.S02.M01, F01.S03.M01, F01.S01.M01, F09.S03.M01, F09.S03.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As an owner, I declare that my guitar is worth 120.00 EUR to me, see how that compares with my listing's asking price, and know that others will see this declared value.
+  - As a participant in a proposal, I can flag a value that looks wrong and the owner is asked to explain or change it before the exchange proceeds.
+  - As an owner whose value was flagged, I acknowledge it with a short reason or redeclare it.
+edge_cases:
+  - The declared value is 10 percent of the listing's asking price; it is flagged low automatically and the item is excluded from matching until the owner acknowledges.
+  - The listing price is in a different currency than the declaration; no ratio is computed, plausibility is unchecked and the UI says so.
+  - The item is reserved for a committed cycle; changing the value is refused so the consented terms stay true.
+  - Three different participants flag the same item within a day; the item remains flagged once and further flags are counted but do not change state.
+  - A peer valuation projection arrives with a lower seq than the stored one; it is ignored and counted.
+  - The owner declares 0 or a negative amount; refused. Gift items use giveaway listings, not valuation.
+  - The owner changes the listing price after declaring; plausibility is re-evaluated against the new reference and may flag or clear the automatic flag.
+ux:
+  screens:
+    - "Declare value sheet: amount and currency, basis selector (retail estimate, purchase price, replacement cost, other), note up to 280 characters, reference price shown when the listing has one, and the notice 'Visible to anyone who sees your listing. This is your own estimate, not an appraisal.'"
+    - "Flag value sheet for participants: reason choices (too high, too low, unclear) and optional comment."
+    - "Flagged-value banner for the owner with Acknowledge (reason required) and Change value."
+  states: [loading, empty, declared, flagged-auto, flagged-by-peer, acknowledged, locked-by-reservation, pending-offline, error]
+  a11y:
+    - Amount field has a visible label including currency and uses inputmode decimal.
+    - Flag and acknowledgement status are text banners announced via an aria-live polite region.
+    - All buttons are at least 44 by 44 px and the sheets are keyboard operable.
+processes:
+  domain_schema:
+    requirements:
+      - An ItemValuation links one inventory item to a declared Money amount, basis, optional reference price, plausibility verdict, status and the per-author sequence of its signed projection.
+      - The declared value is a public claim of the owner once the owner opts the item into barter, and the UI discloses this before signing; it is P0 and retained RET-STANDARD until the owner deletes it.
+      - Flags are stored as local records on the flagger's side and as received statements on the owner's side, with only the reason code and an optional comment up to 280 code points.
+    entities:
+      - name: ItemValuation
+        schema: classrup.mutiny.item_valuation/v1
+        storage: device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "ownerId: did — declaring owner; signer of the projection"
+          - "inventoryItemId: uuidv7 — item valued (F01.S03.M01)"
+          - "listingCid: cid — listing projection the item belongs to"
+          - "declared: Money — CTR-MNY-001; > 0 and ≤ 1 000 000 000 000 minor units"
+          - "basis: enum — retail_estimate | purchase_price | replacement_cost | other"
+          - "note?: string — ≤ 280 code points, plain text"
+          - "referencePrice?: Money — asking price of the listing at declaration, same-currency only"
+          - "ratioPermille?: int — declared divided by referencePrice times 1000, floor; absent when currencies differ or no reference"
+          - "plausibility: enum — ok | low | high | unchecked"
+          - "status: enum — declared | flagged | acknowledged | superseded"
+          - "flagCount: int — 0..100 flags received in this vault, counted not stored individually beyond 10"
+          - "flags: array — 0..10 items {byActorId did, reason too_high|too_low|unclear|implausible_auto, comment?, flaggedAtLocal}"
+          - "ackNote?: string — owner's justification, 10..280 code points"
+          - "lockedBySubjectId?: uuidv7 — subject with an active reservation on this item, set by mutiny.cycle.locked"
+          - "seq: int — projection sequence per author per item starting at 1"
+          - "prev?: cid — hash of previous projection envelope"
+          - "cid: cid — sha256 of JCS(envelope minus sig)"
+          - "sig: string — Ed25519 signature (base64url) per CTR-FED-001 FED-2"
+          - "origin: enum — local | peer"
+          - "provenance?: object — {originRelay?, receivedAt (local clock), via[], verifiedAt} for peers"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Exactly one ItemValuation per (ownerId, inventoryItemId) has a status other than superseded.
+          - declared is positive and in a registered currency, and ratioPermille exists only when referencePrice has the same currency.
+          - status flagged implies the item is excluded from matching and cannot be consented to until acknowledged or redeclared.
+          - A valuation with lockedBySubjectId set cannot be changed or superseded by its owner.
+    sql: |
+      CREATE TABLE mutiny_item_valuation (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_id TEXT NOT NULL, inventory_item_id TEXT NOT NULL, status TEXT NOT NULL,
+        seq INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_valuation_current ON mutiny_item_valuation(tenant_id, owner_id, inventory_item_id) WHERE status <> 'superseded';
+  validation_rules:
+    requirements:
+      - Declarations are validated strictly on amount, currency, basis, ownership and lock state before anything is signed.
+      - Plausibility thresholds are fixed numbers evaluated with integer arithmetic so every vault gets the same verdict.
+      - Flags are accepted only from participants of a non-terminal proposal or cycle that contains the item, and acknowledgements need a justification.
+    rules:
+      - "V01 | declared amount is a positive integer string within 1 and 1000000000000 and the currency is registered | VALIDATION_FAILED"
+      - "V02 | the principal owns the inventory item and its listing is published and flagged barterAcceptable | MUTINY_VALUATION_ITEM_INVALID"
+      - "V03 | basis is one of retail_estimate, purchase_price, replacement_cost, other and note ≤ 280 code points | VALIDATION_FAILED"
+      - "V04 | the item has no active reservation (lockedBySubjectId absent) | MUTINY_VALUATION_LOCKED"
+      - "V05 | ratioPermille below 200 gives plausibility low, above 5000 gives high, otherwise ok; no reference gives unchecked | VALIDATION_FAILED"
+      - "V06 | flagger is a participant of a non-terminal proposal or cycle containing the item and has not flagged the same item within 30 days | MUTINY_VALUATION_FLAG_NOT_ALLOWED"
+      - "V07 | acknowledgement is by the owner, the valuation is flagged, and ackNote has 10..280 code points | MUTINY_VALUATION_ACK_INVALID"
+      - "V08 | peer projection signature verifies, signer equals ownerId, seq is greater than stored and prev equals stored cid, claimed time not more than 5 minutes ahead of the local clock | MUTINY_VALUATION_STATEMENT_INVALID"
+  workflow_state_machine:
+    requirements:
+      - A valuation is declared, may be flagged automatically or by participants, may be acknowledged by the owner, and is superseded when the owner redeclares.
+      - Every change that alters the signed projection increments seq by exactly 1 and is only possible while no reservation holds the item.
+      - A flagged valuation blocks matching and consent for the item until acknowledged or superseded, and an acknowledgement never hides the flag history.
+    machines:
+      - entity: ItemValuation
+        initial: declared
+        terminal: [superseded]
+        transitions:
+          - "declared -> flagged | plausibility low or high at declaration, or valid peer flag received | emits mutiny.valuation.flagged"
+          - "declared -> superseded | mutiny.valuation.declare by owner for the same item | new record seq+1; old record kept as history"
+          - "flagged -> acknowledged | mutiny.valuation.acknowledge by owner with justification | re-signs projection seq+1 with ackNote; emits mutiny.valuation.declared"
+          - "flagged -> superseded | owner redeclares a different value | new record seq+1; emits mutiny.valuation.declared"
+          - "acknowledged -> flagged | new valid flag from a participant of a different subject | emits mutiny.valuation.flagged"
+          - "acknowledged -> superseded | owner redeclares | new record seq+1; emits mutiny.valuation.declared"
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - declare and acknowledge are vault commands that produce the signed projection statement classrup.mutiny.item_valuation/v1; flag produces the signed statement classrup.mutiny.valuation_flag/v1 addressed to the owner; ingest commands verify other parties' statements.
+      - Events are written in the same IndexedDB transaction as the state change and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
+      - The module consumes listing, sell-terms and reservation events to keep references and locks consistent.
+    commands:
+      - name: mutiny.valuation.declare
+        capability: mutiny.valuation.declare
+        input: "{ inventoryItemId, declared: Money, basis, note? } — vault command; produces statement classrup.mutiny.item_valuation/v1 signed by the owner (public projection, P0)"
+        output: "{ valuationId, seq, plausibility, status, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, MUTINY_VALUATION_ITEM_INVALID, MUTINY_VALUATION_LOCKED, RATE_LIMITED]
+        emits: [mutiny.valuation.declared, mutiny.valuation.flagged]
+        idempotent: true
+      - name: mutiny.valuation.flag
+        capability: mutiny.valuation.flag
+        input: "{ valuationId, reason: too_high|too_low|unclear, comment? ≤ 280 } — vault command; produces statement classrup.mutiny.valuation_flag/v1 signed by the flagger, end-to-end encrypted to the owner"
+        output: "{ flagId, syncState }"
+        errors: [NOT_FOUND, MUTINY_VALUATION_FLAG_NOT_ALLOWED, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: mutiny.valuation.acknowledge
+        capability: mutiny.valuation.acknowledge
+        input: "{ valuationId, ackNote, expectedRevision } — vault command; produces statement classrup.mutiny.item_valuation/v1 with seq+1"
+        output: "{ valuationId, seq, status: acknowledged, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_VALUATION_ACK_INVALID, MUTINY_VALUATION_LOCKED]
+        emits: [mutiny.valuation.declared]
+        idempotent: true
+      - name: mutiny.valuation.ingest
+        capability: mutiny.valuation.ingest
+        input: "{ envelope: classrup.mutiny.item_valuation/v1 | classrup.mutiny.valuation_flag/v1, provenance } — vault command; produces no statement"
+        output: "{ accepted: boolean, valuationId?, quarantineReason? }"
+        errors: [MUTINY_VALUATION_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        emits: [mutiny.valuation.declared, mutiny.valuation.flagged]
+        idempotent: true
+    queries:
+      - name: mutiny.valuation.get
+        capability: mutiny.valuation.read
+        input: "{ valuationId }"
+        output: "{ valuation: ItemValuation }"
+        errors: [NOT_FOUND]
+      - name: mutiny.valuation.list_mine
+        capability: mutiny.valuation.read
+        input: "{ status?, cursor?, limit ≤ 50 }"
+        output: "{ items: ItemValuation[], nextCursor? }"
+        errors: []
+      - name: mutiny.valuation.list_for_items
+        capability: mutiny.valuation.read
+        input: "{ inventoryItemIds: uuidv7[] ≤ 200 }"
+        output: "{ items: ItemValuation[] — current projections known in this vault, including peers' }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: mutiny.valuation.declared, privacy: P0, payload: "{ valuationId, ownerId, inventoryItemId, declared, basis, plausibility, status, seq, origin }"}
+      - {type: mutiny.valuation.flagged, privacy: P2, payload: "{ valuationId, inventoryItemId, reason, flagCount, origin }"}
+    events_consumed:
+      - {type: bazaar.listing.edited, effect: "re-read the listing price as the reference and re-evaluate plausibility; clear or set the automatic flag"}
+      - {type: bazaar.sell_terms.set, effect: "update referencePrice and ratioPermille of valuations of items on that listing"}
+      - {type: bazaar.listing.unpublished, effect: "mark valuations of that listing's items superseded locally; a signed tombstone follows the listing's tombstone"}
+      - {type: mutiny.cycle.locked, effect: "set lockedBySubjectId on valuations of the reserved items"}
+      - {type: mutiny.cycle.unlocked, effect: "clear lockedBySubjectId on valuations of the released items"}
+    errors:
+      - "MUTINY_VALUATION_ITEM_INVALID | 422 | no | the item is not owned by the principal, not listed or not barter-acceptable"
+      - "MUTINY_VALUATION_LOCKED | 409 | no | the item is reserved for an active proposal or cycle and its value cannot change"
+      - "MUTINY_VALUATION_FLAG_NOT_ALLOWED | 403 | no | only participants of an active proposal or cycle containing the item may flag, once per 30 days"
+      - "MUTINY_VALUATION_ACK_INVALID | 422 | no | acknowledgement needs the owner, a flagged valuation and a justification of 10 to 280 characters"
+      - "MUTINY_VALUATION_STATEMENT_INVALID | 422 | no | a valuation or flag statement failed signature, sequence or claimed-time checks"
+    example: |
+      mutiny.valuation.declare  Idempotency-Key: 0192f460-0000-7000-8000-000000000001
+      { "inventoryItemId": "0192f461-…", "declared": {"amount":"12000","currency":"EUR"}, "basis": "retail_estimate", "note": "Used 3 years, new strings" }
+      -> { "valuationId": "0192f462-…", "seq": 1, "plausibility": "ok", "status": "declared", "syncState": "prepared" }   (reference price 12500 EUR: ratio 960 permille)
+      mutiny.valuation.declare { "inventoryItemId": "0192f463-…", "declared": {"amount":"1000","currency":"EUR"}, "basis": "other" }   (asking price 12000)
+      -> { "plausibility": "low", "status": "flagged" }   ratio 83 permille < 200 => automatic flag; excluded from matching until acknowledged
+      Values used in 2-, 3-, 4- and N-party cycles are exactly these declared amounts (or their pinned conversion, F02.S04.M02).
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal declare or acknowledge values of items it owns and flag values only as a participant of an active subject.
+      - Incoming projections and flags are accepted only when signed by the owner (projections) or by a participant of the named subject (flags).
+      - Relays may index public valuation projections under their hosting policy but have no capability to change or remove them except by refusing to host.
+    capabilities:
+      - "mutiny.valuation.declare | principal | vault unlocked; principal owns the item; item not reserved"
+      - "mutiny.valuation.flag | principal | principal is a participant of a non-terminal proposal or cycle containing the item"
+      - "mutiny.valuation.acknowledge | principal | principal is the owner; valuation flagged; item not reserved"
+      - "mutiny.valuation.ingest | principal | projection signed by the owner or flag signed by a participant with a non-revoked key"
+      - "mutiny.valuation.read | principal | declared values are public projections; flags readable by the owner and the flagger only"
+  failure_recovery_idempotency:
+    requirements:
+      - declare, flag and acknowledge are idempotent, and projections dedupe by cid and ordering by seq.
+      - Each command is one IndexedDB transaction covering the record, event and outbox entry.
+      - A valuation changed while a reservation exists is refused; there is no merge of conflicting values from two devices, and the higher seq after user confirmation wins for the public projection.
+    idempotency: "Idempotency-Key replay 24 h; declare is also idempotent by (inventoryItemId, declared, basis, note) within 24 h."
+    concurrency: "expectedRevision on acknowledge; per-item Web Locks mutex; seq chain prevents lost updates between two devices of the same owner and surfaces a resolve prompt."
+    retries: "Outbox retries with IDM-4 backoff (base 500 ms, cap 30 s, max 6 attempts per relay); flags are re-sent as the same signed envelope."
+    offline: "All commands work offline and commit locally; matching in the vault uses new values immediately, and other vaults see them after delivery."
+    partial_failure: "If the listing projection is temporarily missing, plausibility is unchecked and the valuation is stored with a warning; it is re-evaluated when the listing is available."
+  privacy_retention_abuse:
+    requirements:
+      - Declared values are public once the owner opts the item into barter and the UI says so before signing; flags are private between the flagger and the owner.
+      - Valuations never contain addresses or exact location, and flags carry no personal data beyond the flagger's DID.
+      - Value manipulation to game tolerance and flag abuse to block rivals are limited by plausibility thresholds, the participants-only flag rule, a 30-day per-flagger limit and the owner's acknowledgement path.
+    data:
+      - "ItemValuation: P0 public projection fields; flags[] are P2 stored locally only."
+    retention:
+      - "RET-STANDARD until the owner deletes it; signed tombstone on delete (PRV-6, copies already fetched cannot be recalled)."
+    threats:
+      - "T01 | Owner declares an inflated or deflated value to make a bad cycle pass tolerance | automatic plausibility flag against the asking price, participant flags, and the participants' own consent on the displayed values"
+      - "T02 | Rival floods flags to block an item | only participants of an active subject can flag, once per 30 days per item, and flags never delete the valuation"
+      - "T03 | Value changed after consent | valuations of reserved items cannot change, and consents sign the revision snapshot that embeds the values"
+      - "T04 | Forged valuation for someone else's item | signature must verify against the owner DID and the listing projection must be authored by that DID"
+      - "T05 | Platform appears to appraise items | UI and copy state that values are the owner's own estimate; no module computes a market value"
+    abuse_controls:
+      - "Rate limit 60 declare commands per day per vault and 20 flags per day per vault."
+      - "Peers that send more than 5 seq increments per item per hour are quarantined for 24 h."
+  observability_performance:
+    requirements:
+      - Local diagnostics record outcomes without amounts or DIDs and send nothing off the device (OBS-7).
+      - declare completes within 80 ms at p95 including signing; list_for_items for 200 items within 50 ms.
+      - Relay deployments that index projections expose counts by plausibility class under CTR-OBS-001.
+    metrics:
+      - "classrup_mutiny_valuations_total{outcome=declared|flagged_auto|flagged_peer|acknowledged|quarantined} (local diagnostics)"
+      - "classrup_mutiny_valuation_projection_total{plausibility} (relay)"
+    logs:
+      - "info valuation.declared {valuationId, plausibility, seq, correlationId} — no amounts or DIDs."
+    budgets:
+      - "declare p95 ≤ 80 ms; ingest p95 ≤ 50 ms; list_for_items(200) p95 ≤ 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Plausibility thresholds are tested at their exact boundaries with integer arithmetic.
+      - Cross-vault tests cover projection chains, flags and locks with an in-memory relay.
+    fixtures: "Alice's items I1 (asking 12500 EUR), I2 (asking 12000 EUR), I3 (no reference), I4 (reference in USD); Bob and Carol as flaggers; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R03 | declare 12000 EUR on I1 | stored with ratio 960 permille, plausibility ok, signed projection seq 1"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01..V08 violated in turn | documented error code and nothing signed"
+      - "T03 | unit | 02.R02 | ratio 199, 200, 5000, 5001 permille and missing or foreign-currency reference | low, ok, ok, high, unchecked"
+      - "T04 | property | 03.R01,03.R02 | random declare, flag, acknowledge sequences | seq increments by exactly 1 per signed change; flagged items never reach matching or consent"
+      - "T05 | integration | 03.R03,01.R03 | participant flags an item in a proposal, owner acknowledges | status flagged then acknowledged, flag history kept, item usable again"
+      - "T06 | integration | 03.R02,05.R01 | item reserved by cycle.locked then owner tries to change value | MUTINY_VALUATION_LOCKED until mutiny.cycle.unlocked"
+      - "T07 | contract | 04.R01,04.R02,09.R02,09.R03 | commands and events | statements and payloads validate against classrup.mutiny.item_valuation/v1, valuation_flag/v1 and registry"
+      - "T08 | integration | 04.R03,06.R03 | listing edited and sell terms set events | reference and plausibility recomputed; automatic flag set or cleared"
+      - "T09 | abuse | 05.R01,05.R02,05.R03,07.R02,07.R03 | non-participant flags, 2nd flag within 30 days, forged projection, flags flood | rejected with documented codes"
+      - "T10 | integration | 06.R01,06.R02 | replay declare; two devices change value concurrently | single record; resolve prompt, higher seq wins only after user confirmation"
+      - "T11 | integration | 07.R01,07.R03 | value disclosure and relay indexing | disclosure shown before signing; relay sees only public projection fields; flags never leave as plaintext"
+      - "T12 | load | 08.R02,08.R03 | declare and list_for_items(200) on emulated Moto G | within budgets"
+      - "T13 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no amounts or DIDs in diagnostics; every PS-027 requirement maps to a passing test"
+      - "T14 | integration | 06.R03,10.R01,10.R02,10.R03 | export, import into fresh vault, rollback | own valuations round-trip with signatures; imported peer projections re-verified; seq continues"
+      - "T15 | e2e | 01.R02,07.R03 | mobile owner declares a value | disclosure and not-an-appraisal notice shown; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No module or screen presents a declared value as an appraisal or market price.
+      - A reserved item's value cannot change and flagged values block matching and consent until acknowledged or redeclared.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the user's own ItemValuation records with signatures and sequence chain, and not other owners' projections, which are re-fetchable.
+      - Import verifies signatures and chains, continues seq from the highest stored value and never imports a lock marker.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.valuations in classrup-export/v1; one line per own ItemValuation (schema classrup.mutiny.item_valuation/v1) including flags received."
+    import: "Records are verified; superseded history imports read-only; the current record per item is restored with lockedBySubjectId cleared; conflicting IDs rejected."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only signed public projections (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback ignores unknown fields; the basis enum only grows and unknown values read as other."

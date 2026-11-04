@@ -1,35 +1,59 @@
-# PS-115-03 — workflow state machine
+# PS-115-03 — Workflow state machine: PWA install
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-03. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M03 PWA install](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/install` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for install within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-115-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-115-03.R01** Install and update each follow explicit states and the UI shows only the state reached.
+- **PS-115-03.R02** A waiting worker is activated only after consent; there is no automatic skipWaiting.
+- **PS-115-03.R03** Deferral is time-boxed so the user is asked again after 24 hours but never forced.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### UpdateAttempt lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **update_available**; terminal **activated**, **superseded**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| update_available -> updating | user taps Update now and V05 passes | draft saved, SKIP_WAITING posted |
+| update_available -> deferred | user taps Later | deferredUntil = now + 86400000 ms |
+| deferred -> update_available | deferredUntil reached or app restarted | banner shown again |
+| updating -> activated | controllerchange received | page reloaded once |
+| updating -> update_available | V05 fails or activation does not complete within 10000 ms | message states why and offers retry |
+| update_available -> superseded | a newer waiting worker replaces this one | banner now refers to the newer build |
+| deferred -> superseded | a newer waiting worker replaces this one | banner now refers to the newer build |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> update_available
+  update_available --> updating: user taps Update now and V05 passes
+  update_available --> deferred: user taps Later
+  deferred --> update_available: deferredUntil reached or app restarted
+  updating --> activated: controllerchange received
+  updating --> update_available: V05 fails or activation does not complete within 10000 ms
+  update_available --> superseded: a newer waiting worker replaces this one
+  deferred --> superseded: a newer waiting worker replaces this one
+  activated --> [*]
+  superseded --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Update check on app start, on visibilitychange to visible and every 3600000 ms.
+- Deferral lasts 86400000 ms; install card back-off 2592000000 ms (30 days).
+- Activation wait after SKIP_WAITING is 10000 ms.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-115-09.T03 | property | PS-115-03.R01, PS-115-03.R03 | random sequences of waiting-worker, Later, Update now and timer events | only declared transitions occur; deferral always 24 h |
+| TEST-PS-115-09.T04 | e2e | PS-115-03.R02, PS-115-02.R03, PS-115-06.R01 | build B deployed while A is open with an unsaved draft | banner appears; Update now saves the draft first then activates; reload shows B with draft restored; no update without a click |
+| TEST-PS-115-09.T05 | e2e | PS-115-03.R02, PS-115-06.R02 | activation does not complete within 10 s (simulated) | state returns to update_available with explanation; A still works |
+
+## Dependencies
+
+Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

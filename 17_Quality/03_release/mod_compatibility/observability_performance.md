@@ -1,35 +1,38 @@
-# PS-142-08 — observability performance
+# PS-142-08 — Observability and performance: Compatibility
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-142-08. **Owner:** [17_Quality/03_release/mod_compatibility](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_compatibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M03 Compatibility](SPEC.md) · **Scope:** MVP · **Code:** `tests/compat` · **Contracts:** [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the observability performance process for compatibility within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-142-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-142-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-142-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-142-08.R01** The runner records pass or fail per cell, durations and the browser version tested.
+- **PS-142-08.R02** N-1 data tests finish in at most 60 s; schema and OpenAPI diff in at most 20 s; browser matrix in at most 25 min nightly.
+- **PS-142-08.R03** Web Push check on installed iOS 16.4+ PWA is simulated through feature detection and the content-free push payload format (reference and template key only).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_quality_compat_checks_total{kind,outcome}
+- classrup_quality_compat_matrix_cells{browser,outcome}
+- classrup_quality_compat_records_upgraded_total
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- JSON line per check {ts, level, msg, module, kind, outcome, durationMs, code?} with counts only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-142-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- N-1 data tests at most 60 s; schema and OpenAPI diff at most 20 s.
+- Browser matrix at most 25 min nightly with 6 workers.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-142-09.T12 | load | PS-142-08.R01, PS-142-08.R02 | run N-1 data, diff and matrix suites | 60 s, 20 s and 25 min budgets met; versions recorded |
+| TEST-PS-142-09.T13 | e2e | PS-142-08.R03 | iOS Safari 16.4 profile feature detection and content-free push payload | push capability detected; payload holds reference and template key only; fallback message shown otherwise |
+
+## Dependencies
+
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).

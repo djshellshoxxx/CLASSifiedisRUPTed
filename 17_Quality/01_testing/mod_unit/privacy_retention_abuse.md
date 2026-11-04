@@ -1,35 +1,45 @@
-# PS-137-07 — privacy retention abuse
+# PS-137-07 — Privacy, retention and abuse: Unit testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-07. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M01 Unit testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/unit-conventions` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for unit within 01_testing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-137-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-137-07.R01** Fixtures contain only synthetic data and the lint rule fails on strings matching real email or phone patterns outside the reserved example.com and 555-01xx ranges.
+- **PS-137-07.R02** Coverage and JUnit artifacts are retained 14 days in CI and contain no secrets because tests run without environment secrets.
+- **PS-137-07.R03** Tests run with an empty environment allow list so credentials in the developer shell never leak into snapshots.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Fixtures: synthetic P0 data only.
+- Reports: test names, durations, coverage percentages, no payloads.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- CI artifacts (junit, lcov) 14 days; local coverage/ directory is git-ignored and deleted by pnpm clean.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Real user data copied into a fixture | fixture lint blocks real-looking emails, phones and coordinates; code review checklist item |
+| T02 | Secret leaked through snapshot or log | tests run with an empty env allow list; secret scanning (F16.S01.M02) runs on repository and artifacts |
+| T03 | Test weakened to pass coverage gate | coverage counts only lines executed by assertions-bearing tests in a package; thresholds can be lowered only in a commit reviewed by a code owner of tests/unit-conventions |
+
+**Abuse controls**
+- Thresholds file is code-owned; pull requests that lower a threshold require a second reviewer.
+- Skipped tests (it.skip and pending-test markers) in spec-covered packages fail the lint rule.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-137-09.T12 | abuse | PS-137-07.R01, PS-137-07.R03 | commit that lowers a threshold and a file with it.skip | code-owner check flags the threshold change; lint rejects it.skip |
+| TEST-PS-137-09.T13 | abuse | PS-137-07.R02 | run with a canary secret in the shell environment | canary absent from every artifact and from test process env |
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-ID-001, CTR-MNY-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

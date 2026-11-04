@@ -1,0 +1,249 @@
+id: F03.S02.M03
+scope: MVP
+summary: >-
+  Either party of a service booking can open a service-specific dispute in their own vault: the module collects the scope
+  (booking, milestone, no-show, payment not received, quality, other), a statement and an automatically assembled evidence pack
+  of the signed statements already held (quote, acceptance, confirmation, cancellation, submissions, approvals, payment claim
+  references). It then asks F09.S02.M02 to create the DisputeCase and sends the counterparty a signed dispute notice. Case
+  handling, evidence review and resolution belong to F09.S02.M02; this module only links the case to the booking and freezes
+  service actions while the case is open. No funds are held by anyone, so a resolution is a signed statement the parties act on.
+responsibilities:
+  - Own ServiceDisputeLink in both participants' vaults, linking a booking and optional milestone to one DisputeCase.
+  - Assemble the evidence pack automatically - list of statement cids and attachment references with hashes - and let the opener add up to 5 more references and a statement of up to 2000 characters.
+  - Enforce eligibility - parties only, booking confirmed or later, within 30 days after the later of booking end, last milestone activity and cancellation, one open dispute per scope, at most 3 per booking.
+  - Emit services.dispute.opened locally so F03.S02.M01 and F03.S02.M02 freeze approvals and fee claims, and mark the link resolved when F09 reports the resolution.
+non_responsibilities:
+  - Case handling, evidence review, arbitration and resolution statements (F09.S02.M02 DisputeCase).
+  - Payment claims and receipts (F09.S01.M01, F09.S02.M01).
+  - Account sanctions or takedowns; there is no global enforcement (ADR-0016 section 8), relays may apply their own hosting policy.
+  - "Future: mediator marketplace and automatic evidence scoring."
+depends_on: [F03.S02.M01, F03.S02.M02, F09.S02.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a client, I open a dispute for a milestone where the provider delivered nothing, see the evidence assembled for me and know that the case is now with the dispute process.
+  - As a provider, I receive a dispute notice, see the scope and statement, and add my response through the case.
+  - As either party, I withdraw my dispute before the case is created if I resolved it directly.
+edge_cases:
+  - Both parties open a dispute for the same milestone at the same moment; the links merge on the booking and scope key and the earlier case cid (lexicographically smaller on tie) is kept, the other opener is pointed to it.
+  - The dispute window of 30 days has passed; refused with SERVICES_DISPUTE_WINDOW_CLOSED, but the parties may still use F09 directly with a manual case.
+  - F09.S02.M02 case creation fails or times out after 10 minutes; the link becomes link_failed after 3 retries and the opener is told to retry, nothing is lost.
+  - The counterparty never acknowledges the notice; the case proceeds with the evidence held and the notice shows transport_acknowledged at most.
+  - Evidence pack contains an attachment that is no longer in the vault; the pack lists it as missing with its recorded hash.
+  - Opener's device clock is wrong; windows are evaluated on the local clock plus the signed statement times as claims, and a skew over 24 hours shows a warning.
+  - Booking is cancelled in the middle of a dispute; the link stays linked and cancellation fee claims remain frozen until resolution.
+  - Counterparty is blocked locally; the dispute can still be opened (a block does not remove the right to dispute) and the notice goes to the mailbox without a notification sound.
+ux:
+  screens:
+    - "Open dispute sheet: scope choice, statement field (up to 2000 characters), evidence checklist pre-filled from signed statements, plain-language note that no funds are held and the outcome is a statement the parties act on."
+    - "Dispute status card on the booking: link state (pending, linked, resolved, withdrawn), case reference, sync line, resolution outcome in words."
+    - "Notice view for the counterparty: scope, opener statement, evidence list with hashes, Respond in case button."
+  states: [loading, eligible, ineligible, pending-link, linked, resolved, withdrawn, link-failed, pending-offline]
+  a11y:
+    - Scope choice is a radio group with visible labels and descriptions.
+    - Evidence checklist items are checkboxes with accessible names including type and date.
+    - Link state changes are announced through an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A ServiceDisputeLink stores booking, optional milestone, scope, opener, counterparty, statement, evidence pack, case reference, state and outcome, with revision per CTR-ID-001.
+      - Links are P2 and kept under RET-EVIDENCE; the evidence pack stores cids and hashes, never copies of deliverable bytes.
+      - A link is unique per booking and scope key; duplicates are merged rather than stored twice.
+    entities:
+      - name: ServiceDisputeLink
+        schema: classrup.services.dispute_link/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "bookingId: uuidv7 — ref F03.S02.M01 Booking"
+          - "milestoneId?: uuidv7 — ref F03.S02.M02 Milestone when scope is milestone"
+          - "scope: enum — not_delivered | quality | scope_change | payment_not_received | no_show | cancellation_fee | other"
+          - "scopeKey: string — bookingId plus milestoneId or 'booking'; unique among non-withdrawn links"
+          - "openerId: actorId — party who opened"
+          - "counterpartyId: actorId — other party"
+          - "statement: string — 20..2000 code points, plain text"
+          - "evidencePack: EvidenceRef[] — 1..25 items {kind: statement | attachment, cid? , attachmentId?, sha256?, missing?}"
+          - "disputeCaseId?: uuidv7 — ref F09.S02.M02 DisputeCase once created"
+          - "state: enum — pending_link | linked | resolved | withdrawn | link_failed"
+          - "outcome?: enum — continue | settled | cancelled | split | no_action"
+          - "noticeCid?: string — cid of the signed dispute notice"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "retryCount: int — 0..3"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "openedAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - state linked or resolved implies disputeCaseId is set.
+          - At most one non-withdrawn link per scopeKey in a vault.
+          - evidencePack always contains the cids of the booking confirmation statement and of the quote that the booking derives from.
+    sql: |
+      CREATE TABLE services_dispute_link (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, booking_id TEXT NOT NULL, scope_key TEXT NOT NULL, state TEXT NOT NULL,
+        dispute_case_id TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX services_dispute_scope ON services_dispute_link(tenant_id, scope_key) WHERE state <> 'withdrawn';
+  validation_rules:
+    requirements:
+      - Eligibility, scope and statement are validated before any case is requested.
+      - Inbound dispute notices are validated for signature, party role and referenced booking before a link is created.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | actor is client or provider of the booking and the booking has a confirmation statement | FORBIDDEN"
+      - "V02 | booking status is confirmed, in_progress, completed or cancelled with a late fee claim, and within 30 days of the window start | SERVICES_DISPUTE_WINDOW_CLOSED"
+      - "V03 | no non-withdrawn link exists for the same scopeKey | SERVICES_DISPUTE_DUPLICATE"
+      - "V04 | at most 3 disputes per booking | SERVICES_DISPUTE_LIMIT"
+      - "V05 | statement 20..2000 code points and at most 5 extra evidence references each with a SHA-256 | VALIDATION_FAILED"
+      - "V06 | scope milestone requires a milestoneId of this booking | VALIDATION_FAILED"
+      - "V07 | dispute notice signature verifies and signer equals the opener party of the booking | SERVICES_STATEMENT_INVALID"
+  workflow_state_machine:
+    requirements:
+      - Links move pending_link, linked, resolved; withdrawn and link_failed are terminal exits before the case exists.
+      - Resolution is reported only by F09 resolution events; this module never decides an outcome.
+      - Opening emits services.dispute.opened exactly once per link so downstream freezes are idempotent.
+    machines:
+      - entity: ServiceDisputeLink
+        initial: pending_link
+        terminal: [resolved, withdrawn, link_failed]
+        transitions:
+          - "pending_link -> linked | commerce.dispute.opened consumed with context reference this link | case id stored; freeze already in effect"
+          - "pending_link -> withdrawn | services.dispute.withdraw by opener | case not yet created; sends withdrawal inside the notice thread"
+          - "pending_link -> link_failed | 3 failed case-creation attempts | opener told to retry by opening again"
+          - "linked -> resolved | commerce.dispute.resolved consumed | outcome stored; emits no further freeze"
+    timeouts:
+      - "Case creation is retried at 10 s, 60 s and 10 minutes; after the third failure the link becomes link_failed. A linked dispute with no resolution for 60 days shows a reminder to both parties; it is never closed automatically."
+  commands_queries_events:
+    requirements:
+      - The module exposes vault commands open, withdraw and receive_notice; open produces the signed notice statement and calls the F09 case port in the same vault transaction.
+      - services.dispute.opened is a local event; it leaves the device only as the signed dispute notice.
+      - The module consumes F09 case events to link and resolve; it never writes to the DisputeCase itself.
+    commands:
+      - name: services.dispute.open
+        capability: services.dispute.open
+        input: "[statement classrup.services.dispute_notice/v1 signed by opener, E2E encrypted to counterparty; calls F09.S02.M02 case open port] { bookingId, milestoneId?, scope, statement, extraEvidence? }"
+        output: "{ linkId, state: pending_link, evidenceCount, noticeCid, syncState }"
+        errors: [NOT_FOUND, FORBIDDEN, VALIDATION_FAILED, SERVICES_DISPUTE_WINDOW_CLOSED, SERVICES_DISPUTE_DUPLICATE, SERVICES_DISPUTE_LIMIT, RATE_LIMITED]
+        emits: [services.dispute.opened]
+        idempotent: true
+      - name: services.dispute.withdraw
+        capability: services.dispute.withdraw
+        input: "[vault-local plus withdrawal note inside the notice thread] { linkId, expectedRevision }"
+        output: "{ linkId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: services.dispute.receive
+        capability: services.dispute.receive
+        input: "[vault-local ingestion of an inbound dispute_notice envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, linkId?, code? }"
+        errors: [SERVICES_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, SERVICES_DISPUTE_DUPLICATE]
+        emits: [services.dispute.opened]
+        idempotent: true
+    queries:
+      - name: services.dispute.get
+        capability: services.dispute.read_own
+        input: "[vault-local] { linkId }"
+        output: "{ link: ServiceDisputeLink }"
+        errors: [NOT_FOUND]
+      - name: services.dispute.preview_evidence
+        capability: services.dispute.read_own
+        input: "[vault-local] { bookingId, milestoneId?, scope }"
+        output: "{ eligible: boolean, reasonCode?, evidencePack: EvidenceRef[], windowEndsAt }"
+        errors: [NOT_FOUND, SERVICES_DISPUTE_WINDOW_CLOSED]
+    events_produced:
+      - {type: services.dispute.opened, privacy: P2, payload: "{ linkId, bookingId, milestoneId?, scope, openerId, counterpartyId }"}
+    events_consumed:
+      - {type: commerce.dispute.opened, effect: "for context type service_dispute link the case id and move pending_link to linked"}
+      - {type: commerce.dispute.resolved, effect: "move linked to resolved and store the outcome"}
+    errors:
+      - "SERVICES_DISPUTE_WINDOW_CLOSED | 409 | no | more than 30 days since the booking end, last milestone activity or cancellation"
+      - "SERVICES_DISPUTE_DUPLICATE | 409 | no | a dispute for this scope already exists"
+      - "SERVICES_DISPUTE_LIMIT | 409 | no | three disputes already exist for this booking"
+      - "SERVICES_STATEMENT_INVALID | 422 | no | dispute notice signature or signer role is invalid; quarantined"
+    example: |
+      client vault services.dispute.open { "bookingId": "0192f3c0-00b1-…", "milestoneId": "0192f3d0-0001-…", "scope": "not_delivered",
+        "statement": "No files were delivered after the agreed date of 2027-04-05." }
+      -> { "linkId": "0192f3e0-0001-…", "state": "pending_link", "evidenceCount": 5, "noticeCid": "sha256-Dn…", "syncState": "prepared" }
+      later: commerce.dispute.opened consumed -> state linked, disputeCaseId set; commerce.dispute.resolved consumed -> state resolved, outcome settled
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who is client or provider of the booking can open or withdraw a dispute for it.
+      - Inbound notices are accepted only when the signer is the other party of the booking; otherwise they are quarantined.
+      - Relay roles are not involved; a relay can refuse to carry the notice, which changes only the sync state.
+    capabilities:
+      - "services.dispute.open | principal | local principal is client or provider of the booking; window and limits satisfied"
+      - "services.dispute.withdraw | principal | link.openerId = local principal and state pending_link"
+      - "services.dispute.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "services.dispute.read_own | principal | local principal is client or provider of the booking"
+  failure_recovery_idempotency:
+    requirements:
+      - Open is idempotent by local command id and by scopeKey; a repeated open returns the existing link.
+      - A failure of the F09 case port leaves a pending_link that retries with backoff and never creates two cases.
+      - The notice and the link commit in one vault transaction; a crash leaves neither.
+    idempotency: "Local command id stored 24 h; scopeKey uniqueness returns the existing link; notice dedup by cid; the F09 case request carries the link id as idempotency reference."
+    concurrency: "Web Locks lock services-booking-<bookingId>; simultaneous opens by both parties are merged by scopeKey when the second notice arrives, keeping the earlier case cid with lexicographic tie-break."
+    retries: "F09 case open retried at 10 s, 60 s, 10 minutes (3 attempts); notice delivery retried 1 s, 2 s, 4 s, 8 s up to 8 attempts."
+    offline: "Opening works offline and creates a pending_link with a prepared notice; the case is requested when the local F09 module is reachable (always in the same vault) and delivery happens when online."
+    partial_failure: "If notice delivery fails the link and case still exist locally and the counterparty learns through the case flow later; if the case port fails the link becomes link_failed after 3 attempts with no case created."
+  privacy_retention_abuse:
+    requirements:
+      - Statements and evidence references are P2, travel only as end-to-end encrypted envelopes to the counterparty and the case handler chosen in F09, and never appear in logs or notifications.
+      - Retaliatory or repeated disputes are limited by eligibility, per-booking caps and per-day quotas.
+      - A dispute does not publish anything about the counterparty; any reputation effect is decided by F07 from signed resolutions, not here.
+    data:
+      - "ServiceDisputeLink: P2 with statement text; evidence pack holds cids and hashes."
+    retention:
+      - "Resolved, withdrawn and failed links: RET-EVIDENCE (2 years after last related activity)."
+    threats:
+      - "T01 | Retaliatory dispute right after a bad review | window and one dispute per scope, 3 per booking, statement and evidence are visible to the case handler and counterparty"
+      - "T02 | Forged dispute notice claiming to be the counterparty | signature and signer role checks, notice quarantined on mismatch"
+      - "T03 | Dispute spam to harass a provider | per-sender quota of 10 inbound notices per day in the receiving vault, local block of the sender still lets notices into quarantine for review"
+      - "T04 | Evidence pack leaks private deliverables | pack stores cids and SHA-256 only; file bytes go to the case handler only by explicit opener action and stay encrypted"
+    abuse_controls:
+      - "Local quota of 5 disputes opened per day per vault."
+      - "Relay hosting policy may rate limit notice delivery; the module shows refusals in the sync state."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and diagnostics stay in the vault.
+      - Open and preview_evidence meet p95 ≤ 200 ms with 25 evidence items on a mid-range phone.
+      - Evidence assembly never blocks the UI thread longer than 50 ms per slice.
+    metrics:
+      - "classrup_services_disputes_total{outcome=opened|linked|resolved|withdrawn|link_failed} (local counter)"
+      - "classrup_services_dispute_link_latency_ms (local histogram from open to linked)"
+    logs:
+      - "info dispute.opened {linkId, scope, correlationId} in the local diagnostics log - no statement text and no evidence names."
+    budgets:
+      - "open p95 ≤ 200 ms; preview_evidence p95 ≤ 150 ms; get p95 ≤ 50 ms."
+      - "Link to case round trip inside one vault ≤ 500 ms p95."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests validate the notice statement, events and the F09 case port call against the schema registry.
+      - Two-vault tests with a hostile relay cover duplicate, dropped and simultaneous notices.
+    fixtures: "Two vaults - client C and provider P - with confirmed booking B, milestone M submitted but empty of files; stub F09.S02.M02 case port; fixed clock 2027-04-10T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01,02.R02,02.R03 | rules V01–V07 each violated | documented code returned and nothing stored; notices with bad signature quarantined"
+      - "T02 | integration | 01.R02,04.R01 | open dispute with 5 extra evidence references | evidence pack holds cids and hashes only; notice signed; case requested once"
+      - "T03 | property | 03.R01 | random event orders for case opened, resolved, withdraw and retry | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,04.R03 | commerce.dispute.opened then commerce.dispute.resolved consumed twice | link linked then resolved once; outcome stored; duplicates skipped"
+      - "T05 | integration | 03.R03,04.R02 | services.dispute.opened consumed by quotes and milestones modules | booking disputed and milestones frozen exactly once"
+      - "T06 | integration | 06.R01,06.R02 | case port fails 3 times; port succeeds on retry 2 | link_failed after 3 failures with no case; success path creates exactly one case"
+      - "T07 | integration | 06.R03,09.R03 | crash between notice and link commit; both parties open simultaneously | neither or both persisted; links merge on scopeKey keeping earlier case cid"
+      - "T08 | contract | 04.R01,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | third party opens; notice signed by wrong key | FORBIDDEN or quarantine; no link created"
+      - "T10 | abuse | 07.R02,07.R03 | 11 inbound notices from one sender; retaliatory second dispute on same scope | 11th dropped and counted; duplicate refused"
+      - "T11 | integration | 07.R01 | inspect logs, notifications and relay payloads during open | no statement text, no evidence names, ciphertext only at relay"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 25 evidence items on throttled mobile profile | open p95 ≤ 200 ms, no telemetry request, UI slices ≤ 50 ms"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-030 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | links and notices round-trip; in-flight pending_link re-enters retry"
+      - "T15 | e2e | 01.R01,02.R01 | mobile client opens dispute, provider receives notice in second browser | both show linked with case reference; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No dispute outcome is ever decided by this module; only F09 resolution events change a link to resolved.
+      - Every opened dispute freezes approvals and fee claims exactly once and produces exactly one case.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains links, notices and evidence packs so a dispute can be reconstructed without the relay.
+      - Import verifies notice signatures and cids; unverifiable notices are kept as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section services.disputes in classrup-export/v1; one line per ServiceDisputeLink with the signed notice envelopes."
+    import: "Resolved and withdrawn links import as history; pending_link imports as pending_link and resumes case creation; linked imports as linked and re-links when the case is imported."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because notices are immutable and older readers ignore unknown fields."

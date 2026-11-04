@@ -1,0 +1,244 @@
+id: F08.S03.M01
+scope: MVP
+summary: >-
+  Curated public meetup spots (police station lobbies, shopping centres, libraries, transit hubs, busy cafes)
+  per L2 region cell, plus a safety checklist. Spots are signed public statements published by curators that a
+  relay operator or community chooses; the app ships a bundled starter set per supported region and refreshes
+  it from the user's selected relay. Suggestions are computed in the vault from cached spots for a region cell
+  the user picks, so no user location is sent anywhere and none is stored. The module never claims a spot is
+  safe, only that a curator listed it as a public place with stated opening hours.
+responsibilities:
+  - Own the SafeSpot record as a curator-signed public statement and its lifecycle from draft to active to retired.
+  - Provide relay commands for curators to publish and retire spots and for anyone to list spots of an L2 cell, served from the relay's public projection index.
+  - Provide the vault command that suggests up to 5 spots for a chosen L2 cell and meeting time from the local cache without contacting the relay with any location.
+  - Ship and version the safety checklist (10 items, localized keys) and the bundled starter spot set per region.
+  - Let users report a spot as unsuitable, which the relay operator or curator handles under their own policy.
+non_responsibilities:
+  - Agreeing on time and place between two members (F08.S03.M03).
+  - Check-in, no-show and trusted-contact sharing (F08.S03.M02).
+  - Region cells and L2 geometry (F06.S02.M01 and F06.S02.M02).
+  - Global curation or global takedown of spots; each relay and community curates its own list.
+  - "Future: crowd-sourced spot ratings, live opening hours, per-spot CCTV or staffed-hours attestations."
+depends_on: [F06.S02.M01, F16.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
+user_stories:
+  - As a buyer arranging a pickup, I can see up to 5 public spots in the region we chose, ordered by opening hours that cover our window, without sharing where I am.
+  - As a seller, I can read a short safety checklist before I go and tick items off.
+  - As a relay curator, I can publish a police-station lobby as a spot and retire it later, with a reason.
+  - As a member, I can report a spot that is closed or unsuitable.
+edge_cases:
+  - Region has no curated spots; the app shows the safety checklist and a prompt to pick a public place with staff, never a map search that would reveal location.
+  - Spot opening hours do not cover the meeting window; the spot is shown below spots that do and labelled outside hours.
+  - Curator retires a spot after members already agreed to meet there; the agreed Meetup keeps the spot snapshot, and its owner is told the spot was retired.
+  - Two curators publish the same venue; spots with equal venue key are deduplicated by the newer valid statement and the older is shown as superseded.
+  - Relay serves a statement with an invalid signature or an untrusted curator key; the vault discards it with reason and keeps the cached version.
+  - Cached list older than 30 days; the app still suggests but marks the list as possibly outdated.
+ux:
+  screens:
+    - "Suggest spots sheet: region cell label, list of up to 5 spots with name, kind, public address, opening hours, curator name, and Use this spot button."
+    - "Safety checklist: 10 checkable items (public place, tell a friend, daylight, inspect before paying, keep payment claim terms, no exact home address, trust your judgment to leave, bring a companion, keep chat in app, report problems)."
+    - "Report spot dialog: reason picker and free text up to 280 characters."
+  states: [loading, empty-region, cached-stale, ready, reported, offline]
+  a11y:
+    - Spots are a list; each item has an accessible name with name, kind and hours status, and the Use button is at least 44 by 44 px.
+    - The checklist uses native checkboxes with labels and progress is announced politely.
+    - Hours are rendered as text such as Open 08:00 to 20:00 and not only by color.
+processes:
+  domain_schema:
+    requirements:
+      - A SafeSpot is a public P0 statement signed by a curator key with venue name, kind, public street address, L3-or-coarser venue cell, opening hours and the L2 region cell it belongs to; it never contains user data.
+      - Spots belong to exactly one L2 cell and carry a curator DID, the relay or community that hosts them, a version and a validity range; the vault trusts only curator keys listed in the selected relay's signed curator list or bundled with the app.
+      - Spot statements are retained under RET-STANDARD in relay indexes and vault caches and are replaced when a newer valid version arrives; retired spots keep a tombstone for 180 days.
+    entities:
+      - name: SafeSpot
+        schema: classrup.comms.safe_spot/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — hosting relay or community scope"
+          - "l2Cell: string — region cell ID, public location precision L2"
+          - "venueKey: string — normalized lowercase name plus street address hash, ≤ 64 chars, for deduplication"
+          - "name: string — 2..80 characters"
+          - "kind: enum — police_station | shopping_centre | library | transit_hub | cafe | community_centre"
+          - "publicAddress: string — street address of the public venue, ≤ 160 characters; no private addresses"
+          - "venueCell: string — cell ID at L3 precision or coarser, never exact coordinates"
+          - "hours: array — 1..14 items { dayOfWeek 1..7, open HH:mm, close HH:mm } in the venue's IANA tz"
+          - "venueTz: string — IANA time zone"
+          - "curatorDid: did:key — signer, must be in the curator list"
+          - "status: enum — draft | active | retired"
+          - "retiredReason?: enum — closed | unsuitable | duplicate | policy"
+          - "version: int — increments on each published change"
+          - "validUntil?: timestamp — optional curator-stated end of validity"
+          - "signature: bytes — Ed25519 over JCS of the statement"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - A spot is active only with a valid signature from a key in the curator list and at least one hours entry.
+          - venueCell is at most L3 precision and no field carries a residential address or user coordinates.
+          - Only the newest version per (curatorDid, venueKey) is active; older versions are superseded.
+  validation_rules:
+    requirements:
+      - Curator input is validated strictly before signing and again by every verifying vault and relay.
+      - Suggestion inputs are validated so that no user location can enter the module.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | name 2..80 characters, kind in the enum, hours 1..14 entries with open earlier than close in venueTz | VALIDATION_FAILED"
+      - "V02 | publicAddress is at most 160 characters and venueCell precision is L3 or coarser | VALIDATION_FAILED"
+      - "V03 | statement signature verifies and curatorDid is in the trusted curator list of the hosting relay or the bundled list | COMMS_SAFE_SPOT_CURATOR_UNTRUSTED"
+      - "V04 | l2Cell exists in the supported region list (F06.S02.M01) | NOT_FOUND"
+      - "V05 | suggest input contains an L2 cell ID and a time window only; coordinates, addresses or device location fields are rejected | VALIDATION_FAILED"
+      - "V06 | a curator publishes at most 200 spot changes per day and a relay hosts at most 5 000 active spots per L2 cell | RATE_LIMITED"
+      - "V07 | retirement carries a reason from the enum | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A SafeSpot moves draft to active to retired; retired is terminal and a returning venue is published as a new spot.
+      - Publishing validates and signs in the curator vault; relays and vaults only verify and store.
+      - Retired spots are removed from suggestions immediately in vaults that received the retirement statement and keep a tombstone for 180 days.
+    machines:
+      - entity: SafeSpot
+        initial: draft
+        terminal: [retired]
+        transitions:
+          - "draft -> active | comms.safe_spot.publish by curator, signature and curator list verified | statement stored; relay index updated"
+          - "active -> active | comms.safe_spot.publish with higher version | older version superseded"
+          - "active -> retired | comms.safe_spot.retire by curator or relay operator under hosting policy | tombstone with reason signed"
+          - "draft -> retired | comms.safe_spot.retire by curator | draft discarded"
+    timeouts:
+      - "Vault cache refresh every 7 days while online; list marked possibly outdated after 30 days."
+      - "Tombstones are purged 180 days after retirement."
+  commands_queries_events:
+    requirements:
+      - Curators publish and retire spots through relay commands that accept signed statements; anyone lists spots of an L2 cell through a public relay query.
+      - Members get suggestions through a vault command that reads only the local cache and emits comms.safe_spot.suggested locally.
+      - The module consumes relay role events so that curator authority follows the relay operator's role assignments.
+    commands:
+      - name: comms.safe_spot.publish
+        capability: comms.safe_spot.publish
+        input: "[relay command; accepts signed statement classrup.comms.safe_spot/v1] { statement }"
+        output: "{ spotId, version, status: active }"
+        errors: [VALIDATION_FAILED, COMMS_SAFE_SPOT_CURATOR_UNTRUSTED, NOT_FOUND, RATE_LIMITED, CONFLICT_REVISION]
+        emits: []
+        idempotent: true
+      - name: comms.safe_spot.retire
+        capability: comms.safe_spot.retire
+        input: "[relay command; accepts signed retirement statement] { spotId, reason, expectedRevision }"
+        output: "{ spotId, revision, status: retired }"
+        errors: [NOT_FOUND, FORBIDDEN, VALIDATION_FAILED, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: comms.safe_spot.suggest
+        capability: comms.safe_spot.suggest
+        input: "[vault command, local only] { l2Cell, windowStart, windowEnd, kinds? }"
+        output: "{ items: SafeSpot[] (≤ 5), cacheAgeMs, checklistVersion }"
+        errors: [VALIDATION_FAILED, NOT_FOUND]
+        emits: [comms.safe_spot.suggested]
+        idempotent: true
+    queries:
+      - name: comms.safe_spot.list_for_cell
+        capability: comms.safe_spot.read_public
+        input: "[relay query, public] { l2Cell, sinceVersion?, cursor?, limit ≤ 100 }"
+        output: "{ items: SafeSpot[] (signed statements), tombstones[], nextCursor? }"
+        errors: [NOT_FOUND]
+      - name: comms.safe_spot.checklist
+        capability: comms.safe_spot.suggest
+        input: "[vault query] { locale }"
+        output: "{ version, items: [{ key, defaultText }] (10 items) }"
+        errors: []
+    events_produced:
+      - {type: comms.safe_spot.suggested, privacy: P1, payload: "{ l2Cell, spotIds[] (≤ 5), windowStart, windowEnd }"}
+    events_consumed:
+      - {type: security.role.assigned, effect: "relay only: when the role is operator or curator on this relay, add the assignee key to the curator list"}
+      - {type: security.role.revoked, effect: "relay only: remove the assignee key from the curator list; their active spots stay but are marked unmaintained"}
+    errors:
+      - "COMMS_SAFE_SPOT_CURATOR_UNTRUSTED | 403 | no | statement signer is not in the curator list of this relay or the bundled list"
+    example: |
+      vault command comms.safe_spot.suggest
+      { "l2Cell": "l2:DE-BE-001", "windowStart": "2026-11-07T14:00:00Z", "windowEnd": "2026-11-07T15:00:00Z" }
+      -> { "items": [ { "id": "0192f3a4-7777-7000-8000-000000000001", "name": "Polizeiabschnitt 53 lobby", "kind": "police_station" } ], "cacheAgeMs": 86400000, "checklistVersion": 3 }
+  authorization_capabilities:
+    requirements:
+      - Relay policy lets only device keys listed as curators of that relay publish or retire spots, and the relay operator may retire any spot it hosts with a recorded reason.
+      - Anyone, including anonymous clients, may read the public spot list; no authentication and no location are required.
+      - Vault policy lets the local principal request suggestions and read the checklist; suggestions never leave the device.
+    capabilities:
+      - "comms.safe_spot.publish | operator | relay policy; request signed by a curator key in the relay curator list"
+      - "comms.safe_spot.retire | operator | curator who published the spot, or relay operator under hosting policy with recorded reason"
+      - "comms.safe_spot.read_public | anonymous | relay public read; l2Cell required; 60 requests per minute per IP"
+      - "comms.safe_spot.suggest | local principal | vault policy; no network access"
+  failure_recovery_idempotency:
+    requirements:
+      - Publish is idempotent on (curatorDid, venueKey, version) and retirement is idempotent on spotId.
+      - Cache refresh failures leave the previous cache in place and are retried with backoff.
+      - Suggestions are computed locally from the cache and are available offline.
+    idempotency: "Relay commands require Idempotency-Key with 24 h replay window and are naturally idempotent on (curatorDid, venueKey, version); suggest is a pure local computation."
+    concurrency: "Relay applies publish with expectedRevision on the spot row; two curators publishing the same venueKey result in the higher version winning only within one curator's chain, otherwise both are kept and deduplicated at display time by newest valid statement."
+    retries: "Vault refresh retries with backoff base 1 s, factor 2, cap 15 min, max 6 attempts per cycle; curators retry publish on network errors only."
+    offline: "Suggest and checklist work offline from the cache and bundled starter set; publish requires a relay connection."
+    partial_failure: "If a refresh page fails midway, statements already verified are stored and the cursor advances only past verified pages; if the bundled set and cache are both empty the app shows the checklist only."
+  privacy_retention_abuse:
+    requirements:
+      - No user location is stored, transmitted or logged; the user picks a region cell label and the app reads from its own cache.
+      - Spot data is public P0 and contains only venue information; curators must not publish private homes or addresses.
+      - The module does not claim safety; the UI states that listing a place is not a guarantee.
+    data:
+      - "SafeSpot: P0 public statement."
+      - "comms.safe_spot.suggested event: P1 local event with the chosen L2 cell and window; not sent anywhere."
+    retention:
+      - "Active spots and caches: RET-STANDARD; tombstones 180 days after retirement."
+      - "Reports of unsuitable spots: held by the receiving relay operator under RET-SHORT (30 days)."
+    threats:
+      - "T01 | Malicious spot at a private or unsafe location | only trusted curator keys are accepted, curators are accountable by DID, relay operator can retire, users can report, and the UI says listing is not a safety guarantee"
+      - "T02 | Location inference from which cell a user browses | cells are L2 regions of many thousands of residents; the list is fetched in bulk per cell with no per-user parameters; users may preload several cells"
+      - "T03 | Forged spot injected by a hostile relay | statements are verified by curator signature in the vault; invalid ones are discarded"
+      - "T04 | Curator flooding with junk spots | 200 changes per day per curator and 5 000 active spots per cell per relay"
+      - "T05 | Spot used for targeted ambush because both parties announce it | spots are public by design; the checklist advises companions and daylight and the Meetup module lets either party change the place"
+    abuse_controls:
+      - "Report spot sends the spot ID and reason to the hosting relay operator under that relay's policy; no global takedown is claimed."
+      - "Relay operator can suspend a curator key on that relay only."
+  observability_performance:
+    requirements:
+      - Relay publish, retire and list are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
+      - Public list queries meet p95 ≤ 150 ms for 100 items and the vault suggest meets p95 ≤ 50 ms with 5 000 cached spots.
+      - Cache age and refresh failures are visible in local diagnostics.
+    metrics:
+      - "classrup_comms_safe_spots_total{status=active|retired} (relay)"
+      - "classrup_comms_safe_spot_publish_total{outcome=ok|untrusted|invalid} (relay)"
+      - "classrup_comms_safe_spot_cache_age_ms (gauge, local diagnostics)"
+    logs:
+      - "relay info safe_spot.published {spotId, version, correlationId} — no user data exists in this module."
+    budgets:
+      - "list_for_cell p95 ≤ 150 ms for 100 items; suggest p95 ≤ 50 ms with 5 000 cached spots on a mid-range phone."
+      - "Bundled starter set ≤ 200 KiB per region."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check relay commands, the vault command and the event payload against the schema registry.
+      - A privacy test asserts that no network request or storage write contains user location.
+    fixtures: "Relay R with curator C1 (trusted) and C2 (untrusted), region cell l2:DE-BE-001 with 8 spots incl. 2 outside hours, fixed clock 2026-11-04T10:00:00Z, venue tz Europe/Berlin."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | publish a valid police-station spot and a spot with exact coordinates in venueCell | first stored active signed; second refused VALIDATION_FAILED"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V07 violated in turn | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of publish, retire, refresh | retired never returns to active; at most one active version per curator and venue; tombstone purged at 180 days"
+      - "T04 | contract | 04.R01,04.R02,04.R03,09.R02 | publish, retire, suggest, list, checklist | outputs and event payloads validate against registry schemas"
+      - "T05 | unit | 04.R02,02.R02 | suggest for window 14:00 to 15:00 | at most 5 spots, in-hours first, outside-hours labelled, no network call made"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | statement signed by untrusted C2; anonymous publish; anonymous read | COMMS_SAFE_SPOT_CURATOR_UNTRUSTED for C2, UNAUTHENTICATED for anonymous publish, and anonymous read allowed within the rate limit"
+      - "T07 | integration | 06.R01,06.R02,06.R03 | replay publish, interrupt refresh after page 2, run offline | idempotent result, cursor resumes, cached suggestions still work"
+      - "T08 | abuse | 07.R01,07.R02 | capture all network traffic and IndexedDB writes during suggest and checklist | no coordinates, addresses or device location present"
+      - "T09 | abuse | 07.R03,03.R02 | 201st change in a day by one curator; forged relay statement | RATE_LIMITED; forged statement discarded and cache unchanged"
+      - "T10 | load | 08.R01,08.R02,08.R03 | 5 000 cached spots suggest 1 000 times; list 100 items at 50 req/s | budgets met"
+      - "T11 | unit | 09.R01,09.R03 | traceability tool run | every PS-066 requirement maps to a passing test"
+      - "T12 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup | spots round trip; imported spots are re-verified against the curator list"
+      - "T13 | a11y | 04.R01 | suggest sheet and checklist with screen reader | list semantics, checklist progress announced, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T13 pass in CI.
+      - Network and storage captures show zero user location data in any flow of this module.
+      - The UI never describes a listed spot as safe or verified safe.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains the cached spot statements they use and their checklist progress, and a curator's export contains their signed spots.
+      - Import re-verifies signatures and curator trust; spots from untrusted curators are dropped and counted.
+      - Schema changes follow expand and contract; new venue kinds are additive enum values.
+    export: "Section comms.safe_spots in classrup-export/v1; one line per SafeSpot statement (schema classrup.comms.safe_spot/v1) plus checklist progress."
+    import: "Signatures and curator list membership are re-verified; existing IDs and older versions are skipped; retired tombstones are kept."
+    backup: "Vault export is the backup (IOX-6); the relay index is covered by relay SQLite backup (IOX-3, IOX-7) and can be rebuilt from curator exports."
+    migration_rollback: "Additive fields only in v1; older readers show unknown kinds as other public place; rollback is safe because statements are immutable and versioned."

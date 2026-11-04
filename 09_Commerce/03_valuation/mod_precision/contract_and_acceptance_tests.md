@@ -1,35 +1,47 @@
-# PS-074-09 — contract and acceptance tests
+# PS-074-09 — Contract and acceptance tests: Money precision
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-09. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S03.M03 Money precision](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/valuation/precision` · **Contracts:** [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-074-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-074-09.R01** Every requirement is covered by at least one automated test.
+- **PS-074-09.R02** Property tests run at least 10 000 cases per property with a recorded seed.
+- **PS-074-09.R03** Golden vectors are shared between implementations and checked in CI.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** packages/commerce/test/vectors/money.json with at least 300 vectors: half-way cases, negative amounts, zero-decimal, 18-decimal, 40-digit rates, allocation ties.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-074-09.T01 | unit | PS-074-01.R01, PS-074-01.R02, PS-074-02.R01 | parse valid and invalid strings including '+1', '01', '1.0', '1e3', '-0' and a 39-digit value | valid values round-trip; each invalid input returns COMMERCE_MONEY_INVALID or COMMERCE_MONEY_OVERFLOW |
+| TEST-PS-074-09.T02 | unit | PS-074-02.R02, PS-074-02.R03, PS-074-01.R03 | invalid rate, empty weights, all-zero weights, mixed currencies | documented error returned or programmer error thrown |
+| TEST-PS-074-09.T03 | property | PS-074-03.R02, PS-074-04.R02 | 10 000 random (amount, rate, exponents) conversions compared with an independent oracle using exact fractions | results identical and rounding applied exactly once |
+| TEST-PS-074-09.T04 | property | PS-074-03.R02 | conversion round trip A to B to A with the same quote | absolute error ≤ floor(1/(2r) + 1/2) minor units where r is the effective minor-unit rate |
+| TEST-PS-074-09.T05 | property | PS-074-03.R03 | 10 000 random allocations over random weights | parts sum exactly to total, each part within 1 minor unit of the ideal share, ties resolved to lowest index |
+| TEST-PS-074-09.T06 | property | PS-074-03.R02 | HALF_EVEN symmetry | round(-x) equals -round(x) and half-way values go to the even neighbour |
+| TEST-PS-074-09.T07 | unit | PS-074-03.R01, PS-074-06.R01, PS-074-06.R02 | same input executed twice, inputs frozen and compared after the call | identical outputs, inputs unmodified |
+| TEST-PS-074-09.T08 | contract | PS-074-04.R01, PS-074-04.R03, PS-074-09.R03 | run the 300 JSON vectors in TypeScript and in the reference Python checker | all outputs identical |
+| TEST-PS-074-09.T09 | unit | PS-074-04.R02 | trigger each error path | code and HTTP mapping match the errors table |
+| TEST-PS-074-09.T10 | unit | PS-074-05.R01, PS-074-05.R02, PS-074-07.R01 | static analysis of the package imports and call graph | no fetch, fs, Date or Math.random usage and no logging calls |
+| TEST-PS-074-09.T11 | property | PS-074-06.R03, PS-074-07.R02, PS-074-07.R03 | oversized inputs of 5 000 digits and 100 000 weights | rejected within 1 ms with documented error and no amounts in the message |
+| TEST-PS-074-09.T12 | load | PS-074-08.R02, PS-074-05.R03 | 1 000 weights allocation and bundle size check | p99 ≤ 2 ms and gzip size ≤ 12 KiB |
+| TEST-PS-074-09.T13 | unit | PS-074-08.R01, PS-074-08.R03, PS-074-09.R01 | CI report generation | vector count and seeds are present in the CI artifact; traceability tool maps every requirement to a passing test |
+| TEST-PS-074-09.T14 | unit | PS-074-01.R01, PS-074-09.R02 | lint rule run on a file using parseFloat | lint fails the build |
+| TEST-PS-074-09.T15 | unit | PS-074-10.R01, PS-074-10.R02, PS-074-10.R03 | publish vectors file and load it from a fresh checkout and the previous major | vectors load, versions are recorded and backward compatible |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- Every property test passes with at least 10 000 cases and the shared vectors give identical results in all implementations.
+- Allocation never produces parts that fail to sum to the total in any generated case.
+- No floating point type, function or literal is present in the package (lint and static analysis).
+
+## Dependencies
+
+Module depends on: CTR-MNY-001, CTR-ERR-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

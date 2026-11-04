@@ -1,35 +1,62 @@
-# PS-098-01 — domain schema
+# PS-098-01 — Domain schema: Account limits
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-01. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S03.M04 Account limits](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/antifraud/limits` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the domain schema process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-098-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-098-01.R01** An AccountLimit stores key, limit key, tier, base value, risk multiplier, override, effective value and the reasons for each adjustment, with tenant and revision per CTR-ID-001.
+- **PS-098-01.R02** Limits are P2 between the member and the relay's moderators and retained under RET-STANDARD with the membership record.
+- **PS-098-01.R03** Effective value is always computed as the override when active, otherwise floor(base × multiplier) with a minimum of 1.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### AccountLimit
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.moderation.accountlimit/v1` · storage **relay** · privacy **P2** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — relay hosting scope |
+| subjectKey | did:key — member key on this relay |
+| limitKey | enum — listings_per_day \| open_offers \| open_cycle_proposals \| bids_per_day \| new_conversations_per_day |
+| tier | enum — new \| established \| trusted |
+| baseValue | int — from tier table, 0..10000 |
+| riskMultiplier | number — 1.0, 0.75 or 0.5 |
+| overrideValue? | int — 0..10000 set by a moderator |
+| overrideReason? | string — 10..500 code points |
+| overrideBy? | did:key — moderator key |
+| overrideExpiresAt? | timestamp — RFC 3339 UTC, at most 90 days after setting |
+| effectiveValue | int — computed, ≥ 0 |
+| firstSeenAt | timestamp — RFC 3339 UTC, relay clock |
+| completedDeals | int — consumed count, capped at 1000 |
+| revision | int — CTR-ID-001 ID-4 |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- effectiveValue equals overrideValue when overrideExpiresAt is in the future, otherwise max(1, floor(baseValue × riskMultiplier)) unless baseValue is 0.
+- overrideValue requires overrideReason, overrideBy and overrideExpiresAt.
+- At most one AccountLimit exists per (tenantId, subjectKey, limitKey).
+
+### Storage DDL
+
+```sql
+CREATE TABLE moderation_account_limit (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, limit_key TEXT NOT NULL, tier TEXT NOT NULL,
+  effective_value INTEGER NOT NULL, override_expires_at TEXT, first_seen_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX moderation_account_limit_key ON moderation_account_limit(tenant_id, subject_key, limit_key);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-098-09.T01 | unit | PS-098-01.R01, PS-098-01.R03, PS-098-02.R01 | tier table for A, B, C on all five limit keys | A new (5, 10, 3, 20, 20), B established (20, 50, 10, 100, 60), C trusted (100, 200, 25, 500, 200) |
+| TEST-PS-098-09.T02 | property | PS-098-01.R03, PS-098-03.R02 | random tiers, multipliers and overrides | effective value follows the documented formula; never below 1 unless base is 0 or override sets 0 |
+| TEST-PS-098-09.T15 | e2e | PS-098-01.R02, PS-098-04.R01 | mobile member hits the daily listing limit | limit sheet shows used, allowed, reset time and next tier; axe zero serious issues |
+
+## Dependencies
+
+Module depends on: F12.S03.M01, F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

@@ -1,10 +1,9 @@
-# TODO
+# TODO — F03.S02.M01 Service quotes and booking
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPECIFIED — implementation pending.
 
 - [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Specify all ten processes (module.spec.yaml).
+- [x] Validate cross-module contracts (spec:check).
+- [ ] Implement in `packages/services/src/service_booking/quotes`.
+- [ ] Tests for every requirement pass (tools/trace).

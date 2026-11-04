@@ -1,35 +1,32 @@
-# PS-110-03 — workflow state machine
+# PS-110-03 — Workflow state machine: Screen reader support
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-03. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M02 Screen reader support](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/screenreader` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-110-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-110-03.R01** The announcer is a queue with deterministic rules for priority, de-duplication and rate limiting.
+- **PS-110-03.R02** Polite messages never interrupt assertive messages and an assertive message replaces queued polite ones of the same region.
+- **PS-110-03.R03** There is no persisted lifecycle, so no entity state machine is declared.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Stateless UI services; the announcer queue exists only in memory for the page lifetime.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Announcer clears each live region text 5 s after announcement so repeated identical messages are announced again.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-110-09.T02 | unit | PS-110-01.R02, PS-110-02.R02, PS-110-03.R01 | form fixtures without labels or error associations; submit with 3 errors | V02 raised; compliant form focuses the first invalid field and announces 3 errors |
+| TEST-PS-110-09.T04 | property | PS-110-03.R01, PS-110-03.R02, PS-110-06.R01 | random sequences of announce() calls (200 runs) | at most one message per 2 s per region; assertive never interrupted by polite; duplicates dropped |
+| TEST-PS-110-09.T08 | unit | PS-110-01.R03, PS-110-03.R03, PS-110-09.R02 | spokenSync for local committed, prepared, transport acknowledged, peer accepted | wording matches the state and never claims more |
+| TEST-PS-110-09.T11 | e2e | PS-110-03.R02, PS-110-04.R01 | VoiceOver on iPhone 14 and TalkBack on Pixel 7 manual-assisted run of listing create and offer flows | landmarks navigable, values spoken in full, status announced without focus loss |
+
+## Dependencies
+
+Module depends on: F14.S02.M01, F14.S02.M02, CTR-UX-001, CTR-MNY-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

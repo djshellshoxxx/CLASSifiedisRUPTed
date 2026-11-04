@@ -1,35 +1,31 @@
-# PS-127-03 — workflow state machine
+# PS-127-03 — Workflow state machine: Secrets handling
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-03. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M02 Secrets handling](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/secrets` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-127-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-127-03.R01** Startup is all-or-nothing, so if any required secret fails validation the relay does not open its listener.
+- **PS-127-03.R02** Reload on SIGHUP loads new values atomically and keeps the previous value valid for the configured overlap of at most 300 seconds.
+- **PS-127-03.R03** Rotation of the relay data key re-wraps stored per-object keys in batches of 1 000 and records progress so it is resumable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** No entity lifecycle. Secret loading is a startup and reload procedure, not a stateful entity.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Overlap window after rotation: configurable 0..300 s, default 120 s.
+- Weekly full-history secret scan every Monday 02:00 UTC in CI.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-127-09.T04 | unit | PS-127-03.R02, PS-127-04.R01, PS-127-04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch |
+| TEST-PS-127-09.T06 | integration | PS-127-03.R01, PS-127-03.R02, PS-127-03.R03, PS-127-06.R01, PS-127-06.R02 | SIGHUP reload with overlap 120 s; failed reload; key rotation interrupted and resumed | atomic swap; old value valid within overlap only; failed reload keeps previous; rotation resumes without double work |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

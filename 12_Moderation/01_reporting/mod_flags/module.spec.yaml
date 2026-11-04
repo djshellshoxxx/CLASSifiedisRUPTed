@@ -1,0 +1,303 @@
+id: F12.S01.M01
+scope: MVP
+summary: >-
+  Local-first reporting. A member reports content from their own vault: the vault captures evidence of what
+  it holds (via F12.S01.M02), stores the Report locally, and sends a signed report statement, sealed to the
+  chosen relay's moderation key, to that relay's moderators. The reporter can also hide or block locally and
+  subscribe to signed advisory feeds that label or hide content, with no relay involved. A relay's moderators
+  decide only what that relay indexes; there is no global takedown. Reporter pseudonymity is not anonymity:
+  the relay operator sees the reporting key, and the relay's hosting policy (not cryptography) promises not to
+  reveal it to the reported party.
+responsibilities:
+  - Own the Report record in the reporter's vault (device) and its relay-side copy on a relay that accepts the report, with sync states local committed, prepared, transport_acknowledged and peer_accepted.
+  - Offer the 12-code reason taxonomy and produce the signed report statement addressed to one user-selected relay.
+  - Deduplicate reports (one open report per reporter key, target and reason) in the vault and again at the relay, and cap reports per relay policy.
+  - Provide local hide (never leaves the device) and advisory-feed subscriptions that label or hide matching content in local views.
+  - Show the reporter honest delivery state and a coarse outcome (actioned on that relay, no action, duplicate) when the relay returns a signed outcome statement.
+non_responsibilities:
+  - Evidence capture and hashing (F12.S01.M02).
+  - Cases, actions and statements of reasons issued by a relay (F12.S02.M01).
+  - Policy rule text and IDs (F12.S02.M03).
+  - Appeals (F12.S01.M03).
+  - Blocking people (F07.S02.M02 owns block lists); hide here only affects content visibility.
+  - "Future: trusted-flagger relationships; cross-relay report forwarding."
+depends_on: [F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a member, I can report a listing as a scam to the relay that serves it, and I see whether my report is only saved on my device, delivered to the relay, or acknowledged by its moderators.
+  - As a member, I can hide content or an author on my device immediately, even when no relay is reachable.
+  - As a member, I can subscribe to a relay's or community's signed advisory feed and choose whether matching content is labelled or hidden.
+edge_cases:
+  - The same reporter key reports the same target for the same reason twice; the vault returns the existing Report (MODERATION_REPORT_DUPLICATE with params.reportId) and sends nothing.
+  - The relay is unreachable; the report stays prepared in the sync outbox for up to 7 days and the UI says 'saved on this device, not delivered'; the user may export the report file to send to another relay or moderator.
+  - The relay serves a different copy of the content than the one the reporter holds; the snapshot covers the reporter's signed copy and the relay compares its own copy by content id.
+  - The target has no signed author envelope (a local draft or an unsigned import); capture is refused with MODERATION_TARGET_UNAVAILABLE because evidence needs the author's signature.
+  - A relay returns an outcome statement with an invalid relay signature; the vault quarantines it, keeps the report at transport_acknowledged and never shows 'actioned'.
+  - An advisory feed publisher key is revoked; the vault drops the subscription's labels after it verifies the revocation statement and shows 'publisher revoked'.
+  - Mass reporting from many fresh keys against one author; relay policy applies per-key and per /24 caps, and reports carry no weight by count alone.
+ux:
+  screens:
+    - "Report sheet from any content item: relay picker (default the relay that served the content), reason radio list (12 reasons), optional details (max 1000 characters), toggles 'hide on this device' and 'also block this author', submit."
+    - "Delivery status line under each report: Saved on this device, Sent to relay, Relay acknowledged, Resolved; each with timestamp labelled as 'this device' or 'relay clock'."
+    - "Settings > Safety > Advisory feeds: add publisher, per-feed mode (label, hide, ignore), last update, revoke state."
+    - "Honest notice on the sheet: your reporting key is visible to the relay's moderators; the person reported is not told by the relay's policy; copies already fetched by others cannot be recalled."
+  states: [loading, empty, saved-locally, sent, acknowledged, resolved, duplicate, relay-unreachable, quarantined-outcome]
+  a11y:
+    - Reason list is a radiogroup with arrow-key navigation and per-option descriptions.
+    - Delivery state changes are announced in an aria-live polite region and are never conveyed by color alone.
+    - All controls are at least 44 by 44 px and the sheet traps focus and restores it on close.
+processes:
+  domain_schema:
+    requirements:
+      - A Report stores reporter key, relay target, content target (id, content id and revision seen), reason code, optional details, evidence snapshot reference, sync state and status, with tenant and revision per CTR-ID-001.
+      - Reports are P3 in the reporter's vault and are sent only as an envelope sealed to the relay's moderation key, so the relay stores ciphertext until a moderator opens it; the relay copy is retained under RET-EVIDENCE per relay policy.
+      - A report is immutable after filing except for sync state, status, case reference and outcome; details cannot be edited, only withdrawn and refiled.
+      - An AdvisorySubscription stores a publisher key, mode and last verified sequence, is P3 and local to the vault, and changes only through the subscription command.
+    entities:
+      - name: Report
+        schema: classrup.moderation.report/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, generated in the vault"
+          - "tenantId: uuidv7 — relay hosting scope the report is addressed to (the vault's own scope locally)"
+          - "reporterKey: did:key — pseudonymous principal that signs the statement; P3"
+          - "relayId: string — user-selected destination relay, did:key of the relay"
+          - "targetType: enum — listing | message | profile | review | bid | offer | attachment | cycle_proposal"
+          - "targetId: uuidv7 — id of the reported content"
+          - "targetCid: string — content id (sha256-…) of the signed author envelope held by the reporter"
+          - "targetRevision: int — revision of the target at report time"
+          - "reasonCode: enum — spam | scam_fraud | prohibited_item | harassment | hate | sexual_content | violence | counterfeit | privacy_leak | impersonation | minor_safety | other"
+          - "details?: string — plain text, 0..1000 code points, sealed to the relay"
+          - "evidenceSnapshotId: uuidv7 — ref F12.S01.M02 EvidenceSnapshot in the vault"
+          - "syncState: enum — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "caseRef?: string — relay case reference from the signed report receipt"
+          - "status: enum — filed | linked | resolved | withdrawn"
+          - "outcome?: enum — actioned | no_action | duplicate | content_removed_by_owner"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local device clock (a claim, not evidence)"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one report with status filed or linked per (reporterKey, relayId, targetType, targetId, reasonCode).
+          - syncState peer_accepted implies a verified relay-signed receipt is stored; transport_acknowledged implies a relay receipt time recorded as relay-clock evidence only.
+          - status linked or resolved implies caseRef is set; a report always has an evidenceSnapshotId.
+      - name: AdvisorySubscription
+        schema: classrup.moderation.advisorysubscription/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "publisherKey: did:key — signer of advisory statements"
+          - "mode: enum — label | hide | ignore"
+          - "lastSeq: int — highest verified advisory sequence number (CTR-FED-001 FED-3)"
+          - "publisherStatus: enum — active | revoked | unreachable"
+          - "createdAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Advisory items are applied only if their signature verifies against publisherKey and the key is not revoked in the vault's key registry.
+          - An advisory never deletes local records; mode hide only filters views and can be undone.
+    sql: |
+      CREATE TABLE moderation_report (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reporter_key TEXT NOT NULL, relay_id TEXT NOT NULL,
+        target_type TEXT NOT NULL, target_id TEXT NOT NULL, reason_code TEXT NOT NULL, sync_state TEXT NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_report_open ON moderation_report(reporter_key, relay_id, target_type, target_id, reason_code)
+        WHERE status IN ('filed','linked');
+      CREATE INDEX moderation_report_target ON moderation_report(tenant_id, target_type, target_id, status);
+  validation_rules:
+    requirements:
+      - Report input is validated strictly against the schema in the vault and again by the receiving relay; unknown fields are rejected with VALIDATION_FAILED.
+      - The target must be a record the vault holds with a verifiable author signature and must not belong to the reporter.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | reasonCode is in the 12-code taxonomy and details is at most 1000 code points of plain text | VALIDATION_FAILED"
+      - "V02 | the vault holds the target with a verifiable author signature for targetCid | MODERATION_TARGET_UNAVAILABLE"
+      - "V03 | reporterKey differs from the author key of the target | MODERATION_REPORT_SELF"
+      - "V04 | no open report by the same reporter key for the same relay, target and reason | MODERATION_REPORT_DUPLICATE"
+      - "V05 | relay policy: fewer than 20 reports from this key in 24 h (3 after five dismissed reports in 30 days) | RATE_LIMITED"
+      - "V06 | relay id is a known relay with a published moderation key; the sealed report is at most 64 KiB | PAYLOAD_TOO_LARGE"
+      - "V07 | a received outcome or receipt statement carries a valid relay signature and references an existing report | FORBIDDEN"
+  workflow_state_machine:
+    requirements:
+      - Reports follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
+      - Sync state advances only through local committed, prepared, transport_acknowledged and peer_accepted, and the UI never shows more than the reached state.
+      - A reporter can withdraw a report while it is filed or linked; withdrawal sends a signed withdrawal statement but cannot recall evidence the relay already holds.
+    machines:
+      - entity: Report
+        initial: filed
+        terminal: [resolved, withdrawn]
+        transitions:
+          - "filed -> linked | relay receipt statement with caseRef verified (syncState peer_accepted) | caseRef stored"
+          - "filed -> withdrawn | moderation.report.withdraw by reporter | withdrawal statement queued; local record kept"
+          - "linked -> resolved | relay outcome statement verified | outcome stored"
+          - "linked -> withdrawn | moderation.report.withdraw by reporter | relay told; case may continue on other evidence"
+          - "filed -> resolved | relay outcome statement duplicate or removed_by_owner verified without a case | outcome stored"
+    timeouts:
+      - "Prepared statements retry delivery with CTR-IDM-001 backoff for up to 7 days, then show 'not delivered' with export and resend actions."
+      - "Relay side: a received report without a linked case after 24 h raises an operator metric."
+  commands_queries_events:
+    requirements:
+      - Every command declares whether it is vault-local, produces a signed statement, or is a relay command, and the signatures below do so.
+      - File emits moderation.report.filed as a local event in the same IndexedDB transaction as the Report; the statement leaves the device only through the sync outbox.
+      - The module consumes case events locally (derived from verified relay statements) to link and resolve reports.
+    commands:
+      - name: moderation.report.file
+        mode: "statement classrup.moderation.report/v1, sealed to the relay moderation key"
+        capability: moderation.report.file
+        input: "{ targetType, targetId, relayId, reasonCode, details?, hideLocally?: boolean, blockAuthor?: boolean }"
+        output: "{ reportId, referenceCode, revision: 1, syncState: local_committed, evidenceSnapshotId }"
+        errors: [VALIDATION_FAILED, MODERATION_TARGET_UNAVAILABLE, MODERATION_REPORT_SELF, MODERATION_REPORT_DUPLICATE, MODERATION_EVIDENCE_FAILED, PAYLOAD_TOO_LARGE]
+        emits: [moderation.report.filed]
+        idempotent: true
+      - name: moderation.report.withdraw
+        mode: "statement classrup.moderation.reportwithdrawal/v1 signed by reporter"
+        capability: moderation.report.withdraw
+        input: "{ reportId, expectedRevision }"
+        output: "{ reportId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: moderation.report.receive
+        mode: "relay command; request signed by reporter device key"
+        capability: moderation.report.receive
+        input: "{ sealedReport, signature }"
+        output: "{ receipt: statement classrup.moderation.reportreceipt/v1 signed by relay, caseRef? }"
+        errors: [VALIDATION_FAILED, MODERATION_REPORT_DUPLICATE, PAYLOAD_TOO_LARGE, RATE_LIMITED, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: moderation.advisorysubscription.set
+        mode: "vault-local"
+        capability: moderation.advisorysubscription.set
+        input: "{ publisherKey, mode: label|hide|ignore }"
+        output: "{ subscriptionId, revision }"
+        errors: [VALIDATION_FAILED, NOT_FOUND]
+        emits: []
+        idempotent: true
+    queries:
+      - name: moderation.report.list_mine
+        capability: moderation.report.read_own
+        input: "{ status?, cursor?, limit ≤ 50 }"
+        output: "{ items: { reportId, referenceCode, reasonCode, status, syncState, outcome?, createdAt }[], nextCursor? }"
+        errors: []
+      - name: moderation.report.list_for_target
+        capability: moderation.report.read_as_relay_moderator
+        input: "{ targetType, targetId, status?, cursor?, limit ≤ 50 }"
+        output: "{ items: Report[] (opened from sealed envelopes), nextCursor? }"
+        errors: [NOT_FOUND]
+      - name: moderation.advisorysubscription.list
+        capability: moderation.advisorysubscription.read_own
+        input: "{ includeRevoked?: boolean }"
+        output: "{ items: AdvisorySubscription[] }"
+        errors: []
+    events_produced:
+      - {type: moderation.report.filed, privacy: P3, payload: "{ reportId, targetType, targetId, targetCid, reasonCode, relayId, evidenceSnapshotId }"}
+    events_consumed:
+      - {type: moderation.case.opened, effect: "relay side: link received reports to the case; vault side: derived from the verified relay receipt to set caseRef and status linked"}
+      - {type: moderation.case.closed, effect: "move linked reports to resolved with the case outcome (relay side) or from the verified outcome statement (vault side)"}
+    errors:
+      - "MODERATION_TARGET_UNAVAILABLE | 409 | no | the vault does not hold the target with a verifiable author signature"
+      - "MODERATION_REPORT_SELF | 422 | no | authors cannot report their own content"
+      - "MODERATION_REPORT_DUPLICATE | 409 | no | an open report for this key, relay, target and reason exists; params.reportId"
+      - "MODERATION_EVIDENCE_FAILED | 500 | no | the evidence snapshot could not be created locally so no report was filed"
+    example: |
+      vault command moderation.report.file (local, Idempotency-Key 0192f3a4-0000-7000-8000-000000000a01)
+      { "targetType": "listing", "targetId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "relayId": "did:key:z6MkRelayExample", "reasonCode": "scam_fraud", "hideLocally": true }
+      -> { "reportId": "0192f3b0-1111-7000-8000-000000000001", "referenceCode": "0192f3b0", "revision": 1, "syncState": "local_committed" }
+      sync outbox POST https://relay.example/api/v1/cmd/moderation.report.receive
+      -> 201 { "receipt": { "type": "classrup.moderation.reportreceipt/v1", "relayReceivedAt": "2026-11-04T10:00:02Z", "sig": "…" } }  (syncState transport_acknowledged)
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the unlocked local principal can file, withdraw and read its reports and manage advisory subscriptions; incoming receipts and outcomes are accepted only when signed by the relay key the report was addressed to."
+      - "Relay policy: a relay accepts report statements from any registered or signed-request key not blocked by its hosting policy, and only that relay's moderators can open sealed reports."
+      - The reported party never receives report objects from the relay; relay queries return NOT_FOUND for non-moderators.
+    capabilities:
+      - "moderation.report.file | local principal | vault unlocked; target held with verifiable author signature; reporter key is not the author key"
+      - "moderation.report.withdraw | local principal | report.reporterKey = local principal"
+      - "moderation.report.receive | relay access (signed request) | relay hosting policy not blocking the key; relay rate limits (F12.S03.M03) not exceeded"
+      - "moderation.report.read_own | local principal | vault unlocked"
+      - "moderation.report.read_as_relay_moderator | moderator | relay role moderator on this relay; reporter key visible only on an open case"
+      - "moderation.advisorysubscription.set | local principal | vault unlocked; publisher key not revoked"
+      - "moderation.advisorysubscription.read_own | local principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Vault commands are idempotent per CTR-IDM-001 using local idempotency keys, and mutating commands require expectedRevision.
+      - Filing is atomic in the vault with the evidence snapshot and local outbox event; a failed capture leaves no report.
+      - Delivery is at-least-once through the sync outbox; the relay receive command is idempotent on report id, so retries never create duplicate cases.
+    idempotency: "Local Idempotency-Key per command; the relay stores (reporterKey, reportId) for 24 h and replays the original signed receipt; a different key for the same report returns MODERATION_REPORT_DUPLICATE."
+    concurrency: "expectedRevision on withdraw; file runs report insert, snapshot reference and outbox write in one IndexedDB transaction; two tabs filing the same report are serialized by the unique open-report index."
+    retries: "Sync outbox retries network errors and DEPENDENCY_UNAVAILABLE with CTR-IDM-001 backoff (base 500 ms, cap 30 s, 6 attempts per run, runs resume on reconnect up to 7 days); RATE_LIMITED honors retryAfterMs."
+    offline: "File and withdraw work offline and show 'saved on this device'; hide and advisory settings apply immediately; the UI never claims delivery before transport_acknowledged and never claims acceptance before peer_accepted."
+    partial_failure: "If the relay accepts the report but the receipt is lost, the retry returns the stored receipt; if the relay is down the report remains prepared and exportable; no state is shared across vaults beyond signed statements."
+  privacy_retention_abuse:
+    requirements:
+      - Reporter key and details are P3 in the vault and travel only sealed to the chosen relay's moderation key, never in federation payloads or public projections.
+      - Reports are retained under RET-EVIDENCE; on the relay the retention is the relay's published policy, never less than the case duration.
+      - Report abuse (mass reporting, retaliation, spoofed outcomes) is limited by per-key and per-prefix relay caps, dedupe, signature checks and local-only effects of advisories.
+    data:
+      - "Report: P3 (reporter vault; moderators of the addressed relay after opening)."
+      - "details: P3 free text; sealed; treated as untrusted content by moderators."
+      - "AdvisorySubscription: P3 (device only); reveals the user's moderation preferences so it is never synced."
+    retention:
+      - "Resolved and withdrawn reports in the vault: RET-EVIDENCE (2 years after last related activity), user may delete earlier from the vault."
+      - "Relay copy: per relay policy, default RET-EVIDENCE; signed tombstones from the reporter are honoured only for the details field when no case is open."
+    threats:
+      - "T01 | Mass reporting to take down a competitor's listing | relay caps 20 reports per day per key and 60 per /24 prefix, no automatic removal from report count alone, human or deterministic rule decides on that relay only"
+      - "T02 | Reported party deduces the reporter | relay policy omits reporter from notices; the UI states that the relay operator can see the reporting key and pseudonymity is not anonymity; reporters may use a fresh per-relay device key"
+      - "T03 | Forged outcome statement shows 'content removed' to the reporter | outcomes accepted only with valid relay signature over the report id; invalid ones are quarantined"
+      - "T04 | Malicious advisory feed hides a competitor's listings in many vaults | advisories are opt-in per publisher, show the publisher name, can be undone, and have local effect only"
+      - "T05 | Report details used to smuggle links or private data to moderators | details is plain text capped at 1000 code points, links rendered inert, scanned by F12.S02.M02"
+      - "T06 | Relay replays an old receipt to fake acknowledgement | receipts bind reportId and a relay sequence number; replay of a stale sequence is rejected"
+    abuse_controls:
+      - "Bad-faith signal: five reports dismissed by one relay within 30 days sends a report_dismissed_bad_faith signal in that relay's F12.S03.M02 store and lowers that key's cap to 3 per day; minor_safety and imminent-harm reasons are exempt."
+      - "Vault UX throttle: more than 10 reports per hour from one vault asks for confirmation (local convenience guard, not security)."
+  observability_performance:
+    requirements:
+      - Relay report intake is measured per CTR-OBS-001 and logs contain no report details or reporter keys; the PWA sends no telemetry (OBS-7).
+      - Vault file completes locally within 150 ms p95 for a 256 KiB snapshot, and the report sheet meets PWA budgets (OBS-5).
+      - Relay intake lag between received and linked is observable and alerting.
+    metrics:
+      - "classrup_moderation_reports_total{outcome=received|duplicate|rejected|withdrawn} (relay)"
+      - "classrup_moderation_report_intake_lag_ms (relay gauge: now - oldest received report without case)"
+      - "Local diagnostics counter reports_prepared (vault, exportable, never sent)"
+    logs:
+      - "relay info report.received {reportId, reasonCode, correlationId} — no reporter key, no details."
+      - "vault local log report.delivery_state {reportId, syncState} — kept in vault diagnostics only."
+    budgets:
+      - "Vault file p95 ≤ 150 ms; relay receive p95 ≤ 300 ms at 50 req/s; list_mine p95 ≤ 100 ms for 50 items."
+      - "Relay intake lag p95 ≤ 5 s; alert when a report stays unlinked for 24 h."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check command input, output, statements and event payloads against the schema registry.
+      - Reporter non-disclosure and statement verification are verified by dedicated abuse tests.
+    fixtures: "Vault of reporter R holding signed listing L (cid sha256-aa…, revision 3) from author S, relay X with moderator M, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | file a valid scam report in the vault | Report stored with syncState local_committed, snapshot reference set, details unchanged"
+      - "T02 | unit | 02.R02,02.R03 | each rule V02–V07 violated in turn | the documented error code is returned and nothing is stored"
+      - "T03 | property | 03.R01,03.R02 | random sequences of receipts, outcomes and withdrawals on one report | only declared transitions succeed and sync state never skips a step"
+      - "T04 | integration | 03.R03 | withdraw while linked | withdrawal statement queued, local record kept, relay case continues"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command, statement and query executes | outputs, signed statements and filed event validate against registry schemas"
+      - "T06 | integration | 04.R03 | case.opened then case.closed receipts delivered twice each | report linked then resolved once"
+      - "T07 | abuse | 05.R01,05.R03,07.R01,09.R03 | outcome signed by a different key; non-moderator queries relay reports | outcome quarantined; NOT_FOUND and no reporter key in any response or event to the author"
+      - "T08 | abuse | 05.R02 | unsigned and malformed relay report requests; blocked key | rejected with FORBIDDEN; no case created"
+      - "T09 | integration | 06.R01,06.R02,06.R03 | duplicate relay delivery with same report id; receipt lost then retried | one case; original signed receipt replayed"
+      - "T10 | integration | 03.R02,06.R03 | relay offline for 8 days then back | UI shows not delivered after 7 days; manual resend reaches transport_acknowledged"
+      - "T11 | abuse | 07.R03 | 21 reports by one key in a day; key with five dismissed reports files a 4th | 21st and 4th return RATE_LIMITED; minor_safety exempt"
+      - "T12 | unit | 01.R04,04.R01 | subscribe to advisory feed then revoke publisher key | labels applied, then dropped after verified revocation; no local record deleted"
+      - "T13 | load | 08.R01,08.R03 | 50 report receives per second for 5 minutes on relay | p95 ≤ 300 ms, intake lag p95 ≤ 5 s, no reporter key in logs"
+      - "T14 | unit | 08.R02,09.R01 | vault file with 256 KiB snapshot on Moto G profile; traceability tool run | p95 ≤ 150 ms; every PS-094 requirement maps to a passing test"
+      - "T15 | integration | 07.R01,07.R02,10.R01,10.R02,10.R03 | export, restore into fresh vault, import imported open report | own reports round-trip; imported open reports become withdrawn; details stay sealed"
+      - "T16 | e2e | 01.R02,04.R01 | mobile reporter files a report offline then reconnects | single report, delivery status progresses honestly, axe zero serious issues"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
+      - The UI never shows delivered or acknowledged before the matching sync state is reached.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the user's reports and advisory subscriptions, and the export is the primary backup (IOX-6).
+      - Import validates IDs, schema version and signatures of stored receipts; open reports are not re-sent automatically.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.reports in classrup-export/v1: one line per report (reportId, relayId, targetType, reasonCode, syncState, status, outcome, receipts); details included because it is the user's own data; section moderation.advisory lists subscriptions."
+    import: "Reports import as read-only history with status withdrawn unless a verified relay receipt shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected."
+    backup: "Vault export is the backup; relay SQLite backups (CTR-IOX-001 IOX-3) hold only sealed report envelopes and receipts and losing a relay loses no vault data."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields; reason code additions are tolerated as other by older readers."

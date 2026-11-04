@@ -1,35 +1,49 @@
-# PS-131-07 — privacy retention abuse
+# PS-131-07 — Privacy, retention and abuse: Incident records
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-07. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M02 Incident records](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/incident` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-131-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-131-07.R01** Incident records contain IDs, counts and data classes only, never user content, tokens or keys, and text is scanned for secret patterns before storage.
+- **PS-131-07.R02** Records are retained under RET-EVIDENCE (2 years), with legal hold override, and are readable only by operators and admins.
+- **PS-131-07.R03** Misuse (incident records used to profile users, forged incidents to trigger panic, concealment of breaches) is limited by content rules, hook thresholds, audit logging and the mandatory notification decision.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Incident: P3 relay operational data.
+- Incident notice statement: P0 content addressed to affected users, free of secrets and unverified claims.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Incidents: RET-EVIDENCE (2 years after closure).
+- Timeline redactions keep a hash for integrity.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Breach concealment | notification decision mandatory before closing SEV1 and SEV2, due times tracked, decisions and reasons stored and exportable to auditors |
+| T02 | Secrets or personal data pasted into timeline | pattern scan on every text, operator guidance, redaction command replacing text with a hash |
+| T03 | Forged or flooded detection events cause alert fatigue | thresholds on rolling windows, de-duplication per category and scope, system-only hook capability, sources are the relay's own verified events |
+| T04 | Incident notice used for phishing | notices are relay-signed statements shown with relay name inside the app only; they never contain links requesting credentials; email variants are not used in MVP |
+| T05 | Rewriting incident history | timeline append-only, severity history retained, operator actions audit-logged (F16.S01.M01), closed incidents immutable |
+
+**Abuse controls**
+- Operator commands limited to 200 per hour per key; hook-opened incidents limited to 20 per hour per relay.
+- Notice sends limited to 1 per incident per audience per 24 hours unless the operator records a reason.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-131-09.T08 | integration | PS-131-03.R01, PS-131-07.R01 | close SEV1 without postmortem or notification decision; with both | SECURITY_INCIDENT_CLOSE_BLOCKED then success |
+| TEST-PS-131-09.T10 | abuse | PS-131-07.R02, PS-131-07.R03 | 201 operator commands in an hour; 21 hook incidents; edit of a timeline entry | RATE_LIMITED; capped; append-only trigger aborts edit |
+| TEST-PS-131-09.T11 | integration | PS-131-07.R01 | secret pasted into annotate | SECURITY_INCIDENT_SECRET_IN_TEXT; redaction command replaces existing text with hash and audit entry |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M02, F16.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

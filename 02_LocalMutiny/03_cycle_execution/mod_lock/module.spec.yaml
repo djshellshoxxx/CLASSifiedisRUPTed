@@ -1,0 +1,274 @@
+# F02.S03.M02 Cycle locks: local reservations plus signed reservation statements (ADR-0016, ADR-0007). No distributed lock exists.
+id: F02.S03.M02
+scope: MVP
+summary: >-
+  Each participant reserves only their own items in their own vault, all-or-nothing, through an inventory hold with an absolute expiry,
+  and signs a reservation statement (classrup.mutiny.cycle_lock/v1) that tells the other participants what was reserved and until when.
+  A reservation prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented.
+  Other participants' reservation statements are verified and stored with provenance. A subject can be committed by a vault only when every giver's
+  reservation statement is present, valid and unexpired on that vault's clock. Conflicting promises about one item freeze the affected subjects.
+responsibilities:
+  - Reserve the principal's own items for a subject all-or-nothing through InventoryPort.hold with expiry equal to consentDeadline plus executionWindow (maximum 37 days) and sign the reservation statement.
+  - Release, convert (after the receiver's signed receipt) or expire reservations and publish a signed release statement on request.
+  - Verify and store peers' reservation statements, detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
+  - Enforce a cap of 5 active own reservation sets per vault and evaluate expiry lazily on vault open and every 60 s while open.
+non_responsibilities:
+  - Any claim that an item is physically available or that a peer will honor a reservation; a signed statement is evidence of a promise only.
+  - Inventory quantities, holds storage and listing availability (F01.S03.M01).
+  - Deciding the commit verdict (F02.S03.M01) and handling dropouts (F02.S03.M03).
+  - "Future: reservations with partial quantities across several cycles and a deposit-free reputation staking signal."
+depends_on: [F01.S03.M01, F01.S01.M01, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a participant, when I consent I know my own item is reserved in my vault and the others are told in a signed statement until what time.
+  - As a participant, I see for each other giver whether their signed reservation has arrived, is still valid, or has expired.
+  - As a participant who withdraws, my reservation is released immediately and a signed release is sent.
+edge_cases:
+  - Two cycles proposed to me concurrently name the same item with quantity 1; the first reserve succeeds and the second fails with a conflict without naming the first cycle.
+  - Reserving three items for one subject fails on the third because it is unavailable; nothing remains reserved.
+  - The vault is closed past the reservation expiry; on next open the reservation is expired before any other action and the subject is told.
+  - A peer's reservation statement names an item and another statement from the same peer names the same quantity-1 item for another subject; both are marked conflicted and both subjects are frozen at this vault.
+  - A reservation statement arrives with expiresAt earlier than consentDeadline plus executionWindow; it is invalid for commit and the UI says the peer's promise is too short.
+  - The vault clock moves backwards; expiry never un-expires a reservation that was already marked expired.
+  - The receiver's received attestation arrives after the giver already released after a cancellation; the lock is already terminal and the late attestation is handled by recovery.
+ux:
+  screens:
+    - "Reservation panel in the proposal and cycle screens: for each giver, item, reserved-until time on the viewer's clock, source (reserved here, signed by them) and validity chip."
+    - "Release confirmation dialog stating that a release notice will be sent but the other participants may have already relied on the reservation."
+  states: [loading, none, reserved-here, peer-signed, expired, released, conflicted, error]
+  a11y:
+    - Expiry times are shown as absolute local time and as relative text, both readable by screen readers.
+    - Conflict and expiry notices are announced in an aria-live polite region and use text, not color alone.
+    - Release is a button of at least 44 by 44 px with a distinct accessible name.
+processes:
+  domain_schema:
+    requirements:
+      - A CycleLock holds one giver's reserved item set for one subject, the revision hash it was made against, the absolute expiry, the direction own or peer and, for own reservations, the local inventory hold ids.
+      - The record is the reservation statement itself (signed, with cid) so peers' copies are verifiable evidence, and the own copy additionally links local holds that exist only in this vault.
+      - Expiry is absolute and never renewed; extending a promise means signing a new reservation that supersedes the old one before it expires.
+    entities:
+      - name: CycleLock
+        schema: classrup.mutiny.cycle_lock/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key in the vault"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "subjectType: enum — trade_proposal | cycle"
+          - "subjectId: uuidv7 — holder id; for a proposal that becomes a cycle the cycle id equals the proposal id"
+          - "giverId: did — signer of the reservation; owner of the items"
+          - "kind: enum — reserve | release"
+          - "direction: enum — own | peer"
+          - "revisionHash: cid — proposal revision digest the reservation was made against"
+          - "items: array — 1..5 items {inventoryItemId uuidv7, listingCid cid, quantity int 1..99, holdId? uuidv7}; holdId only on own"
+          - "expiresAt: timestamp — absolute; consentDeadline + executionWindowMs, at most 37 days after issue; evaluated on the local clock"
+          - "issuedAtClaim: timestamp — signer's clock, a claim"
+          - "status: enum — active | released | converted | expired | superseded | conflicted"
+          - "releaseReason?: enum — declined | withdrawn | cancelled | completed | recovered | item_lost | fork_frozen | superseded"
+          - "cid: cid — sha256 of JCS(envelope minus sig)"
+          - "sig: string — Ed25519 signature (base64url) per CTR-FED-001 FED-2"
+          - "provenance?: object — {originRelay?, receivedAt (local clock), via[], verifiedAt} for peer statements"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - An own reservation with status active has every item's holdId present and active in the local inventory, and all items were reserved in one transaction.
+          - At most one active CycleLock exists per (subjectId, giverId, direction); a new reserve supersedes the earlier one.
+          - expiresAt is never changed after creation; status moves only forward and terminal states do not reopen.
+          - The sum of quantities of active own reservations for one inventory item never exceeds the item's available quantity.
+    sql: |
+      CREATE TABLE mutiny_cycle_lock (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_id TEXT NOT NULL, giver_id TEXT NOT NULL, direction TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, cid TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_lock_active ON mutiny_cycle_lock(tenant_id, subject_id, giver_id, direction) WHERE status = 'active';
+      CREATE UNIQUE INDEX mutiny_lock_cid ON mutiny_cycle_lock(tenant_id, cid);
+  validation_rules:
+    requirements:
+      - Reserve validates ownership, availability, quantities and expiry range before any hold is taken, and takes all holds in one transaction or none.
+      - Incoming reservation statements are verified for signature, signer role, digest binding and expiry before they count toward any commit verdict.
+      - Conflict detection compares only data this vault legitimately holds and never claims knowledge of other vaults.
+    rules:
+      - "V01 | items has 1..5 lines with quantity 1..99 and each item is owned by the principal with available quantity ≥ requested | MUTINY_LOCK_UNAVAILABLE"
+      - "V02 | expiresAt = consentDeadline + executionWindowMs and ≤ now + 37 d | MUTINY_LOCK_EXPIRY_INVALID"
+      - "V03 | the principal has fewer than 5 active own reservation sets | MUTINY_LOCK_LIMIT"
+      - "V04 | revisionHash equals the subject's head revision hash | MUTINY_LOCK_REVISION_STALE"
+      - "V05 | reservation signature verifies Ed25519 and giverId is the owner of the listed items per the signed listing projections and a giver in the head revision's legs | MUTINY_LOCK_STATEMENT_INVALID"
+      - "V06 | peer reservation expiresAt ≥ head consentDeadline + executionWindowMs and is still in the future on the local clock | MUTINY_LOCK_STATEMENT_INVALID"
+      - "V07 | no other active reservation of the same item for a different subject conflicts in quantity | MUTINY_LOCK_CONFLICT"
+      - "V08 | release only by the reservation's signer and only while status is active | CONFLICT_STATE"
+      - "V09 | issuedAtClaim is not more than 5 minutes after the local clock | MUTINY_LOCK_STATEMENT_INVALID"
+  workflow_state_machine:
+    requirements:
+      - A reservation is active until the earliest of release, conversion after receipt, supersession, expiry by the local clock or conflict detection.
+      - Conversion happens per lock only when every item of the lock has a verified signed receipt from the receiver; partial receipt keeps the lock active.
+      - Expiry is evaluated lazily and on a 60 s timer while the vault is open, without any background guarantee, and always before any command touching the lock.
+    machines:
+      - entity: CycleLock
+        initial: active
+        terminal: [released, converted, expired, superseded, conflicted]
+        transitions:
+          - "active -> released | mutiny.lock.release by the signer, or subject declined, cancelled, withdrawn, frozen or rejected | own holds released in the same transaction; emits mutiny.cycle.unlocked"
+          - "active -> converted | mutiny.leg.received verified for every item of the lock | own holds converted to traded in F01.S03.M01; emits mutiny.cycle.unlocked with reason converted"
+          - "active -> superseded | a new reserve for the same subject and giver after a new revision | emits mutiny.cycle.unlocked with reason superseded"
+          - "active -> expired | local clock reaches expiresAt | own holds released; emits mutiny.cycle.unlocked with reason expired"
+          - "active -> conflicted | conflicting active reservation for the same item detected | subject owners freeze the subjects; emits mutiny.lock.conflict_detected"
+    timeouts:
+      - "Expiry evaluation on vault open and every 60 s while open; maximum reservation lifetime 37 days (72 h default consent window plus 14 d default execution window is 17 days)."
+  commands_queries_events:
+    requirements:
+      - reserve and release are vault commands that produce the signed statement classrup.mutiny.cycle_lock/v1 (kind reserve or release); ingest verifies a peer's statement and produces none.
+      - The reserve command takes all holds and writes the statement and event in one IndexedDB transaction, and it is idempotent.
+      - Events locked and unlocked are emitted for own reservations and for verified peer reservations, with direction in the payload.
+    commands:
+      - name: mutiny.lock.reserve
+        capability: mutiny.lock.reserve
+        input: "{ subjectType, subjectId, revisionHash, items: { inventoryItemId, quantity }[1..5], consentDeadline, executionWindowMs } — vault command; produces statement classrup.mutiny.cycle_lock/v1 kind reserve signed by the principal"
+        output: "{ lockId, cid, expiresAt, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, MUTINY_LOCK_UNAVAILABLE, MUTINY_LOCK_CONFLICT, MUTINY_LOCK_LIMIT, MUTINY_LOCK_EXPIRY_INVALID, MUTINY_LOCK_REVISION_STALE]
+        emits: [mutiny.cycle.locked]
+        idempotent: true
+      - name: mutiny.lock.release
+        capability: mutiny.lock.release
+        input: "{ lockId, expectedRevision, reason } — vault command; produces statement classrup.mutiny.cycle_lock/v1 kind release signed by the principal"
+        output: "{ lockId, revision, status: released, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [mutiny.cycle.unlocked]
+        idempotent: true
+      - name: mutiny.lock.ingest
+        capability: mutiny.lock.ingest
+        input: "{ envelope: classrup.mutiny.cycle_lock/v1 signed by the giver, provenance } — vault command; produces no statement"
+        output: "{ lockId?, accepted: boolean, status, quarantineReason? }"
+        errors: [MUTINY_LOCK_STATEMENT_INVALID, MUTINY_LOCK_REVISION_STALE, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        emits: [mutiny.cycle.locked, mutiny.cycle.unlocked, mutiny.lock.conflict_detected]
+        idempotent: true
+    queries:
+      - name: mutiny.lock.get_for_subject
+        capability: mutiny.lock.read
+        input: "{ subjectType, subjectId }"
+        output: "{ locks: CycleLock[], allGiversReserved: boolean, earliestExpiry? }"
+        errors: [NOT_FOUND]
+      - name: mutiny.lock.list_active_own
+        capability: mutiny.lock.read
+        input: "{ cursor?, limit ≤ 50 }"
+        output: "{ items: CycleLock[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: mutiny.cycle.locked, privacy: P2, payload: "{ subjectType, subjectId, giverId, direction, itemCount, inventoryItemIds, expiresAt }"}
+      - {type: mutiny.cycle.unlocked, privacy: P2, payload: "{ subjectType, subjectId, giverId, direction, inventoryItemIds, reason: released|converted|superseded|expired|item_lost|conflict }"}
+      - {type: mutiny.lock.conflict_detected, privacy: P2, payload: "{ giverId, inventoryItemId, subjectIds[2], detectedAt }"}
+    events_consumed:
+      - {type: mutiny.cycle.declined, effect: "release the principal's own reservations of the subject with reason declined"}
+      - {type: mutiny.cycle.cancelled, effect: "release the principal's own reservations with reason cancelled"}
+      - {type: mutiny.cycle.completed, effect: "mark any remaining own reservation released with reason completed"}
+      - {type: mutiny.cycle.partially_executed, effect: "release own reservations for legs without handover evidence; keep reservations of handed-over but unreceived legs until recovery resolves"}
+      - {type: mutiny.recovery.resolved, effect: "apply the recorded per-leg disposition, converting or releasing remaining own holds"}
+      - {type: mutiny.leg.received, effect: "after verifying the receiver's signed attestation, convert the matching item holds and the lock when all its items are received"}
+      - {type: mutiny.proposal.rejected, effect: "release own reservations of the proposal"}
+      - {type: mutiny.proposal.withdrawn, effect: "release own reservations of the proposal"}
+      - {type: mutiny.proposal.expired, effect: "release own reservations of the proposal"}
+      - {type: mutiny.revision.forked, effect: "release own reservations of the frozen subject with reason fork_frozen"}
+      - {type: bazaar.inventory.released, effect: "if the released hold belongs to an active own reservation, mark it expired with reason item_lost and emit unlocked"}
+    errors:
+      - "MUTINY_LOCK_UNAVAILABLE | 409 | no | an own item is not available in the requested quantity; nothing was reserved"
+      - "MUTINY_LOCK_CONFLICT | 409 | no | the item is already reserved for another subject in this vault or a conflicting peer promise exists"
+      - "MUTINY_LOCK_LIMIT | 409 | no | the vault already has 5 active reservation sets"
+      - "MUTINY_LOCK_EXPIRY_INVALID | 422 | no | requested expiry is outside the allowed range"
+      - "MUTINY_LOCK_REVISION_STALE | 409 | no | the revision hash is not the subject's head"
+      - "MUTINY_LOCK_STATEMENT_INVALID | 422 | no | a reservation statement failed signature, signer, expiry or claimed-time checks"
+    example: |
+      # N-party cycle of 4: each giver reserves their own single item; Alice (coordinator) first
+      mutiny.lock.reserve  Idempotency-Key: 0192f420-0000-7000-8000-000000000001
+      { "subjectType":"cycle", "subjectId":"0192f400-…", "revisionHash":"sha256-Zk8…", "items":[{"inventoryItemId":"0192f421-…","quantity":1}],
+        "consentDeadline":"2026-11-07T10:00:00.000Z", "executionWindowMs":1209600000 }
+      -> { "lockId":"0192f422-…", "cid":"sha256-Rr4…", "expiresAt":"2026-11-21T10:00:00.000Z", "syncState":"prepared" }
+      Bob, Carol and Dan do the same in their own vaults. Each vault's commit verdict needs all 4 reservation statements (2 for a 2-party, 3 for a 3-party, N for N-party).
+      A fifth statement naming Dan's item for another cycle triggers mutiny.lock.conflict_detected and freezes both subjects at the vault that sees both.
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal reserve or release, and only items the principal owns.
+      - A peer reservation statement is accepted only when signed by a registered device key of a giver in the subject's head revision and only for items that giver lists; otherwise it is quarantined.
+      - Relays have no capability over reservations and see only ciphertext.
+    capabilities:
+      - "mutiny.lock.reserve | principal | vault unlocked; principal owns the items; principal is a giver in the head revision; subject open"
+      - "mutiny.lock.release | principal | principal signed the reservation and it is active"
+      - "mutiny.lock.ingest | principal | envelope signer is a giver in the head revision with a non-revoked device key"
+      - "mutiny.lock.read | principal | subject stored in this vault"
+  failure_recovery_idempotency:
+    requirements:
+      - Reserve and release are idempotent, and all holds plus the statement are written in one IndexedDB transaction so there are no orphan holds and no statements without holds.
+      - Concurrent reserve attempts inside one vault are serialized by an IndexedDB transaction and a Web Locks mutex; the first transaction to commit wins and the others fail with a conflict.
+      - After a crash, expiry and orphan-hold reconciliation run first on vault open.
+      - Cross-vault double promises are detected on evidence and frozen, never silently resolved.
+    idempotency: "Idempotency-Key replay 24 h; reserve is also idempotent by (subjectId, revisionHash); ingest dedupes by cid."
+    concurrency: "Web Locks mutex 'mutiny-lock' plus IndexedDB readwrite transaction; items are processed in ascending inventoryItemId order inside one transaction so partial acquisition is impossible; the first committed transaction wins, so concurrent proposals over one item resolve first-commit-wins within the vault."
+    retries: "Release and reserve statements go through the sync outbox with IDM-4 backoff; reserve is never retried against inventory automatically after MUTINY_LOCK_UNAVAILABLE."
+    offline: "Reserve and release work offline; the statements stay local_committed or prepared, and the peers' view of this reservation is unknown until transport acknowledgement."
+    partial_failure: "If statement signing fails, the transaction aborts and no hold remains; if the outbox cannot deliver, the local reservation stays valid and the peers treat the missing statement as absent, so the subject cannot commit at their vaults."
+  privacy_retention_abuse:
+    requirements:
+      - Reservation statements are P2, encrypted to the subject's parties, and reveal only item references already public in listings, the subject id and the expiry.
+      - Error messages never reveal which other subject holds an item.
+      - Item hoarding through reservations is limited by the cap of 5 active sets, absolute expiry and per-subject recipients' quarantine of repeat offenders.
+    data:
+      - "CycleLock: P2; own holdId values are local-only and omitted from the signed statement."
+    retention:
+      - "RET-EVIDENCE 2 years after the last related activity; local holds themselves are deleted when released or converted."
+    threats:
+      - "T01 | A giver signs reservations for the same item in two cycles to promise it twice | local vault prevents it for the giver's own vault; peers that see both statements mark both conflicted and freeze; a malicious vault that never shows both cannot be detected, which the UI states as a limit"
+      - "T02 | Hoarding items by proposing many cycles | cap of 5 active reservation sets, absolute expiry, no renewal"
+      - "T03 | Forged reservation of another person's item | signature must verify against the item owner's DID and the listing projection must be authored by that DID"
+      - "T04 | Reservation expiry manipulated through the clock | expiry is evaluated on each vault's own clock and any disagreement with relay receipt time counts as expired"
+      - "T05 | Release statement replayed to cancel a later reservation | release is bound to the cid of the reserve it releases and to a newer revision hash"
+    abuse_controls:
+      - "Cap of 5 active own reservation sets and 20 reserve commands per day per vault."
+      - "Recipients quarantine DIDs that send more than 10 reservation statements per hour."
+  observability_performance:
+    requirements:
+      - Reservation outcomes and expiry sweeps are counted in local diagnostics without identifiers (OBS-7).
+      - Reserve of 5 items completes within 100 ms at p95 on a mid-range phone.
+      - Expiry sweep over 200 locks completes within 50 ms.
+    metrics:
+      - "classrup_mutiny_locks_total{outcome=reserved|released|converted|expired|conflicted|rejected} (local diagnostics)"
+      - "classrup_mutiny_lock_conflicts_total (local diagnostics)"
+    logs:
+      - "info lock.reserved {lockId, itemCount, correlationId} — no item ids, no DIDs."
+      - "warn lock.conflict_detected {correlationId}"
+    budgets:
+      - "reserve p95 ≤ 100 ms for 5 items; ingest p95 ≤ 60 ms including signature verification; expiry sweep ≤ 50 ms for 200 locks."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Concurrency inside a vault is tested deterministically with two simulated transactions, and all-or-nothing is tested by failing the last item.
+      - Cross-vault tests use in-memory vaults and a fake relay with drops, delays and duplicates.
+    fixtures: "Vault A with items I1 (qty 1), I2 (qty 3), I3 (qty 1, held elsewhere); vaults B and C; fixed clock 2026-11-04T10:00:00Z; 4-party and 6-party subject fixtures."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | reserve I1 and I2 | both holds active, statement signed, expiry equals deadline plus execution window"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01..V09 violated in turn | documented error code and no hold left behind"
+      - "T03 | property | 03.R01,06.R02 | random reserve, release, supersede, expire sequences | status only moves forward; active own locks always have active holds; sum of quantities within availability"
+      - "T04 | integration | 06.R02,01.R02,09.R03 | two concurrent reserves of the same quantity-1 item for different subjects | exactly one succeeds, the other MUTINY_LOCK_CONFLICT without naming the first"
+      - "T05 | integration | 02.R01,06.R03 | reserve [I1, I2, I3] where I3 is unavailable | MUTINY_LOCK_UNAVAILABLE and I1, I2 holds absent"
+      - "T06 | integration | 03.R03,06.R03 | vault closed beyond expiry then opened | lock expired before any command runs, holds released, unlocked emitted"
+      - "T07 | integration | 03.R02,04.R03 | leg.received for all items, then for part of the items | lock converted only when all items received; holds converted in inventory"
+      - "T08 | contract | 04.R01,04.R02,09.R02 | commands and events | statements and event payloads validate against classrup.mutiny.cycle_lock/v1 and registry"
+      - "T09 | integration | 02.R02,07.R01 | peer statements: valid, bad signature, wrong signer, expiry too short, duplicated | only valid one stored; others quarantined; duplicate skipped"
+      - "T10 | integration | 07.R03,02.R03 | peer double promise for one quantity-1 item in two subjects | both conflicted, conflict_detected emitted, both subjects frozen"
+      - "T11 | abuse | 05.R01,05.R02,05.R03,07.R03 | other principal reserves; reservation for another person's item; relay inspects mailbox | FORBIDDEN or quarantine; relay sees ciphertext only"
+      - "T12 | abuse | 07.R02,07.R03 | 6th active set; replay of old release against newer reservation | MUTINY_LOCK_LIMIT; release ignored"
+      - "T13 | chaos | 06.R01,06.R03,06.R04 | crash between hold and statement signing | transaction aborted, no orphan hold or statement on restart"
+      - "T14 | load | 08.R02,08.R03 | reserve 5 items; sweep 200 locks on emulated Moto G | within budgets"
+      - "T15 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no identifiers in diagnostics; every PS-023 requirement maps to a passing test"
+      - "T16 | integration | 04.R03,01.R01 | 2-, 3-, 4- and 6-party fixtures | all-givers-reserved flag true only when every giver has a valid unexpired statement"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, rollback | active locks import as expired-unverified to avoid stale promises; history round-trips"
+    acceptance:
+      - All tests T01–T17 pass in CI.
+      - A reservation never leaves a partial item set, and no module claims that a peer's reservation prevents that peer from double-promising.
+      - Expiry is always evaluated on the local clock and terminal lock states never reopen.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the user's own and verified peer reservation statements of non-purged subjects because they are signed evidence.
+      - Imported active reservations never revive holds; they are imported as expired unless the subject is re-confirmed and reserved again.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.locks in classrup-export/v1; one line per CycleLock (schema classrup.mutiny.cycle_lock/v1) without local holdId values."
+    import: "Statements are verified by signature and cid; active ones import with status expired and reason imported, closed ones import as history; holdId values are never imported."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext copies in mailboxes (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback ignores unknown fields; the status enum only grows and unknown states read as expired."

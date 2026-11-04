@@ -1,35 +1,47 @@
-# PS-040-07 — privacy retention abuse
+# PS-040-07 — Privacy, retention and abuse: Rental deposits (noncustodial)
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-07. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S01.M02 Rental deposits (noncustodial)](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_catalog/deposits` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-040-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-040-07.R01** Deposit terms, evidence and amounts are P2 and travel only as end-to-end encrypted envelopes to the two parties; they never appear in logs, notifications or public projections.
+- **PS-040-07.R02** Evidence references are ids and hashes; photos remain encrypted attachments shared only with the counterparty and the dispute handler by explicit action.
+- **PS-040-07.R03** Deposit theft, bogus forfeits and fake release claims are limited by explicit proof levels, mandatory evidence and the dispute path; no one is auto-penalized.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- DepositTerms: P2 in both vaults.
+- Forfeit evidence: references to P2 attachments, hashes recorded in the signed claim.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Terminal deposit terms and statements: RET-EVIDENCE (2 years after last related activity).
+- Quarantined statements: RET-SHORT (30 days) with the failure code.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Owner keeps the deposit and disappears | non-custody is stated before agreement, funded proof requires the owner's own acknowledgement, the signed acknowledgement is dispute evidence and can inform reputation locally; no guarantee of recovery is claimed |
+| T02 | Bogus forfeit claim | claim needs 1..10 evidence references and an amount not above the funded deposit; renter can dispute; 14 days of silence escalates to dispute and never to acceptance |
+| T03 | Renter claims payment that never happened | proof stays claimed (unverified) until the owner acknowledges or the chain is final; handoff UI warns when not funded |
+| T04 | Replay of an old agreement onto new terms | agreement signs the exact terms cid; mismatch returns RENTALS_DEPOSIT_TERMS_STALE |
+| T05 | Relay tampering or reordering | signatures cover JCS bytes; each statement names its predecessor cid; reordered statements wait in quarantine up to 24 h |
+
+**Abuse controls**
+- Local quarantine and a per-sender quota of 50 inbound deposit statements per day per counterparty.
+- Dispute opening is available at every funded state; reports go through F12 on the vault's chosen relay.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-040-09.T11 | abuse | PS-040-07.R01, PS-040-07.R02, PS-040-07.R03 | inspect logs, notifications and relay payloads; 51 inbound statements in a day | no amounts or evidence outside encrypted envelopes; 51st dropped and counted |
+
+## Dependencies
+
+Module depends on: F05.S01.M01, F09.S01.M01, F09.S02.M02, F09.S03.M01, F08.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

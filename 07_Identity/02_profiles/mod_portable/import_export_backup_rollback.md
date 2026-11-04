@@ -1,35 +1,30 @@
-# PS-055-10 — import export backup rollback
+# PS-055-10 — Import, export, backup and rollback: Portable identity
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-10. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F07.S02.M01 Portable identity](SPEC.md) · **Scope:** MVP · **Code:** `packages/identity/src/profiles/portable` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-055-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-055-10.R01** The vault export contains the owner's document history and the documents of contacts, each with provenance, so the identity can move between relays and devices.
+- **PS-055-10.R02** Import re-verifies every signature, chain and size, keeps valid documents with their original provenance and rejects invalid ones with a report.
+- **PS-055-10.R03** Schema changes follow expand/contract with v1 readable for 180 days, and a new major carries a signed migration statement.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Section identity.portable_docs in classrup-export/v1 (schema classrup.identity.portable_doc/v1), own history and received documents.
+- **import:** Each document is verified; valid ones are stored with origin received or own (when the DID matches the vault principal); a chain gap stores the document as history and reports it.
+- **backup:** The vault export is the primary backup (IOX-6); relay backups (IOX-3, IOX-7) hold public documents only, so losing a relay loses nothing the owner cannot republish.
+- **migration rollback:** Additive optional fields in v1 under ext only; rollback is safe because verifiers ignore unknown ext keys and the signature covers them.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-055-09.T15 | integration | PS-055-10.R01, PS-055-10.R02, PS-055-10.R03 | export, import in a fresh vault, relay backup restore | documents round-trip with provenance; invalid signatures rejected on import |
+
+## Dependencies
+
+Module depends on: F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

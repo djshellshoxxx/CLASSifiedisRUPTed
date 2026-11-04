@@ -1,35 +1,36 @@
-# PS-103-02 — validation rules
+# PS-103-02 — Validation rules: In-app notifications
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-02. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F13.S01.M03 In-app notifications](SPEC.md) · **Scope:** MVP · **Code:** `packages/notify/src/delivery/inapp` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-103-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-103-02.R01** Routing validates event shape, recipient rule and registry membership before a notification is created.
+- **PS-103-02.R02** Read operations validate ownership and revision.
+- **PS-103-02.R03** Every violation maps to one stable error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | event type has a routing table row and the payload contains the fields the row needs | VALIDATION_FAILED |
+| V02 | the recipient rule selects the local principal and the actor of the event is not the local principal | NOT_FOUND |
+| V03 | templateKey and ref.type are in the registries | VALIDATION_FAILED |
+| V04 | urgency urgent only for category security | VALIDATION_FAILED |
+| V05 | the sender or actor is not blocked in the local block list | BLOCKED_PARTY |
+| V06 | source event ID not yet seen in the consumer inbox | CONFLICT_STATE |
+| V07 | mark_read expectedRevision matches and notification belongs to the local principal | CONFLICT_REVISION |
+| V08 | event time is not older than 30 days at creation | EXPIRED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-103-09.T01 | unit | PS-103-01.R01, PS-103-01.R02, PS-103-01.R03, PS-103-02.R01 | route bazaar.offer.made to seller U | Notification stored with category offers, template notify.tpl.offers.made, ref offer, no text fields |
+| TEST-PS-103-09.T02 | unit | PS-103-02.R02, PS-103-02.R03 | each rule V01 to V08 violated in turn | documented error code returned and nothing stored |
+| TEST-PS-103-09.T09 | integration | PS-103-06.R03, PS-103-02.R03 | muted thread message; category with in-app off; security category with in-app preference attempt to disable | muted flag set, no row for off category except counters, security row always created |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F13.S02.M04, F08.S01.M01, F08.S01.M02, F08.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

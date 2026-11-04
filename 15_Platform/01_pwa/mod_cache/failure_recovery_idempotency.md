@@ -1,35 +1,32 @@
-# PS-114-06 — failure recovery idempotency
+# PS-114-06 — Failure recovery and idempotency: PWA caching
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-06. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M02 PWA caching](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/cache` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-114-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-114-06.R01** A failed install never replaces a working worker, and a failed runtime cache write never fails the response.
+- **PS-114-06.R02** Fetch handlers are stateless; repeating a request has the same effect as a single request.
+- **PS-114-06.R03** Offline navigation always resolves to the precached shell, and API failures are surfaced as network errors to the page for the outbox and UI to handle.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Fetch handling is idempotent: caches are keyed by URL and revision, replays of install or activate produce the same cache contents. Non-GET requests are never handled.
+- **concurrency:** Several tabs share one worker; cache writes are by key and last write wins for identical content. Update takes effect for all tabs at once after consent, and the page reloads each tab on controllerchange.
+- **retries:** The worker does not retry fetches; page code retries per CTR-IDM-001 IDM-4. Install retries automatically by the browser's update check on the next trigger.
+- **offline:** After first visit the shell, route chunks needed by the entry route, icons and the default locale load without network. Dynamic route chunks not yet visited need network; the router shows an offline page with Retry (precached offline.html, 4 KiB).
+- **partial failure:** If precache of one entry fails the whole install is aborted and the previous version stays active. If activation cleanup fails midway, the next activation re-runs the allowlist deletion, which is safe to repeat.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-114-09.T10 | e2e | PS-114-06.R01, PS-114-06.R03 | first visit online then go offline and open a deep link /l/abc | shell renders, relay calls show offline state, no browser error page |
+| TEST-PS-114-09.T11 | integration | PS-114-06.R02, PS-114-06.R01 | simulate QuotaExceededError on cache put and a slow image request | response still delivered; cache write error counted; no unhandled rejection |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

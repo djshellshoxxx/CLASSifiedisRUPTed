@@ -1,35 +1,34 @@
-# PS-114-02 — validation rules
+# PS-114-02 — Validation rules: PWA caching
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-02. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M02 PWA caching](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/cache` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the validation rules process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-114-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-114-02.R01** The build fails when the precache manifest exceeds 1.5 MiB uncompressed or contains a URL that is not same-origin, so that budgets and the trust boundary are enforced before release.
+- **PS-114-02.R02** A response is cached only when it passes the cacheability checks (status 200, content-type image for the image cache, no private directives, no cookies).
+- **PS-114-02.R03** Violations during build are reported with stable codes; at runtime a violation means the response is served but not stored.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | precache manifest total size ≤ 1572864 bytes and entry count ≤ 120 | PLATFORM_CACHE_PRECACHE_BUDGET |
+| V02 | every precache URL is same-origin, versioned by content hash and not under /api/ or /media/private/ | PLATFORM_CACHE_PRIVATE_RESPONSE |
+| V03 | runtime image response has status 200 and content-type image/avif, image/webp, image/jpeg or image/png | PLATFORM_CACHE_UNCACHEABLE |
+| V04 | response has no Set-Cookie, no Cache-Control private or no-store and no Vary Authorization | PLATFORM_CACHE_UNCACHEABLE |
+| V05 | request is GET and carries no Authorization header and no credentials mode include for the image route | PLATFORM_CACHE_PRIVATE_RESPONSE |
+| V06 | cache name matches the allowlist for the build (current precache name, classrup-img-v1) or it is deleted on activate | PLATFORM_CACHE_VERSION_MISMATCH |
+| V07 | the SKIP_WAITING message origin is a controlled same-origin client | FORBIDDEN |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-114-09.T02 | unit | PS-114-02.R02, PS-114-02.R03 | cacheability function over responses with private, no-store, Set-Cookie, Vary Authorization, 404, text/html | only 200 image responses without private markers return true; others yield PLATFORM_CACHE_UNCACHEABLE |
+| TEST-PS-114-09.T03 | integration | PS-114-02.R01 | CI build with manifest enlarged to 1.6 MiB and a /api/ URL injected | build fails with PLATFORM_CACHE_PRECACHE_BUDGET and PLATFORM_CACHE_PRIVATE_RESPONSE |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

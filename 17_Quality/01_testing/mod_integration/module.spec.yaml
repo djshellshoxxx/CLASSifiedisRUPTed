@@ -1,0 +1,192 @@
+id: F17.S01.M03
+scope: MVP
+summary: 'Integration tests simulate several participants: one in-memory vault per participant (storage/memory adapter, local principal with its own Ed25519 key) plus an optional in-process relay (SQLite in-memory) that indexes public projections and forwards end-to-end encrypted envelopes. Under ADR-0016 the 12 reference flows (paid classified listing, ordinary local sale, two-party barter, three-party cycle, four-party cycle, generalized N-party cycle, mixed-value barter compensation, cancellation and dispute, fraud and moderation, private messages, payments with cash and crypto claim including a simulated reorg, federation import and export) run with a relay and, where meaningful, relay-less through direct envelope exchange. Fault cases cover relay down mid-flow, forked vaults with conflicting promises, offline revocation lag and a malicious relay tampering with statements. Fakes replace the chain (FakeChainVerifierPort), clock and push.'
+responsibilities:
+- Provide a harness that creates N memory vaults (one per participant) and an optional in-process relay with in-memory SQLite plus fake ports and a fixed clock, ready in under 2 s per test file; a DirectTransport lets vaults exchange envelopes with no relay.
+- Implement the 12 reference flows as integration suites, each asserting final state, emitted events and audit entries.
+- 'Provide contract tests: every command input and output and every emitted event payload validates against the schema registry (CTR-SCH-001) and every error matches CTR-ERR-001 shapes.'
+- Provide the FakeChainVerifierPort able to simulate confirmations, a reorg of depth 2 and RPC outage so the crypto claim flow is proven without a chain.
+- Run each reference flow in two modes, relay and relay-less (DirectTransport), except flows that need a relay by nature (index discovery, push, auction host) which declare relay-only; assert that every vault reaches the same final state in both modes.
+- 'Provide fault cases: relay down mid-flow, forked vault with conflicting signed promises, offline revocation lag, malicious relay tampering with a statement (signature failure leads to quarantine).'
+non_responsibilities:
+- Browser-level flows (F17.S01.M04).
+- Throughput and latency (F17.S02.M01) and fault injection (F17.S02.M02).
+- The business logic under test; each owning module implements it.
+- 'Future: multi-relay federation topologies of more than 3 relays.'
+depends_on:
+- CTR-TST-001
+- CTR-EVT-001
+- CTR-ERR-001
+- CTR-SCH-001
+- CTR-IDM-001
+- CTR-COM-001
+- CTR-FED-001
+- CTR-ID-001
+- F17.S01.M01
+- F15.S02.M02
+- F15.S02.M03
+user_stories:
+- As a developer, I run one command and see the 12 reference flows pass or fail with the event trail of the failing step.
+- As a release manager, I can see that each flow passes before release and which requirement IDs they cover.
+- As a contract owner, I learn immediately when an event payload drifts from its registered schema.
+edge_cases:
+- Two flows write to the same tenant concurrently; each test uses its own tenant ID and in-memory database so no cross-talk occurs.
+- A command is replayed with the same Idempotency-Key mid-flow; the harness asserts the original response and no duplicate events.
+- The fake chain verifier reorgs a confirmed payment claim; the claim returns to pending and the deal does not complete.
+- A consumer fails after an event is written; the outbox redelivers and the flow still ends in the expected final state.
+- An event type is emitted that is not in the catalog; the contract suite fails with QUALITY_IT_EVENT_UNREGISTERED.
+- Clock jumps across an expiry boundary mid-flow; the FakeClock advance triggers the sweeps and the flow ends expired exactly once.
+- The relay is stopped mid-flow; local records stay intact, status for undelivered statements stays prepared (delivery unknown), and the flow completes after direct exchange or relay restart.
+- Two vaults sign conflicting reservations for the same item after a fork; both receivers detect the fork, freeze the coordination and require renegotiation, with no last-writer-wins.
+- A key is revoked while a vault is offline; statements it signs afterwards are accepted until the revocation statement arrives, then quarantined, and the bounded lag window is reported.
+- A malicious relay alters one byte of an envelope; the receiver rejects it with signature failure and quarantines it with provenance.
+ux:
+  notes: Headless. Output is vitest JUnit and a flow report reports/integration.json listing each flow, steps, events seen and requirement IDs covered.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; it creates throwaway in-memory vaults (one per participant), an optional in-memory relay database and destroys them on exit.
+    - Seed data is built through public commands where possible and through fixtures only for actors and listings, never by writing rows directly in flow suites.
+    - Flow reports store step names, event types and IDs only; no payload content of P2–P4 data is written to the report.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - Each flow suite must assert the final state, the ordered list of emitted event types and that no unexpected event types appear.
+    - The harness rejects a flow that makes a real network call, writes outside the temp directory or uses a real clock with QUALITY_IT_ISOLATION.
+    - Contract validation fails with a typed code when a command, event or error does not match its registered schema or CTR-ERR-001 shape.
+    - 'Fault cases are mandatory suites: relay_down_midflow, forked_vault, revocation_lag and relay_tamper; each asserts the documented outcome: local records intact, fork frozen and not last-writer-wins, tampered statement quarantined with reason signature_invalid, and sync state never above the state reached.'
+    rules:
+    - V01 | Each of the 12 reference flows exists, runs and asserts final state, events and drained outbox | QUALITY_IT_FLOW_MISSING
+    - V02 | Flow makes no outbound network call, uses only the injected clock and writes only to its temp dir | QUALITY_IT_ISOLATION
+    - V03 | Every emitted event type is registered in the catalog and its payload validates against its schema | QUALITY_IT_EVENT_UNREGISTERED
+    - V04 | Every command output and error response validates against the registry and CTR-ERR-001 | QUALITY_IT_CONTRACT_MISMATCH
+    - V05 | Outbox and inbox are empty at the end of each flow | QUALITY_IT_OUTBOX_NOT_DRAINED
+    - V06 | Each flow runs in relay mode and, unless declared relay-only, in direct mode with identical final states per vault | QUALITY_IT_MODE_DIVERGENCE
+    - V07 | Fault suites relay_down_midflow, forked_vault, revocation_lag and relay_tamper exist and pass | QUALITY_IT_FAULT_SUITE_MISSING
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle for the module; each flow drives the lifecycles of the entities it exercises (Offer, Proposal, Cycle, Deal, Receipt).
+    - A flow is complete only when its terminal state is reached or its documented timeout fires on the FakeClock.
+    - 'Every flow ends by asserting outbox drained: zero undelivered events and zero stuck inbox entries.'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:integration, pnpm test:integration --flow <name> and pnpm test:contract.
+    - The 12 flows are named listing_paid, sale_local, barter_two, cycle_three, cycle_four, cycle_n, barter_mixed, dispute_cancel, fraud_moderation, messages_private, payments_claims, federation_io, each runnable with --mode relay or --mode direct.
+    - 'Exit codes: 0 pass, 1 assertion failure, 2 contract mismatch, 3 isolation violation.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_IT_FLOW_MISSING | 422 | no | a reference flow has no passing suite (exit 1)
+    - QUALITY_IT_ISOLATION | 422 | no | flow performed network, real clock or out-of-sandbox write (exit 3)
+    - QUALITY_IT_EVENT_UNREGISTERED | 422 | no | emitted event type is not registered (exit 2)
+    - QUALITY_IT_CONTRACT_MISMATCH | 422 | no | payload or error does not match its registered schema (exit 2)
+    - QUALITY_IT_OUTBOX_NOT_DRAINED | 422 | no | undelivered outbox events at flow end (exit 1)
+    - QUALITY_IT_MODE_DIVERGENCE | 422 | no | relay and direct runs ended in different vault states (exit 1)
+    - QUALITY_IT_FAULT_SUITE_MISSING | 422 | no | a mandatory fault suite is missing or failing (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:integration --flow payments_claims
+        TEST-PS-135-09.T08 crypto claim reorg depth 2 returns to pending   OK  (1.4 s)
+        steps: commerce.claim.submitted -> verified -> reorged -> pending
+        outbox drained: yes
+      $ pnpm test:contract
+        412 commands/events/errors validated against registry  OK
+  authorization_capabilities:
+    requirements:
+    - Flows act through each vault's command bus as its local principal; incoming statements are accepted only when signed by a key authorized for the role (CTR-CAP-001 CAP-8), and relay requests use signed requests or relay access tokens.
+    - Each flow includes at least one negative authorization step (wrong actor gets FORBIDDEN or NOT_FOUND per CTR-ERR-001 ERR-4).
+    - Fake ports have no capabilities of their own and cannot be reached from production code paths.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Idempotency is tested in every flow by replaying the first mutating command with the same key and asserting identical response and no new events.
+    - Concurrent steps use deterministic scheduling (explicit awaits on a controlled executor) so the same interleaving runs on every execution.
+    - After a simulated consumer crash, redelivery produces a single net effect (CTR-EVT-001 at-least-once with idempotent consumers).
+    - After a relay outage or tampering, each vault's sync outbox states move only along local committed, prepared, transport_acknowledged, peer_accepted (CTR-IDM-001 IDM-7) and the harness asserts the UI-facing status never exceeds the state reached.
+    idempotency: The harness re-runs any flow in a fresh database, so flows are repeatable; the first mutating command of each flow is replayed to prove idempotency (CTR-IDM-001).
+    concurrency: Flows run in parallel across test files, each with its own database and tenant; within a flow, concurrency is simulated with a deterministic scheduler.
+    retries: No retries on assertion failures. The fake ChainVerifierPort supports scripted RPC failures so retry logic of the system under test is exercised, not the test itself.
+    offline: Everything runs offline by construction; flows needing the network use fake ports.
+    partial_failure: A failed step stops its flow and dumps the event trail, state snapshot and seed to reports/integration.json; other flows still run and the exit code is the worst code seen.
+  privacy_retention_abuse:
+    requirements:
+    - Integration data is synthetic; locations are coarse L2 and actors are generated pseudonyms.
+    - The suite asserts that private-message payloads and P3 fields never appear in public views, federation exports or event payloads marked P0.
+    - 'Logs from the relay in tests are captured and scanned: a canary P3 value must never appear.'
+    data:
+    - Synthetic P0–P3 test data inside in-memory databases only.
+    - 'Reports: step names, event types, IDs.'
+    retention:
+    - In-memory databases die with the process; reports kept 14 days as CI artifacts.
+    threats:
+    - T01 | Test data accidentally includes real personal data | fixtures are generated; the same lint as F17.S01.M01 runs on the integration folder
+    - T02 | Flow leaks a P3 or message payload into a report or log | report writer whitelists fields (step name, event type, IDs); canary P3 value scanned in captured logs
+    - T03 | Fake port reused in production by mistake | fake ports live only under tests/integration and the production dependency rule forbids importing from tests/
+    abuse_controls:
+    - The harness forbids sleeping on real time (setTimeout over 50 ms) in flow code.
+    - Disabling a flow requires editing the flow list in code-owned config and fails the QUALITY_IT_FLOW_MISSING rule.
+  observability_performance:
+    requirements:
+    - The harness reports per-flow duration and event counts in reports/integration.json.
+    - Each flow completes in at most 5 s and the whole integration suite in at most 120 s on 2 vCPU.
+    - Relay startup in the harness takes at most 2 s per test file.
+    metrics:
+    - classrup_quality_integration_flows_total{outcome=pass|fail}
+    - classrup_quality_integration_duration_ms{flow}
+    - classrup_quality_integration_contract_checks_total{outcome}
+    logs:
+    - JSON line per flow {ts, level, msg, module, flow, durationMs, code?} without payload data (CTR-OBS-001 OBS-1).
+    budgets:
+    - Each flow at most 5 s; entire suite at most 120 s on 2 vCPU.
+    - Contract validation of all registered schemas at most 20 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Each of the 12 flows has at least one dedicated test row and the flow list is asserted against the reference list in this spec.
+    - Contract tests are generated from the schema registry so a new registered command or event is covered automatically.
+    fixtures: Vaults for Alice, Bob, Carol, Dave, Erin (one memory vault each, seeded Ed25519 keys), optional in-process relay, DirectTransport, FakeClock 2026-11-04T10:00:00Z, FakeChainVerifierPort script (confirm at 12 blocks, reorg depth 2), EUR and BTC test amounts.
+    tests:
+    - T01 | integration | 01.R01,03.R03 | boot harness and tear down 20 times | each database is isolated and removed; outbox drained assertion runs
+    - T02 | integration | 01.R02,01.R03,07.R01 | run flows and inspect reports | no row writes by fixtures in flow files; report holds only step names, types, IDs
+    - T03 | integration | 02.R01,04.R02 | list flows from the harness | exactly the 12 documented flow names exist and each asserts state, ordered events and no unexpected events
+    - T04 | integration | 02.R02,07.R03 | flow attempts fetch to a public URL and Date.now | QUALITY_IT_ISOLATION raised, exit 3
+    - T05 | contract | 02.R03,09.R03 | validate every registered command, event and error | all validate; a mutated schema produces QUALITY_IT_CONTRACT_MISMATCH
+    - T06 | integration | 03.R01,03.R02,04.R01 | run barter_two, cycle_three, cycle_four, cycle_n, barter_mixed to completion and to expiry | terminal states reached or expired exactly once
+    - T07 | integration | 04.R03,06.R03 | run with scripted consumer crash and redelivery | single net effect and outbox drained
+    - T08 | integration | 05.R01,05.R02 | each flow performs a wrong-actor step | FORBIDDEN or NOT_FOUND per ERR-4
+    - T09 | abuse | 05.R03,07.R02 | import fake port from production code and scan logs for P3 canary | import rejected; canary absent from logs, exports and P0 payloads
+    - T10 | integration | 06.R01 | replay first mutating command in each flow | identical response and zero new events
+    - T11 | integration | 06.R02 | two concurrent offer acceptances with the deterministic scheduler | same interleaving every run; exactly one accepted
+    - T12 | integration | 08.R01,08.R02 | run full suite with timing report | each flow at most 5 s, whole suite at most 120 s, report lists durations
+    - T13 | integration | 08.R03 | boot relay harness 50 times | startup at most 2 s each
+    - T14 | integration | 09.R01,09.R02 | assert the flow list equals the reference list and every spec requirement maps to a test | no missing flow or uncovered requirement
+    - 'T15 | integration | 10.R01,10.R02 | federation_io: export from relay A, import to relay B | entities round trip identical; conflicting IDs rejected; report contains no user data'
+    - T16 | integration | 10.R03 | revert harness commit in a branch | production tests unaffected
+    - 'T17 | integration | 03.R03 | payments_claims: cash claim then crypto claim with reorg depth 2 via FakeChainVerifierPort | crypto claim returns to pending after reorg and completes after reconfirmation; platform never holds funds'
+    - T18 | integration | 02.R01 | fraud_moderation and messages_private flows | moderation action recorded with audit entry; message payloads absent from public views
+    - T19 | integration | 02.R04,06.R04 | run all flows with --mode relay and --mode direct | same final vault state in both modes except declared relay-only flows; QUALITY_IT_MODE_DIVERGENCE otherwise
+    - 'T20 | integration | 02.R04 | relay_down_midflow: stop relay between prepared and transport_acknowledged | local records intact; status prepared; completes via direct exchange'
+    - 'T21 | integration | 02.R04 | forked_vault: two signed conflicting reservations delivered in both orders | fork detected and coordination frozen in both vaults; no last-writer-wins'
+    - 'T22 | integration | 02.R04 | revocation_lag: statement signed by a revoked key before and after the revocation arrives | accepted before, quarantined after; lag window reported'
+    - 'T23 | abuse | 02.R04 | relay_tamper: relay flips one byte of an envelope | signature_invalid, statement quarantined with provenance, no state change'
+    acceptance:
+    - All 12 reference flows pass with outbox drained and zero unexpected events.
+    - Contract tests validate every registered command, event and error against the schema registry.
+    - The crypto claim flow demonstrates a simulated reorg returning the claim to pending.
+    - The full integration suite finishes within 120 s on 2 vCPU.
+  import_export_backup_rollback:
+    requirements:
+    - The flow report reports/integration.json is the only export; it contains no user data.
+    - The federation_io flow exports a bundle from relay A and imports into relay B to prove CTR-IOX-001 and CTR-FED-001 round trips.
+    - Rollback is a git revert; harness changes never alter production code.
+    export: reports/integration.json (flows, steps, event types, requirement IDs) and JUnit XML; no user data.
+    backup: Harness code is in git; reports kept 14 days.
+    migration_rollback: Revert the harness commit; flows are versioned with the modules they test and updated in the same pull request as behavior changes.
+    import: The federation_io flow imports a CTR-IOX-001 export bundle into a fresh relay; the harness itself imports no external data.

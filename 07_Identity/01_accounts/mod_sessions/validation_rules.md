@@ -1,35 +1,37 @@
-# PS-054-02 — validation rules
+# PS-054-02 — Validation rules: Sessions
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-02. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F07.S01.M02 Sessions](SPEC.md) · **Scope:** MVP · **Code:** `packages/identity/src/accounts/sessions` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the validation rules process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-054-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-054-02.R01** A challenge is valid only if unexpired, unused, issued for the claimed DID and relay, and signed over the exact domain-separated message.
+- **PS-054-02.R02** The signing key must be listed active in the DID's current signed identity document held by the relay.
+- **PS-054-02.R03** Every failure on the start path returns the same UNAUTHENTICATED outward response, with the specific reason only in relay diagnostics.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | challenge exists, status issued, expiresAt not passed, nonceHash matches the SHA-256 of the presented nonce | EXPIRED |
+| V02 | Ed25519 signature verifies over classrup-login:v1:<relayId>:<nonce> with the presented device public key | UNAUTHENTICATED |
+| V03 | device public key is listed active in the DID's identity document (valid signature by the account key, highest seq seen) | UNAUTHENTICATED |
+| V04 | failed starts for the same (IP /24, DID) are fewer than 10 in 15 minutes and for the IP /24 fewer than 100 in 15 minutes | RATE_LIMITED |
+| V05 | vault unlock idle timeout is between 1 minute and 8 hours | VALIDATION_FAILED |
+| V06 | passphrase unlock attempts respect the local backoff schedule 1 s, 2 s, 4 s, up to 900 s after 5 failures | RATE_LIMITED |
+| V07 | the session to revoke belongs to the caller's DID | NOT_FOUND |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-054-09.T01 | unit | PS-054-01.R01, PS-054-01.R02, PS-054-02.R01 | issue challenge then start with a valid signature | challenge consumed, session active, token returned once, only its hash stored |
+| TEST-PS-054-09.T02 | unit | PS-054-02.R01, PS-054-02.R02, PS-054-02.R03 | signature over wrong relay, wrong nonce, reused nonce, expired nonce (121 s), revoked device A2 | UNAUTHENTICATED or EXPIRED with identical outward bodies for key failures; no token issued |
+| TEST-PS-054-09.T05 | unit | PS-054-02.R02, PS-054-04.R01 | vault unlock with wrong passphrase 6 times then correct; idle timeout 15 min | backoff schedule applied; unlock succeeds; auto-lock after 15 minutes measured with monotonic clock |
+| TEST-PS-054-09.T07 | integration | PS-054-04.R03, PS-054-02.R03 | device key revoked, recovery completed, role assigned, erase events delivered | affected sessions end with documented reasons |
+| TEST-PS-054-09.T11 | abuse | PS-054-07.R03, PS-054-02.R03 | unknown DID requests challenge and starts | decoy challenge returned; start returns the same UNAUTHENTICATED as a bad signature; timing within 10 percent |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

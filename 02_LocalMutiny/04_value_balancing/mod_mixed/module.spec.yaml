@@ -1,0 +1,284 @@
+# F02.S04.M01 Mixed-value compensation legs (CTR-MNY-001 MNY-5, CTR-COM-001, ADR-0016 local-first). Claims only, never custody.
+id: F02.S04.M01
+scope: MVP
+summary: >-
+  When the value gap of a participant exceeds the MNY-5 tolerance (5 percent of the larger side or the configured absolute minimum, with the stricter length profiles of F02.S02.M01 and F02.S02.M02),
+  a compensation leg offsets it, either as money from one participant to another or as an extra item line in a direct proposal. Money legs are payment claims (CTR-COM-001), not payments:
+  ClassRup never holds funds, a claim is made by the payer, acknowledged by the payee (cash or external) or confirmed final on chain, and nothing is marked paid without that evidence.
+  A deterministic planner proposes the legs; the participants may change them in a new revision, and everyone consents to the exact amounts. A disadvantaged participant may instead sign an explicit acceptance of the imbalance in their consent.
+responsibilities:
+  - Compute the deterministic compensation plan from normalized net positions and tolerances, and own CompensationLeg records from proposed to a terminal state.
+  - Open the noncustodial Deal and create payment claims through F09.S01.M01 when the payer asserts payment, and mirror the claim status (claimed, acknowledged, disputed, expired, final) onto the leg.
+  - Report settlement to execution so a cycle completes only when item legs are received and money legs are acknowledged or final, and let recovery waive or dispute a leg.
+  - Keep money legs in the cycle settlement currency in integer minor units with no rounding after normalization.
+non_responsibilities:
+  - Moving, holding, escrowing or verifying funds; wallets, banks and chains are external (CTR-COM-001 COM-1, COM-5).
+  - Value declaration (F02.S04.M03) and normalization and quotes (F02.S04.M02).
+  - Sealing legs into revisions and consent (F02.S01.M04, F02.S03.M01) and execution completion (F02.S03.M04).
+  - Payment claim state machine, receipts and disputes (F09.S01.M01, F09.S02.M02).
+  - "Future: installment compensation, multi-currency payment legs, and chain verifier adapters that unlock crypto legs automatically."
+depends_on: [F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a coordinator of a 3-party cycle with a 60.00 EUR value gap, I see a proposed plan of who pays whom, adjust it, and every participant consents to the exact amounts.
+  - As a payer, I tell the app that I paid 40.00 EUR in cash and the payee sees my claim and can acknowledge it; until then everyone sees 'claimed (unverified)'.
+  - As a payee, I acknowledge the payment only when I actually received it, and I can dispute a claim that is false.
+edge_cases:
+  - All gaps are within tolerance; the planner returns an empty plan and no compensation leg is created.
+  - Net positions need three transfers; the planner produces at most N minus 1 legs by largest-first matching and ties by DID ascending.
+  - The payer claims payment by crypto but no chain verifier is configured; the claim stays claimed, the cycle cannot complete automatically, and the UI offers cash or external settlement or a recovery waiver.
+  - The payee acknowledges payment but the payer never claimed; acknowledgement without a claim is refused because the claim is the payer's assertion.
+  - A participant signs consent with acceptedImbalance covering their gap; the planner leaves that participant out and the leg set is smaller.
+  - The cycle is cancelled before any handover; proposed and due legs are withdrawn and no money is owed.
+  - The cycle becomes partially_executed; due legs stay, and the recovery case may waive, adjust or dispute them.
+  - Compensation legs expire after 14 days without progress per COM-3, and the expiry is shown to both parties.
+ux:
+  screens:
+    - "Value balance table: for each participant gives, receives, gap, tolerance, and suggested payment 'Bob pays Alice 40.00 EUR' with Accept plan and Edit buttons."
+    - "Payment status card per leg using the CTR-COM-001 labels: claimed (unverified), acknowledged by payee, disputed, expired, and 'No funds are held by ClassRup'."
+    - "Claim payment sheet for the payer: method (cash, crypto, external), optional reference up to 128 characters, confirmation text 'I assert that I paid'."
+  states: [loading, no-compensation-needed, proposed, due, claimed, acknowledged, disputed, expired, waived, withdrawn, error]
+  a11y:
+    - Payment status labels are text and are announced through an aria-live polite region when they change.
+    - Amounts have currency in the label and the plan table is a real table with headers.
+    - Claim and Acknowledge buttons are at least 44 by 44 px and name the person and amount.
+processes:
+  domain_schema:
+    requirements:
+      - A CompensationLeg records payer, payee, kind (money or extra_item), positive amount in the settlement currency, status, due date and the F09 deal and payment claim references; it never records a balance or a paid flag.
+      - Legs become part of the immutable revision snapshot, so their amounts are consented to on the exact revision hash; after commit their amounts and parties never change.
+      - Money legs use integer minor units in the cycle settlement currency, with no further conversion and no rounding.
+      - Status values mirror CTR-COM-001 and the UI labels them accordingly; a leg is settled only by payee acknowledgement (cash, external) or final chain confirmation (crypto).
+    entities:
+      - name: CompensationLeg
+        schema: classrup.mutiny.compensation_leg/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "subjectType: enum — trade_proposal | cycle | recovery_case"
+          - "subjectId: uuidv7 — subject the leg offsets"
+          - "kind: enum — money | extra_item"
+          - "payerId: did — participant who owes the compensation; differs from payeeId"
+          - "payeeId: did — participant who is owed"
+          - "amount: Money — CTR-MNY-001; > 0 and ≤ 1 000 000 000 000 minor units in the settlement currency; value of the extra item for extra_item"
+          - "extraLegId?: uuidv7 — TradeLeg id carrying the extra item line when kind is extra_item"
+          - "planBasis: enum — gap_plan | manual"
+          - "methods: array — 1..3 of cash | crypto | external, payer's proposed settlement methods"
+          - "status: enum — proposed | due | claimed | disputed | settled | waived | expired | withdrawn"
+          - "dueAt?: timestamp — local commit time + 14 d; set when due"
+          - "dealId?: uuidv7 — F09.S01.M01 Deal opened when due"
+          - "paymentClaimId?: uuidv7 — F09.S01.M01 PaymentClaim created by the payer's claim"
+          - "claimMethod?: enum — cash | crypto | external"
+          - "claimRef?: string — ≤ 128 chars, transaction reference or note given by the payer"
+          - "claimStatusLabel?: enum — claimed_unverified | acknowledged_by_payee | confirmed_on_chain | final | disputed | expired — mirrors CTR-COM-001 labels"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - payerId differs from payeeId and both are participants of the subject.
+          - A money leg amount is in the subject's settlement currency and never below 1 minor unit.
+          - status settled implies the linked PaymentClaim is acknowledged (cash or external) or final (crypto), or, for extra_item, that the carrying TradeLeg has a valid receiver attestation.
+          - Amount, payer, payee and kind never change after the leg is referenced by a sealed revision.
+    sql: |
+      CREATE TABLE mutiny_compensation_leg (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_id TEXT NOT NULL, payer_id TEXT NOT NULL, payee_id TEXT NOT NULL,
+        status TEXT NOT NULL, due_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX mutiny_compensation_subject ON mutiny_compensation_leg(tenant_id, subject_id, status);
+  validation_rules:
+    requirements:
+      - Compensation legs are validated for parties, currency, amount bounds and consistency with the subject's normalization before they can be sealed in a revision.
+      - Claims are accepted only from the payer for a due leg and acknowledgements only from the payee for a claimed leg, through F09.
+      - Crypto claims are never presented as paid without chain finality evidence, and a missing verifier leaves them claimed.
+    rules:
+      - "V01 | payer and payee are distinct participants of the subject | MUTINY_COMPENSATION_PARTY_INVALID"
+      - "V02 | amount is a positive integer within 1 and 1000000000000 minor units in the subject's settlement currency | VALIDATION_FAILED"
+      - "V03 | kind money has methods of 1..3 values from cash, crypto, external; kind extra_item has extraLegId referencing a leg of the subject | VALIDATION_FAILED"
+      - "V04 | at most N minus 1 money legs per subject where N is the participant count, at most 8 legs | MUTINY_COMPENSATION_LIMIT"
+      - "V05 | a leg may be proposed only while the subject is draft or open proposal, or a proposed cycle, and by an allowed author | MUTINY_COMPENSATION_NOT_ALLOWED"
+      - "V06 | claim is made by the payer, the leg is due, and the cycle is committed or executing or partially_executed | MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED"
+      - "V07 | claimRef is at most 128 characters and contains no URL query secrets; method is one of the leg methods | VALIDATION_FAILED"
+      - "V08 | withdraw only while status is proposed and the leg is not referenced by a sealed head revision | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - A leg is proposed in a revision, becomes due when the cycle is committed, is claimed by the payer, and is settled only by payee acknowledgement or chain finality as reported by F09.
+      - A cycle cancelled before any handover withdraws all non-terminal legs, while a partially executed cycle keeps due legs for the recovery case to waive, adjust by agreement or dispute.
+      - Expiry follows COM-3, 14 days without progress, and is shown to both parties; an expired leg never counts as settled.
+      - Disputed legs are resolved only by the outcome of F09.S02.M02 or by a waiver agreed in recovery.
+    machines:
+      - entity: CompensationLeg
+        initial: proposed
+        terminal: [settled, waived, expired, withdrawn]
+        transitions:
+          - "proposed -> due | mutiny.cycle.committed consumed for the subject | dueAt = local commit time + 14 d; Deal opened in F09.S01.M01"
+          - "proposed -> withdrawn | mutiny.compensation.withdraw, a newer revision not referencing the leg, or the subject ended | no obligation exists"
+          - "due -> claimed | mutiny.compensation.claim by the payer | PaymentClaim created in F09.S01.M01; emits mutiny.compensation.claimed"
+          - "due -> withdrawn | mutiny.cycle.cancelled consumed before any handover | no money is owed"
+          - "due -> expired | 14 d without progress on the local clock | shown as expired; recovery or a new proposal may follow"
+          - "claimed -> settled | commerce.payment.acknowledged for cash or external, or final for crypto, consumed | emits mutiny.compensation.settled"
+          - "claimed -> disputed | commerce.payment.disputed consumed | recovery case or dispute referenced"
+          - "claimed -> expired | commerce.payment.expired consumed | 14 d without progress per COM-3"
+          - "disputed -> settled | commerce.dispute.resolved with payment confirmed | emits mutiny.compensation.settled"
+          - "disputed -> waived | commerce.dispute.resolved with no-fault close or waiver agreed in recovery | no payment due"
+    timeouts:
+      - "A due or claimed leg without progress expires 14 days after dueAt or the last claim update, evaluated on vault open and every 60 s while open."
+  commands_queries_events:
+    requirements:
+      - propose, withdraw and suggest_plan are vault commands or pure queries that produce no statement, because legs are consented inside the signed revision; claim produces the payment claim statement defined by F09.S01.M01.
+      - Acknowledgement by the payee is a F09.S01.M01 command and arrives here as a consumed event; this module never marks a payment acknowledged on its own.
+      - Events are written in the same IndexedDB transaction as the state change and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
+    commands:
+      - name: mutiny.compensation.propose
+        capability: mutiny.compensation.propose
+        input: "{ subjectType, subjectId, kind, payerId, payeeId, amount: Money, methods[], extraLegId?, planBasis? } — vault command; produces no statement, sealed later by a revision"
+        output: "{ compensationLegId, status: proposed, residualGaps: { actorId, gapMinor, withinTolerance }[] }"
+        errors: [VALIDATION_FAILED, MUTINY_COMPENSATION_PARTY_INVALID, MUTINY_COMPENSATION_LIMIT, MUTINY_COMPENSATION_NOT_ALLOWED, CONFLICT_STATE]
+        emits: [mutiny.compensation.proposed]
+        idempotent: true
+      - name: mutiny.compensation.withdraw
+        capability: mutiny.compensation.withdraw
+        input: "{ compensationLegId, expectedRevision }"
+        output: "{ compensationLegId, revision, status: withdrawn }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: mutiny.compensation.claim
+        capability: mutiny.compensation.claim
+        input: "{ compensationLegId, method, claimRef?, expectedRevision } — vault command; produces the payment claim statement of F09.S01.M01 (classrup.commerce.payment_claim/v1) signed by the payer"
+        output: "{ compensationLegId, paymentClaimId, claimStatusLabel: claimed_unverified, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED, DEPENDENCY_UNAVAILABLE]
+        emits: [mutiny.compensation.claimed]
+        idempotent: true
+    queries:
+      - name: mutiny.compensation.suggest_plan
+        capability: mutiny.compensation.read
+        input: "{ subjectType, subjectId, acceptedImbalances?: { actorId, amount }[] }"
+        output: "{ legs: { payerId, payeeId, amount: Money }[], residuals: { actorId, gapMinor, withinTolerance }[], toleranceBasis: profile version }"
+        errors: [NOT_FOUND, VALIDATION_FAILED]
+      - name: mutiny.compensation.get
+        capability: mutiny.compensation.read
+        input: "{ compensationLegId }"
+        output: "{ leg: CompensationLeg, claimStatusLabel?, expiresInMs? }"
+        errors: [NOT_FOUND]
+      - name: mutiny.compensation.list_for_subject
+        capability: mutiny.compensation.read
+        input: "{ subjectType, subjectId, status? }"
+        output: "{ items: CompensationLeg[], allSettled: boolean }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: mutiny.compensation.proposed, privacy: P2, payload: "{ compensationLegId, subjectType, subjectId, kind, payerId, payeeId, amount, planBasis }"}
+      - {type: mutiny.compensation.claimed, privacy: P2, payload: "{ compensationLegId, subjectId, payerId, payeeId, amount, method, claimStatusLabel }"}
+      - {type: mutiny.compensation.settled, privacy: P2, payload: "{ compensationLegId, subjectId, payerId, payeeId, amount, via: acknowledged|final|extra_item_received|dispute }"}
+    events_consumed:
+      - {type: mutiny.cycle.committed, effect: "turn referenced proposed legs into due, set dueAt, open the F09 Deal for money legs"}
+      - {type: mutiny.cycle.cancelled, effect: "withdraw proposed and due legs of the cycle when no handover happened"}
+      - {type: mutiny.cycle.declined, effect: "withdraw proposed legs of the cycle"}
+      - {type: mutiny.proposal.revised, effect: "withdraw proposed legs that the new head revision does not reference; mark referenced ones sealed"}
+      - {type: mutiny.leg.received, effect: "settle extra_item legs when the carrying leg has a valid receiver attestation"}
+      - {type: commerce.payment.claimed, effect: "for a leg claimed by the payer on another device or a peer's claim, move due to claimed and set claimStatusLabel"}
+      - {type: commerce.payment.acknowledged, effect: "move claimed to settled for cash or external payments and emit settled"}
+      - {type: commerce.payment.disputed, effect: "move claimed to disputed"}
+      - {type: commerce.payment.expired, effect: "move claimed to expired"}
+      - {type: commerce.dispute.resolved, effect: "move disputed legs to settled or waived according to the recorded outcome"}
+    errors:
+      - "MUTINY_COMPENSATION_PARTY_INVALID | 422 | no | payer and payee must be distinct participants of the subject"
+      - "MUTINY_COMPENSATION_LIMIT | 409 | no | more compensation legs than allowed for this subject"
+      - "MUTINY_COMPENSATION_NOT_ALLOWED | 409 | no | legs cannot be proposed in the subject's current state or by this author"
+      - "MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED | 409 | no | only the payer can claim a due leg of a committed, executing or partially executed cycle"
+    example: |
+      # 3-party cycle p1->p2->p3->p1, values (EUR minor): p1 gives 20000, p2 gives 14000, p3 gives 16000
+      # net position n_i = received - given:  p1 = 16000-20000 = -4000;  p2 = 20000-14000 = +6000;  p3 = 14000-16000 = -2000   (sum 0)
+      # tolerance_i = max(500 bps of larger side, 500 minor): p1 max(1000,500)=1000, p2 max(1000,500)=1000, p3 max(800,500)=800  => all three out of tolerance
+      # plan: debtors (n>tol) p2 6000; creditors (-n>tol) p1 4000, p3 2000; largest-first greedy with DID-ascending ties:
+      mutiny.compensation.suggest_plan { "subjectType":"cycle", "subjectId":"0192f432-…" }
+      -> { "legs": [ {"payerId":"p2","payeeId":"p1","amount":{"amount":"4000","currency":"EUR"}}, {"payerId":"p2","payeeId":"p3","amount":{"amount":"2000","currency":"EUR"}} ], "residuals": [ all 0, withinTolerance true ] }
+      # 2-party: gives 5000 vs 5600 => gap 600 > max(280,500)? tolerance max(5% of 5600 = 280, 500) = 500 => payer is the receiver of the larger item, pays 600 or accepts imbalance <= 600.
+      # 4-party and N-party use the same planner (at most N-1 legs). Payment: payer claims, payee acknowledges.
+      mutiny.compensation.claim { "compensationLegId":"0192f470-…", "method":"cash", "claimRef":"handed over at meetup", "expectedRevision":3 }
+      -> { "paymentClaimId":"0192f471-…", "claimStatusLabel":"claimed_unverified", "syncState":"prepared" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal propose or withdraw legs it is allowed to author, and only the payer can claim; the payee acknowledges through F09.S01.M01.
+      - Claims and acknowledgements from other parties arrive as signed statements verified by F09.S01.M01 and are accepted only from the named payer or payee.
+      - Relays and moderators have no capability over legs or payments.
+    capabilities:
+      - "mutiny.compensation.propose | principal | principal may author the next revision of the subject (coordinator for cycles, non-author party for proposals)"
+      - "mutiny.compensation.withdraw | principal | leg proposed by this vault and not sealed"
+      - "mutiny.compensation.claim | principal | principal is the payer; leg due"
+      - "mutiny.compensation.read | principal | subject stored in this vault"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands carry expectedRevision.
+      - The claim and the leg update are one IndexedDB transaction with the outbox entry, so a crash leaves either no claim or a complete one.
+      - Payment evidence is never auto-confirmed, and a missing verifier or unreachable F09 service leaves legs due or claimed.
+    idempotency: "Idempotency-Key replay 24 h; claim is idempotent by (compensationLegId, method) so a retry never creates a second PaymentClaim."
+    concurrency: "expectedRevision on leg mutations; Web Locks mutex per subjectId; the planner is a pure function so concurrent plan requests agree."
+    retries: "Claim statements go through the sync outbox with IDM-4 backoff (base 500 ms, cap 30 s, max 6 attempts per destination); acknowledgements are never retried by this module because they are not produced here."
+    offline: "propose and claim work offline and show pending; the payee sees the claim after delivery; acknowledgement arrives later and settlement is local to each vault."
+    partial_failure: "If the Deal cannot be opened, the leg stays due with a retry flag and the cycle can still execute item legs; completion waits for settlement, and the UI states the missing step."
+  privacy_retention_abuse:
+    requirements:
+      - Legs, claims and references are P2, end-to-end encrypted in transit to the participants and never published; claimRef is free text and never indexed.
+      - The platform never holds funds or keys and the UI states 'Payments happen between you and the other person. ClassRup holds no money.'
+      - False claims and false acknowledgements are limited by signature accountability, payee-only acknowledgement and disputes.
+    data:
+      - "CompensationLeg: P2; claimRef may contain a transaction reference and is P2."
+    retention:
+      - "RET-EVIDENCE 2 years after last related activity; payment claim records follow F09 retention."
+    threats:
+      - "T01 | Payer falsely claims payment to complete the cycle | completion needs payee acknowledgement (cash, external) or chain finality (crypto); a claim alone never settles"
+      - "T02 | Payee falsely denies receiving | payee can dispute or never acknowledge; the claim, signature and timestamps are evidence; no automatic outcome"
+      - "T03 | Plan manipulated to favor one participant | planner is deterministic and every participant consents to exact amounts on the revision hash"
+      - "T04 | Crypto auto-confirmed without finality | no auto-confirmation; claims stay claimed without a chain verifier (COM-5)"
+      - "T05 | Platform seen as escrow | no custody anywhere; UI copy and absence of any fund-holding feature tested"
+    abuse_controls:
+      - "At most N minus 1 money legs per subject and 12 legs per vault per day."
+      - "Claim rate limit 20 per day per vault."
+  observability_performance:
+    requirements:
+      - Local diagnostics record leg and claim outcomes without amounts or DIDs and send nothing off the device (OBS-7).
+      - The planner for 8 participants completes within 5 ms.
+      - Claim command including F09 call completes within 200 ms at p95 locally.
+    metrics:
+      - "classrup_mutiny_compensation_total{outcome=proposed|due|claimed|settled|disputed|expired|waived|withdrawn} (local diagnostics)"
+    logs:
+      - "info compensation.claimed {compensationLegId, method, correlationId} — no amounts or DIDs."
+    budgets:
+      - "suggest_plan p95 ≤ 5 ms for 8 participants; claim p95 ≤ 200 ms; list_for_subject p95 ≤ 20 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The planner is tested with golden fixtures for 2-, 3-, 4- and 6-party cycles and as a property test that residuals are within tolerance and sums are conserved.
+      - Payment status handling is tested with fake F09 events including crypto without a verifier.
+    fixtures: "3-party values 20000, 14000, 16000 EUR minor (plan above); 2-party 5000 vs 5600; 4-party 20000, 15000, 18000, 17000; 6-party ring; fake F09 claim and acknowledgement events; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,03.R01 | planner on 3-party fixture | legs p2 to p1 4000 and p2 to p3 2000, all residuals zero"
+      - "T02 | property | 01.R03,02.R03 | random value vectors for 2..8 participants | sum of payments conserved, at most N-1 legs, residuals within tolerance, deterministic output"
+      - "T03 | unit | 02.R01,02.R02 | each rule V01..V08 violated in turn | documented error code and nothing stored"
+      - "T04 | unit | 01.R02,03.R02 | planner with acceptedImbalance covering one gap | that participant omitted and fewer legs produced"
+      - "T05 | integration | 03.R01,03.R04 | cycle committed then claim then acknowledged | proposed to due to claimed to settled; settled event emitted; Deal opened"
+      - "T06 | integration | 03.R02,03.R03 | cycle cancelled before handover; cycle partially executed | due legs withdrawn in first case, kept in second"
+      - "T07 | integration | 01.R04,02.R03 | crypto claim without verifier | stays claimed, never settled; cycle cannot complete; recovery waiver path available"
+      - "T08 | contract | 04.R01,04.R02,04.R03,09.R02 | commands, events and statement | outputs and payloads validate against classrup.mutiny.compensation_leg/v1, F09 claim statement and registry"
+      - "T09 | abuse | 05.R01,05.R02,05.R03,07.R01 | payee tries to claim; non-participant acknowledges; forged claim | rejected; relay cannot alter any state"
+      - "T10 | integration | 06.R01,06.R02,06.R03 | replay claim; crash mid-transaction; F09 unavailable | one PaymentClaim; no partial state; leg stays due"
+      - "T11 | abuse | 07.R03,07.R02 | payer claims falsely, payee disputes | disputed state, dispute outcome required; no custody feature exists in UI or API"
+      - "T12 | unit | 03.R03,07.R02 | leg without progress for 14 days with injected clock | expired and not counted as settled"
+      - "T13 | load | 08.R02,08.R03 | planner 8 participants and claim on emulated Moto G | within budgets"
+      - "T14 | unit | 08.R01,09.R01,09.R03 | diagnostics and traceability tool | no amounts or DIDs in diagnostics; every PS-026 requirement maps to a passing test"
+      - "T15 | e2e | 01.R04,07.R02 | mobile payer and payee flow | status labels as text; notice that no funds are held; axe zero serious issues"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | legs round-trip with claim status; imported due legs flagged for re-confirmation with F09"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - No leg is ever settled without payee acknowledgement, chain finality, or a received extra item, and ClassRup never holds funds.
+      - The planner is deterministic, conserves sums and leaves every participant within tolerance or with an explicit signed acceptance.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the user's compensation legs with claim references because they are part of the signed terms and payment evidence.
+      - Import keeps amounts and statuses exactly as exported, never marks anything settled by itself, and asks F09 to re-sync claim status for due and claimed legs.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.compensation in classrup-export/v1; one line per CompensationLeg (schema classrup.mutiny.compensation_leg/v1) with paymentClaimId and dealId references."
+    import: "Terminal legs import read-only; due and claimed legs import with their status and a re-sync flag so claim status comes only from F09 evidence; conflicting IDs rejected."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7); payment evidence is backed up with F09 sections."
+    migration_rollback: "Additive optional fields only in v1; rollback ignores unknown fields; unknown status values read as due and never as settled."

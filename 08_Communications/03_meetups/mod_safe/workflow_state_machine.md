@@ -1,35 +1,50 @@
-# PS-066-03 — workflow state machine
+# PS-066-03 — Workflow state machine: Safe meetup guidance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-03. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S03.M01 Safe meetup guidance](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/meetups/safe` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-066-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-066-03.R01** A SafeSpot moves draft to active to retired; retired is terminal and a returning venue is published as a new spot.
+- **PS-066-03.R02** Publishing validates and signs in the curator vault; relays and vaults only verify and store.
+- **PS-066-03.R03** Retired spots are removed from suggestions immediately in vaults that received the retirement statement and keep a tombstone for 180 days.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### SafeSpot lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **draft**; terminal **retired**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| draft -> active | comms.safe_spot.publish by curator, signature and curator list verified | statement stored; relay index updated |
+| active -> active | comms.safe_spot.publish with higher version | older version superseded |
+| active -> retired | comms.safe_spot.retire by curator or relay operator under hosting policy | tombstone with reason signed |
+| draft -> retired | comms.safe_spot.retire by curator | draft discarded |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> active: comms.safe_spot.publish by curator, signature and curator list verified
+  active --> active: comms.safe_spot.publish with higher version
+  active --> retired: comms.safe_spot.retire by curator or relay operator under hosting policy
+  draft --> retired: comms.safe_spot.retire by curator
+  retired --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Vault cache refresh every 7 days while online; list marked possibly outdated after 30 days.
+- Tombstones are purged 180 days after retirement.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-066-09.T03 | property | PS-066-03.R01, PS-066-03.R02, PS-066-03.R03 | random sequences of publish, retire, refresh | retired never returns to active; at most one active version per curator and venue; tombstone purged at 180 days |
+| TEST-PS-066-09.T09 | abuse | PS-066-07.R03, PS-066-03.R02 | 201st change in a day by one curator; forged relay statement | RATE_LIMITED; forged statement discarded and cache unchanged |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F16.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

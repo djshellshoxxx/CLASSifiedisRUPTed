@@ -1,0 +1,250 @@
+id: F06.S01.M02
+scope: MVP
+summary: >-
+  Parses bounded full-text queries, runs them against the local vault index and, when the user has selected a relay,
+  against that relay's index, and returns cursor-paginated results with provenance. Saved searches live only in the
+  user's vault and raise local alert events when newly indexed documents match; they are never uploaded to a relay.
+  Blocked authors are filtered on the device because relays do not know the user's block list.
+responsibilities:
+  - Parse and sanitize user query text (at most 200 characters, 12 terms) into a safe FTS5 expression where every term is quoted, so user text never reaches FTS5 operator syntax.
+  - Serve discovery.search.query in two deployments - a vault-local query over the local index, and a relay query over the relay index (HTTP query endpoint, HMAC-signed cursors).
+  - Merge local and relay results client-side, de-duplicating by (authorDid, sourceId) and labelling provenance.
+  - Own SavedSearch records (vault-local, P3) and emit discovery.saved_search.matched when a newly indexed document satisfies one, with daily digest mode.
+non_responsibilities:
+  - Index maintenance (F06.S01.M01), filter compilation (F06.S01.M03), proximity guards (F06.S02.M03), scoring (F06.S03.M01) and diversity (F06.S03.M02).
+  - Delivering alerts to the user; notification channels are F13 and local notification only.
+  - "Future: relay-side saved-search matching with private set intersection, saved-search sync between the user's devices through an encrypted mailbox."
+depends_on: [F06.S01.M01, F06.S01.M03, F06.S02.M03, F06.S03.M01, F06.S03.M02, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001]
+user_stories:
+  - As a buyer, I type words and quoted phrases and get relevant results, including from my local index while offline.
+  - As a buyer, I save a search for a bike under 300 EUR within 10 km and get a local alert when a new matching listing is indexed.
+  - As a buyer, I never see listings from authors I blocked, even if the relay returns them.
+  - As a buyer, I can tell which results came from this device and which from which relay.
+edge_cases:
+  - Query text contains FTS5 operators such as NEAR, OR, a column filter or unbalanced quotes; each term is quoted so they are matched literally and never executed.
+  - The user pages past the 500-result depth limit or reuses a cursor older than 15 minutes; EXPIRED is returned and the UI offers to rerun.
+  - The relay is unreachable or slow; local results show immediately and the relay section reports DEPENDENCY_UNAVAILABLE after a 4 s timeout.
+  - Local and relay both return the same listing; one card is shown with both provenance labels.
+  - The 26th saved search is created; refused with DISCOVERY_SAVED_SEARCH_LIMIT.
+  - A document matches the same saved search twice because of an edit; only the first match raises an alert (dedupe by (savedSearchId, documentId)).
+  - The vault is locked when the index changes; matching resumes on next unlock and processes at most 500 queued documents per run.
+  - An empty query with filters only is allowed and sorted by newest.
+ux:
+  screens:
+    - "Search screen: query box (max 200 chars with counter), filter chips (F06.S01.M03), sort selector (relevance, newest, price, distance bucket), result list with provenance badges and 'Promoted' labels."
+    - "Saved searches list: name, filters summary, alert mode (off, instant, daily), pause, delete."
+  states: [loading, empty, results, local-only, relay-error, expired-cursor, offline]
+  a11y:
+    - The query input has a visible label and the result count is announced through an aria-live polite region.
+    - Filter chips and the save-search button are at least 44 by 44 px and operable by keyboard.
+    - Provenance and 'Promoted' are conveyed as text, not colour only.
+processes:
+  domain_schema:
+    requirements:
+      - A SavedSearch stores a normalized query, typed filters, optional area (L2 cell and radius), alert mode and match bookkeeping, and is a P3 vault-local record that is never part of any statement.
+      - A vault keeps at most 25 saved searches and each stores at most 200 matched document ids for dedupe, trimmed oldest first.
+      - Query results are not persisted beyond a 15 minute snapshot used only for cursor consistency.
+    entities:
+      - name: SavedSearch
+        schema: classrup.discovery.saved_search/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "ownerDid: did — local principal"
+          - "name: string — 1..60 code points"
+          - "queryText?: string — 0..200 code points, normalized NFC, at most 12 terms"
+          - "filters: object — typed filters validated by F06.S01.M03"
+          - "centerCell5?: string — geohash of exactly 5 characters (L2), the user's chosen search center"
+          - "radiusKm?: int — one of 5, 10, 25, 50, 100; minimum 5"
+          - "alertMode: enum — off | instant | daily"
+          - "status: enum — active | paused | deleted"
+          - "matchedDocIds: array — at most 200 document ids already alerted"
+          - "lastEvaluatedAt?: timestamp — local clock of last evaluation"
+          - "lastMatchedAt?: timestamp — local clock of last alert"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - centerCell5 has length exactly 5 and radiusKm is at least 5 when present.
+          - A vault never holds more than 25 non-deleted saved searches.
+          - Saved search content is never written into an outbox statement, relay request or log.
+    sql: |
+      CREATE TABLE discovery_saved_search (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_did TEXT NOT NULL, status TEXT NOT NULL,
+        alert_mode TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX discovery_saved_search_active ON discovery_saved_search(tenant_id, status, alert_mode);
+  validation_rules:
+    requirements:
+      - Query text and cursors are validated before any database access, with strict limits that bound work per query.
+      - Saved search input is validated like a query plus ownership, count and area rules.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | queryText is at most 200 code points, at most 12 terms, each term 1..64 code points after NFC and control-character removal | DISCOVERY_QUERY_INVALID"
+      - "V02 | limit is 1..50 (default 20) and requested depth is at most 500 results | VALIDATION_FAILED"
+      - "V03 | cursor is well-formed, at most 512 bytes, matches the query hash, and on a relay carries a valid HMAC and is younger than 15 minutes | EXPIRED"
+      - "V04 | filters pass F06.S01.M03 validation | DISCOVERY_FILTER_INVALID"
+      - "V05 | centerCell5 has 5 characters and radiusKm is in 5, 10, 25, 50, 100 | DISCOVERY_RADIUS_TOO_SMALL"
+      - "V06 | the vault holds fewer than 25 non-deleted saved searches | DISCOVERY_SAVED_SEARCH_LIMIT"
+      - "V07 | name is 1..60 code points and alertMode is a known value | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A saved search is active, paused or deleted; only active searches are evaluated.
+      - Deleting is final and removes matched-id bookkeeping immediately.
+      - Pausing and resuming preserve dedupe history.
+    machines:
+      - entity: SavedSearch
+        initial: active
+        terminal: [deleted]
+        transitions:
+          - "active -> paused | discovery.saved_search.update with status paused | stop evaluation"
+          - "paused -> active | discovery.saved_search.update with status active | resume evaluation from now, no backlog alerts"
+          - "active -> deleted | discovery.saved_search.delete | remove record and matchedDocIds"
+          - "paused -> deleted | discovery.saved_search.delete | remove record and matchedDocIds"
+    timeouts:
+      - "Daily digest runs once per 24 h at the user's local 08:00 while the app is open or on the next unlock and emits one matched event with up to 20 document ids per search."
+      - "Query snapshots expire 15 minutes after creation."
+  commands_queries_events:
+    requirements:
+      - Saved search create, update and delete are vault-local commands that produce no signed statement and never contact a relay.
+      - discovery.search.query is a query served by the vault against the local index and, separately, a relay query endpoint; neither writes state.
+      - Matching consumes discovery.index.updated and emits discovery.saved_search.matched as a local P3 event in the same transaction as the matchedDocIds update.
+    commands:
+      - name: discovery.saved_search.create
+        capability: discovery.saved_search.write_own
+        input: "{ name, queryText?, filters?, centerCell5?, radiusKm?, alertMode }"
+        output: "{ savedSearchId, revision: 1 }"
+        errors: [VALIDATION_FAILED, DISCOVERY_QUERY_INVALID, DISCOVERY_FILTER_INVALID, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_SAVED_SEARCH_LIMIT]
+        emits: []
+        idempotent: true
+      - name: discovery.saved_search.update
+        capability: discovery.saved_search.write_own
+        input: "{ savedSearchId, expectedRevision, name?, queryText?, filters?, centerCell5?, radiusKm?, alertMode?, status?: active|paused }"
+        output: "{ savedSearchId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, DISCOVERY_QUERY_INVALID, DISCOVERY_FILTER_INVALID, DISCOVERY_RADIUS_TOO_SMALL]
+        emits: []
+        idempotent: true
+      - name: discovery.saved_search.delete
+        capability: discovery.saved_search.write_own
+        input: "{ savedSearchId, expectedRevision }"
+        output: "{ savedSearchId, deleted: true }"
+        errors: [NOT_FOUND, CONFLICT_REVISION]
+        emits: []
+        idempotent: true
+    queries:
+      - name: discovery.search.query
+        capability: discovery.search_document.read_public
+        input: "{ q?, filters?, near?: { centerCell5, radiusKm }, sort?: relevance|newest|price_asc|price_desc|distance, source?: local|relay|both, cursor?, limit? (1..50, default 20) }"
+        output: "{ items: [{ documentId, sourceKind, sourceId, authorDid, title, snippet, priceMinor?, currency?, geoCell5?, distanceBucket?, promoted?, explain, provenance }], nextCursor?, sources: [{ source, status }] }"
+        errors: [DISCOVERY_QUERY_INVALID, DISCOVERY_FILTER_INVALID, DISCOVERY_RADIUS_TOO_SMALL, EXPIRED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+      - name: discovery.saved_search.list
+        capability: discovery.saved_search.read_own
+        input: "{ status?: active|paused, cursor?, limit? (1..25) }"
+        output: "{ items: SavedSearch[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: discovery.saved_search.matched, privacy: P3, payload: "{ savedSearchId, mode: instant|daily, documentIds: array of at most 20, matchedAt }"}
+    events_consumed:
+      - {type: discovery.index.updated, effect: "for op upsert, evaluate candidate saved searches by category, kind and area (at most 200 candidates per document) and record a match"}
+      - {type: identity.block.added, effect: "drop pending matches from the blocked author and refresh the block filter cache"}
+      - {type: privacy.deletion.completed, effect: "delete all saved searches on vault erase"}
+    errors:
+      - "DISCOVERY_QUERY_INVALID | 422 | no | query text exceeds limits or contains no usable term after sanitization"
+      - "DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type"
+      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value"
+      - "DISCOVERY_SAVED_SEARCH_LIMIT | 409 | no | 25 saved searches already exist"
+    example: |
+      vault query: discovery.search.query { "q": "road bike \"56 cm\"", "filters": { "priceMax": { "amount": "30000", "currency": "EUR" } }, "near": { "centerCell5": "u4pru", "radiusKm": 10 }, "source": "both" }
+      -> { items: [{ title: "Trek road bike 56cm", distanceBucket: "5_10", provenance: ["relay:relay.example.org"] }], sources: [{ source: "local", status: "ok" }, { source: "relay", status: "ok" }] }
+      vault command: discovery.saved_search.create { "name": "Road bikes", "queryText": "road bike", "alertMode": "instant" } -> { "savedSearchId": "0192f3d0-…", "revision": 1 }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - saved search commands and queries are available only to the unlocked local principal for their own records.
+      - Relay policy - the relay query endpoint is public read; whether anonymous callers are allowed, and at what rate, is the relay operator's policy, and token-bearing callers get a higher quota.
+      - Block filtering happens on the device after results are received; the relay is never told whom the user blocked.
+    capabilities:
+      - "discovery.saved_search.write_own | principal | vault - unlocked local principal owns the record"
+      - "discovery.saved_search.read_own | principal | vault - unlocked local principal owns the record"
+      - "discovery.search_document.read_public | principal, anonymous | vault - unlocked principal; relay - public read allowed by relay policy and under the caller's quota"
+  failure_recovery_idempotency:
+    requirements:
+      - Saved search commands are idempotent and use expectedRevision; queries are side-effect free.
+      - A relay failure never blocks local results and never loses a saved search.
+      - Match evaluation is restartable and never alerts twice for the same (savedSearchId, documentId).
+    idempotency: "Vault commands carry an Idempotency-Key kept in the local command log for 24 h; the matched event is keyed by (savedSearchId, documentId) so a replay is a no-op."
+    concurrency: "One IndexedDB transaction per command and per evaluation batch; revision check on update and delete; two tabs of the same vault serialize through the Web Locks API."
+    retries: "Relay queries retry only on network errors and RATE_LIMITED with base 500 ms, cap 30 s, full jitter, max 6 attempts; local queries are not retried."
+    offline: "Everything except the relay section works offline; creating or editing saved searches is local and immediate."
+    partial_failure: "If the relay returns an error after local results rendered, local results stay and the relay row shows its error code; evaluation of saved searches that fails for one search is retried separately and does not block others."
+  privacy_retention_abuse:
+    requirements:
+      - Queries and saved searches reveal interests and are P3; the vault never sends saved searches anywhere, and relay queries carry only the text and filters the user chose to run on that relay.
+      - A relay sees query text and the coarse center cell; the UI states this and offers local-only search.
+      - Query volume and query complexity are bounded to protect relays and devices.
+    data:
+      - "SavedSearch: P3, device only; excluded from statements and logs."
+      - "Relay query: query text, filters, center cell (L2 at most) and IP prefix; relay logs keep no query text beyond 24 h and truncate IPs per OBS-1."
+    retention:
+      - "SavedSearch: until deleted by the user or vault erase (RET-STANDARD); match history trimmed to 200 ids."
+      - "Query snapshots 15 minutes; relay query counters RET-EPHEMERAL (24 h)."
+    threats:
+      - "T01 | FTS5 operator injection through query text | every term is quoted and bound as a parameter, operators never interpreted, fuzz test of 10 000 strings"
+      - "T02 | Relay operator profiles users by query text | local-only search option, relay logs minimized, no account identifier is required for anonymous queries, honest disclosure in the UI"
+      - "T03 | Expensive queries exhaust a relay | 200 characters, 12 terms, depth 500, 4 s timeout, relay rate limits by policy"
+      - "T04 | Scraping the relay index | relay policy quotas per token and per IP /24, results limited to public P0 fields, pagination depth 500"
+      - "T05 | Hostile relay returns blocked authors or spam | device-side block filter and local hide apply to relay results; results are only labelled, never trusted"
+    abuse_controls:
+      - "Relay query defaults - 60 per minute and 600 per hour per token or IP /24, configurable by the relay operator; exceeding returns RATE_LIMITED with retryAfterMs."
+      - "Alert flood control - at most 20 instant alerts per saved search per day, excess folded into the daily digest."
+  observability_performance:
+    requirements:
+      - Query latency and outcomes are measured on relays per CTR-OBS-001 and in the vault diagnostics log only.
+      - Local query p95 is at most 120 ms over 5 000 documents on a Moto G-class device and relay query p95 is at most 200 ms over 100 000 documents.
+      - Saved search evaluation processes 500 queued documents against 25 searches within 2 seconds.
+    metrics:
+      - "classrup_discovery_query_duration_ms{source=local|relay} (histogram)"
+      - "classrup_discovery_query_total{outcome=ok|invalid|rate_limited|error}"
+      - "classrup_discovery_saved_search_evaluations_total{outcome=matched|no_match}"
+    logs:
+      - "info query.served {source, resultCount, durationMs, correlationId} - never the query text."
+    budgets:
+      - "Relay query p95 <= 200 ms at 100 000 documents and 50 req/s; local query p95 <= 120 ms at 5 000 documents."
+      - "Relay timeout 4 s from the client; saved-search batch of 500 documents x 25 searches <= 2 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test, including a fuzz test of the query sanitizer.
+      - Contract tests check command inputs, query outputs and the matched event against the schema registry.
+      - Privacy tests prove saved searches never appear in statements, relay requests or logs.
+    fixtures: "Vault with 200 indexed documents across three authors, one blocked author, a fake relay returning overlapping results, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01 | create saved search with valid input | record stored with status active, revision 1, matchedDocIds empty"
+      - "T02 | property | 02.R01,07.R03 | 10 000 random strings including FTS5 operators and unbalanced quotes | sanitized to quoted terms, never raises an FTS syntax error, never executes operators"
+      - "T03 | unit | 01.R02,02.R02 | limits: 201-char query, 13 terms, 26th saved search, limit 51 | DISCOVERY_QUERY_INVALID, DISCOVERY_SAVED_SEARCH_LIMIT or VALIDATION_FAILED respectively"
+      - "T04 | unit | 02.R03,03.R01 | cursor tampered, aged 16 minutes, or from another query | EXPIRED or VALIDATION_FAILED with no data returned"
+      - "T05 | property | 03.R01,03.R02,03.R03 | random sequences of update, pause, resume, delete | only declared transitions succeed; deleted has no further transitions"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | each command, the query and the matched event run | outputs validate against registry schemas"
+      - "T07 | integration | 04.R03,06.R03 | index event for a document matching two saved searches, delivered twice, and then edited | one matched event per search, no duplicate after edit"
+      - "T08 | integration | 05.R03 | relay returns a blocked author's listing | the item is filtered on the device before display"
+      - "T09 | abuse | 05.R01,05.R02,07.R03 | locked vault calls saved search commands; anonymous relay caller exceeds quota | FORBIDDEN or UNAUTHENTICATED for the vault; RATE_LIMITED with retryAfterMs for relay"
+      - "T10 | integration | 06.R01,06.R02 | same Idempotency-Key replayed; relay times out after local results | original response replayed; local results shown with relay row DEPENDENCY_UNAVAILABLE"
+      - "T11 | abuse | 07.R01,07.R02 | inspect outbox, relay requests and logs during saved search use | no saved search content present anywhere; relay request has only chosen query and cell"
+      - "T12 | integration | 01.R03,04.R02,06.R02 | local and relay return the same listing | merged into one card with both provenance labels"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 50 req/s on relay with 100 000 documents; vault with 5 000 documents; 500 queued matches | relay p95 <= 200 ms, vault p95 <= 120 ms, evaluation <= 2 s"
+      - "T14 | a11y | 04.R02 | search screen and saved search list with axe-core | zero serious or critical violations and results count announced"
+      - "T15 | unit | 09.R01,09.R03 | traceability tool run over PS-046 | every requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export then import saved searches into a fresh vault | records round-trip; matchedDocIds reset; conflicting ids rejected"
+    acceptance:
+      - All tests T01-T16 pass in CI.
+      - Query text never reaches FTS5 operator syntax (fuzz suite green).
+      - Saved searches never leave the device and blocked authors never appear in displayed results (privacy suite).
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains saved searches as section discovery.saved_searches in classrup-export/v1.
+      - Import validates schema version and filters, resets match history so no stale alerts fire, and caps the total at 25.
+      - Schema changes to SavedSearch follow expand/contract and keep v1 readable for 180 days.
+    export: "Section discovery.saved_searches in classrup-export/v1, one line per SavedSearch (schema classrup.discovery.saved_search/v1), P3 and included only in the user's own export."
+    import: "Searches import as paused with empty matchedDocIds; searches beyond the 25 cap are reported in the dry-run and skipped; id collisions with different content are rejected."
+    backup: "The vault export is the primary backup (IOX-6); relays hold no saved searches, so relay backups (IOX-7) contain none."
+    migration_rollback: "Additive optional fields only in v1; older releases ignore new fields; rollback is safe because the index and queries are derived."

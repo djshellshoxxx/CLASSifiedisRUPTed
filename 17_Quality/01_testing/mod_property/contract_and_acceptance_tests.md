@@ -1,35 +1,50 @@
-# PS-136-09 — contract and acceptance tests
+# PS-136-09 — Contract and acceptance tests: Property testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-136-09. **Owner:** [17_Quality/01_testing/mod_property](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_property. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M02 Property testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/property` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for property within 01_testing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-136-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-136-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-136-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-136-09.R01** Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+- **PS-136-09.R02** Self-tests prove that planted bugs (an off-by-one money split, a broken cycle checker, a state machine with a missing guard) are found within 200 runs.
+- **PS-136-09.R03** The nightly profile is verified by a dry-run with numRuns 10 000 on a small property set in CI weekly.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Base seed derived from commit SHA (pr) or Date seconds (nightly) and printed; FakeClock 2026-11-04T10:00:00Z; Money currencies EUR, JPY, KWD to cover 0, 2 and 3 minor digits.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-136-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-136-09.T01 | unit | PS-136-01.R01, PS-136-01.R02, PS-136-06.R01 | write a counterexample, reload it and replay | the JSON round-trips and replay reproduces the same failure |
+| TEST-PS-136-09.T02 | unit | PS-136-01.R03, PS-136-02.R01 | run an invalid_money arbitrary and a normal one | normal arbitrary yields integer strings only; floats rejected with QUALITY_PROP_ARBITRARY_INVALID |
+| TEST-PS-136-09.T03 | unit | PS-136-02.R02 | load properties with valid and invalid titles | invalid titles rejected with QUALITY_PROP_TITLE_INVALID |
+| TEST-PS-136-09.T04 | unit | PS-136-02.R03, PS-136-04.R03 | property sleeping 11 s in pr profile | aborted with QUALITY_PROP_TIMEOUT and exit 2 |
+| TEST-PS-136-09.T05 | property | PS-136-03.R01, PS-136-03.R02 | planted bug: money allocation drops 1 minor unit | found within 200 runs, shrunk, exit 1, no retry |
+| TEST-PS-136-09.T06 | integration | PS-136-03.R03, PS-136-07.R01 | nightly workflow dry run with a planted counterexample | a regression file and pull request body are generated with the seed |
+| TEST-PS-136-09.T07 | unit | PS-136-04.R01, PS-136-04.R02 | invoke each documented script | reports/property.json and JUnit exist; exit codes as documented |
+| TEST-PS-136-09.T08 | unit | PS-136-05.R01, PS-136-05.R02, PS-136-05.R03 | authorize() property with generated actors and capabilities | default deny holds for all 200 runs; import of secrets or network clients rejected |
+| TEST-PS-136-09.T09 | property | PS-136-06.R01, PS-136-06.R02 | run the same seed twice | identical counterexamples and identical reports |
+| TEST-PS-136-09.T10 | unit | PS-136-06.R03 | two properties mutate one test double | reset hook isolates them; lint rejects module-level mutable state |
+| TEST-PS-136-09.T11 | unit | PS-136-07.R02, PS-136-07.R03 | inspect reports from a failing run | only minimal counterexample values present; seed printed |
+| TEST-PS-136-09.T12 | load | PS-136-08.R01, PS-136-08.R02, PS-136-08.R03 | run all property suites in pr profile on 2 vCPU | finishes in at most 60 s and slow properties are flagged |
+| TEST-PS-136-09.T13 | property | PS-136-09.R02 | planted bugs: off-by-one split, broken cycle checker, missing guard | each found in at most 200 runs |
+| TEST-PS-136-09.T14 | integration | PS-136-09.R01, PS-136-09.R03 | weekly dry run of the nightly profile on a small set | 10 000 runs complete and the report lists numRuns 10000 |
+| TEST-PS-136-09.T15 | unit | PS-136-07.R03, PS-136-10.R01 | confirm lint on hand-edited regression file | rejected without generator signature |
+| TEST-PS-136-09.T16 | integration | PS-136-10.R02, PS-136-10.R03 | upgrade fast-check in a branch then revert | pinned 4.10.2 restored; regressions still replay |
+| TEST-PS-136-09.T17 | property | PS-136-01.R04 | generate envelopes, reorder keys, flip one byte, and deliver conflicting promises in random orders | canonical bytes identical; mutated envelope rejected; fork detected in every order and coordination frozen |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- Every property runs at least 200 times on pull requests and exactly 10 000 times nightly, with the seed printed on failure.
+- A planted off-by-one money split is detected within 200 runs and reported with a minimal counterexample.
+- Replaying a recorded seed and path reproduces the failure deterministically.
+- Property suites exist for money, matching, state machines, geohash and idempotency.
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-MNY-001, CTR-IDM-001, CTR-ID-001, CTR-OBS-001, F17.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

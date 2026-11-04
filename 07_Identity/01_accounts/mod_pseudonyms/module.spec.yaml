@@ -1,0 +1,346 @@
+id: F07.S01.M01
+scope: MVP
+summary: >-
+  Local-first identity. An Account is the local principal in the user's vault - an Ed25519 account signing key whose
+  did:key is the identifier, a chosen pseudonym as display label, and a set of Ed25519 device keys. There is no
+  central account database. Pseudonym rules (NFKC, mixed-script and confusable-skeleton checks per UTS #39) run on the
+  device; strict uniqueness exists only inside a relay that chooses to run an optional handle registry. Device keys
+  are added with a signed link from an existing device and revoked with a signed revocation statement.
+responsibilities:
+  - Create the local principal - generate the account signing key and first device key on the device, derive the did:key, store only public keys and key references (private keys sit encrypted in the kernel keystore under ADR-0013 parameters).
+  - Validate pseudonyms - NFKC normalization, 3..32 code points, allowed characters, Highly Restrictive script rule and UTS #39 skeleton, reserved names, and warn when a pseudonym is confusable with a known contact.
+  - Manage device keys - add via a signed link statement from an active device (max 10 active), revoke via a signed revocation statement, never revoke the last active key without a recovery kit.
+  - Own the optional relay HandleRegistration - claim, release and 30 day change cooldown enforced by that relay for its own namespace.
+non_responsibilities:
+  - Unlocking the vault and relay access tokens (F07.S01.M02).
+  - Recovery kit creation and use (F07.S01.M03), though recovery calls this module's registerRecoveredKey function.
+  - Public profile content (F07.S02.M02) and the published identity document (F07.S02.M01).
+  - Global pseudonym uniqueness - it does not exist; a pseudonym is a label and two relays can hold the same handle for different DIDs.
+  - "Future: passkeys and WebAuthn as an additional factor, social recovery, edit-distance protection of well-known pseudonyms."
+depends_on: [CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001]
+user_stories:
+  - As a new user, I create an identity on my phone without an email or server account; the app generates my keys and asks me for a passphrase to protect them.
+  - As a user, I pick a pseudonym and am told if it is too similar to someone I already know.
+  - As a user with two devices, I add my laptop by approving it from my phone, and I can revoke the laptop if it is lost.
+  - As a relay user, I can claim my handle on a relay that offers a registry and keep it unique there.
+edge_cases:
+  - Pseudonym mixes Latin and Cyrillic letters (for example 'раyраl'); rejected as a mixed-script confusable with IDENTITY_PSEUDONYM_INVALID.
+  - Pseudonym differs from a known contact only by a homoglyph; accepted locally but the UI shows a warning with the contact's name (IDENTITY_PSEUDONYM_CONFUSABLE is returned only by a relay registry).
+  - Two relays hold the same handle for different DIDs; allowed and shown with the DID fingerprint (first 8 characters of the did:key suffix) wherever ambiguity is possible.
+  - The user tries to change the pseudonym twice within 30 days; the local guard warns and requires confirmation, and a relay registry refuses with IDENTITY_PSEUDONYM_COOLDOWN.
+  - The user revokes the only active device key; refused with IDENTITY_LAST_DEVICE_KEY unless a recovery kit has been created and verified.
+  - A revoked device signs a statement that peers receive before they have seen the revocation; peers accept it until they learn of the revocation, because time of signing cannot be proven.
+  - The 11th device is added; refused with IDENTITY_DEVICE_LIMIT.
+  - Pseudonym contains right-to-left override or zero-width characters; rejected.
+  - The user forgets the vault passphrase and has no recovery kit; the account cannot be recovered, and the creation flow states this before finishing.
+ux:
+  screens:
+    - "Create identity: pseudonym field with live checks, passphrase entry with strength meter, explanation that keys stay on this device, and a mandatory prompt to create a recovery kit."
+    - "Devices: list of device keys with label, added date and last-used day, Add device (QR link) and Revoke with confirmation."
+    - "Relay handle: claim or release a handle on a chosen relay with status and cooldown remaining."
+  states: [loading, empty, valid, confusable-warning, invalid, pending-offline, claimed, conflict, error]
+  a11y:
+    - Pseudonym validation messages are associated with the input by aria-describedby and announced via aria-live polite.
+    - The QR link flow has a copyable text code alternative and all controls are at least 44 by 44 px.
+    - Passphrase strength is shown as text, not colour only, and no cognitive-function test is used to unlock (WCAG 3.3.8).
+processes:
+  domain_schema:
+    requirements:
+      - An Account stores the did:key, the account signing public key, the pseudonym with its normalized skeleton and Unicode data version, and timestamps; it holds no email, no password and no private key.
+      - A DeviceKey stores a public key, label, link evidence and status; private keys are referenced by keyRef into the kernel keystore where they are encrypted with XChaCha20-Poly1305 under a key derived by scrypt (N=2^17, r=8, p=1) per ADR-0013.
+      - A HandleRegistration is relay-side data derived from a signed claim statement and enforces uniqueness of the skeleton only within that relay.
+    entities:
+      - name: Account
+        schema: classrup.identity.account/v1
+        storage: device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — local row id"
+          - "tenantId: uuidv7 — tenant scope (single fixed tenant in a vault)"
+          - "did: did — did:key derived from signingPublicKey, the principal identifier"
+          - "signingPublicKey: string — Ed25519 public key, 32 bytes base64url (43 characters)"
+          - "pseudonym: string — 3..32 code points after NFKC, allowed characters only"
+          - "pseudonymSkeleton: string — UTS #39 skeleton of the case-folded pseudonym"
+          - "skeletonVersion: string — Unicode data release used, for example 16.0.0"
+          - "pseudonymChangedAt?: timestamp — local clock of the last change"
+          - "status: enum — active | erased"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - did is deterministically derived from signingPublicKey and never changes for the life of the account.
+          - pseudonym is stored in NFKC form and pseudonymSkeleton equals the skeleton of that pseudonym.
+          - A vault has exactly one local principal Account.
+      - name: DeviceKey
+        schema: classrup.identity.device_key/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "accountId: uuidv7 — ref Account"
+          - "publicKey: string — Ed25519 public key, 32 bytes base64url (43 characters); unique per account"
+          - "keyRef?: string — keystore handle for the private key on this device; null for keys of other devices"
+          - "label: string — 1..40 code points chosen by the user"
+          - "status: enum — active | revoked"
+          - "linkedBy: enum — signup | device_link | recovery"
+          - "linkStatementCid?: string — cid of the signed classrup.identity.device_link/v1 statement"
+          - "revocationStatementCid?: string — cid of the signed classrup.identity.device_revocation/v1 statement"
+          - "lastUsedDay?: date — UTC day of last use, day granularity"
+          - "addedAt: timestamp — local clock"
+          - "revokedAt?: timestamp — local clock of the revocation decision (a claim to others)"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - An account has between 1 and 10 active device keys, or zero only while a verified recovery kit exists.
+          - status revoked is permanent; a revoked public key is never reactivated and never reused as a new device.
+          - Every non-signup key has a link or recovery statement signed by the account signing key or an active device key.
+      - name: HandleRegistration
+        schema: classrup.identity.handle_registration/v1
+        storage: relay
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key on the relay"
+          - "tenantId: uuidv7 — the relay's namespace"
+          - "handle: string — NFKC pseudonym, 3..32 code points"
+          - "skeleton: string — UTS #39 skeleton; unique among active and recently released registrations on this relay"
+          - "did: did — owner"
+          - "claimCid: string — cid of the signed classrup.identity.handle_claim/v1 statement"
+          - "claimedAt: timestamp — the owner's claim"
+          - "registeredAt: timestamp — relay clock, evidence of this relay's clock only"
+          - "status: enum — active | released | purged"
+          - "releasedAt?: timestamp — relay clock; the skeleton stays reserved for 30 days"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one active or recently released registration exists per (tenantId, skeleton) on a relay.
+          - A DID has at most one active registration per relay and may change it once per 30 days.
+          - A registration is valid only with a claim statement signed by the DID's account signing key.
+    sql: |
+      CREATE TABLE identity_handle_registration (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, handle TEXT NOT NULL, skeleton TEXT NOT NULL, did TEXT NOT NULL,
+        status TEXT NOT NULL, released_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX identity_handle_skeleton ON identity_handle_registration(tenant_id, skeleton) WHERE status IN ('active','released');
+      CREATE UNIQUE INDEX identity_handle_did ON identity_handle_registration(tenant_id, did) WHERE status = 'active';
+  validation_rules:
+    requirements:
+      - Pseudonyms are normalized and checked before storage using the pinned Unicode data release, with one error code per failure class.
+      - Device key operations verify signatures over JCS bytes of the statement with domain-separated prefixes.
+      - Relay registry rules apply only on a relay; the vault never claims global uniqueness.
+    rules:
+      - "V01 | pseudonym after NFKC and trimming is 3..32 code points, only letters, marks, digits, underscore, hyphen and dot, no spaces, no leading or trailing separator, no two separators in a row, not all digits | IDENTITY_PSEUDONYM_INVALID"
+      - "V02 | pseudonym passes the Highly Restrictive script rule of UTS #39 (single script, or Latin with Han plus Hiragana plus Katakana, Han plus Bopomofo, Han plus Hangul) and contains no default-ignorable, bidi control, unassigned or private-use code points | IDENTITY_PSEUDONYM_INVALID"
+      - "V03 | skeleton is not in the reserved set (admin, administrator, moderator, support, classrup, operator, staff, official, system, root, null) | IDENTITY_PSEUDONYM_RESERVED"
+      - "V04 | relay only - skeleton is not held by another DID in this relay's registry | IDENTITY_PSEUDONYM_TAKEN"
+      - "V05 | relay only - skeleton is not confusable with another registered handle, which is the same skeleton test applied to the registry | IDENTITY_PSEUDONYM_CONFUSABLE"
+      - "V06 | the last pseudonym change was at least 30 days ago (advisory in the vault, enforced by a relay registry) | IDENTITY_PSEUDONYM_COOLDOWN"
+      - "V07 | device link statement is signed by the account signing key or an active device key, names the new public key, and is no older than 10 minutes by the local clock | IDENTITY_LINK_INVALID"
+      - "V08 | fewer than 10 active device keys exist | IDENTITY_DEVICE_LIMIT"
+      - "V09 | revoking leaves at least one active device key, or a recovery kit with lastVerifiedAt exists | IDENTITY_LAST_DEVICE_KEY"
+  workflow_state_machine:
+    requirements:
+      - Accounts are active until the vault is erased; a pseudonym change keeps the account active and bumps its revision.
+      - Device keys move from active to revoked once; revoked keys never return.
+      - A relay handle moves active to released to purged, and during the released window only the same DID can reclaim it.
+    machines:
+      - entity: Account
+        initial: active
+        terminal: [erased]
+        transitions:
+          - "active -> active | identity.pseudonym.change | validate, update pseudonym and skeleton, emit identity.pseudonym.changed"
+          - "active -> erased | privacy.deletion.completed for the vault | delete keys and records, no further events"
+      - entity: DeviceKey
+        initial: active
+        terminal: [revoked]
+        transitions:
+          - "active -> revoked | identity.device_key.revoke by the principal | sign and queue the revocation statement, emit identity.device_key.revoked"
+      - entity: HandleRegistration
+        initial: active
+        terminal: [purged]
+        transitions:
+          - "active -> released | identity.handle.release by the owner DID or a handle change | set releasedAt, keep skeleton reserved 30 days"
+          - "released -> active | identity.handle.claim by the same DID within 30 days | restore registration"
+          - "released -> purged | purge sweep 30 days after releasedAt | delete the row"
+    timeouts:
+      - "Relay purge sweep every 6 h removes released registrations older than 30 days."
+      - "A pending device link offer expires 10 minutes after it is shown."
+  commands_queries_events:
+    requirements:
+      - Account creation, pseudonym change and device key add and revoke are vault commands; add and revoke produce the signed statements classrup.identity.device_link/v1 and classrup.identity.device_revocation/v1, and a change also may produce classrup.identity.handle_claim/v1 for registered relays.
+      - handle claim and release are relay commands that verify the signed statement and update only that relay's registry.
+      - Every command emits its events in the same local transaction as the state change.
+    commands:
+      - name: identity.account.create
+        capability: identity.account.create
+        input: "{ pseudonym, deviceLabel, signingPublicKey, devicePublicKey, proof: { signingKeySig, deviceKeySig } }"
+        output: "{ accountId, did, deviceKeyId, revision: 1 }"
+        errors: [VALIDATION_FAILED, IDENTITY_PSEUDONYM_INVALID, IDENTITY_PSEUDONYM_RESERVED, CONFLICT_STATE]
+        emits: [identity.account.created, identity.device_key.added]
+        idempotent: true
+      - name: identity.pseudonym.change
+        capability: identity.account.update_pseudonym
+        input: "{ pseudonym, expectedRevision, confirmCooldownOverride?: boolean }"
+        output: "{ accountId, revision, pseudonym, skeleton }"
+        errors: [VALIDATION_FAILED, IDENTITY_PSEUDONYM_INVALID, IDENTITY_PSEUDONYM_RESERVED, IDENTITY_PSEUDONYM_COOLDOWN, CONFLICT_REVISION]
+        emits: [identity.pseudonym.changed]
+        idempotent: true
+      - name: identity.device_key.add
+        capability: identity.device_key.add
+        input: "{ newPublicKey, label, linkStatement: classrup.identity.device_link/v1 (signed), expectedRevision }"
+        output: "{ deviceKeyId, revision, statementCid }"
+        errors: [VALIDATION_FAILED, IDENTITY_LINK_INVALID, IDENTITY_DEVICE_LIMIT, CONFLICT_REVISION]
+        emits: [identity.device_key.added]
+        idempotent: true
+      - name: identity.device_key.revoke
+        capability: identity.device_key.revoke
+        input: "{ deviceKeyId, expectedRevision }"
+        output: "{ deviceKeyId, revision, statementCid, revokedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_LAST_DEVICE_KEY]
+        emits: [identity.device_key.revoked]
+        idempotent: true
+      - name: identity.handle.claim
+        capability: identity.handle_registration.claim
+        input: "{ claim: classrup.identity.handle_claim/v1 (signed by the account signing key) }"
+        output: "{ registrationId, handle, registeredAt }"
+        errors: [VALIDATION_FAILED, IDENTITY_PSEUDONYM_INVALID, IDENTITY_PSEUDONYM_RESERVED, IDENTITY_PSEUDONYM_TAKEN, IDENTITY_PSEUDONYM_CONFUSABLE, IDENTITY_PSEUDONYM_COOLDOWN, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: identity.handle.release
+        capability: identity.handle_registration.release
+        input: "{ registrationId, release: classrup.identity.handle_release/v1 (signed) }"
+        output: "{ registrationId, releasedAt }"
+        errors: [NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: identity.pseudonym.check
+        capability: identity.account.check_pseudonym
+        input: "{ pseudonym, scope: local|relay }"
+        output: "{ valid, normalized, skeleton, reasons: array, confusableWithContact?: { contactDid, displayPseudonym }, taken?: boolean }"
+        errors: [IDENTITY_PSEUDONYM_INVALID, RATE_LIMITED]
+      - name: identity.account.get_own
+        capability: identity.account.read_own
+        input: "{ includeDevices?: boolean }"
+        output: "{ account: Account, devices?: DeviceKey[] }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: identity.account.created, privacy: P0, payload: "{ accountId, did, pseudonym, createdAt }"}
+      - {type: identity.pseudonym.changed, privacy: P0, payload: "{ accountId, did, pseudonym, skeletonVersion, revision }"}
+      - {type: identity.device_key.added, privacy: P3, payload: "{ accountId, deviceKeyId, publicKey, linkedBy }"}
+      - {type: identity.device_key.revoked, privacy: P3, payload: "{ accountId, deviceKeyId, publicKey, revokedAt, statementCid }"}
+    events_consumed:
+      - {type: privacy.deletion.completed, effect: "vault erase: delete device keys, keystore handles and the Account, set status erased"}
+    errors:
+      - "IDENTITY_PSEUDONYM_INVALID | 422 | no | pseudonym violates length, character, script or format rules"
+      - "IDENTITY_PSEUDONYM_RESERVED | 422 | no | pseudonym skeleton is reserved"
+      - "IDENTITY_PSEUDONYM_TAKEN | 409 | no | skeleton is already held by another DID in this relay's registry"
+      - "IDENTITY_PSEUDONYM_CONFUSABLE | 409 | no | skeleton is confusable with a handle in this relay's registry"
+      - "IDENTITY_PSEUDONYM_COOLDOWN | 429 | no | pseudonym was changed less than 30 days ago"
+      - "IDENTITY_DEVICE_LIMIT | 409 | no | 10 active device keys already exist"
+      - "IDENTITY_LINK_INVALID | 422 | no | device link statement is not signed by an authorized key or is stale"
+      - "IDENTITY_LAST_DEVICE_KEY | 409 | no | revoking would leave no active device key and no verified recovery kit"
+    example: |
+      vault command: identity.account.create { "pseudonym": "Riverstone", "deviceLabel": "Pixel 8", "signingPublicKey": "…43 chars…", "devicePublicKey": "…43 chars…", "proof": { … } }
+      -> { "accountId": "0192f400-…", "did": "did:key:z6Mk…", "deviceKeyId": "0192f401-…", "revision": 1 }
+      vault command: identity.device_key.add { "newPublicKey": "…", "label": "Laptop", "linkStatement": { "type": "classrup.identity.device_link/v1", … "sig": "…" }, "expectedRevision": 1 }
+      relay command: identity.handle.claim { "claim": { "type": "classrup.identity.handle_claim/v1", "handle": "Riverstone", "did": "did:key:z6Mk…", "sig": "…" } }
+      -> 201 { "registrationId": "0192f402-…", "handle": "Riverstone", "registeredAt": "2026-11-04T10:00:00.000Z" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked local principal mutates its Account and DeviceKey records; a new device is authorized only by a link statement signed by the account signing key or an active device key.
+      - Relay policy - a relay registry accepts a claim or release only when it is signed by the claimed DID's account signing key; relay operators can refuse a handle by hosting policy but cannot create or change a DID.
+      - Pseudonym availability checks on a relay are public and rate limited by relay policy; local checks need only the unlocked vault.
+    capabilities:
+      - "identity.account.create | anonymous | none; runs on the device before a principal exists"
+      - "identity.account.update_pseudonym | principal | unlocked local principal"
+      - "identity.account.read_own | principal | unlocked local principal"
+      - "identity.account.check_pseudonym | principal, anonymous | vault - unlocked principal; relay - public with relay quota"
+      - "identity.device_key.add | principal | unlocked principal and a valid link statement from an active key"
+      - "identity.device_key.revoke | principal | unlocked principal; target key belongs to the account"
+      - "identity.handle_registration.claim | anonymous, principal | relay policy allows registrations; claim signed by the DID signing key; within quota"
+      - "identity.handle_registration.release | principal | release statement signed by the DID signing key"
+  failure_recovery_idempotency:
+    requirements:
+      - Vault commands are idempotent through the local command log; relay commands are idempotent by Idempotency-Key and statement cid.
+      - Statements are queued through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never shows more than the reached state.
+      - Concurrent edits from two tabs or two devices never overwrite each other silently; conflicts surface as CONFLICT_REVISION or a contested identity document.
+    idempotency: "Idempotency-Key per command in the vault command log for 24 h; claim statements are keyed by claimCid so replays return the same registration."
+    concurrency: "expectedRevision on every mutation; the unique skeleton index serializes concurrent relay claims; two tabs serialize via Web Locks; two devices revoking and adding concurrently produce two signed statements that identity documents reconcile by seq (F07.S02.M01)."
+    retries: "Outbox and relay retries follow base 500 ms, cap 30 s, full jitter, max 6 attempts per window, continuing until peer_accepted or the user cancels."
+    offline: "Everything except relay handle claims works offline; revocation takes effect locally at once and reaches others when the statement is delivered, which the UI states."
+    partial_failure: "If key generation or the keystore write fails, account creation aborts with nothing persisted; if a revocation statement cannot be delivered, the key is revoked locally and the device list shows 'not yet known to others'."
+  privacy_retention_abuse:
+    requirements:
+      - The vault holds no email, phone, real name or password for the account; the pseudonym is a public label and the DID a stable pseudonymous identifier, which is not anonymity.
+      - Private keys never leave the device unencrypted; the relay never sees them and the recovery kit is separate (F07.S01.M03).
+      - Pseudonym checks never reveal which existing handle a candidate collides with beyond the reason code, except a local warning naming a contact the user already knows.
+    data:
+      - "Account: P0 public (did, pseudonym); DeviceKey: P3 (labels, last-used day); keystore blobs: P4 in the kernel keystore."
+      - "HandleRegistration: P0 on the relay that holds it; claims are signed statements."
+    retention:
+      - "Account and DeviceKey until vault erase (RET-STANDARD); revoked key records kept so old signatures remain verifiable."
+      - "Released handles reserved 30 days then purged; relay request counters 24 h (RET-EPHEMERAL)."
+    threats:
+      - "T01 | Homoglyph impersonation of a known pseudonym | NFKC, Highly Restrictive script rule, UTS #39 skeleton equality check on a relay registry and local contact-confusable warning on every display"
+      - "T02 | Squatting or impersonation by claiming a recently changed handle | released handles reserved 30 days for the former DID, 30 day change cooldown per DID on a registry"
+      - "T03 | Mass creation of identities (Sybil, Douceur 2002) | creating a DID costs nothing and cannot be prevented without a central authority; relays can set claim rate limits and allowlists, and reputation dampens new identities (F07.S03.M01); the spec makes no uniqueness-of-person claim"
+      - "T04 | Stolen device keeps acting after revocation | signed revocation statement distributed via the identity document; verifiers accept signatures made before they learn of the revocation, which is an explicit limit"
+      - "T05 | Malicious link statement adds an attacker's device | link requires a signature from an active key and is valid 10 minutes; the UI shows the new device label and fingerprint for confirmation"
+      - "T06 | Weak vault passphrase enables offline guessing of the keystore blob | scrypt N=2^17, r=8, p=1, strength meter requiring at least 12 characters or 4 words, honest text that a stolen device file can be attacked offline"
+    abuse_controls:
+      - "Relay registry limits - 5 claims per hour per IP /24 and 3 per 24 h per DID, 20 availability checks per minute per caller; relays may require an invite token by policy."
+      - "Vault limits - 3 pseudonym change attempts per 24 h, 5 device link attempts per hour."
+  observability_performance:
+    requirements:
+      - Relays export registry metrics per CTR-OBS-001; the PWA keeps counters in local diagnostics only.
+      - Account creation completes within 2 seconds on a Moto G-class device including scrypt (N=2^17), and registry claims within 300 ms p95.
+      - Skeleton computation takes at most 5 ms for a 32 code point pseudonym.
+    metrics:
+      - "classrup_identity_handle_claims_total{outcome=ok|taken|confusable|invalid|rate_limited} (relay)"
+      - "classrup_identity_registry_size (gauge, relay)"
+      - "local counter device_key_changes_total{kind=added|revoked}"
+    logs:
+      - "info identity.device_key {event, correlationId} - no keys, labels, pseudonyms or DIDs."
+    budgets:
+      - "Account creation p95 <= 2 s on a Moto G-class device (scrypt dominates); claim and check p95 <= 300 ms on the relay; skeleton <= 5 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with injected clock, ID generator and fixed key pairs.
+      - Pseudonym tests run the UTS #39 conformance vectors for skeleton and a corpus of confusable and mixed-script samples.
+      - Statement tests verify signatures with RFC 8032 vectors and domain-separation negative cases.
+    fixtures: "Fixed Ed25519 key pairs A1, A2, B1; pseudonym corpus (valid, mixed script, homoglyph pairs 'paypal' and Cyrillic lookalike, RTL override, zero-width); pinned confusables data 16.0.0; fixed clock 2026-11-04T10:00:00Z; relay with registry enabled."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,04.R01 | create account with valid pseudonym | Account stored with did:key (prefix z6Mk), no private key in records, events emitted"
+      - "T02 | unit | 02.R01,02.R02 | pseudonym corpus - too short, 33 code points, spaces, all digits, mixed Latin and Cyrillic, RTL override, zero-width joiner | IDENTITY_PSEUDONYM_INVALID for each; valid CJK and Latin samples accepted"
+      - "T03 | property | 02.R01,02.R02 | UTS #39 confusable pairs and 10 000 random NFKC-equivalent strings | equal skeletons for confusable pairs; normalization is idempotent"
+      - "T04 | unit | 02.R03,02.R01 | reserved names and their homoglyph forms | IDENTITY_PSEUDONYM_RESERVED"
+      - "T05 | integration | 01.R03,02.R03,03.R03 | two DIDs claim confusable handles on one relay; release then reclaim within and after 30 days | second claim IDENTITY_PSEUDONYM_TAKEN or CONFUSABLE; only former DID can reclaim within 30 days; purge after"
+      - "T06 | integration | 02.R03,03.R01 | change pseudonym twice within 30 days in vault and on registry | vault asks confirmation; registry returns IDENTITY_PSEUDONYM_COOLDOWN"
+      - "T07 | unit | 02.R02,02.R03,03.R02 | add device with valid, stale (11 min), wrong-signer link; add 11th device | success then IDENTITY_LINK_INVALID and IDENTITY_DEVICE_LIMIT; revoked key cannot be re-added"
+      - "T08 | integration | 03.R02,02.R03 | revoke last device with and without verified recovery kit | IDENTITY_LAST_DEVICE_KEY without kit; allowed with kit"
+      - "T09 | contract | 04.R01,04.R02,04.R03,09.R02 | each command and query run | outputs, statements and events validate against registry schemas; statement signatures verify per RFC 8032"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | locked vault mutates; claim signed by a different DID; operator tries to create a DID on the registry | FORBIDDEN or VALIDATION_FAILED; no registry row created"
+      - "T11 | integration | 06.R01,06.R02,06.R03 | replay same Idempotency-Key; two tabs and two devices act concurrently; keystore write fails during creation | one result; CONFLICT_REVISION or contested document; nothing persisted on failure"
+      - "T12 | abuse | 07.R01,07.R02,07.R03 | scan storage, logs and exports of other users for private keys, emails and passwords; 6 claims in an hour from one IP /24 | none found; 6th claim RATE_LIMITED"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 50 claims per second for 5 minutes on a relay; account creation on emulated Moto G | p95 <= 300 ms on relay and <= 2 s creation; skeleton <= 5 ms"
+      - "T14 | a11y | 01.R01 | create identity and devices screens with axe-core and keyboard only | zero serious or critical issues; validation messages announced"
+      - "T15 | unit | 09.R01,09.R03 | traceability run over PS-052 | every requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export, import into a fresh vault, vault erase | Account and DeviceKey public data round-trip; private keys excluded; erase deletes all"
+    acceptance:
+      - All tests T01-T16 pass in CI.
+      - No private key, passphrase or email is ever present in module storage, events, logs or relay payloads (privacy suite).
+      - Homoglyph and mixed-script pseudonym samples are rejected or warned according to the rules, and no claim of global pseudonym uniqueness appears in the UI or docs.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the Account and DeviceKey public data and statements; private keys are exported only inside the user's passphrase-encrypted key bundle chosen at export time.
+      - Import validates DID derivation, statement signatures and key uniqueness, and never imports another principal's private data.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Sections identity.account and identity.device_keys in classrup-export/v1 (schemas classrup.identity.account/v1 and classrup.identity.device_key/v1) plus the signed link and revocation statements; optional private key bundle encrypted with XChaCha20-Poly1305 under a scrypt (N=2^17, r=8, p=1) key."
+    import: "Import into an empty vault restores the principal; if the DID derivation or a statement signature fails the section is rejected; importing a second principal into a vault with an existing one is refused with CONFLICT_STATE."
+    backup: "The vault export is the primary backup (IOX-6); relay registries back up under IOX-3 and IOX-7 and contain only public claims, so losing a relay loses no keys."
+    migration_rollback: "Additive optional fields only in v1; the Unicode data release is stored in skeletonVersion and a data bump re-computes skeletons in a migration with rollback to the previous release."

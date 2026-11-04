@@ -1,35 +1,42 @@
-# PS-117-08 — observability performance
+# PS-117-08 — Observability and performance: API and command bus
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-08. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M02 API and command bus](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/bus` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the observability performance process for api within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-117-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-117-08.R01** Every command records classrup_command_duration_ms and classrup_command_total{module, outcome, code} and every query records classrup_query_total and classrup_query_duration_ms when a metrics registry is wired (OBS-3).
+- **PS-117-08.R02** Bus overhead keeps relay writes within OBS-4; 500 sequential sample commands on SQLite WAL complete with p95 at or below 50 ms.
+- **PS-117-08.R03** Each command and query logs exactly one line with correlationId, module, code, durationMs and operation and no input or output values.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_command_total{module, outcome=ok|replayed|rejected|failed, code}
+- classrup_command_duration_ms{module, outcome} histogram, buckets 5..5000 ms
+- classrup_query_total{module, outcome, code} and classrup_query_duration_ms{module, outcome}
+- classrup_http_requests_total{outcome, code} on the relay HTTP adapter
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- info command.completed {correlationId, module, code, durationMs, operation, outcome} — no input or output values.
+- error command.failed {correlationId, module, code: INTERNAL, error name and stack} — exception message redacted by the logger.
+- info http.request {correlationId, code, durationMs, method, status, ip truncated to /24 or /48}.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- Bus overhead for one command on SQLite WAL: p95 ≤ 50 ms (relay write budget p95 ≤ 300 ms, OBS-4).
+- Vault dispatch with the IndexedDB adapter adds one IndexedDB readwrite transaction per committed command.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-117-09.T20 | unit | PS-117-08.R01 | ok, replayed and rejected commands | counters per outcome and a duration histogram series rendered |
+| TEST-PS-117-09.T21 | unit | PS-117-08.R03 | one command with a private title | one log line with ts, level, msg, correlationId, module, code, durationMs first; title absent from logs |
+| TEST-PS-117-09.T22 | load | PS-117-08.R02 | 500 sequential idempotent commands on a SQLite WAL file | p95 ≤ 50 ms |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

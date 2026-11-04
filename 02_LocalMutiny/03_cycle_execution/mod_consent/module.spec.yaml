@@ -1,0 +1,362 @@
+# F02.S03.M01 Cycle consent and commit verdict (ADR-0007, ADR-0016 local-first).
+id: F02.S03.M01
+scope: MVP
+summary: >-
+  Turns a suggestion (or an accepted two-party proposal) into a Cycle that every participant holds in their own vault, collects each participant's
+  Ed25519-signed consent on the exact immutable revision hash (F08.S02.M02 ConsentStatement), and lets each vault decide on its own whether the cycle is committed.
+  A vault commits only when every participant's valid consent on the head hash and every giver's valid unexpired reservation statement (F02.S03.M02) are present,
+  feasibility is fresh, and the vault's own clock is before the consent deadline (default 72 h, range 1 h to 7 d). Any clock disagreement counts as expired.
+  There is no distributed lock and no atomic cross-vault commit. A signature evidences an assertion, not delivery of goods, and nothing is ever silently rerouted.
+responsibilities:
+  - Own the Cycle aggregate and CycleConsent records as seen by one vault, with states opening, proposed, committed, executing, completed, partially_executed, declined, cancelled and frozen.
+  - Create a cycle from a verified suggestion (coordinator) or from a peer's revision 1 (participant), or from an accepted TradeProposal, with participants, legs, revision and reservations built through the owning modules.
+  - Verify consent statements (signer, subject, hash, key validity, deadline) and compute the local commit verdict whenever a consent, reservation, revision or clock tick arrives.
+  - Freeze the cycle on forks or conflicting promises and mirror terminal states reported by dropout and recovery modules.
+non_responsibilities:
+  - Matching and suggestions (F02.S02.M03) and feasibility checks (F02.S02.M05).
+  - Consent statement format and key verification primitives (F08.S02.M02, F16.S02.M03, F07.S01.M01).
+  - Reservations (F02.S03.M02), timeouts and dropouts (F02.S03.M03), handover attestations and recovery (F02.S03.M04).
+  - "Future: threshold consent for large cycles with designated alternates, which would require explicit pre-consented alternates and is excluded now to avoid silent rerouting."
+depends_on: [F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S04.M02, F08.S02.M02, F07.S01.M01, F12.S03.M04, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a participant in a 3-party cycle, I read exactly what I give, what I receive, from whom and the value gaps, and I sign consent on that exact revision; nothing happens to my item until I sign.
+  - As a coordinator, I see which participants have signed, whose reservation statement is missing, and the true delivery state of every statement I sent.
+  - As a participant, if anyone changes the terms or the deadline passes before all have signed, my consent becomes void and my reservation is released automatically.
+edge_cases:
+  - Three of four participants signed and the fourth's consent arrives after the deadline on my clock; my vault does not commit and expires the cycle, even if the fourth's vault considers it in time.
+  - The coordinator revises the cycle while I am reviewing; my signing is refused with a stale revision error and I must review the new revision.
+  - A consent signed with a device key that was revoked yesterday arrives; it is rejected and the participant is shown as not consented.
+  - Two participants propose the same cycleKey concurrently; the vault keeps the proposal it consented to first, and the other is stored as duplicate and cannot be consented because the item is already reserved in this vault.
+  - A participant declines after signing consent; vaults that have not yet committed move to declined, and vaults that already committed hand the case to dropout handling.
+  - The device is offline when the last consent arrives; the verdict is computed when the vault next processes it, and the UI says 'waiting for sync' rather than committed.
+  - The cycle has 8 participants and one has maxCycleLength 6; feasibility fails and the cycle cannot be proposed.
+ux:
+  screens:
+    - "Cycle review screen: ring diagram, per-participant give and receive with values, gap versus tolerance, compensation legs, deadline in local time, feasibility checklist with basis chips, the plain statement 'I agree to exchange exactly this and I understand nothing is guaranteed by ClassRup', buttons Sign and consent, Decline."
+    - "Cycle status screen: consent chips per participant (signed, waiting, void, late), reservation chips per giver, per-statement sync state, countdown to consent deadline."
+    - "Revision-changed banner explaining that all consents were voided and a diff of what changed."
+  states: [loading, reviewing, signing, awaiting-others, committed-here, declined, cancelled, expired, frozen, pending-offline, error]
+  a11y:
+    - The consent statement is real text immediately before the Sign button, and the button name is 'Sign and consent to revision N of M participants'.
+    - Chips for consent and reservation state use text labels and icons; changes are announced in an aria-live polite region.
+    - Countdown is available as absolute time text and the screen is fully keyboard operable with 44 by 44 px targets.
+processes:
+  domain_schema:
+    requirements:
+      - A Cycle is each vault's own view of one exchange ring of 2..8 participants, identified by a coordinator-generated UUIDv7 that equals the TradeProposal id when the cycle originates from an accepted two-party proposal.
+      - A CycleConsent stores one participant's signed consent (embedded ConsentStatement envelope), the revision hash it signed, the local receive time and a validity verdict; consents on any other hash are void evidence.
+      - Cycle composition is P2 and is exchanged only as end-to-end encrypted signed envelopes to the participants; the commit verdict is a local derivation and is never itself a signed fact.
+      - The deadline, execution window and every timestamp from other parties are claims; only the local clock decides expiry.
+    entities:
+      - name: Cycle
+        schema: classrup.mutiny.cycle/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key; generated by the coordinator, equal in all vaults; equals proposal id for origin trade_proposal"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "origin: enum — suggestion | trade_proposal | peer_revision"
+          - "sourceId?: uuidv7 — suggestionId or proposalId in this vault"
+          - "coordinatorId: did — participant who created revision 1; only coordinator can revise"
+          - "length: int — 2..8"
+          - "participantIds: array — 2..8 DIDs in ring order, unique"
+          - "settlementCurrency: string — registered currency code (F09.S03.M01)"
+          - "headRevisionId: uuidv7 — current ProposalRevision (subjectType cycle, or trade_proposal for origin trade_proposal)"
+          - "headRevisionNo: int — 1..20"
+          - "headRevisionHash: cid — digest all consents must sign"
+          - "consentDeadline: timestamp — claim from the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 7 d"
+          - "executionWindowMs: int — 86400000..2592000000, default 1209600000"
+          - "status: enum — opening | proposed | committed | executing | completed | partially_executed | declined | cancelled | frozen"
+          - "closeReason?: enum — declined | consent_timeout | participant_dropped | lock_lost | fork_detected | conflicting_promise | clock_disagreement | execution_timeout | completed | recovery"
+          - "committedLocallyAt?: timestamp — local clock when this vault's verdict became committed"
+          - "lastFeasibilityReportId?: uuidv7 — report used for the verdict, must be ≤ 10 min old"
+          - "peerSync: object — per participant {consent: none|received, reservation: none|received, lastStatementCid}"
+          - "syncStates: object — per outgoing statement {cid: local_committed|prepared|transport_acknowledged|peer_accepted}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - participantIds are distinct, 2..8, and equal the roster of the head revision snapshot.
+          - status committed implies a valid CycleConsent from every participant on headRevisionHash, a valid unexpired reservation from every giver, and a fresh non-infeasible report, all verified in this vault.
+          - A new head revision sets every CycleConsent on the previous hash to void and returns committed-not-yet cycles to proposed.
+          - Terminal states (completed, partially_executed, declined, cancelled, frozen) never change.
+      - name: CycleConsent
+        schema: classrup.mutiny.cycle_consent/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "cycleId: uuidv7 — Cycle (or TradeProposal) id the consent is about"
+          - "participantId: did — signer; one of participantIds"
+          - "revisionNo: int — revision signed"
+          - "revisionHash: cid — exact digest signed; must equal the statement's subject revision hash"
+          - "statementId: uuidv7 — F08.S02.M02 ConsentStatement id"
+          - "statement: object — embedded ConsentStatement envelope (signer, subject ref, revision hash, statement key mutiny.cycle.consent.v1, Ed25519 signature) ≤ 4 KiB"
+          - "acceptedImbalance?: Money — the signer's explicit acceptance of a gap above tolerance up to this amount"
+          - "direction: enum — own | peer"
+          - "signedAtClaim: timestamp — signer's clock, a claim"
+          - "receivedAtLocal: timestamp — local clock when verified"
+          - "relayReceiptAt?: timestamp — relay-signed receipt time, evidence of that relay's clock only"
+          - "status: enum — valid | void | late | invalid"
+          - "voidReason?: enum — revision_changed | declined | cycle_closed | key_revoked | deadline_missed"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one valid consent per (cycleId, participantId, revisionHash).
+          - A consent with signedAtClaim, receivedAtLocal or relayReceiptAt after the consent deadline has status late and never counts toward commit.
+          - The signer of statement equals participantId and the statement's revision hash equals revisionHash.
+    sql: |
+      CREATE TABLE mutiny_cycle (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, origin TEXT NOT NULL, status TEXT NOT NULL, head_revision_hash TEXT NOT NULL,
+        consent_deadline TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX mutiny_cycle_status ON mutiny_cycle(tenant_id, status, consent_deadline);
+      CREATE TABLE mutiny_cycle_consent (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, cycle_id TEXT NOT NULL, participant_id TEXT NOT NULL, revision_hash TEXT NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_cycle_consent_valid ON mutiny_cycle_consent(tenant_id, cycle_id, participant_id, revision_hash) WHERE status = 'valid';
+  validation_rules:
+    requirements:
+      - Proposing a cycle requires a verified suggestion, a fresh feasibility report, no infeasible check, reachable participants and the coordinator's own reservation.
+      - A consent is valid only if the statement verifies against a non-revoked registered device key of the signer, names this cycle and the exact head hash, and arrives before the deadline on the local clock.
+      - Commit requires every condition simultaneously and is re-checked inside the same transaction that records the last piece of evidence.
+    rules:
+      - "V01 | suggestion exists, status suggested, verifiedLocally true, not expired, and the coordinator is a participant | MUTINY_CYCLE_SUGGESTION_UNUSABLE"
+      - "V02 | feasibility report for the head hash is ≤ 10 min old and overall is not infeasible | MUTINY_CYCLE_INFEASIBLE"
+      - "V03 | length 2..8 and participants unique with mailbox hints and no local block among them | MUTINY_CYCLE_INFEASIBLE"
+      - "V04 | consentDeadlineMs between 3600000 and 604800000 (default 259200000) and executionWindowMs between 86400000 and 2592000000 | MUTINY_CYCLE_DEADLINE_INVALID"
+      - "V05 | principal has ≤ 5 non-terminal cycles and proposals combined and is within the F12.S03.M04 local limit | MUTINY_CYCLE_LIMIT"
+      - "V06 | consent revisionHash equals headRevisionHash | MUTINY_CONSENT_STALE_REVISION"
+      - "V07 | consent statement signature verifies, signer is a participant, key not revoked, subject equals the cycle, statement key is mutiny.cycle.consent.v1 | MUTINY_CONSENT_STATEMENT_INVALID"
+      - "V08 | signedAtClaim, receivedAtLocal and any relayReceiptAt are all ≤ consentDeadline and the local clock is ≤ consentDeadline | MUTINY_CONSENT_LATE"
+      - "V09 | the principal's own items were reserved for this head hash before the consent was signed | MUTINY_CYCLE_RESERVATION_FAILED"
+      - "V10 | acceptedImbalance, if present, is a Money in the settlement currency and ≥ 0 and ≤ the participant's gap | VALIDATION_FAILED"
+      - "V11 | acting on a terminal or frozen cycle | MUTINY_CYCLE_FROZEN"
+      - "V12 | a decline is signed by a participant of the cycle | FORBIDDEN"
+  workflow_state_machine:
+    requirements:
+      - The commit verdict is a pure function of verified evidence and the local clock; it is re-evaluated whenever evidence or the clock changes and never depends on a message from a coordinator saying committed.
+      - Any decline, expiry, fork, conflicting promise or participant loss before commit ends the cycle for this vault, and no replacement participant is ever substituted.
+      - Terminal states do not reopen; renegotiation after a freeze or cancellation is a brand-new cycle with new consents.
+      - The consent deadline is evaluated on each vault's own clock, and if the clock disagrees with a relay receipt time about the deadline, the cycle is expired.
+    machines:
+      - entity: Cycle
+        initial: opening
+        terminal: [completed, partially_executed, declined, cancelled, frozen]
+        transitions:
+          - "opening -> proposed | coordinator propose or peer revision 1 ingested and own reservation not yet required | roster, legs, revision stored; emits mutiny.cycle.proposed"
+          - "opening -> committed | mutiny.proposal.accepted consumed (origin trade_proposal) | consents and reservations imported by reference and re-verified; emits mutiny.cycle.proposed then mutiny.cycle.committed"
+          - "proposed -> proposed | mutiny.proposal.revised for this cycle | all consents void, reservations superseded after re-reserve; coordinator re-signs"
+          - "proposed -> committed | evaluateCommit true on the local clock | every participant has valid consent on head hash, every giver has valid unexpired reservation, fresh feasibility, no fork; emits mutiny.cycle.committed"
+          - "proposed -> declined | mutiny.cycle.decline by a participant or verified decline statement | emits mutiny.cycle.declined"
+          - "proposed -> cancelled | mutiny.cycle.cancelled consumed | consent deadline passed, participant dropped or lock lost before commit"
+          - "proposed -> frozen | mutiny.revision.forked or mutiny.lock.conflict_detected consumed | no signature is produced; own reservation released by F02.S03.M02"
+          - "committed -> executing | mutiny.leg.handed_over or mutiny.leg.received consumed | first handover evidence verified"
+          - "committed -> cancelled | mutiny.cycle.cancelled consumed | dropout before any handover evidence"
+          - "committed -> frozen | mutiny.lock.conflict_detected consumed before any handover evidence | renegotiation as a new cycle"
+          - "executing -> completed | mutiny.cycle.completed consumed | all legs received and compensation settled as verified by F02.S03.M04"
+          - "executing -> partially_executed | mutiny.cycle.partially_executed consumed | recovery case opened by F02.S03.M04"
+    timeouts:
+      - "Consent deadline evaluated on vault open and every 60 s while open; at the deadline a proposed cycle is cancelled with reason consent_timeout by F02.S03.M03."
+      - "A feasibility report older than 10 minutes cannot be used for the verdict and is refreshed automatically before evaluation."
+  commands_queries_events:
+    requirements:
+      - propose, consent and decline are vault commands that each name the signed statements they produce, and ingest is a vault command that verifies statements from other participants and produces none.
+      - Commit is never a command; it is the local verdict emitted as mutiny.cycle.committed in the transaction that records the final piece of evidence.
+      - Statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted, and the UI shows no more certainty than the state reached.
+      - Events produced here drive local consumers only; nothing leaves the device except the signed statements.
+    commands:
+      - name: mutiny.cycle.propose
+        capability: mutiny.cycle.propose
+        input: "{ suggestionId, consentDeadlineMs? (default 259200000), executionWindowMs? (default 1209600000), settlementCurrency? } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1), classrup.mutiny.cycle_lock/v1 (coordinator reservation) and classrup.comms.consent/v1 (coordinator consent)"
+        output: "{ cycleId, revisionNo: 1, revisionHash, participantIds, consentDeadline, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, MUTINY_CYCLE_SUGGESTION_UNUSABLE, MUTINY_CYCLE_INFEASIBLE, MUTINY_CYCLE_DEADLINE_INVALID, MUTINY_CYCLE_LIMIT, MUTINY_CYCLE_RESERVATION_FAILED, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [mutiny.cycle.proposed]
+        idempotent: true
+      - name: mutiny.cycle.consent
+        capability: mutiny.cycle.consent
+        input: "{ cycleId, revisionHash, acceptedImbalance?, expectedRevision } — vault command; produces statements classrup.mutiny.cycle_lock/v1 (own reservation, if the principal is a giver) and classrup.comms.consent/v1 (consent on revisionHash) signed by the principal"
+        output: "{ cycleId, consentId, statementId, localVerdict: awaiting_others | committed, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, MUTINY_CONSENT_STALE_REVISION, MUTINY_CONSENT_LATE, MUTINY_CYCLE_INFEASIBLE, MUTINY_CYCLE_RESERVATION_FAILED, MUTINY_CYCLE_FROZEN]
+        emits: [mutiny.cycle.consent_recorded, mutiny.cycle.committed]
+        idempotent: true
+      - name: mutiny.cycle.decline
+        capability: mutiny.cycle.decline
+        input: "{ cycleId, expectedRevision, reasonCode? } — vault command; produces statement classrup.mutiny.cycle_decline/v1 signed by the principal and releases the principal's reservation"
+        output: "{ cycleId, revision, status: declined, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: [mutiny.cycle.declined]
+        idempotent: true
+      - name: mutiny.cycle.ingest
+        capability: mutiny.cycle.ingest
+        input: "{ envelope: classrup.mutiny.proposal_revision/v1 | classrup.comms.consent/v1 | classrup.mutiny.cycle_lock/v1 | classrup.mutiny.cycle_decline/v1, provenance } — vault command; produces no statement"
+        output: "{ accepted: boolean, quarantineReason?, localVerdict? }"
+        errors: [MUTINY_CONSENT_STATEMENT_INVALID, MUTINY_CONSENT_LATE, MUTINY_CONSENT_STALE_REVISION, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        emits: [mutiny.cycle.proposed, mutiny.cycle.consent_recorded, mutiny.cycle.committed, mutiny.cycle.declined]
+        idempotent: true
+    queries:
+      - name: mutiny.cycle.get
+        capability: mutiny.cycle.read
+        input: "{ cycleId }"
+        output: "{ cycle: Cycle, consents: CycleConsent[], locks: CycleLock[], feasibility?: FeasibilityReport, awaiting: { actorId, kind: consent|reservation }[] }"
+        errors: [NOT_FOUND]
+      - name: mutiny.cycle.list_mine
+        capability: mutiny.cycle.read
+        input: "{ status?, cursor?, limit ≤ 50 }"
+        output: "{ items: Cycle[], nextCursor? }"
+        errors: []
+      - name: mutiny.cycle.explain_verdict
+        capability: mutiny.cycle.read
+        input: "{ cycleId }"
+        output: "{ committable: boolean, missing: { code, actorId? }[], evaluatedAt, clockBasis: local }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: mutiny.cycle.proposed, privacy: P2, payload: "{ cycleId, origin, suggestionId?, coordinatorId, participantIds, length, revisionNo, revisionHash, consentDeadline }"}
+      - {type: mutiny.cycle.consent_recorded, privacy: P2, payload: "{ cycleId, participantId, revisionNo, revisionHash, direction, status }"}
+      - {type: mutiny.cycle.committed, privacy: P2, payload: "{ cycleId, revisionNo, revisionHash, participantIds, executionDeadline, sourceType, sourceId? }"}
+      - {type: mutiny.cycle.declined, privacy: P2, payload: "{ cycleId, participantId, afterOwnConsent, cycleKey? }"}
+    events_consumed:
+      - {type: mutiny.proposal.accepted, effect: "open a Cycle with origin trade_proposal, id equal to the proposal id, import the two consents and reservations by reference, re-verify and commit"}
+      - {type: mutiny.proposal.revised, effect: "for cycle subjects set the new head, void every CycleConsent on older hashes, and require the coordinator reservation to be superseded"}
+      - {type: mutiny.cycle.locked, effect: "record that a giver's reservation is present and re-evaluate the commit verdict"}
+      - {type: mutiny.cycle.unlocked, effect: "re-evaluate the verdict; a reservation that expired or was released before commit blocks the commit"}
+      - {type: comms.consent.signed, effect: "verify a peer consent statement for a cycle in this vault, store a CycleConsent and re-evaluate the verdict"}
+      - {type: mutiny.revision.forked, effect: "freeze the cycle"}
+      - {type: mutiny.lock.conflict_detected, effect: "freeze the cycles named in the conflict"}
+      - {type: mutiny.cycle.cancelled, effect: "move proposed or committed cycles to cancelled with the dropout's close reason"}
+      - {type: mutiny.leg.handed_over, effect: "move committed to executing"}
+      - {type: mutiny.leg.received, effect: "move committed to executing"}
+      - {type: mutiny.cycle.completed, effect: "move executing to completed"}
+      - {type: mutiny.cycle.partially_executed, effect: "move executing to partially_executed"}
+    errors:
+      - "MUTINY_CYCLE_SUGGESTION_UNUSABLE | 409 | no | the suggestion is missing, expired, already used or not verified locally"
+      - "MUTINY_CYCLE_INFEASIBLE | 422 | no | feasibility is missing, stale or has a failing check"
+      - "MUTINY_CYCLE_DEADLINE_INVALID | 422 | no | consent deadline or execution window out of range"
+      - "MUTINY_CYCLE_LIMIT | 409 | no | the principal has the maximum number of open cycles and proposals"
+      - "MUTINY_CYCLE_RESERVATION_FAILED | 409 | no | the principal's own items could not be reserved"
+      - "MUTINY_CONSENT_STALE_REVISION | 409 | no | the consent names a hash that is not the head revision"
+      - "MUTINY_CONSENT_STATEMENT_INVALID | 422 | no | the consent statement failed signature, signer, key, subject or statement-key checks"
+      - "MUTINY_CONSENT_LATE | 410 | no | the consent or the local clock is past the consent deadline"
+      - "MUTINY_CYCLE_FROZEN | 409 | no | the cycle is frozen or terminal and accepts no further action"
+    example: |
+      # Local verdict evaluation (identical rule for every cycle length):
+      #   commit iff status = proposed AND localNow <= consentDeadline
+      #     AND for every participant p: valid CycleConsent(p, headHash) with signedAtClaim, receivedAtLocal, relayReceiptAt <= consentDeadline
+      #     AND for every giver g: active unexpired CycleLock(g, headHash) with expiresAt >= consentDeadline + executionWindowMs
+      #     AND FeasibilityReport fresh (<= 10 min) and not infeasible AND no fork or conflicting promise flag.
+      #
+      # 2-party (origin trade_proposal): Alice and Bob consent on hash H1; cycle opens already committed in each vault that holds both consents + 2 reservations.
+      # 3-party: Alice (coordinator) proposes at T0; Bob signs T0+2h; Carol signs T0+30h; deadline T0+72h => Alice's, Bob's and Carol's vaults commit when the last of 3 consents and 3 reservations is verified there.
+      # 4-party: Alice, Bob, Carol signed; Dan's consent signedAtClaim T0+71h59m but received at Alice's vault T0+72h05m => late at Alice's vault: no commit, cycle expires there;
+      #          Dan's own vault may show 'waiting', which is truthful: nobody is bound, and Alice's reservation is released at the deadline.
+      # N-party (8): all 8 consents and 8 reservations are required; 7 of 8 never commits.
+      mutiny.cycle.propose  Idempotency-Key: 0192f430-0000-7000-8000-000000000001
+      { "suggestionId": "0192f431-…", "consentDeadlineMs": 259200000 }
+      -> 201 { "cycleId": "0192f432-…", "revisionNo": 1, "revisionHash": "sha256-Zk8…", "participantIds": ["did:key:z6MkAlice","did:key:z6MkBob","did:key:z6MkCarol"], "syncState": "prepared" }
+      mutiny.cycle.consent { "cycleId": "0192f432-…", "revisionHash": "sha256-Zk8…", "expectedRevision": 2 }   # on Bob's device
+      -> 200 { "consentId": "0192f433-…", "localVerdict": "awaiting_others", "syncState": "prepared" }
+      Consent statement (F08.S02.M02) signed by Bob: { "signer":"did:key:z6MkBob", "subject":{"type":"cycle","id":"0192f432-…"}, "revisionHash":"sha256-Zk8…", "statementKey":"mutiny.cycle.consent.v1", "sig":"…" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal propose, consent or decline, and only as a participant of the cycle; a consent signed by anyone else is never created locally.
+      - Incoming statements count only when signed by a registered, non-revoked device key of a participant DID for the role they claim; otherwise they are quarantined.
+      - Relays and moderators have no capability over cycles; relay roles govern only what that relay hosts.
+    capabilities:
+      - "mutiny.cycle.propose | principal | vault unlocked; principal is in the verified suggestion; participation limit not exceeded"
+      - "mutiny.cycle.consent | principal | principal is a participant; cycle proposed; principal has not consented to the head hash"
+      - "mutiny.cycle.decline | principal | principal is a participant; cycle proposed or committed-before-handover is handled by F02.S03.M03"
+      - "mutiny.cycle.ingest | principal | envelope signer is a participant with a non-revoked device key"
+      - "mutiny.cycle.read | principal | cycle stored in this vault"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands carry expectedRevision for the local aggregate.
+      - Each command and each ingest is one IndexedDB transaction covering the cycle, consents, events and outbox entries, and the commit verdict is evaluated inside that same transaction.
+      - Forked or conflicting signed promises are detected, frozen and renegotiated explicitly; consent, money and inventory commitments are never resolved by last-writer-wins.
+      - Delivery is at-least-once and out of order; duplicates are skipped by cid and the verdict converges once the same evidence is present.
+    idempotency: "Idempotency-Key required on propose, consent and decline, replay 24 h; ingest dedupes by envelope cid; consent is bound to (cycleId, participantId, revisionHash) and cannot be created twice."
+    concurrency: "expectedRevision on the aggregate; a Web Locks mutex per cycleId inside the vault; cross-vault races surface as forks or late consents, never as merges."
+    retries: "Outbox retries with IDM-4 backoff (base 500 ms, cap 30 s, max 6 attempts per destination); the same signed envelope is re-sent, a consent is never re-signed."
+    offline: "Propose, consent and decline commit locally while offline and show pending; the deadline continues on the local clock, and a consent signed offline that is delivered after the deadline is late at peers."
+    partial_failure: "If a consent was delivered but the reservation statement was not, peers do not count the consent toward commit; if a participant's statements reach only some vaults, vaults may disagree on the verdict, and the UI states that each device decides for itself."
+  privacy_retention_abuse:
+    requirements:
+      - Cycle composition, values and consents are P2, travel only in end-to-end encrypted envelopes to the participants and are never published, federated or sent to push in plaintext.
+      - Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
+      - Coercion and spam through unwanted cycle proposals are limited by recipient-side muting, per-sender quarantine, and the proposer's cap of 5 open cycles and proposals.
+      - The UI states that pseudonymity is not anonymity and that counterparties can see the public items, pseudonyms and the distance bucket.
+    data:
+      - "Cycle and CycleConsent: P2, device only."
+      - "Embedded ConsentStatement envelopes: P2; the signature evidences the signer's assertion on the exact hash, not delivery of any item."
+    retention:
+      - "Terminal cycles: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT 30 days."
+    threats:
+      - "T01 | Participant is led to sign terms other than the ones displayed | consent signs the revision hash; the UI recomputes the hash of the displayed snapshot and disables Sign on mismatch"
+      - "T02 | Coordinator swaps a participant after consent | cycle revisions cannot change participants; any change is a new cycle needing new consent"
+      - "T03 | Replay of an old consent on a new revision | consent binds the exact hash; other hashes are void evidence"
+      - "T04 | One vault commits while others do not and the cycle proceeds one-sidedly | execution requires each giver's own action; every handover is attested by the giver and the receiver, and dropout handling cancels before any handover"
+      - "T05 | Deadline games using forged claimed times | claims never decide; the local clock and any relay-signed receipt time do; disagreement counts as expired"
+      - "T06 | Sybil participants in a ring to extract real items | each real participant must sign consent and reserve their own item; no one can be bound without their key; local filters and reputation signals apply"
+      - "T07 | Forked coordinator sends different revisions to different participants | participants compare cids on any exchange and a mismatch freezes the cycle at that vault"
+    abuse_controls:
+      - "Proposer cap of 5 open cycles and proposals and 10 propose commands per day per vault."
+      - "Recipients quarantine DIDs that send more than 10 cycle proposals in 24 h and silently ignore blocked or muted DIDs."
+  observability_performance:
+    requirements:
+      - Local diagnostics record transitions, verdict inputs and error codes without DIDs, values or statements; the PWA sends no telemetry (OBS-7).
+      - propose for 8 participants completes locally within 500 ms at p95; consent within 300 ms; ingest of one envelope within 80 ms.
+      - Verdict evaluation for 8 participants completes within 20 ms.
+    metrics:
+      - "classrup_mutiny_cycles_total{outcome=proposed|committed|declined|cancelled|frozen|completed|partial} (local diagnostics)"
+      - "classrup_mutiny_consent_to_commit_ms (histogram, local diagnostics)"
+      - "classrup_mutiny_statements_quarantined_total{code} (local diagnostics)"
+    logs:
+      - "info cycle.committed_locally {cycleId, length, correlationId} — no DIDs or values."
+      - "warn cycle.consent_late {cycleId, correlationId}"
+    budgets:
+      - "propose p95 ≤ 500 ms for 8 participants; consent p95 ≤ 300 ms; ingest p95 ≤ 80 ms; verdict ≤ 20 ms."
+      - "Envelope size per statement ≤ 96 KiB; per-cycle stored evidence ≤ 1 MiB."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Multi-vault tests use in-memory vaults with a fake relay that drops, delays, duplicates and reorders, and an injected clock per vault.
+      - Property tests show commit is impossible without every consent and reservation on the head hash, and that revisions void consents.
+      - Fixtures cover explicit 2-, 3-, 4- and 8-party cycles.
+    fixtures: "Vaults Alice, Bob, Carol, Dan and Erin..Hal; cycles C2 (proposal origin), C3, C4, C8; keys and a revoked key for Dan; fake relay with controllable delay; per-vault clocks starting 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R01,03.R01,04.R03 | 3-party happy path across three vaults | each vault commits after verifying 3 consents and 3 reservations; committed event carries executionDeadline"
+      - "T02 | integration | 01.R01,03.R01 | 2-party accepted proposal opens cycle as committed | Cycle id equals proposal id and both vaults commit with imported consents re-verified"
+      - "T03 | unit | 02.R01,02.R03 | each rule V01..V12 violated in turn | documented error code returned, nothing signed"
+      - "T04 | property | 03.R01,03.R02,09.R03 | random interleavings, drops and duplicates of consents, locks, revisions | committed only with all valid consents and reservations on the head hash; terminal states immutable"
+      - "T05 | integration | 03.R02,04.R02,01.R03 | coordinator revises after two consents | all consents void, reservations superseded, only the coordinator can revise, participant change refused"
+      - "T06 | integration | 01.R04,03.R04,07.R04 | 4-party with Dan's consent arriving after deadline on Alice's clock | no commit at Alice's vault, cycle expires, reservations released, disagreement counted expired"
+      - "T07 | integration | 02.R02,05.R02 | consent signed by revoked key, wrong subject, wrong hash, wrong signer | quarantined with MUTINY_CONSENT_STATEMENT_INVALID or STALE; not counted"
+      - "T08 | integration | 03.R03,06.R03 | fork: coordinator sends two different revision 2 to different participants | cids compared, mutiny.revision.forked, both vaults freeze, no consent counted"
+      - "T09 | integration | 03.R03,06.R03 | conflicting reservation for one item in two cycles seen by one vault | mutiny.lock.conflict_detected, both cycles frozen, renegotiation requires new cycle"
+      - "T10 | contract | 04.R01,04.R04,09.R02,09.R04 | all commands and ingest | outputs, events and statements validate against classrup.mutiny.cycle/v1, cycle_consent/v1, cycle_decline/v1, and registry; sync states advance only when acknowledged"
+      - "T11 | abuse | 05.R01,05.R02,05.R03 | other principal consents; forged statements; relay tries to inject committed | FORBIDDEN or quarantine; verdict unaffected"
+      - "T12 | integration | 06.R01,06.R02,06.R04 | replay commands; crash mid-transaction; out-of-order and duplicate delivery | one consent per participant; no partial record; verdict converges"
+      - "T13 | chaos | 06.R04,06.R03 | relay down 30 min during consent window | statements delivered afterwards, UI never shows peer_accepted before acknowledgement"
+      - "T14 | abuse | 07.R03,07.R01 | 11 proposals from one DID in 24 h; 6th open cycle at one proposer | quarantine and MUTINY_CYCLE_LIMIT"
+      - "T15 | abuse | 07.R02 | participant erases identity; others export evidence | records retained and pseudonymized; signatures still verify"
+      - "T16 | e2e | 07.R04,01.R04 | mobile 3-party consent flow | disclosure that pseudonymity is not anonymity shown; consent statement text before Sign; axe zero serious issues"
+      - "T17 | load | 08.R02,08.R03 | 8-participant propose, consent, ingest on emulated Moto G | within p95 budgets"
+      - "T18 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no identifiers in diagnostics; every PS-021 requirement maps to a passing test"
+      - "T19 | integration | 03.R02,01.R02 | participant declines after consent; others not yet committed and already committed | declined at uncommitted vaults; committed vaults hand over to dropout handling"
+      - "T20 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, schema rollback | cycles and consents round-trip with signatures verified; open cycles import as frozen"
+    acceptance:
+      - All tests T01–T20 pass in CI.
+      - A cycle is committed in a vault only when every participant's valid signed consent on the head hash and every giver's valid unexpired reservation statement were verified in that vault before the deadline on its own clock.
+      - No code path adds, removes or replaces a participant of an existing cycle, and forks or conflicting promises always freeze rather than merge.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the user's cycles with all consents and the statements they depend on, because they are signed evidence of what was agreed.
+      - Import verifies every consent signature and hash, skips identical records, rejects conflicting IDs, and imports non-terminal cycles as frozen so no stale consent or deadline is acted upon.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.cycles in classrup-export/v1; one line per Cycle (schema classrup.mutiny.cycle/v1) and per CycleConsent (schema classrup.mutiny.cycle_consent/v1) with embedded statements and provenance."
+    import: "Terminal cycles import as read-only history; proposed and committed cycles import as frozen with closeReason recovery; reservations never revive."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext in mailboxes (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback to the previous release ignores unknown fields; the status enum only grows and unknown states read as frozen."

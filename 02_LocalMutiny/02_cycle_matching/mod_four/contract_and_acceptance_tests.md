@@ -1,35 +1,45 @@
-# PS-017-09 — contract and acceptance tests
+# PS-017-09 — Contract and acceptance tests: Four-party cycles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-09. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M02 Four-party cycles](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/four` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-017-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-017-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-017-09.R02** The 4-party worked example is a golden test with exact bigint outputs.
+- **PS-017-09.R03** The module is tested for emitting no events and sending no statements.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** 4-party values 20000, 19800, 19500, 19900 EUR minor; pair distance fixtures with one 30 km edge; fixed clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-017-09.T01 | unit | PS-017-01.R01, PS-017-03.R01 | read default profile | toleranceBps 300, absoluteMinMajor 3, maxPairBucket 2, maxOtherOpenCycles 2, version p4.1 |
+| TEST-PS-017-09.T02 | unit | PS-017-01.R02, PS-017-02.R01 | overrides at and beyond bounds | out-of-bound rejected, in-bound recorded and shown |
+| TEST-PS-017-09.T03 | unit | PS-017-01.R03, PS-017-02.R03, PS-017-09.R02 | golden 4-party explanation | gaps 100, 200, 300, 400 and tolerances 600, 600, 594, 597 exactly |
+| TEST-PS-017-09.T04 | unit | PS-017-02.R02, PS-017-04.R03 | a 3-party suggestion explained as 4-party | MUTINY_PROFILE_LENGTH_MISMATCH |
+| TEST-PS-017-09.T05 | unit | PS-017-02.R02 | ring with one 30 km edge, one participant with maxCycleLength 3, one with 3 other open cycles | MUTINY_FOUR_DISTANCE, MUTINY_FOUR_LENGTH_PREFERENCE, MUTINY_PARTICIPANT_OVERLOADED |
+| TEST-PS-017-09.T06 | contract | PS-017-04.R01, PS-017-04.R02, PS-017-09.R03 | queries and engine events | outputs validate against registry; no events or statements from this module |
+| TEST-PS-017-09.T07 | integration | PS-017-03.R02, PS-017-03.R03, PS-017-06.R02 | engine started without provider | engine default profile used and degraded diagnostic logged; never the 3-party profile |
+| TEST-PS-017-09.T08 | abuse | PS-017-05.R01, PS-017-05.R02, PS-017-05.R03, PS-017-07.R01 | other principal queries; explanation inspected | NOT_FOUND; no block or exclusion information |
+| TEST-PS-017-09.T09 | integration | PS-017-06.R01, PS-017-06.R03, PS-017-07.R02, PS-017-08.R02 | crash and restart | explanations rebuilt within 10 ms and cache purged with suggestion |
+| TEST-PS-017-09.T10 | unit | PS-017-07.R03, PS-017-08.R01, PS-017-08.R03 | load rule inputs and run statistics | only own knowledge used; profile version p4.1 in stats; latency recorded locally |
+| TEST-PS-017-09.T11 | unit | PS-017-09.R01 | traceability tool run | every PS-017 requirement maps to a passing test |
+| TEST-PS-017-09.T12 | integration | PS-017-10.R01, PS-017-10.R02, PS-017-10.R03 | export, import, rollback | no module records exported; profile version retained on imported suggestions |
+| TEST-PS-017-09.T13 | a11y | PS-017-01.R01 | explanation panel with dropout notice | axe zero serious issues |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01–T13 pass in CI.
+- The golden 4-party example reproduces gaps 100, 200, 300, 400 and tolerances 600, 600, 594, 597 exactly.
+- The module emits no events and no statements and holds no records.
+
+## Dependencies
+
+Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

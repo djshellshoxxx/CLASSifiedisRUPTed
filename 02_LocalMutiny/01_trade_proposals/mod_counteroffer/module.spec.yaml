@@ -1,0 +1,305 @@
+# F02.S01.M04 Barter counteroffers and immutable proposal revisions (ADR-0016 local-first, ADR-0007).
+id: F02.S01.M04
+scope: MVP
+summary: >-
+  A ProposalRevision is an immutable, author-signed statement that freezes the exact terms of a direct trade proposal or an N-party cycle proposal:
+  parties, legs, compensation legs, accepted imbalances, normalized values with pinned quotes, deadlines and the feasibility evidence. Its content hash (cid of the
+  RFC 8785 JCS bytes of {subjectType, subjectId, revisionNo, prev, authorId, snapshot}) is the digest every consent signs; F08 consent statements carry the same
+  32 digest bytes as lowercase hex. Any change creates a new revision with a higher number and voids all earlier consents, even when the terms equal an earlier revision.
+  At most 20 revisions exist per subject. Counteroffers on direct proposals alternate between the two parties; a cycle is revised only by its coordinator
+  and only for terms that do not change participants or items, so no revision can silently reroute a cycle.
+responsibilities:
+  - Build the canonical snapshot, compute contentHash, sign it with the author's Ed25519 key and store it; be the single ingest owner of classrup.mutiny.proposal_revision/v1 and verify revisions authored by others.
+  - Provide canonicalBytes(subjectType, subjectId, revisionNo) to F08.S02.M02 so consent statements on mutiny_proposal and mutiny_cycle subjects verify against the same digest, and record forks reported from conflicting signed consents (mutiny.revision.report_fork).
+  - Enforce revision numbering 1..20, the prev hash chain, turn-taking on direct proposals, coordinator-only revisions on cycles and the closed-subject rule.
+  - Detect forks (two valid revisions with the same subject and number but different hash) and signal them so consent modules freeze the subject.
+  - Provide diff between two revisions for the consent screen and verify that a presented digest equals the stored snapshot.
+non_responsibilities:
+  - Collecting or verifying consent signatures (F02.S01.M01 for direct proposals, F02.S03.M01 for cycles, F08.S02.M02 ConsentStatement).
+  - Defining legs (F02.S01.M03), roster (F02.S01.M02), compensation (F02.S04.M01) and normalization (F02.S04.M02); it only references and seals them.
+  - Delivery of statements (F15.S01.M01 sync outbox and user-selected relays).
+  - "Future: revision branches merged by explicit three-way review, and zero-knowledge proofs of tolerance compliance."
+depends_on: [F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a proposal recipient, I can counter by changing the items I give, and the other party sees a diff of exactly what changed and must consent again to the new revision.
+  - As a cycle coordinator, I can add a compensation leg or refresh an expired quote, and every participant is asked to consent again to the new digest.
+  - As any participant, I can verify that the digest I sign equals the hash of the terms I am looking at.
+edge_cases:
+  - The twenty-first revision is attempted; it is refused with MUTINY_REVISION_LIMIT and the parties must start a new proposal.
+  - Both parties of a direct proposal counter at the same time while offline; both revisions claim number 3, the vault detects a fork and freezes the proposal for explicit renegotiation, with no last-writer-wins.
+  - Revision 5 arrives before revision 4; it is buffered for up to 24 h with MUTINY_REVISION_GAP and applied in order when revision 4 arrives, instead of being rejected.
+  - Revision 4 restores exactly the terms of revision 2; its digest differs because it binds revisionNo and prev, so consents on revision 2 stay void.
+  - A cycle participant other than the coordinator tries to revise; the vault refuses it and the statement received from such an author is quarantined.
+  - A revision arrives whose snapshot hash does not match its contentHash; it is quarantined as tampered.
+  - A revision is created after the subject was accepted or cancelled; it is refused with CONFLICT_STATE.
+  - A revision claims a createdAt more than 5 minutes in the local future; it is quarantined because other parties' timestamps are claims.
+  - A cycle revision tries to remove or replace a participant; it is refused as MUTINY_REVISION_MATERIAL_FORBIDDEN because a different set of people is a new cycle with fresh consent.
+ux:
+  screens:
+    - "Counter sheet on a direct proposal: current legs, editable items and compensation, 'what changes' diff preview, Send counter (signs the revision)."
+    - "Revision history list: numbered revisions 1..20, author pseudonym, reason, time claimed, signature status and sync state."
+    - "Diff view between two revisions with added, removed and changed lines in plain language."
+  states: [loading, draft, signing, prepared, transport-acknowledged, peer-accepted, quarantined, forked, closed]
+  a11y:
+    - Diff lines are real list items with text 'Added', 'Removed' or 'Changed' in addition to color and icons.
+    - Sync state labels are text and announced through an aria-live polite region when they change.
+    - Send counter is a button of at least 44 by 44 px whose accessible name includes the revision number.
+processes:
+  domain_schema:
+    requirements:
+      - A ProposalRevision is immutable after creation; its snapshot, contentHash, author and signature never change and a correction is a new revision.
+      - The snapshot carries parties, legs with item references and declared values, compensation legs, accepted imbalances, normalization with quote ids and rates, deadlines and the cited feasibility report hash, and the digest covers subject type, subject id, revision number, prev and author together with the snapshot.
+      - Revisions of one subject form a chain by prev hash and number with at most 20 entries, and the head is the revision with the highest number that is not part of a fork.
+      - Revisions are P2 and travel only as end-to-end encrypted envelopes addressed to the subject's parties (PRV-5).
+      - "contentHash = cid (sha256-base64url) of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); canonicalBytes returns exactly these JCS bytes, and the F08 subjectRevisionHash is the lowercase hex of the same 32 SHA-256 bytes (hex = base64url-decode of the contentHash digest), so one digest is compared in one encoding everywhere."
+    entities:
+      - name: ProposalRevision
+        schema: classrup.mutiny.proposal_revision/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "subjectType: enum — trade_proposal | cycle"
+          - "subjectId: uuidv7 — id of the TradeProposal or Cycle, generated by the first author"
+          - "revisionNo: int — 1..20, prev revisionNo + 1"
+          - "prev?: cid — contentHash of revision revisionNo-1; absent for revision 1"
+          - "authorId: did — signer; must be a party of the subject"
+          - "reason: enum — initial | counter | compensation_added | quote_refresh | deadline_change | acceptance_policy_change"
+          - "snapshot: object — canonical terms ≤ 64 KiB: {parties[{did, role, position}], legs[], compensation[], acceptedImbalances[{actorId, maxAmount Money}] (0..8, each a participant's signed acceptance of a gap through its consent on this digest), settlementCurrency, normalization, consentDeadline, executionWindowMs, feasibilityReportHash?}"
+          - "contentHash: cid — sha256-base64url of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); the digest all consents sign (F08 hex form = the same 32 bytes)"
+          - "legIds: array — 1..8 uuidv7 of TradeLeg ids sealed by this revision"
+          - "compensationLegIds: array — 0..8 uuidv7 of CompensationLeg ids sealed by this revision"
+          - "normalizationId?: uuidv7 — NormalizationRecord id when more than one currency is involved"
+          - "consentDeadline: timestamp — claim of the author; every vault evaluates it on its own clock"
+          - "executionWindowMs: int — 86400000..1987200000 (1 d..23 d), default 1209600000; (consentDeadline − creation time) + executionWindowMs ≤ 2592000000 so reservations fit the 30 d F01.S03.M01 hold lifetime"
+          - "createdAtClaim: timestamp — author's clock, a claim; never used to order revisions (revisionNo orders them)"
+          - "sig: string — Ed25519 signature (base64url) over JCS(envelope minus sig) per CTR-FED-001 FED-2"
+          - "origin: enum — local | peer"
+          - "provenance?: object — {originRelay?, receivedAt (local clock), via[], verifiedAt} for peer revisions"
+          - "forked: boolean — set when a conflicting revision with the same subject and number is detected"
+          - "revision: int — CTR-ID-001 ID-4; changes only for forked and provenance fields, never for terms"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - snapshot, contentHash, authorId, revisionNo, prev and sig are never modified after creation.
+          - contentHash equals the cid of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}) and sig verifies against authorId.
+          - For one (subjectId, revisionNo) at most one non-forked revision exists, and revisionNo is at most 20.
+          - authorId is a party of the subject and, for subjectType cycle, equals the coordinator.
+    sql: |
+      CREATE TABLE mutiny_proposal_revision (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL,
+        revision_no INTEGER NOT NULL, content_hash TEXT NOT NULL, author_id TEXT NOT NULL, forked INTEGER NOT NULL,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_revision_head ON mutiny_proposal_revision(tenant_id, subject_id, revision_no) WHERE forked = 0;
+      CREATE INDEX mutiny_revision_hash ON mutiny_proposal_revision(tenant_id, content_hash);
+  validation_rules:
+    requirements:
+      - A revision is accepted locally only if its number, chain, author role, turn, size, hash and signature all verify.
+      - Cycle revisions may change money terms, quotes and deadlines but never participants or items.
+      - Every violation maps to exactly one stable code and the offending statement is quarantined with that code rather than discarded.
+      - "Ingest runs the number checks in a fixed order after V04 (hash) and V05 (signature): V01 limit, V12 duplicate, V11 fork, V13 gap, V14 chain, then V02, V03 and V06..V10, so a concurrent same-number revision is always detected as a fork and an early arrival is buffered, never rejected."
+    rules:
+      - "V01 | revisionNo is 1..20; revisionNo > 20 is refused and the parties must start a new subject | MUTINY_REVISION_LIMIT"
+      - "V02 | authorId is a party of the subject in the roster (F02.S01.M02) | MUTINY_REVISION_AUTHOR_INVALID"
+      - "V03 | for trade_proposal the author differs from the author of the head revision (turn-taking); for cycle the author is the coordinator | MUTINY_REVISION_TURN"
+      - "V04 | snapshot size ≤ 65536 bytes and contentHash equals cid of JCS(snapshot) | MUTINY_REVISION_HASH_MISMATCH"
+      - "V05 | sig verifies Ed25519 over JCS of the envelope without sig against authorId's registered device key | MUTINY_STATEMENT_SIGNATURE_INVALID"
+      - "V06 | subject is open (trade_proposal draft or open; cycle proposed) | CONFLICT_STATE"
+      - "V07 | for subjectType cycle the party set and legIds equal the head revision's | MUTINY_REVISION_MATERIAL_FORBIDDEN"
+      - "V08 | every legId and compensationLegId exists, belongs to the subject and is not voided | MUTINY_REVISION_REFERENCE_INVALID"
+      - "V09 | consentDeadline between local now + 1 h and now + 7 d for cycle or now + 14 d for trade_proposal; when normalizationId is present (more than one currency) consentDeadline ≤ now + 24 h and ≤ the record's earliestQuoteExpiry (N16), otherwise a quote_refresh revision with fresh consent is required; executionWindowMs in 86400000..1987200000 and (consentDeadline − now) + executionWindowMs ≤ 2592000000 | MUTINY_DEADLINE_INVALID"
+      - "V10 | createdAtClaim is not more than 5 minutes after the local clock | MUTINY_STATEMENT_FROM_FUTURE"
+      - "V11 | revisionNo ≤ head revisionNo with a contentHash different from the stored revision of that number is a fork: both are kept with forked true, mutiny.revision.forked is emitted and the subject is frozen | MUTINY_REVISION_FORK"
+      - "V12 | revisionNo ≤ head revisionNo with the same contentHash as the stored revision is a duplicate; it is acknowledged and skipped (EVT-3) | MUTINY_REVISION_DUPLICATE"
+      - "V13 | revisionNo > head revisionNo + 1 is buffered for at most 24 h on the local clock until the missing revisions arrive, then quarantined | MUTINY_REVISION_GAP"
+      - "V14 | revisionNo = head revisionNo + 1 requires prev equal to the head contentHash (absent only for revision 1) | MUTINY_REVISION_CHAIN_INVALID"
+      - "V15 | acceptedImbalances entries name parties of the subject, at most one per party, with maxAmount ≥ 0 in the settlement currency | VALIDATION_FAILED"
+  workflow_state_machine:
+    machines: []
+    note: "ProposalRevision is immutable and has no lifecycle. Subject lifecycles are owned by F02.S01.M01 (TradeProposal) and F02.S03.M01 (Cycle). The only mutable flag is forked, set once when a conflicting twin is detected."
+    timeouts: []
+    requirements:
+      - A revision has no state transitions; creating a new revision is the only way to change terms.
+      - After a fork is detected no further revision on that subject is accepted, and the subject owners freeze the subject for explicit renegotiation as a new subject.
+      - Closing a subject (accepted, rejected, withdrawn, expired, cancelled, declined, frozen by a conflicting promise) makes further revisions fail with CONFLICT_STATE.
+  commands_queries_events:
+    requirements:
+      - create is a vault command that produces the signed statement classrup.mutiny.proposal_revision/v1; ingest is a vault command that verifies a statement from another party; queries are local.
+      - Revision events are emitted in the same IndexedDB transaction as the state change and the statement goes to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
+      - Consumers of mutiny.proposal.revised treat it as voiding all earlier consents for the subject.
+      - "This module is the single ingest owner of classrup.mutiny.proposal_revision/v1, registered with the F11.S01.M01 statement registry with signer role 'party of the subject; coordinator for cycle'; F02.S01.M01 and F02.S03.M01 react only to mutiny.proposal.revised, and revisions from DIDs the principal blocked are dropped silently (N7)."
+    commands:
+      - name: mutiny.revision.create
+        capability: mutiny.revision.create
+        input: "{ subjectType, subjectId, expectedHeadRevisionNo (0 for initial), reason, legIds[], compensationLegIds[]?, acceptedImbalances[]?, normalizationId?, settlementCurrency?, consentDeadline?, executionWindowMs? } — vault command; produces statement classrup.mutiny.proposal_revision/v1 signed by the author"
+        output: "{ revisionId, revisionNo, contentHash, consentDigestHex, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, CONFLICT_STATE, CONFLICT_REVISION, MUTINY_REVISION_LIMIT, MUTINY_REVISION_AUTHOR_INVALID, MUTINY_REVISION_TURN, MUTINY_REVISION_MATERIAL_FORBIDDEN, MUTINY_REVISION_REFERENCE_INVALID, MUTINY_DEADLINE_INVALID, MUTINY_REVISION_FORK, MUTINY_REVISION_HASH_MISMATCH, RATE_LIMITED]
+        emits: [mutiny.proposal.revised]
+        idempotent: true
+      - name: mutiny.revision.ingest
+        capability: mutiny.revision.ingest
+        input: "{ envelope: classrup.mutiny.proposal_revision/v1 signed by its author, provenance } — vault command; produces no statement"
+        output: "{ revisionId?, accepted: boolean, quarantineReason? }"
+        errors: [MUTINY_STATEMENT_SIGNATURE_INVALID, MUTINY_REVISION_HASH_MISMATCH, MUTINY_REVISION_AUTHOR_INVALID, MUTINY_REVISION_TURN, MUTINY_REVISION_LIMIT, MUTINY_REVISION_FORK, MUTINY_REVISION_DUPLICATE, MUTINY_REVISION_GAP, MUTINY_REVISION_CHAIN_INVALID, MUTINY_STATEMENT_FROM_FUTURE, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        emits: [mutiny.proposal.revised, mutiny.revision.forked]
+        idempotent: true
+      - name: mutiny.revision.report_fork
+        capability: mutiny.revision.report_fork
+        input: "{ subjectType, subjectId, revisionNo, conflictingHash, evidence: { kind: consent, consentId, signerDid } } — internal vault port called by F02.S01.M01 and F02.S03.M01 when a correctly signed participant consent names the head revisionNo with a different digest (equivocation); produces no statement"
+        output: "{ subjectId, revisionNo, forked: true, contentHashes[2] }"
+        errors: [NOT_FOUND, VALIDATION_FAILED]
+        emits: [mutiny.revision.forked]
+        idempotent: true
+    queries:
+      - name: mutiny.revision.get
+        capability: mutiny.revision.read
+        input: "{ revisionId }"
+        output: "{ revision: ProposalRevision, signatureVerified: boolean, syncState }"
+        errors: [NOT_FOUND]
+      - name: mutiny.revision.list_for_subject
+        capability: mutiny.revision.read
+        input: "{ subjectType, subjectId }"
+        output: "{ items: ProposalRevision[], headRevisionNo, forked: boolean }"
+        errors: [NOT_FOUND]
+      - name: mutiny.revision.diff
+        capability: mutiny.revision.read
+        input: "{ subjectId, fromRevisionNo, toRevisionNo }"
+        output: "{ changes: { path, kind: added|removed|changed, before?, after? }[] }"
+        errors: [NOT_FOUND, VALIDATION_FAILED]
+    events_produced:
+      - {type: mutiny.proposal.revised, privacy: P2, payload: "{ subjectType, subjectId, revisionId, revisionNo, contentHash, authorId, parties [{did, role}], reason, legIds, origin }"}
+      - {type: mutiny.revision.forked, privacy: P2, payload: "{ subjectType, subjectId, revisionNo, contentHashes[2], parties [{did, role}], evidence: revision|consent, detectedAt }"}
+    events_consumed:
+      - {type: mutiny.proposal.accepted, effect: "mark the trade_proposal subject closed; later revisions return CONFLICT_STATE"}
+      - {type: mutiny.proposal.rejected, effect: "mark the trade_proposal subject closed"}
+      - {type: mutiny.proposal.expired, effect: "mark the trade_proposal subject closed"}
+      - {type: mutiny.proposal.withdrawn, effect: "mark the trade_proposal subject closed; later revisions return CONFLICT_STATE and buffered gap revisions are discarded"}
+      - {type: mutiny.lock.conflict_detected, effect: "mark the subjects named in subjectIds frozen for revisions; renegotiation is a new subject"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained revisions' local metadata; signed snapshots stay unchanged so signatures verify, and access is limited to evidence export"}
+      - {type: mutiny.cycle.committed, effect: "mark the cycle subject closed for revisions"}
+      - {type: mutiny.cycle.declined, effect: "mark the cycle subject closed for revisions"}
+      - {type: mutiny.cycle.cancelled, effect: "mark the cycle subject closed for revisions"}
+      - {type: mutiny.normalization.expired, effect: "notify the coordinator that a quote_refresh revision is required before consent can complete"}
+    errors:
+      - "MUTINY_REVISION_LIMIT | 409 | no | a subject allows at most 20 revisions"
+      - "MUTINY_REVISION_DUPLICATE | 409 | no | the revision is already stored; the duplicate is acknowledged and skipped"
+      - "MUTINY_REVISION_GAP | 409 | yes | an earlier revision is missing; the revision is buffered for up to 24 h"
+      - "MUTINY_REVISION_CHAIN_INVALID | 422 | no | prev does not equal the head contentHash for the next revision number"
+      - "MUTINY_REVISION_AUTHOR_INVALID | 403 | no | the author is not a party of the subject"
+      - "MUTINY_REVISION_TURN | 409 | no | it is not this author's turn to revise or the author is not the coordinator"
+      - "MUTINY_REVISION_HASH_MISMATCH | 422 | no | contentHash does not equal the hash of the snapshot or the snapshot exceeds 64 KiB"
+      - "MUTINY_REVISION_MATERIAL_FORBIDDEN | 422 | no | a cycle revision may not change participants or items"
+      - "MUTINY_REVISION_REFERENCE_INVALID | 422 | no | a referenced leg, compensation leg or normalization does not belong to the subject"
+      - "MUTINY_REVISION_FORK | 409 | no | conflicting revisions with the same number exist and the subject is frozen"
+      - "MUTINY_STATEMENT_SIGNATURE_INVALID | 422 | no | the Ed25519 signature does not verify"
+      - "MUTINY_STATEMENT_FROM_FUTURE | 422 | no | the statement's claimed time is more than 5 minutes ahead of the local clock"
+    example: |
+      # 3-party cycle, revision 2 by coordinator Alice adds a compensation leg (reason compensation_added); vault command on Alice's device
+      mutiny.revision.create  Idempotency-Key: 0192f3e0-0000-7000-8000-000000000001
+      { "subjectType": "cycle", "subjectId": "0192f3b0-…", "expectedHeadRevisionNo": 1, "reason": "compensation_added",
+        "legIds": ["0192f3b2-…", "0192f3b3-…", "0192f3b4-…"], "compensationLegIds": ["0192f3b5-…"], "consentDeadline": "2026-11-07T10:00:00.000Z" }
+      -> { "revisionId": "0192f3e1-…", "revisionNo": 2, "contentHash": "sha256-8vQ2kZ…", "syncState": "prepared" }
+      statement to Bob and Carol (E2E encrypted, via their mailbox relays):
+      { "v":1, "type":"classrup.mutiny.proposal_revision/v1", "author":"did:key:z6MkAlice", "seq":2, "prev":"sha256-Qm3…",
+        "payload": { "subjectType":"cycle", "subjectId":"0192f3b0-…", "reason":"compensation_added", "snapshot": { "parties":3, "legs":3, "compensation":1 } }, "sig":"…" }
+      # 2-party: subjectType trade_proposal, 2 legs; 4-party and N-party cycles use the same call with 4 or N legs (N ≤ 8).
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal create revisions, and only when the principal is a party and it is their turn or they are the coordinator.
+      - An incoming revision is accepted only if signed by a key registered to a party DID of the subject; otherwise it is quarantined with a reason.
+      - Reading revisions is limited to the vault owner; no relay can read a revision's plaintext.
+    capabilities:
+      - "mutiny.revision.create | principal | vault unlocked; principal is a party; turn or coordinator rule satisfied; subject open"
+      - "mutiny.revision.ingest | principal | envelope signer is a party of the subject with a non-revoked device key and not blocked by the principal"
+      - "mutiny.revision.report_fork | system | internal port; caller is F02.S01.M01 or F02.S03.M01 holding a consent accepted by F08.S02.M02"
+      - "mutiny.revision.read | principal | own vault"
+  failure_recovery_idempotency:
+    requirements:
+      - create and ingest are idempotent; ingest dedupes by contentHash and create by Idempotency-Key.
+      - Revision creation is one IndexedDB transaction covering the record, the event and the outbox entry.
+      - Forks are never merged automatically, and recovery is explicit renegotiation as a new subject.
+    idempotency: "Idempotency-Key replay 24 h for create; ingest is idempotent by contentHash (a duplicate is acknowledged and skipped, EVT-3)."
+    concurrency: "expectedHeadRevisionNo guards create inside the vault; two devices of one principal are serialized by an IndexedDB transaction on the subject head; cross-party races are detected as forks, never resolved by last-writer-wins."
+    retries: "Outbox delivery retries with IDM-4 backoff (base 500 ms, cap 30 s, max 6 attempts per destination, then waits for reconnect or user action)."
+    offline: "Revisions can be created offline; they stay local_committed or prepared and the UI never claims delivery; peers see them only after transport acknowledgement and their own ingest."
+    partial_failure: "If the signing key is locked the transaction aborts and nothing is stored; if delivery fails the revision remains valid locally and the other parties continue to consent to the previous head until they ingest the new one, at which point their earlier consents are void."
+  privacy_retention_abuse:
+    requirements:
+      - Revisions are P2, end-to-end encrypted in transit and never published, federated or sent to push in plaintext.
+      - Evidence retention is RET-EVIDENCE (2 years after last related activity) and revisions are pseudonymized, not deleted, if a party deletes their identity locally, because the counterparties' signed copies stay valid.
+      - Spam by revision flooding is bounded by the 20-revision cap and local rate limits.
+      - The module registers ExportSectionPort (section mutiny.revisions), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ProposalRevision field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes local metadata while signed snapshots remain verifiable evidence.
+    data:
+      - "ProposalRevision: P2; snapshot contains pseudonym DIDs, item references, declared values and deadlines; no address or exact location."
+      - "sig and contentHash are public-derivable but only accompany the encrypted envelope."
+    retention:
+      - "RET-EVIDENCE 2 years after the last related activity of the subject."
+      - "Quarantined statements: RET-SHORT 30 days, then purged."
+    threats:
+      - "T01 | A party presents terms different from those the other party signs | consent signs contentHash; each vault recomputes the hash from the snapshot it displays and refuses mismatches"
+      - "T02 | Revision replayed from an older state to trick a party | revision numbers and prev chain; an older number is a duplicate or a fork and never becomes head"
+      - "T03 | Forged revision attributed to a party | Ed25519 signature must verify against a registered device key of that DID; otherwise quarantine"
+      - "T04 | Swapping a cycle participant through a revision | cycle revisions may not change parties or items; a new cycle requires fresh consent from everyone"
+      - "T05 | Backdated createdAtClaim to defeat deadlines | claims are never used for ordering or deadlines; each vault uses its own clock and treats disagreement as expired"
+    abuse_controls:
+      - "At most 20 revisions per subject and at most 10 revision creations per subject per hour per vault."
+      - "Peers whose statements are quarantined more than 5 times in 24 h are muted locally for that subject."
+  observability_performance:
+    requirements:
+      - Local diagnostics record create and ingest outcomes with codes but without DIDs, values or snapshots (OBS-1 style, no telemetry per OBS-7).
+      - Revision creation including hashing and signing completes within 50 ms at p95 for 8 legs on a mid-range phone.
+      - Relays that carry revision envelopes expose only counts and sizes of ciphertext.
+    metrics:
+      - "classrup_mutiny_revisions_total{outcome=created|ingested|quarantined|forked} (local diagnostics)"
+      - "classrup_mutiny_revision_envelope_bytes (histogram, relay mailbox, ciphertext size only)"
+    logs:
+      - "info revision.created {revisionNo, reason, correlationId} — no DIDs, no values."
+      - "warn revision.quarantined {code, correlationId}"
+    budgets:
+      - "create p95 ≤ 50 ms; ingest verification p95 ≤ 30 ms; diff of two revisions ≤ 20 ms."
+      - "Snapshot ≤ 64 KiB; envelope after JCS and encryption ≤ 96 KiB."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify the statement envelope against CTR-FED-001 and hash equality with an independent JCS implementation.
+      - Fork, turn-taking and 20-revision cap are covered by deterministic tests with an injected clock.
+    fixtures: "Alice, Bob, Carol DIDs with device keys; trade_proposal P1 (Alice, Bob); cycle C1 (Alice coordinator, Bob, Carol); legs L1..L3; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R02 | create revision 1 then verify stored fields | snapshot, contentHash and sig immutable; hash equals independent JCS cid"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01..V15 violated in turn, including a cross-currency deadline of 25 h and 14 d consent plus 23 d execution window | documented code returned and nothing stored"
+      - "T03 | property | 01.R03,03.R01 | random sequences of create and ingest | revision numbers contiguous, chain prev matches, never above 20"
+      - "T04 | integration | 01.R03,03.R02,09.R03 | Alice and Bob both counter as revision 3 offline, then sync | both quarantined as fork, subject frozen, mutiny.revision.forked emitted once"
+      - "T05 | integration | 03.R03,04.R03 | revise after accepted and after cancelled | CONFLICT_STATE; all earlier consents voided on an accepted revision of a different open subject"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | create and ingest | statement validates against classrup.mutiny.proposal_revision/v1 and events against registry"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND"
+      - "T08 | integration | 06.R01,06.R02 | replay create with same key, deliver same envelope twice, crash mid-transaction | one revision, duplicate skipped, no partial record"
+      - "T09 | integration | 06.R03,01.R04,07.R01 | offline create then reconnect | syncState prepared then transport_acknowledged; relay fixture sees only ciphertext with mailbox id, size and time"
+      - "T10 | abuse | 02.R02,02.R03 | tampered snapshot with unchanged hash; replayed older revision; swapped participant in cycle revision | MUTINY_REVISION_HASH_MISMATCH, MUTINY_REVISION_DUPLICATE or fork, MUTINY_REVISION_MATERIAL_FORBIDDEN"
+      - "T11 | abuse | 02.R01 | createdAtClaim 6 minutes in the future and backdated | first quarantined, second accepted but not used for ordering or deadline"
+      - "T12 | load | 08.R02,08.R03 | 8-leg revision create and ingest on emulated Moto G | p95 within budgets, snapshot under 64 KiB"
+      - "T13 | unit | 08.R01 | diagnostics sink | codes recorded, no DIDs or values, nothing transmitted"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-012 requirement maps to a passing test"
+      - "T15 | unit | 04.R03,01.R01 | diff between revision 1 and 2 of 3-party cycle | exactly the compensation line added; all earlier consents void"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, rollback | revisions round-trip with signatures valid; conflicting IDs rejected; forked flag preserved"
+      - "T17 | a11y | 01.R04 | diff and history screens | axe zero serious issues; text labels for added, removed, changed"
+      - "T18 | property | 01.R05,01.R02,03.R01 | random revision chains where revision k restores the terms of an earlier revision | every revision has a distinct contentHash; consents on the earlier digest stay void"
+      - "T19 | integration | 02.R04,01.R03 | same-number concurrent revision, revision 5 before 4, exact duplicate, wrong prev | fork detected (not MUTINY_REVISION_LIMIT); 5 buffered with MUTINY_REVISION_GAP and applied after 4; duplicate skipped; MUTINY_REVISION_CHAIN_INVALID"
+      - "T20 | abuse | 07.R03 | 11 revision creates on one subject within an hour, then a 21st revision | RATE_LIMITED for the 11th; MUTINY_REVISION_LIMIT for the 21st"
+      - "T21 | integration | 07.R02,07.R04 | F10 export, deletion of a party and retention sweep | section mutiny.revisions exported with sig; erased DID pseudonymized in local metadata; signatures still verify; quarantined statements purged after 30 days"
+      - "T22 | contract | 04.R04,01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | hex digest equals base64url-decoded contentHash; registered signer role is party, coordinator for cycle"
+      - "T23 | integration | 04.R04,03.R02 | mutiny.revision.report_fork called with a signed consent on a different digest at the head revision number | forked set, mutiny.revision.forked emitted once with evidence consent, further revisions refused"
+    acceptance:
+      - All tests T01–T23 pass in CI.
+      - A consent can only ever bind a contentHash that equals the hash of the displayed snapshot.
+      - No revision can add, remove or replace a participant of an existing cycle, and forks always freeze the subject.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains all revisions of subjects the user is a party of, including peer revisions with provenance, because they are signed evidence.
+      - Import verifies hash and signature of every revision, skips identical ones, rejects conflicting IDs and keeps forked flags.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.revisions in classrup-export/v1; one line per ProposalRevision (schema classrup.mutiny.proposal_revision/v1) including sig and provenance."
+    import: "Each line is verified (hash, signature, chain) and stored read-only; subjects with open status import as frozen until the user reopens them, so no stale consent is acted upon."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext envelopes in mailboxes (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; snapshot canonical form is part of the hash, so any change to canonicalization is a new schema major; rollback to the previous release leaves stored revisions readable."

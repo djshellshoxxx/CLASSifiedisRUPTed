@@ -1,35 +1,62 @@
-# PS-001-01 — domain schema
+# PS-001-01 — Domain schema: Listing archive and expiry
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-001-01. **Owner:** [01_LocalBazaar/01_listings/mod_archive](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_archive. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S01.M04 Listing archive and expiry](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listings/archive` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the domain schema process for archive within 01_listings. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-001-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-001-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-001-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-001-01.R01** An ArchiveRecord stores the end-of-life of one listing: kind of end, reason, optional reference, restoreUntil and purgeAt.
+- **PS-001-01.R02** References to deals or trades are owner assertions labelled unverified unless the referenced module provides a signed completion.
+- **PS-001-01.R03** ArchiveRecords are P1 vault data retained as evidence and purged with the listing.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### ArchiveRecord
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.bazaar.archive_record/v1` · storage **device** · privacy **P1** · retention **RET-EVIDENCE**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-001-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
+| listingId | uuidv7 — ref F01.S01.M01 Listing |
+| ownerId | did:key — local principal |
+| status | enum — expired \| closed \| archived \| restored \| purged |
+| closeReason? | enum — sold \| given \| traded \| fulfilled \| sold_out \| other; set when status is closed |
+| closedWithRef? | object — {type: deal\|proposal\|cycle\|giveaway_request, id: uuidv7, verified: boolean} |
+| endedAt | timestamp — RFC 3339 UTC of the first end event |
+| archivedAt? | timestamp — RFC 3339 UTC |
+| restoreUntil? | timestamp — archivedAt + 90 d |
+| purgeAt? | timestamp — restoreUntil |
+| restoredAt? | timestamp — RFC 3339 UTC |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most one ArchiveRecord per listing is not in status restored or purged.
+- status archived implies restoreUntil = archivedAt + 90 days exactly.
+- status closed implies closeReason is set and the listing has no active publication.
+
+### Storage DDL
+
+```sql
+CREATE TABLE bazaar_archive_record (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+  status TEXT NOT NULL, purge_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX bazaar_archive_open ON bazaar_archive_record(tenant_id, listing_id)
+  WHERE status IN ('expired','closed','archived');
+CREATE INDEX bazaar_archive_purge ON bazaar_archive_record(tenant_id, status, purge_at);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-001-09.T01 | unit | PS-001-01.R01, PS-001-01.R02, PS-001-02.R01, PS-001-02.R02 | close A with reason sold and a deal ref | ArchiveRecord closed, closedWithRef.verified false, Listing closed |
+| TEST-PS-001-09.T02 | unit | PS-001-01.R03, PS-001-07.R02 | read stored records and events | no content beyond P1 fields; event carries reason enum only |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

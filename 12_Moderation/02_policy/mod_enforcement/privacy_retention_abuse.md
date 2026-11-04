@@ -1,35 +1,50 @@
-# PS-096-07 — privacy retention abuse
+# PS-096-07 — Privacy, retention and abuse: Enforcement actions
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-096-07. **Owner:** [12_Moderation/02_policy/mod_enforcement](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_enforcement. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S02.M01 Enforcement actions](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/policy/enforcement` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for enforcement within 02_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-096-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-096-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-096-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-096-07.R01** Cases and actions are P2 relay-side data, accessible to relay moderators and the subject, and never leave the relay except as the subject's statement, a public advisory and a tombstone.
+- **PS-096-07.R02** Retention is RET-EVIDENCE, with legal hold override, and subject deletion leaves a pseudonymized record for the case duration.
+- **PS-096-07.R03** Moderator abuse is limited by assignment, rule requirement, audit logging and operator reversal.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- ModerationCase: P2 (relay moderators); reporter identities are not stored on the case.
+- EnforcementAction: P2 (relay moderators; subject sees own action without decider).
+- Advisory statement: P0 content limited to target content id, rule ID and advice; no facts summary.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Cases and actions: RET-EVIDENCE (2 years after last related activity).
+- Internal notes: deleted 180 days after case closure unless an appeal or legal hold exists.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-096-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Moderator abuses power against a rival | actions need rule IDs and facts summary, are audit-logged (F16.S01.M01) and reversible by operators; subject can appeal to a different moderator |
+| T02 | Silent suppression | no hidden action kinds exist; the subject always gets a signed statement; shadow restriction is rejected by schema |
+| T03 | Forged statement of reasons used to scare a user | vault verifies relay signature and shows relay identity; unsigned statements are ignored |
+| T04 | Over-broad effect misread as global ban | statements and UI state the relay-only scope and that other relays and local data are unaffected |
+| T05 | Report-count brigading triggers removal | removal needs a human decider or deterministic rule recorded in ruleRefs; count alone is never a rule |
+
+**Abuse controls**
+- Moderators can apply at most 50 actions per day each (F12.S03.M03); operators receive a weekly action summary.
+- Automated actions are limited to velocity throttles with expiry ≤ 1 hour and are labelled automated.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-096-09.T09 | abuse | PS-096-05.R02, PS-096-07.R03 | statement signed by wrong key; unsigned statement; schema with shadow kind | vault ignores first two; shadow kind rejected by validation |
+| TEST-PS-096-09.T12 | integration | PS-096-01.R03, PS-096-07.R01, PS-096-07.R02 | subject deletes own account after action | pseudonymized case kept; legal hold prevents purge |
+| TEST-PS-096-09.T13 | abuse | PS-096-07.R03 | moderator applies 51 actions in a day | 51st returns RATE_LIMITED; operator report lists all |
+
+## Dependencies
+
+Module depends on: F12.S02.M03, F12.S01.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

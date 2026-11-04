@@ -1,35 +1,30 @@
-# PS-128-10 — import export backup rollback
+# PS-128-10 — Import, export, backup and rollback: Key lifecycle
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-10. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S02.M01 Key lifecycle](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/cryptography/key` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-128-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-128-10.R01** The encrypted backup file contains the wrapped blob and public metadata only, uses the same KDF and cipher, and is the user's primary key backup alongside the recovery kit under the user's control.
+- **PS-128-10.R02** Import decrypts with the passphrase, validates parameters and refuses unknown or downgraded versions.
+- **PS-128-10.R03** Blob format changes follow versioned parsers, keep v1 readable for 180 days and re-wrap to the newest version only after a successful unlock.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Download classrup-key-backup.json containing the v1 wrapped blob (scrypt parameters, salt, nonce, ciphertext, key ID) and the public principal; the passphrase is never included; recovery kit handling stays in F07.S01.M03.
+- **import:** Importing a backup on a new device creates a vault with the same key after passphrase verification; if a vault already exists the user must choose to replace it, and the old blob is kept until the new one unlocks successfully.
+- **backup:** Vault export (IOX-6) includes the wrapped blob; keys are never uploaded by default; users are warned after 30 days without an export.
+- **migration rollback:** Raising scrypt cost or switching ciphers adds a new blob version; unlock re-wraps after success and keeps the old blob for 7 days to allow rollback; older clients refuse unknown versions rather than guess.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-128-09.T15 | integration | PS-128-10.R01, PS-128-10.R02, PS-128-10.R03 | export backup, import on a fresh browser profile, downgrade attempt | same principal and fingerprint; wrong passphrase fails generically; older client rejects unknown version |
+
+## Dependencies
+
+Module depends on: CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

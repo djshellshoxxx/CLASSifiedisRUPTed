@@ -1,0 +1,290 @@
+id: F05.S02.M02
+scope: MVP
+summary: >-
+  When the handoff is attested, each vault starts a return record due at the reservation's end. The renter records the return
+  with a condition report (checklist, photo hashes, notes) as a signed statement and the owner attests that exact report, or the
+  owner alone records receipt. If no return is recorded after the end plus the grace period, each vault detects overdue
+  and the late fee, computed from the offering's terms as a payment claim between the parties, starts to accrue. Silence of the owner for 72 hours after a renter report is recorded
+  as such and does not hold the renter hostage. The rental closes when the return is attested, the damage claim window is over or
+  waived, no damage claim is open and any funded deposit is settled. Nothing here proves delivery or condition; it records signed assertions.
+responsibilities:
+  - Own RentalReturn in both vaults and the statements return_report, return_attestation, owner_receipt, late_fee_adjustment and return_waiver (classrup.rentals.*/v1).
+  - Detect overdue locally at the reservation end plus the grace period (default 60 minutes) and emit rentals.rental.overdue once per vault.
+  - Compute the late fee as min(cap, ceil(lateMinutes / 60) times ratePerHour) with lateMinutes after grace, as integer minor units; the owner may only lower or waive it; register it as a payment context for the renter to claim through F09.
+  - Close the rental under the closure rule and emit rentals.rental.closed locally.
+non_responsibilities:
+  - Handoff report (F05.S02.M01), damage assessment and claims (F05.S02.M03), deposit release or forfeit (F05.S01.M02), reservation calendar (F05.S01.M01).
+  - Collecting or enforcing the late fee; it is a claim between parties, disputes go to F09.S02.M02.
+  - Legal characterisation of non-return or theft; a not-returned case is a damage claim of kind not_returned and a dispute.
+  - "Future: tracked return shipping and automatic late-fee reminders by push."
+depends_on: [F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a renter, I record the return with photos, see whether I am late and what late fee would apply before I confirm.
+  - As an owner, I attest the return or note differences, and I can waive or lower the late fee.
+  - As either party, I see when the rental is closed and why it has not closed yet.
+edge_cases:
+  - Renter returns 30 minutes after the end with a 60 minute grace; lateMinutes is 0, no overdue event, no fee.
+  - Renter returns 3 h 10 min after the end with grace 60 and rate EUR 5.00 per hour; lateMinutes 130, ceil(130/60) = 3 hours, fee EUR 15.00 unless the cap is lower.
+  - Renter claims a return time before the owner's receipt time by more than 72 hours; the effective return time is the receipt time, not the claim.
+  - Owner does not respond for 72 hours after the renter's report; the return is attested as renter_only_silent_owner and the UI says the owner did not respond.
+  - Owner records receipt although the renter never reported; allowed as owner_only attestation, and the renter can add a report afterwards for the record.
+  - Return is reported while a damage claim from the handoff differences is in preparation; the return attests, closure waits for the damage window.
+  - Daylight saving change between end and return; durations use elapsed UTC time, so the late fee never gains or loses an hour.
+  - Reservation end is moved by an agreed extension (future); not supported in MVP, so the due time is always the confirmed endsAt.
+  - Late-fee adjustment tries to raise the fee; refused with RENTALS_FEE_ADJUST_INVALID because only a decrease or waiver is allowed.
+ux:
+  screens:
+    - "Return screen (renter): countdown to due time, checklist from the handoff with condition chips, photos, notes, a live late-fee preview, Record return button."
+    - "Owner receipt screen: renter's report next to the handoff report with differences highlighted, Attest return, Note differences, Waive late fee, Waive damage claims."
+    - "Rental status card: due, overdue (with accruing fee), awaiting owner, attested, closed, with the closure checklist (damage window, deposit, open claims)."
+  states: [loading, due, overdue, awaiting-owner, attested, closed, pending-offline]
+  a11y:
+    - Late-fee preview is announced as text whenever the time changes by a full hour, in an aria-live polite region.
+    - Differences between handoff and return are listed as text with condition words, not only colour.
+    - Buttons are at least 44x44 px with accessible names including the action and the reservation dates.
+processes:
+  domain_schema:
+    requirements:
+      - A RentalReturn stores reservation, due time, grace, return report content with photo hashes, effective return time, late minutes and fee, attestation mode, closure checks and state, with revision per CTR-ID-001.
+      - Returns are P2 in both vaults, retained under RET-EVIDENCE; the late fee is integer minor units per CTR-MNY-001 computed from terms copied into the reservation at confirmation.
+      - Report revisions and attestations are immutable once signed and bind to the exact report cid.
+    entities:
+      - name: RentalReturn
+        schema: classrup.rentals.return/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "reservationId: uuidv7 — ref F05.S01.M01 RentalReservation; unique"
+          - "handoffReportCid: string — cid of the attested handoff report to compare with"
+          - "dueAt: timestamp — reservation endsAt"
+          - "graceUntil: timestamp — dueAt plus graceMinutes (0..1440)"
+          - "checklist: ChecklistItem[] — 0..30 items as in the handoff, with the condition at return"
+          - "photos: PhotoRef[] — 0..20 items {attachmentId, sha256}"
+          - "notes?: string — ≤ 1000 code points, plain text"
+          - "reportCid?: string — cid of the signed return_report"
+          - "returnedAtClaim?: timestamp — time stated by the signer of the report"
+          - "effectiveReturnedAt?: timestamp — claim if within 72 h before local receipt time, else receipt time"
+          - "attestedBy?: enum — both | renter_only_silent_owner | owner_only"
+          - "conditionVerdict?: enum — matches_handoff | differences_noted"
+          - "lateMinutes: int — 0 or more, after grace"
+          - "lateFee: Money — CTR-MNY-001; ≥ 0; ≤ cap; only decreasing by owner adjustment"
+          - "lateFeeContext?: string — payment context id registered with the Deal"
+          - "damageWindowEndsAt?: timestamp — attestation time plus 7 days"
+          - "closureChecks: object — {damageWindowOver, noOpenDamageClaim, depositSettled, ownerWaivedDamage}"
+          - "state: enum — due | overdue | awaiting_owner | attested | closed"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - lateFee is at most the capAmount in the reservation lateFeeTerms and never negative.
+          - state closed implies attested and all four closure checks true.
+          - effectiveReturnedAt is never earlier than local receipt time minus 72 hours.
+    sql: |
+      CREATE TABLE rentals_return (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reservation_id TEXT NOT NULL, due_at TEXT NOT NULL, grace_until TEXT NOT NULL,
+        state TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX rentals_return_reservation ON rentals_return(tenant_id, reservation_id);
+      CREATE INDEX rentals_return_due ON rentals_return(state, grace_until);
+  validation_rules:
+    requirements:
+      - Statements are validated in the order schema, signature, signer role, reservation and report cids, state, business rules.
+      - Late-fee computation uses elapsed UTC time and the terms copied at confirmation, never terms edited later.
+      - Every violation maps to one stable error code; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the renter for return reports and the owner for attestations, receipts, fee adjustments and waivers | RENTALS_STATEMENT_INVALID"
+      - "V02 | handoff for the reservation is attested and the return is in state due, overdue or awaiting_owner as the command requires | CONFLICT_STATE"
+      - "V03 | checklist has at most 30 items, photos at most 20 each with a SHA-256, notes at most 1000 code points | VALIDATION_FAILED"
+      - "V04 | attestation names the cid of the latest return report | RENTALS_REPORT_STALE"
+      - "V05 | late fee adjustment is not higher than the current fee and not below zero | RENTALS_FEE_ADJUST_INVALID"
+      - "V06 | closure is attempted only when attested, the damage window is over or waived, no damage claim is open and a funded deposit is settled | PRECONDITION_FAILED"
+      - "V07 | returnedAtClaim is not later than local receipt time plus 5 minutes | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Returns move due, optionally overdue, awaiting_owner, attested, closed; closed is terminal.
+      - Overdue and late fee follow only from the confirmed end time, grace and elapsed time; the owner can lower the fee but nothing raises it.
+      - Owner silence is recorded as renter_only_silent_owner after 72 hours, and closure still needs the damage window, open claims and deposit checks to pass.
+    machines:
+      - entity: RentalReturn
+        initial: due
+        terminal: [closed]
+        transitions:
+          - "due -> overdue | local sweep at graceUntil | no return recorded; emits rentals.rental.overdue"
+          - "due -> awaiting_owner | rentals.return.report by renter | report signed, late fee computed"
+          - "overdue -> awaiting_owner | rentals.return.report by renter | report signed, late fee computed on elapsed time"
+          - "awaiting_owner -> attested | rentals.return.attest by owner on the exact cid, or 72 h of owner silence | attestedBy both or renter_only_silent_owner; emits rentals.return.attested"
+          - "due -> attested | rentals.return.record_received by owner | attestedBy owner_only; emits rentals.return.attested"
+          - "overdue -> attested | rentals.return.record_received by owner | attestedBy owner_only; late fee to the receipt time; emits rentals.return.attested"
+          - "attested -> closed | closure rule satisfied by event or sweep | emits rentals.rental.closed"
+    timeouts:
+      - "Overdue is detected at graceUntil by a vault sweep (app start, every command, every 60 s while the PWA is open) and by every read; owner silence is 72 h after the renter report; the damage window is 7 days after attestation; closure is evaluated on every related event and by the sweep."
+  commands_queries_events:
+    requirements:
+      - Vault commands report, attest, record_received, adjust_late_fee and waive_damage each produce a named signed statement and a sync outbox entry in the same vault transaction.
+      - One ingestion command applies inbound statements, deduplicates by cid, derives local events with actor.kind federated and quarantines failures.
+      - Overdue, attested and closed events are local (EVT-8); each vault derives them from its own data and clock and from the signed statements it holds.
+    commands:
+      - name: rentals.return.report
+        capability: rentals.return.report
+        input: "[statement classrup.rentals.return_report/v1 signed by renter, E2E encrypted to owner] { reservationId, checklist, photos?, notes?, returnedAtClaim }"
+        output: "{ returnId, reportCid, lateMinutes, lateFee: Money, syncState }"
+        errors: [NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.return.attest
+        capability: rentals.return.attest
+        input: "[statement classrup.rentals.return_attestation/v1 signed by owner over the exact report cid] { returnId, expectedRevision, reportCid, conditionVerdict }"
+        output: "{ returnId, revision, attestationCid, state, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_REPORT_STALE]
+        emits: [rentals.return.attested]
+        idempotent: true
+      - name: rentals.return.record_received
+        capability: rentals.return.attest
+        input: "[statement classrup.rentals.owner_receipt/v1 signed by owner] { returnId, expectedRevision, receivedAtClaim, checklist?, photos?, notes?, conditionVerdict }"
+        output: "{ returnId, revision, receiptCid, lateMinutes, lateFee: Money, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [rentals.return.attested]
+        idempotent: true
+      - name: rentals.return.adjust_late_fee
+        capability: rentals.return.adjust_fee
+        input: "[statement classrup.rentals.late_fee_adjustment/v1 signed by owner] { returnId, expectedRevision, newLateFee: Money, reason }"
+        output: "{ returnId, revision, lateFee: Money, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_FEE_ADJUST_INVALID]
+        emits: []
+        idempotent: true
+      - name: rentals.return.waive_damage
+        capability: rentals.return.adjust_fee
+        input: "[statement classrup.rentals.return_waiver/v1 signed by owner] { returnId, expectedRevision }"
+        output: "{ returnId, revision, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [rentals.rental.closed]
+        idempotent: true
+      - name: rentals.return.receive
+        capability: rentals.return.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [RENTALS_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, RENTALS_REPORT_STALE, CONFLICT_STATE]
+        emits: [rentals.return.attested, rentals.rental.overdue, rentals.rental.closed]
+        idempotent: true
+    queries:
+      - name: rentals.return.get
+        capability: rentals.return.read_own
+        input: "[vault-local] { returnId }"
+        output: "{ return: RentalReturn, diffFromHandoff: ChecklistDiff, closureChecks }"
+        errors: [NOT_FOUND]
+      - name: rentals.return.get_for_reservation
+        capability: rentals.return.read_own
+        input: "[vault-local] { reservationId }"
+        output: "{ return?: RentalReturn }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: rentals.return.attested, privacy: P2, payload: "{ returnId, reservationId, ownerId, renterId, reportCid?, effectiveReturnedAt, attestedBy, conditionVerdict, lateMinutes, lateFee }"}
+      - {type: rentals.rental.overdue, privacy: P2, payload: "{ reservationId, returnId, dueAt, graceUntil, detectedAt }"}
+      - {type: rentals.rental.closed, privacy: P2, payload: "{ reservationId, returnId, closedAt, reason }"}
+    events_consumed:
+      - {type: rentals.handoff.attested, effect: "create the RentalReturn in state due with dueAt from the reservation and the handoff report cid"}
+      - {type: rentals.damage.claimed, effect: "mark an open damage claim so closure waits"}
+      - {type: rentals.damage.resolved, effect: "clear the open damage claim and re-evaluate closure"}
+      - {type: rentals.deposit.agreed, effect: "mark a deposit pending for the closure check"}
+      - {type: rentals.deposit.funded, effect: "keep the deposit pending until it is released or forfeited"}
+      - {type: rentals.deposit.released, effect: "mark the deposit settled and re-evaluate closure"}
+    errors:
+      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
+      - "RENTALS_REPORT_STALE | 409 | no | attestation names a return report cid that is not the latest"
+      - "RENTALS_FEE_ADJUST_INVALID | 422 | no | a late fee can only be lowered or waived"
+    example: |
+      renter vault: rentals.return.report { "reservationId": "0192f500-0002-…", "checklist": [{ "id": "tent-body", "label": "Tent body", "condition": "ok" }],
+        "returnedAtClaim": "2026-12-07T12:10:00.000Z" } -> { "returnId": "0192f530-0001-…", "lateMinutes": 130, "lateFee": { "amount": "1500", "currency": "EUR" } }
+      (reservation end 09:00 UTC, grace 60 min, rate EUR 5.00 per hour: lateMinutes 130, ceil(130/60) = 3 hours, fee EUR 15.00)
+      owner vault: rentals.return.attest { "reportCid": "sha256-Rt…", "conditionVerdict": "matches_handoff" } -> rentals.return.attested; later rentals.rental.closed
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who is the renter reports a return; only the owner attests, records receipt, adjusts the late fee or waives damage claims.
+      - Inbound statements are accepted only when the signer's key matches the role rule for that statement in this reservation; otherwise they are quarantined with a reason code.
+      - No relay role is involved; relays carry ciphertext only.
+    capabilities:
+      - "rentals.return.report | principal | local principal is the renter of the reservation; handoff attested"
+      - "rentals.return.attest | principal | local principal is the owner of the reservation; return not yet attested"
+      - "rentals.return.adjust_fee | principal | local principal is the owner of the reservation; adjustments only lower the fee"
+      - "rentals.return.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "rentals.return.read_own | principal | local principal is owner or renter of the reservation"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements through cid, so repeated delivery never adds a second attestation or fee adjustment.
+      - Overdue and closed events are derived once per vault from stored state, so sweeps that run twice emit once.
+      - Each state change, event and sync outbox entry commit in one IndexedDB transaction.
+    idempotency: "Local command id stored 24 h; statements deduplicated by cid in the inbox table; the unique return per reservation index and a stored overdueEmitted flag make overdue emission once; closure is idempotent on the stored closedAt."
+    concurrency: "Web Locks lock rentals-return-<reservationId> around commands and sweeps; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the return for explicit renegotiation."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; late-fee context registration retries 10 s, 60 s, 10 minutes."
+    offline: "Reporting and attesting work offline; the effective return time uses the claim only within the 72 hour rule at receipt; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the owner saw a report before the signed acknowledgement."
+    partial_failure: "If registering the late-fee payment context fails, the report is signed without the fee context and a retry job registers it; if relay delivery fails the local state stands and the sync state shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Return reports, photos and fees are P2, travel only as end-to-end encrypted envelopes and attachments to the two parties, and never appear in logs, notifications or public projections.
+      - Late fees are claims between the parties and are never collected by the platform; enforcement is by agreement, reputation and disputes only.
+      - False overdue claims and fee inflation are limited by deterministic computation from signed terms, owner-only lowering and the 72 hour backdating limit.
+    data:
+      - "RentalReturn: P2 in both vaults."
+      - "Return photos: P2 encrypted attachments with hashes in the signed report."
+    retention:
+      - "Closed returns and statements: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days)."
+    threats:
+      - "T01 | Owner inflates the late fee | fee is computed from the terms copied into the confirmed reservation; adjustments can only lower it; the renter's vault recomputes and flags any mismatch"
+      - "T02 | Renter backdates the return | effective return time is the claim only within 72 hours before local receipt time; relay-signed receipt time evidences that relay's clock only"
+      - "T03 | Owner stalls the attestation to hold the deposit | 72 hour silence is recorded as renter_only_silent_owner; the deposit decision clock still runs and the renter can dispute"
+      - "T04 | Forged return report or attestation | signature over JCS bytes and signer role check; non-party keys quarantined"
+      - "T05 | Photos swapped between handoff and return | hashes recorded at signing, same re-encoding rules, differences computed per checklist item"
+    abuse_controls:
+      - "Local quarantine and a per-sender quota of 100 inbound return statements per day per counterparty."
+      - "Attachment size limit 10 MB per photo and 50 MB per report (PAYLOAD_TOO_LARGE)."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Late-fee computation and report signing meet p95 ≤ 120 ms on a mid-range phone, excluding image re-encoding.
+      - The overdue sweep over 5 000 returns completes in ≤ 100 ms in slices of at most 50 ms.
+    metrics:
+      - "classrup_rentals_returns_total{state} (local counter)"
+      - "classrup_rentals_overdue_detected_total (local counter)"
+      - "classrup_rentals_late_fee_minor_sum (local gauge, never exported)"
+    logs:
+      - "info return.attested {returnId, correlationId} in the local diagnostics log - no amounts, no notes."
+    budgets:
+      - "report/attest p95 ≤ 120 ms; get p95 ≤ 50 ms; overdue sweep over 5 000 returns ≤ 100 ms."
+      - "Closure re-evaluation per event p95 ≤ 30 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Late-fee arithmetic and the 72 hour rule are covered by property tests with a reference model including DST zones.
+      - Two-vault tests with a hostile in-memory relay cover duplicate, dropped and reordered statements and silent owners.
+    fixtures: "Two vaults - owner O and renter R - with attested handoff, reservation ending 2026-12-07T09:00:00Z, grace 60 minutes, late fee EUR 5.00 per hour capped at EUR 40.00; fixed clock 2026-12-07T08:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R02 | returns at +30 min, +130 min after grace, +20 h and across a DST change | lateMinutes 0, 130 with fee 15.00, capped at 40.00; elapsed UTC time used"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01–V07 violated in turn | documented code returned and nothing stored; bad statements quarantined"
+      - "T03 | property | 02.R02,03.R02 | random return times, rates, caps and adjustments against reference model | fee equals model, never above cap, adjustments only decrease"
+      - "T04 | property | 03.R01 | random statement and event sequences | only declared transitions succeed; closed never changes"
+      - "T05 | integration | 03.R03,06.R01 | owner silent for 72 hours; owner records receipt only; owner attests exact cid | attestedBy renter_only_silent_owner, owner_only, both respectively; events once per vault"
+      - "T06 | integration | 01.R03,06.R02 | sweep runs twice across the grace boundary and across restart | one overdue event per vault; closure emitted once"
+      - "T07 | integration | 04.R03,01.R02 | closure with open damage claim, funded deposit, damage window, owner waiver | closed only when all four checks pass; waiver ends the window early"
+      - "T08 | integration | 04.R01,04.R02,06.R03,09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on attested and closed with identical cids; duplicates skipped"
+      - "T09 | contract | 04.R01,04.R03,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | attestation signed by renter; fee adjustment signed by renter; third-party key | quarantined or FORBIDDEN; no state change; raising a fee refused"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | backdated claim 5 days; 101 inbound statements in a day; inspect logs | receipt time used; 101st dropped; no amounts or notes in logs"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 5 000 returns, throttled mobile profile | sign p95 ≤ 120 ms, sweep ≤ 100 ms, no telemetry request"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-043 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | returns and statements round-trip; overdue flag preserved"
+      - "T15 | e2e | 01.R01,02.R01 | mobile renter returns 2 h late, owner attests in second browser | late fee preview matches, both show attested; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - The late fee equals the reference model in every case, never exceeds the cap and can only be lowered by the owner.
+      - A rental closes only when attested, damage window over or waived, no open claim and any funded deposit settled.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains returns, return reports, attestations, fee adjustments, waivers and photo references with hashes.
+      - Import verifies every signature and cid before restoring and recomputes the late fee from the stored terms, flagging mismatches.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section rentals.returns in classrup-export/v1; one line per RentalReturn with the signed envelopes of each statement."
+    import: "Closed returns import as history; due, overdue, awaiting_owner and attested returns import as is and resume their clocks from stored times."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

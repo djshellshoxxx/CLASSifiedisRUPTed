@@ -10,7 +10,7 @@ export interface IdGen {
   next<T extends string = string>(): Id<T>;
 }
 
-export type RandomFill = (bytes: Uint8Array) => void;
+export type RandomFill = (bytes: Uint8Array<ArrayBuffer>) => void;
 
 export const MAX_ID_SKEW_MS = 24 * 60 * 60 * 1000;
 const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -18,7 +18,7 @@ const COUNTER_BITS = 42;
 const COUNTER_MAX = 2 ** COUNTER_BITS - 1;
 const TWO_30 = 2 ** 30;
 
-export function webCryptoRandom(bytes: Uint8Array): void {
+export function webCryptoRandom(bytes: Uint8Array<ArrayBuffer>): void {
   globalThis.crypto.getRandomValues(bytes);
 }
 

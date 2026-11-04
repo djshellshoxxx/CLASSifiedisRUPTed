@@ -153,6 +153,17 @@ function recordStore(d: DriverTx) {
     query<T = unknown>(q: RecordQuery): StoredRecord<T>[] {
       return d.records.query(q).map((r) => toStored<T>(r));
     },
+    /**
+     * Restores an exported record as-is (revision and timestamps kept) for import and restore (IOX-2):
+     * absent ⇒ written; identical ⇒ skipped; different ⇒ CONFLICT_REVISION.
+     */
+    restore(rec: StoredRecord, idx: IndexValues): Result<'restored' | 'identical', AppError> {
+      const data = jsonText(rec.data, 'record data');
+      const current = d.records.get(rec.tenantId, rec.type, rec.id);
+      if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
+      d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx, createdAt: rec.createdAt, updatedAt: rec.updatedAt });
+      return ok('restored');
+    },
   };
 }
 

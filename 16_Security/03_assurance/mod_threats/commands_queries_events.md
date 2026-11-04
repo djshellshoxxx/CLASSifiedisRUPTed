@@ -1,35 +1,64 @@
-# PS-133-04 — commands queries events
+# PS-133-04 — Commands, queries and events: Security threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-04. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M01 Security threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the commands queries events process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-133-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-133-04.R01** The CLI parses the register, validates rules V01 to V05, resolves references against planning/modules.yaml, module.spec.yaml files and test IDs, and exits non-zero on any error.
+- **PS-133-04.R02** The report lists counts per boundary and STRIDE letter, rows by residual risk level and dangling references, in text and JSON.
+- **PS-133-04.R03** The CLI runs in CI on every pull request touching module specs or the register, and in the release gate.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| SECURITY_THREATMODEL_COVERAGE_GAP | 422 | no | a boundary lacks a STRIDE category without a recorded reason |
+| SECURITY_THREATMODEL_DANGLING_CONTROL | 422 | no | a control reference does not exist in the module specs |
+| SECURITY_THREATMODEL_NO_TEST | 422 | no | a row has no existing test reference |
+| SECURITY_THREATMODEL_REVIEW_STALE | 422 | no | review date older than 6 months |
+| SECURITY_THREATMODEL_FORBIDDEN_CLAIM | 422 | no | a document claims audit, certification or guaranteed security |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Documentation and tooling module with no bus commands, queries or events. Interface is the CLI pnpm security:threats:check and the generated report.
+
+### Example
+
+```
+$ pnpm security:threats:check
+boundaries: 6 (B1..B6) + 2 cross-cutting (X1, X2); rows: 42; STRIDE gaps: 0; dangling controls: 0; rows without test: 0; stale reviews: 0
+exit 0
+$ pnpm security:threats:check   (after renaming F16.S02.M03)
+SECURITY_THREATMODEL_DANGLING_CONTROL THR-B2-03 -> F16.S02.M03.07.R02 not found    exit 1
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-133-09.T06 | integration | PS-133-04.R01, PS-133-04.R02, PS-133-04.R03 | run CLI in CI on a pull request touching a spec | report text and JSON produced; non-zero exit blocks merge |
+| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03, PS-133-10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M02, F16.S02.M03, F12.S03.M03, CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -109,8 +109,8 @@ function toAppError(e: unknown): AppError {
   return e instanceof AppErrorException ? e.error : appError('INTERNAL');
 }
 
-function outcomeLabel(r: Result<{ replayed?: boolean }, AppError>): string {
-  if (r.ok) return r.value.replayed ? 'replayed' : 'ok';
+function outcomeLabel(r: Result<unknown, AppError>): string {
+  if (r.ok) return (r.value as { replayed?: boolean }).replayed ? 'replayed' : 'ok';
   return r.error.status >= 500 ? 'failed' : 'rejected';
 }
 
@@ -220,7 +220,7 @@ export function createBus(o: BusOptions): Bus {
     return r;
   }
 
-  function finish(kind: 'command' | 'query', def: Def | undefined, call: Call, started: number, r: Result<{ replayed?: boolean }, AppError>, e?: unknown): void {
+  function finish(kind: 'command' | 'query', def: Def | undefined, call: Call, started: number, r: Result<unknown, AppError>, e?: unknown): void {
     const durationMs = Math.round((globalThis.performance.now() - started) * 1000) / 1000;
     const module = def?.module ?? 'unknown';
     const outcome = outcomeLabel(r);

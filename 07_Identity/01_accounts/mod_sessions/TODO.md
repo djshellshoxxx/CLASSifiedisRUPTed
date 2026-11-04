@@ -1,10 +1,9 @@
-# TODO
+# TODO — F07.S01.M02 Sessions
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPECIFIED — implementation pending.
 
 - [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Specify all ten processes (module.spec.yaml).
+- [x] Validate cross-module contracts (spec:check).
+- [ ] Implement in `packages/identity/src/accounts/sessions`.
+- [ ] Tests for every requirement pass (tools/trace).

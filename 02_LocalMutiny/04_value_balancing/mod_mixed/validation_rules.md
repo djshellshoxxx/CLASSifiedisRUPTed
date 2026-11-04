@@ -1,35 +1,36 @@
-# PS-026-02 — validation rules
+# PS-026-02 — Validation rules: Mixed-value compensation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-02. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S04.M01 Mixed-value compensation](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/value_balancing/mixed` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the validation rules process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-026-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-026-02.R01** Compensation legs are validated for parties, currency, amount bounds and consistency with the subject's normalization before they can be sealed in a revision.
+- **PS-026-02.R02** Claims are accepted only from the payer for a due leg and acknowledgements only from the payee for a claimed leg, through F09.
+- **PS-026-02.R03** Crypto claims are never presented as paid without chain finality evidence, and a missing verifier leaves them claimed.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | payer and payee are distinct participants of the subject | MUTINY_COMPENSATION_PARTY_INVALID |
+| V02 | amount is a positive integer within 1 and 1000000000000 minor units in the subject's settlement currency | VALIDATION_FAILED |
+| V03 | kind money has methods of 1..3 values from cash, crypto, external; kind extra_item has extraLegId referencing a leg of the subject | VALIDATION_FAILED |
+| V04 | at most N minus 1 money legs per subject where N is the participant count, at most 8 legs | MUTINY_COMPENSATION_LIMIT |
+| V05 | a leg may be proposed only while the subject is draft or open proposal, or a proposed cycle, and by an allowed author | MUTINY_COMPENSATION_NOT_ALLOWED |
+| V06 | claim is made by the payer, the leg is due, and the cycle is committed or executing or partially_executed | MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED |
+| V07 | claimRef is at most 128 characters and contains no URL query secrets; method is one of the leg methods | VALIDATION_FAILED |
+| V08 | withdraw only while status is proposed and the leg is not referenced by a sealed head revision | CONFLICT_STATE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-026-09.T02 | property | PS-026-01.R03, PS-026-02.R03 | random value vectors for 2..8 participants | sum of payments conserved, at most N-1 legs, residuals within tolerance, deterministic output |
+| TEST-PS-026-09.T03 | unit | PS-026-02.R01, PS-026-02.R02 | each rule V01..V08 violated in turn | documented error code and nothing stored |
+| TEST-PS-026-09.T07 | integration | PS-026-01.R04, PS-026-02.R03 | crypto claim without verifier | stays claimed, never settled; cycle cannot complete; recovery waiver path available |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

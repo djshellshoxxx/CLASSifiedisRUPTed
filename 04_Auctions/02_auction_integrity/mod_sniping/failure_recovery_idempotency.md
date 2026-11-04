@@ -1,35 +1,33 @@
-# PS-038-06 — failure recovery idempotency
+# PS-038-06 — Failure recovery and idempotency: Anti-sniping soft close
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-06. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S02.M02 Anti-sniping soft close](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_integrity/sniping` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-038-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-038-06.R01** Apply is idempotent per auction and triggering bid sequence, so a repeated call returns the existing extension and never adds a second.
+- **PS-038-06.R02** Extension row, adjust_end and the bid ledger entry commit in the same SQLite transaction; a crash leaves none of them.
+- **PS-038-06.R03** Concurrent apply attempts are impossible inside the lease and are additionally prevented by the unique (auction, seq) index and the compare-and-set on extensionCount.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Unique (tenant, auction, triggerBidSeq) via the unique seq index plus a stored triggerBidSeq lookup; repeated apply returns the stored result.
+- **concurrency:** Runs only under the per-auction lease with BEGIN IMMEDIATE; adjust_end uses compare-and-set on extensionCount; a stale fencing token is refused by the bid path before apply is reached.
+- **retries:** No retries inside the transaction; if the bid transaction fails, the bid is retried by the bidder with the same nonce and the extension is decided again from scratch.
+- **offline:** Not applicable in vaults; vaults show the last verified end time and mark it as last known when the host is unreachable.
+- **partial failure:** If apply fails the whole bid transaction fails with DEPENDENCY_UNAVAILABLE, so a bid is never accepted without its extension decision.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-038-09.T05 | integration | PS-038-03.R03, PS-038-06.R01 | extension commits before close lease; close worker started earlier | close re-reads end under lease and releases without closing |
+| TEST-PS-038-09.T06 | chaos | PS-038-06.R02, PS-038-06.R03 | crash between extension insert and adjust_end; fail adjust_end | whole bid transaction rolls back; no extension row; bid not accepted |
+| TEST-PS-038-09.T07 | integration | PS-038-02.R03, PS-038-06.R03, PS-038-04.R01 | two bids 50 ms apart inside the window | two sequential extensions; second counts from the moved end; unique seq holds |
+
+## Dependencies
+
+Module depends on: F04.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

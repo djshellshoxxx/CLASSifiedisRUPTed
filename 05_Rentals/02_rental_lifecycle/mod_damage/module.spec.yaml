@@ -1,0 +1,297 @@
+id: F05.S02.M03
+scope: MVP
+summary: >-
+  After a rental the owner can claim damage or non-return as a signed statement that carries a computed comparison of the
+  attested handoff report and the return report, up to 10 itemized amounts and evidence references. The renter has 7 days to accept,
+  counter once with an amount, or contest; silence is never acceptance - after 7 days or on contest the claim escalates to a
+  dispute in F09.S02.M02, whose resolution statement settles it. Money is never held or moved by the platform: an accepted amount is
+  satisfied from a funded deposit through the bilateral forfeit in F05.S01.M02, or paid directly through a payment claim. The comparison shows
+  what the two signed reports say, not what happened to the item.
+responsibilities:
+  - Own DamageClaim in both vaults and the statements damage_claim, damage_response, damage_counter_acceptance and damage_withdrawal (classrup.rentals.*/v1).
+  - Compute the comparison between the attested handoff report and the return report by checklist item (condition ranking ok < worn < damaged < missing) and require at least one worsened or missing item, or kind not_returned.
+  - Enforce windows - claim within 7 days after return attestation, or for not_returned from 14 days overdue until 30 days after the reservation end; response within 7 days; one counter.
+  - Escalate to a dispute through F09.S02.M02 on contest, on a rejected counter, or on 7 days of silence, and emit rentals.damage.resolved when the claim reaches accepted, withdrawn or resolved.
+non_responsibilities:
+  - Handoff and return reports (F05.S02.M01, F05.S02.M02), deposit release and forfeit (F05.S01.M02) and the reservation (F05.S01.M01).
+  - Dispute case handling and resolution statements (F09.S02.M02).
+  - Insurance, valuation of used items or depreciation tables; the owner states amounts, the renter answers, a dispute decides.
+  - "Future: standard repair price catalogues and third-party assessor attestations."
+depends_on: [F05.S02.M01, F05.S02.M02, F05.S01.M01, F05.S01.M02, F09.S01.M01, F09.S02.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As an owner, I compare the handoff and return reports, select the worsened items, add photos and amounts, and send a claim.
+  - As a renter, I see the comparison and evidence, and accept, offer a lower amount, or contest the claim.
+  - As either party, I see when the claim goes to a dispute and how it was resolved, and how an accepted amount is paid.
+edge_cases:
+  - Owner claims for an item whose condition was already worn in the handoff report; the comparison shows no worsening for it and the item cannot be selected without a note, and a claim with no worsened item is refused with RENTALS_DAMAGE_NO_BASIS.
+  - Return report was attested with renter_only_silent_owner; the owner still has the 7 day window from the attestation time.
+  - Total claimed exceeds the owner's declared item value; refused with RENTALS_DAMAGE_EXCEEDS_VALUE.
+  - Renter does not answer within 7 days; the claim escalates to a dispute and the renter is notified; the claim is never accepted by silence.
+  - Renter counters with a lower amount and the owner ignores it for 7 days; the claim escalates to a dispute with both amounts shown.
+  - Owner withdraws after the renter contested; allowed only before the dispute case is created, otherwise the withdrawal is evidence in the case.
+  - Item never returned; kind not_returned is allowed from 14 days after the due time and carries the overdue and return history as basis.
+  - A funded deposit exists; an accepted amount at or below the deposit is settled through the forfeit flow, and any excess is a payment claim between the parties.
+  - Two claims for the same reservation and kind; refused with RENTALS_DAMAGE_DUPLICATE.
+ux:
+  screens:
+    - "Compare screen: handoff and return checklist side by side with condition words and photo pairs, worsened items pre-selected, differences summarized."
+    - "Claim builder: up to 10 items each with description (≤ 300 characters), estimated cost with currency, 1 to 5 evidence references; total and declared value check."
+    - "Renter response screen: claim summary, comparison, Accept, Counter with amount and note, Contest; dispute status once escalated."
+  states: [loading, no-basis, composing, claimed, countered, accepted, escalated, resolved, withdrawn, window-closed, pending-offline]
+  a11y:
+    - Comparison table has row and column headers and states condition changes in words (changed from ok to damaged).
+    - Amount fields have visible labels including currency and use inputmode=decimal; the total is announced after each change.
+    - Accept, Counter, Contest and Withdraw buttons are at least 44x44 px with accessible names including the total amount.
+processes:
+  domain_schema:
+    requirements:
+      - A DamageClaim stores reservation, parties, kind, itemized amounts, evidence, the comparison basis, responses, dispute reference, outcome and state, with revision per CTR-ID-001.
+      - Claims are P2 in both vaults, retained under RET-EVIDENCE, with integer minor units in the reservation currency per CTR-MNY-001.
+      - Claim content is immutable once signed; a counter or withdrawal is a new signed statement referencing the claim cid.
+    entities:
+      - name: DamageClaim
+        schema: classrup.rentals.damage_claim/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "reservationId: uuidv7 — ref F05.S01.M01 RentalReservation"
+          - "ownerId: actorId — claimant and signer"
+          - "renterId: actorId — respondent"
+          - "kind: enum — damage | missing_parts | not_returned"
+          - "items: ClaimItem[] — 1..10 items {checklistItemId?, description ≤ 300, estimatedCost: Money, evidenceRefs[] (1..5)}"
+          - "totalClaimed: Money — sum of item costs; > 0; ≤ ownerDeclaredValue"
+          - "ownerDeclaredValue: Money — owner's stated replacement value; ≤ 1 000 000 000 000 minor units"
+          - "basis: object — {handoffReportCid, returnReportCid?, worsenedItemIds[], overdueMinutes?}"
+          - "claimCid: string — sha256- cid of the signed damage_claim"
+          - "response?: object — {kind: accepted | counter | contest, counterAmount?: Money, note? ≤ 1000, responseCid, respondedAtClaim}"
+          - "agreedAmount?: Money — amount fixed by acceptance, accepted counter or dispute resolution"
+          - "disputeCaseId?: uuidv7 — ref F09.S02.M02 DisputeCase"
+          - "settlement?: object — {via: deposit_forfeit | payment_claim | none, contextId?, proof?}"
+          - "outcome?: enum — accepted | counter_accepted | withdrawn | dispute_for_owner | dispute_for_renter | dispute_split"
+          - "state: enum — claimed | countered | escalated | accepted | resolved | withdrawn"
+          - "respondBy: timestamp — local receipt time of the claim plus 7 days"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - totalClaimed equals the sum of item costs and never exceeds ownerDeclaredValue.
+          - Unless kind is not_returned, basis.worsenedItemIds has at least one item.
+          - At most one claim per (reservationId, kind) exists in a vault.
+          - state accepted or resolved implies agreedAmount is set and not above totalClaimed.
+    sql: |
+      CREATE TABLE rentals_damage_claim (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reservation_id TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL,
+        total_minor TEXT NOT NULL, currency TEXT NOT NULL, respond_by TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX rentals_damage_kind ON rentals_damage_claim(tenant_id, reservation_id, kind);
+  validation_rules:
+    requirements:
+      - Statements are validated in the order schema, signature, signer role, referenced cids, state, window, business rules.
+      - The comparison basis is recomputed by the receiving vault from the two attested reports and must match the claim.
+      - Every violation maps to one stable error code; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the owner for claims, counter acceptances and withdrawals and the renter for responses | RENTALS_STATEMENT_INVALID"
+      - "V02 | claim is filed within 7 days after return attestation, or for not_returned between 14 days overdue and 30 days after the reservation end | RENTALS_DAMAGE_WINDOW"
+      - "V03 | basis lists at least one worsened or missing item, or kind is not_returned, and the receiver's recomputed basis equals the claimed basis | RENTALS_DAMAGE_NO_BASIS"
+      - "V04 | items are 1..10, each description at most 300 code points with 1 to 5 evidence references, costs positive in the reservation currency | VALIDATION_FAILED"
+      - "V05 | totalClaimed equals the sum of items and is not above ownerDeclaredValue | RENTALS_DAMAGE_EXCEEDS_VALUE"
+      - "V06 | no claim of the same kind exists for the reservation | RENTALS_DAMAGE_DUPLICATE"
+      - "V07 | counter amount is positive, below totalClaimed, and only one counter exists | RENTALS_DAMAGE_COUNTER_LIMIT"
+      - "V08 | response arrives before respondBy by the receiver's clock plus 5 minutes | EXPIRED"
+  workflow_state_machine:
+    requirements:
+      - Claims move claimed, optionally countered, then accepted, escalated to resolved, or withdrawn; accepted, resolved and withdrawn are terminal.
+      - Silence never settles money - unanswered claims and unanswered counters escalate to a dispute after 7 days.
+      - Each terminal transition emits rentals.damage.resolved once with the outcome; escalation produces the dispute request before the state changes.
+    machines:
+      - entity: DamageClaim
+        initial: claimed
+        terminal: [accepted, resolved, withdrawn]
+        transitions:
+          - "claimed -> accepted | rentals.damage.respond accepted by renter | agreedAmount equals totalClaimed; emits rentals.damage.resolved with outcome accepted"
+          - "claimed -> countered | rentals.damage.respond counter by renter | one counter below totalClaimed"
+          - "claimed -> escalated | contest by renter, or 7 days without response | F09.S02.M02 case requested"
+          - "claimed -> withdrawn | rentals.damage.withdraw by owner | emits rentals.damage.resolved with outcome withdrawn"
+          - "countered -> accepted | rentals.damage.accept_counter by owner | agreedAmount equals counterAmount; emits rentals.damage.resolved with outcome counter_accepted"
+          - "countered -> escalated | owner rejects or 7 days without owner answer | F09.S02.M02 case requested"
+          - "countered -> withdrawn | rentals.damage.withdraw by owner | emits rentals.damage.resolved with outcome withdrawn"
+          - "escalated -> resolved | commerce.dispute.resolved consumed | agreedAmount from the resolution; emits rentals.damage.resolved with the dispute outcome"
+    timeouts:
+      - "Response deadline 7 days after the claim is received (receiver clock); counter answer deadline 7 days; both escalate, never accept. Vault sweeps run at app start, on every command and every 60 s while the PWA is open, and every read applies the deadlines on the fly."
+  commands_queries_events:
+    requirements:
+      - Vault commands claim, respond, accept_counter, withdraw and escalate produce named signed statements where the other party must rely on them, and a sync outbox entry, in the same vault transaction.
+      - One ingestion command applies inbound statements, deduplicates by cid, recomputes the comparison, derives local events with actor.kind federated and quarantines failures.
+      - Payment status of an agreed amount is derived from F09 events whose context is a rental_damage record of this module; the module never creates a PaymentClaim itself.
+    commands:
+      - name: rentals.damage.claim
+        capability: rentals.damage.claim
+        input: "[statement classrup.rentals.damage_claim/v1 signed by owner, E2E encrypted to renter] { reservationId, kind, items[], ownerDeclaredValue }"
+        output: "{ claimId, claimCid, basis, respondBy, syncState }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, RENTALS_DAMAGE_WINDOW, RENTALS_DAMAGE_NO_BASIS, RENTALS_DAMAGE_EXCEEDS_VALUE, RENTALS_DAMAGE_DUPLICATE]
+        emits: [rentals.damage.claimed]
+        idempotent: true
+      - name: rentals.damage.respond
+        capability: rentals.damage.respond
+        input: "[statement classrup.rentals.damage_response/v1 signed by renter over the claim cid] { claimId, expectedRevision, claimCid, kind: accepted|counter|contest, counterAmount?, note? }"
+        output: "{ claimId, revision, state, responseCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, VALIDATION_FAILED, RENTALS_DAMAGE_COUNTER_LIMIT]
+        emits: [rentals.damage.resolved]
+        idempotent: true
+      - name: rentals.damage.accept_counter
+        capability: rentals.damage.decide
+        input: "[statement classrup.rentals.damage_counter_acceptance/v1 signed by owner over the response cid] { claimId, expectedRevision, responseCid }"
+        output: "{ claimId, revision, agreedAmount: Money, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED]
+        emits: [rentals.damage.resolved]
+        idempotent: true
+      - name: rentals.damage.withdraw
+        capability: rentals.damage.decide
+        input: "[statement classrup.rentals.damage_withdrawal/v1 signed by owner] { claimId, expectedRevision }"
+        output: "{ claimId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [rentals.damage.resolved]
+        idempotent: true
+      - name: rentals.damage.escalate
+        capability: rentals.damage.escalate
+        input: "[vault-local; requests F09.S02.M02 case with the claim, comparison and evidence; notice statement to the other party] { claimId, expectedRevision, statement }"
+        output: "{ claimId, revision, disputeCaseId? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.damage.receive
+        capability: rentals.damage.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [RENTALS_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, RENTALS_DAMAGE_NO_BASIS, CONFLICT_STATE]
+        emits: [rentals.damage.claimed, rentals.damage.resolved]
+        idempotent: true
+    queries:
+      - name: rentals.damage.compare_reports
+        capability: rentals.damage.read_own
+        input: "[vault-local] { reservationId }"
+        output: "{ rows: [{ checklistItemId, handoffCondition, returnCondition, worsened: boolean, photoPairs[] }], worsenedItemIds[], eligible: boolean, windowEndsAt }"
+        errors: [NOT_FOUND]
+      - name: rentals.damage.get
+        capability: rentals.damage.read_own
+        input: "[vault-local] { claimId }"
+        output: "{ claim: DamageClaim, paymentProof?: none|claimed|acknowledged|confirming|final|disputed|expired }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: rentals.damage.claimed, privacy: P2, payload: "{ claimId, reservationId, ownerId, renterId, kind, totalClaimed, claimCid }"}
+      - {type: rentals.damage.resolved, privacy: P2, payload: "{ claimId, reservationId, outcome, agreedAmount?, disputeCaseId? }"}
+    events_consumed:
+      - {type: rentals.handoff.attested, effect: "store the attested handoff report cid as the baseline for comparisons"}
+      - {type: rentals.return.attested, effect: "open the 7 day claim window from the attestation time"}
+      - {type: rentals.rental.overdue, effect: "start the 14 day clock after which a not_returned claim is allowed"}
+      - {type: rentals.rental.closed, effect: "close the claim window; later claims return RENTALS_DAMAGE_WINDOW"}
+      - {type: commerce.dispute.opened, effect: "for context type rental_damage link the case id to the claim"}
+      - {type: commerce.dispute.resolved, effect: "move an escalated claim to resolved with the agreed amount and outcome"}
+      - {type: commerce.payment.acknowledged, effect: "for context type rental_damage record payment proof acknowledged"}
+      - {type: commerce.payment.finalized, effect: "for context type rental_damage record payment proof final"}
+    errors:
+      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
+      - "RENTALS_DAMAGE_WINDOW | 409 | no | claim or response is outside its allowed window"
+      - "RENTALS_DAMAGE_NO_BASIS | 422 | no | reports show no worsened or missing item, or the claimed basis differs from the recomputed one"
+      - "RENTALS_DAMAGE_EXCEEDS_VALUE | 422 | no | total claimed is above the owner's declared value"
+      - "RENTALS_DAMAGE_DUPLICATE | 409 | no | a claim of this kind already exists for the reservation"
+      - "RENTALS_DAMAGE_COUNTER_LIMIT | 409 | no | only one counter is allowed"
+    example: |
+      owner vault: rentals.damage.compare_reports { "reservationId": "0192f500-0002-…" } -> worsenedItemIds ["tent-pole"], eligible true
+      rentals.damage.claim { "reservationId": "0192f500-0002-…", "kind": "damage", "ownerDeclaredValue": { "amount": "30000", "currency": "EUR" },
+        "items": [{ "checklistItemId": "tent-pole", "description": "Bent pole", "estimatedCost": { "amount": "4500", "currency": "EUR" }, "evidenceRefs": ["0192f540-00a1-…"] }] }
+      renter: rentals.damage.respond { "kind": "counter", "counterAmount": { "amount": "2500", "currency": "EUR" } } -> countered; owner accept_counter -> accepted, agreedAmount EUR 25.00
+      agreed amount is settled from the funded deposit through rentals.deposit.claim_forfeit, or paid directly through a payment claim
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who is the owner of the reservation claims, accepts a counter, withdraws; only the renter responds; either party may escalate.
+      - Inbound statements are accepted only when the signer's key matches the role for that statement in this claim and the recomputed basis matches; otherwise they are quarantined.
+      - No relay role is involved; relays carry ciphertext only.
+    capabilities:
+      - "rentals.damage.claim | principal | local principal is the owner of the reservation; return attested or overdue 14 days; window open"
+      - "rentals.damage.respond | principal | local principal is the renter of the reservation; claim in state claimed"
+      - "rentals.damage.decide | principal | local principal is the owner of the reservation; claim in state claimed or countered"
+      - "rentals.damage.escalate | principal | local principal is owner or renter; claim in state claimed or countered"
+      - "rentals.damage.receive | principal | any envelope; acceptance depends on signature, signer role and recomputed basis"
+      - "rentals.damage.read_own | principal | local principal is owner or renter of the reservation"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements through cid, so repeated delivery never adds a second response or acceptance.
+      - Contradictory signed statements (two responses to one claim, a counter acceptance for an unknown response cid) freeze the claim and require escalation, never last-writer-wins.
+      - Escalation requests the F09 case before the state change and retries on failure, so a claim is never escalated without a case request in flight.
+    idempotency: "Local command id stored 24 h; statements deduplicated by cid in the inbox table; unique (reservation, kind) index returns the existing claim for a repeated claim command; the F09 case request carries the claim id as reference."
+    concurrency: "Web Locks lock rentals-damage-<reservationId> around commands and sweeps; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the claim."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; the F09 case request retries 10 s, 60 s, 10 minutes."
+    offline: "Claim, respond, accept, withdraw and escalate work offline and commit locally; deadlines use the local clock when the statement is received; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the other party saw a statement before the signed acknowledgement."
+    partial_failure: "If the case port fails during escalation the claim stays in its state with an escalation retry pending and a visible note; if relay delivery fails the local state stands and the sync state shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Claims, comparisons, photos and amounts are P2, travel only as end-to-end encrypted envelopes and attachments to the two parties and the dispute handler chosen in F09, and never appear in logs, notifications or public projections.
+      - Inflated or fabricated claims are limited by the recomputed comparison, evidence requirements, declared value cap, a 7 day response window with escalation, and the dispute path.
+      - No automatic penalty or reputation change is applied; any effect on reputation comes from signed dispute resolutions processed by F07.
+    data:
+      - "DamageClaim: P2 in both vaults."
+      - "Evidence photos: P2 encrypted attachments with hashes in the signed claim."
+    retention:
+      - "Terminal claims and statements: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days)."
+    threats:
+      - "T01 | Owner claims damage that already existed | comparison against the attested handoff report, items already worn or damaged cannot be claimed without a basis, receiving vault recomputes the basis"
+      - "T02 | Claim inflated beyond the item's value | total capped at the owner's declared value, which is also visible in the deposit terms, renter can counter or contest"
+      - "T03 | Renter ignores the claim | silence escalates to a dispute after 7 days and is never treated as acceptance"
+      - "T04 | Forged response or acceptance | signature over JCS bytes and signer role check; non-party keys quarantined"
+      - "T05 | Doctored evidence photos | hashes recorded at signing, metadata stripped, the dispute handler can compare with both parties' copies"
+    abuse_controls:
+      - "Local quarantine and a per-sender quota of 50 inbound damage statements per day per counterparty."
+      - "One claim per kind per reservation and a window limit make repeated claims impossible."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Comparison of two 30-item reports and claim signing meet p95 ≤ 150 ms on a mid-range phone, excluding image handling.
+      - Sweep over 2 000 claims completes in ≤ 100 ms in slices of at most 50 ms.
+    metrics:
+      - "classrup_rentals_damage_claims_total{state} (local counter)"
+      - "classrup_rentals_damage_escalations_total{reason=contest|silence|counter_rejected} (local counter)"
+      - "classrup_rentals_statements_quarantined_total{code} (local counter)"
+    logs:
+      - "info damage.resolved {claimId, outcome, correlationId} in the local diagnostics log - no amounts, no descriptions."
+    budgets:
+      - "compare_reports and claim p95 ≤ 150 ms; get p95 ≤ 50 ms; sweep over 2 000 claims ≤ 100 ms."
+      - "Case request round trip inside one vault ≤ 500 ms p95."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The comparison and the amount rules are covered by property tests with a reference model over random checklists.
+      - Two-vault tests with a hostile relay cover duplicate, dropped and reordered statements and silent counterparties.
+    fixtures: "Two vaults - owner O and renter R - with attested handoff (tent-pole ok) and attested return (tent-pole damaged), reservation ended 2026-12-07T09:00:00Z, declared value EUR 300.00, deposit EUR 100.00 funded; stub F09 case port; fixed clock 2026-12-08T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R03 | claim with 2 items summing to total and one whose sum is off by 1 minor unit | first stored with claim cid; second RENTALS_DAMAGE_EXCEEDS_VALUE or VALIDATION_FAILED"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01–V08 violated in turn | documented code returned and nothing stored; bad statements quarantined"
+      - "T03 | property | 02.R02,03.R01 | random handoff and return checklists | worsened set equals the reference model; claims without worsened items refused; basis mismatch refused on receipt"
+      - "T04 | integration | 03.R02,03.R03 | renter silent for 7 days; owner silent on a counter for 7 days | both escalate to a dispute and never to accepted; events once"
+      - "T05 | property | 03.R01 | random statement and event sequences | only declared transitions succeed; terminal states never change"
+      - "T06 | integration | 04.R01,04.R03 | accept path with funded deposit; accept path without deposit | agreed amount triggers deposit forfeit prefill, or payment context; resolved emitted once"
+      - "T07 | integration | 04.R02,06.R01,09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on accepted with identical cids; duplicates skipped"
+      - "T08 | contract | 04.R01,04.R03,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | response signed by owner; claim signed by renter; claim after the window | quarantined or FORBIDDEN; RENTALS_DAMAGE_WINDOW; no state change"
+      - "T10 | integration | 06.R02,06.R03 | two contradictory responses; case port failing once | claim frozen for escalation; case retried; escalation never without a request in flight"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect logs, notifications, relay payloads; 51 inbound statements in a day; duplicate claim | no amounts or evidence outside encrypted envelopes; 51st dropped; RENTALS_DAMAGE_DUPLICATE"
+      - "T12 | integration | 03.R01,01.R03 | not_returned claim at day 13 and day 15 overdue | RENTALS_DAMAGE_WINDOW at day 13; allowed at day 15 with overdue history as basis"
+      - "T13 | load | 08.R01,08.R02,08.R03 | two 30-item reports and 2 000 claims on throttled mobile profile | p95 ≤ 150 ms, sweep ≤ 100 ms, no telemetry request"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-041 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | claims and statements round-trip; basis recomputation flags mismatches"
+      - "T16 | e2e | 01.R01,02.R01 | mobile owner files claim, renter counters, owner accepts in two browsers | both show accepted with the same agreed amount; axe zero serious issues"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - No claim is accepted by silence and no amount is shown as paid on a payment claim alone.
+      - Every claim carries a comparison the receiver can recompute from the two attested reports.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains claims, responses, acceptances, withdrawals, comparison bases and evidence references with hashes.
+      - Import verifies every signature and cid and recomputes the basis; mismatches are kept as read-only history with a warning.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section rentals.damage in classrup-export/v1; one line per DamageClaim with the signed statement envelopes."
+    import: "Terminal claims import as history; claimed and countered claims import as is and resume their deadlines from stored receipt times; escalated claims re-link to their dispute case on import."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

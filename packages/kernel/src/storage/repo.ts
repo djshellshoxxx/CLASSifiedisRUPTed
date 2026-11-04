@@ -65,6 +65,8 @@ export interface Repo<T, K extends string> extends ReadRepo<T, K> {
   /** expectedRevision 0 creates; otherwise must equal the stored revision (CONFLICT_REVISION). */
   put(id: string, data: T, opts: { readonly expectedRevision: number }): Result<StoredRecord<T>, AppError>;
   remove(id: string, opts: { readonly expectedRevision: number }): Result<void, AppError>;
+  /** Import/restore of an exported record into this tenant, keeping its revision (IOX-2). */
+  restore(record: StoredRecord<T>): Result<'restored' | 'identical', AppError>;
 }
 
 const OPS: readonly (keyof Range)[] = ['lt', 'lte', 'gt', 'gte'];
@@ -119,6 +121,7 @@ function runQuery<T, K extends string>(s: RepoScope, def: RepoDef<T, K>, q: Repo
   if (!filters.ok) return filters;
   const after = decodeCursor(q.cursor);
   if (!after.ok) return after;
+  if (after.value && orderSlot !== 0 && after.value.value === null) return err(invalid('cursor', 'INVALID_CURSOR'));
   const rows = s.tx.records.query<T>({ tenant: s.tenantId, type: def.type, filters: filters.value, orderSlot, dir: q.dir ?? 'asc', limit: limit + 1, ...(after.value ? { after: after.value } : {}) });
   const items = rows.slice(0, limit);
   const last = items[items.length - 1];
@@ -148,5 +151,10 @@ export function writeRepo<T, K extends string>(s: RepoScope, def: RepoDef<T, K>)
       return s.tx.records.put<T>({ tenant: s.tenantId, type: def.type, id, data: parsed.data, idx: indexValues(def, parsed.data), expectedRevision: opts.expectedRevision, now: s.now() });
     },
     remove: (id, opts) => s.tx.records.remove(s.tenantId, def.type, id, opts.expectedRevision),
+    restore: (record) => {
+      const parsed = def.schema.safeParse(record.data);
+      if (!parsed.success) return err(invalid('data', 'SCHEMA_MISMATCH'));
+      return s.tx.records.restore({ ...record, tenantId: s.tenantId, type: def.type, data: parsed.data }, indexValues(def, parsed.data));
+    },
   };
 }

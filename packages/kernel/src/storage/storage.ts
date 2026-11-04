@@ -67,8 +67,9 @@ export function createStorage(driver: StorageDriver): Storage {
       guard();
       return lock(() => runTx(driver, opts?.mode ?? 'write', fn));
     },
-    read: async (fn) => {
-      const r = await storage.transaction(async (tx) => ok(await fn(tx)), { mode: 'read' });
+    read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => {
+      const r = await storage.transaction<T, never>(async (tx) => ok((await fn(tx)) as T), { mode: 'read' });
+      if (!r.ok) throw new Error('read transaction failed');
       return r.value;
     },
     ping: async () => {

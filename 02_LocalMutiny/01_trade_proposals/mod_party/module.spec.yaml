@@ -1,0 +1,235 @@
+# F02.S01.M02 Proposal party roster (ADR-0016 local-first).
+id: F02.S01.M02
+scope: MVP
+summary: >-
+  The roster of a proposal or cycle as one vault sees it: 2..8 distinct parties identified by DID with a fixed ring position, a role (coordinator or participant),
+  the mailbox hints needed to reach them, and a status of active, left or removed. The roster is part of the signed revision snapshot, so every vault holds
+  the same canonical list; this module keeps the local view, enforces uniqueness and runs the local block checks without revealing who blocked whom.
+responsibilities:
+  - Create and hold the roster for a subject, enforcing 2..8 unique parties, a single coordinator and ring positions 0..N-1.
+  - Check pairwise local blocks and the principal's account limits before the principal joins, and reject without disclosing which pair or which block.
+  - Mark parties left or removed when a signed notice, a local block, a decline or a timeout says so, emitting joined and left events for local consumers.
+non_responsibilities:
+  - Which items each party gives or receives (F02.S01.M03) and the revision snapshot (F02.S01.M04).
+  - Consent and reservation of each party (F02.S03.M01, F02.S03.M02) and dropout handling (F02.S03.M03).
+  - Block list storage (F07.S02.M02) and local rate or participation limits (F12.S03.M04).
+  - "Future: adding a participant to an open proposal; in the MVP this always means a new subject with fresh consent."
+depends_on: [F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a proposer, I see the roster of everyone in the cycle with their pseudonyms and positions before I send the proposal.
+  - As a member who blocked someone, I am never put in a cycle with them and nobody is told why.
+  - As a participant, I can see who has left or been removed and that the cycle is not rerouted around them.
+edge_cases:
+  - The same DID appears twice in a candidate roster; creation is refused with a duplicate error.
+  - A participant has no reachable mailbox hint; creation is refused because no statement could be delivered to them.
+  - The principal has blocked one participant locally; creation is refused with a generic blocked error that does not name the participant.
+  - A participant blocks another after both joined; the blocking party's vault marks itself left with reason unavailable and the other vaults learn only through a signed notice or timeout, with no reason given.
+  - The roster would exceed 8 parties; refused.
+  - A party leaves; the roster never substitutes a new party, so the subject cannot proceed unanimously and moves to cancellation in the owning module.
+ux:
+  screens:
+    - "Roster list: ring position, pseudonym, avatar, role badge (coordinator), status and consent/reservation chips supplied by other modules."
+    - "Ring diagram with N nodes and arrows from giver to receiver."
+  states: [loading, ready, party-left, party-removed, error]
+  a11y:
+    - The roster is an ordered list; the ring diagram has a text alternative with each arrow stated in words.
+    - Status chips contain text such as 'left' in addition to color.
+processes:
+  domain_schema:
+    requirements:
+      - A ProposalParty links one DID to one subject with a ring position, role, status, mailbox hints and the time it joined or left on the local clock.
+      - The roster is canonical only through the signed revision snapshot; local rows are a view that must match the head revision's party list.
+      - Mailbox hints are public routing data (relay ids) and nothing else about a party is stored here.
+    entities:
+      - name: ProposalParty
+        schema: classrup.mutiny.proposal_party/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "subjectType: enum — trade_proposal | cycle"
+          - "subjectId: uuidv7 — subject the party belongs to"
+          - "actorId: did — party DID (did:key); unique within the subject"
+          - "position: int — 0..7 ring position; giver at position i gives to position (i+1) mod N"
+          - "role: enum — coordinator | participant"
+          - "isLocal: boolean — true for the vault's principal"
+          - "mailboxHints: array — 1..3 relay ids or direct endpoints from the party's signed projection"
+          - "status: enum — active | left | removed"
+          - "leftReason?: enum — declined | withdrew | unavailable | timeout | fork_frozen | locally_removed"
+          - "joinedAt: timestamp — local clock"
+          - "leftAt?: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - (subjectId, actorId) is unique and (subjectId, position) is unique.
+          - Per subject there are 2..8 parties, exactly one has role coordinator, and for trade_proposal there are exactly 2.
+          - A party with status left or removed is never reactivated; a returning person means a new subject.
+    sql: |
+      CREATE TABLE mutiny_proposal_party (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_id TEXT NOT NULL, actor_id TEXT NOT NULL, position INTEGER NOT NULL,
+        role TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_party_actor ON mutiny_proposal_party(tenant_id, subject_id, actor_id);
+      CREATE UNIQUE INDEX mutiny_party_position ON mutiny_proposal_party(tenant_id, subject_id, position);
+  validation_rules:
+    requirements:
+      - Roster creation validates size, uniqueness, reachability, blocks and limits before anything is stored.
+      - Block failures return BLOCKED_PARTY without parameters that identify the pair.
+      - Roster rows must equal the party list of the head revision snapshot whenever a revision is sealed or ingested.
+    rules:
+      - "V01 | roster has 2..8 DIDs, exactly 2 for trade_proposal | MUTINY_ROSTER_SIZE"
+      - "V02 | all DIDs are distinct (participant uniqueness) | MUTINY_PARTICIPANT_DUPLICATE"
+      - "V03 | exactly one coordinator and positions are 0..N-1 without gaps | MUTINY_ROSTER_SIZE"
+      - "V04 | no pair among the parties is blocked in the local block list (checked for the principal's own blocks only) | BLOCKED_PARTY"
+      - "V05 | every party has 1..3 mailbox hints from a verified signed projection | MUTINY_PARTY_UNREACHABLE"
+      - "V06 | the principal's open subjects after joining are ≤ 5 and within the F12.S03.M04 local participation limit | MUTINY_PARTY_LIMIT"
+      - "V07 | roster equals the head revision's party list in DIDs, positions and roles | MUTINY_ROSTER_MISMATCH"
+  workflow_state_machine:
+    requirements:
+      - A party is active until it leaves or is removed; both are terminal and never reversed.
+      - Removal never substitutes another party and never reorders positions, so the ring stays exactly as consented.
+      - Local status changes are recorded with a reason code that is shared with other parties only as a coarse code (declined, withdrew, unavailable, timeout).
+    machines:
+      - entity: ProposalParty
+        initial: active
+        terminal: [left, removed]
+        transitions:
+          - "active -> left | mutiny.party.leave by the principal for its own party, or a verified signed decline or withdrawal of that party | emits mutiny.party.left with coarse reason"
+          - "active -> removed | local block, fork freeze, or timeout evaluated by the owning module | emits mutiny.party.left with reason locally_removed, unavailable, fork_frozen or timeout"
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - join and leave are vault commands that change only local rows and produce no statement; the signed decline, withdrawal or revision that carries the same fact is produced by the owning module.
+      - Events are emitted in the same IndexedDB transaction as the roster change.
+      - Queries return only rosters of subjects stored in the vault.
+    commands:
+      - name: mutiny.party.join
+        capability: mutiny.party.join
+        input: "{ subjectType, subjectId, parties: { actorId, position, role }[2..8] } — vault command; no statement"
+        output: "{ partyIds[], count }"
+        errors: [VALIDATION_FAILED, MUTINY_ROSTER_SIZE, MUTINY_PARTICIPANT_DUPLICATE, BLOCKED_PARTY, MUTINY_PARTY_UNREACHABLE, MUTINY_PARTY_LIMIT, MUTINY_ROSTER_MISMATCH, CONFLICT_STATE]
+        emits: [mutiny.party.joined]
+        idempotent: true
+      - name: mutiny.party.leave
+        capability: mutiny.party.leave
+        input: "{ subjectId, actorId, reason: declined|withdrew|unavailable|timeout|fork_frozen|locally_removed, expectedRevision }"
+        output: "{ partyId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: [mutiny.party.left]
+        idempotent: true
+    queries:
+      - name: mutiny.party.list_for_subject
+        capability: mutiny.party.read
+        input: "{ subjectType, subjectId }"
+        output: "{ items: ProposalParty[], coordinatorId, matchesHeadRevision: boolean }"
+        errors: [NOT_FOUND]
+      - name: mutiny.party.check_roster
+        capability: mutiny.party.read
+        input: "{ actorIds: did[2..8] }"
+        output: "{ ok: boolean, failures: { code }[] }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: mutiny.party.joined, privacy: P2, payload: "{ subjectType, subjectId, actorId, position, role }"}
+      - {type: mutiny.party.left, privacy: P2, payload: "{ subjectType, subjectId, actorId, position, reason }"}
+    events_consumed:
+      - {type: identity.block.added, effect: "for every active subject containing the blocked DID and the principal, mark the principal's own party left with reason unavailable through the owning module; no event names the block"}
+      - {type: mutiny.proposal.revised, effect: "verify roster equals the new head snapshot; on peer revisions create missing roster rows with origin peer"}
+      - {type: mutiny.cycle.declined, effect: "mark the declining party left with reason declined"}
+      - {type: mutiny.cycle.participant_dropped, effect: "mark the dropped party left with the coarse reason"}
+    errors:
+      - "MUTINY_ROSTER_SIZE | 422 | no | roster size or coordinator count is invalid"
+      - "MUTINY_PARTICIPANT_DUPLICATE | 422 | no | the same participant appears twice"
+      - "MUTINY_PARTY_UNREACHABLE | 422 | no | a party has no verified mailbox hint so no statement could reach them"
+      - "MUTINY_PARTY_LIMIT | 409 | no | the principal already has the maximum number of open subjects"
+      - "MUTINY_ROSTER_MISMATCH | 409 | no | local roster differs from the signed head revision"
+    example: |
+      # 4-party cycle roster created by coordinator Alice
+      mutiny.party.join { "subjectType":"cycle", "subjectId":"0192f400-…", "parties":[
+        {"actorId":"did:key:z6MkAlice","position":0,"role":"coordinator"}, {"actorId":"did:key:z6MkBob","position":1,"role":"participant"},
+        {"actorId":"did:key:z6MkCarol","position":2,"role":"participant"}, {"actorId":"did:key:z6MkDan","position":3,"role":"participant"} ] }
+      -> { "partyIds": ["0192f401-…","0192f402-…","0192f403-…","0192f404-…"], "count": 4 }
+      # ring: Alice->Bob, Bob->Carol, Carol->Dan, Dan->Alice. 2-party uses positions 0,1; 3-party 0..2; N-party 0..N-1 with N ≤ 8.
+      mutiny.party.leave { "subjectId":"0192f400-…", "actorId":"did:key:z6MkCarol", "reason":"declined", "expectedRevision":1 } -> { "status":"left" } (Carol is never replaced)
+  authorization_capabilities:
+    requirements:
+      - Only the unlocked local principal changes the roster in its vault, and only the principal's own party can be marked left by an explicit leave; other parties are marked only from verified signed notices or local rules.
+      - A signed notice that a party left is accepted only if signed by that party's registered device key.
+      - Rosters are readable only by the vault owner.
+    capabilities:
+      - "mutiny.party.join | principal | vault unlocked; principal is in the roster or is the coordinator creating it"
+      - "mutiny.party.leave | principal | own party, or verified signed notice from that party, or a local rule decision of the owning module"
+      - "mutiny.party.read | principal | subject stored in this vault"
+  failure_recovery_idempotency:
+    requirements:
+      - join and leave are idempotent; replaying the same body returns the stored result.
+      - join creates all rows in one IndexedDB transaction so a partial roster never exists.
+      - A mismatch between roster and head revision is surfaced and blocks consent until reconciled by ingesting the signed revision.
+    idempotency: "Idempotency-Key replay 24 h; join is also idempotent by (subjectId, parties) and leave by (subjectId, actorId)."
+    concurrency: "IndexedDB transaction per command; expectedRevision on leave; uniqueness enforced by the two unique indexes."
+    retries: "No network use; the owning module sends statements through the sync outbox."
+    offline: "Fully available offline; reachability is judged from retained signed projections and their age."
+    partial_failure: "A failing block-list read aborts the whole join with DEPENDENCY_UNAVAILABLE; no partial roster is stored."
+  privacy_retention_abuse:
+    requirements:
+      - No roster field, event or error reveals that a block exists or who holds it; the principal's own block list never leaves the vault.
+      - The roster holds pseudonym DIDs and relay ids only and is retained as evidence for 2 years with its subject.
+      - Subject spam against a person is limited by the principal-side limit of 5 open subjects and by recipients' local filtering.
+    data:
+      - "ProposalParty: P2; DIDs and relay routing hints only."
+    retention:
+      - "RET-EVIDENCE with the subject (2 years after last related activity)."
+    threats:
+      - "T01 | Probing who blocked whom by trying rosters | generic BLOCKED_PARTY and unavailable codes only, checked on the principal's own list"
+      - "T02 | Fake roster entries forcing a person into a cycle | a party becomes bound only by its own signed consent and reservation; roster rows alone bind nobody"
+      - "T03 | Reroute by silent substitution | positions are fixed by the signed revision and left parties are never replaced"
+      - "T04 | Harassment by repeated proposals naming the same person | recipient vault can mute the proposer; per-proposer limit of 5 open subjects at the proposer"
+    abuse_controls:
+      - "Recipients' vaults auto-hide proposals from DIDs the recipient blocked or muted, silently."
+      - "A DID that sends more than 10 proposals to one recipient in 24 h is quarantined at the recipient."
+  observability_performance:
+    requirements:
+      - Roster command outcomes are counted in local diagnostics without DIDs (OBS-7).
+      - join for 8 parties completes within 30 ms p95.
+      - Roster mismatch occurrences are visible in diagnostics for support.
+    metrics:
+      - "classrup_mutiny_roster_total{outcome=joined|left|removed|rejected} (local diagnostics)"
+    logs:
+      - "info party.joined {subjectType, count, correlationId} — no DIDs."
+    budgets:
+      - "join p95 ≤ 30 ms for 8 parties; list_for_subject p95 ≤ 10 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify that block failures leak no identifying parameter.
+      - Fixtures include 2-, 3-, 4- and 8-party rosters.
+    fixtures: "DIDs Alice, Bob, Carol, Dan, Erin..Hal (8); local block Alice->Mallory; mailbox hints for all but Zed; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | join valid 2, 3, 4 and 8 party rosters | rows stored with unique positions and one coordinator"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01..V07 violated in turn | documented error code and no rows stored"
+      - "T03 | contract | 02.R02,07.R01 | roster containing a locally blocked DID | BLOCKED_PARTY with params that do not include any DID"
+      - "T04 | property | 03.R01,03.R02 | random leave and removal sequences | left or removed never reactivates, positions never change, no substitution"
+      - "T05 | integration | 03.R03,04.R03 | consume block.added, cycle.declined, participant_dropped, proposal.revised | rows marked with coarse reasons; roster mismatch detected on altered revision"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | join and leave | events validate against registry and no statement is produced"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | other principal calls join; leave notice signed by wrong key | FORBIDDEN and notice ignored; roster unreadable by others"
+      - "T08 | integration | 06.R01,06.R02 | replay join; crash mid-transaction | one roster; no partial rows"
+      - "T09 | integration | 06.R03,01.R02,02.R03 | tampered revision with different party order | MUTINY_ROSTER_MISMATCH and consent blocked"
+      - "T10 | abuse | 07.R02,07.R03 | 11 proposals from one DID in 24 h; 6th open subject by one proposer | quarantine and MUTINY_PARTY_LIMIT"
+      - "T11 | load | 08.R02 | join 8 parties on emulated Moto G | p95 ≤ 30 ms"
+      - "T12 | unit | 08.R01,08.R03,09.R01,09.R03 | diagnostics and traceability tool | no DIDs in diagnostics; every PS-014 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | rosters round-trip; mismatching imports flagged"
+      - "T14 | a11y | 01.R01 | roster and ring screens | axe zero serious issues; ring text alternative present"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - No error, event or log reveals who blocked whom.
+      - A left party is never replaced and ring positions never change after a revision is sealed.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains rosters of the user's subjects including status and coarse leave reasons.
+      - Import checks each roster against its head revision and marks mismatches as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.parties in classrup-export/v1; one line per ProposalParty (schema classrup.mutiny.proposal_party/v1)."
+    import: "Rows import only when the matching revision is imported and the roster equals its party list; otherwise they are kept as read-only history."
+    backup: "The vault export is the primary backup (IOX-6); relays never hold rosters in plaintext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback ignores unknown fields; the leave reason enum only gains values and unknown values read as unavailable."

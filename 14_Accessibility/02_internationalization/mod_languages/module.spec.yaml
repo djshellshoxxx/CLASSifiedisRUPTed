@@ -1,0 +1,175 @@
+id: F14.S02.M01
+scope: MVP
+summary: >-
+  Message catalogs, locale negotiation, plural rules, text direction and missing-key fallback for the PWA and
+  relay-rendered text. Catalogs are JSON files packages/i18n/messages/<locale>.json with {name} placeholders
+  and plural forms selected by Intl.PluralRules (CTR-UX-001 UX-3). MVP locales are en (default), de, fr and es,
+  plus two pseudolocales (en-XA accented and expanded, ar-XB right to left) used to test expansion and RTL.
+  A missing key falls back to en and warns in development. Layouts use CSS logical properties. The module
+  runs offline in the browser and sends no telemetry.
+responsibilities:
+  - Load catalogs lazily per locale (at most 30 KiB gzip each) from the app bundle, with en always available as fallback.
+  - Negotiate the locale from the vault setting, then navigator.languages by BCP 47 lookup (de-AT to de), then en; set the document lang and dir attributes accordingly.
+  - Provide t(key, params), plural selection through Intl.PluralRules with the categories zero, one, two, few, many and other, and list, date and number helpers through Intl.ListFormat, Intl.DateTimeFormat and Intl.NumberFormat.
+  - Fall back to the en string when a key is missing, log a development warning with the key and locale, record the key in local diagnostics, and never show a raw key or an empty string to users.
+  - Provide CI checks for key parity, placeholder parity, plural completeness, maximum message length (500 characters) and logical-CSS usage (no left or right physical properties in component styles).
+non_responsibilities:
+  - Money, currency and quote-label formatting (F14.S02.M02).
+  - Spoken names for assistive technology (F14.S01.M02), which uses these catalogs.
+  - Translation of user-generated content; listings and messages are shown in the language their authors wrote them.
+  - "Future: community translation workflow, machine translation of user content, and shipped catalogs for ar, he and fa; MVP verifies RTL layout with the ar-XB pseudolocale only."
+depends_on: [CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001]
+user_stories:
+  - As a German speaker, I see the whole app in German, including plurals such as "1 Angebot" and "3 Angebote".
+  - As a user whose browser prefers de-AT, I get German even though only de is shipped.
+  - As a user, if a translation is missing I see the English text, not a key or a blank.
+  - As a right-to-left reader, layouts mirror correctly and icons that imply direction flip.
+edge_cases:
+  - Locale tag is malformed or unsupported (xx-YY); negotiation falls back to en and does not throw.
+  - A plural message lacks the category the locale needs (for example few in a language that uses it); CI fails and runtime falls back to other.
+  - A placeholder name appears in en but is missing in de; CI fails parity and runtime uses en for that key.
+  - A translated string is 40 percent longer than English; the pseudolocale check shows no clipping or overlap in any component.
+  - The user changes locale while a form is open; text updates without losing form input or focus.
+  - Message params contain user text with braces or markup; params are inserted as plain text and never interpreted as placeholders or HTML.
+  - Numbers in an RTL locale are embedded in text; bidi isolation (Unicode FSI and PDI or the dir attribute) keeps order correct.
+ux:
+  screens:
+    - "Language settings: list of languages in their own names (Deutsch, Français, Español, English) with the active one marked, plus 'Automatic'."
+    - "Development-only missing-translation badge on strings that fell back to English."
+  states: [loading-catalog, ready, fallback-en, error]
+  a11y:
+    - The html element carries the correct lang attribute and inline passages in another language carry their own lang attribute.
+    - Language names are displayed in their own language and the selector has a visible label.
+    - Changing language announces "Language changed to Deutsch" in the new language through the polite live region.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; catalogs are static files and the chosen locale is a vault setting key i18n.locale stored by F10 settings.
+      - A catalog is a flat JSON object from key to string or plural object, with keys named area.screen.name and plural objects holding the CLDR categories.
+      - Placeholders use {name} syntax only, with no code execution or nested formatting, and every locale must have the same placeholder set for a key.
+    entities: []
+    note: "Static catalogs and a library; the only persisted value is the vault setting i18n.locale owned by F10 settings, so no catalog entity is owned here."
+  validation_rules:
+    requirements:
+      - CI validates every catalog against the en catalog and the plural rules of its locale.
+      - Runtime negotiation and lookup never throw; invalid input degrades to English.
+      - Each failure has one stable code printed in CI output.
+    rules:
+      - "V01 | every key in en exists in each shipped locale or is listed in missing-allowed.json with an expiry within 30 days | I18N_CATALOG_KEY_MISSING"
+      - "V02 | the set of {placeholders} equals the en set for every key and locale | I18N_CATALOG_PLACEHOLDER_MISMATCH"
+      - "V03 | every plural message defines all categories required by Intl.PluralRules for the locale | I18N_CATALOG_PLURAL_INCOMPLETE"
+      - "V04 | message length ≤ 500 characters and catalog gzip size ≤ 30 KiB | I18N_CATALOG_TOO_LARGE"
+      - "V05 | locale tag is a valid BCP 47 tag; unsupported tags map to en | I18N_LOCALE_UNSUPPORTED"
+      - "V06 | component styles use logical properties and no physical left, right, margin-left, padding-right or text-align left or right | I18N_CSS_PHYSICAL_PROPERTY"
+  workflow_state_machine:
+    requirements:
+      - Locale switching is a deterministic sequence of negotiate, load catalog, set lang and dir, re-render, announce.
+      - A failed catalog load keeps the previous locale and shows the app in English if none was loaded, so the UI is never blank.
+      - There is no persisted lifecycle, so no entity state machine is declared.
+    machines: []
+    timeouts:
+      - "Catalog load timeout 5 s; on timeout the previous or en catalog stays active and a retry is offered."
+    note: "Stateless library; the locale switch sequence is implemented in code and covered by tests, not stored as an entity lifecycle."
+  commands_queries_events:
+    requirements:
+      - The module exposes library functions and no vault or relay commands, queries or events.
+      - Functions return strings or Result values and never throw for bad input.
+      - Relay-rendered text (emails if enabled, push templates) uses the same catalogs through the same functions.
+    commands: []
+    queries: []
+    note: "API: negotiateLocale(requested[], supported[]) -> locale; loadCatalog(locale) -> Promise<Catalog>; t(key, params?) -> string; tp(key, count, params?) -> string using Intl.PluralRules; dirOf(locale) -> ltr|rtl; formatDate, formatList, formatNumber(locale, ...). Pseudolocales en-XA and ar-XB are generated from en by a build step."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "I18N_CATALOG_KEY_MISSING | 400 | no | CI: a locale lacks a key present in en"
+      - "I18N_CATALOG_PLACEHOLDER_MISMATCH | 400 | no | CI: placeholder sets differ between locales"
+      - "I18N_CATALOG_PLURAL_INCOMPLETE | 400 | no | CI: plural categories missing for the locale"
+      - "I18N_CATALOG_TOO_LARGE | 400 | no | CI: message or catalog exceeds size limits"
+      - "I18N_LOCALE_UNSUPPORTED | 400 | no | locale tag invalid or not shipped; en is used"
+      - "I18N_CSS_PHYSICAL_PROPERTY | 400 | no | CI: physical CSS direction property used"
+    example: |
+      negotiateLocale(["de-AT", "en-GB"], ["en", "de", "fr", "es"]) // "de"
+      tp("offers.count", 1, {}) // de: "1 Angebot"
+      tp("offers.count", 3, {}) // de: "3 Angebote"
+      t("listing.saved_local") // missing in fr -> returns the en string and warns in development: "i18n missing fr listing.saved_local"
+      dirOf("ar-XB") // "rtl"
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization and has no roles; any user may change their own locale.
+      - Catalogs contain no secrets and are public static files shipped in the app bundle.
+      - Locale choice is a vault setting changed by the local principal only.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Locale negotiation and catalog lookup are pure and idempotent; switching to the active locale does nothing.
+      - If a catalog fails to load or parse, the app keeps the last good catalog or en and shows a retry control.
+      - Interpolation never fails; a missing param renders as an empty value with a development warning, not an exception.
+    idempotency: "negotiateLocale and t are pure; setLocale to the current locale is a no-op."
+    concurrency: "Catalog loads for the same locale share one in-flight promise; a later request for another locale cancels the earlier one, so the last request wins."
+    retries: "Catalog load retries once after 1 s; afterwards the retry control is shown."
+    offline: "All catalogs are precached by the service worker after first load; en ships in the main bundle so the app works fully offline."
+    partial_failure: "A corrupt non-en catalog is ignored with a local diagnostic entry and the UI continues in en."
+  privacy_retention_abuse:
+    requirements:
+      - The chosen locale is a mild fingerprinting signal, so it is stored only in the vault and never sent to relays except as the standard Accept-Language header the browser already sends.
+      - User-provided text is inserted into messages as plain text only, preventing injection through placeholders.
+      - Missing-key diagnostics stay on the device in local diagnostics and are not transmitted.
+    data:
+      - "Locale preference: P3 vault setting."
+      - "Missing-key diagnostics: P3 local diagnostics, exportable by the user."
+    retention:
+      - "Locale setting kept until the user changes it; diagnostics kept 30 days locally (RET-SHORT)."
+    threats:
+      - "T01 | Injection through message params (HTML or placeholder syntax in user text) | params are escaped as text and never re-parsed; React-style text rendering only"
+      - "T02 | Right-to-left override characters used to spoof text | bidi control characters are stripped from user-visible titles and names at input by the owning feature, and numbers are isolated with FSI and PDI"
+      - "T03 | Locale-based fingerprinting | no locale telemetry; no locale in URLs; locale only in the vault and the browser's own header"
+    abuse_controls:
+      - "Catalogs are static and reviewed in pull requests; user content can never add or change catalog entries."
+  observability_performance:
+    requirements:
+      - CI reports key coverage per locale and the number of fallbacks used in end-to-end runs; production builds send no metrics.
+      - Locale switch completes within 300 ms after the catalog is loaded, and t() takes 0.05 ms or less per call.
+      - Each catalog is at most 30 KiB gzip and loads in 1 s or less on the 4G profile.
+    metrics:
+      - "ci_i18n_key_coverage_ratio{locale} (CI artifact)"
+      - "ci_i18n_fallbacks_total{locale} (CI artifact from e2e runs)"
+      - "ci_i18n_catalog_gzip_bytes{locale} (CI artifact)"
+    logs:
+      - "dev-only console.warn i18n.missing {locale, key} — no param values; production writes the key to local diagnostics only."
+    budgets:
+      - "t() p95 ≤ 0.05 ms; locale switch ≤ 300 ms after catalog load."
+      - "Catalog ≤ 30 KiB gzip; en inline in the main bundle within the 150 KiB initial JS budget (OBS-5)."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Property tests cover plural selection for every shipped locale against CLDR data via Intl.PluralRules.
+      - Pseudolocale end-to-end runs prove no clipping with expansion and correct mirroring in RTL.
+    fixtures: "Catalogs en, de, fr, es plus generated en-XA and ar-XB; a broken fixture catalog set (missing key, placeholder mismatch, missing plural, 501-character message); lint fixtures with left and right CSS."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | validate the shipped catalogs and the broken fixtures | shipped pass; each broken fixture fails with V01, V02, V03 or V04"
+      - "T02 | unit | 01.R03,02.R02,06.R01 | negotiateLocale for de-AT, pt-BR, xx-YY, malformed, empty list | de, en, en, en, en with no exception"
+      - "T03 | property | 01.R03,03.R01,04.R02 | for each shipped locale and counts 0..1000000, compare tp() category to Intl.PluralRules | category matches; every category has a string"
+      - "T04 | unit | 03.R01,03.R02,06.R03 | remove a key from fr at runtime; corrupt the de catalog JSON | en string returned, dev warning, local diagnostic entry; UI continues in en; never raw key or blank"
+      - "T05 | e2e | 03.R03,06.R01,04.R03 | switch locale en to de to ar-XB while a form is half filled | text updates; input and focus preserved; lang and dir updated; announcement in the new language"
+      - "T06 | unit | 04.R01,04.R02,05.R01,05.R02 | inspect exports, network calls and authorization calls | pure functions or Result values; no vault or relay command; no network call during t()"
+      - "T07 | abuse | 07.R02,07.R01 | params with <script>, {name} and bidi override characters | rendered as inert text; placeholders not re-evaluated; bidi isolated"
+      - "T08 | e2e | 01.R05,02.R03,07.R01 | run all routes in en-XA (40 percent expansion) and ar-XB at 320 px | no clipping, overlap or horizontal scroll; layout mirrored; V06 passes"
+      - "T09 | unit | 02.R03,01.R05 | lint fixtures with margin-left, padding-right and text-align right | I18N_CSS_PHYSICAL_PROPERTY raised; logical equivalents pass"
+      - "T10 | abuse | 07.R01,07.R03,05.R03 | capture network traffic during locale switch and diagnostics export | locale not transmitted by the app; diagnostics only in user-initiated export"
+      - "T11 | a11y | 07.R03,03.R03 | axe in each shipped locale and pseudolocale | zero serious or critical findings; lang attributes correct on inline foreign text"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 t() calls; catalog load on 4G profile; bundle size check | p95 ≤ 0.05 ms, switch ≤ 300 ms, load ≤ 1 s, catalogs ≤ 30 KiB gzip"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-113 requirement maps to a passing test"
+      - "T14 | unit | 09.R02,10.R01,10.R02,10.R03 | add a key and a locale; roll back a release | new keys fall back to en until translated; export and import of i18n.locale works; rollback keeps users on a shipped locale"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - No user ever sees a raw key or an empty string for a missing translation.
+      - Pseudolocale runs show no clipping at 40 percent expansion and correct RTL mirroring on every route.
+  import_export_backup_rollback:
+    requirements:
+      - The only user data is the vault setting i18n.locale, which is part of the vault export owned by F10.
+      - Importing a locale that is not shipped in this release selects the negotiated fallback and keeps the imported value so a newer release can honour it.
+      - Catalog changes are additive; removing a key needs a deprecation period of one release.
+    export: "Setting i18n.locale in the vault settings export (classrup-export/v1, owned by F10); catalogs are not user data."
+    import: "i18n.locale is validated as a BCP 47 tag; unsupported values are kept but the app uses the negotiated fallback."
+    backup: "Nothing to back up beyond the vault setting; catalogs ship with the app bundle."
+    migration_rollback: "Catalogs are additive; rollback to a previous release restores its catalogs, and keys unknown to it simply do not appear; users on a locale dropped in rollback fall back to en."

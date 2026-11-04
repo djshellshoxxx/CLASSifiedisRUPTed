@@ -245,7 +245,7 @@ processes:
       - "T01 | unit | 01.R01,01.R02,02.R02 | create revision 1 then verify stored fields | snapshot, contentHash and sig immutable; hash equals independent JCS cid"
       - "T02 | unit | 02.R01,02.R03 | each rule V01..V11 violated in turn | documented code returned and nothing stored"
       - "T03 | property | 01.R03,03.R01 | random sequences of create and ingest | revision numbers contiguous, chain prev matches, never above 20"
-      - "T04 | integration | 01.R03,03.R02 | Alice and Bob both counter as revision 3 offline, then sync | both quarantined as fork, subject frozen, mutiny.revision.forked emitted once"
+      - "T04 | integration | 01.R03,03.R02,09.R03 | Alice and Bob both counter as revision 3 offline, then sync | both quarantined as fork, subject frozen, mutiny.revision.forked emitted once"
       - "T05 | integration | 03.R03,04.R03 | revise after accepted and after cancelled | CONFLICT_STATE; all earlier consents voided on an accepted revision of a different open subject"
       - "T06 | contract | 04.R01,04.R02,09.R02 | create and ingest | statement validates against classrup.mutiny.proposal_revision/v1 and events against registry"
       - "T07 | abuse | 05.R01,05.R02,05.R03,07.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND"

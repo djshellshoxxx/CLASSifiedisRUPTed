@@ -12,3 +12,4 @@
 ## ADR-0016 amendment (local-first)
 - **IDM-7** Vault commands commit locally first (state `local committed`). Statements to other parties go through a per-destination **sync outbox** with states `prepared → transport_acknowledged (relay receipt) → peer_accepted (signed peer acknowledgement)`; UI never shows more certainty than the reached state.
 - **IDM-8** IDM-3 leases are local reservations inside one vault (or within one relay for relay-hosted resources such as auctions). Cross-vault coordination uses signed reservation statements with expiry; there is no distributed lock.
+- **IDM-9** Implementation note (kernel): only committed (successful) results are recorded under an idempotency key; a command that failed leaves no record and may be retried with the same key. The request hash covers the command input (including `expectedRevision` when it is part of the input).

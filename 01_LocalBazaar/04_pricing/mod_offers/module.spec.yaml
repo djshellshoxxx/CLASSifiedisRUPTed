@@ -1,0 +1,274 @@
+# Exemplar module specification (ADR-0015). Rows use "a | b | c" cells. Keep IDs stable once published.
+id: F01.S04.M01
+scope: MVP
+summary: >-
+  Buyers make money offers on published sell listings. A seller can accept, reject or let an offer
+  expire; a buyer can withdraw before a decision. Acceptance atomically reserves inventory through
+  F01.S03.M01 and opens a noncustodial Deal in F09.S01.M01. The platform never takes payment.
+responsibilities:
+  - Own the Offer record and its lifecycle from made to a terminal decision.
+  - Enforce one open offer per buyer per listing variant and a per-listing cap of 50 open offers.
+  - On acceptance, request an inventory hold and open a Deal; roll back the acceptance if the hold fails.
+  - Expire offers after their deadline (default 48 h, range 1 h to 7 days).
+non_responsibilities:
+  - Counteroffer rounds (F01.S04.M02 negotiation owns them and reuses Offer as round zero).
+  - Payment, receipts and disputes (F09).
+  - Messaging between parties (F08); offers are referenced from threads, not copied.
+depends_on: [F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M03, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001]
+user_stories:
+  - As a buyer, I can offer a price below the asking price and see whether it is pending, accepted, rejected or expired.
+  - As a seller, I can review all open offers on my listing sorted by amount and accept one, which reserves the item for that buyer.
+  - As a buyer, I can withdraw my offer before the seller decides.
+edge_cases:
+  - Two sellers' devices accept two different offers for the last unit at the same time; exactly one acceptance succeeds, the other gets CONFLICT_STATE.
+  - Listing is edited materially (price or condition) while offers are open; offers stay open but are marked listingChangedSinceOffer and the buyer is notified.
+  - Listing is unpublished, expired or removed by moderation; all open offers become expired with reason listing_unavailable.
+  - Buyer is blocked by the seller after making an offer; the offer is auto-rejected with reason blocked and no notification reveals the block.
+  - Offer currency differs from the listing currency; rejected unless the listing accepts that currency.
+  - Buyer goes offline after submitting; the outbox replays with the same Idempotency-Key and gets the original response.
+ux:
+  screens:
+    - "Make offer sheet: amount input with currency, optional note (≤ 280 chars), expiry selector, summary showing asking price."
+    - "Seller offers list: sortable by amount and time, accept/reject buttons with confirmation dialog."
+    - "Buyer offer status card inside the listing and the conversation thread (F08.S02.M01)."
+  states: [loading, empty, pending-offline, submitted, accepted, rejected, expired, withdrawn, conflict]
+  a11y:
+    - Amount input has a visible label including currency and uses inputmode=decimal.
+    - Status changes are announced through an aria-live polite region.
+    - Accept and reject are buttons ≥ 44×44 px with distinct accessible names including the amount.
+processes:
+  domain_schema:
+    requirements:
+      - An Offer stores listing, variant, buyer, seller, amount as integer minor units, currency, optional note, expiry and status, with tenant and revision per CTR-ID-001.
+      - Offer records are P2 (visible to buyer and seller only) and retained under RET-EVIDENCE because accepted offers form commerce evidence.
+      - The offer amount is immutable after creation; changing the price requires a new offer or a negotiation round.
+    entities:
+      - name: Offer
+        schema: classrup.bazaar.offer/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing; must be published"
+          - "variantId?: uuidv7 — ref F01.S03.M02 Variant; required when listing has variants"
+          - "buyerId: actorId — offer maker"
+          - "sellerId: actorId — copied from listing owner at creation"
+          - "amount: Money — CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units"
+          - "note?: string — ≤ 280 code points, plain text"
+          - "expiresAt: timestamp — createdAt + 1 h..7 d"
+          - "status: enum — made | accepted | rejected | withdrawn | expired"
+          - "decisionReason?: enum — seller_rejected | blocked | listing_unavailable | superseded | timeout"
+          - "listingRevisionAtOffer: int — listing revision seen by buyer"
+          - "listingChangedSinceOffer: boolean — set by consumer of bazaar.listing.edited"
+          - "dealId?: uuidv7 — ref F09.S01.M01 Deal, set on accept"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one offer with status made per (buyerId, listingId, variantId).
+          - status accepted implies dealId is set and an inventory hold exists for the same quantity.
+          - buyerId differs from sellerId.
+    sql: |
+      CREATE TABLE bazaar_offer (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, variant_id TEXT,
+        buyer_id TEXT NOT NULL, seller_id TEXT NOT NULL, amount_minor TEXT NOT NULL, currency TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_offer_open ON bazaar_offer(tenant_id, buyer_id, listing_id, ifnull(variant_id,''))
+        WHERE status = 'made';
+      CREATE INDEX bazaar_offer_listing ON bazaar_offer(tenant_id, listing_id, status);
+  validation_rules:
+    requirements:
+      - Offer input is validated strictly against the schema; unknown fields are rejected with VALIDATION_FAILED.
+      - Business rules check listing state, currency acceptance, self-dealing, blocks and open-offer caps before persistence.
+      - Every rule violation maps to exactly one stable error code with a localized message key.
+    rules:
+      - "V01 | amount.amount is a positive integer string within limits and amount.currency is registered (F09.S03.M01) | VALIDATION_FAILED"
+      - "V02 | listing exists, is published, kind sell, and not expired | BAZAAR_LISTING_NOT_OFFERABLE"
+      - "V03 | amount.currency is in the listing's accepted currencies | BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED"
+      - "V04 | buyerId != listing ownerId | BAZAAR_OFFER_SELF"
+      - "V05 | neither party has blocked the other (F07.S02.M02) | BLOCKED_PARTY"
+      - "V06 | buyer has no other open offer on the same listing variant | BAZAAR_OFFER_DUPLICATE"
+      - "V07 | listing has fewer than 50 open offers | BAZAAR_OFFER_LIMIT"
+      - "V08 | expiresAt between now+1h and now+7d | VALIDATION_FAILED"
+      - "V09 | variantId present iff the listing has variants, and the variant has quantity ≥ 1 | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Offers follow the declared lifecycle; any transition not listed is refused with CONFLICT_STATE.
+      - Acceptance is atomic with the inventory hold and Deal creation; if either fails, the offer stays made.
+      - Accepting one offer for the last available unit expires all other open offers on that variant with reason superseded.
+    machines:
+      - entity: Offer
+        initial: made
+        terminal: [accepted, rejected, withdrawn, expired]
+        transitions:
+          - "made -> accepted | bazaar.offer.accept by seller | inventory hold acquired and Deal opened in same transaction; emits bazaar.offer.accepted"
+          - "made -> rejected | bazaar.offer.reject by seller, or block added | emits bazaar.offer.rejected"
+          - "made -> withdrawn | bazaar.offer.withdraw by buyer | emits bazaar.offer.withdrawn"
+          - "made -> expired | expiry sweep at expiresAt, listing unavailable, or superseded | emits bazaar.offer.expired"
+    timeouts:
+      - "Expiry sweep every 60 s transitions made offers with expiresAt ≤ now to expired (reason timeout)."
+  commands_queries_events:
+    requirements:
+      - The module exposes make, accept, reject and withdraw commands and two queries with the signatures below.
+      - Every command emits exactly the listed events in the same transaction as the state change.
+      - The module consumes listing, inventory and block events to keep open offers consistent.
+    commands:
+      - name: bazaar.offer.make
+        capability: bazaar.offer.make
+        input: "{ listingId, variantId?, amount: Money, note?, expiresInMs? (default 172800000) }"
+        output: "{ offerId, revision: 1, expiresAt }"
+        errors: [VALIDATION_FAILED, BAZAAR_LISTING_NOT_OFFERABLE, BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED, BAZAAR_OFFER_SELF, BLOCKED_PARTY, BAZAAR_OFFER_DUPLICATE, BAZAAR_OFFER_LIMIT, RATE_LIMITED]
+        emits: [bazaar.offer.made]
+        idempotent: true
+      - name: bazaar.offer.accept
+        capability: bazaar.offer.accept
+        input: "{ offerId, expectedRevision }"
+        output: "{ offerId, revision, dealId, holdId }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_OFFER_HOLD_FAILED, EXPIRED]
+        emits: [bazaar.offer.accepted, bazaar.offer.expired]
+        idempotent: true
+      - name: bazaar.offer.reject
+        capability: bazaar.offer.reject
+        input: "{ offerId, expectedRevision }"
+        output: "{ offerId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.offer.rejected]
+        idempotent: true
+      - name: bazaar.offer.withdraw
+        capability: bazaar.offer.withdraw
+        input: "{ offerId, expectedRevision }"
+        output: "{ offerId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.offer.withdrawn]
+        idempotent: true
+    queries:
+      - name: bazaar.offer.list_for_listing
+        capability: bazaar.offer.read_as_seller
+        input: "{ listingId, status?: made|all, sort?: amount_desc|created_desc, cursor?, limit ≤ 50 }"
+        output: "{ items: Offer[], nextCursor? }"
+        errors: [NOT_FOUND]
+      - name: bazaar.offer.list_mine
+        capability: bazaar.offer.read_own
+        input: "{ status?, cursor?, limit ≤ 50 }"
+        output: "{ items: Offer[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: bazaar.offer.made, privacy: P2, payload: "{ offerId, listingId, variantId?, buyerId, sellerId, amount, expiresAt }"}
+      - {type: bazaar.offer.accepted, privacy: P2, payload: "{ offerId, listingId, variantId?, buyerId, sellerId, amount, dealId, holdId }"}
+      - {type: bazaar.offer.rejected, privacy: P2, payload: "{ offerId, listingId, buyerId, reason }"}
+      - {type: bazaar.offer.withdrawn, privacy: P2, payload: "{ offerId, listingId, sellerId }"}
+      - {type: bazaar.offer.expired, privacy: P2, payload: "{ offerId, listingId, buyerId, sellerId, reason }"}
+    events_consumed:
+      - {type: bazaar.listing.edited, effect: "set listingChangedSinceOffer=true on open offers when the edit is material"}
+      - {type: bazaar.listing.unpublished, effect: "expire open offers with reason listing_unavailable"}
+      - {type: bazaar.listing.expired, effect: "expire open offers with reason listing_unavailable"}
+      - {type: bazaar.inventory.depleted, effect: "expire open offers on the variant with reason superseded"}
+      - {type: identity.block.added, effect: "reject open offers between the two parties with reason blocked"}
+    errors:
+      - "BAZAAR_LISTING_NOT_OFFERABLE | 409 | no | listing is not published, not a sell listing, or expired"
+      - "BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED | 422 | no | listing does not accept the offer currency"
+      - "BAZAAR_OFFER_SELF | 422 | no | a seller cannot offer on their own listing"
+      - "BAZAAR_OFFER_DUPLICATE | 409 | no | buyer already has an open offer on this listing variant"
+      - "BAZAAR_OFFER_LIMIT | 409 | no | listing reached 50 open offers"
+      - "BAZAAR_OFFER_HOLD_FAILED | 409 | no | inventory could not be held; offer remains open"
+    example: |
+      POST /api/v1/cmd/bazaar.offer.make
+      Idempotency-Key: 0192f3a4-0000-7000-8000-000000000001
+      { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "amount": { "amount": "4500", "currency": "EUR" } }
+      201 { "offerId": "0192f3a5-…", "revision": 1, "expiresAt": "2026-11-06T10:00:00.000Z" }
+      POST /api/v1/cmd/bazaar.offer.accept  { "offerId": "0192f3a5-…", "expectedRevision": 1 }
+      200 { "offerId": "0192f3a5-…", "revision": 2, "dealId": "0192f3a6-…", "holdId": "0192f3a6-…" }
+  authorization_capabilities:
+    requirements:
+      - Only signed-in, non-suspended members can make offers; only the listing owner can accept or reject; only the buyer can withdraw.
+      - Offers are visible only to their buyer and seller; others receive NOT_FOUND.
+      - Moderators can read offers only when attached to an open moderation case.
+    capabilities:
+      - "bazaar.offer.make | member | notSuspended; not blockedWith(listing owner); account limit (F12.S03.M04) not exceeded"
+      - "bazaar.offer.accept | member | owner(listing) and offer.sellerId = actor"
+      - "bazaar.offer.reject | member | owner(listing) and offer.sellerId = actor"
+      - "bazaar.offer.withdraw | member | offer.buyerId = actor"
+      - "bazaar.offer.read_as_seller | member, moderator | owner(listing), or moderator with open case referencing the listing"
+      - "bazaar.offer.read_own | member | offer.buyerId = actor"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+      - Concurrent acceptances on the same variant serialize on the inventory hold; exactly one wins.
+      - A failure after the hold but before commit leaves neither hold nor Deal (single transaction).
+    idempotency: "Idempotency-Key required on all four commands; replay returns the stored response for 24 h."
+    concurrency: "expectedRevision on accept/reject/withdraw; the open-offer unique index enforces V06 under races; accept runs hold + deal + offer update in one SQLite transaction (BEGIN IMMEDIATE)."
+    retries: "Client retries only network errors and RATE_LIMITED; BAZAAR_OFFER_HOLD_FAILED is not retried automatically."
+    offline: "make and withdraw can be queued in the outbox and show pending; accept/reject require online confirmation because they are time-sensitive (UI disables them offline)."
+    partial_failure: "If the Deal service port fails, the transaction aborts and returns DEPENDENCY_UNAVAILABLE (retryable); no orphan holds because holds are created in the same transaction."
+  privacy_retention_abuse:
+    requirements:
+      - Offer amounts and notes never appear in public listing views, search, federation or notification payloads.
+      - Offer evidence is retained for RET-EVIDENCE and pseudonymized if either party deletes their account.
+      - Offer spam and lowballing harassment are limited by caps, rate limits and seller-side filters.
+    data:
+      - "Offer: P2 (buyer, seller)."
+      - "note: P2 free text; scanned by F12.S02.M02 spam heuristics; never federated."
+    retention:
+      - "Terminal offers: RET-EVIDENCE (2 years after last related activity)."
+      - "On account deletion: buyerId/sellerId replaced with a per-deletion pseudonym; amounts kept for the counterparty's records."
+    threats:
+      - "T01 | Lowball offer flooding to harass a seller | per-buyer rate limit 20 offers/hour, per-listing 50 open cap, seller can set a minimum offer threshold (offers below auto-rejected silently to the seller)"
+      - "T02 | Offer note used for phishing links | link detection via F12.S02.M02; links rendered as plain text; report action on each offer"
+      - "T03 | Enumeration of who offered on a listing | queries restricted to seller; other actors get NOT_FOUND"
+      - "T04 | Replay of an accept request | idempotency key and expectedRevision; replay returns original result"
+    abuse_controls:
+      - "Signals bazaar.offer.made velocity and reject ratio to F12.S03.M02 fraud signals."
+      - "Report offer action creates F12.S01.M01 report with an evidence snapshot."
+  observability_performance:
+    requirements:
+      - Command latency and outcomes are measured per CTR-OBS-001.
+      - Make and accept meet the write budget (p95 ≤ 300 ms) at 50 req/s.
+      - Expiry sweep lag is observable and alerting.
+    metrics:
+      - "classrup_bazaar_offers_total{outcome=made|accepted|rejected|withdrawn|expired}"
+      - "classrup_bazaar_offer_accept_conflicts_total"
+      - "classrup_bazaar_offer_expiry_lag_ms (gauge: now - oldest overdue made offer)"
+    logs:
+      - "info offer.accepted {offerId, listingId, correlationId} — no amounts or notes."
+    budgets:
+      - "make/accept p95 ≤ 300 ms; list queries p95 ≤ 150 ms for ≤ 50 items."
+      - "Expiry sweep processes 10 000 overdue offers in ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check command input/output and event payloads against the schema registry.
+      - The accept race is covered by a deterministic concurrency test.
+    fixtures: "Seeded tenant, seller S with published sell listing L (EUR 50.00, qty 1), buyers B1 and B2; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | make offer with valid input | Offer stored with status made, revision 1, amount unchanged"
+      - "T02 | unit | 02.R02,02.R03 | each rule V02–V09 violated in turn | the documented error code is returned and nothing is stored"
+      - "T03 | property | 03.R01 | random sequences of commands on one offer | only declared transitions succeed; others return CONFLICT_STATE"
+      - "T04 | integration | 03.R02,06.R03 | Deal port fails during accept | offer stays made, no hold exists, DEPENDENCY_UNAVAILABLE returned"
+      - "T05 | integration | 03.R03,06.R02,09.R03 | B1 and B2 offers accepted concurrently for qty 1 | one accepted, other CONFLICT_STATE, then expired superseded"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | each command executes | output and emitted event payloads validate against registry schemas"
+      - "T07 | integration | 04.R03 | listing unpublished and block added events delivered | open offers expire or reject with documented reasons"
+      - "T08 | abuse | 05.R01,05.R02,07.R01 | non-owner accepts; third party queries offers; public listing view | FORBIDDEN or NOT_FOUND; no offer data in public payloads"
+      - "T09 | abuse | 05.R03 | moderator reads offers with and without an open case | allowed only with case"
+      - "T10 | integration | 06.R01 | same Idempotency-Key replayed with same and different body | original response replayed; IDEMPOTENCY_KEY_REUSED"
+      - "T11 | integration | 07.R02 | buyer deletes account | offer pseudonymized, seller still sees amount"
+      - "T12 | abuse | 07.R03 | 21 offers in one hour by one buyer | 21st returns RATE_LIMITED"
+      - "T13 | load | 08.R01,08.R02 | 50 req/s mixed make/accept for 5 minutes | p95 ≤ 300 ms, metrics exported"
+      - "T14 | integration | 08.R03 | 10 000 overdue offers | sweep completes ≤ 5 s and lag gauge returns to 0"
+      - "T15 | unit | 09.R01 | traceability tool run | every PS-011 requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export, re-import into fresh relay, and restore from backup | offers round-trip identical; import rejects conflicting IDs"
+      - "T17 | e2e | 01.R02,04.R01 | mobile buyer makes offer, seller accepts on another device | both see accepted state; screen passes axe with zero serious issues"
+    acceptance:
+      - All tests T01–T17 pass in CI.
+      - No offer data appears in public, search or federation payloads (privacy test suite).
+      - Concurrent acceptance never produces two accepted offers for one unit (property and integration tests).
+  import_export_backup_rollback:
+    requirements:
+      - A user's export contains offers they made and offers on their listings.
+      - Import of offers validates IDs, schema version and that both parties exist on the target relay; otherwise records are kept as read-only history.
+      - Schema changes to Offer follow expand/contract and keep v1 readable for 180 days.
+    export: "Section bazaar.offers in classrup-export/v1; one line per Offer (schema classrup.bazaar.offer/v1)."
+    import: "Terminal offers import as read-only history; open offers import as expired with reason superseded to avoid stale commitments."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); no module-specific backup."
+    migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because new optional fields are ignored by older readers."

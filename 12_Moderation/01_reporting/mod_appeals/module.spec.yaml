@@ -1,0 +1,275 @@
+id: F12.S01.M03
+scope: MVP
+summary: >-
+  A person affected by a relay's moderation action (content removed from that relay's index, feature
+  restricted, relay access suspended, warning) can appeal to that same relay once per action within 30 days
+  of the signed statement of reasons. The appeal is a signed statement from the appellant's vault. The relay
+  assigns a reviewer who is not the moderator who decided, and returns a signed decision with reasons. The
+  appeal covers only that relay's hosting decision; it cannot restore the person's local records, other
+  relays' decisions or copies other vaults already hold.
+responsibilities:
+  - Own the Appeal record (relay copy and the appellant's vault copy) from filing to a signed decision.
+  - Enforce one appeal per action, a 30-day window measured from the relay-signed statement of reasons time, and reviewer independence.
+  - Assign reviewers automatically from relay moderators other than the original decider and keep an auditable queue with a 14-day decision target.
+  - Return a relay-signed decision statement that states outcome, policy rule IDs and reasoning, and trigger revert of the action on overturn.
+non_responsibilities:
+  - Applying or reverting actions (F12.S02.M01 consumes the decision event).
+  - Evidence storage and viewing rules (F12.S01.M02).
+  - Disputes between deal parties (F09.S02.M02).
+  - "Future: independent external review bodies; cross-relay appeal escalation; appeals of dismissed reports by reporters."
+depends_on: [F12.S02.M01, F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a member whose listing was removed from a relay's index, I can appeal with my explanation and see the evidence the relay relied on.
+  - As a relay moderator, I review appeals on decisions made by colleagues and record a reasoned decision with policy rule IDs.
+  - As a member, I get a signed decision I can keep and show to anyone, including when I move to another relay.
+edge_cases:
+  - Appeal is filed on day 31; refused with MODERATION_APPEAL_WINDOW_CLOSED, and the notice explains the relay's contact route for exceptional requests.
+  - A second appeal is filed for the same action; refused with MODERATION_APPEAL_DUPLICATE and returns the existing appeal.
+  - The relay has only one moderator; the appeal stays awaiting_reviewer, the appellant is told honestly that no independent reviewer exists on that relay, and may export the full appeal packet to take elsewhere.
+  - The deciding moderator is removed from the role and a new moderator is added; the new one may review because reviewer independence is checked against decider key, not role history.
+  - The appellant's vault was offline at filing; the appeal queues in the sync outbox and the 30-day window is measured against the relay-signed receipt time of the statement of reasons plus a 7-day grace for offline devices only if the appellant's signed statement predates the window end by its own clock claim.
+  - The action was already reverted by the moderator before the appeal; the appeal is closed as moot with outcome overturned and a decision notice.
+  - A decision statement arrives with an invalid relay signature; the vault quarantines it and keeps the appeal at transport_acknowledged.
+ux:
+  screens:
+    - "Statement of reasons screen: action, rule IDs and text, facts summary, 'Appeal this decision' button with deadline date and remaining days (deadline computed from the relay-signed time)."
+    - "Appeal form: statement of up to 2000 characters, optional supporting files (max 3, 5 MiB each), review of the evidence snapshot, submit."
+    - "Appeal status timeline: Saved on this device, Sent to relay, Assigned to a reviewer, Decided, each with whose clock the time comes from."
+    - "Moderator appeal queue: oldest first, deadline badges, reviewer-independence indicator."
+  states: [loading, draft, saved-locally, sent, awaiting-reviewer, in-review, decided-upheld, decided-overturned, decided-reduced, window-closed, withdrawn]
+  a11y:
+    - Deadline is shown as a date and relative text and is announced by screen readers, not by color alone.
+    - Form errors are linked to fields with aria-describedby and announced in an aria-live region.
+    - Controls are at least 44 by 44 px and the timeline is a semantic ordered list.
+processes:
+  domain_schema:
+    requirements:
+      - An Appeal stores the contested action reference, appellant key, statement, optional attachments, reviewer key, outcome with reasons, rule IDs and sync state, with tenant and revision per CTR-ID-001.
+      - Appeals are P2 between appellant and the relay's moderators and retained under RET-EVIDENCE with the action they contest.
+      - An appeal is immutable after filing except for assignment, status and decision fields written by the relay and verified by the vault.
+    entities:
+      - name: Appeal
+        schema: classrup.moderation.appeal/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key generated in the appellant vault"
+          - "tenantId: uuidv7 — relay hosting scope that issued the action"
+          - "actionId: uuidv7 — ref F12.S02.M01 EnforcementAction on that relay"
+          - "appellantKey: did:key — signer of the appeal statement; must equal the action subject key"
+          - "statement: string — plain text, 20..2000 code points"
+          - "attachmentHashes: string[] — up to 3 files, each ≤ 5 MiB, SHA-256 hex"
+          - "reasonsStatementCid: string — content id of the relay-signed statement of reasons being appealed"
+          - "reasonsIssuedAt: timestamp — relay-signed time of the statement of reasons (relay clock evidence)"
+          - "deadlineAt: timestamp — reasonsIssuedAt + 30 days"
+          - "status: enum — filed | awaiting_reviewer | in_review | decided | withdrawn"
+          - "reviewerKey?: did:key — relay moderator assigned; differs from the action decider key"
+          - "outcome?: enum — upheld | overturned | reduced"
+          - "decisionReasons?: string — 50..2000 code points shown to the appellant"
+          - "decisionRuleIds?: string[] — policy rule IDs with versions, ≥ 1 when decided"
+          - "decisionStatementCid?: string — content id of the relay-signed decision statement"
+          - "syncState: enum — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one appeal exists per (tenantId, actionId).
+          - reviewerKey never equals the deciderKey of the contested action.
+          - status decided implies outcome, decisionReasons, decisionRuleIds and decisionStatementCid are set and the decision signature verified.
+    sql: |
+      CREATE TABLE moderation_appeal (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, action_id TEXT NOT NULL, appellant_key TEXT NOT NULL,
+        status TEXT NOT NULL, reviewer_key TEXT, deadline_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_appeal_action ON moderation_appeal(tenant_id, action_id);
+      CREATE INDEX moderation_appeal_queue ON moderation_appeal(tenant_id, status, deadline_at);
+  validation_rules:
+    requirements:
+      - Appeal input is validated strictly and the appellant must be the subject of the contested action.
+      - The 30-day window is computed from the relay-signed statement of reasons time, never from the appellant's clock.
+      - Decisions require a different reviewer, a reasoned text and at least one policy rule ID.
+    rules:
+      - "V01 | statement length 20..2000 code points and at most 3 attachments of at most 5 MiB | VALIDATION_FAILED"
+      - "V02 | appellantKey equals the subject key of the action and a verified statement of reasons exists | NOT_FOUND"
+      - "V03 | now ≤ deadlineAt (30 days after reasonsIssuedAt) | MODERATION_APPEAL_WINDOW_CLOSED"
+      - "V04 | no existing appeal for the action | MODERATION_APPEAL_DUPLICATE"
+      - "V05 | reviewerKey differs from the action decider key | MODERATION_APPEAL_REVIEWER_CONFLICT"
+      - "V06 | decision reasons 50..2000 code points and at least one decisionRuleId that exists in F12.S02.M03 | VALIDATION_FAILED"
+      - "V07 | the signature on the appeal statement verifies against appellantKey | FORBIDDEN"
+  workflow_state_machine:
+    requirements:
+      - Appeals follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
+      - Assignment requires an eligible reviewer and otherwise leaves the appeal awaiting_reviewer with an honest notice.
+      - A decision is final for that relay; overturn emits the decided event that makes F12.S02.M01 revert the action.
+    machines:
+      - entity: Appeal
+        initial: filed
+        terminal: [decided, withdrawn]
+        transitions:
+          - "filed -> in_review | automatic assignment finds an eligible reviewer | reviewerKey set; reviewer differs from decider"
+          - "filed -> awaiting_reviewer | no eligible reviewer on this relay | appellant notice says so; retry hourly"
+          - "awaiting_reviewer -> in_review | an eligible reviewer becomes available | reviewerKey set"
+          - "in_review -> decided | moderation.appeal.decide by assigned reviewer | signed decision statement issued; emits moderation.appeal.decided"
+          - "filed -> withdrawn | moderation.appeal.withdraw by appellant | statement queued"
+          - "awaiting_reviewer -> withdrawn | moderation.appeal.withdraw by appellant | statement queued"
+          - "in_review -> withdrawn | moderation.appeal.withdraw by appellant | statement queued; no decision issued"
+    timeouts:
+      - "Decision target 14 days after filing; at day 10 the queue escalates to operators and at day 14 an overdue metric and notice to the appellant are produced; no automatic outcome is applied."
+      - "awaiting_reviewer appeals retry assignment every 60 minutes."
+  commands_queries_events:
+    requirements:
+      - Every command declares whether it is vault-local, a signed statement or a relay command, and the signatures below do so.
+      - File emits moderation.appeal.filed on the relay after it verifies the signed statement and emits moderation.appeal.decided when a decision is issued.
+      - The module consumes action events to open the 30-day window and to close appeals on actions that are reverted first.
+    commands:
+      - name: moderation.appeal.file
+        mode: "statement classrup.moderation.appeal/v1 signed by appellant, sent to the issuing relay"
+        capability: moderation.appeal.file
+        input: "{ actionId, reasonsStatementCid, statement, attachmentHashes? }"
+        output: "{ appealId, deadlineAt, syncState: local_committed, revision: 1 }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, MODERATION_APPEAL_WINDOW_CLOSED, MODERATION_APPEAL_DUPLICATE, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: moderation.appeal.receive
+        mode: "relay command; verifies the signed appeal statement"
+        capability: moderation.appeal.receive
+        input: "{ appealStatement, signature }"
+        output: "{ receipt: statement classrup.moderation.appealreceipt/v1 signed by relay, status }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, MODERATION_APPEAL_WINDOW_CLOSED, MODERATION_APPEAL_DUPLICATE, RATE_LIMITED, FORBIDDEN]
+        emits: [moderation.appeal.filed]
+        idempotent: true
+      - name: moderation.appeal.decide
+        mode: "relay command; produces statement classrup.moderation.appealdecision/v1 signed by relay key and reviewer"
+        capability: moderation.appeal.decide
+        input: "{ appealId, expectedRevision, outcome: upheld|overturned|reduced, reasons, ruleIds[], reducedTo? }"
+        output: "{ appealId, revision, decisionStatementCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MODERATION_APPEAL_REVIEWER_CONFLICT, VALIDATION_FAILED, FORBIDDEN]
+        emits: [moderation.appeal.decided]
+        idempotent: true
+      - name: moderation.appeal.withdraw
+        mode: "statement classrup.moderation.appealwithdrawal/v1 signed by appellant"
+        capability: moderation.appeal.withdraw
+        input: "{ appealId, expectedRevision }"
+        output: "{ appealId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: moderation.appeal.get_mine
+        capability: moderation.appeal.read_own
+        input: "{ appealId }"
+        output: "{ appeal: Appeal without reviewer key, decisionStatement? }"
+        errors: [NOT_FOUND]
+      - name: moderation.appeal.list_queue
+        capability: moderation.appeal.read_queue
+        input: "{ status?: awaiting_reviewer|in_review, cursor?, limit ≤ 50 }"
+        output: "{ items: Appeal[] sorted by deadline, nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: moderation.appeal.filed, privacy: P2, payload: "{ appealId, actionId, appellantKey, deadlineAt }"}
+      - {type: moderation.appeal.decided, privacy: P2, payload: "{ appealId, actionId, outcome, reducedTo?, ruleIds, decisionStatementCid }"}
+    events_consumed:
+      - {type: moderation.action.applied, effect: "compute and store the appeal deadline for the action from the relay-signed statement of reasons time"}
+      - {type: moderation.action.reverted, effect: "close an open appeal on the action as moot with outcome overturned and issue the decision notice"}
+    errors:
+      - "MODERATION_APPEAL_WINDOW_CLOSED | 409 | no | more than 30 days passed since the signed statement of reasons"
+      - "MODERATION_APPEAL_DUPLICATE | 409 | no | an appeal for this action exists; params.appealId"
+      - "MODERATION_APPEAL_REVIEWER_CONFLICT | 409 | no | the reviewer made the original decision"
+    example: |
+      vault command moderation.appeal.file (local, Idempotency-Key 0192f3c0-0000-7000-8000-000000000c01)
+      { "actionId": "0192f3b8-3333-7000-8000-000000000003", "reasonsStatementCid": "sha256-bb12…", "statement": "The item is a handmade replica sold as such; see photo 3 caption." }
+      -> { "appealId": "0192f3c0-4444-7000-8000-000000000004", "deadlineAt": "2026-12-04T10:00:00Z", "syncState": "local_committed", "revision": 1 }
+      relay POST /api/v1/cmd/moderation.appeal.decide (reviewer key K2 differs from decider key K1)
+      -> 200 { "appealId": "0192f3c0-4444-7000-8000-000000000004", "revision": 3, "decisionStatementCid": "sha256-cc34…" }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal can file, withdraw and read its appeals, and incoming decisions are accepted only when signed by the key of the relay that issued the action."
+      - "Relay policy: only the action's subject key can appeal, only a moderator other than the decider can decide, and operators can read the queue and reassign."
+      - Reviewer identity is hidden from the appellant by default and shown as 'a moderator who did not make the original decision'.
+    capabilities:
+      - "moderation.appeal.file | local principal | vault unlocked; appellant key is the action subject; statement signed"
+      - "moderation.appeal.receive | relay access (signed request) | key equals action subject on this relay; window and duplicate checks"
+      - "moderation.appeal.decide | moderator | relay role moderator; assigned reviewer; reviewer key differs from action decider key"
+      - "moderation.appeal.withdraw | local principal | appeal.appellantKey = local principal"
+      - "moderation.appeal.read_own | local principal | appeal.appellantKey = local principal"
+      - "moderation.appeal.read_queue | moderator, operator | relay role moderator or operator; appeals about own decisions are hidden from the decider"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+      - Concurrent assignment attempts serialize on appeal revision within the relay store; there is no cross-vault lock.
+      - Decision and event are written in one relay transaction, and a vault that misses the decision statement can refetch it by appeal ID.
+    idempotency: "Local Idempotency-Key on vault commands; relay stores (appellantKey, appealId) for 24 h and replays the signed receipt; decide replays the stored decision statement."
+    concurrency: "expectedRevision on decide and withdraw; unique (tenant_id, action_id) index enforces one appeal per action under races; assignment uses compare-and-set on status and revision."
+    retries: "Sync outbox retries delivery for up to 7 days with CTR-IDM-001 backoff; the vault polls decision status every 15 min while open when online."
+    offline: "File and withdraw can be queued offline; deadline arithmetic always uses the relay-signed reasons time so offline delay can consume the window, and the UI shows the remaining days before the user goes offline."
+    partial_failure: "If the relay accepts the appeal but the receipt is lost, the retry returns the stored receipt; if the decision statement fails to deliver, it is available via query and the vault fetches it; sync state never shows peer_accepted without a verified relay signature."
+  privacy_retention_abuse:
+    requirements:
+      - Appeals and decisions are P2, readable only by the appellant and the relay's assigned reviewer and operators, and never federated or sent in plain notifications.
+      - Appeal records follow RET-EVIDENCE with the action, and the appellant may keep the signed decision in their vault regardless of relay deletion.
+      - Appeal abuse (spam appeals, reviewer harassment, deadline gaming) is limited by one appeal per action, size caps and reviewer anonymity.
+    data:
+      - "Appeal: P2 (appellant, relay reviewer, relay operators)."
+      - "Attachments: P2 files stored encrypted on the relay under the per-object key scheme of F12.S01.M02."
+      - "Reviewer key: P3 on the relay, hidden from the appellant."
+    retention:
+      - "Decided and withdrawn appeals: RET-EVIDENCE (2 years after last related activity) on the relay."
+      - "Vault copy: kept until the user deletes it; deletion does not recall the relay copy."
+    threats:
+      - "T01 | Decider reviews own decision | reviewer key must differ from decider key; enforced in assignment and in decide; audited"
+      - "T02 | Relay forges or backdates the statement of reasons to close the window | the statement is relay-signed and the appellant's vault stores it on receipt with its own clock; mismatch between vault receipt time and relay time greater than 24 h is flagged to the user"
+      - "T03 | Appeal flooding to overload moderators | one appeal per action, size caps, relay rate limits 5 appeals per day per key"
+      - "T04 | Reviewer harassment | reviewer key hidden from appellant; decision statement is signed by the relay key"
+      - "T05 | Forged decision statement shows 'overturned' in the vault | vault accepts decisions only with valid relay signature bound to appealId; others quarantined"
+    abuse_controls:
+      - "Per-key cap of 5 appeals per day and 20 per 30 days on a relay (F12.S03.M03)."
+      - "Appeals whose statement is empty after trimming or duplicates a previous one by hash are rejected with VALIDATION_FAILED."
+  observability_performance:
+    requirements:
+      - Relay appeal intake, queue age and decision latency are measured per CTR-OBS-001 without statement text in logs.
+      - Receive and decide meet the write budget (p95 ≤ 300 ms) at 50 req/s.
+      - Overdue appeals are observable and alerting.
+    metrics:
+      - "classrup_moderation_appeals_total{outcome=filed|upheld|overturned|reduced|withdrawn|moot}"
+      - "classrup_moderation_appeal_age_ms (gauge: now - oldest undecided appeal)"
+      - "classrup_moderation_appeals_overdue_total"
+    logs:
+      - "relay info appeal.decided {appealId, outcome, correlationId} — no statement text, no keys."
+      - "warn appeal.overdue {appealId, ageDays, correlationId}."
+    budgets:
+      - "receive and decide p95 ≤ 300 ms; list_queue p95 ≤ 150 ms for 50 items."
+      - "Assignment of 1 000 queued appeals completes in ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check commands, statements and events against the schema registry.
+      - Reviewer independence and window arithmetic are covered by deterministic tests with an injected clock.
+    fixtures: "Relay X with moderators M1 (decider, key K1) and M2 (key K2), member A with action on listing L issued 2026-11-04T10:00:00Z, fixed clock."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | file a valid appeal | Appeal stored with deadlineAt = reasonsIssuedAt + 30 days and status filed"
+      - "T02 | unit | 02.R02,02.R03 | window day 30 and day 31; duplicate; same reviewer; short reasons | accepted on day 30; documented error codes otherwise"
+      - "T03 | property | 03.R01,03.R02 | random sequences of assign, decide, withdraw | only declared transitions succeed and reviewer never equals decider"
+      - "T04 | integration | 03.R02,03.R03 | relay with a single moderator; second moderator added | awaiting_reviewer then in_review; decision overturn emits moderation.appeal.decided"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command, statement and event | validate against registry schemas; decision statement signature verifies"
+      - "T06 | integration | 04.R03 | action.applied then action.reverted before appeal decision | deadline stored; appeal closed as moot with outcome overturned"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | stranger files; decider decides; appellant queries reviewer identity | FORBIDDEN, MODERATION_APPEAL_REVIEWER_CONFLICT, reviewer key absent"
+      - "T08 | abuse | 07.R01,07.R03 | forged decision signature; 6th appeal in a day | decision quarantined, vault never shows decided; 6th returns RATE_LIMITED"
+      - "T09 | integration | 06.R01,06.R02 | same Idempotency-Key replayed; concurrent assign and withdraw | original receipt replayed; consistent final state by revision"
+      - "T10 | chaos | 06.R03,03.R03 | receipt lost then retried; decision statement undelivered | stored receipt replayed; vault fetches decision; sync state advances honestly"
+      - "T11 | integration | 07.R02 | appellant deletes vault copy | relay copy retained for RET-EVIDENCE; UI states relay copy remains"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 50 req/s mixed receive and decide for 5 minutes; assign 1 000 appeals | p95 ≤ 300 ms, assignment ≤ 5 s, metrics exported"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-092 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export appeal packet, import into fresh vault, restore relay backup | signed decision verifies after round trip; imported pending appeals are not re-sent"
+      - "T15 | e2e | 01.R02,04.R01 | mobile appellant files offline and reconnects | appeal reaches the relay, timeline shows honest states, axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No appeal is ever decided by the moderator who made the original decision (property and abuse tests).
+      - The 30-day window is always computed from the relay-signed statement time.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the user's appeals and signed decisions, and the export is the primary backup.
+      - Import verifies signatures of decisions and receipts; unsent or pending appeals are not re-sent automatically.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.appeals in classrup-export/v1: appeal, attachments hashes, receipts and decision statements; relay appeal packets for the appellant include the evidence snapshot the decision relied on."
+    import: "Decided appeals import as read-only history after signature verification; pending appeals import as withdrawn history to avoid duplicates; conflicting IDs are rejected."
+    backup: "Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) holds relay-side appeal records, which are not user-owned private data."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown outcomes display as 'decided'."

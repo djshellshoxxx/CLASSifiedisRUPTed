@@ -11,6 +11,7 @@ export const LAYERS = {
   security: 1, privacy: 1, platform: 1, i18n: 1, governance: 1,
   identity: 2, commerce: 2, discovery: 2, comms: 2, notify: 2, moderation: 2, federation: 2,
   bazaar: 3, mutiny: 3, services: 3, auctions: 3, rentals: 3,
+  vault: 4, // composition root for the browser vault runtime (and multi-vault tests)
 };
 const IMPORT = /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
 

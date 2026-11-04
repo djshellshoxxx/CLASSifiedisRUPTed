@@ -1,0 +1,177 @@
+id: F17.S02.M02
+scope: MVP
+summary: 'Fault-injection suites that prove invariants hold under faults of the local-first architecture (ADR-0016): database busy (relay SQLite BUSY and IndexedDB transaction abort), consumer crash on the local outbox, duplicate and reordered statement delivery, clock skew, relay or peer outage, and three trust faults: forked vaults signing conflicting promises, offline revocation lag and a malicious relay tampering with statements. Faults are injected through ports and wrappers in test vaults and relays, never in production paths. Every scenario ends by asserting the invariants: no lost committed command, no duplicate effect, no last-writer-wins on consent, money or inventory, local records intact, outbox eventually drained.'
+responsibilities:
+- 'Provide fault injectors: relay SQLite BUSY and IndexedDB transaction abort on N writes, consumer crash before and after ack, duplicate and reordered statement delivery, clock skew of plus or minus 5 min and 24 h, relay or peer outage, forked vault with conflicting signed promises, revocation delivered late, and a tampering relay.'
+- 'Define the invariant set checked after every scenario: committed commands appear exactly once, entity revisions strictly increase, outbox drained within 60 s of recovery, idempotent replay returns stored response, no event is lost.'
+- Run each scenario with 3 seeds in the PR profile (smoke, 2 min total) and 30 seeds nightly with randomised fault timing.
+- Write a chaos report with the seed, fault schedule and violated invariant on failure so it can be replayed.
+non_responsibilities:
+- Throughput targets (F17.S02.M01).
+- Offline client behavior (F17.S02.M03).
+- Infrastructure-level chaos such as killing real hosts or network partitions between machines.
+- 'Future: staged chaos in a pre-production environment.'
+depends_on:
+- CTR-EVT-001
+- CTR-IDM-001
+- CTR-ERR-001
+- CTR-FED-001
+- CTR-TST-001
+- CTR-OBS-001
+- F17.S01.M01
+- F17.S01.M03
+- F15.S02.M03
+user_stories:
+- As an engineer, I replay a failed chaos run from its seed and fault schedule to debug a lost event.
+- As an operator, I trust that a busy database causes retries and not lost commands.
+- As a federation maintainer, I see that a peer outage does not block local commands and that deliveries resume afterwards.
+edge_cases:
+- SQLITE_BUSY persists for longer than the busy timeout of 5 000 ms; the command returns DEPENDENCY_UNAVAILABLE retryable and nothing is half-committed.
+- Consumer crashes after applying an effect but before acking; redelivery must not duplicate the effect.
+- The same event is delivered twice and out of order; the inbox dedupes by event ID and revision.
+- Clock skew moves time backwards by 24 h; monotonic ordering uses hybrid logical clock or revision, not wall time alone, and expiry sweeps do not fire early.
+- A federation peer is down for 10 minutes; the delivery queue backs off and resumes with no duplicate imports.
+- A fault is injected while a cycle execution is mid-way; saga compensation completes or the state remains consistent and visible.
+- Two forked vaults sign conflicting reservations; each peer detects the conflict, freezes the coordination and requires explicit renegotiation.
+- A relay tampers with an envelope in transit; the receiver vault rejects the signature and quarantines the statement.
+- A relay goes down mid-flow; the local vault keeps working and the sync state stays prepared until a transport acknowledgement exists.
+ux:
+  notes: Headless. Output is reports/chaos.json with scenario, seed, fault schedule, invariant results and Markdown summary.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; faults are described in a scenario file (YAML) and results in reports/chaos.json.
+    - A scenario lists fault type, injection point, duration, seed, and the invariants to assert; the schema is validated before the run.
+    - Fault injectors wrap ports and the clock in the test relay; production code contains no chaos hooks and a build check proves it.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - Every scenario must assert the full invariant set after recovery, not only that the process stays alive.
+    - 'Fault parameters are bounded: BUSY duration at most 30 s, clock skew at most 24 h, peer outage at most 10 min, crashes at most 5 per scenario.'
+    - A scenario without a seed or without recovery step is rejected with a typed error.
+    rules:
+    - V01 | Scenario has seed, fault type, bounded parameters and a recovery step | QUALITY_CHAOS_SCENARIO_INVALID
+    - V02 | After recovery every committed command appears exactly once and revisions are strictly increasing | QUALITY_CHAOS_INVARIANT_VIOLATED
+    - V03 | Outbox is drained and no orphan hold or stuck saga exists within 60 s of fault removal | QUALITY_CHAOS_RECOVERY_TIMEOUT
+    - V04 | Production build contains no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD
+    - 'V05 | Fault parameters do not exceed bounds: BUSY 30 s, skew 24 h, outage 10 min, 5 crashes | QUALITY_CHAOS_SCENARIO_INVALID'
+    - V06 | Trust-fault scenarios fork_conflict, relay_tamper, revocation_lag and relay_down exist and pass | QUALITY_CHAOS_TRUST_SCENARIO_MISSING
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle; a scenario runs phases arrange, inject, observe, recover, assert.
+    - 'Recovery is time-boxed: invariants must hold within 60 s of fault removal, otherwise the scenario fails.'
+    - 'Scenarios are independent: each starts from a fresh relay and database.'
+    - 'Trust-fault scenarios are mandatory: fork_conflict (freeze and renegotiate, never last-writer-wins), relay_tamper (signature failure leads to quarantine), revocation_lag (statements by a revoked key accepted only until the revocation arrives) and relay_down (local records intact, delivery status unknown or prepared).'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:chaos (smoke profile), pnpm test:chaos:nightly and pnpm test:chaos --scenario <name> --seed <n>.
+    - Scenarios are db_busy, consumer_crash, duplicate_delivery, clock_skew, peer_outage, combined_busy_crash, fork_conflict, relay_tamper, revocation_lag and relay_down.
+    - 'Exit codes: 0 pass, 1 invariant violated, 2 recovery timeout, 3 scenario invalid.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_CHAOS_SCENARIO_INVALID | 422 | no | scenario lacks seed or recovery, or exceeds fault bounds (exit 3)
+    - QUALITY_CHAOS_INVARIANT_VIOLATED | 422 | no | an invariant failed after recovery (exit 1)
+    - QUALITY_CHAOS_RECOVERY_TIMEOUT | 422 | no | system did not recover within 60 s (exit 2)
+    - QUALITY_CHAOS_HOOK_IN_PROD | 422 | no | chaos hook detected in a production bundle (exit 1)
+    - QUALITY_CHAOS_TRUST_SCENARIO_MISSING | 422 | no | a mandatory trust-fault scenario is missing or failing (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:chaos --scenario duplicate_delivery --seed 31
+        inject: deliver event offer.accepted x3, reorder 2
+        recover: 4.1 s
+        invariants: exactly-once OK, revisions monotonic OK, outbox drained OK
+        exit 0
+  authorization_capabilities:
+    requirements:
+    - Chaos runs use only the test relay and fake ports; no real peers, hosts or credentials are touched.
+    - Fault injection endpoints exist only in the test harness process, not exposed over HTTP.
+    - 'Authorization checks keep working under fault: a denied command still denies after recovery, and audit entries are not lost.'
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - 'Idempotency is verified under each fault: replaying a command whose response was lost returns the stored result with no duplicate effect (CTR-IDM-001).'
+    - Consumers dedupe by event ID, so duplicate or reordered deliveries are safe (CTR-EVT-001).
+    - After any single injected fault, a sweep of the relay with nothing else running shows zero orphan holds, zero stuck sagas and zero undelivered outbox events.
+    idempotency: Scenarios are re-runnable from the seed; the relay under test is rebuilt per scenario so earlier faults leave no residue.
+    concurrency: Scenarios run sequentially per relay but in parallel across workers; fault schedules use a seeded PRNG so concurrency interleavings are reproducible.
+    retries: No retries of failed scenarios; the system's retry behavior (busy timeout 5 000 ms, exponential backoff 1 s to 60 s with jitter) is what is under test.
+    offline: Peer outage and network faults are simulated by fake transports; no real network is used.
+    partial_failure: The runner continues remaining scenarios after one fails, writes all results, and exits with the worst code.
+  privacy_retention_abuse:
+    requirements:
+    - Chaos data are synthetic; reports contain scenario names, seeds and invariant results only.
+    - Logs from the relay during chaos are scanned for P2–P4 canaries; faults must not cause sensitive data to be logged in error paths.
+    - Reports retained 30 days.
+    data:
+    - Synthetic test data only (P0/P1) in in-memory relays.
+    - 'Reports: scenario names, seeds, invariant verdicts.'
+    retention:
+    - Reports 30 days as CI artifacts; no persistent stores.
+    threats:
+    - T01 | Chaos hooks shipped to production | production bundle scan fails with QUALITY_CHAOS_HOOK_IN_PROD; hooks compiled only under the test entry point
+    - T02 | Failure paths leak P3 data into logs | captured relay logs scanned for P3 canaries after every scenario
+    - T03 | Scenario runner used against a real relay | runner accepts only in-process relay handles, not URLs
+    abuse_controls:
+    - Nightly chaos workflow runs without secrets and on schedule only (no fork pull request trigger).
+    - Bounds on faults are code-enforced; they cannot be raised by scenario files.
+  observability_performance:
+    requirements:
+    - The harness records classrup_quality_chaos_* metrics and scrapes the relay's own outbox lag gauge (classrup_outbox_lag_ms).
+    - Smoke profile finishes in at most 2 min; nightly profile with 30 seeds per scenario in at most 30 min.
+    - Recovery time per scenario is measured; a trend regression above 2x the baseline is flagged.
+    metrics:
+    - classrup_quality_chaos_scenarios_total{scenario,outcome}
+    - classrup_quality_chaos_recovery_ms{scenario}
+    - classrup_quality_chaos_invariant_violations_total{invariant}
+    logs:
+    - JSON line per scenario {ts, level, msg, module, scenario, seed, recoveryMs, code?} without payload data.
+    budgets:
+    - Smoke profile at most 2 min; nightly at most 30 min.
+    - Recovery within 60 s of fault removal; outbox lag back under 60 s (OBS-6 readiness).
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - A planted bug (consumer applies effect twice on redelivery) must be caught by the duplicate_delivery scenario.
+    - A planted bug (expiry uses wall clock without monotonic guard) must be caught by clock_skew.
+    fixtures: Seeds 31, 32, 33 (smoke) and 1..30 (nightly); FakeClock 2026-11-04T10:00:00Z; FaultyStore wrapper around SQLite; FakePeer with scripted outage 10 min; offers and cycle execution as workload.
+    tests:
+    - T01 | unit | 01.R01,01.R02,02.R03 | validate a scenario file without seed or recovery | rejected with QUALITY_CHAOS_SCENARIO_INVALID
+    - T02 | integration | 01.R03,02.R02,04.R03 | scan production bundles and run with out-of-bound parameters | no chaos hooks; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew
+    - 'T03 | chaos | 02.R01,06.R01 | db_busy: SQLITE_BUSY for 12 s during accept commands | commands retried or DEPENDENCY_UNAVAILABLE; no half-commit; exactly-once after replay'
+    - 'T04 | chaos | 03.R01,03.R02,06.R03 | consumer_crash: crash before and after ack on a cycle execution | no duplicate effect; orphan holds zero; recovery within 60 s'
+    - T05 | chaos | 03.R03,04.R02 | run each scenario twice in sequence | each starts from a fresh relay and database
+    - T06 | chaos | 04.R01,04.R03,09.R02 | duplicate_delivery with planted double-apply bug | invariant violated and exit 1
+    - 'T07 | chaos | 06.R02,09.R03 | clock_skew: minus 24 h then plus 24 h with planted wall-clock expiry bug | bug detected; correct implementation keeps expiries and revisions monotonic'
+    - T08 | chaos | 05.R03 | peer_outage 10 min then recovery | local commands keep succeeding; federation deliveries resume without duplicate import; audit entries intact
+    - T09 | chaos | 05.R01,05.R02 | scan relay for HTTP exposure of injection endpoints | none reachable; fake ports only
+    - T10 | abuse | 07.R02,07.R03 | grep captured logs for P3 canary after each scenario | none found; retention config 30 days
+    - T11 | chaos | 07.R01,08.R01,08.R03 | run all scenarios and read the report | metrics present, recovery times recorded, seeds listed
+    - T12 | load | 08.R02 | smoke and nightly timing | 2 min and 30 min budgets met
+    - T13 | integration | 09.R01 | traceability tool run | every requirement maps to a passing test
+    - T14 | integration | 10.R01,10.R02,10.R03 | replay a failed run from its exported seed and fault schedule | same violation reproduced; v1 scenario schema enforced
+    - 'T15 | chaos | 06.R01 | combined_busy_crash: busy writes while consumer crashes | invariants hold and outbox drained'
+    - 'T16 | chaos | 03.R04 | fork_conflict: conflicting signed reservations delivered in both orders | both vaults freeze; no last-writer-wins; renegotiation required'
+    - T17 | chaos | 03.R04 | relay_tamper and revocation_lag scenarios | tampered statement quarantined with signature_invalid; statement by revoked key refused after revocation arrives
+    - T18 | chaos | 03.R04 | relay_down mid-flow | local records intact; status prepared; no claim of delivery
+    acceptance:
+    - All five fault types (DB busy, consumer crash, duplicate delivery, clock skew, peer outage) are covered by passing scenarios.
+    - After each fault the invariant set holds and the outbox drains within 60 s.
+    - A planted double-apply bug is caught within the smoke profile.
+    - A failed run can be replayed exactly from its exported seed and fault schedule.
+  import_export_backup_rollback:
+    requirements:
+    - Scenario files and reports are the exports; a failed run exports its seed and fault schedule for replay.
+    - Scenario schema is versioned (classrup-chaos-scenario/v1) and the runner reads v1 only.
+    - Rollback is a git revert; no state outside git and CI artifacts exists.
+    export: reports/chaos.json with seed, fault schedule and invariant verdicts; scenario YAML files in git.
+    backup: Scenario files in git; reports 30 days in CI.
+    migration_rollback: Scenario schema classrup-chaos-scenario/v1; rollback by git revert.
+    import: The runner imports scenario YAML (v1) and, for replay, a previously exported seed and fault schedule; other formats are rejected.

@@ -1,0 +1,256 @@
+id: F08.S01.M02
+scope: MVP
+summary: >-
+  Conversation threads bound to a context (listing, proposal, cycle, booking, rental or a direct conversation)
+  with a fixed participant set, living in each participant's local vault (ADR-0016). The initiator's vault creates
+  the thread and sends a signed thread-open statement so other vaults can create a mirror after verifying that the
+  signer is entitled to talk about that context; unknown contexts land in a message-request quarantine. The module
+  keeps the roster in step with context events, enforces blocks by local filtering, supports per-participant mute
+  and archives threads when their context ends. Message content lives in F08.S01.M01; this module owns only who
+  may talk where. No relay is the authority for any thread.
+responsibilities:
+  - Own the Thread record, its context binding (type and ID), participant roster and archive lifecycle.
+  - Create at most one active thread per (context, participant pair) for one-to-one contexts and one thread per cycle or booking context for group contexts.
+  - Keep participants in step with context events such as mutiny.party.joined and mutiny.party.left, capped at 12 participants.
+  - Enforce blocks at thread creation and on block events (direct threads archive, group threads hide the blocked party from the blocker).
+  - Store per-participant mute settings (off, 1 h, 8 h, 24 h, until unmuted) that notification routing reads.
+  - Produce and verify the signed thread-open statement classrup.comms.thread_open/v1 and quarantine thread-open statements that the signer is not entitled to send.
+non_responsibilities:
+  - Message storage, encryption and delivery (F08.S01.M01).
+  - The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05).
+  - Blocking itself (F07.S02.M02 owns block lists; this module only enforces them).
+  - Notification delivery (F13); mute is data that F13.S02.M04 and F13.S01.M03 read through the thread query.
+  - "Future: threads spanning federated peers, thread-level retention overrides, message pinning."
+depends_on: [F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+user_stories:
+  - As a buyer, I can start a conversation from a listing and the seller sees it in their inbox bound to that listing.
+  - As a participant of a cycle, I am automatically added to the cycle thread and removed when I leave the cycle.
+  - As a member, I can mute a noisy thread for 8 hours without leaving it.
+  - As a member, I cannot open a new thread with someone who blocked me and I am not told that I am blocked.
+edge_cases:
+  - Two buyers click Message at the same moment on the same listing; each gets their own thread because the pair differs; the same buyer clicking twice gets the same thread (idempotent on context plus pair).
+  - A party blocks the other while a direct thread is active; the thread is archived with reason blocked, the blocker's view hides it, and the blocked party sees it as archived without a reason.
+  - A cycle participant leaves; they can no longer fetch new messages but keep what was already delivered to their device.
+  - A cycle grows beyond 12 participants; the 13th join is refused with COMMS_THREAD_PARTICIPANT_LIMIT and the cycle owner module decides how to react.
+  - Listing is archived or removed; threads stay open for 14 days for pending questions then archive automatically.
+  - Participant account deleted; they are removed from the roster and their display is replaced by a deleted-member label.
+ux:
+  screens:
+    - "Inbox: list of threads sorted by latest activity with context chip (listing, cycle, booking, rental), unread indicator and mute icon."
+    - "Thread header: context summary card, participant list, mute menu (1 h, 8 h, 24 h, until unmuted) and archive action."
+    - "Start conversation sheet launched from listing or proposal pages with a single Send message button."
+  states: [loading, empty-inbox, active, muted, archived, blocked-hidden, offline]
+  a11y:
+    - Inbox rows are a list with one accessible name per thread including context title, unread count and mute state.
+    - Mute menu is operable by keyboard and each option is a button of at least 44 by 44 px.
+    - Archive and mute changes are announced in an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A Thread is a vault record storing its context type and ID, a participant roster of DIDs with roles and mute state, status and tenant plus revision per CTR-ID-001; there is no relay copy.
+      - Threads are P2 and visible only to participants; retention is RET-STANDARD and archived threads are purged locally 30 days after archive together with their messages unless the user keeps them.
+      - Participant timestamps in a received thread-open statement are claims; the vault stores its own receivedAt separately.
+      - The context binding is immutable after creation; a different context needs a new thread.
+    entities:
+      - name: Thread
+        schema: classrup.comms.thread/v1
+        storage: device
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "contextType: enum — listing | proposal | cycle | booking | rental | direct"
+          - "contextId?: uuidv7 — ref to the owning context record; absent only for direct"
+          - "participants: array — 2..12 items { did, role: owner|member, joinedAtClaim, leftAt?; the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean }"
+          - "openStatementCid?: string — sha256 cid of the signed thread-open statement that created or mirrored this thread"
+          - "origin: enum — local | mirrored"
+          - "receivedAt?: timestamp — local clock when a mirrored thread was accepted"
+          - "status: enum — active | archived"
+          - "archiveReason?: enum — context_closed | blocked | manual | idle | account_deleted"
+          - "archivedAt?: timestamp — set when archived"
+          - "createdBy: did:key — thread initiator"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one active thread exists per (tenantId, contextType, contextId, sorted participant pair) for one-to-one contexts.
+          - A participant has at most one entry with leftAt unset; leftAt is never cleared.
+          - status archived implies archivedAt and archiveReason are set and no new messages are accepted.
+  validation_rules:
+    requirements:
+      - Thread creation and inbound thread-open statements are validated against the context record, the signer's entitlement and the local block list before persistence.
+      - Roster changes are validated against the participant cap and the owning context's own membership.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | contextType is one of the enum values and contextId exists, is visible to the creator and is not closed (checked through the context port of the owning module) | VALIDATION_FAILED"
+      - "V02 | creator is not blocked by and does not block any other participant (F07.S02.M02) | BLOCKED_PARTY"
+      - "V03 | participants count between 2 and 12 | COMMS_THREAD_PARTICIPANT_LIMIT"
+      - "V04 | no active thread with the same context and pair exists; if it does its ID is returned instead of creating | COMMS_THREAD_EXISTS"
+      - "V05 | mute duration is one of 1 h, 8 h, 24 h or until unmuted, and the actor is a current participant | VALIDATION_FAILED"
+      - "V06 | direct threads require both parties to have at least one known device key | VALIDATION_FAILED"
+      - "V08 | inbound thread-open statement carries a valid Ed25519 signature by a key of createdBy and createdBy is entitled for the context (listing author, counterparty of the offer or proposal party); otherwise it is quarantined | COMMS_THREAD_OPEN_REJECTED"
+      - "V07 | a member creates at most 30 new threads per day | RATE_LIMITED"
+  workflow_state_machine:
+    requirements:
+      - A Thread is active until archived; archived is terminal and a new conversation needs a new thread.
+      - Archival happens by context closure, block, idle timeout of 90 days, manual action by any participant in one-to-one threads, or account deletion.
+      - Archiving emits comms.thread.archived once and triggers the message purge schedule in F08.S01.M01.
+    machines:
+      - entity: Thread
+        initial: active
+        terminal: [archived]
+        transitions:
+          - "active -> archived | comms.thread.archive by participant (one-to-one), context closed event, identity.block.added in a direct thread, idle sweep, account deletion | roster frozen; emits comms.thread.archived"
+    timeouts:
+      - "Idle sweep hourly archives active threads with no message for 90 days (reason idle)."
+      - "Threads whose listing context closed are archived 14 days after the closure event (reason context_closed)."
+  commands_queries_events:
+    requirements:
+      - All commands are vault-local; create additionally produces the signed statement classrup.comms.thread_open/v1 and archive and mute never leave the device.
+      - Roster changes made from context events are internal and are not a public command; they emit no extra events.
+      - The module consumes context, block and identity events to keep threads consistent.
+    commands:
+      - name: comms.thread.create
+        capability: comms.thread.create
+        input: "[vault command; produces signed statement classrup.comms.thread_open/v1] { contextType, contextId?, participantDids[] (other participants) }"
+        output: "{ threadId, revision, existing: boolean }"
+        errors: [VALIDATION_FAILED, BLOCKED_PARTY, COMMS_THREAD_PARTICIPANT_LIMIT, COMMS_THREAD_EXISTS, COMMS_THREAD_OPEN_REJECTED, RATE_LIMITED, NOT_FOUND]
+        emits: [comms.thread.created]
+        idempotent: true
+      - name: comms.thread.archive
+        capability: comms.thread.archive
+        input: "[vault command, local only] { threadId, expectedRevision }"
+        output: "{ threadId, revision, archivedAt }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [comms.thread.archived]
+        idempotent: true
+      - name: comms.thread.mute
+        capability: comms.thread.mute
+        input: "[vault command, local only] { threadId, duration: off|1h|8h|24h|forever }"
+        output: "{ threadId, mutedUntil?, muteForever }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: comms.thread.list_mine
+        capability: comms.thread.read_own
+        input: "[vault query] { status?: active|archived, contextType?, cursor?, limit ≤ 50 }"
+        output: "{ items: Thread[], nextCursor? }"
+        errors: []
+      - name: comms.thread.get
+        capability: comms.thread.read_own
+        input: "[vault query] { threadId }"
+        output: "{ thread: Thread }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: comms.thread.created, privacy: P2, payload: "{ threadId, contextType, contextId?, participantDids[], createdBy, origin }"}
+      - {type: comms.thread.archived, privacy: P2, payload: "{ threadId, contextType, contextId?, participantDids[], reason }"}
+    events_consumed:
+      - {type: mutiny.party.joined, effect: "add the joining party to the cycle thread, creating the thread on first join; refuse beyond 12"}
+      - {type: mutiny.party.left, effect: "set leftAt for the party on the context thread"}
+      - {type: mutiny.cycle.cancelled, effect: "archive the cycle thread 14 days later with reason context_closed"}
+      - {type: mutiny.cycle.completed, effect: "archive the cycle thread 14 days later with reason context_closed"}
+      - {type: services.booking.cancelled, effect: "archive the booking thread 14 days later with reason context_closed"}
+      - {type: services.booking.completed, effect: "archive the booking thread 14 days later with reason context_closed"}
+      - {type: rentals.rental.closed, effect: "archive the rental thread 14 days later with reason context_closed"}
+      - {type: bazaar.listing.archived, effect: "archive listing threads 14 days later with reason context_closed"}
+      - {type: identity.block.added, effect: "archive direct threads between the pair with reason blocked and hide the blocked party from the blocker in group threads"}
+      - {type: privacy.deletion.completed, effect: "set leftAt for the deleted actor in all threads and archive two-party threads with reason account_deleted"}
+    errors:
+      - "COMMS_THREAD_PARTICIPANT_LIMIT | 409 | no | thread would have fewer than 2 or more than 12 participants"
+      - "COMMS_THREAD_EXISTS | 409 | no | an active thread already exists for this context and pair; params.threadId is returned"
+      - "COMMS_THREAD_OPEN_REJECTED | 422 | no | thread-open statement signer is not entitled for the context or the signature is invalid; statement quarantined"
+    example: |
+      vault command comms.thread.create
+      { "contextType": "listing", "contextId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "participantDids": ["did:key:z6MkExampleSeller"] }
+      -> { "threadId": "0192f3a4-0000-7000-8000-0000000000aa", "revision": 1, "existing": false }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal create, mute or archive its own threads, and only with parties it has not blocked.
+      - Inbound thread-open statements are accepted only when signed by a key entitled for the context role; otherwise they are quarantined with a reason and shown as message requests.
+      - Group threads (cycle, booking, rental) are archived only by context events; participants may only mute or leave through the context module. No relay or global role can read or alter a thread.
+    capabilities:
+      - "comms.thread.create | local principal | vault policy; not blocked by any participant in the local block list; context known to the vault; at most 30 new threads per day"
+      - "comms.thread.archive | local principal | participant(thread) and contextType in (direct, listing, proposal)"
+      - "comms.thread.mute | local principal | participant(thread)"
+      - "comms.thread.read_own | local principal | participant(thread)"
+  failure_recovery_idempotency:
+    requirements:
+      - Create is idempotent on context plus participant pair so a retry returns the existing thread with existing true; the signed thread-open statement is queued in the sync outbox and goes through prepared, transport acknowledged and peer accepted.
+      - Roster updates from events are idempotent through the consumer inbox (CTR-EVT-001 EVT-3) and order-insensitive.
+      - Archiving and message purge scheduling happen in one IndexedDB transaction so a thread is never archived without a purge schedule.
+    idempotency: "Vault commands are idempotent on the natural key (context, sorted participant pair); the thread-open statement is deduplicated by cid on receipt."
+    concurrency: "expectedRevision on archive; each command is one IndexedDB transaction; two vaults creating the same pair thread concurrently produce two thread-open statements and the lower threadId (bytewise) is kept by both after exchange, the other is archived as superseded; no distributed lock is used."
+    retries: "The sync outbox retries the thread-open statement with backoff base 1 s, factor 2, cap 15 min for 14 days; local event consumers retry up to 8 times then dead-letter locally."
+    offline: "All commands work offline; create shows the thread as saved on this device until the thread-open statement is transport acknowledged."
+    partial_failure: "If the context record is not yet in the vault create returns NOT_FOUND and stores nothing; if the relay is down the thread works locally with delivery status unknown; consumer failures leave the roster unchanged and retry."
+  privacy_retention_abuse:
+    requirements:
+      - Thread membership exists only in vaults; the relay sees only per-message sender DID and recipient mailbox (F08.S01.M01), and this is disclosed.
+      - Archived threads and their messages are purged locally 30 days after archive and on vault wipe.
+      - Block enforcement never reveals to the blocked party that a block exists.
+    data:
+      - "Thread: P2, vault only; the thread-open statement travels as an end-to-end encrypted envelope, so the relay sees only mailbox routing metadata."
+      - "Mute state: P2, visible to the owner only and to the notification router as a boolean."
+    retention:
+      - "Active threads: RET-STANDARD until the user deletes them; archived threads purged locally 30 days after archive."
+      - "When a participant erases their vault the others keep their copy; the roster shows the pseudonym last known, and no remote deletion is claimed."
+    threats:
+      - "T01 | Stalking through repeated new threads after block | a blocker's vault quarantines or drops thread-open statements from blocked DIDs silently so the sender learns nothing; rate limit of 30 new threads per day per vault"
+      - "T02 | Adding an unwanted person to a cycle thread | roster changes only follow mutiny.party.joined events derived from verified signed statements that carry that person's own consent in F02"
+      - "T03 | Enumeration of who talks to whom | threads exist only in vaults; list and get are local; relay routing metadata is disclosed"
+      - "T04 | Thread spam to many members from one listing | receiving vaults put unknown-sender threads in message requests; a relay may rate limit puts by its hosting policy"
+    abuse_controls:
+      - "Local filtering: unknown-sender thread-open statements wait in message requests and the user can block or report; relays apply their own hosting policy."
+      - "Report thread action passes thread ID and participant DIDs to the chosen relay operator or advisory feed (F12.S01.M01); content is attached only by the reporter's decrypted export."
+  observability_performance:
+    requirements:
+      - The PWA records only local diagnostics (OBS-7); no telemetry leaves the device.
+      - Create and archive meet a vault budget of p95 ≤ 50 ms and inbox list meets p95 ≤ 100 ms for 50 threads on a mid-range phone.
+      - Roster consumer lag is visible in local diagnostics.
+    metrics:
+      - "classrup_comms_threads_total{outcome=created|existing|archived|rejected}"
+      - "classrup_comms_thread_participants (histogram)"
+      - "classrup_comms_thread_consumer_lag_ms (gauge, local diagnostics only)"
+    logs:
+      - "local info thread.created {threadId, contextType, correlationId} — local diagnostics, no participant list."
+      - "info thread.archived {threadId, reason, correlationId}."
+    budgets:
+      - "Vault create/archive/mute p95 ≤ 50 ms; list_mine p95 ≤ 100 ms for 50 items with 2 000 threads in IndexedDB."
+      - "Idle sweep archives 2 000 threads in ≤ 2 s on a mid-range phone."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check command input and output and event payloads against the schema registry.
+      - Roster consistency is covered by deterministic event replay tests.
+    fixtures: "Tenant with members A, B, C, listing L owned by A, cycle context X with parties A, B, C, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, thread-open statement signed"
+      - "T02 | unit | 02.R02,02.R03 | each rule V02 to V07 violated in turn | the documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02 | random sequences of create, archive, mute, join and leave events | archived never leaves archived; roster never exceeds 12; unique active pair holds"
+      - "T04 | integration | 03.R03,06.R03 | archive thread | one comms.thread.archived event and purge schedule exist in the same transaction"
+      - "T05 | contract | 04.R01,04.R02,09.R02,09.R03 | each command and query executes | outputs and event payloads validate against registry schemas"
+      - "T06 | integration | 04.R03,06.R02 | replay mutiny.party.joined, party.left and block events in shuffled and duplicated order | final roster identical to ordered replay"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | stranger thread-open statement; blocked user create; participant archives a cycle thread; relay operator tries to read threads | quarantine, BLOCKED_PARTY or FORBIDDEN as documented; relay has no thread data"
+      - "T08 | integration | 06.R01,01.R04 | create twice and concurrent creates from both vaults A and B for one pair | one thread after exchange, lowest threadId kept, other archived superseded, existing true on repeat"
+      - "T09 | e2e | 06.R01,03.R01 | block added while direct thread active | thread archived for both, blocked party shown archived without reason"
+      - "T10 | abuse | 07.R01,07.R03 | blocked party sends thread-open statements | blocker vault drops silently, sender sees no error or signal of a block"
+      - "T11 | integration | 07.R02 | archive then advance clock 30 days | thread and messages purged locally; peers keep their copy"
+      - "T12 | abuse | 07.R03,02.R01 | 31st thread creation in a day; thread-open statement signed by a stranger for a listing they do not own | RATE_LIMITED; COMMS_THREAD_OPEN_REJECTED and message-request quarantine"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 500 mixed vault commands per second for 1 minute plus 2 000-thread idle sweep | budgets met and lag gauge returns to 0"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-061 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault and restore from backup | threads round trip identical; import rejects unknown participants as read-only"
+      - "T16 | a11y | 04.R01 | inbox and mute menu with keyboard and screen reader | all controls operable, state changes announced, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T16 pass in CI.
+      - A blocked party can never learn from any response that a block exists.
+      - Roster after arbitrary event replay equals the roster after ordered replay.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains the threads they participate in with roster, thread-open statements and own mute settings.
+      - Import validates thread IDs, schema version and thread-open signatures; threads with invalid signatures become quarantined read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section comms.threads in classrup-export/v1; one line per Thread (schema classrup.comms.thread/v1) including the exporting user's mute fields; the export is the primary backup (IOX-6)."
+    import: "Active threads whose context record is absent from the target vault import as archived with reason context_closed; existing IDs are skipped; the mute fields of the importer are applied."
+    backup: "Vault export is the backup; relays hold no thread data (CTR-IOX-001 IOX-6, IOX-7)."
+    migration_rollback: "Additive fields only in v1; rolling back is safe because older readers ignore new optional fields; the IndexedDB index on (contextType, contextId) is created in the same version upgrade as the code that uses it."

@@ -1,0 +1,335 @@
+# F15.S01.M01 Offline sync outbox and storage status (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S01.M01
+scope: MVP
+summary: >-
+  The PWA is the product and works with no server after install: every domain command commits first in the
+  user's IndexedDB vault. This module is the vault's sync outbox. Whatever must reach another party or a
+  user-selected relay (a signed statement such as a published listing, offer or consent, or a relay command
+  such as an index write) is placed in a per-destination outbox (idb 8.0.4) and moves through the honest
+  states prepared, transport_acknowledged (relay receipt) and peer_accepted (signed peer acknowledgement).
+  The UI never shows more certainty than the reached state. Entries replay in creation order with the
+  original Idempotency-Key for relay commands (CTR-IDM-001 IDM-1, IDM-4, IDM-5, IDM-7), conflicts are never
+  merged automatically, and unsent entries expire after 7 days following a prompt. The module also reports
+  storage status (persistence grant, quota, eviction warnings, last-export age with a 30-day warning).
+responsibilities:
+  - Own the OutboxEntry record in the IndexedDB database classrup-outbox (stores entries and meta; indexes bySeq, byDestination, byStatus) and its lifecycle from prepared to a terminal state.
+  - Queue signed statements (CTR-FED-001 envelopes) and relay commands per destination (relay id or direct peer), capped at 200 entries and 5 MiB per principal, and expose the reached sync state to the UI.
+  - Deliver strictly in creation order per destination with CTR-IDM-001 IDM-4 backoff (base 500 ms, cap 30 s, full jitter, 6 attempts), serialized across tabs by the Web Locks API, and record relay receipts and verified peer acknowledgements.
+  - Surface conflicts (relay CONFLICT_*, peer rejection, forked conflicting signed promise reported by the receiving module) as a resolve-or-discard prompt and expire unsent entries 7 days after creation after a day-6 warning.
+  - Report vault storage status through navigator.storage.persist() and estimate(), eviction warnings and last-export age (warn at 30 days, per CTR-IOX-001 IOX-6).
+non_responsibilities:
+  - Verifying incoming signed statements and quarantine (F11 federation modules and the receiving domain module); this module only accepts an already verified acknowledgement reference.
+  - Relay-side idempotency storage, mailboxes and receipts (relay modules F15.S02.M01 and F15.S02.M02).
+  - Service worker caching (F15.S01.M02) and install flow (F15.S01.M03); the outbox does not rely on the Background Sync API, which is missing in some supported browsers.
+  - Deciding which commands may be queued; each module flags its statements and relay commands deliveryEligible, and consent, payment-claim and acceptance statements are signed only after live user confirmation on the exact revision, but may then be queued for delivery.
+  - Producing the vault export itself (F10.S01.M03); this module only shows the export age it is told about.
+  - "Future: outbox encryption at rest with a passphrase-derived key; Future: automatic encrypted backup to a user-selected location."
+depends_on: [F15.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001]
+user_stories:
+  - As a member on a train without signal, I can publish a listing and see it as saved on my device and waiting to send, then see "reached relay" when my phone reconnects, and "peer confirmed" only when the counterparty's signed acknowledgement arrives.
+  - As a member, when a queued offer collides with a newer signed revision from the other party, I see both versions and choose to rebase or discard, never a silent overwrite.
+  - As a member, I am warned a day before an unsent action expires and can send it, keep it or discard it.
+  - As a member, I see whether my browser granted persistent storage, how much space is left and when I last exported my vault, with a warning after 30 days.
+edge_cases:
+  - Browser kills the tab while an entry is sending; at next start entries in sending older than 60 s return to prepared and are resent with the same Idempotency-Key (relay command) or the same statement cid (statement), so the destination deduplicates.
+  - Two tabs are open on reconnect; only the tab holding the Web Lock classrup-outbox-replay sends, the other observes through BroadcastChannel.
+  - IndexedDB is unavailable or over quota; enqueue returns PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, the domain command that needed it aborts before commit, and the UI says nothing was saved.
+  - The destination relay is stopped or removed; entries stay prepared with "relay unreachable, status unknown", other destinations keep flowing, and the user may re-route an entry to a different relay or discard it.
+  - A relay receipt arrives but the peer never acknowledges; the entry stays transport_acknowledged and shows "delivered to relay, peer has not confirmed" until the 30-day timeout moves it to expired.
+  - Two vaults signed conflicting promises (for example two acceptances for the same inventory); the receiving module reports the fork, the entry becomes conflict, dependent coordination is frozen and nothing is resolved by last-writer-wins.
+  - The browser evicts site data under storage pressure without persistence granted; on next start the module detects a missing database marker, shows a data-loss warning with the restore-from-export action and never fabricates entries.
+  - The relay clock is wrong; relay-signed receipt time is stored as evidence of that relay's clock only, never used to order or expire entries.
+ux:
+  screens:
+    - "Sync status chip on every item with queued statements, with three distinct labels and icons: Saved on this device, Reached relay (receipt), Confirmed by peer; a fourth Needs attention state for conflict and failed."
+    - "Outbox sheet: entries per destination, newest first, with command label, creation time, state, attempts, and buttons Retry now, Cancel, Change relay and for conflicts Review."
+    - "Conflict dialog: shows 'Your signed version' and 'Their signed version' for the changed fields, buttons Prepare a new version on theirs and Discard mine."
+    - "Expiry prompt: at day 6 lists unsent entries expiring within 24 h with Send now, Keep until expiry, Discard."
+    - "Storage status panel: persistence granted yes/no with a Request persistence button, used and available space from estimate(), last export date with Export now, and warning banner after 30 days without export."
+  states: [empty, prepared-offline, sending, transport-acknowledged, peer-accepted, completed, conflict, failed, expired, storage-unavailable, storage-not-persistent, export-overdue]
+  a11y:
+    - Sync state changes are announced through one aria-live polite region; conflicts use role=alertdialog with focus on the first action.
+    - Sync state is conveyed by text and icon, never color alone, and the accessible names read "Saved on this device only", "Delivered to relay, peer has not confirmed", "Confirmed by peer".
+    - All outbox and storage buttons are at least 44x44 px, keyboard operable with visible focus.
+    - Timestamps use locale formatting through F14.S02.M01 and relative text carries the absolute time in a title.
+processes:
+  domain_schema:
+    requirements:
+      - An OutboxEntry stores the destination, kind (statement or relay_command), the prepared payload, the dedupe identity (statement cid or Idempotency-Key), optional expectedRevision, principal, a monotonic sequence number, sync state, attempt counter, receipts and timestamps, with ids per CTR-ID-001.
+      - Entries are P2 device-local data held only in the principal's vault, never uploaded as a record, and removed according to the state-specific retention below, with an absolute maximum of 30 days plus 24 h.
+      - The signed payload of a statement is immutable after preparation; only sync bookkeeping changes, and resolving a conflict creates a new prepared statement under a new cid instead of editing the old one.
+    entities:
+      - name: OutboxEntry
+        schema: classrup.platform.outbox_entry/v1
+        storage: device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key, generated in the vault"
+          - "principal: string — did:key of the local principal that owns the vault; entries are only shown and sent while that principal is unlocked"
+          - "destination: string — 'relay:<relayId>' or 'direct:<did>' (peer transfer such as QR or file); entries never move between destinations except by explicit user re-route"
+          - "seq: int — vault-wide monotonic counter starting at 1; delivery order within a destination"
+          - "kind: enum — statement | relay_command"
+          - "statementSchema?: string — e.g. classrup.bazaar.offer_statement/v1; required when kind is statement"
+          - "cid: string — sha256- plus base64url SHA-256 of the JCS payload (CTR-ID-001 ID-3); dedupe identity of a statement"
+          - "payload: json — signed CTR-FED-001 envelope for statements, or { command, input } for relay commands; serialized ≤ 262144 bytes; P3/P4 excluded"
+          - "idempotencyKey?: uuidv7 — required for relay_command, sent as Idempotency-Key (CTR-IDM-001 IDM-1)"
+          - "expectedRevision?: int — present for relay commands that mutate an existing relay resource (IDM-2)"
+          - "aggregateKey: string — '<entity>:<id>' used to hold back later entries behind a blocked one"
+          - "needsPeerAck: boolean — true when completion means a signed peer acknowledgement (offers, consents, proposals); false for relay commands"
+          - "state: enum — prepared | sending | transport_acknowledged | peer_accepted | completed | conflict | failed | expired | discarded"
+          - "attempts: int — 0..6, reset to 0 by a manual retry"
+          - "nextAttemptAt?: timestamp — earliest next send, from backoff"
+          - "relayReceipt?: json — { relayId, receiptCid, relayTime, sig } ; relayTime is evidence of that relay's clock only"
+          - "peerAckCid?: string — cid of the verified signed peer acknowledgement (set by platform.outbox.record_peer_ack)"
+          - "lastError?: json — { code, status, retryable, currentRevision?, fields? } from the last response"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "expiresAt: timestamp — createdAt + 604800000 ms for unsent states; extended to ackAt + 2592000000 ms while waiting for a peer"
+          - "updatedAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - seq is unique per vault and strictly increasing; delivery never sends an entry before every lower-seq entry for the same destination and aggregateKey has reached a terminal state or transport_acknowledged.
+          - At most one entry per destination is in sending at a time.
+          - peer_accepted requires peerAckCid; transport_acknowledged requires relayReceipt; completed is used only when needsPeerAck is false.
+          - The signed payload and cid of a statement never change after creation, and a terminal entry never changes again.
+          - The store holds at most 200 entries and 5242880 bytes of payload per principal.
+    sql: |
+      -- IndexedDB (idb 8.0.4), not SQL. Database classrup-outbox, version 1.
+      -- objectStore 'entries': keyPath 'id'
+      --   index 'bySeq' on seq (unique), index 'byDestination' on [destination, state, seq], index 'byStatus' on [principal, state]
+      -- objectStore 'meta': keyPath 'key'; rows { key: 'seqCounter', value: int }, { key: 'storageMarker', value: uuidv7 }, { key: 'lastExportAt', value: timestamp }
+  validation_rules:
+    requirements:
+      - Enqueue validates destination, delivery eligibility, size, quota and signature presence before writing; nothing is stored on a violation.
+      - Delivery classifies every relay response into receipt, retryable, conflict or failed using only the code, status and retryable flag from CTR-ERR-001.
+      - A peer acknowledgement is accepted only as a reference to an already verified signed statement from the expected counterparty role; otherwise it is ignored.
+    rules:
+      - "V01 | kind is statement with a CTR-FED-001 envelope whose signature the local principal made, or relay_command registered deliveryEligible by its owning module | PLATFORM_OUTBOX_NOT_DELIVERABLE"
+      - "V02 | JSON.stringify(payload) is ≤ 262144 bytes | PAYLOAD_TOO_LARGE"
+      - "V03 | principal entry count is < 200 and payload bytes + new payload ≤ 5242880 | PLATFORM_OUTBOX_FULL"
+      - "V04 | relay_command idempotencyKey is a UUIDv7 unique in the store; statement cid is unique per destination | VALIDATION_FAILED"
+      - "V05 | destination matches relay:<id> of a relay the user selected, or direct:<did> | VALIDATION_FAILED"
+      - "V06 | the vault is unlocked and entry principal equals the unlocked principal | UNAUTHENTICATED"
+      - "V07 | IndexedDB opened and the write transaction committed | PLATFORM_OUTBOX_STORAGE_UNAVAILABLE"
+      - "V08 | unsent entry is not older than 7 days at send time | EXPIRED"
+      - "V09 | peer acknowledgement references an entry in transport_acknowledged and its signer role matches the counterparty named in the statement | PLATFORM_OUTBOX_ACK_MISMATCH"
+  workflow_state_machine:
+    requirements:
+      - Entries follow the declared lifecycle and any transition not listed is refused with CONFLICT_STATE.
+      - transport_acknowledged is recorded only after a relay receipt is verified and peer_accepted only after a verified signed peer acknowledgement; a network failure or a missing reply never advances the state, and the UI shows the state reached.
+      - Conflict and failed entries block only later entries with the same destination and aggregateKey, are never auto-merged or auto-retried, and forked conflicting promises freeze the affected coordination instead of choosing a winner.
+    machines:
+      - entity: OutboxEntry
+        initial: prepared
+        terminal: [peer_accepted, completed, discarded, expired]
+        transitions:
+          - "prepared -> sending | delivery picks the lowest-seq eligible entry of a destination and holds the Web Lock | nextAttemptAt ≤ now, vault unlocked, no lower-seq entry of same aggregateKey unresolved; attempts += 1"
+          - "sending -> transport_acknowledged | relay or direct transport returns a verified receipt for a statement with needsPeerAck true | store relayReceipt; relay time kept as relay-clock evidence only"
+          - "sending -> completed | relay returns 2xx or Idempotent-Replay 2xx for a relay_command, or receipt for a statement with needsPeerAck false | store response id"
+          - "sending -> prepared | network failure or error with retryable=true | schedule nextAttemptAt by full-jitter backoff (base 500 ms, cap 30 s, retryAfterMs honored) while attempts < 6"
+          - "sending -> conflict | CONFLICT_REVISION or CONFLICT_STATE response | store currentRevision and state; show the resolve-or-discard prompt"
+          - "sending -> failed | non-retryable error, or attempts reaches 6 | store error code and fields; show failure with Retry now and Discard"
+          - "sending -> prepared | entry stuck in sending for more than 60 s after a tab crash | recovery at startup; same idempotencyKey or cid is reused"
+          - "transport_acknowledged -> peer_accepted | platform.outbox.record_peer_ack with a verified signed acknowledgement from the counterparty | store peerAckCid"
+          - "transport_acknowledged -> conflict | receiving module reports a rejection or forked conflicting signed promise | store reason; affected coordination frozen by the owning module"
+          - "transport_acknowledged -> expired | 30 days after the relay receipt without peer acknowledgement | UI says the peer never confirmed"
+          - "conflict -> prepared | user chooses Prepare a new version on theirs | new statement signed under a new cid (or new idempotencyKey for a relay command), expectedRevision set to currentRevision, attempts reset to 0; old payload kept only in history"
+          - "failed -> prepared | user chooses Retry now | attempts reset to 0 and nextAttemptAt = now"
+          - "prepared -> discarded | user cancels the entry | removed from the delivery set"
+          - "conflict -> discarded | user chooses Discard mine | removed from the delivery set"
+          - "failed -> discarded | user discards | removed from the delivery set"
+          - "prepared -> expired | now ≥ expiresAt | UI states the action was not sent"
+          - "conflict -> expired | now ≥ expiresAt | UI states the action was not sent"
+          - "failed -> expired | now ≥ expiresAt | UI states the action was not sent"
+    timeouts:
+      - "Unsent entries expire 604800000 ms (7 days) after createdAt; the expiry prompt is shown from day 6 (518400000 ms)."
+      - "transport_acknowledged entries expire 2592000000 ms (30 days) after the relay receipt if no peer acknowledgement arrived."
+      - "An entry in sending for more than 60000 ms without a response is reset to prepared at the next startup or delivery tick."
+      - "Delivery tick runs on the online event, visibilitychange to visible, app start, and every 60000 ms while unsent entries exist."
+  commands_queries_events:
+    requirements:
+      - Every command here is a vault-local command with actor = unlocked local principal; none is a relay command and none produces a signed statement itself, although the entries it manages carry statements produced by other modules.
+      - The module produces no domain events leaving the device and emits only local UI notifications over the BroadcastChannel classrup-outbox (CTR-EVT-001 EVT-8).
+      - Relay responses are interpreted only through CTR-ERR-001 fields so that new error codes need no code change here.
+    commands:
+      - name: platform.outbox.enqueue
+        capability: platform.outbox.enqueue
+        input: "{ destination, kind, payload, statementSchema?, idempotencyKey?, expectedRevision?, aggregateKey, needsPeerAck } — vault-local command"
+        output: "{ entryId, seq, cid, expiresAt }"
+        errors: [PLATFORM_OUTBOX_NOT_DELIVERABLE, PAYLOAD_TOO_LARGE, PLATFORM_OUTBOX_FULL, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, UNAUTHENTICATED, VALIDATION_FAILED]
+        emits: []
+        idempotent: false
+      - name: platform.outbox.deliver
+        capability: platform.outbox.deliver
+        input: "{ entryId?, destination? } (omit to deliver everything eligible) — vault-local command that calls the relay or peer transport"
+        output: "{ sent, transportAcknowledged, completed, pending, conflict, failed }"
+        errors: [UNAUTHENTICATED, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: platform.outbox.record_peer_ack
+        capability: platform.outbox.record_peer_ack
+        input: "{ entryId, ackCid } — vault-local command called by the statement ingest path after signature verification"
+        output: "{ entryId, state: peer_accepted }"
+        errors: [NOT_FOUND, CONFLICT_STATE, PLATFORM_OUTBOX_ACK_MISMATCH]
+        emits: []
+        idempotent: true
+      - name: platform.outbox.resolve
+        capability: platform.outbox.resolve
+        input: "{ entryId, resolution: rebase|retry|reroute, newDestination? } — vault-local command; rebase asks the owning module to sign a new statement"
+        output: "{ entryId, state }"
+        errors: [NOT_FOUND, CONFLICT_STATE, EXPIRED, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: platform.outbox.discard
+        capability: platform.outbox.discard
+        input: "{ entryId } — vault-local command"
+        output: "{ entryId, state: discarded }"
+        errors: [NOT_FOUND, CONFLICT_STATE, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: platform.storage.request_persistence
+        capability: platform.storage.request_persistence
+        input: "{} — vault-local command calling navigator.storage.persist() after a user gesture"
+        output: "{ persisted: boolean }"
+        errors: [PLATFORM_OUTBOX_STORAGE_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: platform.storage.record_export
+        capability: platform.storage.record_export
+        input: "{ exportedAt, sha256 } — vault-local command called by F10.S01.M03 after a vault export completes"
+        output: "{ lastExportAt }"
+        errors: [VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: platform.outbox.list
+        capability: platform.outbox.read
+        input: "{ destination?, state?: unsent|conflict|failed|all, limit ≤ 200 }"
+        output: "{ items: OutboxEntry[] } ordered by seq ascending"
+        errors: [PLATFORM_OUTBOX_STORAGE_UNAVAILABLE]
+      - name: platform.outbox.count_by_state
+        capability: platform.outbox.read
+        input: "{ aggregateKey? }"
+        output: "{ prepared, transportAcknowledged, peerAccepted, conflict, failed, expiringWithin24h }"
+        errors: [PLATFORM_OUTBOX_STORAGE_UNAVAILABLE]
+      - name: platform.storage.get_status
+        capability: platform.storage.read_status
+        input: "{ } (no input)"
+        output: "{ persisted, usageBytes, quotaBytes, usageRatio, lastExportAt?, exportAgeDays?, exportOverdue (age > 30), evictionRisk (not persisted or usageRatio > 0.8), markerOk }"
+        errors: []
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "PLATFORM_OUTBOX_NOT_DELIVERABLE | 409 | no | entry is not a locally signed statement or a registered deliverable relay command"
+      - "PLATFORM_OUTBOX_FULL | 409 | no | 200 entries or 5 MiB of queued payload reached for this principal"
+      - "PLATFORM_OUTBOX_STORAGE_UNAVAILABLE | 503 | no | IndexedDB is blocked, full or unavailable on this device"
+      - "PLATFORM_OUTBOX_ACK_MISMATCH | 422 | no | peer acknowledgement does not match the entry or the expected counterparty"
+    example: |
+      // offline: user edits a listing and sends an offer; both commit locally first
+      platform.outbox.enqueue({ destination: "relay:r-7k3m", kind: "statement", statementSchema: "classrup.bazaar.offer_statement/v1", payload: { /* signed envelope */ }, aggregateKey: "listing:0192f3a4-5b6c-7d8e-9f01-23456789abcd", needsPeerAck: true })
+      -> { entryId: "0192f400-0000-7000-8000-000000000001", seq: 17, cid: "sha256-Xq1...", expiresAt: "2026-11-11T10:00:00.000Z" }
+      // online: relay mailbox returns a receipt  -> state transport_acknowledged ("Delivered to relay, peer has not confirmed")
+      // seller's vault returns a signed acknowledgement -> platform.outbox.record_peer_ack -> peer_accepted ("Confirmed by peer")
+  authorization_capabilities:
+    requirements:
+      - Vault policy applies, meaning only the unlocked local principal may run any command or query here, and every entry is bound to the principal that created it.
+      - The outbox stores no session token, relay access token or private key; each delivery obtains a relay access token by challenge-response at send time (CTR-CAP-001 CAP-10), so a relay that revoked access cannot be sent to.
+      - Relay policy decides at send time whether the relay accepts the write or mailbox delivery; a FORBIDDEN or BLOCKED_PARTY response from a relay marks the entry failed and never changes local data.
+    capabilities:
+      - "platform.outbox.enqueue | local-principal | vault unlocked; entry principal = actor"
+      - "platform.outbox.deliver | local-principal | vault unlocked; one delivery runner per vault through the Web Lock"
+      - "platform.outbox.record_peer_ack | local-principal | called only by the ingest path with a verified signed acknowledgement; signer role = counterparty in the statement"
+      - "platform.outbox.resolve | local-principal | entry.principal = actor and state is conflict or failed or prepared (reroute)"
+      - "platform.outbox.discard | local-principal | entry.principal = actor and state is prepared, conflict or failed"
+      - "platform.outbox.read | local-principal | entry.principal = actor"
+      - "platform.storage.request_persistence | local-principal | user gesture"
+      - "platform.storage.record_export | local-principal | called by the export module after the bundle is written"
+      - "platform.storage.read_status | local-principal | vault unlocked; also readable while locked for the data-loss and persistence banner (no vault content)"
+  failure_recovery_idempotency:
+    requirements:
+      - Every relay command is sent with its stored Idempotency-Key and every statement carries its cid so that any number of deliveries takes effect at most once at the destination (CTR-IDM-001 IDM-1, ID-3).
+      - Retry timing follows IDM-4 exactly; only retryable errors and network failures are retried, at most 6 attempts per entry.
+      - A crash between send and receipt leaves the entry recoverable, and a lost peer acknowledgement leaves it in transport_acknowledged rather than claiming acceptance.
+    idempotency: "Idempotency-Key (relay commands) or cid (statements) is created at enqueue and persisted in the same IndexedDB transaction as the entry; resend of a sending entry reuses it and the relay replays its stored response for 24 h or ignores the duplicate cid. Conflict resolution that changes the content creates a new key or cid so IDEMPOTENCY_KEY_REUSED never occurs. For relay commands older than 24 h in sending state the target revision is checked first and the entry moves to conflict if it changed."
+    concurrency: "A navigator.locks exclusive lock named classrup-outbox-replay serializes delivery across tabs; without Web Locks an IndexedDB lease row in meta (30 s TTL, renewed every 10 s) is used. This is a local lease inside one vault (IDM-8), not a distributed lock. Entries are sent one at a time per destination in seq order; destinations proceed independently."
+    retries: "Full-jitter exponential backoff per IDM-4: delay = random(0, min(30000, 500 * 2^(attempts-1))) ms, honoring retryAfterMs when larger; stop after 6 attempts and move to failed; Retry now resets attempts."
+    offline: "Domain commands commit to the vault with no network. Detection uses navigator.onLine as a hint only; a send attempt is the truth. While offline or when the relay is stopped no network calls are made and entries stay prepared with status unknown for the peer."
+    partial_failure: "If the IndexedDB write of transport_acknowledged fails after a receipt arrived, the entry is resent once more and the destination answers with the duplicate receipt, ending in the correct state without a second effect. If the user-selected relay disappears permanently, entries can be re-routed to another relay or exported; no local record is lost."
+  privacy_retention_abuse:
+    requirements:
+      - Queued payloads are signed statements or relay commands that can contain P2 content; they stay in the vault, P2 statements are sent only as end-to-end encrypted envelopes to the listed participants (CTR-PRV-001 PRV-5), and P3/P4 data is never queued.
+      - Unsent entries expire after 7 days with a prompt, entries awaiting a peer after 30 days; expired entries are not sent.
+      - A hostile page script or another principal on a shared browser profile must not be able to read or send a principal's entries, and the PWA sends no telemetry (CTR-OBS-001 OBS-7).
+    data:
+      - "OutboxEntry: P2 vault-local; contains signed statements or relay command inputs but never private keys, relay tokens or P3 exact home address."
+      - "meta.storageMarker and lastExportAt: P0 local bookkeeping."
+      - "relayReceipt.relayTime: relay-clock evidence only, not a trusted timestamp."
+    retention:
+      - "completed and peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); discarded: immediately; expired: shown for 24 h then deleted; absolute maximum 30 days plus 24 h on the device."
+      - "Locking or signing out keeps entries so queued work is not lost; 'Erase vault' and F10.S01.M04 deletion remove all entries of the principal."
+    threats:
+      - "T01 | Shared browser profile: another principal reads or sends a previous principal's queued statements | entries bound to principal DID; list and delivery filter by the unlocked principal; vault locked by default after 5 minutes idle"
+      - "T02 | Stale destructive intent delivered weeks later | 7-day expiry with day-6 prompt; expectedRevision conflict detection for relay commands; statements carry their own validity expiry checked by the receiver"
+      - "T03 | Queue growth fills device storage or causes local denial of service | caps of 200 entries, 262144 bytes per payload and 5 MiB per principal; PLATFORM_OUTBOX_FULL shown to user"
+      - "T04 | Script injection reads IndexedDB | strict CSP (script-src 'self', no inline scripts, no third-party scripts); payloads contain no private keys or tokens so impact is limited to the user's own queued content"
+      - "T05 | Relay lies about delivery or peer acceptance | transport_acknowledged is only a relay receipt; peer_accepted requires a verified signed acknowledgement by the counterparty key; relay receipt time is never trusted as event time"
+      - "T06 | Forked vault produces two conflicting signed promises | receiving module detects the fork, outbox entry becomes conflict, coordination is frozen for renegotiation and nothing is merged by last-writer-wins"
+    abuse_controls:
+      - "Relays rate limit written commands under their own policy (RATE_LIMITED is retryable with retryAfterMs); the outbox honors it and cannot bypass limits."
+      - "The client never retries after a non-retryable error, which prevents hammering a relay with a failing entry."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry; outbox and storage diagnostics stay in the vault, are shown in the Storage status panel and can be exported by the user (CTR-OBS-001 OBS-7).
+      - Enqueue completes fast enough to feel instant on a Moto G-class device (CTR-OBS-001 OBS-5).
+      - Delivery of 200 entries never blocks the main thread for more than 50 ms per task.
+    metrics:
+      - "local counters in meta (never transmitted): outbox_delivery_total{outcome=transport_acknowledged|completed|retry|conflict|failed|expired}"
+      - "local gauge outbox_pending_count and storage usageRatio, shown in the Storage status panel"
+      - "local histogram outbox_age_ms (createdAt to terminal state), last 500 samples"
+    logs:
+      - "Local diagnostic log in IndexedDB store diag (ring buffer, 500 lines): outbox.delivery {entryIdHash, state, attempts, code} — never payload or identifiers; exportable by the user, never uploaded."
+    budgets:
+      - "enqueue p95 ≤ 30 ms from call to committed IndexedDB transaction on a Moto G-class device."
+      - "Outbox module adds ≤ 5 KiB gzip to the initial bundle and ≤ 20 KiB gzip to the deferred chunk; initial JS stays within 150 KiB gzip (OBS-5)."
+      - "Delivering 200 queued entries takes ≤ 200 x relay write p95 (300 ms) = 60 s sequentially and never blocks the main thread longer than 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Logic is tested with fake-indexeddb, and the Web Locks, reconnect and UI flows with a real browser (Playwright, offline emulation).
+      - Conformance with CTR-IDM-001 IDM-1, IDM-4, IDM-5 and IDM-7 is tested with a stub relay that injects network failures, 429 and 409 responses, relay receipts and peer acknowledgements.
+    fixtures: "fake-indexeddb 6.x database classrup-outbox; stub relay implementing Idempotency-Key replay, cid dedupe and signed receipts; fixed clock 2026-11-04T10:00:00Z; principals P1 and P2 with Ed25519 keys; statement offer_statement and relay command index.put."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | enqueue a locally signed offer statement for relay:r1 and a relay command with expectedRevision 4 | entries stored in state prepared, attempts 0, seq 1 and 2, cid set, expiresAt = createdAt + 7 d"
+      - "T02 | unit | 02.R01,01.R03 | enqueue violating V01, V02, V03, V04, V05 in turn | each returns its documented code and nothing is stored"
+      - "T03 | property | 03.R01,01.R02 | random sequences of delivery results, acknowledgements and user actions on one entry | only declared transitions occur, terminal states never change, seq stays strictly increasing"
+      - "T04 | integration | 03.R02,06.R01,06.R03 | kill the tab after send and before receipt, restart | entry resent with same cid or Idempotency-Key, stub relay applies once, entry ends transport_acknowledged or completed"
+      - "T05 | integration | 03.R02,02.R03 | relay receipt arrives, then a forged acknowledgement signed by a non-counterparty key, then the real one | forged ack rejected with PLATFORM_OUTBOX_ACK_MISMATCH; entry stays transport_acknowledged until the real ack gives peer_accepted"
+      - "T06 | integration | 03.R03,02.R02 | entry 3 gets 409 CONFLICT_REVISION; entries 4 (same aggregate) and 5 (other aggregate) queued | 3 becomes conflict, 4 waits, 5 is sent; nothing merged"
+      - "T07 | integration | 06.R02,02.R02 | stub relay returns network error, 429 retryAfterMs 3000, then 200 | delays follow full-jitter bounds, wait at least 3000 ms, delivered on third attempt; after 6 failures entry is failed"
+      - "T08 | unit | 04.R01,04.R02 | all commands and queries called | contract of input/output holds, no domain event is produced and no network call is made by local-only commands"
+      - "T09 | contract | 04.R03,02.R02 | stub returns an unknown error code with status 409 retryable false | classified as failed without code changes and shown with messageKey"
+      - "T10 | abuse | 05.R01,07.R03 | principal P2 unlocks a vault profile holding P1 entries | list and delivery return none of P1's entries; P1 entries keep their state"
+      - "T11 | integration | 05.R02,05.R03 | relay revokes access then answers 401 and 403; token store inspected | delivery obtains a fresh token per send via challenge-response; FORBIDDEN marks entry failed; no token or private key in IndexedDB"
+      - "T12 | integration | 07.R01,07.R02 | clock advanced 6 d, 7 d, then a transport_acknowledged entry advanced 30 d | day-6 prompt; unsent entry expired at 7 d and never sent; unconfirmed entry expired at 30 d"
+      - "T13 | abuse | 07.R01,07.R03 | inspect network traffic and script injection under CSP during a full session | no telemetry request; inline script blocked; P3/P4 fields rejected at enqueue"
+      - "T14 | e2e | 03.R03,06.R03 | two tabs open, device offline, three actions queued, device reconnects, relay then stopped | exactly one tab delivers, order preserved, UI shows Reached relay for delivered entries and unknown for the rest, local data intact"
+      - "T15 | a11y | 08.R01 | outbox sheet, conflict dialog and storage panel scanned with axe | zero serious or critical issues; aria-live announces state changes; targets ≥ 44 px"
+      - "T16 | integration | 04.R01,07.R03,03.R03 | two vaults send conflicting acceptances for one reservation; receiving module reports the fork | entry becomes conflict, affected coordination frozen, no winner chosen"
+      - "T17 | load | 08.R02,08.R03 | enqueue 200 entries then deliver against stub with 300 ms latency | enqueue p95 ≤ 30 ms, longest main-thread task ≤ 50 ms, total ≤ 60 s"
+      - "T18 | unit | 09.R01 | traceability tool run | every PS-116 requirement maps to a passing test"
+      - "T19 | contract | 09.R03,06.R02 | IDM-1/IDM-4/IDM-5/IDM-7 conformance suite against the stub relay | all assertions pass including 24 h old sending entry check"
+      - "T20 | integration | 09.R02,10.R01,10.R02,10.R03 | upgrade database version 1 to 2 with entries; export vault; erase vault | entries preserved on upgrade; export bundle has no outbox section; erase removes them; suite identical on fake-indexeddb, Chromium, WebKit, Firefox"
+      - "T21 | integration | 01.R02,08.R01 | storage status with persist() denied, usage 85 percent, last export 31 days ago, and a missing storageMarker | evictionRisk true, exportOverdue true, data-loss warning shown with restore action, no entries fabricated"
+    acceptance:
+      - All tests T01-T21 pass in CI on Chromium, WebKit and Firefox profiles.
+      - A statement queued offline is delivered at most once per destination after reconnect, in creation order, regardless of tab crashes or duplicate deliveries, and the UI shows only the state actually reached.
+      - A conflicting queued action is never applied without the user's explicit choice, and relay receipts are never presented as peer acceptance.
+      - Storage status shows persistence, quota and a warning after 30 days without export; no queued data remains after the vault is erased.
+  import_export_backup_rollback:
+    requirements:
+      - The outbox is device-local transient state and is excluded from the vault export bundle (CTR-IOX-001 IOX-1, IOX-6); the export contains the signed statements already committed in the domain records.
+      - Outbox entries are never imported; after an import the user sees imported records only, and unsent statements must be re-created from the records.
+      - IndexedDB schema upgrades are forward-only with data kept, and a downgrade of the app leaves the database untouched and ignores entries it cannot read.
+    export: "No outbox section in classrup-export/v1; the Outbox sheet offers 'Copy as JSON' of the user's own unsent entries for support, payloads included only after a confirmation dialog. The storage panel's Export now action calls F10.S01.M03 and then platform.storage.record_export."
+    import: "Not applicable: import (CTR-IOX-001 IOX-2) creates vault records and never writes outbox entries."
+    backup: "The vault export is the primary backup (IOX-6) and the PWA warns after 30 days without one. The outbox itself is not backed up: unsent actions are lost if the browser profile is wiped, which the pending help text states. Relays never store the outbox."
+    migration_rollback: "IndexedDB version upgrades add stores and indexes only (expand/contract); on a schema_version greater than the app supports, the module opens read-only, refuses enqueue with UNSUPPORTED_SCHEMA_VERSION and keeps entries intact so rolling back the app release is safe."

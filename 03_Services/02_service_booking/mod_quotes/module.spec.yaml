@@ -1,0 +1,385 @@
+id: F03.S02.M01
+scope: MVP
+summary: >-
+  A client sends a quote request to a provider; the provider answers with a signed quote (price, optional milestone plan,
+  start time, validity, cancellation terms); the client accepts the exact quote by signing its content hash; the provider
+  then signs a booking confirmation. Each of these is a signed statement exchanged over end-to-end encrypted mailboxes or
+  directly; each party's vault keeps its own Booking record derived from the statements it holds. A booking is confirmed only
+  when both signatures exist. The platform takes no payment; money is handled by F09 claims between the parties.
+responsibilities:
+  - Own QuoteRequest, ServiceQuote and Booking records in each party's vault and the statement schemas quote_request, quote, quote_acceptance, quote_decline, booking_confirmation and booking_cancellation (all classrup.services.*/v1).
+  - Verify every inbound statement - signature, signer role (client for requests and acceptances, provider for quotes and confirmations), exact quote cid and expiry - and quarantine anything else with a reason.
+  - On provider confirmation commit the slot through F03.S01.M02 and open a local Deal in F09.S01.M01 in the same vault transaction.
+  - Apply cancellation terms and compute the late-cancellation fee as a claim amount, never as a charge.
+non_responsibilities:
+  - Slot generation and holds (F03.S01.M02) and the offering (F03.S01.M01).
+  - Milestone delivery and approval (F03.S02.M02) and dispute handling (F03.S02.M03, F09.S02.M02).
+  - Payment, receipts and chain verification (F09).
+  - Message transport and mailboxes (F08, F11); this module only hands signed envelopes to the sync outbox.
+  - "Future: recurring bookings, group bookings and quote revision rounds beyond one superseding quote."
+depends_on: [F03.S01.M01, F03.S01.M02, F09.S01.M01, F08.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a client, I request a quote for a task with a description and a preferred time window and see when the provider answers.
+  - As a provider, I issue a quote with a price, optional milestones and validity, and the slot is held for me while it is open.
+  - As a client, I accept the exact quote and see honestly whether the provider has confirmed yet or the booking is still awaiting confirmation.
+  - As either party, I cancel under the stated policy and see the fee claim that applies before I confirm.
+edge_cases:
+  - Two clients accept two quotes for the same slot; the provider vault holds the slot only for the first quote, so the second acceptance gets a signed refusal (booking_cancellation reason slot_taken) and the second client sees declined.
+  - Acceptance arrives after validUntil by the provider clock plus 5 minutes tolerance; the provider refuses with reason quote_expired and the client sees expired.
+  - Provider issues a second quote for the same request; the first becomes superseded and an acceptance of it is refused with reason quote_superseded.
+  - A statement arrives signed by a key that is not the offering provider key or not the request author; it is quarantined and never changes state.
+  - The same acceptance statement is delivered twice or through two relays; dedup by cid makes the second a no-op.
+  - Client cancels offline and syncs two days later; effective cancellation time is the claimed time only when it is within 72 h before the receipt time, otherwise the receipt time.
+  - Client blocks the provider (or the reverse) while a request is open; open requests move to cancelled with reason blocked and no notice reveals the block.
+  - Provider confirmation is lost in transit; the client still sees awaiting_confirmation (transport_acknowledged at most) and never confirmed.
+ux:
+  screens:
+    - "Request sheet: task description (≤ 2000 chars), preferred window, optional budget with currency, attachments by reference (max 5)."
+    - "Quote card: price, milestone plan, start time in the viewer's zone and the provider's zone, validity countdown, cancellation policy in words and numbers, Accept button naming the exact amount."
+    - "Booking card: state chip (awaiting confirmation, confirmed, in progress, completed, cancelled, disputed) with a sync line (prepared, delivered to relay, acknowledged by peer)."
+  states: [loading, empty, request-draft, quoted, awaiting-confirmation, confirmed, cancelled, expired, quarantined, pending-offline]
+  a11y:
+    - Accept and Cancel are buttons of at least 44x44 px whose accessible names include the amount and the date.
+    - Countdown is conveyed as text (expires in 2 d 3 h) in an aria-live polite region updating at most once per minute.
+    - Sync status uses text labels and never colour alone.
+processes:
+  domain_schema:
+    requirements:
+      - QuoteRequest, ServiceQuote and Booking are P2 records stored in the vault of each participant, with revision per CTR-ID-001 and the cid of each signed statement they derive from.
+      - Money is integer minor units per CTR-MNY-001; an hourly total is computed once as rate times estimatedMinutes divided by 60 with HALF_EVEN rounding, and the milestone amounts must sum exactly to the total.
+      - A quote is immutable after issue; changing anything requires a superseding quote with a new cid, and acceptance binds to the exact quote cid.
+    entities:
+      - name: QuoteRequest
+        schema: classrup.services.quote_request/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "offeringId: uuidv7 — ref F03.S01.M01 ServiceOffering"
+          - "clientId: actorId — author and signer"
+          - "providerId: actorId — must equal the offering provider"
+          - "description: string — 10..2000 code points, plain text"
+          - "preferredFromUtc?: timestamp — RFC 3339 UTC"
+          - "preferredToUtc?: timestamp — after preferredFromUtc, at most 90 days ahead"
+          - "budget?: Money — CTR-MNY-001; > 0"
+          - "attachmentIds: uuidv7[] — 0..5 refs F08.S01.M03"
+          - "status: enum — open | quoted | accepted | cancelled | expired"
+          - "cid: string — sha256- cid of the signed request statement"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "expiresAt: timestamp — claim-time plus 14 days, evaluated on the local clock"
+        invariants:
+          - At most one open request per (clientId, offeringId).
+          - status accepted implies exactly one ServiceQuote with status accepted for this request.
+          - providerId equals the offering provider key.
+      - name: ServiceQuote
+        schema: classrup.services.quote/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "requestId: uuidv7 — ref QuoteRequest"
+          - "providerId: actorId — signer"
+          - "total: Money — CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units"
+          - "pricingBasis: enum — fixed | hourly_estimate"
+          - "estimatedMinutes?: int — 15..14400; required for hourly_estimate"
+          - "milestonePlan: MilestoneDraft[] — 0..10 items {title ≤ 120, amount: Money, dueAt?}; sum equals total; empty means one implicit milestone"
+          - "proposedStartUtc?: timestamp — a generated slot start from F03.S01.M02"
+          - "durationMinutes?: int — 15..1440"
+          - "providerTimeZone: string — IANA zone of the provider"
+          - "validUntil: timestamp — issue claim-time plus 1 h..14 d, default 72 h"
+          - "cancellationPolicy: object — {freeUntilHoursBefore 0..720, lateFeeBps 0..5000}"
+          - "slotHoldId?: uuidv7 — local ref F03.S01.M02 SlotHold (provider vault only)"
+          - "status: enum — issued | accepted | declined | withdrawn | expired | superseded"
+          - "cid: string — sha256- cid of the signed quote statement"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - milestonePlan amounts sum exactly to total in one currency.
+          - At most one quote per request has status issued.
+          - A quote with status accepted is never edited and its cid never changes.
+      - name: Booking
+        schema: classrup.services.booking/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, derived from the acceptance statement cid so both vaults agree"
+          - "quoteId: uuidv7 — ref ServiceQuote"
+          - "quoteCid: string — cid the client signed"
+          - "acceptanceCid: string — cid of quote_acceptance"
+          - "confirmationCid?: string — cid of booking_confirmation; present when confirmed"
+          - "clientId: actorId — client"
+          - "providerId: actorId — provider"
+          - "startUtc?: timestamp — RFC 3339 UTC; absent for remote asynchronous work"
+          - "endUtc?: timestamp — after startUtc"
+          - "total: Money — copied from the quote"
+          - "cancellationPolicy: object — copied from the quote"
+          - "status: enum — awaiting_confirmation | confirmed | in_progress | completed | cancelled | disputed"
+          - "cancelledBy?: enum — client | provider | system"
+          - "cancelReason?: enum — client_request | provider_request | slot_taken | quote_expired | quote_superseded | confirmation_timeout | blocked | mutual"
+          - "lateFeeClaim?: Money — fee amount that applies as a claim between parties"
+          - "dealId?: uuidv7 — local ref F09.S01.M01 Deal in this vault"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - status confirmed or later implies confirmationCid is set and both signatures verified.
+          - A provider vault never has two bookings in status confirmed or in_progress whose intervals overlap.
+          - lateFeeClaim is at most total times lateFeeBps divided by 10000 and is never collected by the platform.
+    sql: |
+      CREATE TABLE services_booking (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, quote_id TEXT NOT NULL, client_id TEXT NOT NULL, provider_id TEXT NOT NULL,
+        start_utc TEXT, end_utc TEXT, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX services_booking_provider_time ON services_booking(tenant_id, provider_id, start_utc, status);
+  validation_rules:
+    requirements:
+      - Every inbound statement is validated in a fixed order - schema, signature, signer role, referenced cids, expiry, business rules - and the first failure decides the error.
+      - Business rules check offering state, blocks, limits, money and slot availability before any state changes.
+      - Every violation maps to one stable error code with a localized message key; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies over JCS bytes and author key matches the required role | SERVICES_STATEMENT_INVALID"
+      - "V02 | offering is published locally or in a stored verified projection and provider key matches | SERVICES_OFFERING_NOT_BOOKABLE"
+      - "V03 | description 10..2000 code points and budget, when present, is positive in a registered currency | VALIDATION_FAILED"
+      - "V04 | milestonePlan sums exactly to total and has at most 10 items | SERVICES_MILESTONE_SUM_MISMATCH"
+      - "V05 | validUntil is within 1 h..14 d of issue and acceptance occurs before validUntil plus 5 minutes by the provider clock | EXPIRED"
+      - "V06 | acceptance quoteCid equals the issued quote cid and the quote is not superseded or withdrawn | SERVICES_QUOTE_NOT_ACCEPTABLE"
+      - "V07 | client has fewer than 5 open requests and fewer than 2 per provider | SERVICES_REQUEST_LIMIT"
+      - "V08 | neither party has blocked the other | BLOCKED_PARTY"
+      - "V09 | slot hold for the quote is still held and not expired at confirmation | SERVICES_SLOT_UNAVAILABLE"
+  workflow_state_machine:
+    requirements:
+      - Requests, quotes and bookings follow the declared lifecycles; a statement that implies another transition is refused and quarantined with CONFLICT_STATE.
+      - A booking is confirmed only by the provider's signed confirmation; acceptance alone yields awaiting_confirmation.
+      - Confirmation commits the slot, stores the confirmation and opens the local Deal in one vault transaction; failure of any step leaves the booking awaiting_confirmation.
+    machines:
+      - entity: QuoteRequest
+        initial: open
+        terminal: [accepted, cancelled, expired]
+        transitions:
+          - "open -> quoted | quote issued or received | verified quote for this request; emits services.quote.issued"
+          - "quoted -> open | quote declined, withdrawn or expired | request may receive a new quote; emits services.quote.declined or services.quote.expired"
+          - "quoted -> accepted | acceptance recorded | exact quote cid matched; emits services.quote.accepted"
+          - "open -> cancelled | client cancels or block added | emits services.quote.declined with reason request_cancelled"
+          - "quoted -> cancelled | client cancels or block added | open quote is withdrawn"
+          - "open -> expired | local sweep at expiresAt | no quote within 14 days"
+      - entity: ServiceQuote
+        initial: issued
+        terminal: [accepted, declined, withdrawn, expired, superseded]
+        transitions:
+          - "issued -> accepted | client acceptance statement verified | quote cid equals signed cid and not expired"
+          - "issued -> declined | client quote_decline | frees the slot hold"
+          - "issued -> withdrawn | provider quote_decline | frees the slot hold"
+          - "issued -> expired | local sweep at validUntil plus 5 minutes | frees the slot hold; emits services.quote.expired"
+          - "issued -> superseded | provider issues a new quote for the same request | frees the old slot hold"
+      - entity: Booking
+        initial: awaiting_confirmation
+        terminal: [completed, cancelled]
+        transitions:
+          - "awaiting_confirmation -> confirmed | services.booking.confirm by provider | slot committed, Deal opened; emits services.booking.confirmed"
+          - "awaiting_confirmation -> cancelled | provider refusal, confirmation timeout 24 h, or client cancel | emits services.booking.cancelled"
+          - "confirmed -> in_progress | startUtc reached or services.milestone.submitted consumed | local sweep or event"
+          - "confirmed -> cancelled | services.booking.cancel by either party | applies cancellation policy; emits services.booking.cancelled"
+          - "in_progress -> completed | services.booking.completed consumed | all milestones settled"
+          - "in_progress -> cancelled | mutual cancellation statements from both parties | unpaid milestones cancelled; emits services.booking.cancelled"
+          - "in_progress -> disputed | services.dispute.opened consumed | freezes further approvals"
+          - "confirmed -> disputed | services.dispute.opened consumed | freezes cancellation fee claims"
+          - "disputed -> in_progress | commerce.dispute.resolved with outcome continue | resumes"
+          - "disputed -> completed | commerce.dispute.resolved with outcome settled | emits services.booking.completed"
+          - "disputed -> cancelled | commerce.dispute.resolved with outcome cancelled | emits services.booking.cancelled"
+    timeouts:
+      - "Request expiry 14 days, quote expiry at validUntil plus 5 minutes, confirmation timeout 24 h after acceptance; all evaluated on the local clock by a sweep at app start, on every command and every 60 s while the PWA is open, and by every read before the sweep has run."
+  commands_queries_events:
+    requirements:
+      - The module exposes vault commands for each party action; commands that another party must rely on also produce a named signed statement and enter the sync outbox in the same vault transaction.
+      - A single ingestion command applies inbound statements; it verifies, deduplicates by cid, derives local events with actor.kind federated and quarantines failures.
+      - Events are local (EVT-8); they leave the device only as the statements named below.
+    commands:
+      - name: services.quote.request
+        capability: services.quote.request
+        input: "[statement classrup.services.quote_request/v1 signed by client, E2E encrypted to provider] { offeringId, description, preferredFromUtc?, preferredToUtc?, budget?, attachmentIds? }"
+        output: "{ requestId, cid, syncState }"
+        errors: [VALIDATION_FAILED, SERVICES_OFFERING_NOT_BOOKABLE, SERVICES_REQUEST_LIMIT, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [services.quote.requested]
+        idempotent: true
+      - name: services.quote.issue
+        capability: services.quote.issue
+        input: "[statement classrup.services.quote/v1 signed by provider, E2E encrypted to client] { requestId, total, pricingBasis, estimatedMinutes?, milestonePlan?, proposedStartUtc?, durationMinutes?, validUntil?, cancellationPolicy }"
+        output: "{ quoteId, cid, slotHoldId?, syncState }"
+        errors: [NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_MILESTONE_SUM_MISMATCH, SERVICES_SLOT_UNAVAILABLE, SERVICES_HOLD_LIMIT]
+        emits: [services.quote.issued]
+        idempotent: true
+      - name: services.quote.accept
+        capability: services.quote.accept
+        input: "[statement classrup.services.quote_acceptance/v1 signed by client over the exact quote cid] { quoteId, expectedRevision }"
+        output: "{ bookingId, status: awaiting_confirmation, acceptanceCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, SERVICES_QUOTE_NOT_ACCEPTABLE]
+        emits: [services.quote.accepted]
+        idempotent: true
+      - name: services.quote.decline
+        capability: services.quote.decline
+        input: "[statement classrup.services.quote_decline/v1 signed by the declining party] { quoteId? , requestId?, role: client|provider, reason }"
+        output: "{ id, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [services.quote.declined]
+        idempotent: true
+      - name: services.booking.confirm
+        capability: services.booking.confirm
+        input: "[statement classrup.services.booking_confirmation/v1 signed by provider over quoteCid and acceptanceCid] { bookingId, expectedRevision }"
+        output: "{ bookingId, revision, confirmationCid, dealId, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, SERVICES_SLOT_UNAVAILABLE, DEPENDENCY_UNAVAILABLE]
+        emits: [services.booking.confirmed]
+        idempotent: true
+      - name: services.booking.cancel
+        capability: services.booking.cancel
+        input: "[statement classrup.services.booking_cancellation/v1 signed by the cancelling party] { bookingId, expectedRevision, reason }"
+        output: "{ bookingId, revision, lateFeeClaim?, effectiveAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [services.booking.cancelled]
+        idempotent: true
+      - name: services.statement.receive
+        capability: services.statement.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [SERVICES_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, SERVICES_QUOTE_NOT_ACCEPTABLE, EXPIRED, CONFLICT_STATE]
+        emits: [services.quote.requested, services.quote.issued, services.quote.accepted, services.booking.confirmed, services.booking.cancelled, services.quote.declined]
+        idempotent: true
+    queries:
+      - name: services.quote.get
+        capability: services.quote.read_own
+        input: "[vault-local] { quoteId }"
+        output: "{ quote: ServiceQuote, request: QuoteRequest }"
+        errors: [NOT_FOUND]
+      - name: services.quote.list_mine
+        capability: services.quote.read_own
+        input: "[vault-local] { role?: client|provider, status?, cursor?, limit ≤ 50 }"
+        output: "{ items: [QuoteRequest with latest ServiceQuote], nextCursor? }"
+        errors: []
+      - name: services.booking.list_mine
+        capability: services.booking.read_own
+        input: "[vault-local] { status?, fromUtc?, toUtc?, cursor?, limit ≤ 50 }"
+        output: "{ items: Booking[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: services.quote.requested, privacy: P2, payload: "{ requestId, offeringId, clientId, providerId, cid }"}
+      - {type: services.quote.issued, privacy: P2, payload: "{ quoteId, requestId, providerId, total, validUntil, cid }"}
+      - {type: services.quote.accepted, privacy: P2, payload: "{ quoteId, requestId, bookingId, clientId, providerId, acceptanceCid }"}
+      - {type: services.booking.confirmed, privacy: P2, payload: "{ bookingId, quoteId, clientId, providerId, startUtc?, endUtc?, total, milestonePlan[], dealId }"}
+      - {type: services.booking.cancelled, privacy: P2, payload: "{ bookingId, cancelledBy, reason, lateFeeClaim?, effectiveAt }"}
+      - {type: services.quote.declined, privacy: P2, payload: "{ quoteId?, requestId, role, reason }"}
+      - {type: services.quote.expired, privacy: P2, payload: "{ quoteId, requestId }"}
+    events_consumed:
+      - {type: services.milestone.submitted, effect: "move a confirmed booking to in_progress on the first submission"}
+      - {type: services.booking.completed, effect: "move an in_progress or disputed booking to completed"}
+      - {type: services.dispute.opened, effect: "move the booking to disputed and freeze new cancellation fee claims"}
+      - {type: commerce.dispute.resolved, effect: "leave disputed according to the outcome (continue, settled or cancelled)"}
+      - {type: identity.block.added, effect: "cancel open requests and unconfirmed bookings between the two parties with reason blocked"}
+    errors:
+      - "SERVICES_STATEMENT_INVALID | 422 | no | signature, signer role, schema or referenced cid check failed; statement is quarantined"
+      - "SERVICES_OFFERING_NOT_BOOKABLE | 409 | no | offering is not published, withdrawn, or the provider key differs"
+      - "SERVICES_QUOTE_NOT_ACCEPTABLE | 409 | no | quote is superseded, withdrawn, expired or the signed cid differs"
+      - "SERVICES_MILESTONE_SUM_MISMATCH | 422 | no | milestone amounts do not sum exactly to the quote total"
+      - "SERVICES_SLOT_UNAVAILABLE | 409 | no | the proposed slot is taken, expired or not generated in the provider vault"
+      - "SERVICES_HOLD_LIMIT | 409 | no | provider vault already has the maximum number of active holds for this client"
+      - "SERVICES_REQUEST_LIMIT | 409 | no | client already has the maximum number of open requests"
+    example: |
+      client vault command services.quote.request -> statement classrup.services.quote_request/v1 (cid sha256-Qw…), syncState prepared
+      provider vault receives, issues: services.quote.issue { "requestId": "0192f3c0-0001-…", "total": { "amount": "18000", "currency": "EUR" },
+        "pricingBasis": "fixed", "proposedStartUtc": "2027-03-29T07:00:00.000Z", "cancellationPolicy": { "freeUntilHoursBefore": 24, "lateFeeBps": 2000 } }
+      -> { "quoteId": "0192f3c0-0002-…", "cid": "sha256-Zk…", "slotHoldId": "0192f3b0-0002-…", "syncState": "prepared" }
+      client services.quote.accept { "quoteId": "0192f3c0-0002-…", "expectedRevision": 1 } -> status awaiting_confirmation
+      provider services.booking.confirm -> status confirmed, dealId set, syncState transport_acknowledged until the client acknowledges
+  authorization_capabilities:
+    requirements:
+      - Vault policy - requests and acceptances can be created only by the local principal acting as client; quotes, confirmations and withdrawals only by the local principal who is the offering provider.
+      - Inbound statements are accepted only when the signer matches the role required for that statement type for this request; otherwise quarantine with a reason code.
+      - No relay role is involved; relays only carry ciphertext and cannot create, alter or confirm any record.
+    capabilities:
+      - "services.quote.request | principal | local principal is not the provider; not blocked with provider locally; fewer than 5 open requests"
+      - "services.quote.issue | principal | local principal is the offering provider and the request was received from a verified client"
+      - "services.quote.accept | principal | local principal is the request author; quote is issued and unexpired"
+      - "services.quote.decline | principal | local principal is client of the request or provider of the quote"
+      - "services.booking.confirm | principal | local principal is the quote provider"
+      - "services.booking.cancel | principal | local principal is client or provider of the booking"
+      - "services.statement.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "services.quote.read_own | principal | local principal is client or provider of the request"
+      - "services.booking.read_own | principal | local principal is client or provider of the booking"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements are idempotent by cid, so duplicate delivery through two relays is harmless.
+      - Conflicting signed promises (two confirmations for overlapping slots, or two different acceptances of one quote) freeze the affected booking and require explicit renegotiation; there is no last-writer-wins for money or commitments.
+      - Each state change and its sync outbox entry are one IndexedDB transaction; a crash leaves neither.
+    idempotency: "Local command id stored 24 h; inbound statements deduplicated by cid in the inbox table (EVT-3); a repeated accept returns the same bookingId and acceptanceCid."
+    concurrency: "Web Locks lock services-provider-<providerId> around quote issue, confirm and slot operations so overlap prevention holds inside the provider vault; across vaults the only protection is the signed quote with its hold expiry and the provider's confirmation. Two confirmations for one quote cid from forked provider devices are detected through the seq/prev chain and freeze the booking."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination, then shows needs attention; acceptance is retried until confirmation or expiry."
+    offline: "Request, accept, decline and cancel work offline and commit locally; status text always names the highest reached sync state, and confirmed appears only after the provider's signed confirmation is held locally."
+    partial_failure: "If slot commit or Deal creation fails during confirmation, nothing is signed or stored and the booking stays awaiting_confirmation; if relay delivery fails after local commit the booking keeps its local state and the sync state shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Requests, quotes and bookings are P2 and travel only as end-to-end encrypted envelopes to the two participants; relays see ciphertext and routing metadata only.
+      - Descriptions and attachments never enter public projections, logs or notifications; notifications carry a reference and a template key only.
+      - Spam requests and phishing text are limited by local quotas, receiver-side filtering and relay hosting policy; no global enforcement is claimed.
+    data:
+      - "QuoteRequest, ServiceQuote, Booking: P2 (client and provider vaults)."
+      - "Client exact address, if any, is shared in the encrypted thread by explicit user action (L3 at most by default); never in these records."
+    retention:
+      - "Terminal requests, quotes and bookings: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days) with the failure code, then purged."
+    threats:
+      - "T01 | Forged acceptance or confirmation | Ed25519 signature over JCS bytes, signer must equal the request author or offering provider key, cid binding to the exact quote"
+      - "T02 | Request flooding of a provider | per-sender quota 20 inbound requests per day in the receiving vault, 5 open requests per client, relay mailbox quotas, local block"
+      - "T03 | Backdated cancellation to dodge a fee | effective time is the claimed time only when within 72 h before the receipt time, otherwise the receipt time; relay-signed receipt time is evidence of that relay clock only; disputes go to F03.S02.M03"
+      - "T04 | Provider double-sells one slot to two clients | overlap check and hold inside the provider vault; second acceptance is refused with a signed slot_taken cancellation; clients see awaiting confirmation until the provider signs"
+      - "T05 | Phishing links in descriptions | descriptions are plain text, links are not rendered as links, report or locally hide actions"
+    abuse_controls:
+      - "Local per-sender quotas and quarantine for malformed or unauthorized statements."
+      - "Relay hosting policy may rate limit mailbox writes; this module surfaces refusals in the sync state."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); local counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Vault commands meet p95 ≤ 150 ms on a mid-range phone with 2 000 bookings stored, excluding network delivery.
+      - Statement verification meets p95 ≤ 30 ms per envelope.
+    metrics:
+      - "classrup_services_quotes_total{outcome=requested|issued|accepted|declined|expired} (local counter)"
+      - "classrup_services_statements_quarantined_total{code} (local counter)"
+      - "classrup_services_booking_confirm_latency_ms (local histogram from acceptance receipt to confirmation)"
+    logs:
+      - "info booking.confirmed {bookingId, correlationId} in the local diagnostics log - no descriptions, amounts or addresses."
+    budgets:
+      - "vault command p95 ≤ 150 ms; list queries p95 ≤ 80 ms for 50 items; statement verification p95 ≤ 30 ms."
+      - "Sweep over 2 000 records ≤ 150 ms, split into slices of at most 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests validate all statement schemas, signatures and event payloads against the schema registry.
+      - Cross-vault flows are covered by two-vault integration tests with an in-memory relay that can drop, duplicate and reorder envelopes.
+    fixtures: "Two vaults - client C and provider P - with an in-memory relay; offering O (fixed EUR), calendar in Europe/Berlin; fixed clock 2026-11-04T10:00:00Z; keys generated from fixed seeds."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,04.R01 | issue a quote whose milestones sum to total and one that is off by 1 minor unit | first stored; second SERVICES_MILESTONE_SUM_MISMATCH"
+      - "T02 | unit | 01.R03,02.R01,02.R02,02.R03 | each rule V01–V09 violated in turn | documented code returned and nothing stored, bad statements quarantined"
+      - "T03 | property | 03.R01 | random statement sequences per entity | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,03.R03,06.R03 | confirm with slot commit failing, then with Deal creation failing | booking stays awaiting_confirmation, no signature, no committed slot, no Deal"
+      - "T05 | integration | 04.R02,06.R01,09.R03 | full flow with relay that duplicates and reorders envelopes | both vaults reach confirmed with identical bookingId and cids; duplicates skipped"
+      - "T06 | contract | 04.R01,04.R03,09.R01,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T07 | abuse | 05.R01,05.R02,05.R03,07.R01 | acceptance signed by a third key; confirmation signed by the client; relay tries to alter ciphertext | all quarantined with SERVICES_STATEMENT_INVALID; no state change; relay cannot read descriptions"
+      - "T08 | integration | 06.R02,07.R02 | two clients accept two quotes for one slot; forked provider devices sign two confirmations | second acceptance refused slot_taken; forked confirmations freeze booking and require renegotiation"
+      - "T09 | integration | 01.R02,03.R01,07.R03 | acceptance arrives 6 minutes after validUntil by provider clock | refused EXPIRED; quote shown expired; no booking confirmed"
+      - "T10 | property | 06.R01,07.R03 | cancellation times around the 24 h boundary and with backdated claims | fee follows the policy and the 72 h rule; amounts HALF_EVEN and never exceed total times lateFeeBps"
+      - "T11 | abuse | 07.R03,07.R01 | 21 inbound requests in a day from one sender | 21st dropped and counted; sender remains quarantined for the day"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 bookings, 100 mixed commands on throttled mobile profile | command p95 ≤ 150 ms, verify p95 ≤ 30 ms, no telemetry request"
+      - "T13 | integration | 06.R01,10.R01 | go offline, accept, sync later | UI shows prepared then transport_acknowledged; confirmed only after provider confirmation received"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | records round-trip identical; in-flight statements re-enter outbox as prepared"
+      - "T15 | e2e | 01.R01,03.R02 | mobile client requests, provider quotes and confirms in a second browser context | both show confirmed; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No booking is ever shown as confirmed without the provider's verified signed confirmation held in the vault.
+      - Duplicated, reordered or replayed statements never change state twice.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains requests, quotes, bookings and all signed statements with their cids so evidence survives vault loss.
+      - Import verifies every statement signature and cid before restoring; unverifiable items are kept as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section services.bookings in classrup-export/v1 with request, quote and booking lines plus a statements array of the original envelopes."
+    import: "Verified terminal records import as history; open requests and quotes import as expired; awaiting_confirmation bookings import cancelled with reason system so no stale commitment is restored; confirmed and in_progress bookings import as is."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext mailboxes (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

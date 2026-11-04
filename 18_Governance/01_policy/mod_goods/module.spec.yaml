@@ -108,7 +108,7 @@ processes:
         initial: active
         terminal: [retired]
         transitions:
-          - "active -> deprecated | bazaar.category.deprecate by publisher, or pack change | hidden from new listings; existing references keep working; emits governance.category.changed"
+          - "active -> deprecated | governance.category.set_status by publisher, or pack change | hidden from new listings; existing references keep working; emits governance.category.changed"
           - "deprecated -> active | reactivate by publisher or pack change | emits governance.category.changed"
           - "deprecated -> retired | retire with mergedInto by publisher or pack change | resolve alias returns mergedInto; emits governance.category.changed"
           - "active -> retired | retire with mergedInto by publisher or pack change | emits governance.category.changed"

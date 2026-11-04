@@ -1,0 +1,184 @@
+id: F06.S02.M03
+scope: MVP
+summary: >-
+  Radius search over cells with bucketed distances. Locally in the vault it filters the local index by cell sets
+  with no limits, because the user already holds that data. On a relay it is served as the query
+  discovery.proximity.search under relay-policy rate limits designed against trilateration (Polakis et al., CCS 2015):
+  the search center is always a cell (never a raw point), the radius is at least 5 km, distances leave the module only
+  as bucket labels, and the number of distinct centers per client is limited. Cell snapping bounds what any attacker can
+  learn to the L2 cell that is already public; rate limits slow cross-referencing, they do not claim to stop it.
+responsibilities:
+  - Resolve a search area from a center cell (own home cell or a chosen browse cell) and a radius from the set 5, 10, 25, 50, 100 km using F06.S02.M01.
+  - Return documents inside the cell set with a distance bucket per item computed cell-to-cell, never a numeric distance, and order by bucket then relevance score.
+  - On a relay, enforce policy limits on query rate, distinct centers and radius for anonymous and token callers, and record abuse patterns in relay-local counters.
+  - Provide library guards (assertCenterCell, assertRadius, bucketize) used by F06.S01.M02 when the near parameter is present.
+non_responsibilities:
+  - Geohash math and bucket thresholds (F06.S02.M01).
+  - Full-text queries and saved searches (F06.S01.M02) and scoring (F06.S03).
+  - Global user suspension or global rate limits; limits are per relay policy (CAP-9) and the vault has none.
+  - "Future: per-query differential-privacy noise on result counts, proof-of-work tickets for anonymous callers, cross-relay shared abuse signals."
+depends_on: [F06.S02.M01, F06.S01.M01, F06.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001]
+user_stories:
+  - As a buyer, I browse items within 10 km of my area and see '5-10 km' badges, not exact distances.
+  - As a buyer on a relay, I can change my browse area a few times per day but not hundreds of times.
+  - As a seller, my listing cannot be located more precisely than my approximate area by repeated proximity queries.
+  - As a relay operator, I can tune the limits and see when they trigger, without learning anyone's home location.
+edge_cases:
+  - Radius 1 km is requested; rejected with DISCOVERY_RADIUS_TOO_SMALL, never rounded up silently.
+  - A caller supplies a 6-character center cell; rejected with DISCOVERY_CENTER_TOO_PRECISE and nothing is queried.
+  - A caller issues queries from 12 distinct centers within an hour on a relay; the 3rd distinct new center in an hour and the 6th in 24 h get RATE_LIMITED with reason center_changes.
+  - Two points in the same cell issue the same query; responses are identical, proving no sub-cell information is used.
+  - A caller omits the center and has no stored home cell; DISCOVERY_CENTER_REQUIRED.
+  - A radius search would return 0 documents; an empty result is returned and still counts toward limits.
+  - An anonymous caller requests radius 5 km at an L2 center; the relay policy forces anonymous callers to L1 centers and radius at least 25 km, returning DISCOVERY_CENTER_TOO_PRECISE otherwise.
+  - The vault is offline; local proximity search works without limits.
+ux:
+  screens:
+    - "Nearby screen: area label ('Around <region>'), radius selector (5, 10, 25, 50, 100 km), results grouped by distance bucket badges, 'Change area' action showing remaining area changes today when on a relay."
+  states: [loading, empty, results, rate-limited, offline-local-only, error]
+  a11y:
+    - Distance buckets are text badges with accessible names such as 'between 5 and 10 kilometres away'.
+    - The radius selector is a native radio group with 44 by 44 px targets.
+    - A rate-limited state is announced via aria-live polite with the retry time.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no persisted entity; its inputs are a center cell, a radius and filters, and its limits are relay policy values with counters held in RET-EPHEMERAL relay memory.
+      - The policy row holds numeric limits per caller class and is versioned so operators can audit changes.
+      - A result item exposes a distance bucket and the document's L2 cell only, never a number or a finer location.
+    entities: []
+    note: >-
+      Module owns no entity. Relay policy values (stored in relay configuration by F15.S04, read here) - anonymousMinRadiusKm 25,
+      anonymousCenterLevel L1, queriesPerMinute 20 (anonymous) and 60 (token), queriesPerHour 200 (anonymous) and 600 (token),
+      distinctCentersPerHour 2, distinctCentersPer24h 5, maxDepth 500. Counters (RET-EPHEMERAL, 24 h) are keyed by device-key
+      thumbprint, access-token id and IP /24 and stored hashed with a rotating daily salt.
+  validation_rules:
+    requirements:
+      - Center, radius and depth are validated before any search work is done.
+      - Relay policy limits are checked before the index is touched and failures return RATE_LIMITED with retryAfterMs and a reason.
+      - Validation errors never reveal counters or other users' behaviour.
+    rules:
+      - "V01 | center cell has exactly 5 characters (members and tokens) or 4 characters (anonymous relay callers) | DISCOVERY_CENTER_TOO_PRECISE"
+      - "V02 | radiusKm is one of 5, 10, 25, 50, 100 and at least 25 for anonymous relay callers | DISCOVERY_RADIUS_TOO_SMALL"
+      - "V03 | a center is supplied or the vault has a stored home cell | DISCOVERY_CENTER_REQUIRED"
+      - "V04 | relay only - distinct new centers within 1 h are at most 2 and within 24 h at most 5 per caller key | RATE_LIMITED"
+      - "V05 | relay only - queries within 1 minute are at most 20 (anonymous) or 60 (token) and within 1 hour at most 200 or 600 | RATE_LIMITED"
+      - "V06 | requested depth is at most 500 results and limit is 1..50 | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - The module has no entity lifecycle; each query is evaluated independently against current counters.
+      - Counter windows slide by fixed buckets (1 min, 1 h, 24 h) and reset by expiry, not by operator edits.
+      - A blocked or rate-limited caller recovers automatically when the window ends.
+    machines: []
+    note: Stateless per request; counters are ephemeral relay-side values, not entity state.
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - The only operation is the query discovery.proximity.search, served by the vault locally and by a relay endpoint; it never writes domain state and never produces statements.
+      - Results contain only public P0 fields of SearchDocuments plus a distance bucket.
+      - The module emits no events; relay-local abuse counters are metrics, and anomaly reports go to the relay's own moderation port.
+    commands: []
+    queries:
+      - name: discovery.proximity.search
+        capability: discovery.proximity_area.search
+        input: "{ centerCell5?: string, radiusKm: 5|10|25|50|100, filters?, sort?: bucket_then_relevance|newest, cursor?, limit? (1..50, default 20) }"
+        output: "{ items: [{ documentId, title, priceMinor?, currency?, geoCell5?, distanceBucket: lt5|5_10|10_25|25_50|gt50, explain }], nextCursor?, areaChangesRemaining? }"
+        errors: [DISCOVERY_CENTER_TOO_PRECISE, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_CENTER_REQUIRED, DISCOVERY_FILTER_INVALID, RATE_LIMITED, EXPIRED]
+    events_produced: []
+    events_consumed: []
+    note: Query-only module with no events; abuse patterns are reported to the relay's local moderation port as signals, not as catalog events.
+    errors:
+      - "DISCOVERY_CENTER_TOO_PRECISE | 422 | no | center cell is finer than allowed for this caller"
+      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius is below 5 km, not an allowed value, or below the anonymous minimum"
+      - "DISCOVERY_CENTER_REQUIRED | 422 | no | no center was supplied and no home cell is stored"
+      - "DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type"
+    example: |
+      relay query: POST /api/v1/query/discovery.proximity.search { "centerCell5": "u4pru", "radiusKm": 10, "limit": 20 }
+      200 { "items": [{ "documentId": "0192f3b0-…", "title": "Trek road bike 56cm", "distanceBucket": "5_10", "geoCell5": "u4prv" }], "areaChangesRemaining": 4 }
+      429 { "code": "RATE_LIMITED", "retryable": true, "params": { "reason": "center_changes" }, "retryAfterMs": 1800000 }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - local proximity search is available to the unlocked principal only and has no rate limit.
+      - Relay policy - the relay endpoint allows anonymous callers at reduced precision and quota, and token or signed-request callers at the higher quota; a relay may disable anonymous access.
+      - Relay moderators and operators get no extra proximity powers; they can only change policy values.
+    capabilities:
+      - "discovery.proximity_area.search | principal, anonymous | vault - unlocked principal, no limit; relay - caller class and quotas from relay policy"
+  failure_recovery_idempotency:
+    requirements:
+      - The query is side-effect free except for ephemeral counters, so retries are safe.
+      - A counter store failure fails closed with DEPENDENCY_UNAVAILABLE rather than skipping limits.
+      - Cursors are bound to the center cell, radius and filter hash so they cannot be reused to widen an area.
+    idempotency: "Queries are read-only; counters increment once per accepted request keyed by request id, so a client retry with the same Idempotency-Key header is not double counted within 60 s."
+    concurrency: "Counters use atomic increments per key and window; concurrent requests may overshoot a limit by at most the number of in-flight requests (bounded by 4 per key)."
+    retries: "Clients retry only RATE_LIMITED after retryAfterMs and DEPENDENCY_UNAVAILABLE with base 500 ms, cap 30 s, full jitter, max 6 attempts."
+    offline: "The vault runs local proximity search on the local index offline; relay search is skipped and the UI says so."
+    partial_failure: "If the index read fails after counters incremented, the request still counts; the caller sees DEPENDENCY_UNAVAILABLE and the retry is allowed once per minute without a second increment."
+  privacy_retention_abuse:
+    requirements:
+      - The center cell is the only location a relay learns from a query; it is L2 or coarser and is not stored beyond 24 hours in hashed counters.
+      - Result distance is bucketed and computed cell to cell, ordering never uses a finer distance than the bucket, and results contain no coordinates.
+      - Trilateration resistance rests on snapping and bucketing; rate limits are a secondary speed bump, and the spec states that a patient attacker with many keys and networks is slowed, not stopped.
+    data:
+      - "Query: center cell (L2 at most), radius, filters; counters hashed with a daily rotating salt; no IP beyond /24."
+      - "Results: P0 fields only; no coordinates; distance bucket labels."
+    retention:
+      - "Relay counters RET-EPHEMERAL (24 h); no query log with center cells beyond 24 h; vault keeps no proximity history."
+    threats:
+      - "T01 | Trilateration by moving the query center and observing bucket edges (Polakis et al. 2015) | centers and documents are cells, so every point in a cell gives identical answers; bucket edges are cell-to-cell, so edges expose only cell-level facts already public at L2"
+      - "T02 | Probing with many distinct centers to localize a seller within a cell neighbourhood | 2 new centers per hour and 5 per 24 h per caller key, IP /24 and token; relay policy may lower these"
+      - "T03 | Tiny radius to isolate individual listings | minimum radius 5 km, anonymous minimum 25 km at L1 centers, allowed radius set only"
+      - "T04 | Distance ordering leaks finer distance than the bucket | results sorted by bucket then relevance; ties never broken by true distance"
+      - "T05 | Many sybil keys and IPs defeat per-key limits | honest limit - per-key, token and /24 limits only slow this; the bound on leakage remains the L2 cell; relays may add proof-of-work or allowlists by policy"
+    abuse_controls:
+      - "Relay policy limits listed above, configurable per relay; exceeding returns RATE_LIMITED with reason and retryAfterMs."
+      - "Pattern detector flags more than 8 queries in 1 hour touching at least 4 distinct centers within 25 km of each other; the relay logs a local signal and may tighten the caller's quota to half for 24 h."
+  observability_performance:
+    requirements:
+      - Relays export proximity query metrics per CTR-OBS-001; the PWA keeps only local diagnostics.
+      - Proximity queries meet the search budget - relay p95 at most 200 ms over 100 000 documents and local p95 at most 120 ms over 5 000 documents.
+      - Limit triggers are observable by reason.
+    metrics:
+      - "classrup_discovery_proximity_queries_total{outcome=ok|rate_limited|invalid}"
+      - "classrup_discovery_proximity_rate_limited_total{reason=center_changes|per_minute|per_hour|pattern}"
+      - "classrup_discovery_proximity_duration_ms (histogram)"
+    logs:
+      - "info proximity.served {radiusKm, resultCount, durationMs, correlationId} - no center cell, no caller id."
+      - "warn proximity.limited {reason, correlationId}."
+    budgets:
+      - "Relay p95 <= 200 ms at 100 000 documents and 50 req/s; local p95 <= 120 ms at 5 000 documents; cellsForRadius(100 km) <= 2 ms."
+      - "Counter checks add <= 3 ms p95."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test, including a property test that results depend only on cells.
+      - Abuse tests simulate a trilateration attempt and verify the information bound and the limits.
+      - Contract tests check the query signature against the registry.
+    fixtures: "Index of 2 000 documents over 40 L2 cells, relay with default policy, anonymous and token callers, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01 | valid center and radius 10 | cell set from F06.S02.M01 used, items carry distance buckets only"
+      - "T02 | unit | 02.R02,02.R03,06.R01 | radius 1 km, 6-character center, missing center, anonymous at L2 center | DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_CENTER_TOO_PRECISE, DISCOVERY_CENTER_REQUIRED respectively; no index read"
+      - "T03 | property | 01.R03,07.R02 | 1 000 pairs of points in the same cell issue the same query | byte-identical responses; no numeric distance appears in any response"
+      - "T04 | abuse | 07.R03,07.R01 | scripted trilateration - 200 centers moving in 100 m steps around a target listing | information obtained is the target's L2 cell and bucket edges only; later queries are RATE_LIMITED"
+      - "T05 | abuse | 02.R02,03.R03,07.R03 | third new center within 1 h and sixth within 24 h; recovery after window | RATE_LIMITED with reason center_changes and retryAfterMs; works again after the window"
+      - "T06 | abuse | 02.R02,03.R02 | 21 queries in one minute as anonymous, 61 as token caller | 21st and 61st RATE_LIMITED with reason per_minute"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | query executes | output validates against registry schema and contains only P0 fields"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | locked vault queries locally; operator tries special access on relay; anonymous at disabled-anonymous relay | local needs unlock; operator has no extra power; anonymous gets FORBIDDEN"
+      - "T09 | chaos | 06.R01,06.R02,06.R03 | counter store down; index read fails after increment; same Idempotency-Key retried | fail closed with DEPENDENCY_UNAVAILABLE; no double count within 60 s; cursor reuse for wider radius rejected"
+      - "T10 | integration | 04.R03,01.R02 | local proximity offline over local index with 5 000 documents | results returned with no limits applied and no relay call"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 50 req/s for 5 minutes on a relay and 120 ms local budget run | relay p95 <= 200 ms, counters add <= 3 ms, metrics exported by reason"
+      - "T12 | abuse | 07.R03,08.R03 | pattern of 9 queries over 4 centers within 25 km in an hour | local signal raised and quota halved for 24 h"
+      - "T13 | unit | 09.R01,09.R03 | traceability run over PS-049 | every requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export and restore of vault and relay | no proximity data exists in exports; policy values restored from relay configuration backup"
+      - "T15 | unit | 01.R01,03.R01 | read relay policy values and inspect counters storage | policy versioned, counters hashed with rotating salt and expire in 24 h"
+    acceptance:
+      - All tests T01-T15 pass in CI.
+      - Same-cell invariance holds (property test) and no response contains a numeric distance or coordinates.
+      - The scripted trilateration test yields no information finer than the L2 cell and is rate limited as documented.
+  import_export_backup_rollback:
+    requirements:
+      - The module owns no user data; nothing is exported, and the vault keeps no proximity history.
+      - Relay policy values are part of relay configuration and are restored with relay backups; counters are never backed up.
+      - Policy value changes are versioned and a rollback restores the previous version.
+    export: "Not applicable; no user data is owned."
+    import: "Not applicable; relay policy values are configuration, imported by operators through F15.S04."
+    backup: "Relay policy values are covered by relay configuration backups (IOX-7); counters are ephemeral and excluded."
+    migration_rollback: "Policy version increments on every change and rollback selects the previous version; the allowed radius set and the 5 km minimum are constants that change only with a new major of F06.S02.M01."

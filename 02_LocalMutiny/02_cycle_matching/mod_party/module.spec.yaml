@@ -102,8 +102,9 @@ processes:
     machines:
       - entity: MatchingProfile
         initial: opted_out
-        terminal: []
+        terminal: [retired]
         transitions:
+          - "opted_out -> retired | vault erasure by the principal (F10.S01.M04) | local record purged; tombstone already published if it had been opted in"
           - "opted_out -> opted_in | mutiny.matching_profile.update with optedIn true | V03 and V04 pass; signs projection seq+1; emits mutiny.matching_profile.updated"
           - "opted_in -> opted_in | mutiny.matching_profile.update changing public fields | signs projection seq+1; emits mutiny.matching_profile.updated"
           - "opted_in -> paused | update with pausedUntil | local only; emits mutiny.matching_profile.updated with paused true"
@@ -136,7 +137,7 @@ processes:
     queries:
       - name: mutiny.matching_profile.get_mine
         capability: mutiny.matching_profile.read_own
-        input: "{}"
+        input: "{ none — the principal own profile }"
         output: "{ profile: MatchingProfile, syncState, lastPublishedAt }"
         errors: [NOT_FOUND]
       - name: mutiny.matching_profile.list_known
@@ -228,7 +229,7 @@ processes:
     fixtures: "Principal did:key:z6MkAlice with home region u0qj; peers Bob and Carol; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01,02.R02 | update with each of V01..V06 violated in turn | documented error code and nothing stored"
-      - "T02 | contract | 01.R02,04.R02,07.R02,09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs"
+      - "T02 | contract | 01.R02,04.R02,07.R02,09.R02,09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs"
       - "T03 | unit | 01.R03,02.R03 | ingest valid, bad signature, lower seq, broken prev, future createdAt | accepted once, other four quarantined or ignored with reasons"
       - "T04 | property | 03.R01,03.R02 | random sequences of update commands | seq increments by exactly 1 per public change; opt-out always yields tombstone"
       - "T05 | integration | 03.R02,06.R03 | opt out while all relays unreachable | tombstone queued with state prepared and delivered on reconnect"

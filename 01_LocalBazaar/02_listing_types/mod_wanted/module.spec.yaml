@@ -1,0 +1,259 @@
+id: F01.S02.M02
+scope: MVP
+summary: >-
+  Lets a member post what they are looking for: category, keywords, acceptable conditions, quantity, an optional
+  maximum budget and whether they would barter. The WantSpec is attached to a wanted-kind listing. It becomes
+  matchable (event bazaar.want.declared) when the listing is published, and feeds local barter matching and relay
+  matching over public projections. The maximum budget is private by default and is never published unless the
+  owner switches budgetVisible on.
+responsibilities:
+  - Own WantSpec: category, keywords (at most 10), acceptable conditions, quantity wanted, optional max budget, barter flag, distance bucket and needed-by date.
+  - Keep the budget private by default; include it in the projection only when budgetVisible is true.
+  - Track the want lifecycle (draft, open, paused, fulfilled, withdrawn) driven by listing publication events and owner actions.
+  - Offer a read port for LocalMutiny matching and local search: bazaar.want.list_open returns open wants of the local vault with the fields the owner agreed to share.
+non_responsibilities:
+  - Creating the wanted listing record (F01.S01.M01) and publishing it (F01.S01.M03).
+  - Cycle matching and proposals (F02); this module only declares wants.
+  - Search over other people's wants (F06 relay and local index over signed projections).
+  - Currency registry (F09.S03.M01) beyond checking that the budget currency is registered.
+  - "Future: wants with attached reference photos and recurring wants."
+depends_on: [F01.S01.M01, F18.S01.M03, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a buyer, I post that I want a used road bike in good condition within 25 km and keep my maximum budget private.
+  - As a trader, I mark my want as barter-acceptable so the matcher can include it in swap cycles.
+  - As a member, I mark my want fulfilled and it stops appearing in matches.
+edge_cases:
+  - Budget currency not registered; BAZAAR_WANT_CURRENCY_UNKNOWN is returned.
+  - Owner publishes the wanted listing, then unpublishes it; the want pauses and stops being matchable until republished.
+  - The wanted listing expires; the want is withdrawn with reason expired and the matching engine receives the withdrawal event.
+  - Keywords include a prohibited term; publication is blocked by the listing publication module, and the want stays draft.
+  - Owner sets budgetVisible true after publishing; this is a material edit that requires a new signed projection and shows a warning that fetched copies of earlier versions remain private.
+  - Two devices of the same owner mark the want fulfilled and withdrawn at once; the second gets CONFLICT_STATE.
+ux:
+  screens:
+    - "Want form: category, keywords as chips (max 10), acceptable conditions, quantity, max budget with a private toggle and explanation, barter switch with note, distance bucket, needed-by date."
+    - "My wants list with status chips and actions Mark fulfilled and Withdraw."
+  states: [loading, empty, saving-local, saved-local, open, paused, fulfilled, withdrawn, conflict]
+  a11y:
+    - Keyword chips are removable by keyboard and have accessible names including the keyword.
+    - The budget privacy toggle states its effect in text next to the control.
+    - Status changes are announced in an aria-live polite region; buttons are at least 44x44 px.
+processes:
+  domain_schema:
+    requirements:
+      - "WantSpec holds the search intent of a wanted listing: category, keywords, acceptable conditions, quantity, optional budget as Money, barter flag, distance bucket and needed-by date."
+      - "The maximum budget is P3 by default and part of any projection only when budgetVisible is true; keywords and category are P0 once published."
+      - "WantSpec status is derived from the listing lifecycle events plus explicit owner actions."
+    entities:
+      - name: WantSpec
+        schema: classrup.bazaar.want_spec/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing of kind wanted; unique"
+          - "ownerId: did:key — local principal"
+          - "categoryId: uuidv7 — ref F18.S01.M03 Category; active leaf"
+          - "keywords: string[] — 1..10 items, each 2..40 code points lowercase"
+          - "conditionsAccepted: string[] — subset of new | like_new | good | fair | poor | for_parts; at least 1"
+          - "quantityWanted: int — 1..100"
+          - "maxBudget?: Money — CTR-MNY-001; > 0; <= 1 000 000 000 000 minor units"
+          - "budgetVisible: boolean — default false"
+          - "barterAcceptable: boolean — default false"
+          - "barterNote?: string — <= 280 code points, plain text"
+          - "maxDistanceBucket?: enum — lt_5km | 5_10km | 10_25km | 25_50km | gt_50km (CTR-PRV-001 PRV-2 buckets)"
+          - "neededBy?: date — ISO 8601 date, not more than 365 days ahead"
+          - "status: enum — draft | open | paused | fulfilled | withdrawn"
+          - "withdrawReason?: enum — owner | expired | listing_closed | listing_archived | listing_deleted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Exactly one WantSpec exists per wanted listing and none for other kinds.
+          - maxBudget never appears in an event payload, and in a projection only if budgetVisible is true.
+          - status open implies the listing status is published.
+    sql: |
+      CREATE TABLE bazaar_want_spec (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+        category_id TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_want_spec_listing ON bazaar_want_spec(tenant_id, listing_id);
+      CREATE INDEX bazaar_want_spec_open ON bazaar_want_spec(tenant_id, status, category_id);
+  validation_rules:
+    requirements:
+      - "Want input is validated strictly, including keyword hygiene and Money rules."
+      - "The category must be an active leaf of the active policy pack and the listing must be of kind wanted."
+      - "Every violation maps to one stable error code."
+    rules:
+      - "V01 | keywords 1..10, each 2..40 code points after NFKC lowercase, no duplicates | VALIDATION_FAILED"
+      - "V02 | categoryId is an active leaf category | BAZAAR_WANT_CATEGORY_INVALID"
+      - "V03 | conditionsAccepted has 1..6 distinct valid values | VALIDATION_FAILED"
+      - "V04 | quantityWanted integer 1..100 | VALIDATION_FAILED"
+      - "V05 | maxBudget amount positive integer string and currency registered | BAZAAR_WANT_CURRENCY_UNKNOWN"
+      - "V06 | neededBy is today or later and at most 365 days ahead | VALIDATION_FAILED"
+      - "V07 | listing exists, is of kind wanted and has status draft, published or unpublished | CONFLICT_STATE"
+      - "V08 | barterNote <= 280 code points and contains no contact or payment details pattern | VALIDATION_FAILED"
+      - "V09 | owner has fewer than 100 open wants | BAZAAR_WANT_LIMIT"
+  workflow_state_machine:
+    requirements:
+      - "WantSpec follows the declared machine; fulfilled and withdrawn are terminal."
+      - "A want becomes open only when its listing is published and paused when it is unpublished; the matching engine treats only open wants as matchable."
+      - "Owner actions and listing events race safely: the first committed transition wins and the other receives CONFLICT_STATE."
+    machines:
+      - entity: WantSpec
+        initial: draft
+        terminal: [fulfilled, withdrawn]
+        transitions:
+          - "draft -> open | consumes bazaar.listing.published for the listing | emits bazaar.want.declared"
+          - "open -> paused | consumes bazaar.listing.unpublished | no event; matching engines see the unpublish through the listing tombstone"
+          - "paused -> open | consumes bazaar.listing.published again | emits bazaar.want.declared"
+          - "open -> fulfilled | bazaar.want.mark_fulfilled by owner | emits bazaar.want.fulfilled"
+          - "open -> withdrawn | bazaar.want.withdraw by owner, or consumes bazaar.listing.expired, closed, archived | emits bazaar.want.withdrawn with reason"
+          - "paused -> withdrawn | bazaar.want.withdraw by owner, or listing expired, archived or deleted | emits bazaar.want.withdrawn"
+          - "draft -> withdrawn | bazaar.want.withdraw by owner or listing deleted | no event because the want was never declared"
+    timeouts:
+      - "A want open for 90 days without a republish is withdrawn with reason expired when its listing expires; neededBy in the past pauses the want after 7 days and asks the owner to extend or withdraw."
+  commands_queries_events:
+    requirements:
+      - "define, mark_fulfilled and withdraw are vault-local commands; none produces a signed statement; the want's public data reaches others in the signed projection of F01.S01.M03."
+      - "bazaar.want.declared and bazaar.want.withdrawn carry ids and category only, so matching engines read details through the signed projection or the local read port."
+      - "bazaar.want.list_open is the local read port for LocalMutiny matching, including private fields because it runs in the owner's vault."
+    commands:
+      - name: bazaar.want.define
+        capability: bazaar.want.define
+        input: "[vault-local] { listingId, expectedRevision?, categoryId, keywords, conditionsAccepted, quantityWanted, maxBudget?, budgetVisible?, barterAcceptable?, barterNote?, maxDistanceBucket?, neededBy? }"
+        output: "{ wantId, revision, status, unsentChanges }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_WANT_CATEGORY_INVALID, BAZAAR_WANT_CURRENCY_UNKNOWN, BAZAAR_WANT_LIMIT]
+        emits: []
+        idempotent: true
+      - name: bazaar.want.mark_fulfilled
+        capability: bazaar.want.close
+        input: "[vault-local] { wantId, expectedRevision }"
+        output: "{ wantId, revision, status: fulfilled }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.want.fulfilled]
+        idempotent: true
+      - name: bazaar.want.withdraw
+        capability: bazaar.want.close
+        input: "[vault-local] { wantId, expectedRevision }"
+        output: "{ wantId, revision, status: withdrawn }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.want.withdrawn]
+        idempotent: true
+    queries:
+      - name: bazaar.want.get
+        capability: bazaar.want.read
+        input: "{ wantId } | { listingId }"
+        output: "{ want: WantSpec }"
+        errors: [NOT_FOUND]
+      - name: bazaar.want.list_open
+        capability: bazaar.want.read
+        input: "{ categoryId?, barterAcceptable?, cursor?, limit <= 200 }"
+        output: "{ items: WantSpec[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: bazaar.want.declared, privacy: P1, payload: "{ wantId, listingId, ownerId, categoryId, barterAcceptable, revision }"}
+      - {type: bazaar.want.withdrawn, privacy: P1, payload: "{ wantId, listingId, ownerId, reason: owner|expired|listing_closed|listing_archived|listing_deleted }"}
+      - {type: bazaar.want.fulfilled, privacy: P1, payload: "{ wantId, listingId, ownerId }"}
+    events_consumed:
+      - {type: bazaar.listing.published, effect: "move the want of that listing from draft or paused to open and emit bazaar.want.declared"}
+      - {type: bazaar.listing.unpublished, effect: "move an open want to paused"}
+      - {type: bazaar.listing.expired, effect: "withdraw the want with reason expired"}
+      - {type: bazaar.listing.closed, effect: "withdraw an open or paused want with reason listing_closed"}
+      - {type: bazaar.listing.archived, effect: "withdraw the want with reason listing_archived"}
+      - {type: bazaar.listing.deleted, effect: "withdraw the want with reason listing_deleted and delete it after 30 days"}
+    errors:
+      - "BAZAAR_WANT_CATEGORY_INVALID | 422 | no | category missing, retired or not a leaf"
+      - "BAZAAR_WANT_CURRENCY_UNKNOWN | 422 | no | budget currency is not registered"
+      - "BAZAAR_WANT_LIMIT | 409 | no | owner already has 100 open wants"
+    example: |
+      vault.dispatch("bazaar.want.define", { "listingId": "0192f3a4-7777-7d8e-9f01-23456789abcd", "categoryId": "0192f3a4-1111-7000-8000-0000000000c2",
+        "keywords": ["road bike", "54 cm"], "conditionsAccepted": ["good", "like_new"], "quantityWanted": 1,
+        "maxBudget": { "amount": "30000", "currency": "EUR" }, "budgetVisible": false, "barterAcceptable": true },
+        idempotencyKey: "0192f3a4-0000-7000-8000-000000000081")
+      => { "wantId": "0192f3ad-...", "revision": 1, "status": "draft", "unsentChanges": false }
+      on bazaar.listing.published => event bazaar.want.declared { wantId, listingId, ownerId, categoryId, barterAcceptable: true, revision: 2 }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal who owns the wanted listing may define, fulfil or withdraw the want."
+      - "bazaar.want.list_open is callable by the owner and by the local matching module acting for the owner; it returns private fields only inside the vault."
+      - "Relay matching uses the signed public projection and never reads this record."
+    capabilities:
+      - "bazaar.want.define | owner | listing.ownerId = local principal; listing kind wanted; status draft, published or unpublished"
+      - "bazaar.want.close | owner | want.ownerId = local principal; want status draft, open or paused"
+      - "bazaar.want.read | owner | want.ownerId = local principal, or internal caller F02.S02.M04 acting for the owner"
+  failure_recovery_idempotency:
+    requirements:
+      - "Commands are idempotent per CTR-IDM-001; event consumers are idempotent by event id in the local inbox (EVT-3)."
+      - "State change and outbox event commit in one transaction; events that arrive twice or out of order never regress a terminal state."
+      - "Offline edits are committed locally; matching engines on relays learn of changes only through a new signed projection."
+    idempotency: "Idempotency-Key required on commands, kept 24 h; consumers record (consumer, eventId) before side effects and skip duplicates."
+    concurrency: "expectedRevision on define, mark_fulfilled and withdraw; unique index on listing id; listing events and owner actions are serialized by the IndexedDB transaction, first commit wins."
+    retries: "Consumers retry failed handling with backoff base 500 ms cap 30 s up to 8 attempts, then dead-letter locally and show a diagnostics entry (EVT-6)."
+    offline: "Fully offline capable; unsent changes are shown until the projection is re-sent and a signed relay receipt exists."
+    partial_failure: "If an event handler fails after the status change, the whole handler transaction rolls back and the event is retried; the want never shows open while its listing is unpublished."
+  privacy_retention_abuse:
+    requirements:
+      - "The maximum budget is private by default because revealing it weakens the buyer's negotiating position; it is never in an event payload."
+      - "Wants follow RET-STANDARD with the listing; fulfilled and withdrawn wants are purged with the listing and leave a 180-day tombstone."
+      - "Wants reveal interests, so the UI states that published keywords are public and linkable to the pseudonym."
+    data:
+      - "WantSpec: P3 draft; category, keywords and conditions P0 when projected; maxBudget P3 unless budgetVisible."
+    retention:
+      - "WantSpec: RET-STANDARD; deleted 30 days after the listing is deleted."
+    threats:
+      - "T01 | Budget leakage lets sellers price up | budget excluded from events and from projection unless budgetVisible; contract test checks allowlist"
+      - "T02 | Fake wants to pollute matching or harvest offers | cap of 100 open wants, matching requires signed projection and local block lists, relay hosting policy"
+      - "T03 | Sensitive interest disclosure through keywords | owner sees exactly what becomes public before publishing; pseudonymity is not anonymity notice"
+      - "T04 | Keyword stuffing | at most 10 keywords of 2..40 code points; duplicates rejected"
+    abuse_controls:
+      - "At most 100 open wants and 30 define commands per hour per vault."
+      - "Prohibited-item rules apply to keywords at publication (F01.S01.M03)."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Define and list_open meet local latency budgets on Moto G-class hardware."
+      - "Consumer lag for listing events is visible in local diagnostics."
+    metrics:
+      - "classrup_bazaar_wants_total{outcome=declared|fulfilled|withdrawn} (local)"
+      - "classrup_bazaar_want_consumer_lag_ms (local gauge)"
+    logs:
+      - "info want.declared {wantId, listingId, correlationId} in local diagnostics; no keywords or budgets."
+    budgets:
+      - "define p95 <= 60 ms; list_open of 100 wants p95 <= 100 ms on Moto G-class hardware."
+      - "Event handling p95 <= 30 ms per event."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate command outputs and event payloads against the registry."
+      - "Lifecycle tests run listing events in duplicated and out-of-order delivery."
+    fixtures: "Vault with draft wanted listing W, published wanted listing X, categories C1 (active leaf) and C2 (retired), clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | define a valid want with private budget | stored; keywords normalized; budget absent from projection builder output"
+      - "T02 | unit | 01.R03,02.R03 | violate each rule V01-V09 | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random owner commands and duplicated listing events | only declared transitions; terminal states never regress; open implies listing published"
+      - "T04 | contract | 04.R01,04.R02,09.R02 | define, fulfil and withdraw | outputs and events validate; event payloads carry no budget or keywords"
+      - "T05 | integration | 04.R03,05.R03 | list_open as owner, as matching module and as relay-facing call | private fields for owner and matching module only; relay-facing path sees projection fields only"
+      - "T06 | abuse | 05.R01,05.R02 | another principal defines or withdraws | FORBIDDEN or NOT_FOUND"
+      - "T07 | integration | 06.R01,06.R02 | replay define; deliver bazaar.listing.published twice | one want, one declared event"
+      - "T08 | integration | 06.R03 | handler fails after transition | handler rolled back; retried; want never open while listing unpublished"
+      - "T09 | integration | 06.R03 | edit offline then send projection | unsent state shown; no relay-accepted claim without receipt"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | scan events, logs and projection; delete listing | budget absent everywhere; tombstone after purge; public-keywords notice present"
+      - "T11 | abuse | 07.R03 | create 101st open want and 31st define in an hour | BAZAAR_WANT_LIMIT and RATE_LIMITED"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 wants on Moto G profile | define p95 <= 60 ms, list p95 <= 100 ms, event handling p95 <= 30 ms, no network"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run, duplicate-event seed replay | every PS-007 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, import want for foreign listing | round-trip identical; foreign want rejected; open imports as paused"
+    acceptance:
+      - All tests T01-T14 pass in CI.
+      - Budget never appears in events, logs or projections unless the owner turned budgetVisible on.
+      - A want is open only while its listing is published, under duplicated and out-of-order events.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains all WantSpec rows of own wanted listings in section bazaar.wants."
+      - "Import imports open wants as paused so the owner must republish; it validates category, currency and ownership."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Section bazaar.wants in classrup-export/v1, one line per WantSpec (schema classrup.bazaar.want_spec/v1) including private budget because the export goes to the owner only."
+    import: "Wants import as paused regardless of exported status unless fulfilled or withdrawn; unknown categories keep the record read-only with a warning."
+    backup: "Vault export is the primary backup (IOX-6); relays hold only the public projection."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; older readers ignore new fields."

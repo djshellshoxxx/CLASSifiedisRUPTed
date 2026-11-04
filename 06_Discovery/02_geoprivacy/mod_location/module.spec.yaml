@@ -1,0 +1,297 @@
+id: F06.S02.M02
+scope: MVP
+summary: >-
+  Keeps the user's location choices inside the vault. The user sets a home region (public precision at most L2,
+  chosen by tapping a map tile or picking from an offline gazetteer, with GPS optional and used only once to
+  snap to a cell on the device). The user can also share a precise position (L3 cell or L4 exact coordinates)
+  with exactly one counterparty for at most 24 hours as an end-to-end encrypted signed statement, and can revoke
+  it. Exact coordinates never reach a relay in readable form and exact home addresses are never stored.
+responsibilities:
+  - Own LocationSetting - the vault-local home cell, the public level (L0, L1 or L2) and the entry mode.
+  - Snap device GPS or manual map input to a cell on the device before any storage, discarding the raw point within 1 second.
+  - Own LocationShare - the sharer's record and the recipient's received copy of a time-limited precise share, with expiry, revocation and context binding.
+  - Produce the signed statements classrup.discovery.location_share/v1 and classrup.discovery.location_share_revoke/v1 and verify incoming ones.
+non_responsibilities:
+  - Geohash math and the public-precision guard (F06.S02.M01).
+  - Transport and encryption of envelopes (F08.S01.M02 private messaging, relay mailboxes under F11).
+  - Meetup scheduling and safe-spot suggestions (F08.S03).
+  - Storing a street address; the vault holds no address field in this module.
+  - "Future: continuous live location, location sharing to groups, platform-protected key storage for share keys."
+depends_on: [F06.S02.M01, F07.S01.M01, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001]
+user_stories:
+  - As a user, I set my area by tapping a map tile without granting any location permission, and only the approximate area is stored.
+  - As a user, I choose whether my profile and listings show my area at L1 (about 39 km) or L2 (about 5 km) or nothing.
+  - As a buyer arranging a meetup, I share my exact position with the seller for 2 hours and can stop sharing at any time.
+  - As a recipient, I see that a share is active, when it ends, and that the sender can revoke it.
+edge_cases:
+  - Browser geolocation permission is denied or times out after 10 s; the flow falls back to the manual map tile picker with no error blocking the user.
+  - The user changes the home cell more than 3 times in 24 hours; the local guard refuses with DISCOVERY_HOME_CHANGE_LIMIT to discourage position-probing patterns.
+  - A share is requested for a counterparty the user has blocked; refused with BLOCKED_PARTY.
+  - An incoming share claims an expiry 5 days ahead; the recipient clamps it to receipt time plus 24 h and marks it clamped.
+  - The sender revokes while the recipient is offline; the revoke statement waits in the sync outbox (prepared, then transport_acknowledged) and the recipient's copy ends when it arrives or at expiry, whichever is first.
+  - A recipient device keeps a copy after expiry; the protocol cannot force deletion on another device and the sender UI says so before sharing.
+  - The user already has an active share to the same counterparty and context; the new grant replaces it only after explicit confirmation (old one revoked first).
+  - Clock skew - the recipient's clock differs from the sender's by an hour; all expiry decisions use the recipient's local receipt time as the anchor.
+ux:
+  screens:
+    - "Location settings: map tile picker with a 5 km grid, 'Use my device position once' button, public level selector (Hidden, Region about 39 km, Area about 5 km) with a live preview of what others will see."
+    - "Share precise location sheet: counterparty name, precision (neighbourhood about 1 km or exact point), duration (15 min, 1 h, 2 h, 8 h, 24 h), warning text about copies on the other device, Share and Stop buttons."
+    - "Incoming share card: map with marker, remaining time countdown, 'ends when sender stops or at <time>'."
+  states: [loading, no-home-set, permission-denied, active-share, share-expired, share-revoked, pending-offline, delivered-transport, accepted-by-peer, error]
+  a11y:
+    - The map tile picker has a keyboard and list alternative (choose from a searchable list of regions) per WCAG 2.5.7.
+    - Share state and remaining time are announced through an aria-live polite region and shown as text.
+    - Share and Stop buttons are at least 44 by 44 px with distinct accessible names including the counterparty.
+processes:
+  domain_schema:
+    requirements:
+      - LocationSetting stores only cells at precision 4 or 5 and a public level; it has no address field and no raw coordinates.
+      - LocationShare is P3 on the sharer's device and a time-boxed encrypted copy on the recipient's device; its expiry is at most 24 hours after creation and uses the holder's local clock.
+      - Exact coordinates are held in a share record only while it is active and are overwritten with zero bytes and deleted at expiry or revocation.
+    entities:
+      - name: LocationSetting
+        schema: classrup.discovery.location_setting/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "ownerDid: did — local principal"
+          - "homeCell5?: string — geohash of exactly 5 characters (L2); null means L0 none"
+          - "publicLevel: enum — L0 | L1 | L2; default L0; publicCell is homeCell5 truncated to the level"
+          - "entryMode: enum — map_tile | gazetteer | device_gps_once"
+          - "changeCount24h: int — home changes in the last 24 hours, 0..3"
+          - "lastChangedAt?: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - homeCell5 is null or exactly 5 geohash characters; publicLevel L1 publishes only its first 4 characters.
+          - publicLevel is never finer than L2 and is L0 when homeCell5 is null.
+          - changeCount24h never exceeds 3.
+      - name: LocationShare
+        schema: classrup.discovery.location_share/v1
+        storage: device
+        privacy: P3
+        retention: RET-EPHEMERAL
+        fields:
+          - "id: uuidv7 — shareId, primary key, generated by the sharer"
+          - "tenantId: uuidv7 — tenant scope"
+          - "direction: enum — outgoing | incoming"
+          - "sharerDid: did — the signer of the share statement"
+          - "recipientDid: did — exactly one counterparty"
+          - "contextRef?: object — { type: thread|meetup|deal, id: uuidv7 } the share is bound to"
+          - "precision: enum — L3 | L4"
+          - "cell6?: string — geohash of exactly 6 characters when precision is L3"
+          - "position?: object — { lat, lon } with 5 decimals, only when precision is L4 and the share is active"
+          - "claimedIssuedAt: timestamp — sender's claim"
+          - "claimedExpiresAt: timestamp — sender's claim, at most 24 h after claimedIssuedAt"
+          - "effectiveExpiresAt: timestamp — holder's local anchor, min(claimedExpiresAt, localReceiptOrCreation + 24 h)"
+          - "statementCid: string — sha256-base64url cid of the signed statement"
+          - "syncState: enum — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "status: enum — active | revoked | expired"
+          - "endReason?: enum — revoked | expired | blocked | context_cancelled | erased"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - effectiveExpiresAt minus the local creation time is at most 86 400 000 ms.
+          - Exactly one of cell6 and position is present while status is active, and neither is present after the share ends.
+          - Per (sharerDid, recipientDid, contextRef) at most one share is active.
+          - sharerDid differs from recipientDid and the pair is not blocked.
+    sql: |
+      CREATE TABLE discovery_location_share (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, direction TEXT NOT NULL, sharer_did TEXT NOT NULL,
+        recipient_did TEXT NOT NULL, context_type TEXT, context_id TEXT, status TEXT NOT NULL,
+        effective_expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX discovery_location_share_active ON discovery_location_share(tenant_id, sharer_did, recipient_did, ifnull(context_id,''), direction)
+        WHERE status = 'active';
+  validation_rules:
+    requirements:
+      - Home input is validated to cells at precision 5 or coarser and a public level no finer than L2 before storage.
+      - Share input enforces one counterparty, a TTL of 24 hours or less, a non-blocked recipient and a valid statement signature on receipt.
+      - Incoming statements are accepted only when signed by the claimed sharer and addressed to the local principal; otherwise they are quarantined with a reason.
+    rules:
+      - "V01 | home cell has exactly 5 geohash characters and publicLevel is L0, L1 or L2 | DISCOVERY_PRECISION_FORBIDDEN"
+      - "V02 | home changes in the last 24 hours are fewer than 3 | DISCOVERY_HOME_CHANGE_LIMIT"
+      - "V03 | share ttl is 15 minutes, 1 h, 2 h, 8 h or 24 h and never above 86 400 000 ms | DISCOVERY_SHARE_TTL_INVALID"
+      - "V04 | recipient is a single known DID that is not the sharer and not blocked in either direction | BLOCKED_PARTY"
+      - "V05 | fewer than 5 active outgoing shares exist and none is active for the same recipient and context | DISCOVERY_SHARE_LIMIT"
+      - "V06 | incoming statement signature verifies against sharerDid over JCS bytes and recipientDid equals the local principal | DISCOVERY_SHARE_SIGNATURE_INVALID"
+      - "V07 | position has finite lat in -90..90 and lon in -180..180 and is rounded to 5 decimals | DISCOVERY_COORD_INVALID"
+  workflow_state_machine:
+    requirements:
+      - A share is active until the first of revocation, expiry, block or context cancellation, and every end is permanent.
+      - Ending a share deletes its position or cell6 in the same transaction.
+      - A new share for the same recipient and context requires the previous one to be ended first.
+    machines:
+      - entity: LocationShare
+        initial: active
+        terminal: [revoked, expired]
+        transitions:
+          - "active -> revoked | discovery.location_share.revoke by sharer, signed revoke statement received by recipient, block added, or context cancelled | delete position and cell6, emit discovery.location_share.revoked, queue revoke statement to the counterparty"
+          - "active -> expired | local expiry sweep at effectiveExpiresAt | delete position and cell6, emit discovery.location_share.revoked with reason expired"
+    timeouts:
+      - "Expiry sweep every 30 s while the app is open and at every unlock; records past effectiveExpiresAt are ended before any read returns them."
+      - "Ended share records are deleted 24 h after ending (RET-EPHEMERAL)."
+  commands_queries_events:
+    requirements:
+      - set_home and clear_home are vault-local commands with no statement; grant and revoke are vault commands that produce signed statements delivered through the sync outbox; receive is the intake of an incoming statement.
+      - Every command emits its local event in the same transaction as the state change; statements are produced by the explicit grant and revoke commands only.
+      - The module consumes block, meetup-cancel and deletion events to end shares and erase data.
+    commands:
+      - name: discovery.location.set_home
+        capability: discovery.location_setting.write_own
+        input: "{ cell5?: string, fromGpsOnce?: boolean, publicLevel: L0|L1|L2, entryMode, expectedRevision? }"
+        output: "{ settingId, revision, publicCell? }"
+        errors: [VALIDATION_FAILED, DISCOVERY_PRECISION_FORBIDDEN, DISCOVERY_COORD_INVALID, DISCOVERY_HOME_CHANGE_LIMIT, CONFLICT_REVISION]
+        emits: [discovery.location.updated]
+        idempotent: true
+      - name: discovery.location.clear_home
+        capability: discovery.location_setting.write_own
+        input: "{ expectedRevision }"
+        output: "{ settingId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION]
+        emits: [discovery.location.updated]
+        idempotent: true
+      - name: discovery.location_share.grant
+        capability: discovery.location_share.grant
+        input: "{ recipientDid, contextRef?, precision: L3|L4, ttlMs, source: gps_once|map_point, cell6?, position? }"
+        output: "{ shareId, effectiveExpiresAt, syncState: local_committed, statement: classrup.discovery.location_share/v1 }"
+        errors: [VALIDATION_FAILED, BLOCKED_PARTY, DISCOVERY_SHARE_TTL_INVALID, DISCOVERY_SHARE_LIMIT, DISCOVERY_COORD_INVALID, RATE_LIMITED]
+        emits: [discovery.location_share.granted]
+        idempotent: true
+      - name: discovery.location_share.revoke
+        capability: discovery.location_share.revoke
+        input: "{ shareId, expectedRevision }"
+        output: "{ shareId, revision, statement: classrup.discovery.location_share_revoke/v1 }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [discovery.location_share.revoked]
+        idempotent: true
+      - name: discovery.location_share.receive
+        capability: discovery.location_share.receive
+        input: "{ envelope: classrup.discovery.location_share/v1 (decrypted), provenance }"
+        output: "{ shareId, effectiveExpiresAt, clamped }"
+        errors: [DISCOVERY_SHARE_SIGNATURE_INVALID, BLOCKED_PARTY, DISCOVERY_SHARE_TTL_INVALID, CONFLICT_STATE]
+        emits: [discovery.location_share.granted]
+        idempotent: true
+    queries:
+      - name: discovery.location.get_own
+        capability: discovery.location_setting.read_own
+        input: "{ includeHomeCell?: boolean }"
+        output: "{ settingId?, publicLevel, publicCell?, homeCell5?, revision? }"
+        errors: []
+      - name: discovery.location_share.list
+        capability: discovery.location_share.read_own
+        input: "{ direction?: outgoing|incoming, status?: active|ended, limit? (1..50) }"
+        output: "{ items: LocationShare[] with syncState and remaining time }"
+        errors: []
+    events_produced:
+      - {type: discovery.location.updated, privacy: P1, payload: "{ settingId, publicLevel, publicCell? (at most 4 or 5 characters per level, absent at L0), revision }"}
+      - {type: discovery.location_share.granted, privacy: P3, payload: "{ shareId, direction, counterpartDid, precision, effectiveExpiresAt, contextRef? }"}
+      - {type: discovery.location_share.revoked, privacy: P3, payload: "{ shareId, direction, counterpartDid, reason: revoked|expired|blocked|context_cancelled|erased }"}
+    events_consumed:
+      - {type: identity.block.added, effect: "end active shares with the blocked DID in both directions with reason blocked and drop later incoming statements from it silently"}
+      - {type: comms.meetup.cancelled, effect: "end active shares whose contextRef is that meetup with reason context_cancelled"}
+      - {type: privacy.deletion.requested, effect: "end all shares and delete LocationSetting and share records in the same transaction"}
+    errors:
+      - "DISCOVERY_PRECISION_FORBIDDEN | 422 | no | cell finer than L2 offered for storage as public level"
+      - "DISCOVERY_COORD_INVALID | 422 | no | latitude or longitude is not a finite in-range value"
+      - "DISCOVERY_HOME_CHANGE_LIMIT | 429 | no | home region was changed 3 times in 24 hours"
+      - "DISCOVERY_SHARE_TTL_INVALID | 422 | no | share duration is not allowed or exceeds 24 hours"
+      - "DISCOVERY_SHARE_LIMIT | 409 | no | 5 active outgoing shares exist or one is already active for this recipient and context"
+      - "DISCOVERY_SHARE_SIGNATURE_INVALID | 422 | no | incoming share signature or addressing is invalid"
+    example: |
+      vault command: discovery.location.set_home { "cell5": "u4pru", "publicLevel": "L1", "entryMode": "map_tile" }
+      -> { "settingId": "0192f3e0-…", "revision": 1, "publicCell": "u4pr" }
+      vault command: discovery.location_share.grant { "recipientDid": "did:key:z6Mk…", "contextRef": { "type": "meetup", "id": "0192f3e1-…" }, "precision": "L4", "ttlMs": 7200000, "source": "gps_once" }
+      -> { "shareId": "0192f3e2-…", "effectiveExpiresAt": "2026-11-04T12:00:00.000Z", "syncState": "local_committed" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked local principal may set the home region or grant and revoke shares; incoming shares are accepted only when signed by the sharer and addressed to the principal.
+      - There is no relay role and no relay command in this module; relays carry the encrypted envelope as opaque ciphertext and cannot read, create or alter shares.
+      - A blocked party can never create an incoming share on this vault.
+    capabilities:
+      - "discovery.location_setting.write_own | principal | unlocked local principal"
+      - "discovery.location_setting.read_own | principal | unlocked local principal"
+      - "discovery.location_share.grant | principal | unlocked principal; recipient not blockedWith; fewer than 5 active shares"
+      - "discovery.location_share.revoke | principal | unlocked principal and share.direction is outgoing"
+      - "discovery.location_share.receive | principal | statement signed by sharerDid, addressed to the principal, sharer not blocked"
+      - "discovery.location_share.read_own | principal | unlocked local principal"
+  failure_recovery_idempotency:
+    requirements:
+      - Vault commands are idempotent through the local command log and use expectedRevision where an aggregate exists.
+      - Delivery of share and revoke statements goes through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never claims more than the reached state.
+      - Expiry and revocation are enforced locally even when the counterparty is unreachable; nothing waits on the network to end a share.
+    idempotency: "Idempotency-Key per command kept in the local command log for 24 h; a replayed grant returns the same shareId and the same statement bytes; receive is keyed by statementCid."
+    concurrency: "One IndexedDB transaction per command; the partial unique index prevents two active shares for one recipient and context; two tabs serialize through Web Locks."
+    retries: "Outbox retries follow base 500 ms, cap 30 s, full jitter, max 6 attempts per attempt window and continue until effectiveExpiresAt; after expiry the statement is dropped from the outbox."
+    offline: "set_home, grant, revoke and local expiry work offline; the statements wait in the outbox and the share card shows 'not yet delivered' until transport_acknowledged and 'accepted by peer' only after a signed peer acknowledgement."
+    partial_failure: "If encryption to the recipient key fails, grant fails before committing; if the revoke statement cannot be delivered, the local share still ends and the UI reports 'the other device may still show your position until <effectiveExpiresAt>'."
+  privacy_retention_abuse:
+    requirements:
+      - Raw GPS points exist only in memory for under 1 second to be snapped or, for an L4 share, until the share statement is built; they are never logged and never put in any event, export of another user, or relay-readable payload.
+      - A share reaches the counterparty only as an end-to-end encrypted envelope (PRV-5); a relay sees ciphertext, size and recipient mailbox id only.
+      - The UI states that the recipient's device can keep a copy and that the share protects against accidental long-lived exposure, not against a malicious recipient.
+    data:
+      - "LocationSetting: P3 on device; only the public-level cell is ever placed in a profile or listing projection, at most L2."
+      - "LocationShare: P3 on device while active; position bytes overwritten at end; statements travel encrypted, claimed times are the sender's claims."
+    retention:
+      - "LocationSetting until changed or vault erase (RET-STANDARD); LocationShare records 24 h after ending (RET-EPHEMERAL); share position data is deleted at the moment the share ends."
+      - "Outbox copies of share statements are deleted at effectiveExpiresAt or on transport_acknowledged plus 24 h, whichever is earlier."
+    threats:
+      - "T01 | Precise share used to stalk | single counterparty, TTL at most 24 h, context binding, block ends shares both ways, no continuous live tracking in MVP, warning text before sharing"
+      - "T02 | Recipient keeps coordinates after expiry | protocol cannot force deletion; honest UI warning, short default of 2 h, L3 cell option, signed revoke honoured by compliant clients"
+      - "T03 | Relay reads precise position | end-to-end encryption to the recipient device key (XChaCha20-Poly1305), relay sees ciphertext only"
+      - "T04 | Forged or replayed share statement | Ed25519 signature over JCS bytes, recipient addressing, statementCid dedupe, effective expiry anchored at local receipt time"
+      - "T05 | Home region probing - a user repeatedly moves the home cell to map others | 3 changes per 24 h local guard, home is never shown to others below the chosen public level"
+    abuse_controls:
+      - "Grant rate limited to 10 per hour per vault and 5 active shares; incoming shares limited to 20 per day per sender DID, excess quarantined."
+      - "Incoming shares from DIDs outside the user's contacts or active conversations are shown as requests and never auto-displayed."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry; local diagnostics hold counters of shares granted, expired and failed delivery without positions.
+      - Setting a home cell completes within 100 ms locally and a share grant within 300 ms excluding transport.
+      - Expiry is enforced within 30 seconds of effectiveExpiresAt while the app is open and before any read after unlock.
+    metrics:
+      - "local counter location_share_total{outcome=granted|revoked|expired|blocked}"
+      - "local gauge location_share_active"
+    logs:
+      - "info location.share {shareId, event} in the local diagnostics log - never positions, cells or DIDs."
+    budgets:
+      - "set_home p95 <= 100 ms and grant p95 <= 300 ms on a Moto G-class device; expiry lag <= 30 s while the app is open; GPS one-shot timeout 10 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with an injected clock and a fake geolocation provider.
+      - Contract tests check statements and events against the schema registry.
+      - Privacy tests prove that no raw coordinates, L3 or L4 data appears in logs, events other than the share events, exports of others, or relay requests in readable form.
+    fixtures: "Principal P with DID, counterparties Q and R, fake geolocation returning 57.64911,10.40744, fake relay mailbox, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01 | set home from GPS once with level L1 | stored homeCell5 u4pru, publicCell u4pr, raw coordinates absent from storage"
+      - "T02 | unit | 02.R01,02.R02 | 6-character cell, level L3, and 4th change within 24 h | DISCOVERY_PRECISION_FORBIDDEN or DISCOVERY_HOME_CHANGE_LIMIT with nothing stored"
+      - "T03 | unit | 01.R02,02.R02,03.R01 | grant share ttl 2 h, then ttl 25 h, 20 min, and a blocked recipient | first succeeds; others return DISCOVERY_SHARE_TTL_INVALID or BLOCKED_PARTY"
+      - "T04 | property | 01.R03,03.R01,03.R02,03.R03 | random sequences of grant, revoke, block, expiry on one share | only declared transitions succeed; position data is null in every ended state"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and event runs | outputs, statements and event payloads validate against registry schemas"
+      - "T06 | integration | 04.R03 | block added and meetup cancelled events delivered | affected shares end with reasons blocked and context_cancelled"
+      - "T07 | abuse | 02.R03,05.R01,05.R03 | incoming share with a bad signature, wrong addressee, claimed expiry 5 days ahead | rejected or clamped to receipt time plus 24 h; quarantined with reason"
+      - "T08 | abuse | 05.R02,07.R01,07.R02 | inspect relay-visible bytes, logs, events, and export of another user | only ciphertext visible to relay; no coordinates in logs or events; no shares in others' exports"
+      - "T09 | integration | 06.R01,06.R02,06.R03 | grant offline, replay same key, deliver later, revoke offline | one share and one statement; UI states follow local_committed, prepared, transport_acknowledged; local expiry works with no network"
+      - "T10 | abuse | 07.R03 | 11 grants in one hour and 21 incoming shares from one DID | RATE_LIMITED on the 11th grant; excess incoming quarantined"
+      - "T11 | integration | 08.R01,08.R02,08.R03 | expiry with the clock advanced past effectiveExpiresAt while app open and after unlock | share ended within 30 s or before the first read"
+      - "T12 | a11y | 01.R01,02.R03 | location settings and share sheet with axe-core and keyboard-only map alternative | zero serious or critical violations and list alternative works"
+      - "T13 | unit | 09.R01,09.R03 | traceability run over PS-048 | every requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export then import in a fresh vault; import a vault with an expired share | LocationSetting round-trips; shares are never exported or imported"
+    acceptance:
+      - All tests T01-T14 pass in CI.
+      - No location finer than L2 appears in any public projection, event class below P3, log or relay-readable payload.
+      - Every share ends by expiry or revocation locally within 30 seconds with its position deleted, and the UI states what the other device may still hold.
+  import_export_backup_rollback:
+    requirements:
+      - The user's export contains LocationSetting (home cell and public level) but never active or past LocationShare records, because shares are ephemeral and time-boxed.
+      - Import validates the cell precision and resets changeCount24h; any import carrying a cell finer than 5 characters is rejected.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section discovery.location_setting in classrup-export/v1 with one line (schema classrup.discovery.location_setting/v1); LocationShare is excluded."
+    import: "Setting imports with publicLevel preserved; if the cell is invalid the setting is skipped and the level becomes L0; share records in a bundle are ignored."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only opaque ciphertext of share envelopes, which they delete at mailbox expiry (7 days maximum)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because older readers ignore unknown fields and shares are ephemeral."

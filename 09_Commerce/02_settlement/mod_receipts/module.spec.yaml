@@ -80,7 +80,7 @@ processes:
     requirements:
       - Receipt input is validated strictly; unknown fields are rejected with VALIDATION_FAILED.
       - Role and claim-state rules check that the signer is a party and that the claim status supports the assertion.
-      - Signature verification is exact: any byte change in the canonical content invalidates the receipt.
+      - Signature verification is exact, so any byte change in the canonical content invalidates the receipt.
     rules:
       - "V01 | claim exists in this vault and signer is a party of its Deal | NOT_FOUND"
       - "V02 | payer_asserts_paid requires the signer to be the claim payer and claim status not expired; payee_asserts_received requires the payee and claim status acknowledged, confirmed or final | COMMERCE_RECEIPT_ROLE"
@@ -214,7 +214,7 @@ processes:
       - "T06 | integration | 04.R03 | identity.device_key.revoked delivered twice | keyStatus revoked_later set once and receipt still listed"
       - "T07 | abuse | 05.R01,05.R02,05.R03 | non-party signer; wrong-role statement; relay traffic inspection | quarantined with reason; relay sees only ciphertext"
       - "T08 | integration | 06.R01,06.R02,06.R03 | two tabs sign simultaneously; delivery fails after signing | one receipt; export still possible; UI shows prepared"
-      - "T09 | integration | 06.R04,07.R01 | offline signing then reconnect | receipt delivered, sync state advances to peer_accepted only on signed acknowledgement"
+      - "T09 | integration | 03.R02,07.R01 | offline signing then reconnect | receipt delivered, sync state advances to peer_accepted only on signed acknowledgement"
       - "T10 | e2e | 07.R02,09.R03 | both parties open receipts | disclaimer shown; labels say asserted by signer; axe zero serious issues"
       - "T11 | integration | 07.R03 | account deletion completes | signerId pseudonymized, signature flagged unverifiable-after-pseudonymization, counterparty copy unchanged"
       - "T12 | abuse | 07.R03,07.R01 | 21 incoming receipts in one hour from one sender | 21st quarantined"

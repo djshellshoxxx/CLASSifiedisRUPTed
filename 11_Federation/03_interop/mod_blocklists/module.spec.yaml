@@ -1,0 +1,291 @@
+id: F11.S03.M02
+scope: MVP
+summary: >-
+  Holds block rules that keep unwanted federated statements out of a vault or relay before anything is
+  stored. A rule matches a peer relay id, an author did:key, a statement cid or a content hash, with action
+  reject or hide. Rules are local choices of the vault owner or the relay operator (local filtering and
+  hosting policy, no global takedown). Shared blocklists from other publishers arrive as signed statements and
+  are never applied without explicit review. The block list of a person is private data and is not shared
+  unless the owner publishes a list on purpose.
+responsibilities:
+  - Own BlockRule records of four types (peer, author, cid, content_hash) with action reject or hide, optional expiry and a reason from a fixed enum.
+  - Provide evaluate(envelope, peer) used by F11.S01.M02 before storage and by F11.S02.M01 before sending, with precedence peer, author, cid, content_hash and reject over hide.
+  - Import a signed shared blocklist statement (classrup.federation.blocklist/v1, at most 10000 entries) into pending_review rules and apply only the entries a person or operator approves.
+  - Publish an owner-selected subset of own rules as a signed blocklist statement on explicit request.
+  - Emit federation.block_rule.changed for every add, activate, disable and remove so mirrors matching a new rule are purged.
+non_responsibilities:
+  - Per-user social blocking and mute (F07.S02.M02 owns the block relationship; this module only mirrors it as a hide rule for federated content).
+  - Content moderation decisions and appeals (F12).
+  - Relay-wide legal removal workflow (F18 and the relay operator procedure); this module only enforces the resulting rule.
+  - "Future: subscribing to live advisory feeds with automatic updates and signed reputation scores; MVP has manual import only."
+depends_on: [F11.S01.M03, F07.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001]
+user_stories:
+  - As a user, I can hide everything from an author or a relay in my vault and undo it, without telling anyone.
+  - As a relay operator, I can import a shared blocklist, review each entry and approve only the ones I agree with.
+  - As a relay operator, I can block a specific cid after a legal notice and see matching mirrors purged within 1 h.
+edge_cases:
+  - Imported list has 10001 entries; refused whole with FEDERATION_BLOCKLIST_TOO_LARGE.
+  - Imported entry duplicates an existing active rule; skipped and counted as duplicate in the import report.
+  - A rule blocks the operator's own relay id; refused with FEDERATION_BLOCK_SELF.
+  - Rule on an author did removes mirrors but a later tombstone by that author is still processed so the tombstone chain stays consistent.
+  - Rule expires while a batch is in flight; evaluation uses the rule set snapshot taken at batch start.
+  - Imported list signed by a key the operator has never trusted; allowed to import to review only, shown with an unverified-publisher warning.
+  - Two rules of different types match one envelope; the highest-precedence rule decides and both are recorded as matched.
+ux:
+  screens:
+    - "Block list: tabs by rule type with value (shortened), reason, source (mine or imported from publisher), action, expiry and remove."
+    - "Import review: publisher did and fingerprint, entry count, per-entry checkboxes with reason, 'Approve selected' and 'Reject all'."
+    - "Hidden-content notice in feeds: 'Hidden by your rules' with an undo link; relay operators see counts only."
+  states: [loading, empty, pending-review, active, disabled, expired, removed, import-too-large]
+  a11y:
+    - Import review table has header cells and checkboxes with labels including the shortened value.
+    - Approve and reject controls are ≥ 44×44 px and bulk actions confirm in a focus-trapping dialog.
+    - Rule changes are announced through an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A BlockRule stores type, value, action, reason, source, optional publisher list reference, optional expiry and status with tenant and revision per CTR-ID-001.
+      - Local block lists are private to the vault owner or relay operator and are classed P3 because a person's block list is sensitive.
+      - Values are exact matches only (relay id, did:key, cid, SHA-256 content hash), with no patterns or regular expressions.
+    entities:
+      - name: BlockRule
+        schema: classrup.federation.block_rule/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
+          - "ruleType: enum — peer | author | cid | content_hash"
+          - "value: string — relay id, did:key, cid or sha256-base64url; ≤ 200 chars; exact match"
+          - "action: enum — reject | hide"
+          - "reason: enum — spam | scam | harassment | illegal | malware | other"
+          - "note?: string — ≤ 280 code points, plain text"
+          - "source: enum — local | imported"
+          - "listCid?: string — cid of the imported blocklist statement"
+          - "publisher?: string — did:key that signed the imported list"
+          - "status: enum — pending_review | active | disabled | expired | removed"
+          - "expiresAt?: timestamp — default none for local, createdAt + 180 days for imported"
+          - "createdBy: string — local principal or relay operator id"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one non-removed rule per (tenantId, ruleType, value).
+          - source imported never starts in status active; it starts pending_review.
+          - A rule of type peer never targets the local relay id.
+          - Total non-removed rules per tenant ≤ 100000.
+    sql: |
+      CREATE TABLE fed_block_rule (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, rule_type TEXT NOT NULL, value TEXT NOT NULL, action TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_block_rule_value ON fed_block_rule(tenant_id, rule_type, value) WHERE status <> 'removed';
+      CREATE INDEX fed_block_rule_active ON fed_block_rule(tenant_id, status, rule_type);
+  validation_rules:
+    requirements:
+      - Rule input is validated strictly against the schema and value formats per type.
+      - Imports are bounded and signature-checked before any entry is shown for review.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | ruleType peer has a relay id format, author is did:key Ed25519, cid and content_hash start with sha256- and decode to 32 bytes | VALIDATION_FAILED"
+      - "V02 | no non-removed rule with the same type and value exists | FEDERATION_BLOCK_DUPLICATE"
+      - "V03 | peer rule value is not the local relay id | FEDERATION_BLOCK_SELF"
+      - "V04 | imported list statement signature verifies and entries ≤ 10000 | FEDERATION_BLOCKLIST_TOO_LARGE"
+      - "V05 | tenant has fewer than 100000 non-removed rules | FEDERATION_BLOCK_LIMIT"
+      - "V06 | note ≤ 280 code points plain text | VALIDATION_FAILED"
+      - "V07 | imported rules are approved only by an explicit review command naming each rule id | FORBIDDEN"
+  workflow_state_machine:
+    requirements:
+      - Rules follow the declared lifecycle and any transition not listed is refused with CONFLICT_STATE.
+      - Imported rules cannot reach active without an explicit review decision by the owner or operator.
+      - Expired and removed are terminal so history of what was blocked remains auditable.
+    machines:
+      - entity: BlockRule
+        initial: pending_review
+        terminal: [expired, removed]
+        transitions:
+          - "pending_review -> active | federation.block_rule.review approve | emits federation.block_rule.changed change activated"
+          - "pending_review -> removed | federation.block_rule.review reject | emits federation.block_rule.changed change removed"
+          - "active -> disabled | federation.block_rule.disable | emits federation.block_rule.changed change disabled"
+          - "disabled -> active | federation.block_rule.enable | emits federation.block_rule.changed change activated"
+          - "active -> expired | expiresAt reached | emits federation.block_rule.changed change expired"
+          - "active -> removed | federation.block_rule.remove | emits federation.block_rule.changed change removed"
+          - "disabled -> removed | federation.block_rule.remove | emits federation.block_rule.changed change removed"
+    timeouts:
+      - "Expiry sweep every 15 min moves active rules with expiresAt ≤ now to expired."
+      - "Pending imported rules not reviewed within 30 days are removed with a notice."
+  commands_queries_events:
+    requirements:
+      - The module exposes add, import, review, enable, disable, remove and publish commands plus list and evaluate queries.
+      - Each command states whether it is vault-local, produces a signed statement or is a relay command, and emits its events in the same transaction.
+      - The module consumes the personal block event to keep federated content hidden consistently with the user's block list.
+    commands:
+      - name: federation.block_rule.add
+        capability: federation.block_rule.add
+        input: "[vault-local command in the vault; relay command under relay policy] { ruleType, value, action, reason, note?, expiresAt? }"
+        output: "{ ruleId, revision, status: active }"
+        errors: [VALIDATION_FAILED, FEDERATION_BLOCK_DUPLICATE, FEDERATION_BLOCK_SELF, FEDERATION_BLOCK_LIMIT]
+        emits: [federation.block_rule.changed]
+        idempotent: true
+      - name: federation.block_rule.import_list
+        capability: federation.block_rule.import
+        input: "[vault-local or relay command; consumes signed statement classrup.federation.blocklist/v1] { list: Envelope }"
+        output: "{ listCid, publisher, imported, duplicates, status: pending_review }"
+        errors: [FED_SIGNATURE_INVALID, FEDERATION_BLOCKLIST_TOO_LARGE, FEDERATION_BLOCK_LIMIT, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: federation.block_rule.review
+        capability: federation.block_rule.review
+        input: "[vault-local or relay command] { decisions: [ { ruleId, decision: approve|reject } ] ≤ 500, expectedRevisions }"
+        output: "{ approved, rejected }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: [federation.block_rule.changed]
+        idempotent: true
+      - name: federation.block_rule.disable
+        capability: federation.block_rule.update
+        input: "[vault-local or relay command] { ruleId, expectedRevision }"
+        output: "{ ruleId, revision, status: disabled }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [federation.block_rule.changed]
+        idempotent: true
+      - name: federation.block_rule.enable
+        capability: federation.block_rule.update
+        input: "[vault-local or relay command] { ruleId, expectedRevision }"
+        output: "{ ruleId, revision, status: active }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [federation.block_rule.changed]
+        idempotent: true
+      - name: federation.block_rule.remove
+        capability: federation.block_rule.update
+        input: "[vault-local or relay command] { ruleId, expectedRevision }"
+        output: "{ ruleId, revision, status: removed }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [federation.block_rule.changed]
+        idempotent: true
+      - name: federation.block_rule.publish_list
+        capability: federation.block_rule.publish
+        input: "[vault-local command; produces signed statement classrup.federation.blocklist/v1] { ruleIds: uuidv7[1..10000], title ≤ 80 }"
+        output: "{ listCid, entries }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, FEDERATION_BLOCKLIST_TOO_LARGE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: federation.block_rule.list
+        capability: federation.block_rule.read
+        input: "{ ruleType?, status?, source?, cursor?, limit ≤ 100 }"
+        output: "{ items: BlockRule[], nextCursor? }"
+        errors: []
+      - name: federation.block_rule.evaluate
+        capability: federation.block_rule.evaluate
+        input: "{ peerRelayId, author, cid, contentHash }"
+        output: "{ decision: allow|reject|hide, matchedRuleIds: uuidv7[] }"
+        errors: []
+    events_produced:
+      - {type: federation.block_rule.changed, privacy: P3, payload: "{ ruleId, ruleType, value, action, change: added|activated|disabled|expired|removed }"}
+    events_consumed:
+      - {type: identity.block.added, effect: "when the blocked party has a did:key, create or keep a local author rule with action hide and reason other so federated content from that author is hidden"}
+      - {type: identity.block.removed, effect: "remove the matching local hide rule that was created from the personal block"}
+    errors:
+      - "FEDERATION_BLOCK_DUPLICATE | 409 | no | an active or pending rule with this type and value exists"
+      - "FEDERATION_BLOCK_SELF | 422 | no | a peer rule cannot target this relay"
+      - "FEDERATION_BLOCKLIST_TOO_LARGE | 413 | no | list has more than 10000 entries"
+      - "FEDERATION_BLOCK_LIMIT | 409 | no | 100000 rules per tenant reached"
+      - "FED_SIGNATURE_INVALID | 400 | no | blocklist statement signature check failed"
+    example: |
+      federation.block_rule.add { ruleType: "author", value: "did:key:z6MkBad...", action: "reject", reason: "scam" }
+      -> { ruleId: "0192f3e0-...", revision: 1, status: "active" }   emits federation.block_rule.changed
+      federation.block_rule.evaluate { peerRelayId: "relay:b.example", author: "did:key:z6MkBad...", cid: "sha256-Qm...", contentHash: "sha256-Lk..." }
+      -> { decision: "reject", matchedRuleIds: ["0192f3e0-..."] }
+  authorization_capabilities:
+    requirements:
+      - In a vault only the unlocked local principal manages rules; on a relay only that relay's operator does, with an audit entry.
+      - Evaluate is an internal capability for the verified receive and delivery pipelines and is not exposed to external requests.
+      - Rules are never readable by other users or other relays unless the owner publishes a list on purpose.
+    capabilities:
+      - "federation.block_rule.add | local principal, operator | vault policy: unlocked vault owner; relay policy: operator of this relay with audit entry"
+      - "federation.block_rule.import | local principal, operator | same as add"
+      - "federation.block_rule.review | local principal, operator | same as add; every approval names the rule id"
+      - "federation.block_rule.update | local principal, operator | same as add; rule belongs to the tenant"
+      - "federation.block_rule.publish | local principal | vault owner only; relays do not publish operator rules by default"
+      - "federation.block_rule.read | local principal, operator | own vault or own relay only"
+      - "federation.block_rule.evaluate | system | internal call from the verified pipelines"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+      - Imports are all-or-nothing so a failed import leaves no partial pending rules.
+      - Evaluation uses an in-memory snapshot refreshed in the same transaction as every rule change, so a restart cannot lose an active rule.
+    idempotency: "Idempotency-Key on all commands (24 h replay); importing the same list cid twice returns the first result."
+    concurrency: "expectedRevision per rule; unique index on (tenant, type, value); a batch uses one rule snapshot taken at its start."
+    retries: "Local commands are not retried automatically; the sync of a published list is delivery's concern."
+    offline: "All rule management works offline in the vault; relay policy changes need the relay to be reachable."
+    partial_failure: "If purging mirrors after a rule change fails, the rule stays active, federation.block_rule.changed is re-delivered from the outbox, and the purge sweep in F11.S01.M02 retries until the 24 h deadline."
+  privacy_retention_abuse:
+    requirements:
+      - A person's block list is P3 and never leaves the vault except when the person publishes a selected list deliberately.
+      - Rejections caused by block rules return one generic code so senders cannot probe which rules exist.
+      - Imported lists are advisory and bounded; they can never silence a person on a relay without that relay's operator review.
+    data:
+      - "BlockRule: P3 (value, reason, note)."
+      - "Published blocklist statement: P0 once the owner publishes it."
+    retention:
+      - "RET-STANDARD until the owner removes the rule; removed rules are purged after 30 days; pending imports after 30 days unreviewed."
+    threats:
+      - "T01 | Poisoned shared blocklist silences legitimate users | no automatic application; per-entry review; cap 10000 entries; publisher shown; imported rules expire after 180 days"
+      - "T02 | Probing the block list by sending candidate authors or cids | generic FEDERATION_NOT_ACCEPTED and constant-time-class evaluation; evaluate not externally callable"
+      - "T03 | Block list leaks who a person avoids | list is P3, never in federation payloads, export only to the owner; publish is explicit and shows entries before signing"
+      - "T04 | Rule used to censor via a coordinated list | no global takedown exists; each vault and relay decides; reasons recorded; operator changes audited"
+      - "T05 | Resource exhaustion with a huge list or many rules | 10000 per import, 100000 per tenant, O(1) hash lookup, exact match only"
+    abuse_controls:
+      - "At most 5 list imports per day per tenant."
+      - "Review of more than 500 rules in one command is refused with VALIDATION_FAILED."
+  observability_performance:
+    requirements:
+      - Rule counts and match counts are exported on relays and kept in local diagnostics in the vault; the PWA sends no telemetry.
+      - Evaluate adds at most 0.5 ms p95 to ingest.
+      - An alert fires when a relay's matched-reject ratio exceeds 50 percent over 15 minutes, signalling a misconfigured rule.
+    metrics:
+      - "classrup_federation_block_rules{status}"
+      - "classrup_federation_block_matches_total{ruleType, action}"
+      - "classrup_federation_block_import_total{outcome=ok|too_large|invalid}"
+    logs:
+      - "info federation.block_rule.changed {ruleId, ruleType, change, correlationId} — value omitted for author rules."
+    budgets:
+      - "evaluate p95 ≤ 0.5 ms with 100000 rules loaded."
+      - "Import and validation of 10000 entries ≤ 2 s."
+      - "Rule writes p95 ≤ 300 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Tests prove that block rules are applied before storage and that imports never self-activate.
+      - Contract tests validate commands, the blocklist statement and events against registry schemas.
+    fixtures: "Relay B, authors X and Bad, cids C1 and C2, content hash H1, signed blocklist L with 3 entries by publisher P, fake clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | add one rule of each type with valid values | rules active with exact-match values and event emitted"
+      - "T02 | unit | 02.R02,02.R03,01.R02 | each rule V01–V07 violated | documented code and no rule changed"
+      - "T03 | integration | 03.R01,03.R02 | import list L then approve one of 3 entries | 3 pending, 1 active, 2 stay pending then removed by reject; none active before review"
+      - "T04 | property | 03.R01,03.R03 | random command sequences on one rule | only declared transitions succeed; expired and removed never change"
+      - "T05 | integration | 04.R01,04.R02,06.R03 | rule blocks author Bad with 5 mirrors present | mirrors purged within 1 h via federation.block_rule.changed consumer; later tombstone from Bad still applied"
+      - "T06 | integration | 04.R03,02.R01 | identity.block.added then removed for a party with a did | local hide rule created then removed; federated content hidden then visible"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | each command, query and the blocklist statement | validate against registry schemas"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | other vault reads rules; external evaluate call; non-operator edits relay rules | NOT_FOUND or FORBIDDEN"
+      - "T09 | integration | 06.R01,06.R02 | replay import with same key; kill import midway | first response replayed; no partial pending rules"
+      - "T10 | integration | 06.R03,05.R03 | rule added while a batch is in flight | batch uses start snapshot; next batch applies the rule"
+      - "T11 | abuse | 07.R01,07.R02 | send blocked and unknown authors to the inbox and compare responses | identical FEDERATION_NOT_ACCEPTED or accepted shape; evaluate not reachable from outside"
+      - "T12 | abuse | 07.R03,07.R02 | import list with 10001 entries, from unknown publisher, 6th import in a day | FEDERATION_BLOCKLIST_TOO_LARGE, import allowed to review only, RATE_LIMITED"
+      - "T13 | load | 08.R01,08.R02,08.R03 | evaluate 100000 envelopes against 100000 rules; import 10000 entries | p95 ≤ 0.5 ms and import ≤ 2 s"
+      - "T14 | a11y | 03.R01,04.R01 | operate import review by keyboard and screen reader | all rows labelled, targets ≥ 44 px, announcements present"
+      - "T15 | unit | 09.R01,09.R03 | traceability tool run | every PS-089 requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export rules, import into fresh vault | rules round trip as written; imported-source rules return to pending_review"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - Block rules are evaluated before any record is stored (integration test with storage spy).
+      - An imported list never activates a rule without explicit per-rule review.
+  import_export_backup_rollback:
+    requirements:
+      - A vault export contains the owner's rules for the owner only, never in any shared or federated section.
+      - Import of rules from another vault or from an export keeps local rules as written and returns imported-source rules to pending_review.
+      - Schema changes follow expand/contract and v1 stays readable for 180 days.
+    export: "Section federation.block_rules in classrup-export/v1, one line per BlockRule (schema classrup.federation.block_rule/v1); personal export only."
+    import: "Local rules import as written after validation; imported-source rules import as pending_review; duplicates are skipped and counted."
+    backup: "Vault export is the primary backup (IOX-6); relay rules are covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because unknown optional fields are ignored and active rules stay active."

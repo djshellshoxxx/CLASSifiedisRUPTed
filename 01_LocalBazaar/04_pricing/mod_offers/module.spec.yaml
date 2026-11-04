@@ -2,13 +2,16 @@
 id: F01.S04.M01
 scope: MVP
 summary: >-
-  Buyers make money offers on published sell listings. A seller can accept, reject or let an offer
-  expire; a buyer can withdraw before a decision. Acceptance atomically reserves inventory through
-  F01.S03.M01 and opens a noncustodial Deal in F09.S01.M01. The platform never takes payment.
+  Buyers make money offers on published sell listings. Under ADR-0016 the buyer's vault records the
+  offer and sends it to the seller as a signed, end-to-end encrypted statement (classrup.bazaar.offer/v1
+  envelope) through a user-selected relay mailbox or direct exchange. The seller's vault verifies it and
+  can accept, reject or let it expire; the buyer can withdraw before a decision. Acceptance runs in the
+  seller's vault: it places a local inventory hold (F01.S03.M01), opens a noncustodial Deal (F09.S01.M01)
+  and returns a signed acceptance statement. The platform never takes payment and no relay is authoritative.
 responsibilities:
   - Own the Offer record and its lifecycle from made to a terminal decision.
   - Enforce one open offer per buyer per listing variant and a per-listing cap of 50 open offers.
-  - On acceptance, request an inventory hold and open a Deal; roll back the acceptance if the hold fails.
+  - On acceptance in the seller's vault, place a local inventory hold and open a Deal in one local transaction; roll back if either fails.
   - Expire offers after their deadline (default 48 h, range 1 h to 7 days).
 non_responsibilities:
   - Counteroffer rounds (F01.S04.M02 negotiation owns them and reuses Offer as round zero).
@@ -118,7 +121,7 @@ processes:
       - name: bazaar.offer.make
         capability: bazaar.offer.make
         input: "{ listingId, variantId?, amount: Money, note?, expiresInMs? (default 172800000) }"
-        output: "{ offerId, revision: 1, expiresAt }"
+        output: "{ offerId, revision: 1, expiresAt, syncState: prepared }"
         errors: [VALIDATION_FAILED, BAZAAR_LISTING_NOT_OFFERABLE, BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED, BAZAAR_OFFER_SELF, BLOCKED_PARTY, BAZAAR_OFFER_DUPLICATE, BAZAAR_OFFER_LIMIT, RATE_LIMITED]
         emits: [bazaar.offer.made]
         idempotent: true
@@ -143,6 +146,7 @@ processes:
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: [bazaar.offer.withdrawn]
         idempotent: true
+    note: "Execution sites (ADR-0016): make and withdraw are vault commands in the buyer vault that emit signed statements to the seller; accept and reject are vault commands in the seller vault that emit signed statements to the buyer; the receiving vault verifies signer role (buyer for make/withdraw, listing author for accept/reject) and applies the same transition locally. Relays only carry the encrypted envelopes."
     queries:
       - name: bazaar.offer.list_for_listing
         capability: bazaar.offer.read_as_seller
@@ -186,11 +190,11 @@ processes:
       - Offers are visible only to their buyer and seller; others receive NOT_FOUND.
       - Moderators can read offers only when attached to an open moderation case.
     capabilities:
-      - "bazaar.offer.make | member | notSuspended; not blockedWith(listing owner); account limit (F12.S03.M04) not exceeded"
-      - "bazaar.offer.accept | member | owner(listing) and offer.sellerId = actor"
+      - "bazaar.offer.make | local principal (buyer) | not blockedWith(listing author) in buyer vault; relay mailbox policy of the seller's chosen relay accepts the envelope; receiving vault accepts only if signed by a key of buyerId"
+      - "bazaar.offer.accept | local principal (seller) | actor is listing author; buyer vault accepts the acceptance statement only if signed by a key of the listing author"
       - "bazaar.offer.reject | member | owner(listing) and offer.sellerId = actor"
       - "bazaar.offer.withdraw | member | offer.buyerId = actor"
-      - "bazaar.offer.read_as_seller | member, moderator | owner(listing), or moderator with open case referencing the listing"
+      - "bazaar.offer.read_as_seller | local principal (seller), relay moderator | seller vault only; a relay moderator sees an offer only when a party voluntarily attaches it to a report on that relay"
       - "bazaar.offer.read_own | member | offer.buyerId = actor"
   failure_recovery_idempotency:
     requirements:
@@ -200,8 +204,8 @@ processes:
     idempotency: "Idempotency-Key required on all four commands; replay returns the stored response for 24 h."
     concurrency: "expectedRevision on accept/reject/withdraw; the open-offer unique index enforces V06 under races; accept runs hold + deal + offer update in one SQLite transaction (BEGIN IMMEDIATE)."
     retries: "Client retries only network errors and RATE_LIMITED; BAZAAR_OFFER_HOLD_FAILED is not retried automatically."
-    offline: "make and withdraw can be queued in the outbox and show pending; accept/reject require online confirmation because they are time-sensitive (UI disables them offline)."
-    partial_failure: "If the Deal service port fails, the transaction aborts and returns DEPENDENCY_UNAVAILABLE (retryable); no orphan holds because holds are created in the same transaction."
+    offline: "All four commands commit locally offline; their statements wait in the sync outbox (prepared) and the UI shows 'not yet delivered'. An acceptance is binding for the seller vault immediately (local hold) but the buyer sees it only after delivery; if the buyer withdrew first, the later-delivered statements conflict and both vaults show withdrawn-before-accept with the hold released."
+    partial_failure: "Hold, Deal and offer update share one IndexedDB transaction in the seller vault; failure aborts all three. Delivery failure never rolls back local state; it leaves the statement in the sync outbox with retry (CTR-IDM-001 IDM-4/IDM-7)."
   privacy_retention_abuse:
     requirements:
       - Offer amounts and notes never appear in public listing views, search, federation or notification payloads.
@@ -216,7 +220,7 @@ processes:
     threats:
       - "T01 | Lowball offer flooding to harass a seller | per-buyer rate limit 20 offers/hour, per-listing 50 open cap, seller can set a minimum offer threshold (offers below auto-rejected silently to the seller)"
       - "T02 | Offer note used for phishing links | link detection via F12.S02.M02; links rendered as plain text; report action on each offer"
-      - "T03 | Enumeration of who offered on a listing | queries restricted to seller; other actors get NOT_FOUND"
+      - "T03 | Relay learns offer contents or who offered | envelopes end-to-end encrypted to the seller's key; relay sees mailbox ID, size and time only (PRV-5)"
       - "T04 | Replay of an accept request | idempotency key and expectedRevision; replay returns original result"
     abuse_controls:
       - "Signals bazaar.offer.made velocity and reject ratio to F12.S03.M02 fraud signals."

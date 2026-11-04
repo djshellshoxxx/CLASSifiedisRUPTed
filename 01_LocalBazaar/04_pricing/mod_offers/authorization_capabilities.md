@@ -14,11 +14,11 @@
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| bazaar.offer.make | member | notSuspended; not blockedWith(listing owner); account limit (F12.S03.M04) not exceeded |
-| bazaar.offer.accept | member | owner(listing) and offer.sellerId = actor |
+| bazaar.offer.make | local principal (buyer) | not blockedWith(listing author) in buyer vault; relay mailbox policy of the seller's chosen relay accepts the envelope; receiving vault accepts only if signed by a key of buyerId |
+| bazaar.offer.accept | local principal (seller) | actor is listing author; buyer vault accepts the acceptance statement only if signed by a key of the listing author |
 | bazaar.offer.reject | member | owner(listing) and offer.sellerId = actor |
 | bazaar.offer.withdraw | member | offer.buyerId = actor |
-| bazaar.offer.read_as_seller | member, moderator | owner(listing), or moderator with open case referencing the listing |
+| bazaar.offer.read_as_seller | local principal (seller), relay moderator | seller vault only; a relay moderator sees an offer only when a party voluntarily attaches it to a report on that relay |
 | bazaar.offer.read_own | member | offer.buyerId = actor |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).

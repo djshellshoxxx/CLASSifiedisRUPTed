@@ -15,8 +15,8 @@
 - **idempotency:** Idempotency-Key required on all four commands; replay returns the stored response for 24 h.
 - **concurrency:** expectedRevision on accept/reject/withdraw; the open-offer unique index enforces V06 under races; accept runs hold + deal + offer update in one SQLite transaction (BEGIN IMMEDIATE).
 - **retries:** Client retries only network errors and RATE_LIMITED; BAZAAR_OFFER_HOLD_FAILED is not retried automatically.
-- **offline:** make and withdraw can be queued in the outbox and show pending; accept/reject require online confirmation because they are time-sensitive (UI disables them offline).
-- **partial failure:** If the Deal service port fails, the transaction aborts and returns DEPENDENCY_UNAVAILABLE (retryable); no orphan holds because holds are created in the same transaction.
+- **offline:** All four commands commit locally offline; their statements wait in the sync outbox (prepared) and the UI shows 'not yet delivered'. An acceptance is binding for the seller vault immediately (local hold) but the buyer sees it only after delivery; if the buyer withdrew first, the later-delivered statements conflict and both vaults show withdrawn-before-accept with the hold released.
+- **partial failure:** Hold, Deal and offer update share one IndexedDB transaction in the seller vault; failure aborts all three. Delivery failure never rolls back local state; it leaves the statement in the sync outbox with retry (CTR-IDM-001 IDM-4/IDM-7).
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 

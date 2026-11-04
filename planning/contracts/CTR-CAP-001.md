@@ -13,3 +13,8 @@
 
 ## Sessions (D10)
 Challenge–response login: relay issues 32-byte random nonce (TTL 120 s); client signs `classrup-login:v1:<relayId>:<nonce>` with its device Ed25519 key; relay verifies against the account's registered device keys and issues an opaque 256-bit session token (stored as SHA-256 hash). Idle timeout 7 days, absolute 30 days, rotate on privilege change. Token sent as `Authorization: Bearer`; never in URLs or logs.
+
+## ADR-0016 amendment (local-first)
+- **CAP-8** Two layers. *Vault policy*: commands run in the user's vault with `actor = unlocked local principal`; only that principal mutates its records. Incoming signed statements are accepted only when signed by a key authorized for the role (author of the listing, listed proposal participant, etc.); otherwise the statement is quarantined with reason. *Relay policy*: a relay authorizes its own resources (index writes, mailbox access, auction hosting, push subscriptions) for requests signed by a registered device key or bearing a relay access token from the challenge–response below.
+- **CAP-9** Roles `moderator`, `operator`, `admin` exist per relay and affect only what that relay hosts. There is no global role and no global suspension; "suspended" means suspended on that relay.
+- **CAP-10** The session section above describes **relay access tokens** only; the vault itself is unlocked locally (passphrase-derived key or platform-protected non-extractable key) and never requires a server.

@@ -17,3 +17,4 @@
 | [ADR-0013](planning/adr/ADR-0013.md) | D10 Authentication and portability | ACCEPTED |
 | [ADR-0014](planning/adr/ADR-0014.md) | Module overlap resolution | ACCEPTED |
 | [ADR-0015](planning/adr/ADR-0015.md) | Specifications as data | ACCEPTED |
+| [ADR-0016](planning/adr/ADR-0016.md) | Local-first hybrid architecture (supersedes relay authority) | ACCEPTED |

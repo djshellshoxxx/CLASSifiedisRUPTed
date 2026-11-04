@@ -6,13 +6,13 @@
 
 ## Purpose
 
-Buyers make money offers on published sell listings. A seller can accept, reject or let an offer expire; a buyer can withdraw before a decision. Acceptance atomically reserves inventory through F01.S03.M01 and opens a noncustodial Deal in F09.S01.M01. The platform never takes payment.
+Buyers make money offers on published sell listings. Under ADR-0016 the buyer's vault records the offer and sends it to the seller as a signed, end-to-end encrypted statement (classrup.bazaar.offer/v1 envelope) through a user-selected relay mailbox or direct exchange. The seller's vault verifies it and can accept, reject or let it expire; the buyer can withdraw before a decision. Acceptance runs in the seller's vault: it places a local inventory hold (F01.S03.M01), opens a noncustodial Deal (F09.S01.M01) and returns a signed acceptance statement. The platform never takes payment and no relay is authoritative.
 
 ## Responsibilities
 
 - Own the Offer record and its lifecycle from made to a terminal decision.
 - Enforce one open offer per buyer per listing variant and a per-listing cap of 50 open offers.
-- On acceptance, request an inventory hold and open a Deal; roll back the acceptance if the hold fails.
+- On acceptance in the seller's vault, place a local inventory hold and open a Deal in one local transaction; roll back if either fails.
 - Expire offers after their deadline (default 48 h, range 1 h to 7 days).
 
 ## Not responsible for

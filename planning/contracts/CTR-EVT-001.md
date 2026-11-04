@@ -18,3 +18,7 @@
 - **EVT-5** Payloads contain IDs and minimal changed fields, never secrets (P4) or exact location (L4).
 - **EVT-6** Consumer failure: retry with CTR-IDM-001 backoff; after 8 attempts the event moves to `dead_letter` with error code; operators replay via `platform.events.replay` (operator capability).
 - **EVT-7** `actor.kind` ∈ `user | system | relay | federated | operator`. `federated` events require verified `provenance.sig`.
+
+## ADR-0016 amendment (local-first)
+- **EVT-8** Domain events are written to the vault's local outbox in the same IndexedDB transaction as the state change and drive local consumers (notifications, search index, reputation). Events never leave the device by themselves.
+- **EVT-9** What leaves the device is a **signed statement** (CTR-FED-001 envelope) produced by an explicit command (publish, send offer, sign consent, attest handover). Receiving vaults verify, store with provenance, and derive their own local events (`actor.kind = federated`).

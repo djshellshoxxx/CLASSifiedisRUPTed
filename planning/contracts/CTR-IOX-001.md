@@ -7,3 +7,7 @@
 - **IOX-3** Relay backup: SQLite online backup API every 6 h + WAL archiving; encrypted at rest (operator-supplied key, never in repo); 30 daily, 12 monthly kept; quarterly restore drill with checksum verification.
 - **IOX-4** Rollback: application rollback by redeploying previous release (schema expand/contract keeps N-1 compatible); data rollback only via restore to new instance + event replay; never destructive in-place downgrade.
 - **IOX-5** Module-level export sections are owned by the module that owns the record; F10.S01.M03 orchestrates.
+
+## ADR-0016 amendment (local-first)
+- **IOX-6** The user's vault export (IOX-1) is the primary backup. The PWA shows last-export age and warns after 30 days. Encrypted backups go only to a user-selected location; keys are never uploaded by default.
+- **IOX-7** IOX-3 applies to relays, which hold only signed public projections, encrypted envelopes and relay-local operational data; losing a relay loses no user-owned private data.

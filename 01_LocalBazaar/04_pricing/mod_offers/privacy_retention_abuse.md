@@ -26,7 +26,7 @@
 |---|---|---|
 | T01 | Lowball offer flooding to harass a seller | per-buyer rate limit 20 offers/hour, per-listing 50 open cap, seller can set a minimum offer threshold (offers below auto-rejected silently to the seller) |
 | T02 | Offer note used for phishing links | link detection via F12.S02.M02; links rendered as plain text; report action on each offer |
-| T03 | Enumeration of who offered on a listing | queries restricted to seller; other actors get NOT_FOUND |
+| T03 | Relay learns offer contents or who offered | envelopes end-to-end encrypted to the seller's key; relay sees mailbox ID, size and time only (PRV-5) |
 | T04 | Replay of an accept request | idempotency key and expectedRevision; replay returns original result |
 
 **Abuse controls**

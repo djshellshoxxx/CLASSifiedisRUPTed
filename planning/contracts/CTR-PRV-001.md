@@ -35,3 +35,7 @@
 | RET-AUDIT | 1 year | authorization audit, operator actions |
 | RET-LEGAL-HOLD | until hold released | overrides all deletion; requires admin + second approver |
 Deletion = tombstone (ID, type, deletedAt) kept for federation propagation for 180 days; content purged; encrypted blobs crypto-shredded by deleting their per-object key.
+
+## ADR-0016 amendment (local-first)
+- **PRV-5** P2 data travels only as end-to-end encrypted envelopes addressed to the listed participants; relays see ciphertext plus minimal routing metadata (recipient mailbox ID, size, time). P3/P4 never leave the vault except in the user's own export.
+- **PRV-6** Relays retain public projections per their published policy and must honour signed tombstones; copies already fetched by other vaults cannot be recalled, and the UI says so before publishing.

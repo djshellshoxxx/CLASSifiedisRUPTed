@@ -16,7 +16,7 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `bazaar.offer.make` | bazaar.offer.make | { listingId, variantId?, amount: Money, note?, expiresInMs? (default 172800000) } | { offerId, revision: 1, expiresAt } | VALIDATION_FAILED, BAZAAR_LISTING_NOT_OFFERABLE, BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED, BAZAAR_OFFER_SELF, BLOCKED_PARTY, BAZAAR_OFFER_DUPLICATE, BAZAAR_OFFER_LIMIT, RATE_LIMITED | bazaar.offer.made | yes (Idempotency-Key) |
+| `bazaar.offer.make` | bazaar.offer.make | { listingId, variantId?, amount: Money, note?, expiresInMs? (default 172800000) } | { offerId, revision: 1, expiresAt, syncState: prepared } | VALIDATION_FAILED, BAZAAR_LISTING_NOT_OFFERABLE, BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED, BAZAAR_OFFER_SELF, BLOCKED_PARTY, BAZAAR_OFFER_DUPLICATE, BAZAAR_OFFER_LIMIT, RATE_LIMITED | bazaar.offer.made | yes (Idempotency-Key) |
 | `bazaar.offer.accept` | bazaar.offer.accept | { offerId, expectedRevision } | { offerId, revision, dealId, holdId } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_OFFER_HOLD_FAILED, EXPIRED | bazaar.offer.accepted, bazaar.offer.expired | yes (Idempotency-Key) |
 | `bazaar.offer.reject` | bazaar.offer.reject | { offerId, expectedRevision } | { offerId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | bazaar.offer.rejected | yes (Idempotency-Key) |
 | `bazaar.offer.withdraw` | bazaar.offer.withdraw | { offerId, expectedRevision } | { offerId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | bazaar.offer.withdrawn | yes (Idempotency-Key) |
@@ -60,6 +60,8 @@
 | BAZAAR_OFFER_HOLD_FAILED | 409 | no | inventory could not be held; offer remains open |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Execution sites (ADR-0016): make and withdraw are vault commands in the buyer vault that emit signed statements to the seller; accept and reject are vault commands in the seller vault that emit signed statements to the buyer; the receiving vault verifies signer role (buyer for make/withdraw, listing author for accept/reject) and applies the same transition locally. Relays only carry the encrypted envelopes.
 
 ### Example
 

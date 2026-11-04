@@ -5,17 +5,20 @@ summary: >-
   A pure, deterministic set of checks that tells a vault whether a suggestion, a direct proposal or a cycle revision can be proposed or consented to
   right now, and explains every failure with a stable check code. Checks cover participant uniqueness, item uniqueness, ownership and availability,
   value tolerance (MNY-5), quote freshness, distance, blocks, eligibility and deadlines. Each check states its basis, either verified locally,
-  derived from a signed projection or only claimed by a peer, so the UI never presents a peer's claim as verified fact.
+  derived from a signed projection or only claimed by a peer, so the UI never presents a peer's claim as verified fact. The module also holds the LengthProfile
+  registry: F02.S02.M01, F02.S02.M02 and the engine default profile of F02.S02.M03 register into it, and the engine, the explanations and these checks read the
+  effective profile from it, so no dependency cycle exists between profiles and engine.
 responsibilities:
   - Provide checkFeasibility(input, ports) as a pure function and the command that stores a FeasibilityReport for a subject.
   - Return overall feasible, feasible_with_conditions or infeasible with ordered check results and machine-readable reason codes.
   - Re-run before proposing, before signing consent, and before the local commit verdict, and mark reports older than 10 minutes stale.
+  - Hold the LengthProfile registry (register(profile), get(length)) and accept an explicit effectiveProfile input in checkFeasibility; own MUTINY_PROFILE_LENGTH_MISMATCH and MUTINY_DEADLINE_INVALID (N1).
 non_responsibilities:
   - Reserving items or signing anything (F02.S03.M02, F02.S03.M01).
   - Computing normalized values and pinning quotes (F02.S04.M02) and declared values (F02.S04.M03); this module only consumes them.
   - Guaranteeing that a peer's item exists; only the peer's signed reservation statement and the physical exchange evidence speak to that.
   - "Future: probabilistic dropout risk estimates per participant and travel-time based distance checks."
-depends_on: [F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a member about to consent, I see a checklist that says which facts my vault verified itself and which are only claimed by the other parties.
   - As a proposer, I am told exactly why a cycle cannot be proposed, for example that one item is no longer available or the value gap of one participant exceeds the tolerance.
@@ -27,6 +30,8 @@ edge_cases:
   - Item quantity is 1 and a local reservation for another cycle holds it; the check fails with item_reserved_elsewhere without revealing the other cycle.
   - A peer's item cannot be verified because the listing projection is missing locally; basis is unverifiable and the overall result is feasible_with_conditions, never feasible.
   - The report was computed 11 minutes ago; consent is refused until a fresh report is stored.
+  - A participant consents 40 minutes before the consent deadline of a 10-day trade proposal; C11 at consent time checks only that the local clock is before the deadline, so the consent is allowed.
+  - A cross-currency cycle revision asks for a 30 h consent deadline; C11 at revision time fails because cross-currency deadlines are at most 24 h and never after the earliest pinned quote expiry.
 ux:
   screens:
     - "Feasibility checklist inside the proposal and consent screens: one row per check with pass, warn or fail, a basis chip (verified here, from signed projection, claimed by peer) and a fix suggestion."
@@ -42,6 +47,7 @@ processes:
       - A FeasibilityReport stores the subject reference with its revision hash, evaluation time on the local clock, overall result, and one entry per executed check with status, basis, affected participant or leg and parameters.
       - Reports are deterministic functions of their input hash and the local clock, are local derived data, and become stale after 10 minutes.
       - The check set is fixed at C01..C13 and every code is stable; adding a check is additive and follows the schema compatibility rules.
+    note: "LengthProfile registry (port, no records): register({length, toleranceBps, absoluteMinRef: Money (reference amount, default 500 EUR minor), maxPairBucket 0..4, imbalanceQuantumPermille, minWantAgeMinutes, maxOtherOpenCycles?, version}) is called at startup by F02.S02.M01 (length 3), F02.S02.M02 (length 4) and F02.S02.M03 (engine default for all other lengths); get(length) returns the registered profile or the engine default, never another length's profile. checkFeasibility(input, ports, effectiveProfile?) uses an explicit effectiveProfile when the caller passes one."
     entities:
       - name: FeasibilityReport
         schema: classrup.mutiny.feasibility_report/v1
@@ -71,22 +77,24 @@ processes:
   validation_rules:
     requirements:
       - Each feasibility check is a rule with a stable code and maps to one module error code returned to callers.
-      - The tolerance rule implements MNY-5 exactly, 5 percent of the larger side or the configured absolute minimum, whichever is greater, with the stricter length-profile values from F02.S02.M01 and F02.S02.M02.
+      - The tolerance rule implements MNY-5 exactly, toleranceBps of the larger side or the absolute minimum (the profile's reference amount, 5.00 EUR by default, converted to the settlement currency with the subject's pinned barter_normalization quote, MNY-4 HALF_EVEN), whichever is greater, with the effective length profile read from this module's registry.
       - Checks never read another party's private records; they use own vault data, signed projections and statement contents only.
     rules:
       - "V01 | C01 all participant DIDs distinct (participant uniqueness) | MUTINY_PARTICIPANT_DUPLICATE"
       - "V02 | C02 all inventory items distinct across legs | MUTINY_ITEM_DUPLICATE"
       - "V03 | C03 each own item is owned by the principal in the local inventory and each peer item's listing projection is authored by the giver DID | MUTINY_ITEM_NOT_OWNED"
       - "V04 | C04 each own item has available quantity ≥ leg quantity, not reserved elsewhere; each peer item is listed as published and unexpired | MUTINY_ITEM_UNAVAILABLE"
-      - "V05 | C05 for each participant gap = absolute difference of given and received ≤ max(toleranceBps × larger side, absoluteMin) in settlement currency (MNY-5) unless compensation or a signed acceptedImbalance covers the excess | MUTINY_VALUE_OUT_OF_TOLERANCE"
-      - "V06 | C06 every pinned FX quote is unexpired with ≥ 30 minutes left | MUTINY_QUOTE_STALE"
-      - "V07 | C07 every adjacent pair distance bucket ≤ length-profile maximum and both participants' maxDistanceBucket | MUTINY_DISTANCE_EXCEEDED"
+      - "V05 | C05 for each participant gap = absolute difference of given and received ≤ max(toleranceBps × larger side, absoluteMinRef converted to the settlement currency) (MNY-5) unless a sealed compensation leg or an acceptedImbalances entry of the signed head snapshot naming that participant covers the excess; only signed sources (the revision snapshot) are read, never an unsigned local input | MUTINY_VALUE_OUT_OF_TOLERANCE"
+      - "V06 | C06 every pinned FX quote is unexpired; less than 30 minutes left gives status warn and an expired quote gives fail | MUTINY_QUOTE_STALE"
+      - "V07 | C07 every adjacent pair distance bucket ≤ the length-profile maxPairBucket and both participants' maxDistanceBucket, as integer ordinals of the F02.S02.M04 mapping (lt5=0 … gt50=4); the pair bucket is bucketBetween of the giver's listing cell and the receiver's want cell (both ≤ L2, assertPublicCell), and an L1-only cell counts as at least 3 | MUTINY_DISTANCE_EXCEEDED"
       - "V08 | C08 no participant is in another participant's local block list known to this vault | BLOCKED_PARTY"
       - "V09 | C09 each participant is opted in and not paused per projection | MUTINY_PARTICIPANT_INELIGIBLE"
       - "V10 | C10 cycle length ≤ every participant's maxCycleLength and ≤ tenant Lmax | MUTINY_CYCLE_TOO_LONG"
-      - "V11 | C11 consentDeadline is between now + 1 h and now + 7 d and executionWindow between 1 d and 30 d | MUTINY_DEADLINE_INVALID"
-      - "V12 | C12 no item has an open flag in a valuation dispute that the owner has not acknowledged | MUTINY_VALUATION_DISPUTED"
+      - "V11 | C11 at propose or revision time: consentDeadline is between now + 1 h and now + 14 d for trade_proposal or now + 7 d for cycle, at most now + 24 h and ≤ earliestQuoteExpiry when the subject has more than one currency (N16), executionWindow between 1 d and 23 d, and (consentDeadline − now) + executionWindow ≤ 30 d | MUTINY_DEADLINE_INVALID"
+      - "V12 | C12 no item has an unacknowledged automatic plausibility flag, and no open peer flag was raised on the item within this subject (F02.S04.M03) | MUTINY_VALUATION_DISPUTED"
       - "V13 | C13 the report used for a commit decision has evaluatedAt within the last 10 minutes | MUTINY_FEASIBILITY_STALE"
+      - "V14 | C11 at consent or commit time checks only that the local clock is before consentDeadline; the range is not re-validated | EXPIRED"
+      - "V15 | a LengthProfile registered for length L is returned only for subjects of length L, and the explanation or check of another length is refused | MUTINY_PROFILE_LENGTH_MISMATCH"
   workflow_state_machine:
     machines: []
     note: "FeasibilityReport is immutable derived output with no lifecycle; staleness is computed from staleAt at read time. Subject state machines live in F02.S01.M01 and F02.S03.M01."
@@ -125,11 +133,10 @@ processes:
     events_consumed:
       - {type: mutiny.proposal.revised, effect: "mark earlier reports of the subject as superseded for decisions; a new check is required for the new revision hash"}
       - {type: mutiny.values.normalized, effect: "invalidate reports of the same subject so quote and tolerance checks re-run"}
+      - {type: mutiny.normalization.expired, effect: "invalidate reports of the subject so C06 fails until a quote_refresh revision exists"}
+      - {type: mutiny.valuation.flagged, effect: "invalidate reports of subjects containing the item so C12 re-runs"}
+      - {type: privacy.deletion.completed, effect: "purge the erased principal's reports; reports are derived and regenerable"}
     errors:
-      - "MUTINY_PARTICIPANT_DUPLICATE | 422 | no | the same participant appears twice"
-      - "MUTINY_ITEM_DUPLICATE | 422 | no | the same inventory item appears in more than one leg"
-      - "MUTINY_ITEM_NOT_OWNED | 422 | no | the giver is not the owner of the item according to the available evidence"
-      - "MUTINY_ITEM_UNAVAILABLE | 409 | no | item quantity is reserved, sold, expired or unpublished"
       - "MUTINY_VALUE_OUT_OF_TOLERANCE | 422 | no | value gap exceeds MNY-5 tolerance without compensation or acceptance"
       - "MUTINY_QUOTE_STALE | 410 | no | a pinned FX quote is expired or about to expire"
       - "MUTINY_DISTANCE_EXCEEDED | 422 | no | a participant pair is farther apart than allowed"
@@ -138,6 +145,7 @@ processes:
       - "MUTINY_DEADLINE_INVALID | 422 | no | consent deadline or execution window out of range"
       - "MUTINY_VALUATION_DISPUTED | 409 | no | a valuation is disputed and not acknowledged by its owner"
       - "MUTINY_FEASIBILITY_STALE | 409 | yes | the report is older than 10 minutes"
+      - "MUTINY_PROFILE_LENGTH_MISMATCH | 422 | no | the subject's length does not match the requested length profile"
     example: |
       mutiny.feasibility.check  { "subjectType": "cycle", "subjectId": "0192f3b0-…", "revisionHash": "sha256-Qm3…" }
       -> 200 { "reportId": "0192f3b1-…", "overall": "feasible_with_conditions",
@@ -170,9 +178,10 @@ processes:
       - Reports contain pseudonym DIDs, item references and values already visible to the principal, and are never sent to relays or peers.
       - Failure explanations never reveal block lists, exclusion lists or other cycles that reserve an item.
       - Reports are purged after 30 days, except that the report hash cited in a signed proposal revision remains part of that revision's evidence.
+      - The module registers DeletionPort and RetentionPurgePort with F10 and an ExportSectionPort that declares the derived section mutiny.feasibility as excluded (N6), and annotates every FeasibilityReport field with its F10.S02.M02 class.
     data:
       - "FeasibilityReport: P2, derived, device only."
-      - "valueGaps: derived from public declared values and signed acceptedImbalance values."
+      - "valueGaps: derived from public declared values and the acceptedImbalances of the signed head snapshot; field classes annotated per F10.S02.M02."
     retention:
       - "RET-SHORT 30 days after createdAt."
     threats:
@@ -219,8 +228,13 @@ processes:
       - "T15 | unit | 09.R01 | traceability tool run | every PS-016 requirement maps to a passing test"
       - "T16 | integration | 10.R01,10.R02,10.R03 | export and import | reports are not exported; imported subjects re-run checks on first open"
       - "T17 | a11y | 01.R01 | checklist screen | axe zero serious issues, basis chips announced"
+      - "T18 | unit | 02.R02 | absolute minimum reference 500 EUR minor converted with pinned quotes EUR->JPY 163/1 and EUR->BTC 1/60000 | 815 JPY and 8333 satoshi (HALF_EVEN, MNY-4); EUR settlement uses 500 unchanged"
+      - "T19 | unit | 02.R01,03.R02 | C11 at revision time with a 30 h cross-currency deadline and a 14 d plus 23 d window; C11 at consent time 40 minutes before a 10-day trade proposal deadline; C06 with 20 minutes left and expired | MUTINY_DEADLINE_INVALID twice; consent allowed; warn then fail"
+      - "T20 | unit | 01.R01,04.R02 | registry with profiles 3 and 4 registered, get(5), explicit effectiveProfile, explanation of a 4-party suggestion with the 3-party profile | engine default for 5; explicit profile used; MUTINY_PROFILE_LENGTH_MISMATCH"
+      - "T21 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.feasibility declared excluded; erased principal's reports purged; reports purged after 30 days"
+      - "T22 | unit | 02.R03,07.R03 | gap above tolerance with an unsigned local acceptance, then with an acceptedImbalances entry in the signed snapshot | first fails C05; second passes C05 with basis signed_projection"
     acceptance:
-      - All tests T01–T17 pass in CI.
+      - All tests T01–T22 pass in CI.
       - No peer claim is ever presented as verified and overall feasible is impossible with any unverifiable or peer_claim basis.
       - MNY-5 tolerance is exact at the boundary for bigint amounts.
   import_export_backup_rollback:

@@ -10,12 +10,13 @@ responsibilities:
   - Define legs from item references with ownership and availability verification through the InventoryPort for the principal's own items and through signed listing projections for others' items.
   - Keep each leg immutable once defined; replace it by defining a new leg, and mark legs referenced by a sealed revision so they cannot be voided.
   - Void unreferenced legs after 24 hours and enforce the limits of 8 legs per subject, 5 items per direct leg and quantity 1..99 per item.
+  - Own the error codes MUTINY_ITEM_DUPLICATE, MUTINY_ITEM_NOT_OWNED and MUTINY_ITEM_UNAVAILABLE (N1), which F02.S02.M05 references, and register export, deletion and retention handlers with F10 (N6).
 non_responsibilities:
   - Reserving items (F02.S03.M02) and holding inventory (F01.S03.M01); a leg is a description, not a reservation.
   - Declared values and plausibility (F02.S04.M03) and normalization (F02.S04.M02).
   - Sealing legs into a revision and signing (F02.S01.M04).
   - "Future: legs with service or rental components, bundles in cycles, and items with serial numbers."
-depends_on: [F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a proposer, I choose which of my items go to the other person and which of theirs I ask for, and I see immediately which of my own items are available.
   - As a recipient, I see that the other person's items are listed by them and signed, and that availability is their claim until they sign a reservation.
@@ -84,7 +85,7 @@ processes:
     rules:
       - "V01 | items has 1..5 lines (exactly 1 with quantity 1 when subjectType is cycle) and each quantity is 1..99 | MUTINY_LEG_ITEMS_INVALID"
       - "V02 | giverId differs from receiverId and both are parties of the subject | MUTINY_LEG_PARTY_INVALID"
-      - "V03 | own items exist in the local inventory, owned by the principal and quantity available ≥ requested | MUTINY_ITEM_UNAVAILABLE"
+      - "V03 | own items exist in the local inventory, owned by the principal and quantity available ≥ requested, checked with bazaar.inventory.check on the InventoryPort line {listingId of the item's local listing, variantId?, quantity} | MUTINY_ITEM_UNAVAILABLE"
       - "V04 | other party's items have a verified, non-tombstoned listing projection authored by the giver and flagged barterAcceptable | MUTINY_ITEM_NOT_OWNED"
       - "V05 | no inventoryItemId occurs twice within the subject's legs | MUTINY_ITEM_DUPLICATE"
       - "V06 | subject has at most 8 legs | MUTINY_LEG_LIMIT"
@@ -141,6 +142,7 @@ processes:
       - {type: mutiny.proposal.revised, effect: "mark legs listed in legIds as referenced and materialize peer legs from the revision snapshot when origin is peer"}
       - {type: bazaar.listing.edited, effect: "flag defined legs that reference the listing with listingChanged so the author must re-confirm before sealing"}
       - {type: bazaar.listing.unpublished, effect: "void defined (unreferenced) legs referencing the listing; referenced legs stay and are handled by feasibility"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID as giver or receiver of retained referenced legs and purge its defined, unreferenced legs"}
     errors:
       - "MUTINY_LEG_ITEMS_INVALID | 422 | no | item lines or quantities violate the leg limits"
       - "MUTINY_LEG_PARTY_INVALID | 422 | no | giver equals receiver or a party is not in the subject roster"
@@ -178,8 +180,9 @@ processes:
       - Legs expose only what is already in public listings plus the declared values the owners chose to publish; nothing about addresses or exact location.
       - Legs of closed subjects are retained as evidence for 2 years and pseudonymized if a party erases their identity locally.
       - Abuse such as listing other people's items is limited because peer items require a signed listing authored by the giver.
+      - The module registers ExportSectionPort (section mutiny.legs), DeletionPort and RetentionPurgePort with F10 (N6), annotates every TradeLeg field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased party in retained legs.
     data:
-      - "TradeLeg: P2; item references are public listing cids, declared values are owner-published."
+      - "TradeLeg: P2; item references are public listing cids, declared values are owner-published; field classes annotated per F10.S02.M02."
     retention:
       - "RET-EVIDENCE 2 years after last related activity; voided unreferenced legs are purged after 7 days."
     threats:
@@ -223,8 +226,9 @@ processes:
       - "T14 | unit | 08.R01,09.R01 | traceability tool run and diagnostics | every PS-013 requirement maps to a passing test; no identifiers in diagnostics"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | referenced legs round-trip; voided legs not exported; conflicting IDs rejected"
       - "T16 | e2e | 01.R03,02.R03 | mobile user builds a 3-party ring leg set | each leg card readable, axe zero serious issues"
+      - "T17 | integration | 07.R04 | F10 export, deletion of a counterparty and retention sweep | section mutiny.legs exported; erased DID pseudonymized in referenced legs; voided legs purged after 7 days"
     acceptance:
-      - All tests T01–T16 pass in CI.
+      - All tests T01–T17 pass in CI.
       - A leg never presents a peer's availability claim as locally verified.
       - Items occur at most once per subject and cycle legs carry exactly one item with quantity 1.
   import_export_backup_rollback:

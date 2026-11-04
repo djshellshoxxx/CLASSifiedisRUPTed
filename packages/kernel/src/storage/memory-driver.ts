@@ -2,6 +2,7 @@
 // The IndexedDB vault adapter reuses it as its working set and persists each commit's change set.
 import { compareUtf8 } from '../hash/canonical.ts';
 import type {
+  BlobRow,
   DeadLetterRow,
   DriverTx,
   IdempotencyRow,
@@ -18,7 +19,7 @@ import type {
   SyncRow,
 } from './driver.ts';
 
-export const TABLES = ['records', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'sync_outbox', 'schema_migrations', 'meta'] as const;
+export const TABLES = ['records', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'sync_outbox', 'blobs', 'blob_refs', 'schema_migrations', 'meta'] as const;
 export type TableName = (typeof TABLES)[number];
 
 type Row = object;
@@ -29,12 +30,19 @@ export interface Change {
 }
 export type Snapshot = Partial<Record<TableName, ReadonlyArray<readonly [string, Row]>>>;
 
+interface BlobRefRow {
+  readonly tenant: string;
+  readonly ref: string;
+  readonly holder: string;
+}
+
 const SEP = '\u0001';
 const k = (...parts: readonly string[]): string => parts.join(SEP);
 
 function groupOf(table: TableName, row: Row): string | undefined {
   if (table === 'records') return k((row as RecordRow).tenant, (row as RecordRow).type);
   if (table === 'inbox') return (row as InboxRow).consumer;
+  if (table === 'blob_refs') return k((row as BlobRefRow).tenant, (row as BlobRefRow).ref);
   return undefined;
 }
 
@@ -242,6 +250,23 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
           .filter((r) => (q.state === undefined || r.state === q.state) && (q.ref === undefined || r.ref === q.ref))
           .sort(byCreated)
           .slice(0, q.limit),
+    },
+    blobs: {
+      get: (tenant, ref) => {
+        const b = state.table<BlobRow>('blobs').get(k(tenant, ref));
+        return b ? { ...b, bytes: b.bytes.slice() } : undefined;
+      },
+      upsert: (row) => write('blobs', k(row.tenant, row.ref), { ...row, bytes: row.bytes.slice() }),
+      remove: (tenant, ref) => write('blobs', k(tenant, ref), undefined),
+      holders: (tenant, ref) => state.groupKeys('blob_refs', k(tenant, ref)).size,
+      attach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), { tenant, ref, holder }),
+      detach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), undefined),
+      orphans: (createdBefore, limit) =>
+        [...state.table<BlobRow>('blobs').values()]
+          .filter((b) => cmp(b.createdAt, createdBefore) < 0 && state.groupKeys('blob_refs', k(b.tenant, b.ref)).size === 0)
+          .sort((a, b) => cmp(a.createdAt, b.createdAt) || cmp(a.tenant, b.tenant) || cmp(a.ref, b.ref))
+          .slice(0, limit)
+          .map((b) => ({ tenant: b.tenant, ref: b.ref })),
     },
     migrations: {
       list: () => [...state.table<MigrationRow>('schema_migrations').values()].sort((a, b) => cmp(a.appliedAt, b.appliedAt) || cmp(a.id, b.id)),

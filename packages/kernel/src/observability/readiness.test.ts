@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { err, ok } from '../errors/result.ts';
-import { appError } from '../errors/app-error.ts';
+import { ok } from '../errors/result.ts';
 import { runMigrations } from '../storage/migrations.ts';
 import { createMemoryStorage, type Storage } from '../storage/storage.ts';
 import { createFakeClock } from '../clock/clock.ts';
@@ -23,6 +22,5 @@ describe('readiness (CTR-OBS-001 OBS-6)', () => {
     expect((await createReadiness({ storage: broken }).check()).checks).toEqual({ storage: false, migrations: false, outboxLag: true });
     await storage.close();
     expect((await createReadiness({ storage }).check()).ready).toBe(false);
-    void err(appError('INTERNAL'));
   });
 });

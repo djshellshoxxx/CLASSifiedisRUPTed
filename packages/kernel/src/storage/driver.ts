@@ -122,6 +122,20 @@ export interface SyncListQuery {
   readonly limit: number;
 }
 
+export type BlobPrivacy = 'P0' | 'P1' | 'P2' | 'P3';
+
+export interface BlobRow {
+  readonly tenant: string;
+  /** `blob:sha256-<base64url>` of the stored bytes. */
+  readonly ref: string;
+  readonly bytes: Uint8Array;
+  readonly size: number;
+  readonly contentType: string;
+  readonly privacy: BlobPrivacy;
+  readonly encrypted: boolean;
+  readonly createdAt: string;
+}
+
 export interface MigrationRow {
   readonly id: string;
   readonly checksum: string;
@@ -170,6 +184,17 @@ export interface DriverTx {
     /** Per destination, the oldest prepared entry, if its nextAttemptAt is null or <= now. */
     heads(now: string, limit: number): SyncRow[];
     list(q: SyncListQuery): SyncRow[];
+  };
+  readonly blobs: {
+    get(tenant: string, ref: string): BlobRow | undefined;
+    upsert(row: BlobRow): void;
+    remove(tenant: string, ref: string): void;
+    /** Number of holder rows (referencing records) for the ref. */
+    holders(tenant: string, ref: string): number;
+    attach(tenant: string, ref: string, holder: string): void;
+    detach(tenant: string, ref: string, holder: string): void;
+    /** Refs of stored blobs without holders created before the cutoff, oldest first. */
+    orphans(createdBefore: string, limit: number): { tenant: string; ref: string }[];
   };
   readonly migrations: {
     list(): MigrationRow[];

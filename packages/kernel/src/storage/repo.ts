@@ -65,8 +65,13 @@ export interface ReadRepo<T, K extends string> {
 }
 
 export interface Repo<T, K extends string> extends ReadRepo<T, K> {
-  /** expectedRevision 0 creates; otherwise must equal the stored revision (CONFLICT_REVISION). */
+  /**
+   * expectedRevision 0 creates; otherwise must equal the stored revision (CONFLICT_REVISION). For a repo
+   * declared with `blobs`, released refs are detached; encrypted blobs deleted that way are listed by
+   * the scope's blobs.shredded() in the same transaction.
+   */
   put(id: string, data: T, opts: { readonly expectedRevision: number }): Result<StoredRecord<T>, AppError>;
+  /** Removes the record; blob refs it held are detached as for put (see blobs.shredded()). */
   remove(id: string, opts: { readonly expectedRevision: number }): Result<void, AppError>;
   /** Import/restore of an exported record into this tenant, keeping its revision (IOX-2). */
   restore(record: StoredRecord<T>): Result<'restored' | 'identical', AppError>;

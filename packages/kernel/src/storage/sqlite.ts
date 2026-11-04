@@ -122,7 +122,11 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
         const rows = all(`SELECT o.* FROM outbox o LEFT JOIN inbox i ON i.consumer = ? AND i.event_id = o.event_id WHERE o.type IN (${inList(types)}) AND (i.event_id IS NULL OR i.status = 'retry') ORDER BY o.seq LIMIT 1`, [consumer, ...types]);
         return rows[0] ? toOutbox(rows[0]) : undefined;
       },
-      purgeBefore: (at) => Number(run('DELETE FROM outbox WHERE occurred_at < ?', at).changes),
+      purgeBefore: (at) => {
+        const unheld = 'NOT EXISTS (SELECT 1 FROM dead_letter d WHERE d.event_id = o.event_id)';
+        run(`DELETE FROM inbox WHERE event_id IN (SELECT o.event_id FROM outbox o WHERE o.occurred_at < ? AND ${unheld})`, at);
+        return Number(run(`DELETE FROM outbox AS o WHERE o.occurred_at < ? AND ${unheld}`, at).changes);
+      },
     },
     inbox: {
       get: (c, e) => {
@@ -158,6 +162,7 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
           ? all('SELECT * FROM dead_letter ORDER BY dead_at, consumer, event_id LIMIT ?', [limit])
           : all('SELECT * FROM dead_letter WHERE consumer = ? ORDER BY dead_at, consumer, event_id LIMIT ?', [consumer, limit])
         ).map(toDead),
+      purgeBefore: (at) => Number(run('DELETE FROM dead_letter WHERE dead_at < ?', at).changes),
     },
     sync: {
       get: (id) => {

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ok } from '../errors/result.ts';
+import { defineSubscriber } from '../bus/define.ts';
 import { createTestKernel } from '../testing/harness.ts';
-import { SAMPLE_MODULE, sampleDefinitions, type SampleCounters } from '../testing/sample-module.ts';
+import { itemCreated, itemRenamed, SAMPLE_MODULE, sampleDefinitions, type SampleCounters } from '../testing/sample-module.ts';
 import { fullJitterDelay } from './backoff.ts';
-import { MAX_DELIVERY_ATTEMPTS } from './dispatcher.ts';
+import { createOutboxDispatcher, MAX_DELIVERY_ATTEMPTS } from './dispatcher.ts';
 
 function setup(random: () => number = () => 0.5) {
   const counters: SampleCounters = { create: 0, consumed: [], failConsumer: 0 };
@@ -69,6 +70,51 @@ describe('outbox dispatcher (PS-119)', () => {
     k.clock.advance(60_000);
     await k.outbox.drain();
     expect(counters.consumed).toHaveLength(1);
+  });
+
+  it('TEST-PS-119-09.T04 a sink failing after the consumer committed never reopens its done inbox row; side effects run once', async () => {
+    const counters: SampleCounters = { create: 0, consumed: [], failConsumer: 0 };
+    let echoRuns = 0;
+    const echo = defineSubscriber({
+      name: 'sample.item_echo',
+      module: SAMPLE_MODULE,
+      events: [itemCreated],
+      handler: (ctx, env) => {
+        echoRuns += 1;
+        ctx.emit(itemRenamed, { aggregate: env.aggregate, revision: env.revision + 1, payload: { itemId: env.payload.itemId, name: 'echo' } });
+        return ok(undefined);
+      },
+    });
+    const k = createTestKernel({ definitions: [...sampleDefinitions(counters).all, echo] });
+    let sinkFailures = 1;
+    const dispatcher = createOutboxDispatcher({
+      storage: k.storage,
+      registry: k.registry,
+      clock: k.clock,
+      ids: k.ids,
+      logger: k.logger,
+      random: () => 0.5,
+      eventSink: {
+        publish: () => {
+          if (sinkFailures-- > 0) throw new Error('ui notifier down');
+        },
+      },
+    });
+    await k.cmd('sample.item.create', { itemId: k.ids.next(), name: 'v1' });
+    const created = k.events[0];
+    if (!created) throw new Error('no event');
+    expect(await dispatcher.runOnce()).toMatchObject({ delivered: 2, retried: 0 });
+    expect(await k.storage.read((tx) => tx.inbox.get('sample.item_echo', created.eventId))).toMatchObject({ status: 'done', attempts: 1, lastError: null });
+    k.clock.advance(60_000);
+    await dispatcher.drain();
+    expect(echoRuns).toBe(1);
+    expect(await dispatcher.deliver('sample.item_echo', created)).toBe('duplicate');
+    expect(echoRuns).toBe(1);
+    expect(counters.consumed).toEqual([`sample.item.created:${created.aggregate.id}:1`, `sample.item.renamed:${created.aggregate.id}:2`]);
+    expect(k.logs.records().filter((l) => l['msg'] === 'event_sink.failed')).toMatchObject([{ level: 'error', consumer: 'sample.item_echo', eventId: created.eventId, count: 1 }]);
+    const pausing = createOutboxDispatcher({ storage: k.storage, registry: k.registry, clock: k.clock, ids: k.ids, flags: { isEnabled: () => false } });
+    expect(await pausing.deliver('sample.item_echo', created)).toBe('duplicate');
+    expect(await k.storage.read((tx) => tx.inbox.get('sample.item_echo', created.eventId)?.status)).toBe('done');
   });
 
   it('TEST-PS-119-09.T10 dead letters and logs carry consumer, event ID and error code only, never payloads', async () => {

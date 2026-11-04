@@ -7,6 +7,7 @@ import { appError, type AppError } from '../errors/app-error.ts';
 import { PROBLEM_CONTENT_TYPE, toProblemJson } from '../errors/problem.ts';
 import { err, ok, type Result } from '../errors/result.ts';
 import { isUuidV7, type IdGen } from '../ids/uuidv7.ts';
+import { truncateIp } from '../observability/ip.ts';
 import { noopLogger, type Logger } from '../observability/logger.ts';
 import { PROMETHEUS_CONTENT_TYPE, type MetricsRegistry } from '../observability/metrics.ts';
 import type { ReadinessProbe } from '../observability/readiness.ts';
@@ -34,6 +35,11 @@ export interface HttpAdapterOptions {
   readonly readiness?: ReadinessProbe;
   readonly logger?: Logger;
   readonly bodyLimitBytes?: number;
+  /**
+   * Client address used for the per-network rate limit; defaults to the socket peer. A relay behind a
+   * reverse proxy it trusts returns the forwarded client address here. Only its /24 or /48 reaches the bus.
+   */
+  readonly clientAddress?: (req: IncomingMessage) => string | undefined;
 }
 
 export interface HttpHandler {
@@ -113,6 +119,11 @@ export function createHttpHandler(o: HttpAdapterOptions): HttpHandler {
   let draining = false;
   let inFlight = 0;
 
+  function network(req: IncomingMessage): string | undefined {
+    const address = o.clientAddress ? o.clientAddress(req) : req.socket.remoteAddress;
+    return address === undefined ? undefined : truncateIp(address);
+  }
+
   async function session(req: IncomingMessage): Promise<Result<Session, AppError>> {
     const token = bearer(req);
     return token.ok ? o.sessions.resolve(token.value) : token;
@@ -131,7 +142,8 @@ export function createHttpHandler(o: HttpAdapterOptions): HttpHandler {
     }
     const s = await session(req);
     if (!s.ok) return problem(s.error, correlationId);
-    const ctx = { actor: s.value.actor, tenantId: s.value.tenantId, correlationId, origin: 'remote' as const };
+    const net = network(req);
+    const ctx = { actor: s.value.actor, tenantId: s.value.tenantId, correlationId, origin: 'remote' as const, ...(net === undefined ? {} : { network: net }) };
     if (kind === 'query') {
       const r = await o.bus.query(ctx, name, input);
       return r.ok ? json(200, r.value.value) : problem(r.error, correlationId);

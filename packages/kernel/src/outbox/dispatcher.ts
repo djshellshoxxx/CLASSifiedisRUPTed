@@ -109,15 +109,26 @@ export function createOutboxDispatcher(o: OutboxDispatcherOptions): OutboxDispat
       tx.inbox.markDone({ consumer: sub.name, envelope: env, now: o.clock.now() }, (seen?.attempts ?? 0) + 1);
       return ok('delivered');
     });
-    if (r.ok && emitted.length) o.eventSink?.publish(emitted);
+    if (r.ok) publish(sub, env, emitted);
     return r;
+  }
+
+  /** After the consumer's 'done' row committed: a failing sink is logged and never becomes a delivery failure. */
+  function publish(sub: AnySubscriber, env: EventEnvelope, emitted: readonly EventEnvelope[]): void {
+    if (!o.eventSink || emitted.length === 0) return;
+    try {
+      o.eventSink.publish(emitted);
+    } catch (e) {
+      log.error('event_sink.failed', { module: sub.module, consumer: sub.name, eventId: env.eventId, correlationId: env.correlationId, count: emitted.length, error: e });
+    }
   }
 
   async function recordFailure(sub: AnySubscriber, env: EventEnvelope, code: string): Promise<DeliveryOutcome> {
     const r = await o.storage.transaction((tx) => {
       const prior = tx.inbox.get(sub.name, env.eventId);
       const attempts = (prior?.attempts ?? 0) + 1;
-      const from = prior?.status === 'retry' ? 'retry' : 'pending';
+      // A done or dead row is final for this delivery: the machine refuses fail from it, so nothing is overwritten.
+      const from = prior?.status ?? 'pending';
       const event = attempts >= maxAttempts ? 'fail_final' : 'fail';
       const to = inboxMachine.next(from, event);
       if (!to.ok) return to;
@@ -132,12 +143,13 @@ export function createOutboxDispatcher(o: OutboxDispatcherOptions): OutboxDispat
   }
 
   async function pause(sub: AnySubscriber, env: EventEnvelope): Promise<DeliveryOutcome> {
-    await o.storage.transaction((tx) => {
+    const r = await o.storage.transaction((tx): Result<DeliveryOutcome, AppError> => {
       const prior = tx.inbox.get(sub.name, env.eventId);
+      if (prior && (prior.status === 'done' || prior.status === 'dead')) return ok('duplicate');
       tx.inbox.markRetry({ consumer: sub.name, envelope: env, now: o.clock.now() }, prior?.attempts ?? 0, o.clock.now() + PAUSE_MS, 'FEATURE_DISABLED');
-      return ok(undefined);
+      return ok('paused');
     });
-    return 'paused';
+    return r.ok ? r.value : 'paused';
   }
 
   async function deliverTo(sub: AnySubscriber, env: EventEnvelope): Promise<DeliveryOutcome> {

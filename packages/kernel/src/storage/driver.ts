@@ -157,6 +157,10 @@ export interface DriverTx {
     pending(q: PendingQuery): OutboxRow[];
     /** Oldest event of the given types without a done/dead inbox row for the consumer. */
     oldestUndelivered(consumer: string, types: readonly string[]): OutboxRow | undefined;
+    /**
+     * Deletes events that occurred before the cutoff together with every consumer's inbox row for them;
+     * events still held by a dead letter are kept until that dead letter is purged. Returns events deleted.
+     */
     purgeBefore(occurredAt: string): number;
   };
   readonly inbox: {
@@ -177,6 +181,8 @@ export interface DriverTx {
     upsert(row: DeadLetterRow): void;
     remove(consumer: string, eventId: string): void;
     list(consumer: string | undefined, limit: number): DeadLetterRow[];
+    /** Deletes dead letters with deadAt before the cutoff; their inbox rows go with the event's outbox purge. */
+    purgeBefore(deadAt: string): number;
   };
   readonly sync: {
     get(id: string): SyncRow | undefined;

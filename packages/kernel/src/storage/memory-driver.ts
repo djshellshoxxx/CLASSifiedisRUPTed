@@ -202,8 +202,12 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
       },
       purgeBefore: (occurredAt) => {
         const old = [...outbox().values()].filter((o) => cmp(o.occurredAt, occurredAt) < 0);
-        for (const o of old) write('outbox', o.eventId, undefined);
-        return old.length;
+        if (old.length === 0) return 0;
+        const held = new Set([...state.table<DeadLetterRow>('dead_letter').values()].map((d) => d.eventId));
+        const purge = new Set(old.filter((o) => !held.has(o.eventId)).map((o) => o.eventId));
+        for (const [key, row] of [...inbox().entries()]) if (purge.has(row.eventId)) write('inbox', key, undefined);
+        for (const eventId of purge) write('outbox', eventId, undefined);
+        return purge.size;
       },
     },
     inbox: {
@@ -232,6 +236,11 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
           .filter((d) => consumer === undefined || d.consumer === consumer)
           .sort((a, b) => cmp(a.deadAt, b.deadAt) || cmp(a.consumer, b.consumer) || cmp(a.eventId, b.eventId))
           .slice(0, limit),
+      purgeBefore: (deadAt) => {
+        const old = [...state.table<DeadLetterRow>('dead_letter').entries()].filter(([, d]) => cmp(d.deadAt, deadAt) < 0);
+        for (const [key] of old) write('dead_letter', key, undefined);
+        return old.length;
+      },
     },
     sync: {
       get: (id) => sync().get(id),

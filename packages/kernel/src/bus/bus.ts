@@ -58,6 +58,8 @@ export interface DispatchContext {
   readonly correlationId?: string;
   /** `remote` (HTTP) reaches only relay-surface definitions. Default `local`. */
   readonly origin?: Origin;
+  /** Truncated caller network (/24 or /48) set by the relay HTTP adapter for rate limiting; never a raw IP. */
+  readonly network?: string;
 }
 
 export interface DispatchOptions {
@@ -129,10 +131,10 @@ export function createBus(o: BusOptions): Bus {
   const qDuration = m?.histogram({ name: 'classrup_query_duration_ms', help: 'Query duration in milliseconds.', labels: ['module', 'outcome'] });
 
   async function gate(def: Def, call: Call, kind: 'command' | 'query', raw: unknown): Promise<Result<unknown, AppError>> {
-    const { actor, tenantId } = call.ctx;
+    const { actor, tenantId, network } = call.ctx;
     if (!(await flags.isEnabled({ tenantId, module: def.module, actor, operation: def.name }))) return err(appError('FEATURE_DISABLED'));
     if (def.auth === 'required' && actor.kind === 'anonymous') return err(appError('UNAUTHENTICATED'));
-    const rl = await rate.check({ tenantId, actor, operation: def.name, capability: def.capability, kind, now: o.clock.now() });
+    const rl = await rate.check({ tenantId, actor, operation: def.name, capability: def.capability, kind, now: o.clock.now(), ...(network === undefined ? {} : { network }) });
     if (!rl.allowed) return err(appError('RATE_LIMITED', { retryAfterMs: rl.retryAfterMs, params: { retryAfterMs: rl.retryAfterMs } }));
     return parseInput(def.input, raw);
   }
@@ -234,6 +236,16 @@ export function createBus(o: BusOptions): Bus {
 
   const callOf = (ctx: DispatchContext): Call => ({ ctx, correlationId: ctx.correlationId ?? o.ids.next(), origin: ctx.origin ?? 'local' });
 
+  /** Post-commit notification only: the command already committed, so a failing sink is logged, never surfaced. */
+  function publish(def: Def | undefined, call: Call, events: readonly EventEnvelope[]): void {
+    if (!o.eventSink || events.length === 0) return;
+    try {
+      o.eventSink.publish(events);
+    } catch (e) {
+      log.error('event_sink.failed', { correlationId: call.correlationId, module: def?.module ?? 'unknown', operation: def?.name, count: events.length, error: e });
+    }
+  }
+
   return {
     registry: o.registry,
     dispatch: async (ctx, name, rawInput, opts = {}) => {
@@ -250,7 +262,7 @@ export function createBus(o: BusOptions): Bus {
         thrown = e;
         r = err(toAppError(e));
       }
-      if (r.ok && !r.value.replayed && events.length) o.eventSink?.publish(events);
+      if (r.ok && !r.value.replayed) publish(def, call, events);
       finish('command', def, call, started, r, thrown);
       return r.ok ? ok({ ...r.value, events: r.value.replayed ? [] : events, correlationId: call.correlationId }) : r;
     },

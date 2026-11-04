@@ -272,6 +272,7 @@ function outboxStore(d: DriverTx) {
       const row = d.outbox.oldestUndelivered(consumer, types);
       return row ? (JSON.parse(row.envelope) as EventEnvelope) : undefined;
     },
+    /** Deletes events older than the cutoff with their inbox rows (RET-SHORT); events held by a dead letter stay. */
     purgeBefore: (before: number): number => d.outbox.purgeBefore(toIso(before)),
   };
 }
@@ -335,6 +336,8 @@ function deadLetterStore(d: DriverTx) {
       d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: toIso(now), updatedAt: toIso(now) });
       return ok(undefined);
     },
+    /** Deletes dead letters that died before the cutoff (30-day RET-SHORT); returns the count. */
+    purgeBefore: (deadAt: number): number => d.deadLetters.purgeBefore(toIso(deadAt)),
   };
 }
 
@@ -451,14 +454,28 @@ function toBlobInfo(b: BlobRow, holders: number): BlobInfo {
   return { ref: b.ref, size: b.size, contentType: b.contentType, privacy: b.privacy, encrypted: b.encrypted, createdAt: b.createdAt, holders };
 }
 
-/** Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). */
+export interface ShreddedBlob {
+  readonly tenant: string;
+  readonly ref: string;
+}
+
+/**
+ * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). Every encrypted
+ * blob deleted in this transaction, whether by detach, a repository write or the orphan sweep, is listed
+ * by shredded() so the key owner deletes its per-object key in the same unit of work.
+ */
 function blobStore(d: DriverTx, kind: DriverKind) {
+  const shredded: ShreddedBlob[] = [];
+  const removeBlob = (b: BlobRow): void => {
+    d.blobs.remove(b.tenant, b.ref);
+    if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
+  };
   const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
     d.blobs.detach(tenant, ref, holder);
     if (d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
     const blob = d.blobs.get(tenant, ref);
     if (!blob) return { deleted: false, shred: false };
-    d.blobs.remove(tenant, ref);
+    removeBlob(blob);
     return { deleted: true, shred: blob.encrypted };
   };
   return {
@@ -496,9 +513,14 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     /** Deletes stored blobs that no record references and that were created before the cutoff. */
     collectOrphans(createdBefore: number, limit = 100): number {
       const list = d.blobs.orphans(toIso(createdBefore), limit);
-      for (const o of list) d.blobs.remove(o.tenant, o.ref);
+      for (const o of list) {
+        const blob = d.blobs.get(o.tenant, o.ref);
+        if (blob) removeBlob(blob);
+      }
       return list.length;
     },
+    /** Encrypted blobs deleted so far in this transaction (empty again after rollback: the list dies with it). */
+    shredded: (): readonly ShreddedBlob[] => [...shredded],
   };
 }
 

@@ -8,17 +8,17 @@ import { createMetricsRegistry } from '../observability/metrics.ts';
 import { createReadiness } from '../observability/readiness.ts';
 import { createBus } from '../bus/bus.ts';
 import { createRegistry } from '../bus/define.ts';
-import { createMemoryAudit, createRoleTableAuthz, type Actor, type SessionPort } from '../bus/ports.ts';
+import { createFixedWindowRateLimiter, createMemoryAudit, createRoleTableAuthz, type Actor, type RateLimitPort, type RateQuery, type SessionPort } from '../bus/ports.ts';
 import { openSqliteStorage } from '../storage/sqlite.ts';
 import { sampleDefinitions } from '../testing/sample-module.ts';
-import { createHttpHandler, startHttpServer, type RunningServer } from './server.ts';
+import { createHttpHandler, startHttpServer, type HttpAdapterOptions, type RunningServer } from './server.ts';
 
 const servers: RunningServer[] = [];
 afterEach(async () => {
   for (const s of servers.splice(0)) await s.close(1000);
 });
 
-async function relay(opts: { lag?: number } = {}) {
+async function relay(opts: { lag?: number; rateLimit?: (clock: ReturnType<typeof createFakeClock>) => RateLimitPort; clientAddress?: HttpAdapterOptions['clientAddress'] } = {}) {
   const clock = createFakeClock('2026-11-04T10:00:00.000Z');
   const ids = createDeterministicIds({ seed: 3, now: () => clock.now() });
   const storage = openSqliteStorage({ path: ':memory:' });
@@ -30,9 +30,9 @@ async function relay(opts: { lag?: number } = {}) {
   const tenantId = ids.next();
   const users: Record<string, Actor> = { 'member-token': { kind: 'user', id: 'did:key:z6MkMember', roles: ['member'] }, 'operator-token': { kind: 'operator', id: 'did:key:z6MkOp', roles: ['operator'] } };
   const sessions: SessionPort = { resolve: async (t) => (t === undefined ? ok({ actor: { kind: 'anonymous' }, tenantId }) : users[t] ? ok({ actor: users[t] as Actor, tenantId }) : err(appError('UNAUTHENTICATED'))) };
-  const bus = createBus({ registry, storage, clock, ids, authz, audit: createMemoryAudit(), metrics, logger, origin: 'relay:test' });
+  const bus = createBus({ registry, storage, clock, ids, authz, audit: createMemoryAudit(), metrics, logger, origin: 'relay:test', ...(opts.rateLimit ? { rateLimit: opts.rateLimit(clock) } : {}) });
   const readiness = createReadiness({ storage, lagMs: () => opts.lag ?? 0 });
-  const handler = createHttpHandler({ bus, sessions, authz, ids, clock, metrics, readiness, logger });
+  const handler = createHttpHandler({ bus, sessions, authz, ids, clock, metrics, readiness, logger, ...(opts.clientAddress ? { clientAddress: opts.clientAddress } : {}) });
   const server = await startHttpServer(handler);
   servers.push(server);
   const base = `http://127.0.0.1:${server.port}`;
@@ -86,6 +86,28 @@ describe('relay HTTP adapter (PS-117, PS-121)', () => {
     expect(http.length).toBeGreaterThan(5);
     expect(http.every((l) => l['ip'] === '127.0.0.0/24')).toBe(true);
     expect(r.logs.exportJsonl()).not.toMatch(/member-token|lamp/);
+  });
+
+  it('TEST-PS-117-09.T19 the rate limit sees only the caller network (/24 or /48), so one host cannot exhaust every login', async () => {
+    const seen: RateQuery[] = [];
+    const spy = await relay({ rateLimit: () => ({ check: (q) => (seen.push(q), { allowed: true }) }) });
+    expect((await spy.post('/api/v1/cmd/sample.relay.ping', {}, {}, '')).status).toBe(200);
+    expect(seen.map((q) => [q.actor.kind, q.network])).toEqual([['anonymous', '127.0.0.0/24']]);
+    expect(JSON.stringify(seen)).not.toContain('127.0.0.1');
+
+    const behindProxy = await relay({
+      rateLimit: (clock) => createFixedWindowRateLimiter({ limit: 2, windowMs: 60_000, clock }),
+      clientAddress: (req) => {
+        const v = req.headers['x-test-client'];
+        return Array.isArray(v) ? v[0] : v;
+      },
+    });
+    const ping = async (client: string) => (await behindProxy.post('/api/v1/cmd/sample.relay.ping', {}, { 'x-test-client': client }, '')).status;
+    expect([await ping('203.0.113.7'), await ping('203.0.113.200'), await ping('203.0.113.9')]).toEqual([200, 200, 429]);
+    expect([await ping('198.51.100.4'), await ping('2001:db8:1:2::5'), await ping('2001:db8:1:ffff::1'), await ping('2001:db8:1::9')]).toEqual([200, 200, 200, 429]);
+    expect([await ping('::ffff:198.51.100.77'), await ping('198.51.100.5')]).toEqual([200, 429]);
+    const limited = await behindProxy.post('/api/v1/cmd/sample.relay.ping', {}, { 'x-test-client': '203.0.113.1' }, '');
+    expect(limited.headers.get('retry-after')).toBe('60');
   });
 
   it('TEST-PS-121-09.T09 /healthz and /readyz expose only status booleans; draining turns readiness to 503', async () => {

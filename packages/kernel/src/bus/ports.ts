@@ -58,6 +58,8 @@ export interface RateQuery {
   readonly capability: string;
   readonly kind: 'command' | 'query';
   readonly now: number;
+  /** Caller network prefix (`192.0.2.0/24`, `2001:db8:1::/48`) from the relay HTTP adapter; absent in the vault. */
+  readonly network?: string;
 }
 
 export type RateDecision = { readonly allowed: true } | { readonly allowed: false; readonly retryAfterMs: number };
@@ -132,13 +134,27 @@ export function createStaticFlags(disabled: Iterable<string>): FlagPort & { set(
 
 export const unlimitedRate: RateLimitPort = { check: () => ({ allowed: true }) };
 
-/** Fixed-window limiter per (tenant, actor, operation); in-process state only. */
-export function createFixedWindowRateLimiter(opts: { readonly limit: number; readonly windowMs: number; readonly clock: Clock }): RateLimitPort {
+/** Bucket of a rate query: the actor, or the caller's network prefix for anonymous callers when known. */
+export function rateKey(q: RateQuery): string {
+  const who = q.actor.kind === 'anonymous' && q.network !== undefined ? `net:${q.network}` : actorKey(q.actor);
+  return `${q.tenantId}\u0001${who}\u0001${q.operation}`;
+}
+
+/**
+ * Fixed-window limiter per (tenant, actor or anonymous network prefix, operation); in-process state only.
+ * Windows that have ended are dropped once more than maxKeys buckets exist.
+ */
+export function createFixedWindowRateLimiter(opts: { readonly limit: number; readonly windowMs: number; readonly clock: Clock; readonly maxKeys?: number }): RateLimitPort {
   const windows = new Map<string, { start: number; count: number }>();
+  const maxKeys = opts.maxKeys ?? 10_000;
+  const sweep = (now: number): void => {
+    for (const [key, w] of windows) if (now - w.start >= opts.windowMs) windows.delete(key);
+  };
   return {
     check: (q) => {
-      const key = `${q.tenantId}\u0001${actorKey(q.actor)}\u0001${q.operation}`;
+      const key = rateKey(q);
       const now = opts.clock.now();
+      if (windows.size >= maxKeys) sweep(now);
       const w = windows.get(key);
       if (!w || now - w.start >= opts.windowMs) {
         windows.set(key, { start: now, count: 1 });

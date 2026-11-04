@@ -7,8 +7,9 @@ import { createTestKernel } from '../testing/harness.ts';
 import { itemRepo, SAMPLE_MODULE, sampleDefinitions, type SampleCounters } from '../testing/sample-module.ts';
 import { createRegistry, defineCommand } from './define.ts';
 import { ok } from '../errors/result.ts';
-import type { AuthzPort, RateLimitPort } from './ports.ts';
-import { createFixedWindowRateLimiter } from './ports.ts';
+import type { AuthzPort, RateLimitPort, RateQuery } from './ports.ts';
+import { ANONYMOUS, createFixedWindowRateLimiter, rateKey } from './ports.ts';
+import { createBus } from './bus.ts';
 
 function kernel(opts: Parameters<typeof createTestKernel>[0] = {}) {
   const counters: SampleCounters = { create: 0, consumed: [], failConsumer: 0 };
@@ -216,5 +217,59 @@ describe('command bus pipeline (PS-117)', () => {
     expect(k.events).toHaveLength(1);
     const q = await k.ask('sample.item.get', { itemId });
     expect(q.ok && q.value.value).toEqual({ itemId, name: 'lamp', revision: 1 });
+  });
+
+  it('TEST-PS-117-09.T17 anonymous callers are rate limited per network prefix; prefixes do not share a bucket', async () => {
+    const { k } = kernel();
+    const seen: RateQuery[] = [];
+    const window = createFixedWindowRateLimiter({ limit: 2, windowMs: 60_000, clock: k.clock });
+    const rate: RateLimitPort = { check: (q) => (seen.push(q), window.check(q)) };
+    const bus = createBus({ registry: k.registry, storage: k.storage, clock: k.clock, ids: k.ids, authz: { authorize: () => ({ allow: true }) }, rateLimit: rate });
+    const from = (network?: string) => bus.dispatch({ actor: ANONYMOUS, tenantId: k.tenantId, origin: 'remote', ...(network ? { network } : {}) }, 'sample.relay.ping', {});
+    const codes = async (network?: string) => {
+      const r = await from(network);
+      return r.ok ? 'OK' : r.error.code;
+    };
+    expect([await codes('192.0.2.0/24'), await codes('192.0.2.0/24'), await codes('192.0.2.0/24')]).toEqual(['OK', 'OK', 'RATE_LIMITED']);
+    expect([await codes('198.51.100.0/24'), await codes('2001:db8:1::/48'), await codes('2001:db8:1::/48')]).toEqual(['OK', 'OK', 'OK']);
+    expect(await codes('2001:db8:1::/48')).toBe('RATE_LIMITED');
+    expect([await codes(), await codes(), await codes()]).toEqual(['OK', 'OK', 'RATE_LIMITED']);
+    expect(seen[0]).toMatchObject({ network: '192.0.2.0/24', actor: { kind: 'anonymous' }, operation: 'sample.relay.ping' });
+    expect(seen.at(-1)).not.toHaveProperty('network');
+    const member = { kind: 'user' as const, id: 'did:key:z6MkMember', roles: ['member'] };
+    const base = { tenantId: 't', operation: 'o.p.q', capability: 'o.p.q', kind: 'command' as const, now: 0 };
+    expect(rateKey({ ...base, actor: member, network: '192.0.2.0/24' })).toBe(rateKey({ ...base, actor: member, network: '198.51.100.0/24' }));
+    expect(rateKey({ ...base, actor: ANONYMOUS, network: '192.0.2.0/24' })).not.toBe(rateKey({ ...base, actor: ANONYMOUS, network: '198.51.100.0/24' }));
+    k.clock.advance(60_000);
+    expect(await codes('192.0.2.0/24')).toBe('OK');
+  });
+
+  it('TEST-PS-117-09.T25 a throwing EventSink after commit is logged; the committed command still returns its ok result once', async () => {
+    const { k, counters, newId } = kernel();
+    let calls = 0;
+    const sink = {
+      publish: () => {
+        calls += 1;
+        throw new Error('ui listener failed');
+      },
+    };
+    const bus = createBus({ registry: k.registry, storage: k.storage, clock: k.clock, ids: k.ids, authz: { authorize: () => ({ allow: true }) }, eventSink: sink, logger: k.logger, metrics: k.metrics });
+    const itemId = newId();
+    const key = newId();
+    const ctx = { actor: k.actor, tenantId: k.tenantId };
+    const r = await bus.dispatch(ctx, 'sample.item.create', { itemId, name: 'lamp' }, { idempotencyKey: key });
+    expect(r.ok && r.value).toMatchObject({ status: 201, replayed: false, value: { itemId, revision: 1 } });
+    expect(calls).toBe(1);
+    expect(await k.storage.read((tx) => tx.records.get(k.tenantId, 'sample.item', itemId)?.revision)).toBe(1);
+    const again = await bus.dispatch(ctx, 'sample.item.create', { itemId, name: 'lamp' }, { idempotencyKey: key });
+    expect(again.ok && again.value.replayed).toBe(true);
+    expect(counters.create).toBe(1);
+    expect(calls).toBe(1);
+    const failed = k.logs.records().filter((l) => l['msg'] === 'event_sink.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ level: 'error', module: SAMPLE_MODULE, operation: 'sample.item.create', count: 1 });
+    expect(k.logs.records().filter((l) => l['msg'] === 'command.completed')).toHaveLength(2);
+    expect(k.metrics.value('classrup_command_total', { module: SAMPLE_MODULE, outcome: 'ok', code: 'OK' })).toBe(1);
+    expect(k.logs.exportJsonl()).not.toContain('lamp');
   });
 });

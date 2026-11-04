@@ -1,6 +1,9 @@
 // Relay access tokens by challenge–response (CTR-CAP-001 sessions, CAP-10): the relay issues a 32-byte
 // nonce (TTL 120 s); the client signs `classrup-login:v1:<relayId>:<nonce>` with a device key; the relay
 // verifies via an injected verifier and issues an opaque 256-bit token stored only as its SHA-256 hash.
+// Nonces are RET-EPHEMERAL and live only in this relay process: a bounded map swept on every challenge,
+// consumed on first use before anything is awaited, so neither a failed login nor a rolled-back
+// transaction can make a nonce usable again (T06), and unanswered challenges never reach storage.
 import * as z from 'zod';
 import type { Clock } from '../clock/clock.ts';
 import { toIso } from '../clock/clock.ts';
@@ -10,16 +13,20 @@ import { sha256Hex } from '../hash/canonical.ts';
 import { webCryptoRandom, type RandomFill } from '../ids/uuidv7.ts';
 import { bytesToBase64url } from '../storage/base64url.ts';
 import { defineRepo } from '../storage/repo.ts';
-import { writeScope, type WriteScope } from '../storage/scope.ts';
+import { writeScope, type ReadScope, type WriteScope } from '../storage/scope.ts';
 import { defineCommand } from './define.ts';
 import type { Storage } from '../storage/storage.ts';
 import type { Tx } from '../storage/tx.ts';
 import type { IdGen } from '../ids/uuidv7.ts';
 import { ANONYMOUS, type Session, type SessionPort } from './ports.ts';
 
-/** Verifies a device signature for a principal (did:key); implemented by the security package. */
+/**
+ * Verifies a device signature for a principal (did:key); implemented by the security package.
+ * It runs while the login transaction is open: read relay state (e.g. registered device keys) through
+ * `repos`, never through storage.transaction() or storage.read(), which are not re-entrant.
+ */
 export interface SignatureVerifier {
-  verify(principal: string, message: Uint8Array, signature: string): boolean | Promise<boolean>;
+  verify(principal: string, message: Uint8Array, signature: string, repos: Pick<ReadScope, 'repo'>): boolean | Promise<boolean>;
 }
 
 export interface RelayAccessOptions {
@@ -30,10 +37,12 @@ export interface RelayAccessOptions {
   /** Relay tenant that sessions belong to. */
   readonly tenantId: string;
   readonly verifier: SignatureVerifier;
-  /** Relay-local roles for a principal, evaluated on every request (CAP-6, CAP-9). */
+  /** Relay-local roles for a principal, evaluated on every resolve() outside any transaction (CAP-6, CAP-9). */
   readonly rolesFor?: (principal: string) => readonly string[] | Promise<readonly string[]>;
   readonly random?: RandomFill;
   readonly nonceTtlMs?: number;
+  /** Outstanding challenges kept in memory; the oldest is dropped when full. Default 10 000. */
+  readonly maxPendingChallenges?: number;
   readonly idleTimeoutMs?: number;
   readonly absoluteTimeoutMs?: number;
 }
@@ -56,20 +65,25 @@ export interface LoginResult {
 }
 
 export interface RelayAccess extends SessionPort {
+  /** Issues a single-use nonce held in process memory for nonceTtlMs; nothing is written to storage. */
   challenge(): Promise<Challenge>;
   login(input: LoginInput): Promise<Result<LoginResult, AppError>>;
   revoke(token: string): Promise<void>;
-  /** Same operations inside an existing transaction (used by the relay command handlers). */
-  challengeIn(repos: Pick<WriteScope, 'repo'>): Result<Challenge, AppError>;
+  /** Login inside an existing transaction (relay command handler); the nonce is consumed even if it rolls back. */
   loginIn(repos: Pick<WriteScope, 'repo'>, input: LoginInput): Promise<Result<LoginResult, AppError>>;
   revokeIn(repos: Pick<WriteScope, 'repo'>, token: string): Promise<Result<void, AppError>>;
+  /** Unexpired outstanding challenges after sweeping expired ones. */
+  pendingChallenges(): number;
+  /** Deletes tokens past their absolute or idle expiry (relay maintenance sweep); returns the count. */
+  purgeExpired(): Promise<Result<number, AppError>>;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
-const nonceRepo = defineRepo({ type: 'platform.access_nonce', schema: z.strictObject({ expiresAt: z.string() }) });
+const PURGE_PAGE = 500;
 const tokenRepo = defineRepo({
   type: 'platform.access_token',
   schema: z.strictObject({ principal: z.string(), roles: z.array(z.string()), lastUsedAt: z.string(), absoluteExpiresAt: z.string() }),
+  indexes: { absoluteExpiresAt: (d) => d.absoluteExpiresAt, lastUsedAt: (d) => d.lastUsedAt },
 });
 
 function randomToken(fill: RandomFill): string {
@@ -84,39 +98,63 @@ export function loginMessage(relayId: string, nonce: string): string {
 
 type Repos = Pick<WriteScope, 'repo'>;
 
+/** Outstanding nonces → expiry (ms) in issue order; every entry has the same TTL, so the oldest expire first. */
+function createNonceStore(clock: Clock, ttl: number, capacity: number) {
+  const nonces = new Map<string, number>();
+  const sweep = (now: number): void => {
+    for (const [nonce, expiresAt] of nonces) {
+      if (expiresAt > now) break;
+      nonces.delete(nonce);
+    }
+  };
+  return {
+    issue(nonce: string): number {
+      const now = clock.now();
+      sweep(now);
+      for (const oldest of nonces.keys()) {
+        if (nonces.size < capacity) break;
+        nonces.delete(oldest);
+      }
+      nonces.set(nonce, now + ttl);
+      return now + ttl;
+    },
+    /** Single use: removed on lookup whether or not it is still valid. */
+    consume(nonce: string): boolean {
+      const expiresAt = nonces.get(nonce);
+      if (expiresAt === undefined) return false;
+      nonces.delete(nonce);
+      return expiresAt > clock.now();
+    },
+    size(): number {
+      sweep(clock.now());
+      return nonces.size;
+    },
+  };
+}
+
 export function createRelayAccess(o: RelayAccessOptions): RelayAccess {
   const fill = o.random ?? webCryptoRandom;
-  const nonceTtl = o.nonceTtlMs ?? 120_000;
   const idle = o.idleTimeoutMs ?? 7 * DAY;
   const absolute = o.absoluteTimeoutMs ?? 30 * DAY;
+  const nonces = createNonceStore(o.clock, o.nonceTtlMs ?? 120_000, Math.max(1, o.maxPendingChallenges ?? 10_000));
   const scope = (tx: Tx): Repos => writeScope({ tx, tenantId: o.tenantId, clock: o.clock, ids: o.ids, deliveryEligible: false });
   const unauthenticated = (): Result<never, AppError> => err(appError('UNAUTHENTICATED'));
 
-  function challengeIn(r: Repos): Result<Challenge, AppError> {
-    const b = new Uint8Array(32);
-    fill(b);
-    const nonce = bytesToBase64url(b);
-    const expiresAt = toIso(o.clock.now() + nonceTtl);
-    const put = r.repo(nonceRepo).put(nonce, { expiresAt }, { expectedRevision: 0 });
-    return put.ok ? ok({ nonce, message: loginMessage(o.relayId, nonce), expiresAt }) : put;
-  }
-
-  /** Single use: the nonce is deleted whether or not it is still valid. */
-  function consumeNonce(r: Repos, nonce: string): boolean {
-    const repo = r.repo(nonceRepo);
-    const rec = repo.get(nonce);
-    if (!rec || !repo.remove(nonce, { expectedRevision: rec.revision }).ok) return false;
-    return rec.data.expiresAt > o.clock.iso();
+  function challenge(): Challenge {
+    const nonce = randomToken(fill);
+    const expiresAt = toIso(nonces.issue(nonce));
+    return { nonce, message: loginMessage(o.relayId, nonce), expiresAt };
   }
 
   async function loginIn(r: Repos, input: LoginInput): Promise<Result<LoginResult, AppError>> {
-    if (!consumeNonce(r, input.nonce)) return unauthenticated();
+    if (!nonces.consume(input.nonce)) return unauthenticated();
     const message = new TextEncoder().encode(loginMessage(o.relayId, input.nonce));
-    if (!(await o.verifier.verify(input.principal, message, input.signature))) return unauthenticated();
+    if (!(await o.verifier.verify(input.principal, message, input.signature, r))) return unauthenticated();
     const token = randomToken(fill);
-    const roles = [...((await o.rolesFor?.(input.principal)) ?? [])];
-    const expiresAt = toIso(o.clock.now() + absolute);
-    const put = r.repo(tokenRepo).put(await sha256Hex(token), { principal: input.principal, roles, lastUsedAt: o.clock.iso(), absoluteExpiresAt: expiresAt }, { expectedRevision: 0 });
+    const now = o.clock.now();
+    const expiresAt = toIso(now + absolute);
+    // Roles are resolved per request by resolve() (CAP-6); login never calls back into relay state mid-transaction.
+    const put = r.repo(tokenRepo).put(await sha256Hex(token), { principal: input.principal, roles: [], lastUsedAt: toIso(now), absoluteExpiresAt: expiresAt }, { expectedRevision: 0 });
     return put.ok ? ok({ token, expiresAt }) : put;
   }
 
@@ -139,15 +177,26 @@ export function createRelayAccess(o: RelayAccessOptions): RelayAccess {
     return rec ? repo.remove(id, { expectedRevision: rec.revision }) : ok(undefined);
   }
 
+  /** One page per expiry rule; the same comparisons as touch(): absolute ≤ now, lastUsedAt + idle ≤ now. */
+  function purgePage(r: Repos): Result<number, AppError> {
+    const repo = r.repo(tokenRepo);
+    const now = o.clock.now();
+    const absoluteDue = repo.query({ where: { absoluteExpiresAt: { lte: toIso(now) } }, limit: PURGE_PAGE });
+    if (!absoluteDue.ok) return absoluteDue;
+    const idleDue = repo.query({ where: { lastUsedAt: { lte: toIso(now - idle) } }, limit: PURGE_PAGE });
+    if (!idleDue.ok) return idleDue;
+    const due = new Map([...absoluteDue.value.items, ...idleDue.value.items].map((rec) => [rec.id, rec.revision]));
+    for (const [id, revision] of due) {
+      const removed = repo.remove(id, { expectedRevision: revision });
+      if (!removed.ok) return removed;
+    }
+    return ok(due.size);
+  }
+
   return {
-    challengeIn,
     loginIn,
     revokeIn,
-    challenge: async () => {
-      const r = await o.storage.transaction((tx) => challengeIn(scope(tx)));
-      if (!r.ok) throw new Error(r.error.code);
-      return r.value;
-    },
+    challenge: async () => challenge(),
     login: (input) => o.storage.transaction((tx) => loginIn(scope(tx), input)),
     resolve: async (token) => {
       if (token === undefined) return ok({ actor: ANONYMOUS, tenantId: o.tenantId });
@@ -159,6 +208,16 @@ export function createRelayAccess(o: RelayAccessOptions): RelayAccess {
     },
     revoke: async (token) => {
       await o.storage.transaction((tx) => revokeIn(scope(tx), token));
+    },
+    pendingChallenges: () => nonces.size(),
+    purgeExpired: async () => {
+      let total = 0;
+      for (;;) {
+        const page = await o.storage.transaction((tx) => purgePage(scope(tx)));
+        if (!page.ok) return page;
+        total += page.value;
+        if (page.value === 0) return ok(total);
+      }
     },
   };
 }
@@ -175,7 +234,7 @@ export function relayAccessDefinitions(access: RelayAccess) {
     idempotent: false,
     surface: 'relay',
     auth: 'public',
-    handler: (ctx) => access.challengeIn(ctx.tx),
+    handler: async () => ok(await access.challenge()),
   });
   const login = defineCommand({
     name: 'platform.access_token.login',

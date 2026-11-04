@@ -35,6 +35,11 @@ export interface ScopedBlobs extends ReadBlobs {
   put(bytes: Uint8Array, meta: { readonly contentType: string; readonly privacy: BlobPrivacy; readonly encrypted?: boolean }): Promise<Result<BlobInfo, AppError>>;
   attach(ref: string, holder: string): Result<{ holders: number; present: boolean }, AppError>;
   detach(ref: string, holder: string): { deleted: boolean; shred: boolean };
+  /**
+   * Refs of this tenant's encrypted blobs deleted so far in the transaction, including those released by
+   * repository put/remove; the key owner deletes each per-object key in the same unit of work (crypto-shred).
+   */
+  shredded(): readonly string[];
 }
 
 export interface ReadScope {
@@ -73,6 +78,7 @@ function scopedBlobs(o: ScopeOptions): ScopedBlobs {
     put: (bytes, meta) => o.tx.blobs.put({ tenant: o.tenantId, bytes, ...meta, now: o.clock.now() }),
     attach: (ref, holder) => o.tx.blobs.attach(o.tenantId, ref, holder),
     detach: (ref, holder) => o.tx.blobs.detach(o.tenantId, ref, holder),
+    shredded: () => o.tx.blobs.shredded().filter((b) => b.tenant === o.tenantId).map((b) => b.ref),
   };
 }
 

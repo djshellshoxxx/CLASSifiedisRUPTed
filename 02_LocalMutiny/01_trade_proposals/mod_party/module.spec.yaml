@@ -9,12 +9,13 @@ responsibilities:
   - Create and hold the roster for a subject, enforcing 2..8 unique parties, a single coordinator and ring positions 0..N-1.
   - Check pairwise local blocks and the principal's account limits before the principal joins, and reject without disclosing which pair or which block.
   - Mark parties left or removed when a signed notice, a local block, a decline or a timeout says so, emitting joined and left events for local consumers.
+  - Own the error code MUTINY_PARTICIPANT_DUPLICATE (N1), which F02.S02.M05 references, and register export, deletion and retention handlers with F10 (N6).
 non_responsibilities:
   - Which items each party gives or receives (F02.S01.M03) and the revision snapshot (F02.S01.M04).
   - Consent and reservation of each party (F02.S03.M01, F02.S03.M02) and dropout handling (F02.S03.M03).
   - Block list storage (F07.S02.M02) and local rate or participation limits (F12.S03.M04).
   - "Future: adding a participant to an open proposal; in the MVP this always means a new subject with fresh consent."
-depends_on: [F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a proposer, I see the roster of everyone in the cycle with their pseudonyms and positions before I send the proposal.
   - As a member who blocked someone, I am never put in a cycle with them and nobody is told why.
@@ -82,7 +83,7 @@ processes:
       - "V01 | roster has 2..8 DIDs, exactly 2 for trade_proposal | MUTINY_ROSTER_SIZE"
       - "V02 | all DIDs are distinct (participant uniqueness) | MUTINY_PARTICIPANT_DUPLICATE"
       - "V03 | exactly one coordinator and positions are 0..N-1 without gaps | MUTINY_ROSTER_SIZE"
-      - "V04 | no pair among the parties is blocked in the local block list (checked for the principal's own blocks only) | BLOCKED_PARTY"
+      - "V04 | no party is in the principal's own block list (F07.S02.M02 filterBlocked over the roster, own list only; other parties' blocks are applied silently in their own vaults, N7) | BLOCKED_PARTY"
       - "V05 | every party has 1..3 mailbox hints from a verified signed projection | MUTINY_PARTY_UNREACHABLE"
       - "V06 | the principal's open subjects after joining are ≤ 5 and within the F12.S03.M04 local participation limit | MUTINY_PARTY_LIMIT"
       - "V07 | roster equals the head revision's party list in DIDs, positions and roles | MUTINY_ROSTER_MISMATCH"
@@ -138,6 +139,7 @@ processes:
       - {type: mutiny.proposal.revised, effect: "verify roster equals the new head snapshot; on peer revisions create missing roster rows with origin peer"}
       - {type: mutiny.cycle.declined, effect: "mark the declining party left with reason declined"}
       - {type: mutiny.cycle.participant_dropped, effect: "mark the dropped party left with the coarse reason"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained rosters of terminal subjects and drop its mailbox hints"}
     errors:
       - "MUTINY_ROSTER_SIZE | 422 | no | roster size or coordinator count is invalid"
       - "MUTINY_PARTICIPANT_DUPLICATE | 422 | no | the same participant appears twice"
@@ -176,8 +178,9 @@ processes:
       - No roster field, event or error reveals that a block exists or who holds it; the principal's own block list never leaves the vault.
       - The roster holds pseudonym DIDs and relay ids only and is retained as evidence for 2 years with its subject.
       - Subject spam against a person is limited by the principal-side limit of 5 open subjects and by recipients' local filtering.
+      - The module registers ExportSectionPort (section mutiny.parties), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ProposalParty field with its F10.S02.M02 class, and on privacy.deletion.completed replaces the erased DID with the deletion pseudonym in retained rosters.
     data:
-      - "ProposalParty: P2; DIDs and relay routing hints only."
+      - "ProposalParty: P2; DIDs and relay routing hints only; field classes annotated per F10.S02.M02."
     retention:
       - "RET-EVIDENCE with the subject (2 years after last related activity)."
     threats:
@@ -220,8 +223,9 @@ processes:
       - "T12 | unit | 08.R01,08.R03,09.R01,09.R03 | diagnostics and traceability tool | no DIDs in diagnostics; every PS-014 requirement maps to a passing test"
       - "T13 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | rosters round-trip; mismatching imports flagged"
       - "T14 | a11y | 01.R01 | roster and ring screens | axe zero serious issues; ring text alternative present"
+      - "T15 | integration | 07.R04,07.R02 | F10 export, deletion of a party and retention sweep | section mutiny.parties exported; erased DID pseudonymized and mailbox hints dropped; rows purged only after RET-EVIDENCE"
     acceptance:
-      - All tests T01–T14 pass in CI.
+      - All tests T01–T15 pass in CI.
       - No error, event or log reveals who blocked whom.
       - A left party is never replaced and ring positions never change after a revision is sealed.
   import_export_backup_rollback:

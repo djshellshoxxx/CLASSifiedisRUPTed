@@ -17,8 +17,9 @@ const IMPORT = /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"
 
 /** Returns the module directory (packages/<pkg>/src/<sub>/<mod>) containing file, or null. */
 function moduleDir(file) {
-  const m = /^packages\/[^/]+\/src\/[^/]+\/[^/]+/.exec(relative(ROOT, file));
-  return m ? m[0] : null;
+  // Module dirs are packages/<pkg>/src/<subfeature>/<module>/ (directory, not file); the kernel has no spec-module layout.
+  const m = /^(packages\/(?!kernel\/)[^/]+\/src\/[^/]+\/[^/]+)\//.exec(relative(ROOT, file));
+  return m ? m[1] : null;
 }
 
 export function check() {

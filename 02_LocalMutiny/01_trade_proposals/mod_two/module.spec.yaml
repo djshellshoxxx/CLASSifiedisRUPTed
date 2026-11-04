@@ -304,7 +304,7 @@ processes:
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
-      - Contract tests verify all four statement schemas and the sync-state progression against fake relays.
+      - Contract tests verify the withdrawal statement schema, the F08 consent fields this module relies on (subjectType, statement key, hex digest), the reservation holder and the sync-state progression against fake relays.
       - The two-vault flow is tested end to end with two in-memory vaults, a fake relay and an injected clock, including forks and clock disagreement.
     fixtures: "Two in-memory vaults Alice and Bob with keys, items (Alice guitar I1, Bob bicycle I2), a fake relay that can drop, delay and duplicate, fixed clock 2026-11-04T10:00:00Z."
     tests:
@@ -334,7 +334,7 @@ processes:
       - "T24 | contract | 04.R04 | F11.S01.M01 registry lookup for each statement schema named here | registered signer role matches; consent uses subjectType mutiny_proposal and key consent.mutiny.proposal.accept.v1 with hex digest equal to the base64url-decoded contentHash"
       - "T25 | integration | 03.R02,02.R02 | Bob tries to accept an imbalance not in the head snapshot, then counters with acceptedImbalances naming himself | first refused; Alice's vault verifies Bob's consent on the new digest as his signed acceptance and feasibility C05 passes"
     acceptance:
-      - All tests T01–T17 pass in CI.
+      - All tests T01–T25 pass in CI.
       - A party is never shown as bound to a revision unless a valid signature on that exact hash was verified in the viewing vault.
       - Forks and clock disagreement always end in frozen or expired, never in acceptance.
   import_export_backup_rollback:

@@ -1,35 +1,28 @@
-# PS-087-01 — domain schema
+# PS-087-01 — Domain schema: Federated dedup
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-01. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S02.M02 Federated dedup](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/relay_sync/dedup` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the domain schema process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-087-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-087-01.R01** The module owns no entity; its inputs are an Envelope, a ChainHead {seq, cid} and a set of known cids, and its output is a Decision value type.
+- **PS-087-01.R02** The chain rule is fixed by CTR-FED-001 (seq starts at 1, prev is the cid of the previous seq of the same author and is absent only at seq 1).
+- **PS-087-01.R03** The buffer limits are constants of this module (24 h, 100 ahead, 50 per author, 5000 total) so every relay and vault behaves identically.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Stateless decision functions; buffered rows and chain heads are persisted as FederatedRecord by F11.S01.M02, so no entity is owned here.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-087-09.T01 | unit | PS-087-09.R02, PS-087-01.R01, PS-087-01.R02, PS-087-02.R01 | decide for next, duplicate, buffer, fork, reject cases from the example | decision kinds as documented |
+| TEST-PS-087-09.T02 | property | PS-087-01.R02, PS-087-03.R01, PS-087-03.R02, PS-087-09.R03 | random permutations and duplicates of a 50-envelope chain through decide and drain | final accepted order equals seq order; every arrival yields at most one next per seq |
+| TEST-PS-087-09.T03 | unit | PS-087-02.R02, PS-087-02.R03, PS-087-01.R03 | gap of 100 and 101; 50th and 51st buffered for one author; 5000th and 5001st total | boundary accepted at limit, FEDERATION_GAP_TOO_LARGE or FEDERATION_BUFFER_FULL above |
+| TEST-PS-087-09.T04 | property | PS-087-01.R01, PS-087-02.R01, PS-087-07.R03 | random splices of prev values and duplicated seq with different cid | never next; always fork or reject |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ERR-001, CTR-OBS-001, CTR-TST-001. Predecessor: [module SPEC](SPEC.md).

@@ -1,0 +1,177 @@
+id: F14.S02.M02
+scope: MVP
+summary: >-
+  Locale-aware display and input parsing of Money (CTR-MNY-001: a decimal string of minor units plus a currency
+  code). Formatting never converts minor units to a JavaScript Number: the string is split into whole and
+  fraction digits and formatted through Intl.NumberFormat so values far beyond 2^53 stay exact. Approximate
+  (converted) values are always labelled with the symbol or code, the quote source and the quote time, for
+  example "≈ 42.10 EUR, quote from ECB at 10:15" (CTR-UX-001 UX-4). The module displays and parses only; it does
+  not convert, round or hold funds, and a displayed price is a claim, not a payment instruction.
+responsibilities:
+  - Format Money { amount, currency } for a locale with the currency exponent supplied from the registry (F09.S03.M01), using string splitting so no Number conversion occurs, with exactly exponent fraction digits and no rounding.
+  - Support display modes symbol, code and name, ISO 4217 currencies through Intl currency style, and registry crypto assets (BTC 8, ETH 18, USDC 6) through decimal style plus the asset code isolated for bidi.
+  - Format approximate values with the label from the catalog key money.approx, containing the converted amount with currency code, the quote source name and the quote time in the viewer's time zone.
+  - Parse user-typed amounts in a locale to minor-unit strings, rejecting more fraction digits than the exponent, mixed separators and values above 30 digits instead of rounding silently.
+  - Expose parts (sign, currency, integer, group, decimal, fraction) so layouts can style the currency and fraction, and provide spoken-friendly name output used by F14.S01.M02.
+non_responsibilities:
+  - Currency registry and exponents (F09.S03.M01), FX rates and quotes (F09.S03.M02) and conversion arithmetic and rounding (F09.S03.M03).
+  - Message catalogs and locale negotiation (F14.S02.M01), which this module uses.
+  - Payments, balances and custody; the platform holds no funds and displayed amounts are claims between parties (CTR-COM-001).
+  - "Future: compact notation for large amounts, accounting-style negatives and per-region currency symbol preferences; MVP uses standard notation only."
+depends_on: [F14.S02.M01, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
+user_stories:
+  - As a buyer in Germany, I see a EUR price as "45,00 €" and a US buyer sees "€45.00" for the same listing.
+  - As a user, a very large amount such as 12345678901234567890 minor units is shown with every digit correct.
+  - As a barter participant, an approximate converted value reads "≈ 42.10 EUR, quote from ECB at 10:15" so I know it is not exact.
+  - As a user typing a price, "12,50" in a German locale is understood as 12.50 and "12.345" is flagged rather than silently rounded.
+edge_cases:
+  - Amount 5 minor units of a 2-decimal currency formats as 0.05, not 0.5 or 5.00.
+  - Negative amount -250 formats with the locale's minus sign and, when the whole part is zero (-5), keeps the sign (-0.05).
+  - Currency with exponent 0 (JPY) shows no fraction; exponent 3 (KWD) shows three digits; exponent 18 (ETH) shows 18 digits with no trailing trim unless the caller requests trimming.
+  - Amount 9007199254740993 (above 2^53) formats exactly; a Number-based formatter would show ...992.
+  - The engine lacks exact decimal-string support in Intl.NumberFormat (older Safari); the BigInt part-substitution path is used and produces identical output.
+  - Quote asOf is older than 24 h; the label adds the localized text "old quote" and the UI offers refresh when online.
+  - Unknown or non-ISO currency code such as USDC (4 letters) is rendered through decimal style plus the code, never through Intl currency style which would throw.
+  - Right-to-left locale; the amount is wrapped in bidi isolation so digits and symbol keep order inside RTL text.
+ux:
+  screens:
+    - "Price display components used in listing cards, offers, proposals and receipts, always with a currency symbol or code."
+    - "Money input field: label with currency, locale-aware decimal separator hint, inline error for too many fraction digits."
+    - "Approximate value chip: '≈ 42.10 EUR' with an info button that opens the quote source and time."
+  states: [formatted, approximate, old-quote, invalid-input, parsed]
+  a11y:
+    - Money input uses inputmode=decimal, a visible label including the currency, and errors linked with aria-describedby.
+    - The approximate chip's accessible name contains approximately, the amount with currency name, source and time.
+    - The info button is at least 44×44 px and opens an accessible popover with focus management.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; its types are Money (CTR-MNY-001), CurrencySpec { code, exponent, kind } supplied by callers from the registry, and Quote label data { source, asOf, expiresAt }.
+      - Amounts are decimal strings of minor units or bigint in code, with an optional leading minus sign and at most 78 digits, and are never converted to floating point.
+      - Display output is derived data and is never stored or sent as the source of truth for an amount.
+    entities: []
+    note: "Pure formatting and parsing library; stores nothing and owns no catalog entity."
+  validation_rules:
+    requirements:
+      - Inputs are validated before formatting so the output is either exact or an explicit error, never a silently wrong number.
+      - Parsing refuses ambiguous or lossy input instead of rounding.
+      - Each failure has one stable error code usable in forms and tests.
+    rules:
+      - "V01 | amount matches ^-?[0-9]{1,78}$ with no leading zeros except a single 0 | I18N_MONEY_INVALID"
+      - "V02 | exponent is an integer from 0 to 18 supplied by the registry | I18N_MONEY_EXPONENT_INVALID"
+      - "V03 | parsed text has no more fraction digits than the exponent and uses only the locale decimal separator once | I18N_MONEY_PRECISION"
+      - "V04 | parsed value has at most 30 digits and does not exceed the caller's maximum | I18N_MONEY_TOO_LARGE"
+      - "V05 | quote label has a source of 1 to 80 plain-text characters and asOf is a valid RFC 3339 instant | I18N_QUOTE_LABEL_INVALID"
+      - "V06 | an approximate value is never rendered without the currency symbol or code, the source and the time | I18N_QUOTE_LABEL_INVALID"
+  workflow_state_machine:
+    requirements:
+      - Formatting is a pure function from (Money, exponent, locale, options) to a string and parts.
+      - Parsing is a pure function from (text, locale, exponent) to a Result of a minor-unit string.
+      - There is no persisted lifecycle, so no entity state machine is declared.
+    machines: []
+    timeouts: []
+    note: "Stateless library; the only time-dependent logic is the old-quote threshold of 24 h, computed from an injected clock."
+  commands_queries_events:
+    requirements:
+      - The module exposes library functions and no vault or relay commands, queries or events.
+      - Functions are total for valid input and return Result values for parsing and validation.
+      - Formatting the same input twice returns identical output, so UI snapshots are stable.
+    commands: []
+    queries: []
+    note: "API: formatMoney(money, spec, locale, { display: symbol|code|name, trimZeros? }) -> string; formatMoneyParts(...) -> Part[]; formatApprox(money, spec, quote, locale, { timeZone, now }) -> string; parseMoneyInput(text, spec, locale, { max }) -> Result<string>; currencyName(code, locale, count) -> string."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "I18N_MONEY_INVALID | 422 | no | amount is not a decimal integer string of at most 78 digits"
+      - "I18N_MONEY_EXPONENT_INVALID | 422 | no | currency exponent missing or outside 0 to 18"
+      - "I18N_MONEY_PRECISION | 422 | no | typed amount has more fraction digits than the currency allows or mixed separators"
+      - "I18N_MONEY_TOO_LARGE | 422 | no | typed amount exceeds 30 digits or the caller maximum"
+      - "I18N_QUOTE_LABEL_INVALID | 422 | no | quote source or time missing or malformed for an approximate value"
+    example: |
+      formatMoney({ amount: "4500", currency: "EUR" }, { code: "EUR", exponent: 2, kind: "iso" }, "de") // "45,00 €"
+      formatMoney({ amount: "4500", currency: "EUR" }, { code: "EUR", exponent: 2, kind: "iso" }, "en") // "€45.00"
+      formatMoney({ amount: "12345678901234567890", currency: "USD" }, usd, "en") // "$123,456,789,012,345,678.90"
+      formatMoney({ amount: "100000000", currency: "BTC" }, btc, "en") // "1.00000000 BTC"
+      formatApprox({ amount: "4210", currency: "EUR" }, eur, { source: "ECB", asOf: "2026-11-04T10:15:00Z" }, "en", { timeZone: "UTC" })
+        // "≈ 42.10 EUR, quote from ECB at 10:15"
+      parseMoneyInput("12,50", eur, "de") // Ok("1250");  parseMoneyInput("12,345", eur, "de") // Err(I18N_MONEY_PRECISION)
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization and has no roles; it runs in the browser under the unlocked local principal and on relays when rendering text.
+      - It reads no vault data itself; callers pass in the Money and the registry spec.
+      - Formatted strings are derived from data the viewer is already allowed to see and add no new disclosure.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Formatting is deterministic and idempotent, and never returns a string for an invalid amount; invalid input yields an explicit error value shown as a localized message.
+      - If the Intl implementation lacks exact decimal-string support, the BigInt part-substitution path produces identical output, and a startup self-test verifies the two paths agree on 20 sample values.
+      - If Intl.NumberFormat cannot format a currency code, the decimal style plus isolated code is used so a price is never blank.
+    idempotency: "Pure functions; the same input and locale give the same output."
+    concurrency: "No shared mutable state except a bounded cache of at most 64 Intl.NumberFormat instances keyed by locale, currency and options."
+    retries: "Not applicable; no network or storage operations."
+    offline: "Fully offline; uses the browser's built-in Intl data and the bundled catalogs."
+    partial_failure: "A failing quote label (missing source) renders the amount with the approximate marker and the text 'quote details unavailable' from the catalog rather than hiding the approximation."
+  privacy_retention_abuse:
+    requirements:
+      - The module stores and transmits nothing, and formatted prices are never logged with user identifiers.
+      - Price display must not mislead, so approximate values are always labelled, the quote source is shown as plain text, and the UI never presents an approximate value as a payment amount.
+      - Quote source names come from the quote record and are rendered as plain text, never as links or markup.
+    data:
+      - "Money values and quote metadata passed in: whatever class the owning record has; not stored here."
+    retention:
+      - "None; the format cache holds Intl objects only and is discarded on reload."
+    threats:
+      - "T01 | Misleading price display through rounding or Number precision loss | exact string-based formatting, no rounding, property tests up to 78 digits"
+      - "T02 | Approximate value shown as exact | V06 forbids rendering without marker, code, source and time; UI tests assert the label"
+      - "T03 | Spoofed text through bidi control characters in quote source names | source is sanitized to plain text without bidi controls and isolated with FSI and PDI when rendered"
+      - "T04 | Locale-based parsing mistakes causing wrong amounts (12.345 read as 12345) | parsing accepts only the locale decimal separator, rejects extra grouping ambiguity and excess digits"
+    abuse_controls:
+      - "Input length is capped at 40 characters before parsing to avoid pathological regular expression cost; parsing uses a linear scan."
+  observability_performance:
+    requirements:
+      - CI reports golden-string and property test results; production builds send no metrics.
+      - Formatting one amount takes 0.05 ms or less at p95 after the formatter cache is warm.
+      - The module adds at most 3 KiB gzip to the initial bundle beyond the browser's built-in Intl.
+    metrics:
+      - "ci_i18n_money_golden_mismatch_total{locale} (CI artifact)"
+      - "ci_i18n_money_property_runs_total (CI artifact)"
+    logs:
+      - "dev-only console.warn i18n.money.fallback {currency, reason} — no amounts; removed from production builds."
+    budgets:
+      - "formatMoney p95 ≤ 0.05 ms warm, ≤ 1 ms cold; parseMoneyInput p95 ≤ 0.05 ms."
+      - "Self-test of both formatting paths ≤ 10 ms at startup."
+      - "Bundle addition ≤ 3 KiB gzip."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Property tests prove digit-exactness for random bigint amounts up to 78 digits in every shipped locale and exponent 0 to 18.
+      - Golden strings are generated with a pinned Node ICU version and cross-checked in Chromium and WebKit, with CLDR differences reviewed.
+    fixtures: "Specs EUR 2, USD 2, JPY 0, KWD 3, BTC 8, ETH 18, USDC 6; locales en, de, fr, es, ar-XB; amounts 0, 5, -5, 4500, -250, 9007199254740993, 12345678901234567890 and 78-digit values; quote ECB asOf 2026-11-04T10:15:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | golden strings for the fixture amounts and specs in en, de, fr, es | strings equal reviewed goldens; 5 minor units shows 0.05; -5 keeps sign"
+      - "T02 | property | 01.R02,03.R01,06.R01,09.R02 | random bigint amounts 1..78 digits, exponents 0..18, all shipped locales (10 000 runs nightly) | digits extracted from formatToParts without group separators equal the input digits exactly"
+      - "T03 | unit | 01.R02,06.R02,02.R03 | amount 9007199254740993 compared with a Number-based formatter | module output exact; naive Number output differs (documented counter-example)"
+      - "T04 | unit | 02.R02,02.R03,03.R01 | each rule V01–V06 violated | documented I18N_ code returned; no string produced for invalid amounts"
+      - "T05 | unit | 06.R02,03.R02,03.R03 | force the BigInt part-substitution path by stubbing resolvedOptions; run startup self-test | output identical to the decimal-string path on 20 samples including negatives with zero whole part"
+      - "T06 | unit | 02.R03,06.R03 | BTC, ETH, USDC and an unknown code | decimal style plus isolated code; no RangeError; never blank"
+      - "T07 | unit | 04.R01,04.R02,04.R03,05.R01,05.R02,05.R03 | inspect exports, calls to vault, relay or network, and authorization hooks | pure typed functions; no events or commands; no I/O"
+      - "T08 | unit | 02.R03,07.R02,07.R03 | formatApprox with fresh quote, 25 h old quote, missing source, source with bidi characters | label has marker, code, source, time; old-quote text added; missing source shows details-unavailable text; bidi isolated"
+      - "T09 | unit | 02.R02,07.R01,07.R03 | parseMoneyInput for 12,50 (de), 12.50 (en), 12,345 (de), 1.234,50 (de), 12.5.0, 41 characters, 31 digits | 1250, 1250, I18N_MONEY_PRECISION, 123450, error, rejected by length, I18N_MONEY_TOO_LARGE"
+      - "T10 | abuse | 07.R01,07.R02 | capture logs and network during formatting and parsing | no amounts, identifiers or network calls; UI never labels an approximate value as a payment amount"
+      - "T11 | a11y | 07.R03,02.R03 | axe and screen reader pass on the approximate chip and money input in en and ar-XB | zero serious findings; accessible name contains approximately, amount, source and time; targets ≥ 44 px"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 format calls warm and cold; bundle check | p95 ≤ 0.05 ms warm, ≤ 1 ms cold, ≤ 3 KiB gzip"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-112 requirement maps to a passing test"
+      - "T14 | unit | 10.R01,10.R02,10.R03 | upgrade ICU data and golden file; roll back | changed goldens require review; stored amounts unaffected; rollback restores previous goldens"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - Formatting is digit-exact for any amount up to 78 digits in every shipped locale (property test).
+      - Every approximate value is shown with currency, quote source and quote time.
+  import_export_backup_rollback:
+    requirements:
+      - The module stores no user data; amounts in exports remain minor-unit strings as defined by CTR-MNY-001 and are never formatted text.
+      - Display preferences such as symbol, code or name live in vault settings (money.display) and travel with the vault export of F10.
+      - Upgrades of locale data change only display strings, never stored values, so rollback needs no data migration.
+    export: "No module data is exported; the setting money.display is part of the vault settings export owned by F10, and exported amounts stay minor-unit strings."
+    import: "money.display is validated against symbol, code or name; other values are ignored and the default symbol is used."
+    backup: "Nothing to back up; the library ships with the app bundle and uses the browser's Intl data."
+    migration_rollback: "Golden files are versioned with the Node ICU pin; rollback restores the previous goldens and library with no data migration because stored amounts are independent of display."

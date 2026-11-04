@@ -46,7 +46,7 @@ processes:
     requirements:
       - A NotificationPreference stores user DID, category, the three channel flags, the lock flag for in-app, a per-cell revision and the mirror sequence last sent, with tenant and revision per CTR-ID-001.
       - Preferences are P2, held in the vault; relays hold only the push and email flags and a sequence number per user, retained as long as the user's channel consent at that relay is granted plus 30 days.
-      - The default matrix is fixed and versioned: in-app on for all categories, push on for offers, cycles, messages, auctions, bookings and security, push off for moderation, email on only for security, all others off.
+      - The default matrix is fixed and versioned as follows, in-app on for all categories, push on for offers, cycles, messages, auctions, bookings and security, push off for moderation, email on only for security, all others off.
     entities:
       - name: NotificationPreference
         schema: classrup.notify.preference/v1
@@ -209,7 +209,7 @@ processes:
       - "T07 | abuse | 05.R01,05.R02,05.R03 | forged mirror from another key; mirror without relay consent; third party read | rejected; operator cannot read in-app column"
       - "T08 | integration | 06.R02,06.R03 | replay mirror seq 5 after seq 7; two devices edit different cells | stale replay ignored; merged cells preserved"
       - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect mirror statement and relay storage; app update with a new category | only 7 booleans per channel present; user choices preserved"
-      - "T10 | abuse | 07.R03,02.R06 | 61st edit in an hour | RATE_LIMITED"
+      - "T10 | abuse | 07.R03,02.R03 | 61st edit in an hour | RATE_LIMITED"
       - "T11 | load | 08.R01,08.R02,08.R03 | 50 mirror per second for 2 minutes and 100 000 resolve calls | budgets met"
       - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-106 requirement maps to a passing test"
       - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup | matrix round trips; unknown categories kept with defaults"

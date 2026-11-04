@@ -1,35 +1,32 @@
-# PS-111-06 — failure recovery idempotency
+# PS-111-06 — Failure recovery and idempotency: WCAG 2.2 AA conformance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-06. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M03 WCAG 2.2 AA conformance](SPEC.md) · **Scope:** MVP · **Code:** `tests/a11y` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-111-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-111-06.R01** Every task is deterministic and re-runnable, producing the same report for the same commit apart from timestamps.
+- **PS-111-06.R02** Flaky browser failures are retried once and reported as flaky if the retry passes, without hiding real findings.
+- **PS-111-06.R03** Partial runs never mark a build green; a missing report fails the gate.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Tasks are pure functions of the commit and fixtures; re-running overwrites the report.
+- **concurrency:** Axe runs are sharded across at most 4 parallel Playwright workers; each route-state-theme combination is an independent job.
+- **retries:** A failed browser launch or navigation timeout retries once; assertion failures are never retried.
+- **offline:** CI uses a seeded offline-capable fixture server; no external network is needed for the checks.
+- **partial failure:** If a shard crashes, the aggregator marks the run failed with the missing combinations listed.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-111-09.T09 | chaos | PS-111-06.R01, PS-111-06.R02, PS-111-06.R03 | kill one Playwright shard; inject a flaky navigation timeout | run marked failed listing missing combinations; flaky retry reported, real findings not hidden |
+| TEST-PS-111-09.T10 | unit | PS-111-06.R01, PS-111-07.R01, PS-111-07.R02 | run twice on the same commit; scan report for page text or user data | identical findings; reports contain selectors and rule ids only |
+
+## Dependencies
+
+Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

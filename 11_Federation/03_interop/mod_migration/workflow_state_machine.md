@@ -1,35 +1,57 @@
-# PS-090-03 — workflow state machine
+# PS-090-03 — Workflow state machine: Account and relay migration
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-03. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S03.M03 Account and relay migration](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/interop/migration` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for migration within 03_interop. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-090-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-090-03.R01** A move advances prepared, announced and effective and may be cancelled only before it becomes effective.
+- **PS-090-03.R02** The redirect and the rebinding of the author's origin relay start only at effective, never at announce.
+- **PS-090-03.R03** Closed and cancelled are terminal; a later move creates a new record.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### MigrationRecord lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **prepared**; terminal **cancelled**, **closed**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| prepared -> announced | federation.migration.announce signed with a registered device key, copy step ≥ 99 percent | produces classrup.federation.move/v1 and queues it to old relay, new relay and peers |
+| prepared -> cancelled | federation.migration.cancel or account deletion requested | no statement |
+| announced -> effective | 24 h veto window elapsed with no valid veto | emits federation.account.moved; old relay starts redirect for 180 days |
+| announced -> cancelled | valid veto from another registered device key, or cancel by the signer | produces classrup.federation.move_cancel/v1 |
+| effective -> closed | redirectUntil reached | old relay removes redirect |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> prepared
+  prepared --> announced: federation.migration.announce signed with a registered device key, copy step ≥ 99 percent
+  prepared --> cancelled: federation.migration.cancel or account deletion requested
+  announced --> effective: 24 h veto window elapsed with no valid veto
+  announced --> cancelled: valid veto from another registered device key, or cancel by the signer
+  effective --> closed: redirectUntil reached
+  cancelled --> [*]
+  closed --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Veto window 24 h from announcedAt; sweep every 5 min promotes announced records whose effectiveAt ≤ now.
+- Redirect expiry sweep daily closes effective records with redirectUntil ≤ now.
+- Prepared records idle for 14 days are cancelled.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-090-09.T04 | integration | PS-090-03.R01, PS-090-03.R02, PS-090-02.R02 | veto from K2 at 23 h 59 min and at 24 h 01 min | first cancels the move; second ignored; redirect inactive after cancel |
+| TEST-PS-090-09.T05 | property | PS-090-03.R01, PS-090-03.R03 | random command sequences on one record | only declared transitions succeed; cancelled and closed never change |
+| TEST-PS-090-09.T06 | integration | PS-090-03.R02, PS-090-04.R03 | observer R3 receives move before and after effectiveAt | rebinding of origin relay only after effective; F11.S01.M02 accepts records from R2 afterward |
+| TEST-PS-090-09.T13 | abuse | PS-090-07.R01, PS-090-03.R01 | replay of old move statement after a newer move | rejected by cid dedup and chain position; no move back |
+| TEST-PS-090-09.T17 | a11y | PS-090-03.R03, PS-090-01.R01 | operate wizard, countdown and veto prompt by keyboard and screen reader | steps announced, countdown text milestones announced, targets ≥ 44 px |
+
+## Dependencies
+
+Module depends on: F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S03.M01, F07.S02.M01, F10.S01.M04, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

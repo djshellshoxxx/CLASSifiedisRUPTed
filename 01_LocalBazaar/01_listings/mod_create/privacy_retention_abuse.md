@@ -1,35 +1,47 @@
-# PS-002-07 — privacy retention abuse
+# PS-002-07 — Privacy, retention and abuse: Listing creation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-002-07. **Owner:** [01_LocalBazaar/01_listings/mod_create](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_create. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S01.M01 Listing creation](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listings/create` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for create within 01_listings. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-002-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-002-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-002-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-002-07.R01** Drafts are P3 and never enter logs, events with payload content, exports to others or relay storage.
+- **PS-002-07.R02** Records are retained RET-STANDARD until the owner deletes them; deletion writes a tombstone and purges content and blob keys within 30 days.
+- **PS-002-07.R03** Location precision is capped at L2 in the schema and re-checked before any projection leaves the vault.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Listing draft: P3 (owner only); published fields are copied into a signed P0 projection by F01.S01.M03.
+- regionCell: at most geohash 5 (about 4.9 km x 4.9 km); coordinates are never stored.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Listing: RET-STANDARD; deleted listings keep a tombstone {id, type, deletedAt} for 180 days.
+- Command-key table: RET-SHORT 24 h.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-002-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Location leak through precise region or EXIF | schema rejects cells longer than 5 and any coordinate key; media check rejects GPS tags (PRV-4); region picker snaps to the cell before the command is built |
+| T02 | Draft content exposed to a relay or third party | drafts have no statement type and no sync-outbox destination; contract test asserts no network call during create/edit/delete |
+| T03 | Draft flooding exhausting device storage | 50-draft cap, 10 media per listing, 5 MiB per image, storage quota warning at 80 percent |
+| T04 | Malicious imported listing carrying another owner's id | import re-validates ownerId equals local principal, else records are kept only as read-only mirrors by F11.S01.M02 |
+
+**Abuse controls**
+- Local-only rate guard: at most 30 create commands per hour per vault to stop runaway scripts.
+- Text fields are stored as plain text; HTML is never interpreted.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-002-09.T04 | integration | PS-002-03.R03, PS-002-07.R02 | delete draft | tombstone with id, type, deletedAt exists; content and blob keys purged after 30 days (clock advance) |
+| TEST-PS-002-09.T10 | abuse | PS-002-07.R01, PS-002-07.R03, PS-002-09.R03 | create with lat/lon, region of 6 characters and GPS jpeg | all rejected; log scan finds no P3 values |
+
+## Dependencies
+
+Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

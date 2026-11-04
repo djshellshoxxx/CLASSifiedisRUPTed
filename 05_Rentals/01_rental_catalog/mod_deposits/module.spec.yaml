@@ -1,0 +1,326 @@
+id: F05.S01.M02
+scope: MVP
+summary: >-
+  Noncustodial rental deposits (ADR-0012). The owner proposes deposit terms for a reservation as a signed statement; the renter
+  agrees by signing the exact terms. The deposit itself is paid directly between the parties and recorded only as F09 payment
+  claims; the platform and relays never hold it, so the owner holds the money and the only protection is evidence, reputation and
+  disputes, which the UI says before the renter agrees. Release and forfeit are bilateral - the owner attests a release payment
+  that the renter acknowledges, or the owner claims a forfeit that the renter accepts or disputes. Disagreements go to F09.S02.M02
+  disputes, and silence is never treated as consent.
+responsibilities:
+  - Own DepositTerms in both vaults and the statements deposit_terms, deposit_agreement, deposit_release_attestation, forfeit_claim and forfeit_response (classrup.rentals.*/v1).
+  - Bind the terms to one reservation, one currency and an exact amount no higher than the declared item value, and require agreement on the exact terms cid.
+  - Register funding, release and forfeit-remainder payment contexts with the local Deal and derive funded, released and forfeited states only from acknowledged or final payment per CTR-COM-001.
+  - Enforce the decision clock - the owner decides release or forfeit within 7 days after return attestation, and a forfeit claim unanswered for 14 days is escalated to a dispute rather than accepted.
+non_responsibilities:
+  - Holding, escrowing or moving money; payment claims, acknowledgements, receipts and chain checks belong to F09.
+  - Damage assessment and claims against the renter (F05.S02.M03); a forfeit may reference a resolved damage claim.
+  - Reservation calendar and rent (F05.S01.M01) and condition reports (F05.S02.M01, F05.S02.M02).
+  - Case handling and resolution (F09.S02.M02).
+  - "Future: card pre-authorization holds through a provider adapter, and deposit insurance."
+depends_on: [F05.S01.M01, F09.S01.M01, F09.S02.M02, F09.S03.M01, F08.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As an owner, I propose a deposit of EUR 100.00 for a reservation and see when the renter agrees and when I have acknowledged receiving it.
+  - As a renter, I read plainly that the owner will hold the deposit directly, agree to the exact terms, pay and record my payment claim.
+  - As an owner, after return I either release the deposit in full or claim a forfeit of up to the deposit with evidence.
+  - As a renter, I accept or dispute a forfeit claim and see the dispute case if I dispute.
+edge_cases:
+  - Renter agrees to terms that were superseded by a newer proposal; the agreement names the old cid and is refused with RENTALS_DEPOSIT_TERMS_STALE.
+  - Reservation is cancelled after the deposit was funded; the deposit moves to release_pending and the owner must attest a full release.
+  - Owner never decides after return; after 7 days the renter sees an overdue decision banner and can dispute; nothing is auto-forfeited or auto-released.
+  - Forfeit amount exceeds the funded amount; refused with RENTALS_FORFEIT_EXCEEDS_DEPOSIT.
+  - Renter accepts a partial forfeit; the retained part is settled and the remainder goes to release_pending with the remainder amount.
+  - Payment claim for the deposit is claimed but never acknowledged; the deposit stays agreed, the claim expires after 14 days (COM-3) and the handoff UI warns that the deposit is not funded.
+  - Crypto deposit is confirming only; the deposit stays agreed with confirmations N of M until final.
+  - Owner and renter sign contradictory statements (two forfeit claims, or a response to an unknown claim cid); the later statement is quarantined or the pair is frozen for renegotiation.
+  - Funding is acknowledged but the owner later claims it never arrived; the owner's own acknowledgement statement is evidence against the claim and the case goes to dispute.
+ux:
+  screens:
+    - "Deposit proposal sheet: amount with currency, declared item value, payment method (cash, external, crypto), due time, plain-language box stating that the platform does not hold the deposit and the owner will."
+    - "Deposit status card on the reservation: state chip, proof level (claimed (unverified), acknowledged by owner, confirmed N/M, final), decision clock after return."
+    - "Forfeit sheet: amount up to the funded deposit, reason, evidence picker (return report items, damage claim), renter response buttons Accept, Accept partly, Dispute."
+  states: [loading, none, proposed, agreed, funded, release-pending, forfeit-claimed, disputed, released, forfeited, withdrawn, expired, pending-offline]
+  a11y:
+    - Amount fields have visible labels including currency and use inputmode=decimal; the non-custody notice is body text, not a tooltip.
+    - Status chips are text with an icon and announced in an aria-live polite region on change.
+    - Accept, Dispute and Release buttons are at least 44x44 px with accessible names that include the amount.
+processes:
+  domain_schema:
+    requirements:
+      - DepositTerms stores reservation, parties, amount, declared value, method, due time, agreement, funding, release and forfeit details, outcome and state, with revision per CTR-ID-001.
+      - DepositTerms are P2 in both vaults, retained under RET-EVIDENCE, and money values are integer minor units in one currency per CTR-MNY-001.
+      - Terms are immutable after proposal; a change is a new proposal that supersedes the old one, and agreement binds to the exact terms cid.
+    entities:
+      - name: DepositTerms
+        schema: classrup.rentals.deposit_terms/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "reservationId: uuidv7 — ref F05.S01.M01 RentalReservation; unique among non-terminal terms"
+          - "ownerId: actorId — proposer and holder of the deposit"
+          - "renterId: actorId — payer"
+          - "amount: Money — CTR-MNY-001; > 0; ≤ declaredValue; same currency as the rent"
+          - "declaredValue: Money — owner's stated replacement value; > 0; ≤ 1 000 000 000 000 minor units"
+          - "method: enum — cash | external | crypto"
+          - "dueBy: timestamp — claim by the owner; default reservation startsAt; at most startsAt"
+          - "termsCid: string — sha256- cid of the signed deposit_terms statement"
+          - "agreementCid?: string — cid of the deposit_agreement signed by the renter over termsCid"
+          - "fundingClaimId?: uuidv7 — ref F09 PaymentClaim for the deposit payment"
+          - "fundedAt?: timestamp — local time when proof became acknowledged or final"
+          - "forfeit?: object — {amount: Money, reason: damage | missing_parts | late_return | not_returned | other, damageClaimId?, evidenceRefs[] (≤ 10), claimCid, responseCid?, response?: accepted | partial | disputed, acceptedAmount?}"
+          - "releaseClaimId?: uuidv7 — ref F09 PaymentClaim from owner to renter for the amount to be returned"
+          - "releaseAmount?: Money — amount to be returned; amount minus retained"
+          - "retainedAmount?: Money — amount the owner keeps after an accepted or resolved forfeit"
+          - "outcome?: enum — released_full | released_partial | retained_full"
+          - "disputeCaseId?: uuidv7 — ref F09.S02.M02 DisputeCase"
+          - "decisionDueAt?: timestamp — return attestation time plus 7 days"
+          - "state: enum — proposed | agreed | funded | release_pending | forfeit_claimed | disputed | released | forfeited | withdrawn | expired"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - state funded or later implies agreementCid is set and funding proof is acknowledged or final.
+          - retainedAmount plus releaseAmount equals the funded amount whenever both are set.
+          - forfeit.amount is at most the funded amount.
+          - The platform never holds funds - every money movement is a PaymentClaim between owner and renter with a context reference to this record.
+    sql: |
+      CREATE TABLE rentals_deposit_terms (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reservation_id TEXT NOT NULL, owner_id TEXT NOT NULL, renter_id TEXT NOT NULL,
+        amount_minor TEXT NOT NULL, currency TEXT NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX rentals_deposit_live ON rentals_deposit_terms(tenant_id, reservation_id) WHERE state NOT IN ('released','forfeited','withdrawn','expired');
+  validation_rules:
+    requirements:
+      - Statements are validated in the order schema, signature, signer role, referenced cids, state, business rules, and the first failure decides the error.
+      - Amount rules compare integer minor units in one currency; no conversion is performed in this module.
+      - Every violation maps to one stable error code with a localized message key; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the owner for proposals, releases and forfeit claims and the renter for agreements and responses | RENTALS_STATEMENT_INVALID"
+      - "V02 | reservation is confirmed and not started, and no live terms exist for it | RENTALS_DEPOSIT_DUPLICATE"
+      - "V03 | amount is positive, not above declaredValue, in the rent currency, and dueBy is not after startsAt | VALIDATION_FAILED"
+      - "V04 | agreement names the cid of the current terms | RENTALS_DEPOSIT_TERMS_STALE"
+      - "V05 | forfeit amount is positive, not above the funded amount, and evidence references are 1..10 | RENTALS_FORFEIT_EXCEEDS_DEPOSIT"
+      - "V06 | forfeit claim or release is made after return attestation and within 30 days of it | RENTALS_DEPOSIT_WINDOW"
+      - "V07 | release amount equals funded amount minus accepted retained amount | VALIDATION_FAILED"
+      - "V08 | payment events reference a context of type rental_deposit that belongs to these terms with matching amount and currency | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Deposits follow proposed, agreed, funded and then release or forfeit paths; released, forfeited, withdrawn and expired are terminal.
+      - Funded, released and forfeited states are reached only from acknowledged or final F09 payment proof or from a resolved dispute, never from a claim alone.
+      - Silence never settles money - a forfeit claim without response after 14 days becomes a dispute, and an owner who does not decide after return is visible as overdue and can be disputed.
+    machines:
+      - entity: DepositTerms
+        initial: proposed
+        terminal: [released, forfeited, withdrawn, expired]
+        transitions:
+          - "proposed -> agreed | rentals.deposit.agree by renter | agreement names current terms cid; emits rentals.deposit.agreed"
+          - "proposed -> withdrawn | rentals.deposit.withdraw by owner or renter | no obligation"
+          - "proposed -> expired | 72 h without agreement, or reservation cancelled | no obligation"
+          - "agreed -> funded | commerce.payment.acknowledged or commerce.payment.finalized consumed for the funding context | proof acknowledged or final; emits rentals.deposit.funded"
+          - "agreed -> expired | reservation cancelled before any acknowledged payment, or funding claim expired and startsAt passed | no money held"
+          - "funded -> release_pending | rentals.deposit.attest_release by owner, or reservation cancelled | owner attests release; return payment context registered"
+          - "funded -> forfeit_claimed | rentals.deposit.claim_forfeit by owner | return attested, within window, amount at most funded"
+          - "funded -> disputed | rentals.deposit.dispute by either party | F09 case requested"
+          - "release_pending -> released | commerce.payment.acknowledged or commerce.payment.finalized consumed for the release context | renter has the money back; emits rentals.deposit.released"
+          - "release_pending -> disputed | rentals.deposit.dispute by renter | release never arrived"
+          - "forfeit_claimed -> forfeited | rentals.deposit.respond_forfeit accepted for the full amount | outcome retained_full; emits rentals.deposit.released"
+          - "forfeit_claimed -> release_pending | rentals.deposit.respond_forfeit partial acceptance | remainder to be returned"
+          - "forfeit_claimed -> disputed | renter disputes or 14 days without response | F09 case requested"
+          - "disputed -> release_pending | commerce.dispute.resolved with a return amount | release amount from the resolution"
+          - "disputed -> forfeited | commerce.dispute.resolved awarding the full deposit to the owner | emits rentals.deposit.released with outcome retained_full"
+    timeouts:
+      - "Proposals expire after 72 h; the owner decision clock is 7 days after return attestation, then the deposit shows overdue decision to both parties; forfeit claims unanswered for 14 days become disputed; payment claims expire after 14 days without progress (COM-3). Vault sweeps run at app start, on every command and every 60 s while the PWA is open."
+  commands_queries_events:
+    requirements:
+      - All commands are vault commands; each one that the other party must rely on also produces a named signed statement and a sync outbox entry in the same vault transaction.
+      - One ingestion command applies inbound statements, deduplicates by cid and derives local events with actor.kind federated; failures are quarantined.
+      - Payment status is derived only from F09 events whose context is a rental_deposit of this module; the module never creates or alters a PaymentClaim itself.
+    commands:
+      - name: rentals.deposit.propose
+        capability: rentals.deposit.propose
+        input: "[statement classrup.rentals.deposit_terms/v1 signed by owner, E2E encrypted to renter] { reservationId, amount, declaredValue, method, dueBy? }"
+        output: "{ depositId, termsCid, syncState }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, RENTALS_DEPOSIT_DUPLICATE, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: rentals.deposit.agree
+        capability: rentals.deposit.agree
+        input: "[statement classrup.rentals.deposit_agreement/v1 signed by renter over the exact terms cid] { depositId, expectedRevision, termsCid }"
+        output: "{ depositId, revision, agreementCid, paymentContext, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_DEPOSIT_TERMS_STALE, EXPIRED]
+        emits: [rentals.deposit.agreed]
+        idempotent: true
+      - name: rentals.deposit.withdraw
+        capability: rentals.deposit.withdraw
+        input: "[vault-local plus note statement to the other party] { depositId, expectedRevision }"
+        output: "{ depositId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: rentals.deposit.attest_release
+        capability: rentals.deposit.release
+        input: "[statement classrup.rentals.deposit_release_attestation/v1 signed by owner; registers the return payment context with the Deal] { depositId, expectedRevision, releaseAmount }"
+        output: "{ depositId, revision, releaseContext, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_DEPOSIT_WINDOW, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.deposit.claim_forfeit
+        capability: rentals.deposit.release
+        input: "[statement classrup.rentals.forfeit_claim/v1 signed by owner, E2E encrypted to renter] { depositId, expectedRevision, amount, reason, damageClaimId?, evidenceRefs[] }"
+        output: "{ depositId, revision, claimCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_FORFEIT_EXCEEDS_DEPOSIT, RENTALS_DEPOSIT_WINDOW, VALIDATION_FAILED]
+        emits: [rentals.deposit.forfeit_claimed]
+        idempotent: true
+      - name: rentals.deposit.respond_forfeit
+        capability: rentals.deposit.respond
+        input: "[statement classrup.rentals.forfeit_response/v1 signed by renter over the claim cid] { depositId, expectedRevision, claimCid, response: accepted|partial|disputed, acceptedAmount? }"
+        output: "{ depositId, revision, responseCid, state, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [rentals.deposit.released]
+        idempotent: true
+      - name: rentals.deposit.dispute
+        capability: rentals.deposit.dispute
+        input: "[vault-local; requests F09.S02.M02 case with the deposit evidence; notice statement to the other party] { depositId, expectedRevision, statement }"
+        output: "{ depositId, revision, disputeCaseId? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.deposit.receive
+        capability: rentals.deposit.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [RENTALS_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, RENTALS_DEPOSIT_TERMS_STALE, CONFLICT_STATE]
+        emits: [rentals.deposit.agreed, rentals.deposit.forfeit_claimed, rentals.deposit.released]
+        idempotent: true
+    queries:
+      - name: rentals.deposit.get
+        capability: rentals.deposit.read_own
+        input: "[vault-local] { depositId }"
+        output: "{ deposit: DepositTerms, proof: none|claimed|acknowledged|confirming|final|disputed|expired }"
+        errors: [NOT_FOUND]
+      - name: rentals.deposit.get_for_reservation
+        capability: rentals.deposit.read_own
+        input: "[vault-local] { reservationId }"
+        output: "{ deposit?: DepositTerms }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: rentals.deposit.agreed, privacy: P2, payload: "{ depositId, reservationId, ownerId, renterId, amount, method, termsCid, agreementCid }"}
+      - {type: rentals.deposit.released, privacy: P2, payload: "{ depositId, reservationId, outcome, releasedAmount, retainedAmount }"}
+      - {type: rentals.deposit.forfeit_claimed, privacy: P2, payload: "{ depositId, reservationId, amount, reason, claimCid }"}
+      - {type: rentals.deposit.funded, privacy: P2, payload: "{ depositId, reservationId, amount, proof }"}
+    events_consumed:
+      - {type: commerce.payment.claimed, effect: "for context type rental_deposit show proof claimed (unverified)"}
+      - {type: commerce.payment.acknowledged, effect: "for funding context move agreed to funded; for release context move release_pending to released"}
+      - {type: commerce.payment.finalized, effect: "same as acknowledged for crypto payments with chain finality"}
+      - {type: commerce.payment.expired, effect: "show proof expired; funding stays unfunded; the release stays pending and can be disputed"}
+      - {type: commerce.dispute.resolved, effect: "leave disputed according to the resolution outcome"}
+      - {type: rentals.reservation.cancelled, effect: "expire unfunded terms, or move funded terms to release_pending for a full release"}
+      - {type: rentals.return.attested, effect: "start the 7 day owner decision clock"}
+      - {type: rentals.damage.resolved, effect: "prefill a forfeit claim amount from an accepted or resolved damage claim; the owner still signs the claim"}
+    errors:
+      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
+      - "RENTALS_DEPOSIT_DUPLICATE | 409 | no | live deposit terms already exist for this reservation"
+      - "RENTALS_DEPOSIT_TERMS_STALE | 409 | no | agreement names terms that are not current"
+      - "RENTALS_FORFEIT_EXCEEDS_DEPOSIT | 422 | no | forfeit amount is higher than the funded deposit"
+      - "RENTALS_DEPOSIT_WINDOW | 409 | no | release or forfeit is outside the allowed window after return"
+    example: |
+      owner vault: rentals.deposit.propose { "reservationId": "0192f500-0002-…", "amount": { "amount": "10000", "currency": "EUR" },
+        "declaredValue": { "amount": "30000", "currency": "EUR" }, "method": "cash" } -> { "depositId": "0192f510-0001-…", "termsCid": "sha256-Dt…" }
+      renter vault: rentals.deposit.agree { "termsCid": "sha256-Dt…" } -> paymentContext { "type": "rental_deposit", "id": "0192f510-0001-…" }
+      renter pays cash and records a claim; owner acknowledges it in F09 -> commerce.payment.acknowledged -> state funded
+      after return: owner rentals.deposit.attest_release { "releaseAmount": { "amount": "10000", "currency": "EUR" } } -> state release_pending until the renter acknowledges receipt
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who owns the reservation proposes, attests release or claims forfeit; only the renter agrees and responds; each party may withdraw or dispute.
+      - Inbound statements are accepted only when the signer's key matches the role for that statement in this deposit; otherwise they are quarantined with a reason code.
+      - Payment events are applied only when their context belongs to deposit terms in this vault; no relay role exists.
+    capabilities:
+      - "rentals.deposit.propose | principal | local principal is the owner of the confirmed reservation"
+      - "rentals.deposit.agree | principal | local principal is the renter of the reservation; terms proposed and current"
+      - "rentals.deposit.withdraw | principal | local principal is owner or renter; state proposed"
+      - "rentals.deposit.release | principal | local principal is the owner; return attested; state funded"
+      - "rentals.deposit.respond | principal | local principal is the renter; state forfeit_claimed"
+      - "rentals.deposit.dispute | principal | local principal is owner or renter; state funded, release_pending or forfeit_claimed"
+      - "rentals.deposit.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "rentals.deposit.read_own | principal | local principal is owner or renter of the reservation"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements through cid; payment events through the inbox, so replays never double-settle.
+      - Contradictory signed statements (two forfeit claims, responses to different claim cids, two terms with the same reservation) freeze the deposit and require explicit renegotiation or dispute, never last-writer-wins.
+      - Each state change, event and sync outbox entry commit in one IndexedDB transaction.
+    idempotency: "Local command id stored 24 h; statements deduplicated by cid; payment events deduplicated by (consumer, eventId); the unique live-terms index makes a second proposal for one reservation a no-op or RENTALS_DEPOSIT_DUPLICATE."
+    concurrency: "Web Locks lock rentals-deposit-<reservationId> around commands and payment handling; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the deposit."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; local event handlers retry per EVT-6; dispute case creation retries 10 s, 60 s, 10 minutes."
+    offline: "Propose, agree, attest release, claim, respond and dispute work offline and commit locally; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the counterparty saw a statement before the signed acknowledgement."
+    partial_failure: "If registering a payment context with the Deal fails, the statement is not signed and the state is unchanged; if the dispute case port fails after local commit the deposit stays disputed locally with retry; relay delivery failures change only the sync state."
+  privacy_retention_abuse:
+    requirements:
+      - Deposit terms, evidence and amounts are P2 and travel only as end-to-end encrypted envelopes to the two parties; they never appear in logs, notifications or public projections.
+      - Evidence references are ids and hashes; photos remain encrypted attachments shared only with the counterparty and the dispute handler by explicit action.
+      - Deposit theft, bogus forfeits and fake release claims are limited by explicit proof levels, mandatory evidence and the dispute path; no one is auto-penalized.
+    data:
+      - "DepositTerms: P2 in both vaults."
+      - "Forfeit evidence: references to P2 attachments, hashes recorded in the signed claim."
+    retention:
+      - "Terminal deposit terms and statements: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days) with the failure code."
+    threats:
+      - "T01 | Owner keeps the deposit and disappears | non-custody is stated before agreement, funded proof requires the owner's own acknowledgement, the signed acknowledgement is dispute evidence and can inform reputation locally; no guarantee of recovery is claimed"
+      - "T02 | Bogus forfeit claim | claim needs 1..10 evidence references and an amount not above the funded deposit; renter can dispute; 14 days of silence escalates to dispute and never to acceptance"
+      - "T03 | Renter claims payment that never happened | proof stays claimed (unverified) until the owner acknowledges or the chain is final; handoff UI warns when not funded"
+      - "T04 | Replay of an old agreement onto new terms | agreement signs the exact terms cid; mismatch returns RENTALS_DEPOSIT_TERMS_STALE"
+      - "T05 | Relay tampering or reordering | signatures cover JCS bytes; each statement names its predecessor cid; reordered statements wait in quarantine up to 24 h"
+    abuse_controls:
+      - "Local quarantine and a per-sender quota of 50 inbound deposit statements per day per counterparty."
+      - "Dispute opening is available at every funded state; reports go through F12 on the vault's chosen relay."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Vault commands meet p95 ≤ 120 ms and payment event handling p95 ≤ 50 ms on a mid-range phone with 2 000 deposits stored.
+      - Statement verification meets p95 ≤ 30 ms per envelope.
+    metrics:
+      - "classrup_rentals_deposits_total{state} (local counter)"
+      - "classrup_rentals_deposit_decision_overdue_total (local counter)"
+      - "classrup_rentals_statements_quarantined_total{code} (local counter)"
+    logs:
+      - "info deposit.funded {depositId, correlationId} in the local diagnostics log - no amounts, no evidence names."
+    budgets:
+      - "vault command p95 ≤ 120 ms; payment event p95 ≤ 50 ms; verification p95 ≤ 30 ms; list p95 ≤ 80 ms for 50 items."
+      - "Sweep over 2 000 deposits ≤ 100 ms in slices of at most 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Money and proof rules are covered by property tests with a reference model for amounts, partial forfeits and release remainders.
+      - Two-vault tests with a hostile in-memory relay cover duplicate, dropped, reordered and contradictory statements.
+    fixtures: "Two vaults - owner O and renter R - with confirmed reservation B; deposit EUR 100.00 declared value EUR 300.00 method cash; stub F09 claims; hostile in-memory relay; fixed clock 2026-12-05T09:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R03 | propose, supersede with new terms, agree on old cid | second proposal supersedes; agreement on old cid RENTALS_DEPOSIT_TERMS_STALE; amounts immutable"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01–V08 violated in turn | documented code returned and nothing stored; bad statements quarantined"
+      - "T03 | property | 03.R01 | random statement and event sequences | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only at acknowledged or final; proof labels follow COM-4"
+      - "T05 | property | 01.R02,03.R02 | random partial forfeits and releases | retained plus released equals funded; never above funded; integer minor units"
+      - "T06 | integration | 03.R03 | forfeit claim unanswered for 14 days; owner silent for 7 days after return | claim becomes disputed, never accepted; overdue decision banner shown, no auto release or forfeit"
+      - "T07 | integration | 04.R01,04.R02,06.R01,09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on released with identical cids; duplicates skipped"
+      - "T08 | contract | 04.R01,04.R02,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | release signed by renter; response by owner; payment event for foreign context | quarantined or ignored; no state change"
+      - "T10 | integration | 06.R02,06.R03 | two contradictory forfeit claims; dispute port failing once | deposit frozen for dispute; claim retried; no partial state"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect logs, notifications and relay payloads; 51 inbound statements in a day | no amounts or evidence outside encrypted envelopes; 51st dropped and counted"
+      - "T12 | integration | 03.R01,04.R03 | reservation cancelled after funding | deposit moves to release_pending; owner attests full release; released after renter acknowledges"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 2 000 deposits, throttled mobile profile | command p95 ≤ 120 ms, verify p95 ≤ 30 ms, no telemetry request"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-040 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | terms and statements round-trip; unverifiable statements kept as history"
+      - "T16 | e2e | 01.R01,02.R01 | mobile owner proposes, renter agrees and pays, owner acknowledges, release after return | funded then released in both vaults; non-custody notice shown; axe zero serious issues"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - No state shows a deposit as funded, released or forfeited on a payment claim alone, and silence never settles money.
+      - No code path in the platform or a relay moves or holds deposit funds.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains deposit terms, payment context references and all signed statements with their cids so evidence survives vault loss.
+      - Import verifies every signature and cid before restoring; unverifiable items stay read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section rentals.deposits in classrup-export/v1; one line per DepositTerms with the original statement envelopes."
+    import: "Terminal deposits import as history; proposed terms import as expired; funded, release_pending, forfeit_claimed and disputed deposits import as is and resume their clocks from the stored times."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

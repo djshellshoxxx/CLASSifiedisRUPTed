@@ -125,7 +125,7 @@ processes:
       - "V02 | offering is active and the owner key matches | RENTALS_OFFERING_UNAVAILABLE"
       - "V03 | startsAt is at least leadTimeMinutes from now, within horizonDays, and endsAt gives a duration within minimum and maximum | VALIDATION_FAILED"
       - "V04 | interval does not fall on a blackout date in the offering time zone | RENTALS_BLACKOUT"
-      - "V05 | for every instant in [occupiedFrom, occupiedUntil) the overlapping confirmed, in_use and overdue units plus requested units are at most quantity | RENTALS_INTERVAL_CONFLICT"
+      - "V05 | for every instant in [occupiedFrom, occupiedUntil) the overlapping confirmed, in_use and overdue units plus the requested units are at most quantity (requested but unconfirmed reservations never block others) | RENTALS_INTERVAL_CONFLICT"
       - "V06 | rate unit exists on the offering and rent equals the computed amount | VALIDATION_FAILED"
       - "V07 | renter has fewer than 5 open requests and fewer than 2 per offering | RENTALS_REQUEST_LIMIT"
       - "V08 | neither party has blocked the other | BLOCKED_PARTY"

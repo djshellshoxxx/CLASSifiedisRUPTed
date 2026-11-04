@@ -152,7 +152,7 @@ processes:
     fixtures: "RFC 8032 vectors, RFC 8785 vectors, malleable-S and small-order vectors, registry snapshots for active, revoked, unknown and stale keys, fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | sign consent payload and verify with expected context | envelope fields as specified; valid true; signed bytes equal context, 0x00, key digest, 0x00, JCS bytes"
-      - "T02 | unit | 02.R02 | RFC 8032 vectors; non-canonical S; small-order public key | vectors pass; malleable and small-order rejected with SECURITY_SIGNATURE_INVALID"
+      - "T02 | unit | 02.R02,09.R02 | RFC 8032 vectors; non-canonical S; small-order public key | vectors pass; malleable and small-order rejected with SECURITY_SIGNATURE_INVALID"
       - "T03 | property | 01.R02,05.R02 | random payloads signed under context A and verified under B | always SECURITY_CONTEXT_MISMATCH; no cross-context validity"
       - "T04 | unit | 02.R01,02.R03,03.R02 | floats, duplicate keys, unsorted keys, lone surrogates, 65 KiB payload, RFC 8785 vectors | rejected with documented codes; canonical forms match vectors"
       - "T05 | unit | 04.R01,04.R02,05.R01 | consent for revision 4 verified against expected revision 5 and another entity | bindingOk false; SECURITY_BINDING_MISMATCH"

@@ -79,7 +79,7 @@ processes:
       - "V02 | windows has at most 4 entries, days are unique values 1 to 7, start and end match HH:mm 00:00 to 23:59 | VALIDATION_FAILED"
       - "V03 | each window length is between 15 minutes and 12 hours and start is not equal to end | NOTIFY_QUIET_WINDOW_INVALID"
       - "V04 | windows do not overlap and the daily union is less than 24 hours | NOTIFY_QUIET_WINDOW_INVALID"
-      - "V05 | mirror statement signature verifies, seq is greater than the stored seq and the relay holds a granted channel consent for the user | NOTIFY_CONSENT_REQUIRED"
+      - "V05 | mirror statement signature verifies, seq is greater than the stored seq and the relay holds a granted channel consent for the user | PRECONDITION_FAILED"
       - "V06 | a user changes the schedule at most 30 times per day | RATE_LIMITED"
       - "V07 | expectedRevision equals the stored revision | CONFLICT_REVISION"
   workflow_state_machine:
@@ -107,7 +107,7 @@ processes:
         capability: notify.quiet_hours.mirror
         input: "[relay command, relay access token] { statement: { userDid, seq, enabled, timeZone, windows[], sig } }"
         output: "{ seq, relayReceiptAt, relayReceiptSig }"
-        errors: [VALIDATION_FAILED, NOTIFY_QUIET_TZ_UNKNOWN, NOTIFY_QUIET_WINDOW_INVALID, NOTIFY_CONSENT_REQUIRED, UNAUTHENTICATED, CONFLICT_STATE, RATE_LIMITED]
+        errors: [VALIDATION_FAILED, NOTIFY_QUIET_TZ_UNKNOWN, NOTIFY_QUIET_WINDOW_INVALID, PRECONDITION_FAILED, UNAUTHENTICATED, CONFLICT_STATE, RATE_LIMITED]
         emits: []
         idempotent: true
     queries:
@@ -129,7 +129,6 @@ processes:
     errors:
       - "NOTIFY_QUIET_TZ_UNKNOWN | 422 | no | time zone is not in the pinned IANA tzdata"
       - "NOTIFY_QUIET_WINDOW_INVALID | 422 | no | a window is shorter than 15 minutes, longer than 12 hours, equal start and end, or overlapping"
-      - "NOTIFY_CONSENT_REQUIRED | 403 | no | the relay holds no granted channel consent for this user"
     example: |
       vault command notify.quiet_hours.set
       { "enabled": true, "timeZone": "America/New_York", "windows": [ { "days": [1,2,3,4,5,6,7], "start": "22:00", "end": "07:00" } ] }

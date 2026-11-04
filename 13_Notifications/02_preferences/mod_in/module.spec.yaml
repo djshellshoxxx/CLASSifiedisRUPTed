@@ -79,7 +79,7 @@ processes:
       - "V01 | each cell names a known category and boolean flags only; at most 21 cells per request | VALIDATION_FAILED"
       - "V02 | security inApp is not set to false | NOTIFY_PREF_LOCKED"
       - "V03 | reset requires confirmation flag true | VALIDATION_FAILED"
-      - "V04 | mirror statement signature verifies against a device key of userDid and the relay holds a granted channel consent for that user | NOTIFY_CONSENT_REQUIRED"
+      - "V04 | mirror statement signature verifies against a device key of userDid and the relay holds a granted channel consent for that user | PRECONDITION_FAILED"
       - "V05 | mirror seq is greater than the stored seq, otherwise the statement is acknowledged without change | CONFLICT_STATE"
       - "V06 | a user changes preferences at most 60 times per hour | RATE_LIMITED"
       - "V07 | expectedRevision equals the stored cell revision | CONFLICT_REVISION"
@@ -115,7 +115,7 @@ processes:
         capability: notify.preference.mirror
         input: "[relay command, relay access token] { statement: { userDid, seq, cells: [{ category, push, email }] (7), sig } }"
         output: "{ seq, relayReceiptAt, relayReceiptSig }"
-        errors: [VALIDATION_FAILED, NOTIFY_CONSENT_REQUIRED, CONFLICT_STATE, UNAUTHENTICATED, RATE_LIMITED]
+        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, CONFLICT_STATE, UNAUTHENTICATED, RATE_LIMITED]
         emits: []
         idempotent: true
     queries:
@@ -136,7 +136,6 @@ processes:
       - {type: notify.channel.opted_out, effect: "mark the channel inactive in the UI while keeping stored flags; the relay already stops sending"}
     errors:
       - "NOTIFY_PREF_LOCKED | 422 | no | the security category in-app notifications cannot be switched off"
-      - "NOTIFY_CONSENT_REQUIRED | 403 | no | the relay holds no granted channel consent for this user"
     example: |
       vault command notify.preference.set  { "cells": [ { "category": "auctions", "push": false, "expectedRevision": 1 } ] }
       -> { "cells": [ { "category": "auctions", "inApp": true, "push": false, "email": false, "revision": 2 } ], "mirrorState": "local_committed" }

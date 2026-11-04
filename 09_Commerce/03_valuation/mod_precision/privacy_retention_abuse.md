@@ -1,35 +1,43 @@
-# PS-074-07 — privacy retention abuse
+# PS-074-07 — Privacy, retention and abuse: Money precision
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-07. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S03.M03 Money precision](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/valuation/precision` · **Contracts:** [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-074-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-074-07.R01** The library holds no personal data and never logs inputs.
+- **PS-074-07.R02** Error messages carry only the error code and the offending argument position, never amounts.
+- **PS-074-07.R03** Oversized inputs are bounded (38 digits, 1000 weights) so hostile payloads cannot cause denial of service through bigint growth.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- No data stored. Money values passed in are owned and classified by calling modules.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- None; no persistence.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Hostile huge numbers cause CPU exhaustion | Input digit limit 38, rate digit limit 40, weights limit 1000; limits checked before arithmetic |
+| T02 | Silent float coercion changes amounts | Lint rule bans Number, parseFloat and Math in the package; property tests compare against an independent bigint oracle |
+| T03 | Cross-language rounding divergence | Shared JSON vectors executed in every client implementation |
+
+**Abuse controls**
+- Digit and weight bounds enforced at the boundary; callers apply request rate limits (CTR-OBS-001 budgets).
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-074-09.T10 | unit | PS-074-05.R01, PS-074-05.R02, PS-074-07.R01 | static analysis of the package imports and call graph | no fetch, fs, Date or Math.random usage and no logging calls |
+| TEST-PS-074-09.T11 | property | PS-074-06.R03, PS-074-07.R02, PS-074-07.R03 | oversized inputs of 5 000 digits and 100 000 weights | rejected within 1 ms with documented error and no amounts in the message |
+
+## Dependencies
+
+Module depends on: CTR-MNY-001, CTR-ERR-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

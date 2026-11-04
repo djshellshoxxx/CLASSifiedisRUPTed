@@ -87,7 +87,7 @@ processes:
     rules:
       - "V01 | templateKey matches notify.tpl.<category>.<name>, category is one of the seven, and ref contains only type and opaque ID | VALIDATION_FAILED"
       - "V02 | urgency urgent is allowed only for category security, otherwise it is treated as normal and flagged | VALIDATION_FAILED"
-      - "V03 | the caller is a registered device of the user (self wake) or a relay service hook, and the user has a granted unexpired channel consent for push or email | NOTIFY_CONSENT_REQUIRED"
+      - "V03 | the caller is a registered device of the user (self wake) or a relay service hook, and the user has a granted unexpired channel consent for push or email | PRECONDITION_FAILED"
       - "V04 | the matrix allows the category on the channel (F13.S02.M04 resolve) | NOTIFY_CATEGORY_DISABLED"
       - "V05 | release time does not exceed deferredAt plus 24 hours | NOTIFY_DEFER_EXPIRED"
       - "V06 | a relay accepts at most 120 dispatch requests per user per hour and 30 per minute per caller | RATE_LIMITED"
@@ -118,7 +118,7 @@ processes:
         capability: notify.notification.dispatch
         input: "[relay command for push and email, vault command for os_alert; callers are relay hooks or a registered device of the user] { userDid, channel, category, templateKey, ref?, collapseKey?, urgency?: normal|urgent, notificationId? }"
         output: "{ decision: sent|deferred|dropped, deferredId?, releaseAt?, reason? }"
-        errors: [VALIDATION_FAILED, NOTIFY_CONSENT_REQUIRED, NOTIFY_CATEGORY_DISABLED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_CATEGORY_DISABLED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
         emits: [notify.notification.deferred]
         idempotent: true
       - name: notify.notification.release
@@ -146,7 +146,6 @@ processes:
     errors:
       - "NOTIFY_CATEGORY_DISABLED | 409 | no | the matrix does not allow this category on this channel for the user"
       - "NOTIFY_DEFER_EXPIRED | 410 | no | the item was deferred for 24 hours and was dropped"
-      - "NOTIFY_CONSENT_REQUIRED | 403 | no | no granted unexpired consent exists for this channel at this relay"
     example: |
       POST /api/v1/relay/notify.notification.dispatch
       Idempotency-Key: 0192f3b4-0000-7000-8000-000000000001

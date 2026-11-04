@@ -1,35 +1,58 @@
-# PS-073-01 — domain schema
+# PS-073-01 — Domain schema: Currency registry
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-073-01. **Owner:** [09_Commerce/03_valuation/mod_currency](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S03.M01 Currency registry](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/valuation/currency` · **Contracts:** [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the domain schema process for currency within 03_valuation. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-073-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-073-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-073-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-073-01.R01** A CurrencyDef stores code, kind (fiat or crypto), name, decimals, optional chain binding, status and revision per CTR-ID-001, scoped per vault.
+- **PS-073-01.R02** Currency definitions are P0 reference data retained as RET-STANDARD; they hold no personal data.
+- **PS-073-01.R03** Decimals, kind and chain binding are immutable after registration; only status and display name can change.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### CurrencyDef
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.commerce.currency_def/v1` · storage **device** · privacy **P0** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-073-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot) |
+| code | string — ISO 4217 alpha-3 uppercase, or crypto code 2..10 chars A-Z0-9; unique per vault |
+| kind | enum — fiat \| crypto |
+| name | string — 1..60 code points |
+| decimals | int — 0..18 for fiat (ISO list), 0..36 for crypto; immutable |
+| chainId? | string — required for crypto; one of the configured chains (bitcoin-mainnet, ethereum-mainnet) |
+| contract? | string — token contract address for ERC-20 style assets; absent for native assets |
+| status | enum — active \| disabled \| retired |
+| snapshotVersion? | string — ISO table snapshot date for fiat rows, e.g. 2026-01-01 |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- code is unique per vault and never reused after retirement.
+- decimals never change after creation.
+- A crypto row has chainId; a fiat row has neither chainId nor contract.
+
+### Storage DDL
+
+```sql
+CREATE TABLE commerce_currency_def (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL /* vault id */, code TEXT NOT NULL, kind TEXT NOT NULL,
+  decimals INTEGER NOT NULL, chain_id TEXT, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX commerce_currency_code ON commerce_currency_def(tenant_id, code);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-073-09.T01 | unit | PS-073-01.R01, PS-073-01.R02, PS-073-02.R01 | register a crypto asset with valid data | row stored with revision 1, decimals and chain binding intact |
+| TEST-PS-073-09.T03 | unit | PS-073-01.R03, PS-073-02.R03, PS-073-09.R03 | update attempt on decimals and chain binding | COMMERCE_CURRENCY_IMMUTABLE and nothing stored |
+
+## Dependencies
+
+Module depends on: F09.S03.M03, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

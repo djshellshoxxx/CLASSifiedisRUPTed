@@ -104,7 +104,7 @@ processes:
       - "V07 | mediator selection names a relay and moderator did and both parties accept before any evidence is shared | COMMERCE_DISPUTE_MEDIATOR_UNAVAILABLE"
       - "V08 | outcome type is one of the four types; advisoryRefund only with refund_claimed and in a registry currency | COMMERCE_DISPUTE_OUTCOME_INVALID"
       - "V09 | no_fault_close and enforcement_referral by a mediator need no acceptance; refund_claimed and return_agreed need acceptance by every party | COMMERCE_DISPUTE_OUTCOME_INVALID"
-      - "V10 | statement signature valid and signer authorized for the role in the case | COMMERCE_STATEMENT_INVALID"
+      - "V10 | statement signature valid and signer authorized for the role in the case | COMMERCE_DISPUTE_STATEMENT_INVALID"
       - "V11 | outcome proposal round is at most 3 | CONFLICT_STATE"
   workflow_state_machine:
     requirements:
@@ -202,7 +202,7 @@ processes:
         capability: commerce.dispute.ingest
         input: "[vault command, internal] { envelope: any commerce.dispute statement }"
         output: "{ outcome: applied|quarantined|duplicate, reason? }"
-        errors: [VALIDATION_FAILED, COMMERCE_STATEMENT_INVALID, COMMERCE_DISPUTE_FORK, COMMERCE_DISPUTE_CONTEXT_INVALID, UNSUPPORTED_SCHEMA_VERSION]
+        errors: [VALIDATION_FAILED, COMMERCE_DISPUTE_STATEMENT_INVALID, COMMERCE_DISPUTE_FORK, COMMERCE_DISPUTE_CONTEXT_INVALID, UNSUPPORTED_SCHEMA_VERSION]
         emits: [commerce.dispute.opened, commerce.dispute.evidence_added, commerce.dispute.outcome_proposed, commerce.dispute.resolved, commerce.dispute.withdrawn]
         idempotent: true
     queries:
@@ -238,7 +238,7 @@ processes:
       - "COMMERCE_DISPUTE_MEDIATOR_UNAVAILABLE | 409 | no | mediator or relay is not accepted by both parties or is unreachable"
       - "COMMERCE_DISPUTE_OUTCOME_INVALID | 422 | no | outcome type, acceptance rule or advisory refund is invalid"
       - "COMMERCE_DISPUTE_FORK | 409 | no | conflicting accepted outcomes; case is frozen for renegotiation"
-      - "COMMERCE_STATEMENT_INVALID | 422 | no | signature, signer role or envelope is invalid; statement is quarantined"
+      - "COMMERCE_DISPUTE_STATEMENT_INVALID | 422 | no | signature, signer role or envelope is invalid; statement is quarantined"
     example: |
       vault command commerce.dispute.open
       { "contextRef": { "type": "deal", "id": "0192f3a6-…" }, "reason": "not_received",

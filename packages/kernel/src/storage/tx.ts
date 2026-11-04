@@ -4,7 +4,8 @@ import { toIso } from '../clock/clock.ts';
 import { appError, type AppError } from '../errors/app-error.ts';
 import { err, ok, type Result } from '../errors/result.ts';
 import type { EventEnvelope } from '../events/envelope.ts';
-import type { DeadLetterRow, DriverTx, IndexValues, InboxRow, MigrationRow, RecordQuery, RecordRow, SyncListQuery, SyncRow, SyncState } from './driver.ts';
+import { bytesToBase64url } from './base64url.ts';
+import type { BlobPrivacy, BlobRow, DeadLetterRow, DriverKind, DriverTx, IndexValues, InboxRow, MigrationRow, RecordQuery, RecordRow, SyncListQuery, SyncRow, SyncState } from './driver.ts';
 import { syncMachine, type SyncEvent } from './machines.ts';
 
 export interface StoredRecord<T = unknown> {
@@ -399,6 +400,104 @@ function syncStore(d: DriverTx) {
   };
 }
 
+export const MAX_BLOB_BYTES = 5 * 1024 * 1024;
+const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{43}$/;
+const CONTENT_TYPE_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
+
+export interface BlobInfo {
+  readonly ref: string;
+  readonly size: number;
+  readonly contentType: string;
+  readonly privacy: BlobPrivacy;
+  readonly encrypted: boolean;
+  readonly createdAt: string;
+  readonly holders: number;
+}
+
+export interface MediaBlob extends BlobInfo {
+  readonly bytes: Uint8Array;
+}
+
+export interface PutBlobInput {
+  readonly tenant: string;
+  /** Bytes with metadata already stripped (F10.S02.M03); ciphertext for encrypted blobs (F08). */
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  readonly privacy: BlobPrivacy;
+  readonly encrypted?: boolean;
+  readonly now: number;
+}
+
+export function isBlobRef(v: unknown): v is string {
+  return typeof v === 'string' && BLOB_REF_RE.test(v);
+}
+
+/** Content address `blob:sha256-<base64url>` of the bytes (WebCrypto). */
+export async function blobRefOf(bytes: Uint8Array): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes.slice());
+  return `blob:sha256-${bytesToBase64url(new Uint8Array(digest))}`;
+}
+
+function blobCheck(input: PutBlobInput, kind: DriverKind): AppError | undefined {
+  if (input.bytes.byteLength > MAX_BLOB_BYTES) return appError('PAYLOAD_TOO_LARGE', { params: { limitBytes: MAX_BLOB_BYTES } });
+  if (!CONTENT_TYPE_RE.test(input.contentType)) return appError('VALIDATION_FAILED', { fields: [{ path: 'contentType', code: 'INVALID_FORMAT' }] });
+  if (!['P0', 'P1', 'P2', 'P3'].includes(input.privacy)) return appError('VALIDATION_FAILED', { fields: [{ path: 'privacy', code: 'INVALID_VALUE' }] });
+  // A relay holds public blobs and ciphertext only (ADR-0016 §3, PRV-5).
+  if (kind === 'sqlite' && input.privacy !== 'P0' && !input.encrypted) return appError('VALIDATION_FAILED', { fields: [{ path: 'privacy', code: 'PLAINTEXT_NOT_PUBLIC' }] });
+  return undefined;
+}
+
+function toBlobInfo(b: BlobRow, holders: number): BlobInfo {
+  return { ref: b.ref, size: b.size, contentType: b.contentType, privacy: b.privacy, encrypted: b.encrypted, createdAt: b.createdAt, holders };
+}
+
+/** Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). */
+function blobStore(d: DriverTx, kind: DriverKind) {
+  const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
+    d.blobs.detach(tenant, ref, holder);
+    if (d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
+    const blob = d.blobs.get(tenant, ref);
+    if (!blob) return { deleted: false, shred: false };
+    d.blobs.remove(tenant, ref);
+    return { deleted: true, shred: blob.encrypted };
+  };
+  return {
+    /** Stores bytes under their content address; storing identical bytes again returns the existing blob. */
+    async put(input: PutBlobInput): Promise<Result<BlobInfo, AppError>> {
+      const bad = blobCheck(input, kind);
+      if (bad) return err(bad);
+      const ref = await blobRefOf(input.bytes);
+      const existing = d.blobs.get(input.tenant, ref);
+      if (existing) return ok(toBlobInfo(existing, d.blobs.holders(input.tenant, ref)));
+      const row: BlobRow = { tenant: input.tenant, ref, bytes: input.bytes, size: input.bytes.byteLength, contentType: input.contentType, privacy: input.privacy, encrypted: input.encrypted === true, createdAt: toIso(input.now) };
+      d.blobs.upsert(row);
+      return ok(toBlobInfo(row, d.blobs.holders(input.tenant, ref)));
+    },
+    get(tenant: string, ref: string): MediaBlob | undefined {
+      const b = d.blobs.get(tenant, ref);
+      return b ? { ...toBlobInfo(b, d.blobs.holders(tenant, ref)), bytes: b.bytes } : undefined;
+    },
+    info(tenant: string, ref: string): BlobInfo | undefined {
+      const b = d.blobs.get(tenant, ref);
+      return b ? toBlobInfo(b, d.blobs.holders(tenant, ref)) : undefined;
+    },
+    /** Records that `holder` (e.g. `bazaar.listing/<id>`) references the blob; idempotent. */
+    attach(tenant: string, ref: string, holder: string): Result<{ holders: number; present: boolean }, AppError> {
+      if (!isBlobRef(ref)) return err(appError('VALIDATION_FAILED', { fields: [{ path: 'ref', code: 'INVALID_BLOB_REF' }] }));
+      d.blobs.attach(tenant, ref, holder);
+      return ok({ holders: d.blobs.holders(tenant, ref), present: d.blobs.get(tenant, ref) !== undefined });
+    },
+    /** Drops one reference; the blob is deleted with its last reference. `shred` asks the owner to delete the blob key. */
+    detach,
+    /** Deletes stored blobs that no record references and that were created before the cutoff. */
+    collectOrphans(createdBefore: number, limit = 100): number {
+      const list = d.blobs.orphans(toIso(createdBefore), limit);
+      for (const o of list) d.blobs.remove(o.tenant, o.ref);
+      return list.length;
+    },
+  };
+}
+
 function migrationStore(d: DriverTx) {
   return {
     list: (): MigrationRow[] => d.migrations.list(),
@@ -406,8 +505,9 @@ function migrationStore(d: DriverTx) {
   };
 }
 
-export function createTx(d: DriverTx) {
+export function createTx(d: DriverTx, kind: DriverKind = 'memory') {
   return {
+    blobs: blobStore(d, kind),
     records: recordStore(d),
     leases: leaseStore(d),
     idempotency: idempotencyStore(d),

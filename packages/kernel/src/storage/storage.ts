@@ -39,7 +39,7 @@ function createLock(): <T>(fn: () => Promise<T>) => Promise<T> {
 }
 
 async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => Result<T, E> | Promise<Result<T, E>>): Promise<Result<T, E>> {
-  const tx = createTx(driver.begin(mode));
+  const tx = createTx(driver.begin(mode), driver.kind);
   let result: Result<T, E>;
   try {
     result = await fn(tx);

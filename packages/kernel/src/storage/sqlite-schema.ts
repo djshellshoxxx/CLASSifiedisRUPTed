@@ -56,4 +56,18 @@ CREATE INDEX sync_outbox_queue ON sync_outbox(tenant, destination, state, create
 CREATE INDEX sync_outbox_ref ON sync_outbox(ref);
 `,
   },
+  {
+    id: 'kernel:0002_media_blobs',
+    sql: `
+CREATE TABLE blobs (
+  tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL CHECK (size <= 5242880),
+  content_type TEXT NOT NULL, privacy TEXT NOT NULL CHECK (privacy IN ('P0', 'P1', 'P2', 'P3')),
+  encrypted INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant, ref)) WITHOUT ROWID;
+CREATE INDEX blobs_created ON blobs(created_at);
+CREATE TABLE blob_refs (
+  tenant TEXT NOT NULL, ref TEXT NOT NULL, holder TEXT NOT NULL,
+  PRIMARY KEY (tenant, ref, holder)) WITHOUT ROWID;
+`,
+  },
 ];

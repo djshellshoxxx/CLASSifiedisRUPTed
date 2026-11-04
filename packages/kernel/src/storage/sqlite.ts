@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
 import { appError, AppErrorException } from '../errors/app-error.ts';
 import type {
+  BlobRow,
   DeadLetterRow,
   DriverTx,
   IdempotencyRow,
@@ -49,6 +50,11 @@ function toDead(r: SqlRow): DeadLetterRow {
 }
 function toSync(r: SqlRow): SyncRow {
   return { id: s(r['id']), tenant: s(r['tenant']), destination: s(r['destination']), ref: s(r['ref']), envelope: s(r['envelope']), state: s(r['state']) as SyncRow['state'], attempts: n(r['attempts']), nextAttemptAt: sn(r['next_attempt_at']), lastError: sn(r['last_error']), receipt: sn(r['receipt']), createdAt: s(r['created_at']), updatedAt: s(r['updated_at']) };
+}
+function toBlob(r: SqlRow): BlobRow {
+  const raw = r['bytes'];
+  const bytes = raw instanceof Uint8Array ? new Uint8Array(raw) : new Uint8Array();
+  return { tenant: s(r['tenant']), ref: s(r['ref']), bytes, size: n(r['size']), contentType: s(r['content_type']), privacy: s(r['privacy']) as BlobRow['privacy'], encrypted: n(r['encrypted']) === 1, createdAt: s(r['created_at']) };
 }
 function toMigration(r: SqlRow): MigrationRow {
   return { id: s(r['id']), checksum: s(r['checksum']), appliedAt: s(r['applied_at']) };
@@ -178,6 +184,19 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
         const clause = where.length ? ` WHERE ${where.join(' AND ')}` : '';
         return all(`SELECT * FROM sync_outbox${clause} ORDER BY created_at, id LIMIT ?`, [...params, q.limit]).map(toSync);
       },
+    },
+    blobs: {
+      get: (t, ref) => {
+        const r = one('SELECT * FROM blobs WHERE tenant = ? AND ref = ?', t, ref);
+        return r ? toBlob(r) : undefined;
+      },
+      upsert: (b) => void run('INSERT OR REPLACE INTO blobs (tenant, ref, bytes, size, content_type, privacy, encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', b.tenant, b.ref, b.bytes, b.size, b.contentType, b.privacy, b.encrypted ? 1 : 0, b.createdAt),
+      remove: (t, ref) => void run('DELETE FROM blobs WHERE tenant = ? AND ref = ?', t, ref),
+      holders: (t, ref) => n(one('SELECT COUNT(*) AS c FROM blob_refs WHERE tenant = ? AND ref = ?', t, ref)?.['c']),
+      attach: (t, ref, holder) => void run('INSERT OR IGNORE INTO blob_refs (tenant, ref, holder) VALUES (?, ?, ?)', t, ref, holder),
+      detach: (t, ref, holder) => void run('DELETE FROM blob_refs WHERE tenant = ? AND ref = ? AND holder = ?', t, ref, holder),
+      orphans: (before, limit) =>
+        all('SELECT b.tenant, b.ref FROM blobs b WHERE b.created_at < ? AND NOT EXISTS (SELECT 1 FROM blob_refs r WHERE r.tenant = b.tenant AND r.ref = b.ref) ORDER BY b.created_at, b.tenant, b.ref LIMIT ?', [before, limit]).map((r) => ({ tenant: s(r['tenant']), ref: s(r['ref']) })),
     },
     migrations: {
       list: () => all('SELECT * FROM schema_migrations ORDER BY applied_at, id', []).map(toMigration),

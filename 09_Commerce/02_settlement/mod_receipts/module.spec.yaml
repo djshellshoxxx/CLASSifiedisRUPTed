@@ -1,0 +1,236 @@
+# F09.S02.M01 Receipts (ADR-0015, ADR-0016). CTR-COM-001 COM-6: a receipt is a signed statement evidencing an assertion, not delivery.
+id: F09.S02.M01
+scope: MVP
+summary: >-
+  A party signs a short statement about a payment claim with their device key: the payer says they paid, the payee says they
+  received. The result is a Receipt {claimId, statement, signerId, signedAt, sig} that both vaults store, verify and can export
+  as a portable file anyone can verify offline, because the signer's did:key embeds the public key. A receipt evidences what the
+  signer asserted at the time they signed; it never proves that money moved or goods were delivered, and the UI says so.
+responsibilities:
+  - Create receipts by signing a canonical statement (JCS bytes, Ed25519, domain prefix classrup-receipt:v1) with the local principal's device key, only for claims the signer is a party to.
+  - Ingest, verify and store receipts signed by the counterparty, with provenance, and quarantine invalid ones.
+  - Verify any receipt offline from its content and signerId, reporting valid, invalid or key-revoked-after-signing.
+  - Export a receipt as a portable classrup-receipt/v1 file and embed it in the vault export.
+  - Track signer key revocation (as claimed by the signer's revocation statement) so verifiers see the key status.
+non_responsibilities:
+  - Payment claim state and acknowledgement (F09.S01.M01); a receipt does not change claim status.
+  - Dispute handling (F09.S02.M02) and reconciliation (F09.S02.M03).
+  - Tax invoices, VAT and legal receipts; the receipt here is an evidence statement only.
+  - "Future: optional RFC 3161 timestamp tokens from a user-chosen timestamping authority, and PDF rendering for printing."
+depends_on: [F09.S01.M01, F09.S03.M03, F07.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001]
+user_stories:
+  - As a payer, I sign a receipt stating that I paid EUR 45.00 for the bike, and I keep a file I can show later.
+  - As a payee, I sign a receipt stating that I received the cash, and the buyer's vault stores it with my signature.
+  - As anyone holding a receipt file, I can verify the signature offline and see exactly what the signer asserted.
+edge_cases:
+  - The signer's device key was revoked after signing; verification reports valid signature, key revoked at the signer's claimed time, and does not hide the receipt.
+  - A receipt arrives from someone who is not a party to the claim; it is quarantined with reason signer_not_party.
+  - The same party tries to issue two receipts of the same type for one claim; the second returns CONFLICT_STATE and the first stays.
+  - The claim is later disputed or expires; existing receipts stay valid evidence of what was asserted and are never deleted by status changes.
+  - The statement text is edited after signing in a transported file; verification fails with COMMERCE_RECEIPT_SIGNATURE_INVALID.
+  - After the signer's account deletion their did is replaced by a pseudonym in retained records; the signature is kept but marked unverifiable-after-pseudonymization while the original signing check result is retained.
+ux:
+  screens:
+    - "Receipt sheet on a claim: shows the exact sentence that will be signed, amount, currency, claim reference and the line 'This records what you assert. It does not prove payment or delivery.'; button Sign with this device."
+    - "Receipt view: signer pseudonym, role, signed time (as claimed by signer), signature status (Valid, Invalid, Key revoked later), Export file and Copy verification code."
+    - "Verify screen: drop a receipt file or paste code; result with reasons."
+  states: [loading, empty, ready-to-sign, signing, signed, peer-accepted, verified, invalid, quarantined]
+  a11y:
+    - Signature status is text with an icon and an accessible description of what it means.
+    - The sentence to be signed is readable text and read out before the Sign button is focused.
+    - Sign and Export buttons are at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A Receipt stores claimId, dealId, statement type, canonical statement body, signerId, role, signedAt (the signer's claim), local receivedAt, signature and receipt cid, matching COM-6.
+      - Receipts are P2, retained as RET-EVIDENCE, and immutable once created; corrections are new receipts.
+      - The statement body binds the claim cid, amount and currency so a receipt cannot be moved to another claim.
+    entities:
+      - name: Receipt
+        schema: classrup.commerce.receipt/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "claimId: uuidv7 — ref F09.S01.M01 PaymentClaim"
+          - "dealId: uuid — ref F09.S01.M01 Deal"
+          - "statementType: enum — payer_asserts_paid | payee_asserts_received"
+          - "statement: object — {claimCid, amount: Money, method, text?: ≤ 280 code points} canonicalized with JCS"
+          - "signerId: did — did:key of the signing device key (or per-deletion pseudonym after deletion)"
+          - "signerRole: enum — payer | payee"
+          - "signedAt: timestamp — signer's claimed time, RFC 3339 UTC"
+          - "receivedAt: timestamp — local clock when stored"
+          - "sig: string — base64url Ed25519 over JCS of the receipt without sig, with prefix classrup-receipt:v1"
+          - "receiptCid: string — sha256 of the signed receipt"
+          - "verification: object — {checkedAt, result: valid|invalid, keyRevokedAt?: claimed time, provenance: local|peer}"
+          - "peerSync: string — local_committed | prepared | transport_acknowledged | peer_accepted | not_applicable"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - One receipt per (claimId, signerId, statementType).
+          - signerRole matches the signer's role in the claim (payer or payee).
+          - sig verifies over the stored bytes at the time of storage, or the row is quarantined and not stored as a Receipt.
+    sql: |
+      CREATE TABLE commerce_receipt (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, claim_id TEXT NOT NULL, deal_id TEXT NOT NULL,
+        statement_type TEXT NOT NULL, signer_id TEXT NOT NULL, received_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_receipt_unique ON commerce_receipt(vault_id, claim_id, signer_id, statement_type);
+  validation_rules:
+    requirements:
+      - Receipt input is validated strictly; unknown fields are rejected with VALIDATION_FAILED.
+      - Role and claim-state rules check that the signer is a party and that the claim status supports the assertion.
+      - Signature verification is exact: any byte change in the canonical content invalidates the receipt.
+    rules:
+      - "V01 | claim exists in this vault and signer is a party of its Deal | NOT_FOUND"
+      - "V02 | payer_asserts_paid requires the signer to be the claim payer and claim status not expired; payee_asserts_received requires the payee and claim status acknowledged, confirmed or final | COMMERCE_RECEIPT_ROLE"
+      - "V03 | statement.claimCid, amount and currency equal the stored claim | COMMERCE_RECEIPT_MISMATCH"
+      - "V04 | text at most 280 code points, plain text | VALIDATION_FAILED"
+      - "V05 | signature is valid Ed25519 over JCS bytes and signerId is a valid did:key | COMMERCE_RECEIPT_SIGNATURE_INVALID"
+      - "V06 | no receipt of the same type by the same signer exists for the claim | CONFLICT_STATE"
+      - "V07 | signedAt is not more than 10 minutes in the future of the local clock | COMMERCE_RECEIPT_SKEW"
+  workflow_state_machine:
+    requirements:
+      - Receipts are immutable; there is no editing or deletion by status change.
+      - Delivery progress is tracked by the sync outbox states, not by receipt status.
+      - Verification is recomputed on demand and cached with its check time.
+    machines: []
+    note: "Receipts are immutable evidence records with no lifecycle; delivery state is carried by the sync outbox (prepared, transport_acknowledged, peer_accepted) and verification result by the verification field."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - Issue is a vault command that produces the signed statement classrup.commerce.receipt/v1; ingest is a vault command for received statements; verify and export are vault queries; no relay command exists.
+      - Issue and ingest emit commerce.receipt.issued into the vault outbox in the same IndexedDB transaction as the insert.
+      - The module consumes claim and key-revocation events to prompt for receipts and to update key status.
+    commands:
+      - name: commerce.receipt.issue
+        capability: commerce.receipt.issue
+        input: "[vault command, produces signed statement classrup.commerce.receipt/v1] { claimId, statementType, text? }"
+        output: "{ receiptId, receiptCid, signedAt, peerSync }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, CONFLICT_STATE, COMMERCE_RECEIPT_ROLE, COMMERCE_RECEIPT_MISMATCH, COMMERCE_RECEIPT_SKEW]
+        emits: [commerce.receipt.issued]
+        idempotent: true
+      - name: commerce.receipt.ingest
+        capability: commerce.receipt.ingest
+        input: "[vault command, internal] { envelope: signed classrup.commerce.receipt/v1 }"
+        output: "{ outcome: stored|quarantined|duplicate, reason? }"
+        errors: [VALIDATION_FAILED, COMMERCE_RECEIPT_SIGNATURE_INVALID, COMMERCE_RECEIPT_ROLE, COMMERCE_RECEIPT_MISMATCH, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [commerce.receipt.issued]
+        idempotent: true
+    queries:
+      - name: commerce.receipt.verify
+        capability: commerce.receipt.read
+        input: "{ receiptId } or { file: classrup-receipt/v1 JSON, ≤ 8 KiB }"
+        output: "{ result: valid|invalid, reasons[], signerId, signedAt, keyStatus: ok|revoked_later|unknown }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, PAYLOAD_TOO_LARGE]
+      - name: commerce.receipt.export
+        capability: commerce.receipt.read
+        input: "{ receiptId }"
+        output: "{ file: classrup-receipt/v1 JSON, sizeBytes ≤ 4096 }"
+        errors: [NOT_FOUND]
+      - name: commerce.receipt.list_for_claim
+        capability: commerce.receipt.read
+        input: "{ claimId }"
+        output: "{ items: Receipt[] }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: commerce.receipt.issued, privacy: P2, payload: "{ receiptId, claimId, dealId, statementType, signerId, provenance: local|peer }"}
+    events_consumed:
+      - {type: commerce.payment.acknowledged, effect: "if the payee's cash terms require receipts, prompt both parties to sign; no automatic signing ever occurs"}
+      - {type: commerce.payment.finalized, effect: "prompt the payee to sign a payee_asserts_received receipt for the final crypto claim"}
+      - {type: identity.device_key.revoked, effect: "update keyStatus of stored receipts signed by that key to revoked_later with the revocation time claimed by the signer"}
+      - {type: privacy.deletion.completed, effect: "replace signerId display with the per-deletion pseudonym in retained receipts and mark signatures unverifiable-after-pseudonymization"}
+    errors:
+      - "COMMERCE_RECEIPT_ROLE | 403 | no | signer role does not allow this statement for the claim status"
+      - "COMMERCE_RECEIPT_MISMATCH | 422 | no | statement does not match the claim cid, amount or currency"
+      - "COMMERCE_RECEIPT_SIGNATURE_INVALID | 422 | no | signature or signer key encoding is invalid"
+      - "COMMERCE_RECEIPT_SKEW | 422 | no | signedAt is too far in the future of the local clock"
+    example: |
+      vault command commerce.receipt.issue (payee vault)
+      { "claimId": "0192f3a7-…", "statementType": "payee_asserts_received", "text": "Received EUR 45.00 in cash at the station." }
+      => { "receiptId": "0192f3aa-…", "receiptCid": "sha256-77de…", "signedAt": "2026-11-04T10:20:00.000Z", "peerSync": "prepared" }
+      exported file: { "format": "classrup-receipt/v1", "claimId": "0192f3a7-…", "statement": { … }, "signerId": "did:key:z6Mk…", "signedAt": "…", "sig": "…" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal signs with its own device key; the role in the Deal limits which statement type it may sign.
+      - Incoming receipts are accepted only when the signature verifies and the signer is a party of the claim; otherwise they are quarantined.
+      - No relay role has any capability over receipts; relays see only ciphertext.
+    capabilities:
+      - "commerce.receipt.issue | local-principal | principal is payer or payee of the claim; role matches statement type; vault unlocked"
+      - "commerce.receipt.ingest | local-principal | internal ingest pipeline; signer is a party of the claim"
+      - "commerce.receipt.read | local-principal, anonymous | principal reads receipts of its own claims; verification of a supplied file is a pure local function available without a vault"
+  failure_recovery_idempotency:
+    requirements:
+      - Issue is idempotent per CTR-IDM-001 using vault command IDs and unique (claim, signer, type).
+      - Signing and storing are one local transaction so there is no signed-but-unstored receipt.
+      - Delivery uses the sync outbox; the UI never claims the counterparty has the receipt before peer_accepted.
+    idempotency: "Vault command ID recorded for 24 h; receipts deduplicated by receiptCid; unique index on (claim, signer, type)."
+    concurrency: "Unique index serializes two tabs signing the same receipt; one wins and the other gets CONFLICT_STATE. No cross-vault lock is needed because each party signs independently."
+    retries: "Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h for 14 days."
+    offline: "Signing works offline with the local key; delivery waits in the outbox and shows prepared."
+    partial_failure: "If delivery fails after signing, the receipt exists locally and the user can export it as a file and send it by any channel; nothing is rolled back."
+  privacy_retention_abuse:
+    requirements:
+      - Receipts are P2 and travel only inside end-to-end encrypted envelopes to the counterparty or in files the user chooses to share.
+      - The UI states that a receipt shows what the signer asserted and that a signed time is the signer's claim, not proof of time.
+      - Misuse such as forced signing or fake receipts is limited by role checks, signature verification and the dispute path.
+    data:
+      - "Receipt: P2; signerId is a did:key (pseudonymous, not anonymous); text is P2 free text."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity); exported files are outside platform control."
+      - "On deletion: signerId replaced by a pseudonym in retained rows; signed bytes retained and flagged unverifiable-after-pseudonymization; counterparty copies unchanged."
+    threats:
+      - "T01 | Counterfeit receipt attributed to someone | Ed25519 signature over JCS with domain prefix; verification offline; role and claim binding by cid"
+      - "T02 | Receipt reused for another claim | statement binds claimCid, amount and currency; mismatch rejected"
+      - "T03 | Coerced signing under pressure | UI shows the exact sentence, no auto-sign, receipts are optional unless agreed in cash terms, dispute path preserved"
+      - "T04 | Receipt misread as proof of delivery | mandatory disclaimer text on every receipt view and export; file contains assertion type explicitly"
+    abuse_controls:
+      - "Receipts per vault limited to 500 per day; ingest limit 20 statements per hour per sender; excess is quarantined."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); signing and verification timings stay in local diagnostics.
+      - Signing and verification meet the stated budgets on a mid-range phone.
+      - Quarantine counts are visible in local diagnostics.
+    metrics:
+      - "Local diagnostics: classrup_commerce_receipts_total{outcome=issued|ingested|quarantined|invalid}"
+      - "Local diagnostics: classrup_commerce_receipt_verify_ms (histogram)"
+    logs:
+      - "info receipt.issued {receiptId, claimId, statementType, correlationId} — no text, no amounts."
+    budgets:
+      - "issue p95 ≤ 80 ms including Ed25519 signing; verify p95 ≤ 20 ms."
+      - "Exported receipt file ≤ 4 KiB."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Signatures are tested with RFC 8032 vectors and JCS vectors from RFC 8785.
+      - Verification is tested against tampered, replayed and revoked-key receipts.
+    fixtures: "Two vaults A (payer) and B (payee) with an acknowledged EUR 45.00 cash claim; RFC 8032 test keys; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R03 | sign a payee receipt, then flip one byte of statement text | original verifies valid; edited copy fails with COMMERCE_RECEIPT_SIGNATURE_INVALID"
+      - "T02 | unit | 02.R01,02.R02 | rules V01 to V07 violated in turn | documented error code returned and nothing stored"
+      - "T03 | unit | 01.R02,03.R01,03.R03 | attempt edit or delete via API and re-run verify after claim expiry | no edit path exists; verification result recomputed and receipt retained"
+      - "T04 | unit | 01.R03,02.R03 | receipt for claim X replayed against claim Y | COMMERCE_RECEIPT_MISMATCH"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | execute issue, ingest, verify and export | outputs and events validate against registry schemas"
+      - "T06 | integration | 04.R03 | identity.device_key.revoked delivered twice | keyStatus revoked_later set once and receipt still listed"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | non-party signer; wrong-role statement; relay traffic inspection | quarantined with reason; relay sees only ciphertext"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | two tabs sign simultaneously; delivery fails after signing | one receipt; export still possible; UI shows prepared"
+      - "T09 | integration | 06.R04,07.R01 | offline signing then reconnect | receipt delivered, sync state advances to peer_accepted only on signed acknowledgement"
+      - "T10 | e2e | 07.R02,09.R03 | both parties open receipts | disclaimer shown; labels say asserted by signer; axe zero serious issues"
+      - "T11 | integration | 07.R03 | account deletion completes | signerId pseudonymized, signature flagged unverifiable-after-pseudonymization, counterparty copy unchanged"
+      - "T12 | abuse | 07.R03,07.R01 | 21 incoming receipts in one hour from one sender | 21st quarantined"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 1 000 signs and 1 000 verifies | p95 sign ≤ 80 ms, verify ≤ 20 ms, no telemetry sent"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-071 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export vault, import to fresh vault with one tampered receipt, roll back one release | valid receipts round-trip; tampered one quarantined; v1 readable"
+    acceptance:
+      - All tests T01 to T15 pass in CI.
+      - Every receipt view and export carries the statement that it evidences an assertion and not delivery.
+      - A receipt file verifies offline with no network and no vault.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's receipts with signatures in the section commerce.receipts.
+      - Import re-verifies every signature and quarantines receipts that fail or whose signer is not a party of an imported claim.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.receipts in classrup-export/v1; one line per Receipt (schema classrup.commerce.receipt/v1); single receipts also export as classrup-receipt/v1 files."
+    import: "Receipts import as read-only evidence after signature re-verification; failures go to quarantine with reason."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext envelopes of receipts in transit."
+    migration_rollback: "Signed bytes are never rewritten by a migration; additive fields only in v1; rollback is safe because older readers ignore unknown optional fields."

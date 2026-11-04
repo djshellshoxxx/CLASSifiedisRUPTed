@@ -1,0 +1,247 @@
+id: F12.S02.M03
+scope: MVP
+summary: >-
+  A relay's community and hosting policy as versioned rules with stable IDs (for example POL-FRAUD-001).
+  Moderator actions, statements of reasons and appeals cite rule ID and version. A relay operator drafts,
+  publishes and retires rules; each published rule version is signed by the relay as a public policy statement
+  that vaults can fetch, pin and compare, so users can see what a relay enforces before they choose it. Rules
+  describe what the relay hosts and indexes; they are not law and not a global standard. Prohibited goods rules
+  are owned by F18 and are referenced here by ID.
+responsibilities:
+  - Own the PolicyRule record: stable rule ID, immutable versions, locale texts, severity and allowed action ladder.
+  - Provide a seed set of 12 rule families that a relay can adopt, edit or replace before publishing.
+  - Publish each rule version as a relay-signed statement (classrup.moderation.policy/v1) and an index of current versions.
+  - Keep retired and superseded versions readable forever so old statements of reasons remain understandable.
+  - Cross-reference prohibited-goods rules from F18.S01.M02 by rule ID without copying their content.
+non_responsibilities:
+  - Applying rules to content (F12.S02.M01) and detecting violations (F12.S02.M02).
+  - Prohibited goods rule sets and jurisdiction logic (F18.S01.M02, F18.S01.M01).
+  - Community decision-making on policy changes (F18.S02.M01); this module records the published result.
+  - "Future: per-community rule overlays; machine-readable rule tests; translations beyond the operator's locales."
+depends_on: [F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a prospective member, I can read a relay's rules and their change history before I choose it.
+  - As a relay operator, I publish a revised rule with a changelog and an effective date at least 14 days ahead for restrictive changes.
+  - As a moderator, I pick a rule from a list with its full text and allowed actions when I decide a case.
+edge_cases:
+  - A rule is edited after actions cited it; editing creates a new version and old actions keep citing the older version, which stays readable.
+  - Two operators publish different edits of one rule at once; the second returns CONFLICT_REVISION.
+  - A restrictive rule is published with an effective date less than 14 days away; refused with MODERATION_POLICY_NOTICE_TOO_SHORT except for rules marked imminent_harm.
+  - A rule text exists only in English but the user's locale is German; the vault shows the English text labelled with its language.
+  - A rule references a prohibited-goods rule ID that F18 later retires; the reference shows 'retired' and moderators cannot cite the rule for new actions.
+  - Relay signing key rotates; older rule statements stay verifiable through the key registry history in F16.S02.M02.
+ux:
+  screens:
+    - "Public policy page: rule list grouped by family, each with ID, current version, effective date, short and full text, changelog."
+    - "Operator rule editor: locale tabs, severity, allowed action ladder, effective date, changelog, preview of how it appears in a statement of reasons."
+    - "Moderator rule picker: searchable list showing ID, one-line summary and allowed actions."
+  states: [loading, draft, scheduled, in-force, retired, error]
+  a11y:
+    - Policy page is a semantic heading hierarchy with a skip link to each family.
+    - Version history is a list with dates in text form, not color-coded only.
+    - Editor fields have labels, error messages linked by aria-describedby, and 44 by 44 px controls.
+processes:
+  domain_schema:
+    requirements:
+      - A PolicyRule version stores rule ID, version, family, severity, allowed actions, locale texts, effective and retirement times and the relay signature content id, with tenant and revision per CTR-ID-001.
+      - Published rule versions are P0, immutable and retained under RET-EVIDENCE because moderation decisions cite them.
+      - Rule IDs follow POL-<FAMILY>-<NNN>, are never reused and version numbers increase by one.
+    entities:
+      - name: PolicyRule
+        schema: classrup.moderation.policyrule/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key of this version row"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "ruleId: string — stable ID matching POL-[A-Z]+-[0-9]{3}"
+          - "version: int — starts at 1, increments by 1 per published change"
+          - "family: enum — spam | fraud | prohibited_goods | harassment | hate | sexual_content | violence | privacy | impersonation | counterfeit | minor_safety | platform_manipulation"
+          - "severity: enum — low | medium | high | imminent_harm"
+          - "allowedActions: string[] — subset of warn, remove_from_index, restrict_feature, suspend_relay_access"
+          - "texts: object — locale to { title ≤ 120 code points, summary ≤ 400, body ≤ 4000 }"
+          - "prohibitedRuleRef?: string — F18.S01.M02 rule ID when family is prohibited_goods"
+          - "changelog: string — 10..1000 code points"
+          - "effectiveAt: timestamp — RFC 3339 UTC; at least 14 days after publication for restrictive changes"
+          - "retiredAt?: timestamp — RFC 3339 UTC"
+          - "status: enum — draft | published | retired"
+          - "statementCid?: string — content id of the relay-signed policy statement"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - (tenantId, ruleId, version) is unique and a published version is never modified.
+          - Exactly one version of a ruleId is in force at any time.
+          - imminent_harm rules are the only ones allowed an effective date earlier than 14 days after publication.
+    sql: |
+      CREATE TABLE moderation_policy_rule (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, rule_id TEXT NOT NULL, version INTEGER NOT NULL, family TEXT NOT NULL,
+        status TEXT NOT NULL, effective_at TEXT NOT NULL, retired_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_policy_version ON moderation_policy_rule(tenant_id, rule_id, version);
+  validation_rules:
+    requirements:
+      - Rule input is validated strictly, including ID format, text sizes and allowed action vocabulary.
+      - Publication checks notice period, changelog and that the rule is the next version.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | ruleId matches POL-[A-Z]+-[0-9]{3} and family is in the enum | VALIDATION_FAILED"
+      - "V02 | title ≤ 120, summary ≤ 400, body ≤ 4000 code points in at least one locale | VALIDATION_FAILED"
+      - "V03 | allowedActions is a non-empty subset of the four relay action kinds | VALIDATION_FAILED"
+      - "V04 | effectiveAt ≥ publication + 14 days unless severity is imminent_harm | MODERATION_POLICY_NOTICE_TOO_SHORT"
+      - "V05 | version equals current published version + 1 and expectedRevision matches | CONFLICT_REVISION"
+      - "V06 | family prohibited_goods requires prohibitedRuleRef that exists in F18.S01.M02 | VALIDATION_FAILED"
+      - "V07 | a retired ruleId cannot be republished with the same ID | MODERATION_POLICY_RETIRED"
+  workflow_state_machine:
+    requirements:
+      - Rule versions follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
+      - Publishing a version supersedes the previous in-force version at effectiveAt, and the previous stays readable.
+      - Retiring a rule prevents new citations and leaves all existing citations valid.
+    machines:
+      - entity: PolicyRule
+        initial: draft
+        terminal: [retired]
+        transitions:
+          - "draft -> published | moderation.policyrule.publish by operator | statement signed; emits moderation.policy.published"
+          - "published -> retired | moderation.policyrule.retire by operator | retiredAt set; later versions of the ID are refused"
+          - "draft -> retired | moderation.policyrule.retire by operator | draft discarded without publication"
+    timeouts:
+      - "Scheduled versions become in force at effectiveAt; a check every 60 s refreshes the in-force index."
+  commands_queries_events:
+    requirements:
+      - Every command is a relay command; publish also produces a signed policy statement that vaults can fetch.
+      - Publish emits moderation.policy.published in the same transaction as the version row and the statement.
+      - The module consumes governance events to flag rules for review and does not change rules by itself.
+    commands:
+      - name: moderation.policyrule.draft
+        mode: "relay command"
+        capability: moderation.policyrule.draft
+        input: "{ ruleId?, family, severity, allowedActions, texts, prohibitedRuleRef?, changelog, effectiveAt }"
+        output: "{ policyRuleId, ruleId, version, revision: 1 }"
+        errors: [VALIDATION_FAILED, CONFLICT_REVISION, MODERATION_POLICY_RETIRED]
+        emits: []
+        idempotent: true
+      - name: moderation.policyrule.publish
+        mode: "relay command; produces statement classrup.moderation.policy/v1 signed by the relay key"
+        capability: moderation.policyrule.publish
+        input: "{ policyRuleId, expectedRevision }"
+        output: "{ policyRuleId, ruleId, version, statementCid, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MODERATION_POLICY_NOTICE_TOO_SHORT, VALIDATION_FAILED]
+        emits: [moderation.policy.published]
+        idempotent: true
+      - name: moderation.policyrule.retire
+        mode: "relay command; produces retirement note in classrup.moderation.policy/v1 index"
+        capability: moderation.policyrule.retire
+        input: "{ policyRuleId, expectedRevision, reason }"
+        output: "{ policyRuleId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: moderation.policyrule.list_public
+        capability: moderation.policyrule.read_public
+        input: "{ family?, asOf?, locale?, cursor?, limit ≤ 100 }"
+        output: "{ items: PolicyRule[] in force at asOf, nextCursor? }"
+        errors: []
+      - name: moderation.policyrule.get_version
+        capability: moderation.policyrule.read_public
+        input: "{ ruleId, version }"
+        output: "{ rule: PolicyRule, statementCid }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: moderation.policy.published, privacy: P0, payload: "{ ruleId, version, family, severity, effectiveAt, statementCid, changelog }"}
+    events_consumed:
+      - {type: governance.policy_proposal.decided, effect: "create a draft rule version from an accepted proposal for operator review; never publishes by itself"}
+      - {type: governance.prohibited_rule.changed, effect: "refresh prohibitedRuleRef status and flag dependent rules for review"}
+    errors:
+      - "MODERATION_POLICY_NOTICE_TOO_SHORT | 422 | no | restrictive rule changes need an effective date at least 14 days after publication"
+      - "MODERATION_POLICY_RETIRED | 409 | no | a retired rule ID cannot be reused"
+    example: |
+      POST https://relay.example/api/v1/cmd/moderation.policyrule.publish   (relay command, operator token)
+      Idempotency-Key: 0192f3d0-0000-7000-8000-000000000e01
+      { "policyRuleId": "0192f3d0-6666-7000-8000-000000000006", "expectedRevision": 1 }
+      -> 200 { "policyRuleId": "0192f3d0-6666-7000-8000-000000000006", "ruleId": "POL-FRAUD-001", "version": 2, "statementCid": "sha256-dd56…", "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: only relay operators draft, publish and retire rules; moderators and members read published rules; the public read capability needs no session."
+      - "Vault policy: a vault stores a policy statement only if signed by the relay key it fetched it from and pins the statement it showed the user."
+      - Policy reads are cacheable for 5 minutes and never reveal drafts.
+    capabilities:
+      - "moderation.policyrule.draft | operator | relay role operator"
+      - "moderation.policyrule.publish | operator | relay role operator; rule is a draft; notice-period rule satisfied"
+      - "moderation.policyrule.retire | operator | relay role operator"
+      - "moderation.policyrule.read_public | anonymous, member, moderator | published versions only"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 and mutations require expectedRevision.
+      - Publication writes the version row, signature and event in one transaction.
+      - Concurrent edits to the same rule serialize on version uniqueness.
+    idempotency: "Idempotency-Key required; replay returns the stored response for 24 h; publish replay returns the same statementCid."
+    concurrency: "Unique (tenant, ruleId, version) index and expectedRevision; two drafts of the same next version conflict at publish with CONFLICT_REVISION."
+    retries: "Callers retry DEPENDENCY_UNAVAILABLE only; signing failure aborts publication."
+    offline: "Operators need the relay online; vaults read cached policy statements offline and show their fetch date."
+    partial_failure: "If the signing key is unavailable the transaction aborts and the draft stays draft; no unsigned published rule exists."
+  privacy_retention_abuse:
+    requirements:
+      - Rules and statements are P0 public data and contain no personal data; drafts are visible to operators only.
+      - Published versions are retained under RET-EVIDENCE and never deleted while any action cites them.
+      - Policy tampering is prevented by signatures, immutability and audit of every operator action.
+    data:
+      - "PolicyRule published versions: P0."
+      - "Drafts: P1 relay-internal, operators only."
+    retention:
+      - "Published and retired versions: RET-EVIDENCE (kept at least 2 years after the last action citing them)."
+      - "Discarded drafts: deleted after 30 days."
+    threats:
+      - "T01 | Operator rewrites rules retroactively to justify past actions | published versions are immutable and signed; actions store ruleId with version and statement CID"
+      - "T02 | Surprise restrictive rules | 14-day notice for restrictive changes; changelog required; vault shows 'changed since you joined'"
+      - "T03 | Forged policy statement served by an impostor relay | vault verifies the relay signature and the relay key from the registry"
+      - "T04 | Rule text used to smuggle active content | texts are plain text with inert links, length capped"
+    abuse_controls:
+      - "Operator publish rate limited to 20 rule versions per day (F12.S03.M03); all operator actions audit-logged (F16.S01.M01)."
+  observability_performance:
+    requirements:
+      - Publish and read latency and outcomes are measured per CTR-OBS-001.
+      - Public reads meet the read budget (p95 ≤ 150 ms) and are cache friendly.
+      - In-force index freshness is observable.
+    metrics:
+      - "classrup_moderation_policy_versions_total{outcome=published|retired}"
+      - "classrup_moderation_policy_in_force (gauge: number of rules in force)"
+      - "classrup_moderation_policy_index_age_ms (gauge)"
+    logs:
+      - "relay info policy.published {ruleId, version, correlationId}."
+    budgets:
+      - "list_public p95 ≤ 150 ms for 100 rules; publish p95 ≤ 300 ms."
+      - "In-force index refresh ≤ 1 s after effectiveAt."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check commands, statements and events against the schema registry.
+      - Version immutability is covered by property tests.
+    fixtures: "Relay X with operator O, seed rules POL-FRAUD-001 v1 and POL-SPAM-001 v1, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | draft and publish a valid rule | version row stored, version = previous + 1, ID matches pattern"
+      - "T02 | unit | 02.R02,02.R03 | each rule V02–V07 violated | documented error code and nothing stored"
+      - "T03 | property | 01.R02,03.R01 | random sequences of draft, publish, retire, edit | published versions never change; exactly one version in force"
+      - "T04 | integration | 03.R02,03.R03 | action cites v1, v2 published, rule retired | action still resolves v1 text; retired rule not citable for new actions"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query | outputs, statement and event validate against registry schemas; signature verifies"
+      - "T06 | integration | 04.R03 | policy_proposal.decided and prohibited_rule.changed delivered twice | one draft created; dependent rules flagged; nothing auto-published"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | moderator publishes; forged statement signature; draft read by member | FORBIDDEN; vault rejects; NOT_FOUND"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | same Idempotency-Key replayed; concurrent publish; signing key unavailable | same statementCid; one wins; draft stays draft"
+      - "T09 | abuse | 07.R01,07.R03 | attempt to modify a published row directly; 21 publishes in a day | rejected by schema trigger; 21st RATE_LIMITED"
+      - "T10 | integration | 07.R02 | purge sweep while an action cites a version | version retained"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 200 req/s public reads for 5 minutes | p95 ≤ 150 ms; index refresh ≤ 1 s after effective time"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-095 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export policy, import into fresh relay, restore backup | all versions and statements verify; ruleIds unchanged"
+      - "T14 | e2e | 01.R02,04.R01 | mobile visitor reads policy offline after first visit | cached policy shown with fetch date; axe zero serious issues"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - Published rule versions are immutable and every action's citation resolves to the exact text in force at decision time.
+      - Seed set of 12 rule families is available for adoption in a fresh relay.
+  import_export_backup_rollback:
+    requirements:
+      - Policy export contains all versions with statements and is portable between relays as a starting template, not as authority.
+      - Import verifies statement signatures when keeping them as history, and templates import as drafts under the new relay's keys.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.policy in the relay configuration export: all versions, texts, statements and changelogs; users can download the current policy as JSON from the public page."
+    import: "Importing another relay's policy creates drafts only, with changelog 'adopted from <relay>'; original signatures are kept as provenance but never as this relay's statements."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring re-verifies all statement signatures."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown families display as 'other'."

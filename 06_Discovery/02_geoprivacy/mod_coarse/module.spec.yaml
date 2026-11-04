@@ -140,7 +140,7 @@ processes:
       - "T08 | unit | 03.R03 | cellsForRadius at the antimeridian, near a pole and at the equator | sorted unique cells, wrap handled, count within 512"
       - "T09 | unit | 04.R01,04.R02,04.R03 | inspect exports | no command, query, event or capability exists; errors map to documented codes"
       - "T10 | property | 05.R01,05.R03,06.R01 | 200 runs of the same call sequence | byte-identical results, no I/O performed"
-      - "T11 | abuse | 07.R01,07.R02,07.R03 | scan the public API for functions returning coordinates or cells longer than 5 characters | none found; contract helper fails a fake publisher that skips the guard"
+      - "T11 | abuse | 05.R02,07.R01,07.R02,07.R03 | scan the public API for functions returning coordinates or cells longer than 5 characters | none found; contract helper fails a fake publisher that skips the guard"
       - "T12 | load | 08.R01,08.R02,08.R03 | benchmark encode, snap, cellsForRadius(100) 100 000 times | within budgets"
       - "T13 | unit | 09.R01,09.R02,09.R03,06.R02,06.R03 | traceability run over PS-047 | every requirement maps to a passing test; vectors file unchanged"
       - "T14 | unit | 10.R01,10.R02,10.R03 | check that the package exports no persistence | no export section; vectors compatible across library versions"

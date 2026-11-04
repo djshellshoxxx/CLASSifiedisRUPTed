@@ -1,0 +1,257 @@
+# F02.S02.M04 Matching participant eligibility (ADR-0016 local-first).
+id: F02.S02.M04
+scope: MVP
+summary: >-
+  Each member decides in their own vault whether to take part in cycle matching, how long a cycle they accept (2..8, default 4),
+  how far away counterparties may be (distance bucket), whether they accept compensation legs, whom to exclude, and when to pause.
+  Only a coarse signed projection (opt-in, maximum length, distance bucket, compensation flag) is published to relays the member selects;
+  the exclusion list stays in the vault and is applied locally. Eligibility is a pure function used by the engine and the feasibility checks.
+responsibilities:
+  - Own the MatchingProfile record per principal with explicit, versioned opt-in text and defaults of opted out, maxCycleLength 4, distance bucket 10-25 km and no compensation.
+  - Publish a signed public projection (classrup.mutiny.matching_profile/v1) of the non-private fields and a signed tombstone when the member opts out; ingest other members' projections with signature, sequence and tombstone checks.
+  - Provide the eligibility function (opted in, not paused, not locally blocked, within cycle participation limits, region known) used by F02.S02.M03 and F02.S02.M05.
+non_responsibilities:
+  - Enumeration and scoring of cycles (F02.S02.M03).
+  - Block list storage (F07.S02.M02); this module only reads it.
+  - Global suspension; there is none (ADR-0016). A relay's hosting policy may stop indexing a projection, which only removes the projection from that relay.
+  - "Future: per-category opt-in, time-of-day availability windows, and reputation thresholds."
+depends_on: [F07.S01.M01, F07.S02.M02, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a member, I opt in to matching after reading plainly what is published (my coarse preferences, not my exclusions), and I can opt out at any time with a signed tombstone.
+  - As a member, I limit cycles to at most 3 participants within 10 km and exclude two people I do not want to trade with, without those people ever being told.
+  - As a member, I pause matching for 14 days while I am away.
+edge_cases:
+  - The member opts out; copies of the projection already fetched by other vaults cannot be recalled and the confirmation dialog says so before opting in.
+  - Two devices of the same member edit the profile concurrently; the higher seq wins for the public projection and the vault shows a resolve prompt for the private fields, never merging silently.
+  - A member has no home region (no location permission); opt-in is refused until a manual L1 region is entered, because distance buckets cannot be computed.
+  - A peer projection arrives with a seq lower than the stored one or a broken prev chain; it is ignored and counted, and the stored one is kept.
+  - A peer projection carries maxCycleLength 9 or a bucket outside the enum; it is quarantined with reason and excluded from the graph.
+  - The excluded list reaches 200 entries; adding another returns a validation error instead of dropping an entry.
+ux:
+  screens:
+    - "Matching settings: opt-in toggle with plain-language disclosure, max cycle length slider 2..8, distance bucket selector, 'accept compensation' switch, pause date picker, excluded people list with search."
+    - "Disclosure sheet: lists exactly the four published fields, the relays selected, and states that fetched copies cannot be recalled."
+  states: [loading, opted-out, opted-in, paused, region-missing, publishing, publish-failed-offline, error]
+  a11y:
+    - Every control has a visible label; the slider exposes aria-valuetext such as 'up to 4 participants'.
+    - Opt-in disclosure is readable by screen readers and the confirm button names the action 'Opt in to matching'.
+    - Status changes such as published or paused are announced in an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A MatchingProfile stores opt-in state with the accepted disclosure version, maximum cycle length, distance bucket, compensation flag, pause time and exclusion list, with one record per principal.
+      - The vault record is P3 because it contains exclusions; only the derived projection with four coarse fields is P0 and signed with the principal's Ed25519 key.
+      - Projections from other members are stored as read-only mirrors with provenance and a per-author seq chain; tombstones win over any projection with an equal or lower seq.
+    entities:
+      - name: MatchingProfile
+        schema: classrup.mutiny.matching_profile/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key in the vault"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "actorId: did — principal DID (did:key); unique per vault for the local record, peers' mirrors are keyed by (actorId)"
+          - "origin: enum — local | peer_projection"
+          - "optedIn: boolean — default false"
+          - "optInVersion?: string — disclosure text key accepted, e.g. mutiny.matching.optin.v1; required when optedIn"
+          - "optInAt?: timestamp — local clock for local record; a claim for peer mirrors"
+          - "maxCycleLength: int — 2..8, default 4"
+          - "maxDistanceBucket: enum — lt5 | 5_10 | 10_25 | 25_50 | gt50, default 10_25"
+          - "acceptsCompensation: boolean — default false"
+          - "pausedUntil?: timestamp — at most now + 90 d"
+          - "excludedActorIds: array — local only, ≤ 200 DIDs, never in the projection"
+          - "regionL1: string — geohash4 of home region from F06.S02.M02; required when optedIn"
+          - "seq: int — projection sequence per CTR-FED-001 FED-3, starts at 1"
+          - "prev?: cid — hash of previous projection envelope"
+          - "projectionCid?: cid — sha256 of the signed projection envelope"
+          - "projectionSig?: string — Ed25519 signature over JCS of the projection envelope"
+          - "tombstoned: boolean — true after a signed tombstone"
+          - "provenance?: object — {originRelay, receivedAt, via[], verifiedAt} for peer mirrors (receivedAt is the local clock)"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - excludedActorIds never appears in projection payloads, events, logs or relay requests, and never contains the principal's own DID.
+          - optedIn true implies optInVersion, regionL1 and a published projection with seq equal to the record seq.
+          - A tombstoned record has optedIn false and no later projection with a higher seq is accepted from the same author unless it is a new opt-in with seq greater than the tombstone.
+    sql: |
+      CREATE TABLE mutiny_matching_profile (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, actor_id TEXT NOT NULL, origin TEXT NOT NULL, opted_in INTEGER NOT NULL,
+        seq INTEGER NOT NULL, tombstoned INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_matching_profile_actor ON mutiny_matching_profile(tenant_id, actor_id, origin);
+  validation_rules:
+    requirements:
+      - Profile input is validated strictly against the schema and unknown fields are rejected with VALIDATION_FAILED.
+      - Opt-in preconditions (disclosure, region, relay selection) are checked before any projection is signed.
+      - Incoming peer projections are verified before they influence matching; failures quarantine the record with a reason code.
+    rules:
+      - "V01 | maxCycleLength is an integer in 2..8 | VALIDATION_FAILED"
+      - "V02 | maxDistanceBucket is one of lt5, 5_10, 10_25, 25_50, gt50 | VALIDATION_FAILED"
+      - "V03 | optedIn true requires optInVersion equal to the current disclosure key and an explicit confirmation flag | MUTINY_OPTIN_REQUIRED"
+      - "V04 | optedIn true requires regionL1 from F06.S02.M02 (manual entry allowed) | MUTINY_PROFILE_REGION_REQUIRED"
+      - "V05 | excludedActorIds has ≤ 200 unique DIDs and does not contain the principal | MUTINY_EXCLUSION_LIMIT"
+      - "V06 | pausedUntil is in the future and ≤ now + 90 d | VALIDATION_FAILED"
+      - "V07 | peer projection signature verifies (Ed25519 over JCS), author DID matches signer, seq greater than stored and prev equals stored projectionCid | MUTINY_PROJECTION_INVALID"
+      - "V08 | peer projection createdAt is not more than 5 minutes after the local clock (claims from the future are quarantined) | MUTINY_PROJECTION_INVALID"
+  workflow_state_machine:
+    requirements:
+      - The local profile follows opted_out, opted_in and paused states and every change that alters the public projection increments seq by exactly 1.
+      - Opting out always publishes a signed tombstone, even when relays are unreachable, by queueing it in the sync outbox until transport acknowledged.
+      - A pause expires by local clock evaluation without a statement because pause is a local filter, not a public fact.
+    machines:
+      - entity: MatchingProfile
+        initial: opted_out
+        terminal: []
+        transitions:
+          - "opted_out -> opted_in | mutiny.matching_profile.update with optedIn true | V03 and V04 pass; signs projection seq+1; emits mutiny.matching_profile.updated"
+          - "opted_in -> opted_in | mutiny.matching_profile.update changing public fields | signs projection seq+1; emits mutiny.matching_profile.updated"
+          - "opted_in -> paused | update with pausedUntil | local only; emits mutiny.matching_profile.updated with paused true"
+          - "paused -> opted_in | pausedUntil reached or cleared | local evaluation; emits mutiny.matching_profile.updated"
+          - "opted_in -> opted_out | update with optedIn false | signs tombstone with seq+1; emits mutiny.matching_profile.updated"
+          - "paused -> opted_out | update with optedIn false | signs tombstone; emits mutiny.matching_profile.updated"
+    timeouts:
+      - "Pause end is evaluated on vault open and every 60 s while the PWA is open."
+      - "A projection not refreshed for 180 days is re-signed with a new seq on next vault open so relays do not drop it as stale."
+  commands_queries_events:
+    requirements:
+      - update is a vault command that may produce a signed projection statement; ingest is a vault command that verifies peer projections; queries are local.
+      - Statement delivery to user-selected relays goes through the sync outbox with states prepared, transport_acknowledged, peer_accepted, and the UI never shows more than the reached state.
+      - The module emits mutiny.matching_profile.updated for local changes and for accepted peer projections (actor.kind federated).
+    commands:
+      - name: mutiny.matching_profile.update
+        capability: mutiny.matching_profile.update
+        input: "{ optedIn?, confirmDisclosure?, optInVersion?, maxCycleLength?, maxDistanceBucket?, acceptsCompensation?, pausedUntil?, excludedActorIds?, expectedRevision? } — vault command; produces statement classrup.mutiny.matching_profile/v1 (projection or tombstone) when public fields change"
+        output: "{ profileId, revision, seq, syncState: local_committed | prepared }"
+        errors: [VALIDATION_FAILED, MUTINY_OPTIN_REQUIRED, MUTINY_PROFILE_REGION_REQUIRED, MUTINY_EXCLUSION_LIMIT, CONFLICT_REVISION]
+        emits: [mutiny.matching_profile.updated]
+        idempotent: true
+      - name: mutiny.matching_profile.ingest
+        capability: mutiny.matching_profile.ingest
+        input: "{ envelope: classrup.mutiny.matching_profile/v1 signed by its author } — vault command; produces no statement"
+        output: "{ actorId, seq, accepted: boolean, quarantineReason? }"
+        errors: [MUTINY_PROJECTION_INVALID, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        emits: [mutiny.matching_profile.updated]
+        idempotent: true
+    queries:
+      - name: mutiny.matching_profile.get_mine
+        capability: mutiny.matching_profile.read_own
+        input: "{}"
+        output: "{ profile: MatchingProfile, syncState, lastPublishedAt }"
+        errors: [NOT_FOUND]
+      - name: mutiny.matching_profile.list_known
+        capability: mutiny.matching_profile.read_projections
+        input: "{ actorIds?: did[] ≤ 200, optedInOnly? default true, cursor?, limit ≤ 200 }"
+        output: "{ items: { actorId, maxCycleLength, maxDistanceBucket, acceptsCompensation, regionL1, seq, projectionAsOf }[], nextCursor? }"
+        errors: []
+      - name: mutiny.matching_profile.check_eligible
+        capability: mutiny.matching_profile.read_projections
+        input: "{ actorIds: did[] ≤ 8, cycleLength }"
+        output: "{ results: { actorId, eligible, reason? }[] }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: mutiny.matching_profile.updated, privacy: P2, payload: "{ actorId, optedIn, paused, maxCycleLength, maxDistanceBucket, acceptsCompensation, seq, origin }"}
+    events_consumed:
+      - {type: identity.block.added, effect: "no profile change; eligibility function reads the block list at evaluation time"}
+      - {type: identity.block.removed, effect: "no profile change; eligibility re-evaluated on next read"}
+      - {type: discovery.location.updated, effect: "if the principal is opted in and regionL1 changed, update regionL1 and publish projection seq+1"}
+    errors:
+      - "MUTINY_OPTIN_REQUIRED | 422 | no | opt-in needs the current disclosure version and explicit confirmation"
+      - "MUTINY_PROFILE_REGION_REQUIRED | 422 | no | a home region at L1 or finer is required to opt in"
+      - "MUTINY_EXCLUSION_LIMIT | 422 | no | exclusion list is limited to 200 entries"
+      - "MUTINY_PROJECTION_INVALID | 422 | no | peer projection failed signature, sequence, chain or timestamp checks"
+    example: |
+      # vault command, actor = unlocked local principal did:key:z6MkAlice
+      mutiny.matching_profile.update  Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000b1
+      { "optedIn": true, "confirmDisclosure": true, "optInVersion": "mutiny.matching.optin.v1", "maxCycleLength": 3, "maxDistanceBucket": "5_10", "acceptsCompensation": false, "excludedActorIds": ["did:key:z6MkMallory"] }
+      -> { "profileId": "0192f3a5-…", "revision": 2, "seq": 1, "syncState": "prepared" }
+      statement sent to selected relays (excludedActorIds omitted):
+      { "v":1, "type":"classrup.mutiny.matching_profile/v1", "author":"did:key:z6MkAlice", "seq":1,
+        "payload": { "optedIn": true, "maxCycleLength": 3, "maxDistanceBucket": "5_10", "acceptsCompensation": false, "regionL1": "u0qj" }, "sig": "…" }
+  authorization_capabilities:
+    requirements:
+      - Only the unlocked local principal can change its profile; vault policy rejects every other actor.
+      - A peer projection is accepted only when signed by the DID it names; otherwise it is quarantined.
+      - Relay policy decides which projections a relay indexes; this module never grants a relay any right over the principal's profile.
+    capabilities:
+      - "mutiny.matching_profile.update | principal | vault unlocked"
+      - "mutiny.matching_profile.ingest | principal | envelope signature verifies and author DID equals envelope author"
+      - "mutiny.matching_profile.read_own | principal | own vault"
+      - "mutiny.matching_profile.read_projections | principal | own vault; returns only public projection fields of peers, never exclusions"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 and update uses expectedRevision for optimistic concurrency inside the vault.
+      - Projection publication is at-least-once through the sync outbox and receivers dedupe by cid.
+      - A crash between local commit and statement signing leaves the record committed with syncState local_committed and the next open re-prepares the statement.
+    idempotency: "Idempotency-Key replay 24 h; projections dedupe by cid, so re-sending the same seq is harmless."
+    concurrency: "expectedRevision on update; multi-device conflicts surface a resolve prompt for private fields and use the higher seq for the public projection after the user confirms; no silent merge."
+    retries: "Outbox retries per IDM-4 (base 500 ms, cap 30 s, max 6 attempts per relay, then waits for user or reconnect); a failed relay never blocks local state."
+    offline: "update commits locally and shows 'saved on this device, not yet published'; the projection waits in the outbox; matching in the vault already uses the new local values."
+    partial_failure: "If one of three selected relays acknowledges and others fail, the UI shows 1 of 3 relays acknowledged; the profile stays opted_in and the remaining deliveries retry."
+  privacy_retention_abuse:
+    requirements:
+      - Exclusions, pause reasons and block interactions never leave the vault in any event, log, projection or request.
+      - The published projection contains exactly four coarse fields plus region at L1 and the author DID, nothing finer than L2 location.
+      - Opt-in is explicit, versioned and withdrawable, and the UI states that already fetched copies cannot be recalled (PRV-6).
+    data:
+      - "MatchingProfile local record: P3."
+      - "Public projection: P0 fields {optedIn, maxCycleLength, maxDistanceBucket, acceptsCompensation, regionL1}."
+    retention:
+      - "Local profile: RET-STANDARD, deleted with the vault or on user request; tombstone kept 180 days by relays (PRV-6)."
+      - "Peer mirrors: kept while the projection is not older than 180 days and not tombstoned."
+    threats:
+      - "T01 | Inference of who a member excludes | exclusions never published; relay matching cannot apply them and recipient vaults drop suggestions silently"
+      - "T02 | Forged projection opts a victim in to matching | signature must verify against the DID in the envelope; suggestions involving a victim still require the victim's own signed consent"
+      - "T03 | Replay of an old projection to resurrect an opted-out member | seq and prev chain; tombstone with higher seq wins"
+      - "T04 | Location inference from region and distance bucket | regionL1 only (about 39 km by 19.5 km) and bucket enum; no finer cell published"
+    abuse_controls:
+      - "Local rate limit of 20 profile updates per day to bound relay write abuse."
+      - "Peer projections from an author that exceed 5 seq increments per hour are quarantined for 24 h."
+  observability_performance:
+    requirements:
+      - Local diagnostics record update and ingest outcomes without DIDs or exclusions and send nothing off the device (OBS-7).
+      - Relay deployments export projection ingest counts under CTR-OBS-001.
+      - Eligibility checks for 8 participants complete within 5 ms on a mid-range phone.
+    metrics:
+      - "classrup_mutiny_profile_ingest_total{outcome=accepted|quarantined|stale} (relay)"
+      - "classrup_mutiny_profile_optin_total{outcome=in|out} (relay, from projections it indexes)"
+    logs:
+      - "info matching_profile.updated {profileId, seq, optedIn, correlationId} — no exclusions, no DIDs of others."
+    budgets:
+      - "update p95 ≤ 100 ms local commit; projection signing ≤ 20 ms."
+      - "list_known for 200 actors p95 ≤ 50 ms from IndexedDB."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify the projection envelope against CTR-FED-001 and the schema registry, and that exclusions never appear in it.
+      - Abuse tests cover forged, replayed and future-dated projections.
+    fixtures: "Principal did:key:z6MkAlice with home region u0qj; peers Bob and Carol; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | update with each of V01..V06 violated in turn | documented error code and nothing stored"
+      - "T02 | contract | 01.R02,04.R02,07.R02,09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs"
+      - "T03 | unit | 01.R03,02.R03 | ingest valid, bad signature, lower seq, broken prev, future createdAt | accepted once, other four quarantined or ignored with reasons"
+      - "T04 | property | 03.R01,03.R02 | random sequences of update commands | seq increments by exactly 1 per public change; opt-out always yields tombstone"
+      - "T05 | integration | 03.R02,06.R03 | opt out while all relays unreachable | tombstone queued with state prepared and delivered on reconnect"
+      - "T06 | unit | 03.R03 | pausedUntil passes with injected clock | state returns to opted_in without any statement"
+      - "T07 | integration | 04.R01,04.R03,06.R01 | replay update with same key and different body | original response replayed; IDEMPOTENCY_KEY_REUSED"
+      - "T08 | abuse | 05.R01,05.R02,07.R01 | other actor updates profile; projection signed by wrong DID; request logs inspected | FORBIDDEN or quarantine; no exclusion in any log"
+      - "T09 | contract | 04.R02,05.R03 | sync state progression with fake relay | UI model shows only the reached state among local_committed, prepared, transport_acknowledged, peer_accepted"
+      - "T10 | abuse | 07.R03,07.R01 | opt-in without confirmation; replay of old projection after tombstone | MUTINY_OPTIN_REQUIRED; old projection ignored"
+      - "T11 | integration | 06.R02,06.R01 | two devices update concurrently | resolve prompt surfaced, higher seq wins public projection after confirmation"
+      - "T12 | load | 08.R03,08.R01 | check_eligible for 8 actors and list_known for 200 | within budgets on emulated Moto G"
+      - "T13 | unit | 08.R02,09.R01 | traceability tool run | every PS-019 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, rollback | local profile round-trips with exclusions; peer mirrors imported read-only"
+      - "T15 | e2e | 07.R03,02.R01 | mobile user opts in and out | disclosure shown, fetched-copy warning shown, axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - Exclusions are never present in any projection, event payload, log line or relay request (privacy suite).
+      - Opt-in requires explicit versioned confirmation and opt-out always produces a signed tombstone.
+  import_export_backup_rollback:
+    requirements:
+      - Export contains the local MatchingProfile including exclusions and the last published seq, but not peer mirrors, which are re-fetchable.
+      - Import restores the local profile and requires the user to re-confirm opt-in before the next projection is published.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.matching_profile in classrup-export/v1; exactly one line for the local profile (schema classrup.mutiny.matching_profile/v1)."
+    import: "Imported profile gets optedIn false until the user confirms again; seq continues from the stored value so earlier tombstones are not contradicted."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only signed public projections (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback ignores unknown fields; old releases ignore new distance buckets by treating them as gt50 only for peers, never for the local record."

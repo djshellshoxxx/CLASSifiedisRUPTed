@@ -47,7 +47,7 @@ processes:
       - A CycleSuggestion stores an ordered ring of legs (giver, receiver, item, satisfied want), its cycleKey, score tuple, mode, expiry and status; it is advice and contains no consent, reservation or signature of any participant.
       - The cycleKey is sha256 over the RFC 8785 JCS bytes of the ring rotated so the smallest giver DID is first, so the same cycle yields the same key in every vault and on every relay.
       - A CompatibilityGraph is a derived, short-lived cache of nodes and edges plus run statistics (expansions, duration, truncation) and an inputHash used to prove determinism; it is never exported and is purged after 24 h.
-      - Edge, node and result caps are fixed numbers: at most 2000 nodes, 20000 edges, 8 legs per cycle and 500 suggestions per run.
+      - Edge, node and result caps are fixed numbers, at most 2000 nodes, 20000 edges, 8 legs per cycle and 500 suggestions per run.
     entities:
       - name: CycleSuggestion
         schema: classrup.mutiny.cycle_suggestion/v1
@@ -309,7 +309,7 @@ processes:
       - Fixtures include explicit 2-, 3-, 4- and 6-party cycles and a greedy conflict case.
     fixtures: "Graphs g2 (a1<->a2), g3 (a3,a4,a5), g4 (b1..b4), g6 (c1..c6 ring), gG (n1..n4 greedy case), gDense (1000 nodes, 5000 edges, seed 42); fixed clock 2026-11-04T10:00:00Z; seeded fast-check with 200 runs per PR and 10000 nightly."
     tests:
-      - "T01 | unit | 01.R01,01.R02,04.R01 | run on g2, g3, g4 | suggestions of length 2, 3, 4 with stable cycleKey rotated to smallest DID; no statement emitted"
+      - "T01 | unit | 01.R01,01.R02,04.R01,09.R04 | run on g2, g3, g4 | suggestions of length 2, 3, 4 with stable cycleKey rotated to smallest DID; no statement emitted"
       - "T02 | unit | 01.R04,02.R01,02.R02 | Lmax 1 and 9, and graph with 2001 nodes | MUTINY_LMAX_INVALID and MUTINY_GRAPH_TOO_LARGE respectively"
       - "T03 | property | 09.R02,01.R01 | random graphs up to 60 nodes | every suggestion is elementary, has distinct participants, distinct items, length ≤ Lmax and receiverId of leg i equals giverId of leg i+1"
       - "T04 | property | 09.R02,06.R02 | same random graph and parameters run twice, and with shuffled input order | byte-identical output and equal inputHash"

@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { appError } from '../errors/app-error.ts';
 import { err, ok } from '../errors/result.ts';
 import type { EventEnvelope } from '../events/envelope.ts';
+import { sweepRetention } from './maintenance.ts';
 import { defineRepo } from './repo.ts';
 import { writeScope } from './scope.ts';
 import type { Storage } from './storage.ts';
@@ -280,6 +281,74 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       const draft = await put(new Uint8Array([4, 2]), 'P3', true);
       const published = await put(new Uint8Array([4, 2]), 'P0', true);
       expect([draft.ok && draft.value.privacy, published.ok && published.value.privacy]).toEqual(['P3', 'P0']);
+    });
+
+    it(`TEST-PS-119-09.T17 ${adapter}: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction`, async () => {
+      const s = await make();
+      const thread = defineRepo({ type: 'test.thread', schema: z.strictObject({ media: z.array(z.string()) }), blobs: (d) => d.media });
+      const put = async (bytes: number[], encrypted: boolean, tenantId = 'tenant-a') => {
+        const r = await s.transaction((tx) => scoped(tx, tenantId).blobs.put(new Uint8Array(bytes), { contentType: 'image/png', privacy: encrypted ? 'P2' : 'P0', encrypted }));
+        return r.ok ? r.value.ref : '';
+      };
+      const sealed = await put([9, 1], true);
+      const sealed2 = await put([9, 2], true);
+      const plain = await put([9, 3], false);
+      await s.transaction((tx) => scoped(tx).repo(thread).put('t1', { media: [sealed, sealed2, plain] }, { expectedRevision: 0 }));
+      const swap = await s.transaction((tx) => {
+        const r = scoped(tx).repo(thread).put('t1', { media: [sealed2] }, { expectedRevision: 1 });
+        return r.ok ? ok(scoped(tx).blobs.shredded()) : r;
+      });
+      expect(swap.ok && swap.value).toEqual([sealed]);
+      expect(await s.read((tx) => [scoped(tx).blobs.info(sealed), scoped(tx).blobs.info(plain)])).toEqual([undefined, undefined]);
+      const rolledBack = await s.transaction((tx) => {
+        const r = scoped(tx).repo(thread).remove('t1', { expectedRevision: 2 });
+        return r.ok ? err(appError('CONFLICT_STATE', { params: { shredded: scoped(tx).blobs.shredded() } })) : r;
+      });
+      expect(!rolledBack.ok && rolledBack.error.params).toEqual({ shredded: [sealed2] });
+      expect(await s.read((tx) => [scoped(tx).blobs.info(sealed2)?.holders, tx.blobs.shredded()])).toEqual([1, []]);
+      const removed = await s.transaction((tx) => {
+        const r = scoped(tx).repo(thread).remove('t1', { expectedRevision: 2 });
+        return r.ok ? ok({ mine: scoped(tx).blobs.shredded(), other: scoped(tx, 'tenant-b').blobs.shredded() }) : r;
+      });
+      expect(removed.ok && removed.value).toEqual({ mine: [sealed2], other: [] });
+      expect(await s.read((tx) => scoped(tx).blobs.get(sealed2))).toBeUndefined();
+      const orphan = await put([9, 4], true, 'tenant-b');
+      await put([9, 5], false, 'tenant-b');
+      const swept = await s.transaction((tx) => ok({ n: tx.blobs.collectOrphans(clock.now() + 1), all: tx.blobs.shredded(), b: scoped(tx, 'tenant-b').blobs.shredded() }));
+      expect(swept.ok && swept.value).toEqual({ n: 2, all: [{ tenant: 'tenant-b', ref: orphan }], b: [orphan] });
+    });
+
+    it(`TEST-PS-119-09.T09 ${adapter}: inbox rows are pruned with their events; dead letters are kept 30 days and hold their event until purged`, async () => {
+      const s = await make();
+      const DAY = 86_400_000;
+      const at = T0 - 15 * DAY;
+      const old = (id: string, agg: string) => ({ ...env(id, agg, 1), occurredAt: new Date(at).toISOString() });
+      await s.transaction((tx) => {
+        for (const e of [old('p1', 'A'), old('p2', 'B'), old('p3', 'C'), env('n1', 'D', 1)]) tx.outbox.append(e);
+        tx.inbox.markDone({ consumer: 'c1', envelope: old('p1', 'A'), now: at }, 1);
+        tx.inbox.markDone({ consumer: 'c2', envelope: old('p1', 'A'), now: at }, 1);
+        tx.inbox.markDead({ consumer: 'c1', envelope: old('p2', 'B'), now: at }, 8, 'INTERNAL');
+        tx.inbox.markDone({ consumer: 'c2', envelope: old('p2', 'B'), now: at }, 1);
+        tx.inbox.markRetry({ consumer: 'c1', envelope: old('p3', 'C'), now: at }, 2, at + 1000, 'INTERNAL');
+        tx.inbox.markDone({ consumer: 'c1', envelope: env('n1', 'D', 1), now: T0 }, 1);
+        return ok(undefined);
+      });
+      const rows = (tx: Tx) => ({
+        outbox: ['p1', 'p2', 'p3', 'n1'].filter((id) => tx.outbox.get(id)),
+        inbox: (['c1:p1', 'c2:p1', 'c1:p2', 'c2:p2', 'c1:p3', 'c1:n1'] as const).filter((key) => {
+          const [consumer = '', eventId = ''] = key.split(':');
+          return tx.inbox.get(consumer, eventId) !== undefined;
+        }),
+        dead: tx.deadLetters.list(undefined).map((d) => d.eventId),
+      });
+      const first = await s.transaction((tx) => ok(sweepRetention(tx, T0)));
+      expect(first.ok && first.value).toEqual({ deadLetters: 0, outbox: 2, idempotency: 0 });
+      expect(await s.read(rows)).toEqual({ outbox: ['p2', 'n1'], inbox: ['c1:p2', 'c2:p2', 'c1:n1'], dead: ['p2'] });
+      const edge = await s.transaction((tx) => ok(tx.deadLetters.purgeBefore(at)));
+      expect(edge.ok && edge.value).toBe(0);
+      const later = await s.transaction((tx) => ok(sweepRetention(tx, at + 30 * DAY + 1)));
+      expect(later.ok && later.value).toEqual({ deadLetters: 1, outbox: 2, idempotency: 0 });
+      expect(await s.read(rows)).toEqual({ outbox: [], inbox: [], dead: [] });
     });
 
     it(`TEST-PS-119-09.T09 ${adapter}: purge removes expired idempotency rows and outbox rows older than the cutoff`, async () => {

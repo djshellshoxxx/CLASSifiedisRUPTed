@@ -275,7 +275,7 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
           .filter((b) => cmp(b.createdAt, createdBefore) < 0 && state.groupKeys('blob_refs', k(b.tenant, b.ref)).size === 0)
           .sort((a, b) => cmp(a.createdAt, b.createdAt) || cmp(a.tenant, b.tenant) || cmp(a.ref, b.ref))
           .slice(0, limit)
-          .map((b) => ({ tenant: b.tenant, ref: b.ref })),
+          .map((b) => ({ tenant: b.tenant, ref: b.ref, encrypted: b.encrypted })),
     },
     migrations: {
       list: () => [...state.table<MigrationRow>('schema_migrations').values()].sort((a, b) => cmp(a.appliedAt, b.appliedAt) || cmp(a.id, b.id)),

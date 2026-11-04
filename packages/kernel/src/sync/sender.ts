@@ -64,27 +64,30 @@ export function createSyncSender(o: SyncSenderOptions): SyncSender {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running: Promise<unknown> = Promise.resolve();
 
+  const isExpired = (entry: SyncEntry, now: number): boolean => now - Date.parse(entry.createdAt) >= expireAfter;
+
   async function apply(entry: SyncEntry, r: Result<TransportReceipt, AppError>): Promise<Step> {
     const now = o.clock.now();
     const attempts = entry.attempts + 1;
     const res = await o.storage.transaction((tx) => {
       if (r.ok) return tx.sync.transition(entry.id, 'transport_ack', { attempts, receipt: { transport: r.value.receipt ?? null }, nextAttemptAt: null, lastError: null }, now);
-      const expired = now - Date.parse(entry.createdAt) >= expireAfter;
+      const expired = isExpired(entry, now);
       if (!r.error.retryable || expired) return tx.sync.transition(entry.id, 'fail', { attempts, lastError: expired ? 'EXPIRED' : r.error.code, nextAttemptAt: null }, now);
       const next = new Date(now + fullJitterDelay(attempts, random, o.backoff)).toISOString();
       return tx.sync.transition(entry.id, 'retry_later', { attempts, lastError: r.error.code, nextAttemptAt: next }, now);
     });
     if (!res.ok) return 'retried';
     const step: Step = res.value.state === 'transport_acknowledged' ? 'sent' : res.value.state === 'failed' ? 'failed' : 'retried';
-    if (step === 'failed') reportFailed(entry, res.value.lastError ?? (r.ok ? 'OK' : r.error.code));
-    else total?.inc({ outcome: step, code: r.ok ? 'OK' : r.error.code });
+    const sendCode = r.ok ? 'OK' : r.error.code;
+    if (step === 'failed') reportFailed(entry, res.value.lastError ?? sendCode, sendCode);
+    else total?.inc({ outcome: step, code: sendCode });
     return step;
   }
 
-  const isExpired = (entry: SyncEntry, now: number): boolean => now - Date.parse(entry.createdAt) >= expireAfter;
 
-  function reportFailed(entry: SyncEntry, code: string): void {
-    total?.inc({ outcome: 'failed', code });
+  /** `code` is the entry's lastError; `sendCode` the transport result of the attempt, when one was made. */
+  function reportFailed(entry: SyncEntry, code: string, sendCode = code): void {
+    total?.inc({ outcome: 'failed', code: sendCode });
     log.warn('sync.failed', { code, entryId: entry.id, ref: entry.ref });
   }
 

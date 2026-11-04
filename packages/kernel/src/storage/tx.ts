@@ -466,7 +466,7 @@ export interface ShreddedBlob {
  */
 function blobStore(d: DriverTx, kind: DriverKind) {
   const shredded: ShreddedBlob[] = [];
-  const removeBlob = (b: BlobRow): void => {
+  const removeBlob = (b: Pick<BlobRow, 'tenant' | 'ref' | 'encrypted'>): void => {
     d.blobs.remove(b.tenant, b.ref);
     if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
   };
@@ -513,10 +513,7 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     /** Deletes stored blobs that no record references and that were created before the cutoff. */
     collectOrphans(createdBefore: number, limit = 100): number {
       const list = d.blobs.orphans(toIso(createdBefore), limit);
-      for (const o of list) {
-        const blob = d.blobs.get(o.tenant, o.ref);
-        if (blob) removeBlob(blob);
-      }
+      for (const o of list) removeBlob(o);
       return list.length;
     },
     /** Encrypted blobs deleted so far in this transaction (empty again after rollback: the list dies with it). */

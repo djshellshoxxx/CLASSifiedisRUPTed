@@ -199,8 +199,8 @@ export interface DriverTx {
     holders(tenant: string, ref: string): number;
     attach(tenant: string, ref: string, holder: string): void;
     detach(tenant: string, ref: string, holder: string): void;
-    /** Refs of stored blobs without holders created before the cutoff, oldest first. */
-    orphans(createdBefore: string, limit: number): { tenant: string; ref: string }[];
+    /** Refs of stored blobs without holders created before the cutoff, oldest first (no bytes read). */
+    orphans(createdBefore: string, limit: number): { tenant: string; ref: string; encrypted: boolean }[];
   };
   readonly migrations: {
     list(): MigrationRow[];

@@ -201,7 +201,7 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
       attach: (t, ref, holder) => void run('INSERT OR IGNORE INTO blob_refs (tenant, ref, holder) VALUES (?, ?, ?)', t, ref, holder),
       detach: (t, ref, holder) => void run('DELETE FROM blob_refs WHERE tenant = ? AND ref = ? AND holder = ?', t, ref, holder),
       orphans: (before, limit) =>
-        all('SELECT b.tenant, b.ref FROM blobs b WHERE b.created_at < ? AND NOT EXISTS (SELECT 1 FROM blob_refs r WHERE r.tenant = b.tenant AND r.ref = b.ref) ORDER BY b.created_at, b.tenant, b.ref LIMIT ?', [before, limit]).map((r) => ({ tenant: s(r['tenant']), ref: s(r['ref']) })),
+        all('SELECT b.tenant, b.ref, b.encrypted FROM blobs b WHERE b.created_at < ? AND NOT EXISTS (SELECT 1 FROM blob_refs r WHERE r.tenant = b.tenant AND r.ref = b.ref) ORDER BY b.created_at, b.tenant, b.ref LIMIT ?', [before, limit]).map((r) => ({ tenant: s(r['tenant']), ref: s(r['ref']), encrypted: n(r['encrypted']) === 1 })),
     },
     migrations: {
       list: () => all('SELECT * FROM schema_migrations ORDER BY applied_at, id', []).map(toMigration),

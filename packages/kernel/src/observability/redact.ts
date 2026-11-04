@@ -5,7 +5,7 @@ const DROP_KEYS = new Set([
   'token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'address', 'lat', 'lon', 'note', 'body', 'ciphertext',
   'authorization', 'cookie', 'setcookie', 'passphrase', 'apikey', 'latitude', 'longitude', 'lng', 'plaintext',
 ]);
-const DROP_SUFFIXES = ['token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'ciphertext', 'passphrase'];
+const DROP_SUFFIXES = ['token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'address', 'note', 'body', 'ciphertext', 'passphrase'];
 const IP_KEYS = new Set(['ip', 'ipaddress', 'remoteaddress', 'clientip', 'remoteip', 'forwardedfor', 'xforwardedfor', 'xrealip']);
 const MAX_DEPTH = 8;
 const MAX_STRING = 2048;

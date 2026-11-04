@@ -244,7 +244,7 @@ processes:
       - Contract tests check statements and events against the schema registry.
     fixtures: "Principal P with device keys K1, K2, K3 and recovery key R, counterparty Q with key Kq, relays X and Y, fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R03,02.R01 | register K2 with link statement signed by K1 and K2 | KeyRecord stored active, keyId equals thumbprint, event emitted"
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | register K2 with link statement signed by K1 and K2 | KeyRecord stored active, keyId equals thumbprint, event emitted"
       - "T02 | unit | 02.R02,02.R03 | each rule V02–V07 violated | documented error code and nothing stored"
       - "T03 | property | 01.R03,03.R01 | random sequences of register, revoke, expire, conflict resolution | revoked and expired never change; revoked never returns to active"
       - "T04 | integration | 03.R03,06.R03 | expiry sweep missed; revocation arrives before key | verification denies expired key; pending revocation applied when key appears"

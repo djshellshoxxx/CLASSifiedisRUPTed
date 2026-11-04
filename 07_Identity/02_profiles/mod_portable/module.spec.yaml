@@ -241,7 +241,7 @@ processes:
       - "T10 | chaos | 06.R01,06.R02,06.R03 | duplicate delivery, crash after sign but before commit, one of three relays down | one document per cid; no half-committed seq; per-relay states shown"
       - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect document for P3 fields and private keys; stolen device key tries to sign a document; relay receives 11 documents per hour for one DID | no private data; device-key signature rejected; 11th RATE_LIMITED"
       - "T12 | load | 08.R01,08.R02,08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms"
-      - "T13 | a11y | 04.R03,01.R04 | identity document and contact screens with axe-core | zero serious or critical issues; contested warning announced"
+      - "T13 | a11y | 04.R03,01.R03 | identity document and contact screens with axe-core | zero serious or critical issues; contested warning announced"
       - "T14 | unit | 09.R01,09.R03 | traceability run over PS-055 | every requirement maps to a passing test"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export, import in a fresh vault, relay backup restore | documents round-trip with provenance; invalid signatures rejected on import"
     acceptance:

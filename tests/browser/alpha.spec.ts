@@ -199,8 +199,8 @@ for (const count of [2, 3, 4]) {
       for (const [i, page] of pages.entries()) {
         const own = JSON.parse(listings[i]!.toString()) as { cid: string };
         const requested = JSON.parse(listings[(i + 1) % count]!.toString()) as { cid: string };
-        await page.getByLabel('I offer my published item', { exact: true }).selectOption(own.cid);
-        await page.getByLabel('I want this retained peer item', { exact: true }).selectOption(requested.cid);
+        await page.getByLabel('I offer my published item').selectOption(own.cid);
+        await page.getByLabel('I want this retained peer item').selectOption(requested.cid);
         wants.push(await downloadedAction(page, 'Sign and download this want'));
       }
       for (const [i, page] of pages.entries()) {
@@ -227,6 +227,26 @@ for (const count of [2, 3, 4]) {
         await page.reload();
         await unlock(page, `party${i}`);
         await expect(page.getByRole('heading', { name: /Proposal .* · committed/ })).toBeVisible();
+      }
+      if (count === 2) {
+        const withdrawal = await downloadedAction(coordinator, 'Withdraw from this proposal');
+        await importBarter(pages[1]!, withdrawal);
+        for (const page of pages) {
+          await expect(page.getByRole('heading', { name: /Proposal .* · cancelled/ })).toHaveCount(1);
+          await expect(page.getByRole('button', { name: 'Release local hold', exact: true })).toHaveCount(0);
+          await page.getByLabel('Include unfamiliar signing identities', { exact: false }).check();
+        }
+        // A fresh proposal receives no consent; advance the explicit virtual clock past its deadline.
+        await coordinator.getByRole('button', { name: 'Discover compatible cycles', exact: true }).click();
+        const unanswered = await downloadedAction(coordinator, 'Propose this exact cycle');
+        await importBarter(pages[1]!, unanswered);
+        for (const page of pages) {
+          await page.clock.setFixedTime(new Date(start + 78 * 60000));
+          await page.getByRole('button', { name: 'Refresh barter records', exact: true }).click();
+          await expect(page.getByRole('heading', { name: /Proposal .* · cancelled/ })).toHaveCount(2);
+          await expect(page.getByRole('heading', { name: /Proposal .* · proposed/ })).toHaveCount(0);
+          await expect(page.locator('#barter')).toContainText('consent_timeout');
+        }
       }
     } finally { await Promise.all(contexts.map(context => context.close())); }
   });

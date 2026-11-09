@@ -96,7 +96,7 @@ Export browser data using the application's recovery flow before a substantial a
 | --- | --- | --- | --- |
 | Linux, Node 24.22.1 | Working tree based on `3694395272e880d929fcb53693ddd70e14bc47bf` | `node --test tests/cli/*.test.mjs` | 15 passed during implementation |
 | Windows / macOS | Same intended source | CI matrix `.github/workflows/cli-setup.yml` | Not yet executed locally; do not count as passed |
-| Linux actual app | Integrated source required | `node tests/cli/browser-smoke.mjs` | Integration owner records result after PWA lands |
+| Linux actual app | Integrated source required | `node tests/cli/browser-smoke.mjs` | Production build and 8 Firefox native-browser journeys passed; Chromium smoke blocked as detailed below |
 
 The CLI unit suite covers paths with spaces, repeat/concurrent/interrupted setup, invalid/missing settings, unsupported runtime detection, occupied ports, safe public serving, traversal rejection, security headers and nonzero failure exits. The separate browser smoke starts actual `dev` and `preview`, checks real page rendering, reload and offline shell loading in Chromium, and cleans up processes. It does not replace the milestone's full multi-principal browser journeys or Firefox/WebKit verification.
 

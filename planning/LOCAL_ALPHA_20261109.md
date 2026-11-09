@@ -57,5 +57,42 @@ Terminal interface correction: `pnpm setup` is a built-in pnpm operation; projec
 
 ## Browser environment evidence
 
-Firefox 157 installed through Playwright's supported fallback mirror. Four real journeys passed for isolated peer signing/import/tamper handling, restart/offline reload, wrong credentials/lock clearing, encrypted backup restore and concurrent writer exclusion. A fifth mobile390 journey passed with no horizontal overflow, visible button targets >=44px and focused error feedback; screenshot inspected.
+Firefox 157 installed through Playwright's supported fallback mirror. Four real journeys passed for isolated peer signing/import/tamper handling, restart/offline reload, wrong credentials/lock clearing, encrypted backup restore and concurrent writer exclusion. A fifth mobile 390 journey passed with no horizontal overflow, visible button targets >=44px and focused error feedback; screenshot inspected.
 Chromium system binary failed before app launch: Unix socket creation EPERM. Full/headless-shell CDN downloads returned corrupt 0 MiB archives after built-in retries. WebKit installed, but runtime libraries are missing; `playwright install-deps webkit` failed with `su: System error`. These engines are unverified, not passing. Windows/macOS CI is defined but not yet executed.
+
+## Final reviewed implementation checkpoint
+
+Implementation local commit: `de20626fd26087007836c947627d92457cebb8cf`.
+Equivalent published commit: `6ca0323bfcceaba55c0b2398884b398d04841a87`.
+Both have exact tree `bb08f42d40086a000ba5435b1744f52242936e67` (verified locally and through GitHub). Shell Git push had no credential; the authorized GitHub connector published the identical tree. Subsequent checkpoint changes are browser-test selector/evidence updates and CI concurrency, not product behavior changes.
+PR: https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/10 (draft, stacked on the Stage 3/4 implementation branch). Nothing merged, deployed or released. Existing PRs #1–#9 remain intact.
+
+| Check | Environment | Result |
+|---|---|---|
+| `corepack pnpm install --frozen-lockfile` | Linux Node 24.22.1 / pnpm 10.28.0 | Passed; lockfile current |
+| `corepack pnpm typecheck` | Same | Passed |
+| `corepack pnpm test --reporter=json --outputFile=…` | Same | 162/162 passed across 29 files |
+| `corepack pnpm run test:cli` | Same | 15/15 passed, including service-worker cache boundaries |
+| `corepack pnpm run test:tooling` | Same | 4/4 passed |
+| `corepack pnpm spec:check` | Same | 148/148 specified, zero errors, 33 warnings unresolved |
+| `corepack pnpm deps:check` | Same | Zero errors; shared signing primitives moved to security layer |
+| `corepack pnpm trace --results …` | Same | 99/4510 canonical requirements covered; not milestone closure |
+| `corepack pnpm run setup --non-interactive` repeated | Same | Preserved configuration byte-for-byte |
+| `corepack pnpm run doctor` / `corepack pnpm build` | Same | Passed after final integration |
+| `corepack pnpm exec playwright test --project=firefox` | Firefox 157 / Linux | **8/8 passed**, final combined run 1.5 min |
+| Chromium / WebKit local journeys | Linux | Blocked before application assertions as described above |
+| Windows/macOS and full GitHub browser matrix | GitHub Actions | Defined; final-head status must be checked, not claimed passed |
+
+Firefox evidence includes real separate principals, signed-file listing/want/proposal/reservation/consent exchange, 2/3/4-party commitment and restart, signed dropout broadcast with cancelled coordination and released holds, unanswered proposal timeout, peer tamper rejection, repeated upload, encrypted backup restore, wrong passphrase, offline reload, concurrent-tab writer exclusion and mobile 390 layout/error focus. Barter tests explicitly advance virtual browser Date 16 minutes for the specified want aging interval; production does not bypass that interval. Domain persistence tests use the production adapter with fake-indexeddb; Firefox tests use native IndexedDB.
+
+Independent reviewers covered graph oracle correctness, cryptographic boundaries, transaction rollback, recovery normalization and local reservation/consent authorization. This is scoped engineering review, not formal certification or full specification approval.
+
+## Remaining work in dependency order
+
+1. **Foundation/protocol** (`packages/security`, `identity`, `federation`, `vault`): complete private-record encryption, delegated device/rotation/revocation/recovery contracts, complete IOX backup scope and migrations; implement canonical global-author streams/gap buffering plus encrypted participant exchange. Preserve the explicitly marked alpha protocol until tested migrations exist.
+2. **Canonical domain closure** (`packages/bazaar`, `discovery`, `mutiny`, relevant YAML): reconcile 33 specification warnings; category/profile wants, quantities, compensation, signed releases, full lifecycle/recovery semantics; map new executed tests to stable requirement IDs. Do not reinterpret the current 99/4510 trace as broad completion.
+3. **Product workflows** (`apps/pwa`): draft editing UI, counteroffer/revision editor, explicit frozen-conflict recovery, handover/receipt evidence, complete accessibility/localization and usability checks. Current UI supports signed exact-item proposal, reserve, consent, dropout and viewing frozen recovery states.
+4. **Release evidence** (`tests/browser`, `.github/workflows`): inspect PR #10 current-head CI; resolve any failures without weakening assertions. Run Chromium/WebKit and Windows/macOS matrix; add service-worker upgrade, storage-denial/eviction and migration journeys. Manual assistive-technology testing remains unpassed.
+5. **Consolidation**: review the complete Stage 3/4 base plus this alpha with current heads. Merge only eligible dependency-ordered changes; preserve unique mock/storage continuation work and other contributor branches. No superseded PR has been closed without preservation proof.
+
+Next reproducible commands are README's frozen install/setup/doctor/dev and validation block. Focused browser command: `corepack pnpm exec playwright test --project=firefox`. No agents remain responsible for background work after this handoff.

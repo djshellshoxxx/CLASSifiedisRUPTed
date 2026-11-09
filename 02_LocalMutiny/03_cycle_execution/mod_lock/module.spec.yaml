@@ -11,7 +11,7 @@ summary: >-
   committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects.
   The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement.
 responsibilities:
-  - Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d).
+  - "Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d)."
   - Renew the local hold internally with bazaar.inventory.renew before it lapses, up to the statement's absolute expiresAt and never beyond the hold's maxExpiresAt, without re-signing.
   - Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1.
   - Verify peers' reservation statements and release notices (storing the generic statement through bazaar.inventory.record_peer_reservation), detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.

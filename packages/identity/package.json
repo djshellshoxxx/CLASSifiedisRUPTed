@@ -16,6 +16,8 @@
     "@classrup/privacy": "workspace:*",
     "@classrup/platform": "workspace:*",
     "@classrup/i18n": "workspace:*",
-    "@classrup/governance": "workspace:*"
+    "@classrup/governance": "workspace:*",
+    "@noble/hashes": "2.4.0",
+    "@noble/ciphers": "2.4.0"
   }
 }

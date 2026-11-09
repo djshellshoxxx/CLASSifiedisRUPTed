@@ -1,4 +1,10 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["packages/*/src/**/*.ts", "apps/relay/src/**/*.ts", "tests/**/*.ts", "tools/**/*.ts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/relay/src/**/*.ts",
+    "tests/**/*.ts",
+    "tools/**/*.ts",
+    "apps/pwa/src/**/*.ts"
+  ]
 }

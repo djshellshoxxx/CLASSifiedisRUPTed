@@ -13,13 +13,25 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "trace": "node tools/trace/trace.mjs",
-    "deps:check": "node tools/deps/deps.mjs"
+    "deps:check": "node tools/deps/deps.mjs",
+    "setup": "node tools/cli/classrup.mjs setup",
+    "doctor": "node tools/cli/classrup.mjs doctor",
+    "dev": "node tools/cli/classrup.mjs dev",
+    "build": "node tools/cli/classrup.mjs build",
+    "preview": "node tools/cli/classrup.mjs preview",
+    "test:cli": "node --test tests/cli/*.test.mjs",
+    "test:browser": "playwright test",
+    "configure": "node tools/cli/classrup.mjs configure",
+    "test:tooling": "node --test tests/tooling/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "fast-check": "4.10.2",
     "typescript": "7.0.2",
     "vitest": "5.1.0",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "esbuild": "0.27.0",
+    "@playwright/test": "1.64.1",
+    "fake-indexeddb": "6.2.6"
   }
 }

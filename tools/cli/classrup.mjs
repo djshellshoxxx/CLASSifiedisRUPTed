@@ -155,17 +155,34 @@ export async function doctor(root = ROOT) {
   await checkPort(config);
   return config;
 }
+async function assertSafePublicAssets(directory, optional = false) {
+  let stat;
+  try { stat = await fs.lstat(directory); }
+  catch (error) { if (optional && error.code === 'ENOENT') return; throw error; }
+  if (stat.isSymbolicLink()) throw new Error('Public build assets must not contain symbolic links.');
+  if (!stat.isDirectory()) throw new Error('Public build assets must be regular files in real directories.');
+  for (const name of await fs.readdir(directory)) {
+    const asset = path.join(directory, name);
+    const entry = await fs.lstat(asset);
+    if (entry.isSymbolicLink()) throw new Error('Public build assets must not contain symbolic links.');
+    if (entry.isDirectory()) await assertSafePublicAssets(asset);
+    else if (!entry.isFile()) throw new Error('Public build assets must contain only regular files.');
+  }
+}
 export async function build(root = ROOT) {
   const config = await readConfig(root);
   const { build: bundle } = await import('esbuild');
   const source = path.join(root, 'apps/pwa');
   const output = path.join(root, 'dist');
   const staging = path.join(root, `.classrup/build-${randomUUID()}`);
+  await assertSafePublicAssets(path.join(source, 'public'), true);
   await fs.mkdir(staging, { recursive: true });
   try {
     const html = await fs.readFile(path.join(source, 'index.html'), 'utf8');
     await bundle({ entryPoints: [path.join(source, 'src/main.ts')], outfile: path.join(staging, 'app.js'), bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, sourcemap: false, write: true });
     await fs.cp(path.join(source, 'public'), staging, { recursive: true }).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    // A source may change during copying: check the staged tree before reading or rewriting sw.js.
+    await assertSafePublicAssets(staging);
     await fs.writeFile(path.join(staging, 'index.html'), html);
     const workerPath = path.join(staging, 'sw.js');
     let worker;

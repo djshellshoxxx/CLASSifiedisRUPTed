@@ -72,3 +72,16 @@ Release procedure is **not automatic**: settle PR #8 → #10 branch dependencies
 A separate **draft, unmerged** [FED/IOX/ADR-0016 source-to-acceptance gap matrix](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/15) maps canonical federation and recovery requirements to the current alpha source and enumerates negative-test gates. It is an implementation plan, **not** a protocol amendment or proof that incomplete features are available. In particular, alpha per-subject chains do not supply canonical per-author gap buffering, and the encrypted alpha backup does not include complete JSONL export, media and recovery-kit scope. Follow the existing approved contracts before making changes.
 
 Canonical federation and device recovery; private-record encryption and migration; quantity-aware stock; complete counteroffer/handover UX; conflict resolution; expanded negative/regression testing and threat review; live wiki publication. The [project TODO](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/blob/429fcfca9735a323a6ce709d8605429d6c850fdb/PROJECT_TODO.md) and [continuation specification](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/11) track the intended direction; they are not assertions of completion.
+
+
+### Test-first kernel outbox qualification (draft, not integrated)
+
+The kernel shares an event outbox across vault and optional relay storage adapters. A retry must not suppress an independent event stream with the same aggregate ID under a different tenant or aggregate type. Isolated [draft PR #16](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/16) adds regression coverage and proposes a scoped fix to the dispatcher, memory/IndexedDB-backed pending query, and relay SQLite pending query. **PR #16 is not merged or released.** Its earliest test-only GitHub Actions domain job failed as expected at the Vitest stage; exact-head qualification of the fix must be checked independently.
+
+After checking out PR #16's head, a contributor can run the focused test with:
+
+```sh
+corepack pnpm exec vitest run packages/kernel/src/outbox/dispatcher.isolation.test.ts
+```
+
+Only a completed test run on the **current** PR head establishes evidence. Do not infer that this fixes canonical federation ordering (CTR-FED-001 FED-3); the outbox is a different internal domain-event delivery mechanism.

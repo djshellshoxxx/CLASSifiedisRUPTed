@@ -180,3 +180,37 @@ Inspect [Alpha 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/
 ### CI supersession after handoff write (2026-11-10 UTC)
 
 The two initially observed corrective-head CI runs above, [Alpha 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030737) and [CLI 42853030772](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030772), were subsequently **cancelled** by workflow concurrency/supersession. Replacement exact-head runs were [Alpha 42853469274](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469274) and [CLI 42853469290](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469290), both **in progress** at this reinspection and still pinned to `f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f`. Do **not** count cancelled runs as success. No further PR #17 code or metadata updates until these runs settle. The next invocation must read the latest workflow attempts rather than relying on the superseded URLs.
+
+
+---
+
+## Hourly continuation 6 — 2026-11-10 UTC (latest verified checkpoint)
+
+### Startup, active ownership, previous run and exact-head CI
+
+- Read the prior handoff, [draft PR #11](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/11) continuation instructions, active draft PRs, recent commit search, instructions and source. No root `AGENTS.md` exists on inspected main/alpha ref. `main` remains planning-only `95c46be41233520382566360e7135011412e8e6e`; PR #10 is unmerged at `429fcfca9735a323a6ce709d8605429d6c850fdb` stacked on PR #8. Claude-owned specs PR #18 is in progress; its branch/files were not changed.
+- **Prior PR #17 completed exact-head qualification:** Proposed correction `f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f` passed replacement [Alpha CI run 42853469274](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469274) (**domain success**) and [CLI CI run 42853469290](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469290) (**6/6** Ubuntu/macOS/Windows × Node 22.18/24 jobs). Earlier runs 42853030737/42853030772 were cancelled/superseded, not successful. The original regression-only baseline `18adbfc7...` failed the six CLI jobs as intended, while the corrected head passed. Updated PR #17 description with this verified distinction **without modifying its head**. All PRs remain draft; no change to main.
+
+### Primary sequential slice — additional nested-link CLI negative tests, qualification pending
+
+- After PR #17 was qualified, created `chatgpt/zero-codex/cli-nested-assets-20261110` from its exact SHA `f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f`. Added **only** `tests/cli/public-nested-assets.test.mjs`; commit `3a66e440847d7e1234e5a82674decdacb3efb954`. Opened [draft PR #19](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/19) against the **PR #17 branch**, keeping its diff test-only and avoiding edits to PR #17. This PR does not implement record encryption, quantity inventory or canonical federation.
+- Two tests check rejection of a linked file nested in public assets and a linked public directory; preserve an external private fixture and the previous `dist/index.html`. Windows directory case uses a junction; skips are explicitly reported only for disallowed link creation. These tests add breadth to PR #17 but do not prove race-free builds or all filesystem adversarial cases.
+- At inspection PR #19 [Alpha verification 42865325773](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42865325773) and [CLI setup 42865325775](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42865325775) were **in progress** on `3a66e440847d7e1234e5a82674decdacb3efb954`. **No local Node, pnpm, Vitest or browser tests were executed**. Do not start another primary code task or claim this new test-only head qualified until exact-head CI reaches terminal state.
+
+### Separate read-only audit — PR #14
+
+- Six-way rotation pseudorandomly selected previously unaudited `packages/vault/src/vault.ts` from 83 eligible PR #8/#10 source paths. Seed `429fcfca9735a323a6ce709d8605429d6c850fdb|ddcdf7d6565cfa3548cc976cd8f8728a10bf0ee8|audit-rotation-6`, FNV-1a hash **374894804**, index **72/83**. Read vault export/restore, identity crypto, envelope verification, PWA callers, vault tests, approved IOX contract and README. No independent reproducible new vulnerability established; current plaintext IndexedDB domain records and incomplete IOX recovery remain explicitly **unfixed**.
+- Appended evidence, negative-claim boundaries and next rotation to `docs/audits/CHATGPT_RANDOM_AUDIT_LEDGER.md` on the **isolated audit** branch; commit `a2b2c68a13819bfdb4e80a1e38a7f19ed6bd8cf9`. No audit runtime tests/fuzzing or production edits. A-001 privacy logging concern still requires owner coordination; A-003's fix remains unmerged PR #16.
+
+### Separate documentation/wiki maintenance — PR #13
+
+- Corrected stale pending-qualification language for PR #17 and distinguished draft PR #19's pending tests in `docs/wiki/Developer-Guide.md`; commit `852d571bbc68974bcc199c7a6ecaaad3d529c852`. Appended evidence to `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md`; commit `9f231210b9dc731a63525b62f3efc5d391aa07b3`.
+- **Actually checked** local Markdown links in `docs/wiki/Home.md`, `User-Guide.md`, `Developer-Guide.md`, `_Sidebar.md`, `README.md`: **20 local links, zero missing source targets**. Home and Sidebar prominently link distinct User Guide and Developer Guide sections. Link anchors and live GitHub Wiki were not tested; live Wiki remains **unpublished** because no direct wiki writer is available. No spec, protocol or release promise amended.
+
+### Blocking gates and next hourly step
+
+1. First reconcile the two exact-head PR #19 CI runs. If any fail, inspect job logs and repair only the isolated test branch; do not weaken or skip legitimate regressions to force green.
+2. Recheck newly changed PR ownership (especially PR #18), then choose the next approved single independently testable FED/IOX, record confidentiality, inventory/hold or accessibility slice. Canonical author-global ordering, complete device recovery, record encryption, quantity-aware inventory, consent/counteroffers and handover UX remain incomplete. Stacked PR #8 → #10 integration and **33 unresolved spec warnings** remain gates.
+3. Continue randomized audit rotation using new ledger SHA, source-pinned docs and wiki work on their separate branches. Do not silently enable GitHub settings or disclose unpatched privacy issues.
+
+**Concurrency/trust:** Independent no-cost subagents were not available. Primary, randomized audit, documentation and handoff were distinct **sequential** phases of one ChatGPT run, not three parallel workers. No Codex or paid API agents. No merges, deployments, releases, real-funds features, trust-path/cryptographic/financial-policy changes, or security gate reductions. Historical GitHub-hosted tests are reported with exact SHAs; local tests were not run.

@@ -69,4 +69,6 @@ Release procedure is **not automatic**: settle PR #8 → #10 branch dependencies
 
 ## Outstanding engineering work
 
+A separate **draft, unmerged** [FED/IOX/ADR-0016 source-to-acceptance gap matrix](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/15) maps canonical federation and recovery requirements to the current alpha source and enumerates negative-test gates. It is an implementation plan, **not** a protocol amendment or proof that incomplete features are available. In particular, alpha per-subject chains do not supply canonical per-author gap buffering, and the encrypted alpha backup does not include complete JSONL export, media and recovery-kit scope. Follow the existing approved contracts before making changes.
+
 Canonical federation and device recovery; private-record encryption and migration; quantity-aware stock; complete counteroffer/handover UX; conflict resolution; expanded negative/regression testing and threat review; live wiki publication. The [project TODO](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/blob/429fcfca9735a323a6ce709d8605429d6c850fdb/PROJECT_TODO.md) and [continuation specification](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/11) track the intended direction; they are not assertions of completion.

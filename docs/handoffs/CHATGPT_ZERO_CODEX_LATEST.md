@@ -62,3 +62,40 @@ The draft alpha has source/tests for local encrypted signing keys and encrypted 
 - **Actual concurrency:** There were **no independently spawned no-cost workers/subagents**. Primary, audit and docs tasks were separate sequential phases of one ChatGPT run.
 - **No local tests or fuzzing performed.** Existing PR #10 hosted CI is historical, not new test execution; PR #15's current CI was pending at end of inspection. No merge, deployment, release, account/configuration change, financial-policy or cryptographic change.
 - **Next:** first verify both PR #15 exact-head CI runs to completion; if failures, inspect jobs and correct only in its isolated branch. Then ensure trace matrix requirements and links remain source-accurate; with approval/ownership and current SHA verified, advance the first test-first FED-3 author-chain/gap fixture as a new sequential implementation task. Separately keep rotating audit paths and improving wiki source, without overwriting prior branches. No opportunistic collaboration/settings lane started while substantive tasks and CI remain active.
+
+
+---
+
+## Hourly continuation 3 — 2026-11-10 UTC (current verification snapshot)
+
+### Prior work, branch ownership and qualification
+
+- Inspected the existing source-pinned continuation handoff, draft PR #11's `docs/CHATGPT_ZERO_CODEX_CONTINUATION.md`, current repository tree/instructions (no `AGENTS.md` was present in inspected PR #10 tree), current `main` `95c46be41233520382566360e7135011412e8e6e`, PRs #8/#10–#15, relevant branch ownership, source contracts and CI.
+- PR #10 is still unmerged at `429fcfca9735a323a6ce709d8605429d6c850fdb`; PR #15 (FED/IOX source-to-test matrix) still draft at `20691f1cce36b1254644ea16bb438ca91221a872`. Its previously pending *exact-head* [Alpha verification 42824869611](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42824869611) and [CLI setup 42824869654](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42824869654) both completed **success** on 2026-11-10. This is documentation qualification, not canonical FED/IOX implementation or release readiness.
+- Canonical FED-3 author-global ordering/gaps remain a distinct unimplemented feature and involve alpha-to-canonical compatibility/storage admission design; no cryptographic trust-path or existing on-disk signed envelope format was changed. Used the explicitly allowed safe independent non-trust-path task (previous A-003 outbox correctness finding), avoiding other contributors' branches.
+
+### Primary task: test-first cross-tenant outbox retry isolation — isolated draft PR #16
+
+- Created `chatgpt/zero-codex/outbox-isolation-20261110` at PR #10 exact head. Added `packages/kernel/src/outbox/dispatcher.isolation.test.ts` first, test-only commit **`fe1f9aa849f9bb76140d7700411da62c881166f5`**; [Alpha CI 42832903466](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42832903466) actually **failed** at the Vitest domain-test stage while prior frozen install/typecheck/spec/tooling stages completed. JSON reporter did not enumerate individual failing assertions in the downloadable job log; do not claim per-test red proof beyond the domain-stage failure. Paired CLI run 42832903498 was cancelled.
+- Applied a minimal proposed correction (full commit **`a294dd21715edf501aac75bee69f785951985cd5`**) and added a SQLite pending-query regression: **changed** `packages/kernel/src/outbox/dispatcher.ts`, `packages/kernel/src/storage/memory-driver.ts`, `packages/kernel/src/storage/sqlite.ts`, `packages/kernel/src/outbox/dispatcher.isolation.test.ts`.
+- The dispatcher now groups and blocks on an unambiguous `(tenantId, aggregate.type, aggregate.id)` tuple instead of raw aggregate ID. The memory/IndexedDB-backed pending query derives the same tuple from durable outbox rows without migrating existing inbox storage. The SQLite relay pending query correlates deferred inbox rows to the full outbox tuple. Tests cover same-ID different-tenant ordering in one batch, separately deferred retries across passes, and SQLite tenant/type pending-query isolation.
+- **Exact-head fix CI** at time of recording: [Alpha verification 42833329675](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329675) and [CLI setup 42833329717](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329717) are **in progress** on `a294dd21715edf501aac75bee69f785951985cd5`. Qualification is **PENDING**, not passed. No local pnpm/Node/Playwright execution was performed. PR #16 remains draft; do not begin another primary feature until exact-head checks settle.
+
+### Independent randomized read-only audit — PR #14
+
+- Third deterministic rotation, seed `429fcfca9735a323a6ce709d8605429d6c850fdb|1348eccd4d5f38a7f5e0a9d19158fadc4a7cc9b2|audit-rotation-3`, FNV-1a **2776008497**, index **45/76** on previously unaudited sources: `packages/kernel/src/storage/sqlite-schema.ts`.
+- Reviewed migrations, SQLite driver, memory counterpart, transactions, outbox callers and tests. No new independent reproducible vulnerability established. Corroborated existing conditional A-003 outbox retry scoping at the SQL/in-memory pending-query boundary; no claim of actual data loss or exploitation.
+- Updated `docs/audits/CHATGPT_RANDOM_AUDIT_LEDGER.md` in own isolated audit branch at **`4e75c0cc3a1aaa49b335a733121709c90783dbf3`**; no source files edited on audit branch. Review was performed sequentially by this ChatGPT invocation, **not by a concurrent second worker**.
+
+### Separate documentation/wiki maintenance — PR #13
+
+- Updated `docs/wiki/Developer-Guide.md` with source-backed kernel outbox qualification commands and explicitly unmerged PR #16 status; updated `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md` on isolated docs branch at **`8dd9a6006716468503772c58545d94c3cf2fd6ac`**.
+- Rechecked current wiki source `Home.md`, `User-Guide.md`, `Developer-Guide.md`, `_Sidebar.md`: **20 local Markdown links checked, zero missing local destinations**; Home and sidebar still link separate User Guide / Developer Guide. This is static link-target evidence only, not anchor/browser verification. **Live GitHub Wiki publication remains blocked** by available connector capabilities.
+- No additional no-cost subagent workers were available; primary, audit, documentation ran as **three separate sequential phases**, never concurrently.
+
+### Next steps, safety and release gates
+
+1. Qualify the **two PR #16 exact-head CI runs** and inspect jobs/logs if either fails; correct only in that isolated branch, preserve original regression, and do not falsely claim success while checks are pending.
+2. If PR #16 is green and source ownership remains non-overlapping, continue the next prioritized independently testable slice; canonical FED-3 gaps, IOX recovery, private-record encryption, quantity/consent, counteroffers/UI remain incomplete or subject to required owner/protocol decisions.
+3. Continue pseudorandom audit rotation from new ledger SHA, maintain version-controlled docs/wiki, and withhold GitHub settings/collaboration changes while substantive work remains.
+4. Reconcile the stacked PR #8 → PR #10 alpha branch strategy with owner approval. **No merges, releases, deployments, real-funds behavior, changed security/crypto policies, or test weakening** occurred in this run.

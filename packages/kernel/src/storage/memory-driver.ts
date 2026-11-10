@@ -180,9 +180,16 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
       pending: (q: PendingQuery) => {
         const types = new Set(q.types);
         const mine = new Map(inboxRowsFor(q.consumer).map((r) => [r.eventId, r]));
-        const blocked = new Set([...mine.values()].filter((r) => r.status === 'retry' && cmp(r.nextAttemptAt ?? '', q.now) > 0).map((r) => r.aggregateId));
+        // A retry only blocks its own (tenant, aggregate type, aggregate ID) stream.
+        // Derive scope from the durable outbox event to avoid an inbox schema migration.
+        const streamKey = (r: OutboxRow): string => JSON.stringify([r.tenant, r.aggregateType, r.aggregateId]);
+        const blocked = new Set([...mine.values()]
+          .filter((r) => r.status === 'retry' && cmp(r.nextAttemptAt ?? '', q.now) > 0)
+          .map((r) => outbox().get(r.eventId))
+          .filter((r): r is OutboxRow => r !== undefined)
+          .map(streamKey));
         return [...outbox().values()]
-          .filter((o) => types.has(o.type) && !blocked.has(o.aggregateId))
+          .filter((o) => types.has(o.type) && !blocked.has(streamKey(o)))
           .filter((o) => {
             const i = mine.get(o.eventId);
             return !i || (i.status === 'retry' && cmp(i.nextAttemptAt ?? '', q.now) <= 0);

@@ -114,7 +114,12 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
         all(
           `SELECT o.* FROM outbox o LEFT JOIN inbox i ON i.consumer = ? AND i.event_id = o.event_id
            WHERE o.type IN (${inList(q.types)}) AND (i.event_id IS NULL OR (i.status = 'retry' AND i.next_attempt_at <= ?))
-           AND o.aggregate_id NOT IN (SELECT b.aggregate_id FROM inbox b WHERE b.consumer = ? AND b.status = 'retry' AND b.next_attempt_at > ?)
+           AND NOT EXISTS (
+             SELECT 1 FROM inbox b JOIN outbox blocked ON blocked.event_id = b.event_id
+             WHERE b.consumer = ? AND b.status = 'retry' AND b.next_attempt_at > ?
+               AND blocked.tenant = o.tenant AND blocked.aggregate_type = o.aggregate_type
+               AND blocked.aggregate_id = o.aggregate_id
+           )
            ORDER BY o.seq LIMIT ?`,
           [q.consumer, ...q.types, q.now, q.consumer, q.now, q.limit],
         ).map(toOutbox),

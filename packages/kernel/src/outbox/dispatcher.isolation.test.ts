@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { ok } from '../errors/result.ts';
+import { openSqliteStorage } from '../storage/sqlite.ts';
+import { itemCreated } from '../testing/sample-module.ts';
 import { createTestKernel } from '../testing/harness.ts';
 import { sampleDefinitions, type SampleCounters } from '../testing/sample-module.ts';
 
@@ -43,5 +46,26 @@ describe('outbox isolation between independent aggregate streams', () => {
       expect(await k.storage.read(tx => tx.inbox.get('sample.item_projection', next.eventId)?.status)).toBe('done');
       expect(await k.storage.read(tx => tx.inbox.get('sample.item_projection', original.eventId)?.status)).toBe('retry');
     } finally { await k.storage.close(); }
+  });
+  it('SQLite pending query scopes delayed retry to tenant and aggregate type, preserving unrelated events', async () => {
+    const { k } = setup();
+    const sql = openSqliteStorage({ path: ':memory:' });
+    try {
+      const sharedId = k.ids.next();
+      expect((await k.cmd('sample.item.create', { itemId: sharedId, name: 'tenant A' })).ok).toBe(true);
+      expect((await k.cmd('sample.item.create', { itemId: sharedId, name: 'tenant B' }, { tenantId: 'tenant-b' })).ok).toBe(true);
+      const [first, second] = k.events;
+      if (!first || !second) throw new Error('missing events');
+      const third = { ...first, eventId: k.ids.next(), aggregate: { type: 'another-aggregate', id: sharedId } };
+      await sql.transaction(tx => {
+        tx.outbox.append(first);
+        tx.outbox.append(second);
+        tx.outbox.append(third);
+        tx.inbox.markRetry({ consumer: 'sample.item_projection', envelope: first, now: k.clock.now() }, 1, k.clock.now() + 60_000, 'DEPENDENCY_UNAVAILABLE');
+        return ok(undefined);
+      });
+      const due = await sql.read(tx => tx.outbox.pending('sample.item_projection', [itemCreated.type], k.clock.now(), 10).map(x => x.envelope.eventId));
+      expect(due).toEqual([second.eventId, third.eventId]);
+    } finally { await sql.close(); await k.storage.close(); }
   });
 });

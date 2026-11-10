@@ -107,3 +107,39 @@ The draft alpha has source/tests for local encrypted signing keys and encrypted 
 - The test-only parent head `fe1f9aa849f9bb76140d7700411da62c881166f5` had failed at the domain test stage, establishing a red-suite baseline, while the fix head is **green**. The JSON reporter did not include individual failure assertions in the fetched baseline job log; do not claim an isolated reproduction transcript beyond this evidence.
 - **All PRs remain draft/unmerged.** This is bounded outbox correctness qualification, **not** completion of canonical FED-3 ordering, private-record encryption, full recovery, or alpha release gates. No local runtime tests were performed by ChatGPT; GitHub Actions executed the automated tests on the source-pinned head.
 - Next sequential feature on a future invocation: inspect latest ownership and check any new CI before selecting approved, independently testable FED-3, recovery or privacy slices. No further implementation overlap is authorized by this CI success alone.
+
+
+---
+
+## Hourly continuation 4 — 2026-11-10 UTC (source- and CI-pinned)
+
+### Startup, ownership and prior work
+
+- Checked previous handoff, PR #11's continuation specification, repository default branch, recent GitHub commit search, active chatgpt branches and draft PRs #8, #10, #11–#16. Root and applicable nested `AGENTS.md` were not present in the inspected main/alpha paths. The historical `main` head remains `95c46be41233520382566360e7135011412e8e6e` (planning only); the active alpha owner PR #10 is `429fcfca9735a323a6ce709d8605429d6c850fdb` atop PR #8. No edits, merges or rebases to either owner's branch.
+- Qualified the previous primary fix: isolated draft [PR #16](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/16) head `a294dd21715edf501aac75bee69f785951985cd5` completed [Alpha CI 42833329717](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329717) and [CLI CI 42833329675](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329675), both **success**. 24 Linux browser journeys passed and all six OS/Node CLI matrix jobs passed at that head; **33 spec warnings** remain. PR #15 federation/recovery trace `20691f1cce36b1254644ea16bb438ca91221a872` also retained both successful exact-head workflows. No merge/integration authorization inferred.
+- Canonical FED-3 author-global replay/gap and IOX device-recovery migration require a reviewed storage/compatibility design before changing signed admission or crypto trust paths. Instead selected an independently testable **non-cryptographic CLI static-build integrity** regression, with separate file ownership from PR #16.
+
+### Primary task: test-first CLI build boundary
+
+- Created isolated branch `chatgpt/zero-codex/cli-public-symlink-20261110` from the **exact PR #10 SHA**, and regression-only draft [PR #17](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/17) targeting `codex/local-alpha-20261109`.
+- Added **only** `tests/cli/public-symlink.test.mjs`, commit `18adbfc719a75f7ec1eec793bfbfdb00a1d5e39e`. Its harmless synthetic sentinel simulates a linked `apps/pwa/public/sw.js`, asserting build rejects a linked public asset before processing it, preserves an external file's content, and preserves an older `dist/index.html`. The test skips only on runners that cannot create symlinks.
+- Confirmed a **real test-first failing baseline** on this exact head: [CLI workflow 42844193821](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193821) completed **failure** on six OS/Node matrix jobs at `CLI negative and repeat-setup tests`. Inspected Ubuntu Node 22 job `129927200685` logs: test named `CLI build rejects linked public assets before reading or modifying external targets` reports `Missing expected rejection.` This establishes that the current builder does not reject the synthetic linked-public-asset case; it does **not** establish a production incident or all possible data impacts. Baseline code was not modified.
+- [Alpha workflow 42844193761](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193761) remained **in progress** at final inspection, so **no implementation fix was committed yet**. Preserve the CI ownership boundary: wait until exact-head baseline checks complete, then implement the minimal fail-closed public asset traversal/copy change in the isolated PR #17 branch and rerun the same matrix plus Alpha verification. Do not weaken or skip the regression to achieve green CI.
+- No local Node/pnpm/Playwright execution occurred. GitHub-hosted CI is the only observed test execution. No sensitive user material or real keys used.
+
+### Separate read-only security audit (sequential, not a second worker)
+
+- Fourth deterministic selection seeded with `429fcfca9735a323a6ce709d8605429d6c850fdb|4e75c0cc3a1aaa49b335a733121709c90783dbf3|audit-rotation-4`; FNV-1a `1304349623`, index 58 of 83 source paths collected from PR #8 and #10 file lists (after prior-path/test/current CLI exclusions); selected `packages/kernel/src/validation/schemas.ts`. Reviewed neighboring validation parsing, command declaration, Bazaar consumers and approved capability contract. **No new independently reproducible defect**; no runtime tests or code modifications. This sample inventory is the PR change union, not the entire git tree.
+- Updated existing isolated audit [PR #14](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14), ledger `docs/audits/CHATGPT_RANDOM_AUDIT_LEDGER.md`, commit `8f776f6f07b3cd6e9a795b0f3c085b7f74ea4ae0`. Previous A-001 logging risk remains under owner review; A-003 addressed in draft PR #16 but **not merged**.
+
+### Separate docs/wiki maintenance phase (sequential, not a third worker)
+
+- Updated existing isolated docs [PR #13](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13): `docs/wiki/Developer-Guide.md` commit `c976ccb8b99d76e4e303403a808d3eee66cb5be2`, correcting provisional PR #16 CI text and marking PR #17 as a failing regression-only draft; `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md` commit `9611fba0d825bb6caf92e46cbf1da138577de3b9`.
+- Repeated an actual static wiki-source check: 20 local Markdown targets in Home, User Guide, Developer Guide and _Sidebar, **zero missing target files**. Home and sidebar link separately to both mandatory top-level sections. No anchor or remote link/browser checks; direct live GitHub Wiki writing is unsupported and the wiki remains **unpublished**. Draft PR #13 source is not a claim that live pages changed.
+- No independent no-cost subagent facility was available; development, randomized audit and docs review were distinct **sequential** phases of one assistant. Idle-time collaboration/setup lane not started because primary test and CI remain actionable.
+
+### Next safe step
+
+1. Reinspect [PR #17 baseline Alpha CI 42844193761](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193761) until terminal state. The six CLI matrix jobs already fail the new regression as expected. Then update only the PR #17 isolated branch with a minimal public-asset symbolic-link rejection before copying/reading worker content; test exact head with GitHub CLI OS/Node and Alpha workflows.
+2. Recheck current PRs, SHA/ownership and integration dependencies; do not merge PR #17 or modify PR #8/#10/#15/#16. Later complete approved FED/IOX author-global ordering and private record encryption after compatibility gates.
+3. No deployment, release, personal-data processing, financial-policy or cryptographic contract changes. No validation claims beyond linked CI and static source inspection.

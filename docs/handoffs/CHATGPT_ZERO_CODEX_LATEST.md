@@ -175,3 +175,8 @@ The draft alpha has source/tests for local encrypted signing keys and encrypted 
 ### Next bounded step and restrictions
 
 Inspect [Alpha 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030737) and [CLI 42853030772](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030772) first. If both pass, qualify PR #17 at exact `f8ed3a93...`; if failures, inspect jobs and repair only own isolated branch without weakening regression. Then resume canonical FED/IOX, quantity, consent/holds, UI and CLI priorities as ownership/approval permit. PR #8 → #10 integration, 33 spec warnings, incomplete record encryption and recovery remain release gates. No merge, deployment, release, trust-path, financial-policy or cryptographic changes.
+
+
+### CI supersession after handoff write (2026-11-10 UTC)
+
+The two initially observed corrective-head CI runs above, [Alpha 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030737) and [CLI 42853030772](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030772), were subsequently **cancelled** by workflow concurrency/supersession. Replacement exact-head runs were [Alpha 42853469274](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469274) and [CLI 42853469290](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853469290), both **in progress** at this reinspection and still pinned to `f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f`. Do **not** count cancelled runs as success. No further PR #17 code or metadata updates until these runs settle. The next invocation must read the latest workflow attempts rather than relying on the superseded URLs.

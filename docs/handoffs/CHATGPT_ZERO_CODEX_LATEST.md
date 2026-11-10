@@ -143,3 +143,35 @@ The draft alpha has source/tests for local encrypted signing keys and encrypted 
 1. Reinspect [PR #17 baseline Alpha CI 42844193761](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193761) until terminal state. The six CLI matrix jobs already fail the new regression as expected. Then update only the PR #17 isolated branch with a minimal public-asset symbolic-link rejection before copying/reading worker content; test exact head with GitHub CLI OS/Node and Alpha workflows.
 2. Recheck current PRs, SHA/ownership and integration dependencies; do not merge PR #17 or modify PR #8/#10/#15/#16. Later complete approved FED/IOX author-global ordering and private record encryption after compatibility gates.
 3. No deployment, release, personal-data processing, financial-policy or cryptographic contract changes. No validation claims beyond linked CI and static source inspection.
+
+
+---
+
+## Hourly continuation 5 — 2026-11-10 UTC
+
+### Startup and previous-run reconciliation
+
+- Re-read the previous handoff, PR #11's continuation specification, latest commit search, exact main and PR heads, active owner branches and CI. Default `main` remains the planning baseline `95c46be41233520382566360e7135011412e8e6e`; the unmerged alpha [PR #10](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/10) remains at `429fcfca9735a323a6ce709d8605429d6c850fdb` stacked on PR #8. New Claude-owned docs/spec [PR #18](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/18) is in progress; its branch and owned paths were not touched. Root/nested `AGENTS.md` were absent on the checked PR #17 paths.
+- The previous test-first [PR #17](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/17) head `18adbfc719a75f7ec1eec793bfbfdb00a1d5e39e` now has terminal CI: [Alpha 42844193761](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193761) **success**; [CLI 42844193821](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193821) **failure in each of six OS/Node jobs**, attributable to the newly added missing-rejection test. Thus the previous pending CI no longer blocked an isolated corrective commit.
+
+### Primary sequential task: CLI symlink rejection fix, CI pending
+
+- Committed a focused production fix at **`f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f`**, changing only `tools/cli/classrup.mjs` on the existing `chatgpt/zero-codex/cli-public-symlink-20261110` draft branch. The regression `tests/cli/public-symlink.test.mjs` remains unchanged from test-first head `18adbfc7...`.
+- Added `assertSafePublicAssets` with `lstat` recursive checks on public asset tree before copying. It rejects a symlink root, nested symlinks, special files and non-directory roots; a second staged-tree check before reading/rewriting the service worker rejects links introduced during copying. This is source-verified intended behavior, **not yet confirmed passing CI** and not a guarantee against all possible concurrent filesystem mutations.
+- GitHub Actions for the corrective **exact head** were [Alpha verification 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030737) **in progress** and [CLI setup 42853030772](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030772) **in progress** at final qualification snapshot. Stop primary edits until both settle; next hourly invocation must inspect exact-head job results, logs and any remaining regression failures before opening another feature. No local pnpm, Node, Vitest or browser tests were executed by ChatGPT.
+
+### Separate randomized read-only audit (sequential, no concurrent worker)
+
+- Source = exact unmerged alpha `429fcfca...`. Reproducible FNV-1a seed used alpha SHA + prior audit ledger head `8f776f6f07b3cd6e9a795b0f3c085b7f74ea4ae0` + `audit-rotation-5`, hash `2617851883`, index **51/73** eligible source paths from nontruncated 2,733-entry Git tree. Selected unaudited `packages/kernel/src/testing/sample-module.ts`.
+- Read sample module and surrounding harness, registry, command bus, exports and authorization context. No independent reproducible new security defect found. Test-harness default allow-all authorization is a test feature, **not** evidence of a production authorization bypass. No tests, secrets or code changes in audit phase.
+- Appended the evidence to [audit PR #14](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14) ledger `docs/audits/CHATGPT_RANDOM_AUDIT_LEDGER.md` at commit **`ddcdf7d6565cfa3548cc976cd8f8728a10bf0ee8`**. Existing A-001 remains unresolved; A-003 mitigation is unmerged PR #16.
+
+### Separate documentation/wiki phase (sequential, no concurrent worker)
+
+- Updated isolated [docs PR #13](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13): `docs/wiki/Developer-Guide.md` commit **`9e8b9222cf94e63a9b9b8b4c3a90a648dee0c7ff`** and `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md` commit **`a160ee927b32426dc01e24fc4ae1d6629c542dab`**, separating PR #17's failing baseline and pending corrective qualification from released/merged status.
+- Actually checked version-controlled wiki Home, User Guide, Developer Guide and _Sidebar: **20 internal relative Markdown links checked, zero missing file targets**; both Home and sidebar prominently link to separate User Guide and Developer Guide. Heading anchors, remote links and browser rendering not checked. **Live GitHub Wiki was not changed or published**; no available connector write action.
+- No new subagents were spawned. The development, audit and docs phases ran sequentially; no second/third concurrent worker or credit-consuming API was used. The optional collaboration/settings lane was not started because corrective CI and release/spec work remain actionable.
+
+### Next bounded step and restrictions
+
+Inspect [Alpha 42853030737](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030737) and [CLI 42853030772](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42853030772) first. If both pass, qualify PR #17 at exact `f8ed3a93...`; if failures, inspect jobs and repair only own isolated branch without weakening regression. Then resume canonical FED/IOX, quantity, consent/holds, UI and CLI priorities as ownership/approval permit. PR #8 → #10 integration, 33 spec warnings, incomplete record encryption and recovery remain release gates. No merge, deployment, release, trust-path, financial-policy or cryptographic changes.

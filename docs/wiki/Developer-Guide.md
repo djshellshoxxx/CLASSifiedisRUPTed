@@ -76,7 +76,7 @@ Canonical federation and device recovery; private-record encryption and migratio
 
 ### Test-first kernel outbox qualification (draft, not integrated)
 
-The kernel shares an event outbox across vault and optional relay storage adapters. A retry must not suppress an independent event stream with the same aggregate ID under a different tenant or aggregate type. Isolated [draft PR #16](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/16) adds regression coverage and proposes a scoped fix to the dispatcher, memory/IndexedDB-backed pending query, and relay SQLite pending query. **PR #16 is not merged or released.** Its earliest test-only GitHub Actions domain job failed as expected at the Vitest stage; exact-head qualification of the fix must be checked independently.
+The kernel shares an event outbox across vault and optional relay storage adapters. A retry must not suppress an independent event stream with the same aggregate ID under a different tenant or aggregate type. Isolated [draft PR #16](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/16) adds regression coverage and proposes a scoped fix to the dispatcher, memory/IndexedDB-backed pending query, and relay SQLite pending query. **PR #16 is not merged or released.** Its earliest test-only GitHub Actions domain job failed at the Vitest stage (individual assertions not enumerated). The corrective head `a294dd21715edf501aac75bee69f785951985cd5` subsequently passed [Alpha verification](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329717) and all six [CLI matrix jobs](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42833329675). These results qualify that **draft head only**, not integration into main.
 
 After checking out PR #16's head, a contributor can run the focused test with:
 
@@ -85,3 +85,8 @@ corepack pnpm exec vitest run packages/kernel/src/outbox/dispatcher.isolation.te
 ```
 
 Only a completed test run on the **current** PR head establishes evidence. Do not infer that this fixes canonical federation ordering (CTR-FED-001 FED-3); the outbox is a different internal domain-event delivery mechanism.
+
+
+### CLI asset-build regression under qualification (draft, not integrated)
+
+The isolated [draft CLI regression PR #17](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/17) is test-only at `18adbfc719a75f7ec1eec793bfbfdb00a1d5e39e`. [CLI setup CI](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42844193821) failed the newly added negative test across the six OS/Node jobs. This is **failing-baseline evidence**, not a completed hardening change. Run `node --test tests/cli/public-symlink.test.mjs` from that PR's exact checkout to reproduce where symlinks are supported. Do not mark the asset-boundary requirement complete before an isolated correction and new passing exact-head checks. No change has been made to the live Wiki.

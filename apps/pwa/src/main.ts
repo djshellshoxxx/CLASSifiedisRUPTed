@@ -202,5 +202,6 @@ if ('serviceWorker' in navigator && globalThis.isSecureContext) {
   });
 }
 
-// Install all vault form event handlers before enabling keyboard and pointer access.
+// Install all vault form event handlers before revealing or enabling vault access.
 element('access').removeAttribute('inert');
+element('access').hidden = false;

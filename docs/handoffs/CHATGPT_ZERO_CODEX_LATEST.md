@@ -286,3 +286,38 @@ The two initially observed corrective-head CI runs above, [Alpha 42853030737](ht
 1. **First:** check both [corrective PR #20 CI runs](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/20) on exact head `e0f153fd9185eaa5b52882931eac1c694d54abc5` and inspect logs; only if they pass report the accessibility slice qualified. Do not duplicate work while either remains active. Follow up separately on any confirmed failure in the same isolated branch.
 2. Keep sequential feature queue: canonical FED/IOX author-chain/gap and recovery compatibility, record confidentiality/migration, quantity-aware inventory and consent/holds, counteroffer/handover, CLI/browser and security regressions. Stacking PR #8→#10, 33 unresolved spec warnings, security/privacy review, device recovery and plaintext domain IndexedDB remain open gates; do not claim released/production-ready.
 3. No idle-time GitHub collaboration/settings changes because primary development and CI remain actionable. No concurrent subagents were available: implementation, audit and docs occurred as separate **sequential** phases within one ChatGPT invocation. **No Codex, paid API, merge, deploy, release, real funds/custody, signed-protocol/cryptographic/security policy changes, or weakened tests.**
+
+
+---
+
+## Hourly continuation 9 — 2026-11-10 UTC (exact-head UX qualification and no-script test-first baseline)
+
+### Startup / ownership and previous CI gate
+
+- Inspected the preceding rotation-8 handoff and continuation instructions at draft PR #11 `d52b29369271f39a4873ace47c76b1b92d0750b3`, latest repository commits and branches, open PRs #8/#10–#20, planning-only main `95c46be41233520382566360e7135011412e8e6e`, active alpha PR #10 `429fcfca9735a323a6ce709d8605429d6c850fdb`, and CI. Root `AGENTS.md` absent in both main/alpha inspected; no instructions invented. Claude-owned draft PR #18 and all other workers' branches untouched.
+- **PR #20 is now qualified at its exact corrective SHA `e0f153fd9185eaa5b52882931eac1c694d54abc5`:** [Alpha verification 42884821949](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42884821949) **completed success**, domain job 1/1; [CLI setup 42884821917](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42884821917) **completed success**, all six Ubuntu/macOS/Windows × Node 22.18.0/24.x jobs. Previously confirmed test-only parent failed 9/9 new accessibility assertions in 2/3/4-party journeys across the three browsers. Corrective source changes only `apps/pwa/src/barter.ts`; test-only changes `tests/browser/alpha.spec.ts`. Updated PR #20 description with verified CI. Still **draft/unmerged**, not main or release-ready; 33 spec warnings persist.
+
+### Next primary sequential slice — no-script access failsafe (test-first only; implementation not started)
+
+- Chose an independently testable, **non-cryptographic UX/privacy** issue on unmerged alpha HTML: the create/unlock/restore passphrase forms only have script-installed `submit` handlers. Without JavaScript they may be submitted as ordinary navigation forms by default. This is source-backed *potential* form navigation, **not proof of real-world password exfiltration**. No ownership overlap with PR #20's `barter.ts`, CLI PRs #17/#19 or Claude PR #18.
+- Created isolated branch `chatgpt/zero-codex/noscript-vault-guard-20261110` from PR #10 exact SHA `429fcfca9735a323a6ce709d8605429d6c850fdb`, and draft [PR #21](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/21) against `codex/local-alpha-20261109`. **Test-only commit:** `90e0e2df66f15eca528012ac34a8b90ed0093ff8`. **Only file changed:** new `tests/browser/no-script.spec.ts`. It runs Playwright with JavaScript disabled and expects a visible warning, inert vault-access section, inaccessible create control and hidden workspace; with JavaScript enabled it expects inert cleared and create enabled. No existing assertions removed or altered.
+- **Exact-head test-first CI started, not yet qualified at handoff:** [Alpha verification run 42894634951](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42894634951) and [CLI setup run 42894635014](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42894635014), both **in progress** at last check. Do not claim a confirmed red failure until logs settle. **No production fix** committed, by design. After terminal red evidence, consider HTML `inert` guard + `noscript` warning and remove inert only after JS startup handlers attach, then rerun exact-head CI while preserving browser tests. Do not allow passphrases to become URL parameters or send them to an external endpoint.
+
+### Separate audit rotation — draft PR #14
+
+- Seed `90e0e2df66f15eca528012ac34a8b90ed0093ff8|c59b0cc631d90f272e56eb5904da9020f5f8763a|audit-rotation-9`, FNV-1a unsigned 32-bit **2643403713**, selected index 42 of 57 eligible previously unaudited source paths in nontruncated 2,734-item tree: `packages/kernel/src/storage/scope.ts`.
+- Read tenant-scoped storage facade plus `storage/repo.ts`, `storage/storage.ts`, `storage/tx.ts`, `storage/scope.test.ts` and `bus/bus.ts`. No new reproducible defect established by source inspection. `recordPeerAck` expects upstream verification, but no unsafe production caller or violation was demonstrated. Existing A-001 remains conditional/unfixed, A-003 is addressed only in unmerged PR #16.
+- Updated read-only audit ledger at **`cee78b52568ee28212d6ddb0ca7acec0b12a4def`** on isolated [PR #14](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14). No audit branch production edits or runtime tests. No second concurrent worker existed.
+
+### Documentation/Wiki maintenance — draft PR #13
+
+- Reconciled stale "pending PR #20" language with successful hosted CI, and added test-only/pending no-script accessibility coverage to `docs/wiki/Developer-Guide.md`, commit **`731315e6ba580fccab0e546947996d2777da9c46`**.
+- Updated `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md`, commit **`ecaab1361df9fb12a38062b77933f6c9aaef3df0`**. Static link check actually re-run across all five wiki-source files: **20 relative links, 0 missing target files**; Home and _Sidebar both link distinct User Guide and Developer Guide sections. Heading anchors, external links, rendered wiki/browser use were not checked. Live GitHub Wiki remains **unpublished** because the connector lacks a wiki writer.
+- No third concurrent documentation worker existed; all three phases were sequential by one assistant. No local pnpm, Vitest, Playwright, CLI, database or crypto tests executed by this invocation. GitHub Actions results are independent hosted runs, not local validation.
+
+### Unresolved gates and next run
+
+1. Reconcile both PR #21 test-only exact-head Actions runs. If the expected no-JavaScript regression is actually red, capture exact browser/step logs, apply smallest implementation guard on its isolated branch, and rerun complete exact-head Alpha + CLI CI. If any CI is active, do not overwrite it.
+2. Keep canonical FED-3 author-global ordering and IOX device recovery compatibility review, local record encryption/privacy, quantity-aware inventory/consent, handover, 33 spec warnings, stacked PR #8→#10 integration and independent security review **open**. Only explicitly approved protocols can change.
+3. Continue randomized audit and version-controlled wiki documentation without editing other owners. Idle-time collaboration/settings lane stays deferred while primary/audit/docs work remains.
+4. No merge, deploy, release, real funds/custody, protocol or cryptographic policy modification, security-gate relaxation, Codex, paid OpenAI API or credit-consuming agents.

@@ -386,3 +386,38 @@ The two initially observed corrective-head CI runs above, [Alpha 42853030737](ht
 ### Outstanding blockers, concurrency and next run
 - **All pull requests remain drafts**, no branch merges to main, no deployment, no release, no key/crypto trust, policy, relay or account setting changes. No local pnpm/Node/Playwright/security tests ran in this invocation; all reported CI is GitHub-hosted. **No concurrent subagents existed**: primary test-first, independent read-only audit, documentation and handoff phases were performed sequentially by one ChatGPT assistant.
 - Keep pending PR #22 exact-head checks as the next gating item. Additional blockers remain PR #8→#10 stack/integration, 33 alpha spec warnings, plaintext private domain IndexedDB records, canonical FED/IOX recovery/migration, quantity-aware inventory/consent and handover, independent security/privacy review and release authorization. The idle-time GitHub collaboration/settings lane was not started because substantive work remains actionable.
+
+
+---
+
+## Hourly continuation 12 — 2026-11-10 UTC (diagnostic correction pending CI)
+
+### Starting state and branch ownership
+
+- Reconciled previous continuation-11 handoff, `docs/CHATGPT_ZERO_CODEX_CONTINUATION.md` from draft PR #11, current repository metadata, last commits, ChatGPT-owned branches and open PRs. `main` remains planning-only `95c46be41233520382566360e7135011412e8e6e`; the implementation remains unmerged alpha PR #10 `429fcfca9735a323a6ce709d8605429d6c850fdb` atop draft Stage 3/4 foundation PR #8. No root `AGENTS.md` was present at inspected main. No external owner's branch (including Claude PR #18) modified.
+- Previous primary test-first [draft PR #22](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/22) had completed its original CI on head `ecaab0015cc180e5dfb3e064018b13440e724728`: [Alpha 42914411331](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42914411331) **failed** at `corepack pnpm test --reporter=json`, with frozen install, typecheck, spec check, dependency check and tooling tests passed; domain JSON was written, but visible hosted log gave **no individual failing assertion counts**. [CLI 42914411333](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42914411333) **passed all six Ubuntu/macOS/Windows × Node 22.18/24 jobs**. This is the documented red-stage result, not a claim of a particular isolated assertion transcript or an actual private-data leak.
+- No prior PR #22 CI remained active when the corrective implementation started. Audit/docs/handoff branches had no returned PR-triggered workflows at their prior exact heads; missing runs are **not** successful results.
+
+### Primary implementation — bounded logger privacy correction, still draft
+
+- Modified **only** `packages/kernel/src/observability/logger.ts` on the preexisting ChatGPT-owned isolated `chatgpt/zero-codex/diagnostic-privacy-regression-20261110` branch. Corrective commit **`9bb03390b2692d8fad80dbf653c28e36bef76c28`**, parent the unchanged two-test red baseline `ecaab0015cc180e5dfb3e064018b13440e724728`.
+- The logger now emits the public `msg` field only when it follows stable event-identifier syntax; otherwise outputs `[redacted]` before every configured sink. It recursively strips nested `Error` text, stack and cause, and plain-object `message`/`stack` fields before running the existing generic field redactor. Retains static structured `code`, level, duration and identifier fields. The test-only `diagnostic-privacy.test.ts` and existing assertions were **not modified**. This is a **proposed** narrow defense against the two synthetic cases, not independent proof that every arbitrary nested value or caller is fully privacy-safe; confirm side effects on existing observability tests in CI.
+- **New exact-head CI at most recent inspection:** [Alpha verification 42923160200](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42923160200) **in progress** and [CLI setup 42923160019](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42923160019) **in progress** on `9bb03390b2692d8fad80dbf653c28e36bef76c28`. Do not call this implementation qualified until both finish; inspect failures rather than weaken or skip tests. No local pnpm, Vitest, CLI or Playwright suite executed in this ChatGPT phase.
+
+### Separate randomized security audit — rotation 12
+
+- Audit branch `chatgpt/zero-codex/audit-observability-20261110` [draft PR #14](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14), updated ledger commit **`fc051b4a7c4d814a61fcf3777fcd793a3d813340`**. Seed `9bb03390b2692d8fad80dbf653c28e36bef76c28|1e83c10e9cae6f38c0f321010663d00e650ebf19|audit-rotation-12`, FNV-1a 32-bit **3129020386**, index **6/20** from an explicitly **limited list of known unaudited source files**, not a claimed complete Git tree. Selected `packages/kernel/src/clock/clock.ts` and reviewed retention, sync expiry, retry backoff and UUID time callers.
+- No new reproducible vulnerability/correctness defect was established in this static review. Noncanonical `Date.parse` acceptance was noted without a proven unsafe ingress; A-004 conditional expiry boundary remains separately tracked, **not executed**. No audit branch source edits, real user data, subagent, or runtime security tests.
+
+### Separate documentation and Wiki hygiene — rotation 12
+
+- Documentation branch [draft PR #13](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13) updated `docs/wiki/Developer-Guide.md` at **`36ff4f386345d2cfbf198f1d4799b1792a4997c3`**, then `docs/handoffs/CHATGPT_DOCS_MAINTENANCE_LATEST.md` at **`b15b62d339b5b17c671f0f78ed0a5d7e2cee116c`**. Corrected previous PR #22 pending-baseline language with actual hosted red stage, CLI success, scoped proposed fix and pending correction qualification. No requirements or cryptographic/privacy promises silently modified.
+- Actually rechecked 5 version-controlled Wiki source pages and **20 relative links** (**3 unique destination files**): **zero missing targets**. Home and `_Sidebar.md` both link distinct **User Guide** and **Developer Guide**. No rendered/heading-anchor/external-link tests. **Live GitHub Wiki remains unpublished** because the available direct connector provides no Wiki-writing operation.
+- No independently spawned no-cost audit/documentation subagents were available; primary, audit, docs and this handoff were **sequential phases of a single ChatGPT assistant**, not three simultaneous workers.
+
+### Next run and remaining gates
+
+1. **First reconcile PR #22 corrective exact-head CI** (Alpha 42923160200 and CLI 42923160019). If failed, inspect source-pinned logs and repair minimally on that branch after all runs settle. If both succeed, qualify the narrowly defined logger regression without claiming broad privacy certification, and update PR metadata and wiki evidence before advancing to another sequential task.
+2. Preserve unmerged PR #8 → #10 stacking, 33 open specification warnings, incomplete canonical FED/IOX recovery, private domain records still plaintext IndexedDB, quantity-aware inventory, consent/counteroffers/handover UX, independent security review and owner release approvals. The other audit A-004 requires independent test-first proof, not an inference of exploitation.
+3. Do not start idle-time collaboration/settings changes while primary CI and engineering work are active. **No merges, releases, deployments, key custody/protocol/financial-policy changes, test weakening, real funds, Codex, paid API or credit-consuming agents occurred.**
+

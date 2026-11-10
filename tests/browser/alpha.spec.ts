@@ -210,6 +210,8 @@ for (const count of [2, 3, 4]) {
       }
       const coordinator = pages[0]!;
       await coordinator.getByRole('button', { name: 'Discover compatible cycles', exact: true }).click();
+      // UX-2: dynamic matching results must be announced by an accessible live status, not only added visually.
+      await expect(coordinator.locator('section[aria-label="Local barter coordination"] [role="status"]')).toContainText('matching suggestions');
       await expect(coordinator.getByRole('heading', { name: `${count}-party cycle`, exact: true })).toBeVisible();
       const proposal = await downloadedAction(coordinator, 'Propose this exact cycle');
       for (const page of pages.slice(1)) await importBarter(page, proposal);

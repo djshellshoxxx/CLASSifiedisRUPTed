@@ -25,3 +25,7 @@ Test rows not covered
 
 Open questions
 - Whether `export` should drop P1 of other users (spec text says "P2 and higher"; implemented as P2 and higher).
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 44 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

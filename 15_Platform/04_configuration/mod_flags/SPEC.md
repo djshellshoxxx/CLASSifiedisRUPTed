@@ -6,28 +6,32 @@
 
 ## Purpose
 
-Flag values and their evaluation (CTR-FLG-001). Two independent scopes exist: the vault scope, set by the local user within the modules compiled into their build and evaluated entirely on the device, and the relay scope, set by a relay operator per community (tenant) hosted on that relay and evaluated by the relay for its relay commands. A flag value is off, on or beta(roles). The dependency rule (a module can be on only if all modules it depends_on are on, FLG-2) is checked when a value is written and again at evaluation, using the generated registry of F15.S04.M01. A disabled module returns FEATURE_DISABLED for its commands, stops its consumers and hides its entry points while keeping its data (FLG-3). There is no global flag service and no remote switch that can disable features inside someone's vault.
+Flag values and their evaluation (CTR-FLG-001). Two independent scopes exist: the vault scope, set by the local user within the modules compiled into their build and evaluated entirely on the device, and the relay scope, set per community (tenant) hosted on a relay by a key holding the tenant-scoped operator role (or admin) in F16.S01.M01 and evaluated by that relay for its relay commands. A flag value is off, on or beta(roles). The dependency rule (a module can be on only if all modules it depends_on are on, FLG-2) is checked when a value is written and again at evaluation, using the generated registry of F15.S04.M01. A disabled module returns FEATURE_DISABLED for its commands, stops its consumers and hides its entry points while keeping its data (FLG-3). When stored settings cannot be read, evaluation fails closed: last committed values, otherwise every switchable non-core module off. There is no global flag service and no remote switch that can disable features inside someone's vault.
 
 ## Responsibilities
 
-- Own the FlagSetting record for both scopes (vault and relay-community), with expectedRevision concurrency and a reason for each change.
+- Own the FlagSetting record for both scopes (vault and relay-community), with tenantId from the dispatch context (the vaultId of F15.S04.M03 in the vault, the relay tenant on a relay), expectedRevision concurrency and a reason for each change.
 - Evaluate effective state for a key and actor with the dependency rule, the feature-level cascade (feature off turns all its modules off) and defaults from the registry (FLG-4), caching results for at most 30 s and invalidating immediately in-process on change.
+- Fail closed when settings cannot be read - last committed values from memory or the mirror row, otherwise every switchable non-core module off with "settings unavailable", and DEPENDENCY_UNAVAILABLE for affected relay commands - so a module the user or operator switched off never comes back on silently.
 - Reject writes that would violate the dependency rule with PLATFORM_FLAG_DEPENDENCY, listing blocking or dependent modules, with an optional cascade that switches dependents off atomically.
 - Protect core features (F15, F16) from being switched off with PLATFORM_FLAG_LOCKED.
 - Emit platform.flag.changed for each changed key so local consumers (UI, command bus) refresh without polling.
+- Register the F10 privacy ports (ExportSectionPort, DeletionPort, RetentionPurgePort) for vault-scope settings with F10.S01.M03, F10.S01.M04 and F10.S01.M02 (N6).
 
 ## Not responsible for
 
-- The graph and defaults (F15.S04.M01 mod_feature).
+- The graph, defaults and module surfaces (F15.S04.M01 mod_feature).
 - Enforcing FEATURE_DISABLED on commands (F15.S02.M02 mod_api calls the evaluator).
 - Hiding UI entry points (each feature's UI uses the evaluator).
-- Tenants and their settings (F15.S04.M03 mod_tenants).
+- Tenants, their settings and the vaultId (F15.S04.M03 mod_tenants).
+- Relay role assignments (F16.S01.M01 RoleAssignment; this module only names the roles its capabilities need).
 - Future: percentage rollouts and experiments; Future: signed remote flag advisories that a user can accept or ignore.
 
 ## User stories
 
 - As a member, I can turn off modules I do not want, such as auctions, and the app hides them while keeping any data I already have.
 - As a member, I am told exactly which other modules must be on before I can enable one, or which would also switch off.
+- As a member, a module I switched off stays off even if my device cannot read my settings for a moment.
 - As a relay operator, I can enable beta features for operators only on my community before opening them to everyone, and my relay answers FEATURE_DISABLED for anything that is off.
 - As a developer, I can rely on one evaluation function in the vault and on the relay with identical dependency semantics.
 
@@ -40,43 +44,45 @@ Flag values and their evaluation (CTR-FLG-001). Two independent scopes exist: th
 - A module is on in the relay scope but off in the vault scope; relay commands for it work for other users of that relay, while this vault hides its UI and does not run its consumers.
 - A module is on in the vault scope but the selected relay has it off; the vault keeps local features working and shows relay-dependent actions as "this relay does not offer it", using FEATURE_DISABLED from the relay.
 - A beta(roles) value names a role that does not exist or contains duplicates; rejected with VALIDATION_FAILED.
-- Cache is stale by up to 30 s on another device; the relay is authoritative for relay commands at call time and the stale device sees FEATURE_DISABLED on its next call.
+- Cache is stale by up to 30 s on another device; the relay is authoritative for its own relay commands at call time and the stale device sees FEATURE_DISABLED on its next call.
+- The vault's settings rows cannot be read (IndexedDB error); evaluation uses the last committed values, or with none every switchable non-core module off, and Settings shows "settings unavailable"; federation publishing, push and location modules the user had switched off stay off.
+- A member without the tenant operator role calls platform.flag.reset_relay to put a module back to its default (on); refused with FORBIDDEN.
 
 ## UX and accessibility
 
-- Settings > Features (vault scope): feature groups with module toggles, dependency text from the registry, a Show beta features switch, and explanations of what happens to data when off.
-- Operator console > Flags (relay scope, part of the operator tool): table of keys with value, beta roles, last change, reason, with a Change dialog that shows blocking dependencies and a cascade checkbox.
+- Settings > Features (vault scope): feature groups with module toggles for modules of surface vault or both, dependency text from the registry, a Show beta features switch, and explanations of what happens to data when off; a 'Settings unavailable, optional modules are paused' banner when settings cannot be read.
+- Operator console > Flags (relay scope, part of the operator tool): table of keys of surface relay or both with value, beta roles, last change, reason, with Change and Reset to default dialogs that show blocking dependencies and a cascade checkbox.
 
-**States:** loading; ready; saving; conflict; blocked-by-dependency; locked-core; offline-read-only
+**States:** loading; ready; saving; conflict; blocked-by-dependency; locked-core; offline-read-only; settings-unavailable
 
 **Accessibility:** Toggles are real switches with accessible names including module title and dependency summary, and state changes are announced by aria-live polite.; The dependency dialog lists blocking modules as text and focus moves to its first action.; Targets are at least 44x44 px and the table is keyboard navigable.
 
 ## Owned data
 
-- `FlagSetting` (classrup.platform.flag_setting/v1, P1, RET-STANDARD)
+- `FlagSetting` (classrup.platform.flag_setting/v1, P3, RET-STANDARD)
 
 ## Interfaces
 
-- Commands: `platform.flag.set`, `platform.flag.set_relay`, `platform.flag.reset`
+- Commands: `platform.flag.set`, `platform.flag.set_relay`, `platform.flag.reset`, `platform.flag.reset_relay`
 - Queries: `platform.flag.evaluate`, `platform.flag.list`
 - Emits: `platform.flag.changed`
-- Consumes: `platform.tenant.created`
+- Consumes: `platform.tenant.created`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F15.S04.M01, F15.S04.M03, F15.S02.M03, CTR-FLG-001, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-OBS-001
+F15.S04.M01, F15.S04.M03, F15.S02.M03, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FLG-001, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-124-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-124-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-124-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-124-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-124-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-124-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-124-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-124-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-124-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-124-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-124-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-124-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -85,7 +91,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T18 pass in CI.
+- All tests T01-T21 pass in CI.
 - The dependency rule is never violated in stored or evaluated state for vault or relay scope.
-- A disabled module returns FEATURE_DISABLED, stops its consumers and keeps its data.
-- No remote party can change a vault's flags and a vault's flags are never transmitted.
+- A disabled module returns FEATURE_DISABLED, stops its consumers and keeps its data, and stays disabled when settings cannot be read.
+- No remote party can change a vault's flags, a vault's flags are never transmitted, and only a tenant operator or admin can set or reset relay flags.

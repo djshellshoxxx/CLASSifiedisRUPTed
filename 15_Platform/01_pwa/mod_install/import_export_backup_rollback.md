@@ -14,8 +14,8 @@
 
 - **export:** No section in classrup-export/v1; install preferences are not user data. The Settings > App page links to Export vault (F10.S01.M03).
 - **import:** Not applicable.
-- **backup:** Not backed up. The vault export is the user's backup (CTR-IOX-001 IOX-6); the explanation text shown at install recommends exporting at least every 30 days.
-- **migration rollback:** classrup.install.v1 carries a version field; unknown versions are ignored and replaced with defaults. Manifest id is never changed so that rollback or re-release keeps the installed app identity.
+- **backup:** Not backed up. The vault export is the user's backup (CTR-IOX-001 IOX-6); the explanation text shown at install recommends exporting at least every 30 days, or every 7 days when persistent storage is denied.
+- **migration rollback:** classrup.install.v1 carries a version field; unknown versions are ignored and replaced with defaults. Manifest id is never changed so that rollback or re-release keeps the installed app identity. A rollback build carries a higher releaseSeq than the build it replaces so V07 accepts it.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,7 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-115-09.T15 | integration | PS-115-10.R01, PS-115-10.R02, PS-115-10.R03 | roll back to build A and reset app settings | A installs and runs, preferences cleared on reset, vault untouched, export bundle contains no install state |
+| TEST-PS-115-09.T15 | integration | PS-115-10.R01, PS-115-10.R03 | roll back to build A and reset app settings | A installs and runs, preferences cleared on reset, vault untouched, export bundle contains no install state |
+| TEST-PS-115-09.T17 | e2e | PS-115-10.R02 | install, create a vault, uninstall the app (site data kept) and reinstall on the same origin; then clear site data | after reinstall the IndexedDB vault marker of F15.S01.M01 is present and the vault opens; after clearing site data the data-loss warning appears |
 
 ## Dependencies
 

@@ -20,7 +20,7 @@
 - CI log: registry summary line with counts and hash; validation errors list module IDs only.
 
 **Budgets**
-- Generation ≤ 2 s for 148 modules; registry JSON ≤ 64 KiB gzip and ≤ 512 KiB raw.
+- Generation ≤ 2 s for the current catalog (148 modules today) and ≤ 2 s per 1 000 modules; registry JSON ≤ 64 KiB gzip and ≤ 512 KiB raw.
 - Query p95 ≤ 5 ms in memory on a Moto G-class device; relay p95 ≤ 150 ms (OBS-4).
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -29,7 +29,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-123-09.T10 | load | PS-123-08.R01, PS-123-08.R03 | generate for 148 modules and 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for catalog, size within budgets, query p95 ≤ 5 ms |
+| TEST-PS-123-09.T10 | load | PS-123-08.R01, PS-123-08.R03 | generate for the catalog and for 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for the catalog and ≤ 2 s per 1 000 modules, size within budgets, query p95 ≤ 5 ms |
 | TEST-PS-123-09.T11 | integration | PS-123-08.R02 | relay metrics scrape after queries | duration histogram exported per CTR-OBS-001 |
 
 ## Dependencies

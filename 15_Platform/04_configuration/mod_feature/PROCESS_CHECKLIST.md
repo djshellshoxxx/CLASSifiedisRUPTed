@@ -3,9 +3,9 @@
 **Status:** SPECIFIED. > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
 - [x] [PS-123-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
-- [x] [PS-123-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
+- [x] [PS-123-02 Validation rules](validation_rules.md) — 4 requirements, tests mapped
 - [x] [PS-123-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
-- [x] [PS-123-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped
+- [x] [PS-123-04 Commands, queries and events](commands_queries_events.md) — 4 requirements, tests mapped
 - [x] [PS-123-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-123-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped
 - [x] [PS-123-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 3 requirements, tests mapped

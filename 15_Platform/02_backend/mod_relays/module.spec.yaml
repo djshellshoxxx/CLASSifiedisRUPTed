@@ -236,7 +236,7 @@ processes:
       - "T03 | Slowloris and oversized body denial of service | headersTimeout 10 s, requestTimeout 30 s, JSON body limit 262144 bytes, media 5308416 bytes, per-connection cap 256, reverse proxy rate limits"
       - "T04 | Cross-origin abuse from a malicious page | CORS allowlist without wildcard, no cookies, bearer tokens only in Authorization headers, preflight cache 600 s"
       - "T05 | Malicious relay impersonates another or a thief forks the identity | relayId self-certifying from the genesis key; rotations signed by the previous key with prevKeyId and seq; two rotations from one prevKeyId are equivocation that vaults detect and freeze; new identities always get a new relayId"
-      - "T06 | Config secrets leak through logs or crash dumps | config printer redacts names matching KEY|SECRET|PASSPHRASE|TOKEN; *_FILE variants for secrets; startup errors list names only"
+      - "T06 | Config secrets leak through logs or crash dumps | config printer redacts names containing KEY, SECRET, PASSPHRASE or TOKEN; *_FILE variants for secrets; startup errors list names only"
       - "T07 | Operator or seizer rebuilds the communication graph from access logs | route templates only, no mailbox or listing ids, no query strings, no IP prefix on mailbox routes; mailbox-id canary test"
       - "T08 | A receipt for one mailbox presented as proof for another | receipt binds destination and the digest of the exact bytes; vault verification compares both"
     abuse_controls:

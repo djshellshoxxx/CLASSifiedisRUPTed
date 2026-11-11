@@ -6,80 +6,86 @@
 
 ## Purpose
 
-A tenant is relay-local configuration: a community hosted by one relay, with its allowed currencies, jurisdiction profile, default locale, limits and operator assignment. A relay may host several tenants, and a single-community relay has one fixed tenant created at bootstrap (CTR-ID-001 ID-6). Under ADR-0016 the vault has no tenants and no accounts; it has local settings of the same shape (default locale, preferred currencies, local limits) that never leave the device. Tenant configuration governs only what that relay hosts, and "suspended" means suspended on that relay (CTR-CAP-001 CAP-9). Operators are device keys (did:key), assigned by the relay configuration, not user accounts in a central database.
+A tenant is relay-local configuration: a community hosted by one relay, with its allowed currencies, jurisdiction profile, default locale and limits. A relay may host several tenants, and a single-community relay has one fixed tenant created at bootstrap (CTR-ID-001 ID-6). Operators and admins are not stored here: the single source of operator and admin roles is the F16.S01.M01 RoleAssignment, scoped tenant:<id> for tenant operators, and bootstrap creates the tenant together with its first operator and admin assignments in one transaction. Every configuration revision is published as a relay-signed statement (classrup.platform.tenant_config/v1) that vaults store and compare, status and limits are enforced by named modules through TenantPort, and "suspended" means suspended on that relay (CTR-CAP-001 CAP-9). The vault has no relay tenant record: its ID-6 tenant slot is the per-vault UUIDv7 vaultId created at vault initialisation and kept in the vault's LocalSettings, together with local preferences (default locale, preferred currencies, local limits) that never leave the device.
 
 ## Responsibilities
 
-- Own the Tenant record on a relay with slug, display name, status, allowed currencies (1..20), jurisdiction profile id, default locale, limits and operator device keys (1..10), with revision-based concurrency.
-- Bootstrap the first tenant from the relay CLI with filesystem access (relay tenant bootstrap --slug <slug> --operator <did:key>), and allow an admin operator to create further tenants on a multi-community relay (up to 50 per relay).
-- Provide the configuration query used by other modules to apply currencies, locale and limits, with a 30 s cache and invalidation on change.
-- Own the vault-local LocalSettings record with the same settings shape, stored only in the user's vault and included in the user's export.
-- Emit platform.tenant.created and platform.tenant.configured, plus platform.tenant.status_changed, with payloads that let consumers react without reading the tenant.
+- Own the Tenant record on a relay with slug, display name, status, allowed currencies (1..20), jurisdiction profile id, default locale and limits, with revision-based concurrency; operator keys are a derived read of F16.S01.M01 RoleAssignment records of scope tenant:<id>.
+- Bootstrap the first tenant from the relay CLI with filesystem access (relay tenant bootstrap --slug <slug> --operator <did:key> --admin <did:key>), creating the tenant and its first operator and admin assignments through the F16 RoleBootstrapPort in the same transaction, and allow a relay admin to create further tenants on a multi-community relay (up to 50 per relay).
+- Publish every configuration revision as a relay-signed classrup.platform.tenant_config/v1 statement (signed through the RelaySignerPort of F15.S02.M01) returned by platform.tenant.get, so vaults can store, verify and compare what the relay told them.
+- Register TenantPort with the F15.S02.M02 bus (writes to a suspended or archived tenant answer PLATFORM_TENANT_SUSPENDED) and with the relay process, and serve limits(tenantId) to the module that enforces each limit - maxIndexedListingsPerPublisher and allowedCurrencies the relay index and publish intake (F06.S01.M01, F11.S01.M02), maxUploadBytes the media upload route (F15.S02.M01 into F15.S02.M03), maxMailboxBytesPerRecipient and maxEnvelopeBytes the mailbox (F08.S01.M01), maxCycleLength relay matching (F02.S02.M03).
+- Own the vault-local LocalSettings record holding the vaultId (the ID-6 tenantId of every vault record), local preferences and local limits (maxOutboxEntries enforced by F15.S01.M01, maxLocalAttachmentBytes by the vault blob store), stored only in the user's vault and included in the user's export.
+- Emit platform.tenant.created, platform.tenant.configured (with the full configuration snapshot, also at creation and on operator changes) and platform.tenant.status_changed, so consumers react without reading the tenant.
+- Register the F10 privacy ports for LocalSettings (N6) by inverted port registration, because F10.S01.M04 already depends on F15.S01.M01, which depends on this module.
 
 ## Not responsible for
 
-- Registering currencies and validating that a code is a registered asset (F09.S03.M01 consumes tenant events and enforces membership at use time).
+- Registering currencies and validating that a code is a registered asset (F09.S03.M01 CurrencyDef); refusing records in a currency the tenant does not allow is done by the relay index and publish intake (F06.S01.M01, F11.S01.M02) through TenantPort.
 - Resolving jurisdiction profiles to retention and legal rules (F18.S01.M01); this module stores only the profile id and F18 falls back to the generic profile when the id is unknown.
 - Message catalogs and locale negotiation (F14.S02.M01 falls back to en for an unsupported default locale).
-- Role assignment records and authorization decisions (F16.S01.M01 consumes the operator list from tenant events).
+- Role assignment records and authorization decisions (F16.S01.M01 RoleAssignment is the single source of operator and admin roles; this module calls it through RoleBootstrapPort and security.roleassignment.assign and revoke and stores no operator list).
+- Rate policy (F12.S03.M03 RatePolicy owns request rates; the tenant record has no rate limit).
 - Flag values (F15.S04.M02) and relay process configuration (F15.S02.M01).
 - Future: per-tenant branding and custom domains; Future: signed tenant directory shared between federated relays.
 
 ## User stories
 
-- As a relay operator, I can start a relay for my town, name the community, choose EUR as the only currency, set the German default locale and limits, and name my own device key as operator.
+- As a relay operator, I can start a relay for my town, name the community, choose EUR as the only currency, set the German default locale and limits, and name my own device key as the first operator and admin.
 - As a relay operator running two communities, I can configure each with different currencies and limits and suspend one without affecting the other.
 - As a member, I can set my own default language and preferred currencies on my device, and these settings are not shared with any relay.
-- As a member, I can see which currencies, jurisdiction profile and limits the selected relay applies before I publish.
+- As a member, I can see which currencies, jurisdiction profile, limits and operators the selected relay applies before I publish, signed by the relay, and I am told what changed since my last visit.
 
 ## Edge cases
 
-- Shrinking allowedCurrencies while listings in a removed currency exist; allowed, existing records keep their currency, consumers refuse new records in removed currencies, and the change event carries the removed codes.
-- Removing the last operator key; refused with PLATFORM_TENANT_LAST_OPERATOR so the community cannot become unmanageable.
+- Shrinking allowedCurrencies while listings in a removed currency exist; allowed, existing records keep their currency, the relay index and publish intake refuse new projections in removed currencies through TenantPort, and the change event carries the removed codes.
+- Removing the last operator assignment of a tenant; refused with PLATFORM_TENANT_LAST_OPERATOR so the community cannot become unmanageable.
 - Two operators edit settings at once; the second gets CONFLICT_REVISION with currentRevision.
-- A tenant is suspended; the relay refuses writes for it with PLATFORM_TENANT_SUSPENDED while reads and exports stay available, and other tenants and all vaults are unaffected.
-- The slug is already used on this relay; refused with PLATFORM_TENANT_SLUG_TAKEN.
-- Bootstrap is run twice with the same arguments; the second run finds the existing tenant and returns it unchanged (idempotent), a different slug on a single-tenant relay is refused.
-- A limit is set above its allowed maximum (for example maxUploadBytes 50 MiB); refused with VALIDATION_FAILED and the maximum in fields.
+- A tenant is suspended; the bus TenantPort stage refuses member writes for it with PLATFORM_TENANT_SUSPENDED while reads and exports stay available, its operators may still configure and resume it, and other tenants and all vaults are unaffected.
+- The slug is malformed; refused with VALIDATION_FAILED; the slug is already used on this relay; refused with PLATFORM_TENANT_SLUG_TAKEN.
+- Bootstrap is run twice with the same arguments; the second run finds the existing tenant and role assignments and returns them unchanged (idempotent), a different slug on a single-tenant relay is refused.
+- A limit is set above its allowed maximum (for example maxUploadBytes 10 MiB or maxEnvelopeBytes 1 MiB); refused with VALIDATION_FAILED and the maximum (5242880, 262144) in fields.
+- An admin grants a tenant operator role directly through security.roleassignment.assign; this module consumes security.role.assigned and publishes a new signed configuration listing the new operator key.
+- A tenant operator tries to rotate the relay identity, run a backup or replay dead letters; refused with FORBIDDEN because those relay-wide capabilities need the relay_operator role.
+- The relay shows different configurations to different clients; each is a relay-signed statement with a revision, so a vault that sees two different statements for one revision holds proof and shows a warning.
 - The vault default locale is unsupported by the build; the app falls back to en and shows a notice, no error.
 
 ## UX and accessibility
 
-- Operator console > Community: form for display name, currencies (chip input with ISO code check), jurisdiction profile (select), default locale (select), limits table with defaults and maximums, operator keys list with add and remove.
+- Operator console > Community: form for display name, currencies (chip input with ISO code check), jurisdiction profile (select), default locale (select), limits table with defaults, maximums and the enforcing module, and the operators list (from F16 role assignments) with add (admin) and remove (admin).
 - Settings > Preferences (vault): language, preferred currencies, display options; clearly marked 'Stored only on this device'.
-- Relay details sheet (client): shows the selected relay's community name, allowed currencies, jurisdiction profile id, limits and status.
+- Relay details sheet (client): shows the selected relay's signed community configuration (name, allowed currencies, jurisdiction profile id, limits, operators, status), its revision and 'Changed since your last visit' with the differences.
 
-**States:** loading; ready; saving; conflict; suspended; archived; offline-read-only; validation-error
+**States:** loading; ready; saving; conflict; suspended; archived; offline-read-only; validation-error; config-equivocation
 
 **Accessibility:** Every field has a visible label with units (for example bytes shown as MiB) and error messages are linked with aria-describedby.; Currency chips are removable by keyboard with accessible names, and status changes are announced via aria-live polite.; Destructive actions (suspend, archive, remove operator) use a confirmation dialog with focus on the cancel action.
 
 ## Owned data
 
 - `Tenant` (classrup.platform.tenant/v1, P0, RET-STANDARD)
-- `LocalSettings` (classrup.platform.local_settings/v1, P1, RET-STANDARD)
+- `LocalSettings` (classrup.platform.local_settings/v1, P3, RET-STANDARD)
 
 ## Interfaces
 
 - Commands: `platform.tenant.create`, `platform.tenant.configure`, `platform.tenant.assign_operator`, `platform.tenant.change_status`, `platform.local_settings.update`
 - Queries: `platform.tenant.get`, `platform.tenant.list`, `platform.local_settings.get`
 - Emits: `platform.tenant.created`, `platform.tenant.configured`, `platform.tenant.status_changed`
-- Consumes: none
+- Consumes: `security.role.assigned`, `security.role.revoked`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F15.S02.M03, F15.S04.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001
+F15.S02.M03, F15.S02.M01, F15.S04.M01, F16.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001, CTR-SCH-001, CTR-FED-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-125-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-125-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-125-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-125-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-125-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-125-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-125-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-125-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-125-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-125-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-125-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-125-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-125-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -88,7 +94,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T18 pass in CI.
-- A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits.
-- Operator changes are validated, audited and visible to clients; the last operator can never be removed.
-- LocalSettings never leave the device and no tenant concept exists in the vault.
+- All tests T01-T27 pass in CI.
+- A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits, and every limit is enforced by its named module.
+- Operator changes are made only through F16 role assignments by admins, are validated, audited and visible to clients as signed configuration; the last operator can never be removed.
+- LocalSettings never leave the device, no relay tenant record exists in the vault, and every vault record carries its vault's own vaultId as tenantId.

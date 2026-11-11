@@ -117,7 +117,7 @@ processes:
            // miss: GET https://<relay>/media/v1/sha256-<b64> per bound origin; body hashed; mismatch -> discard, count, next relay
       4. registerRoute(({url}) => boundRelayOrigins.includes(url.origin), new NetworkOnly())   // relay commands, mailbox, private media
       5. default: no handler (browser network)
-      page: <img src="/__media/sha256-Qm3...">; without a controlling worker the page fetches with mode cors, credentials omit, verifies and renders a blob: URL
+      page: <img src="/__media/sha256-Qm3...">; without a controlling worker the page fetches with mode cors, credentials omit (the equivalent of crossorigin=anonymous), verifies and renders a blob: URL
       CSP (page): img-src 'self' blob: data:; connect-src 'self' https:  (relay origins are user-selected; the allowlist is enforced in code)
       client -> waiting worker: GET_VERSION -> { buildId, nonce }; after the user taps Update: postMessage({ type: 'SKIP_WAITING', nonce })
   authorization_capabilities:

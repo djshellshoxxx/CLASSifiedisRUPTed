@@ -1,6 +1,6 @@
 # PS-120-10 — Import, export, backup and rollback: Backups
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M02 Backups](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/backups` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M02 Backups](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/backups` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -13,9 +13,9 @@
 ## Specification
 
 - **export:** JSON Lines of BackupRecord (schema classrup.platform.backup_record/v1) via relay backup list --json; manifests are standalone JSON files next to artifacts.
-- **import:** relay backup import-catalog <dir> rebuilds BackupRecords from manifests after a restore; artifacts are never decrypted by the import.
+- **import:** relay backup import-catalog <dir> rebuilds BackupRecords from manifests after a restore, accepting only manifests whose MAC verifies with the backup key and which link into the chain (V10); artifacts are never decrypted by the import.
 - **backup:** This module is the relay backup. The backup key and relay identity key file are backed up by the operator separately and never inside backup artifacts. Vault export remains the primary backup of private records.
-- **migration rollback:** Manifest format carries formatVersion 1; unknown future versions are skipped with a warning. Rolling back the relay release leaves artifacts untouched; restore always creates a new instance and never downgrades data in place.
+- **migration rollback:** Manifest format carries formatVersion 2 (per-artifact salt, MAC and chain hash); formatVersion 1 manifests from before this change are readable for verification only and never accepted as a chain head; unknown future versions are skipped with a warning. Rolling back the relay release leaves artifacts untouched; restore always creates a new instance and never downgrades data in place.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -28,4 +28,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S02.M01, F15.S02.M03, F15.S03.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -13,15 +13,15 @@
 ## Specification
 
 **Metrics**
-- local counters in meta (never transmitted): outbox_delivery_total{outcome=transport_acknowledged|completed|retry|conflict|failed|expired}
+- local counters in meta (never transmitted): outbox_delivery_total{outcome=transport_acknowledged|peer_accepted|retry|conflict|failed|relay_rejected|unsafe_replay|expired|restore_resend}
 - local gauge outbox_pending_count and storage usageRatio, shown in the Storage status panel
 - local histogram outbox_age_ms (createdAt to terminal state), last 500 samples
 
 **Logs**
-- Local diagnostic log in IndexedDB store diag (ring buffer, 500 lines): outbox.delivery {entryIdHash, state, attempts, code} — never payload or identifiers; exportable by the user, never uploaded.
+- Local diagnostic log in an F15.S02.M03 record ring buffer (500 lines): outbox.delivery {entryIdHash, state, attempts, code} — never payload or identifiers; exportable by the user, never uploaded.
 
 **Budgets**
-- enqueue p95 ≤ 30 ms from call to committed IndexedDB transaction on a Moto G-class device.
+- enqueue p95 ≤ 30 ms added to the enclosing IndexedDB transaction on a Moto G-class device.
 - Outbox module adds ≤ 5 KiB gzip to the initial bundle and ≤ 20 KiB gzip to the deferred chunk; initial JS stays within 150 KiB gzip (OBS-5).
 - Delivering 200 queued entries takes ≤ 200 x relay write p95 (300 ms) = 60 s sequentially and never blocks the main thread longer than 50 ms.
 
@@ -31,10 +31,10 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-116-09.T15 | a11y | PS-116-08.R01 | outbox sheet, conflict dialog and storage panel scanned with axe | zero serious or critical issues; aria-live announces state changes; targets ≥ 44 px |
+| TEST-PS-116-09.T13 | abuse | PS-116-08.R01, PS-116-07.R03 | inspect network traffic and script injection under CSP during a full session | no telemetry request; inline script blocked; diagnostics stay in the vault and are exportable |
 | TEST-PS-116-09.T17 | load | PS-116-08.R02, PS-116-08.R03 | enqueue 200 entries then deliver against stub with 300 ms latency | enqueue p95 ≤ 30 ms, longest main-thread task ≤ 50 ms, total ≤ 60 s |
-| TEST-PS-116-09.T21 | integration | PS-116-01.R02, PS-116-08.R01 | storage status with persist() denied, usage 85 percent, last export 31 days ago, and a missing storageMarker | evictionRisk true, exportOverdue true, data-loss warning shown with restore action, no entries fabricated |
+| TEST-PS-116-09.T21 | integration | PS-116-04.R07, PS-116-08.R01 | storage status with persist() denied and last export 8 days ago; then persisted with last export 31 days ago; usage 85 percent and a missing storageMarker | threshold 7 and exportOverdue true; threshold 30 and exportOverdue true; evictionRisk true; data-loss warning with restore action; no entries fabricated |
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

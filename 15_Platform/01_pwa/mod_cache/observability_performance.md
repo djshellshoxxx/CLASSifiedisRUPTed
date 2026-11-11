@@ -1,6 +1,6 @@
 # PS-114-08 — Observability and performance: PWA caching
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M02 PWA caching](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/cache` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M02 PWA caching](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/cache` · **Contracts:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -13,8 +13,8 @@
 ## Specification
 
 **Metrics**
-- classrup_platform_sw_cache_total{outcome=hit|miss|stale} (local diagnostics counter, route class image|shell only, never transmitted)
-- classrup_platform_sw_update_total{outcome=prompted|accepted|deferred}
+- classrup_platform_sw_cache_total{outcome=hit|miss|digest_mismatch} (local diagnostics counter, route class image|shell only, never transmitted)
+- classrup_platform_sw_update_total{outcome=prompted|accepted|deferred|killed}
 - classrup_platform_sw_precache_bytes (CI gauge per build)
 
 **Logs**
@@ -22,7 +22,7 @@
 
 **Budgets**
 - Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip.
-- Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms.
+- Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms; SHA-256 verification of a 1 MiB image ≤ 15 ms (SubtleCrypto).
 - Activation cleanup completes in ≤ 500 ms for 5 stale caches.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -36,4 +36,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M01, F15.S02.M03, CTR-CAP-001, CTR-ID-001, CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

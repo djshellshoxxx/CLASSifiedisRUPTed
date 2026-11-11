@@ -6,13 +6,14 @@
 
 ## Purpose
 
-A static, generated, acyclic registry of every ClassRup feature (F01..F18, 18 features) and module (148 in the current catalog) with its scope, default state and depends_on edges. The registry is generated at build time from planning/modules.yaml and the depends_on lists of each module.spec.yaml, validated for cycles, unknown references and default-state consistency, and shipped inside the isomorphic package so that both the vault (PWA) and an optional relay read the same graph (CTR-FLG-001). It holds no per-user or per-relay values; those belong to F15.S04.M02.
+A static, generated, acyclic registry of every ClassRup feature and module listed in the current catalog (planning/modules.yaml) with its scope, surface (vault, relay or both), default state and depends_on edges. The registry is generated at build time from planning/modules.yaml and the depends_on lists of each module.spec.yaml, validated for cycles, unknown references and default-state consistency, and shipped inside the isomorphic package so that both the vault (PWA) and an optional relay read the same graph (CTR-FLG-001). It holds no per-user or per-relay values; those belong to F15.S04.M02.
 
 ## Responsibilities
 
 - Generate registry.generated.json (features, modules, edges, defaults, content hash) deterministically from planning/modules.yaml and the module specs, and fail the build when the checked-in output is stale.
 - [object Object]
-- Mark FUTURE-scope modules default off and not registered (FLG-4) and mark features F15 Platform and F16 Security as core (not switchable off).
+- Mark FUTURE-scope modules default off and not registered (FLG-4), mark features F15 Platform and F16 Security as core (not switchable off), and keep a module whose module.spec.yaml is missing default off with dependsOnKnown false so it can never be switched on.
+- Derive each module's surface (vault, relay or both) from its catalog code path so that Settings > Features in the vault and the operator console list only the modules that run there.
 - Expose read-only registry queries (list, dependencies, dependents, topological order) that run locally in the vault and on a relay.
 
 ## Not responsible for
@@ -34,12 +35,14 @@ A static, generated, acyclic registry of every ClassRup feature (F01..F18, 18 fe
 - A module spec lists a module ID that is not in planning/modules.yaml; generation fails with PLATFORM_FEATURE_UNKNOWN_DEPENDENCY naming the pair.
 - An MVP module depends on a FUTURE module, so its default on state would violate the dependency rule; generation fails with PLATFORM_FEATURE_DEFAULT_VIOLATION.
 - planning/modules.yaml changed but the generated file was not regenerated; the CI check fails with PLATFORM_FEATURE_REGISTRY_STALE.
-- A module has no module.spec.yaml yet; generation emits it with dependsOn from the catalog only and flags specMissing, and strict mode fails.
+- A module has no module.spec.yaml yet; generation emits it with dependsOn empty, dependsOnKnown false, defaultState off and registered false, so it can never be switched on and no dependent can default on, and strict mode fails with PLATFORM_FEATURE_SPEC_MISSING.
+- A relay-only module (for example F15.S03.M02 backups, code under apps/relay) appears in the vault's Settings > Features; it does not, because its surface is relay and the vault lists only vault and both.
 - A client asks for the dependencies of an unknown key; the query returns NOT_FOUND.
 
 ## UX and accessibility
 
-- Settings > Features: grouped list of features with module toggles (toggle behavior belongs to F15.S04.M02), each row showing 'Needs: <module names>' from this registry.
+- Settings > Features (vault): grouped list of features with module toggles for modules with surface vault or both (toggle behavior belongs to F15.S04.M02), each row showing 'Needs: <module names>' from this registry.
+- Operator console > Modules (relay): the same list filtered to surface relay or both.
 
 **States:** loading; ready; unknown-key
 
@@ -65,9 +68,9 @@ CTR-FLG-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001
 | ID | Process | Requirements |
 |---|---|---|
 | PS-123-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-123-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-123-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-123-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-123-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-123-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-123-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-123-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-123-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -79,7 +82,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T15 pass in CI.
+- All tests T01-T17 pass in CI.
 - The real catalog generates an acyclic registry with defaults that satisfy the dependency rule.
 - Adding a cycle or an unknown dependency to any module spec fails CI with a stable code and a readable path.
 - The registry works fully offline and cannot be modified at runtime.

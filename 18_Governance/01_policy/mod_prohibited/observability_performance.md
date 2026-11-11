@@ -18,10 +18,10 @@
 - classrup_governance_rule_pack_applied_total{outcome} (local)
 
 **Logs**
-- info prohibited_rule.evaluated {verdict, matchedCount, rulesetVersion, correlationId} in local diagnostics; no text and no keywords.
+- info prohibited_rule.evaluated {verdict, matchedCount, packsDigest, correlationId} in local diagnostics; no text and no keywords.
 
 **Budgets**
-- evaluate p95 <= 20 ms for 8 000 code points against 2 000 rules on Moto G-class hardware.
+- evaluate p95 <= 20 ms for 8 000 code points against 2 000 rules, and <= 30 ms when 200 of them are sensitive (n-grams of 1 to 5 tokens hashed once per evaluation), on Moto G-class hardware.
 - apply_pack of 2 000 rules p95 <= 800 ms; relay evaluate p95 <= 100 ms at 50 req/s.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -30,9 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-146-09.T05 | integration | PS-146-03.R03, PS-146-08.R03 | emergency rule passes 7 days | retired automatically, emergency_expired event emitted, evaluation ignores it |
-| TEST-PS-146-09.T13 | load | PS-146-08.R01, PS-146-08.R02, PS-146-08.R03 | 2 000 rules, 8 000 code points on Moto G profile; relay at 50 req/s | evaluate p95 <= 20 ms, apply p95 <= 800 ms, relay p95 <= 100 ms, no telemetry |
+| TEST-PS-146-09.T13 | load | PS-146-08.R01, PS-146-08.R02, PS-146-08.R03 | 2 000 rules (and the 200-sensitive-rule pack), 8 000 code points on Moto G profile; relay at 50 req/s | evaluate p95 <= 20 ms (<= 30 ms with sensitive rules), apply p95 <= 800 ms, relay p95 <= 100 ms, no telemetry |
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F18.S01.M01, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F18.S01.M01, F18.S02.M01, F16.S02.M03, F11.S01.M01, F07.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

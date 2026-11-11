@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-144-10.R01** The user export contains the applied Category mirror with provenance and the trusted publisher list; publisher vaults also export staged changes and their signing history.
-- **PS-144-10.R02** Import re-verifies the pack signature and tree invariants; categories failing verification are not applied.
+- **PS-144-10.R01** The user export contains the applied Category mirror with provenance and held changes; the trusted-publisher list is exported by F18.S02.M01; publisher vaults also export staged changes and their signing history.
+- **PS-144-10.R02** Import re-verifies the pack signature, tree invariants and recorded decisions; categories failing verification are not applied.
 - **PS-144-10.R03** Schema changes follow expand/contract and keep v1 readable for 180 days; the last 3 packs allow reverting by applying an older signed snapshot re-released with a higher version.
 
 ## Specification
 
-- **export:** Sections governance.categories and governance.trusted_publishers in classrup-export/v1, one line per Category (schema classrup.governance.category/v1) and the latest pack statement.
-- **import:** Pack signature and publisher are re-verified; untrusted publishers import as pending; id reuse or tree violations reject the pack; the dry-run lists changed categories.
+- **export:** Section governance.categories in classrup-export/v1, one line per Category (schema classrup.governance.category/v1) and the latest pack statement with its receipt.
+- **import:** Pack signature and publisher are re-verified; packs from publishers not yet trusted in the importing vault go to the pending inbox; id reuse, cross-publisher collisions or tree violations reject the pack; the dry-run lists changed categories.
 - **backup:** Vault export is the primary backup (IOX-6); relays hold only signed public packs and are recoverable from the publisher's vault.
-- **migration rollback:** Additive optional fields only in v1; rollback to the previous app release is safe because the mirror is readable; to undo a taxonomy change the publisher re-releases the earlier content under a higher version.
+- **migration rollback:** Additive optional fields only in v1; rollback to the previous app release is safe because the mirror is readable; to undo a taxonomy change the publisher re-releases the earlier content under a higher version, with a decision when it changes restricted flags.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S02.M01, F16.S02.M03, F11.S01.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

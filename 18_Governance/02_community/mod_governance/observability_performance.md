@@ -16,12 +16,14 @@
 - classrup_governance_proposals_total{outcome} (local)
 - classrup_governance_comments_total{outcome} (relay and local)
 - classrup_governance_verify_duration_ms (local histogram)
+- classrup_governance_pending_statements{reason} (local gauge)
 
 **Logs**
 - info policy_proposal.decided {proposalId, outcome, correlationId} in local diagnostics.
+- warn policy_proposal.conflicted {proposalId, conflictCount, correlationId}; never comment bodies.
 
 **Budgets**
-- verify p95 <= 20 ms; receive p95 <= 80 ms including signature verification on Moto G-class hardware.
+- verify p95 <= 20 ms with cached statements; receive p95 <= 80 ms including signature verification on Moto G-class hardware.
 - Relay comment accept p95 <= 300 ms at 50 req/s.
 - Proposal list of 50 items p95 <= 100 ms.
 
@@ -35,4 +37,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M03, F11.S01.M01, F15.S02.M01, F12.S03.M03, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

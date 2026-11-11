@@ -18,11 +18,11 @@
 - classrup_governance_pack_downloads_total (relay)
 
 **Logs**
-- info category.pack_applied {packVersion, publisherFingerprint, correlationId} in local diagnostics.
+- info category.pack_applied {packVersion, publisherFingerprint, heldCount, correlationId} in local diagnostics.
 
 **Budgets**
 - tree query for 2 000 categories p95 <= 60 ms; get/resolve p95 <= 10 ms on Moto G-class hardware.
-- apply_pack of a 2 000-category pack p95 <= 800 ms.
+- apply_pack of a 2 000-category pack with 50 embedded decisions p95 <= 800 ms.
 - Relay pack download p95 <= 150 ms at 50 req/s.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -35,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S02.M01, F16.S02.M03, F11.S01.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

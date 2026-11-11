@@ -6,20 +6,21 @@
 
 ## Requirements
 
-- **PS-148-05.R01** Vault policy: compiling, recording and discarding require the operator key; publishing requires a different registered operator key; applying a received report is open to the vault owner for trusted publishers.
-- **PS-148-05.R02** Relay policy (CAP-9): the relay serves published reports to anonymous readers and accepts uploads only from its operator keys; a relay role has no power over other relays.
+- **PS-148-05.R01** Vault policy: compiling, importing snapshots and discarding require an operator key of the relay; publishing requires a different operator key of the same relay; applying a received report is open to the vault owner for publishers trusted for scope transparency.
+- **PS-148-05.R02** Relay policy (CAP-9): the relay serves published reports to anonymous readers, and serves counter snapshots and accepts legal tallies and report uploads only on requests signed by its operator keys; a relay role has no power over other relays.
 - **PS-148-05.R03** Counter data is operator-private and is not readable by members or by other relays.
 
 ## Specification
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| governance.transparency.record | owner | local principal holds the operator key; period not frozen |
-| governance.transparency.compile | owner | local principal holds the operator key; period ended |
-| governance.transparency.review | owner | local key is a registered operator key different from the compiler key; report status computed |
-| governance.transparency.apply | owner | vault unlocked; statement signature valid and publisher trusted |
+| governance.transparency.record | relay-operator | relay policy: request signed by an operator device key of this relay; period not frozen; 100 requests per day per key |
+| governance.transparency.compile | owner | local principal holds an operator key of the relay (verified tenant_config operatorKeys); period ended |
+| governance.transparency.review | owner | local key is an operator key of the relay different from the draft's compiler key; draft verified and awaiting_review |
+| governance.transparency.apply | owner | vault unlocked; statement signatures valid and publisher relay trusted for scope transparency (otherwise held pending); drafts only when addressed to a local operator key |
 | governance.transparency.read_public | relay-anonymous | public signed reports; relay policy rate limit 60 requests per minute per IP prefix |
-| governance.transparency.relay_publish | relay-operator | relay policy: request signed by a registered operator device key; report <= 64 KiB |
+| governance.transparency.relay_publish | relay-operator | relay policy: request signed by an operator device key of this relay; report carries two distinct operator signatures; report <= 64 KiB; 5 uploads per day per key |
+| governance.transparency.relay_snapshot | relay-operator | relay policy: request signed by an operator device key of this relay; response sealed to that key; 20 requests per day per key |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -27,9 +28,9 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-148-09.T05 | integration | PS-148-03.R02, PS-148-05.R02 | same key publishes; reviewer different key publishes | GOVERNANCE_TRANSPARENCY_SELF_REVIEW for the same key; success for O2 |
-| TEST-PS-148-09.T08 | abuse | PS-148-05.R01, PS-148-05.R03 | member reads counters; non-operator computes; relay upload with unknown key | FORBIDDEN or NOT_FOUND; relay refuses upload |
+| TEST-PS-148-09.T08 | abuse | PS-148-05.R01, PS-148-05.R03, PS-148-01.R03 | member reads counters; non-operator computes; X requests a snapshot; inspect the sealed snapshot in transit | FORBIDDEN or NOT_FOUND; snapshot refused to X; counters only on the relay and the snapshot readable only by the requesting operator key |
+| TEST-PS-148-09.T18 | integration | PS-148-05.R02, PS-148-04.R03 | anonymous get_published on the relay; relay_upload by O2 with a two-key report, with a single-signature report and by X | anonymous read served; two-key upload stored with receipt; single-signature and X uploads refused |
 
 ## Dependencies
 
-Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S02.M01, F16.S02.M03, F11.S01.M01, F15.S02.M01, F15.S04.M03, F07.S02.M01, F12.S01.M01, F12.S01.M03, F12.S02.M01, F12.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

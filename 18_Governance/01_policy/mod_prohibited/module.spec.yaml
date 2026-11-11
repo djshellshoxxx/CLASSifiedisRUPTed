@@ -4,40 +4,49 @@ summary: >-
   A versioned set of prohibited-item rules (categories and keyword phrases) evaluated when a listing is
   published or edited. Each rule has an action: block, review (the owner must read a notice and confirm), or
   allow_with_notice. Rules are authored by a publisher (the project's bundled pack or a relay operator),
-  released as signed rule packs (classrup.governance.rule_pack/v1), and evaluated locally in the user's vault, so
-  publishing works offline. A relay applies its own rule pack to what it hosts. Rules are configuration, not a
-  legal determination, and evasion is possible; the evaluation is a safeguard, not a guarantee.
+  released as signed rule packs (classrup.governance.rule_pack/v1) that declare the taxonomy they are scoped to and
+  embed the decisions approving newly activated rules, and evaluated locally in the user's vault, so publishing
+  works offline. Receiving vaults verify decisions only for rules that are new or changed for them, at the time the
+  rule was first activated, so long-approved rules in full snapshots keep applying. A relay applies its operator's
+  pack to what it hosts. A pack change never removes a user's publications by itself: the owner decides. Rules are
+  configuration, not a legal determination, and evasion is possible; the evaluation is a safeguard, not a
+  guarantee.
 responsibilities:
-  - Own ProhibitedRule: rule key, version, category scope, normalized keywords or phrases, action, kinds, jurisdiction scope, notice reference and reason key.
-  - Evaluate listing text, tags and category against the active rule pack deterministically, with a result that names rule keys and reason keys but not the matched text.
-  - Author, version and release rule packs in a publisher vault; an emergency review-level rule may be active for at most 7 days without a proposal, and everything else needs a verified approved decision from F18.S02.M01.
-  - Verify and store rule packs in any vault and re-announce changes so active publications can be re-evaluated.
+  - Own ProhibitedRule: rule key, version, category scope, normalized keywords or salted keyword hashes for sensitive rules, action, kinds, jurisdiction scope (ProfileRef), notice reference, reason key and proposal reference.
+  - Evaluate listing text, tags and category against all applied packs deterministically, with a result that names rule keys with their publishers, reason keys and the evaluated packs, but not the matched text.
+  - Author, version and release rule packs in a publisher vault; an emergency review-level rule may be active for at most 7 days in any 30-day window without a proposal, and everything else needs a verified approved decision from F18.S02.M01.
+  - Verify and store rule packs in any vault, enforce emergency limits from stored pack history, and re-announce changes so active publications can be re-evaluated.
+  - Apply the relay operator's pack as the relay's hosting policy through relay_upload and serve it unchanged.
 non_responsibilities:
   - Deciding what is legal or illegal in a place; rules are configuration (see F18.S01.M01 disclaimers).
-  - Enforcement against users, takedowns or suspensions (relay moderation F12 and local filtering); this module returns verdicts only.
+  - Enforcement against users, takedowns or suspensions (relay moderation F12 and local filtering); this module returns verdicts only, and F01.S01.M03 holds affected publications for their owner.
   - Image and file inspection; only text, tags and category are evaluated.
-  - Taxonomy (F18.S01.M03) and policy proposals (F18.S02.M01).
+  - Taxonomy (F18.S01.M03), policy proposals (F18.S02.M01) and the trusted-publisher list and pending inbox (F18.S02.M01).
   - "Future: image hash lists from trusted publishers and per-rule appeal workflows."
-depends_on: [F18.S01.M03, F18.S01.M01, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001]
+depends_on: [F18.S01.M03, F18.S01.M01, F18.S02.M01, F16.S02.M03, F11.S01.M01, F07.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001]
 user_stories:
   - As a seller, if my text matches a blocking rule I see which policy reason applies and can edit my listing.
   - As a seller, if my item needs a notice, I read it and confirm before publishing.
+  - As a seller, if a new rule pack blocks one of my live listings, I am told and decide myself whether to edit or unpublish it.
   - As a relay operator, I publish a rule pack for my community after a comment period and can add a temporary review-level rule against a new scam.
 edge_cases:
   - Text uses look-alike characters or zero-width characters to dodge a keyword; evaluation normalizes NFKC, case-folds, strips zero-width and diacritics and maps common look-alikes before matching.
   - A harmless word matches a phrase inside another word (the Scunthorpe problem); whole-word matching is the default and phrase matching needs explicit mode.
   - Two rules match with different actions; the strictest action wins (block over review over allow_with_notice over allow) and all matched rule keys are reported up to 10.
-  - An emergency rule reaches its 7-day limit without ratification; it is retired automatically and the retirement is announced.
-  - A rule pack is applied while publications are active; the changed event triggers re-evaluation and a new block verdict ends the publication in F01.S01.M03.
-  - A pack with 10 001 rules or a phrase longer than 60 code points is rejected before evaluation can be slowed.
-  - The pack publisher is not trusted by this vault; the pack stays pending and the previous pack stays in force.
+  - An emergency rule reaches its effective expiry without ratification; it is retired automatically and the retirement is announced.
+  - A rule pack is applied while publications are active; the changed event triggers re-evaluation, and a new block verdict holds the publication for its owner (policy_attention in F01.S01.M03, owner notified, renewals and edits that keep the blocked content stop); it is unpublished and tombstoned only after the owner confirms.
+  - A pack with 2 001 active rules or a phrase longer than 60 code points is rejected before evaluation can be slowed.
+  - The pack publisher is not trusted by this vault; the pack waits in the F18.S02.M01 pending inbox and the previous pack stays in force.
   - Evaluation input is 100 000 code points; it is rejected with VALIDATION_FAILED before matching starts.
+  - A publisher re-issues the same emergency rule key every week or future-dates its activation; receivers cap it at 7 days from first sight and refuse a second emergency activation within 30 days with GOVERNANCE_RULE_EMERGENCY_INVALID.
+  - A new user, or a vault offline for 45 days, applies a full snapshot whose rules were approved long ago; each rule's decision is checked at the anchored time its version was first activated, so the pack applies.
+  - The pack's rules are scoped to a taxonomy the vault does not hold; those rules are stored scope_unresolved and use the fallback (exact category id match, keyword match capped at review).
 ux:
   screens:
-    - "Policy result sheet at publish: verdict, list of reason texts (localized from reason keys), notice text, Fix and Confirm actions; no matched text is shown."
-    - "Rule pack settings: current pack, publisher fingerprint, version, age, pending packs with diff summary."
-    - "Operator editor: rule list with action, scope, keywords (masked in the public view of the pack when marked sensitive), emergency toggle with expiry, release button."
-  states: [loading, empty, pending-trust, pack-applied, verdict-allow, verdict-notice, verdict-review, verdict-block, offline-cached]
+    - "Policy result sheet at publish: verdict, list of reason texts (localized from reason keys) with the publisher of each rule, notice text, Fix and Confirm actions; no matched text is shown."
+    - "Rule pack settings: applied packs per publisher, fingerprint, version, age, scope_unresolved rules, pending packs with diff summary."
+    - "Operator editor: rule list with action, scope, keywords, sensitive toggle (the signed pack carries only salted hashes; the editor states that this hides the terms from casual reading but not from dictionary search), emergency toggle with expiry, proposal reference, release button."
+  states: [loading, empty, pending-trust, pack-applied, verdict-allow, verdict-notice, verdict-review, verdict-block, policy-attention, offline-cached]
   a11y:
     - Verdicts are expressed in text and icon; reasons are plain sentences.
     - Confirm and Fix buttons are at least 44x44 px; the result sheet is a dialog with focus trap and announced heading.
@@ -45,9 +54,11 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - "A ProhibitedRule is an immutable version of a rule identified by a stable ruleKey; activating a new version retires the previous version of the same key."
-      - "Keywords are stored normalized (NFKC, case-folded, diacritics folded) and bounded: at most 50 phrases per rule, each 2 to 60 code points, at most 2 000 active rules per pack."
+      - "A ProhibitedRule is an immutable version of a rule identified by a stable (publisherId, ruleKey); activating a new version retires the previous version of the same key."
+      - "Keywords are stored normalized (NFKC, case-folded, diacritics folded) and bounded: at most 50 phrases per rule, each 2 to 60 code points, at most 2 000 active rules per pack; sensitive rules carry in the signed pack only salted hashes of whole-word phrases of at most 5 tokens."
       - "Rules are public configuration (P0) so sellers can see what is not allowed; evaluation results are local P3 and never leave the vault."
+      - "A rule pack declares the taxonomy its category scopes refer to and expresses jurisdiction scopes as ProfileRefs; scopes that do not resolve are stored as scope_unresolved with one defined fallback, never skipped silently."
+      - "Each rule version records the pack version that first activated it and its proposalId, and the pack embeds the decision envelopes with receipts for rule versions first activated in that pack version and cites older ones by decisionCid."
     entities:
       - name: ProhibitedRule
         schema: classrup.governance.prohibited_rule/v1
@@ -55,77 +66,103 @@ processes:
         privacy: P0
         retention: RET-STANDARD
         fields:
-          - "id: uuidv7 — primary key of this rule version"
+          - "id: uuidv7 — ruleId, primary key of this rule version"
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
           - "publisherId: did:key — signer of the pack and origin"
-          - "ruleKey: string — [a-z0-9_]{3,40}, stable across versions"
-          - "version: int — monotonic per ruleKey"
-          - "categoryIds: uuidv7[] — 0..20 categories whose subtree the rule covers; empty means all categories"
-          - "keywords: string[] — 0..50 normalized phrases of 2..60 code points"
-          - "matchMode: enum — whole_word | phrase"
+          - "ruleKey: string — [a-z0-9_]{3,40}, stable across versions; cross-module references use (publisherId, ruleKey)"
+          - "version: int — monotonic per (publisherId, ruleKey)"
+          - "categoryIds: uuidv7[] — 0..20 categories of the pack's taxonomyRef whose subtree the rule covers; empty means all categories"
+          - "keywords: string[] — 0..50 normalized phrases of 2..60 code points; for sensitive rules only in the publisher vault, never in the pack"
+          - "keywordHashes?: string[] — sensitive rules only: 1..50 base64url sha256 of keywordSalt followed by the normalized phrase, phrases of 1..5 whole-word tokens"
+          - "keywordSalt?: string — sensitive rules only: 16 random bytes base64url, fixed per rule version so carried-forward versions keep a stable content digest"
+          - "matchMode: enum — whole_word | phrase; sensitive rules whole_word only"
           - "action: enum — block | review | allow_with_notice"
           - "kinds: string[] — subset of sell, wanted, giveaway, service, rental, auction; empty means all"
-          - "jurisdictionProfileIds: uuidv7[] — 0..10; empty means all profiles"
+          - "jurisdictionScope: ProfileRef[] — 0..10 F18.S01.M01 references {publisherId, code}, version resolved at evaluation; empty means all"
           - "noticeId?: string — notice shown for review and allow_with_notice"
           - "reasonKey: string — i18n message key for the owner-facing reason"
-          - "sensitive: boolean — when true the keywords are omitted from the public copy of the pack and replaced by a hash list"
+          - "sensitive: boolean — when true the pack carries keywordHashes and keywordSalt instead of keywords"
           - "status: enum — draft | active | retired"
-          - "rulesetVersion: int — pack version in which the rule became active"
+          - "scopeState: enum — resolved | scope_unresolved"
+          - "rulesetVersion: int — pack version in which this rule version first became active"
+          - "activatedAt?: timestamp — anchored time of that pack version: its relay receipt, else the publisher's claimed createdAt marked as a claim"
           - "emergencyUntil?: timestamp — publisher claim, at most activation + 7 d; only for action review"
+          - "effectiveEmergencyUntil?: timestamp — derived by receivers: min(emergencyUntil, firstSeenAt + 7 d)"
           - "proposalId?: uuidv7 — ref F18.S02.M01 approved decision, required unless emergency"
-          - "provenance: object — {originRelay?, receivedAt, verifiedAt, packCid}"
+          - "decisionCid?: string — cid of the decision recorded at verification; a decision activates each rule key at most once"
+          - "provenance: object — {originRelay?, receivedAt, verifiedAt, packCid, bundled: boolean}"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - A rule must have at least one category id or at least one keyword; a rule with neither is invalid.
+          - A rule must have at least one category id or at least one keyword (or keyword hash); a rule with neither is invalid.
           - At most one active version per (publisherId, ruleKey); versions only increase.
           - emergencyUntil is allowed only with action review and at most 7 days after activation; blocking rules always need proposalId.
+          - Sensitive rules use whole_word matching, carry keywordHashes and keywordSalt in the pack and never plaintext keywords outside the publisher vault.
+    note: |
+      The signed statement classrup.governance.rule_pack/v1 carries { publisherId, packVersion, createdAt (claim), changelogEntry, taxonomyRef { publisherId, packVersion?, packCid? }, rules[] (full snapshot of active rules with rulesetVersion), retiredRuleKeys[], decisions: [{ proposalId, decisionCid, decision?: { envelope, receipt } }] (envelopes embedded for rule versions first activated in this pack version, cids for older ones, fetched through governance.policy_proposal.relay_get), anchors?: [{ packVersion, packCid, receipt }] }. Relays serve it unchanged; nothing in it is rewritten after signing.
+      Local record EmergencyHistory (P0 derived, device and relay): per (publisherId, ruleKey) the emergency activations seen in the last 30 days with firstSeenAt and effective expiry; used by V11.
+      Unknown-category policy shared with F18.S01.M01: unresolved ids are stored as scope_unresolved, shown in settings and re-resolved on governance.category.changed.
     sql: |
       CREATE TABLE governance_prohibited_rule (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, publisher_id TEXT NOT NULL, rule_key TEXT NOT NULL, version INTEGER NOT NULL,
         action TEXT NOT NULL, status TEXT NOT NULL, ruleset_version INTEGER, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX governance_prohibited_rule_active ON governance_prohibited_rule(tenant_id, publisher_id, rule_key) WHERE status = 'active';
+      CREATE TABLE governance_emergency_history (
+        tenant_id TEXT NOT NULL, publisher_id TEXT NOT NULL, rule_key TEXT NOT NULL, first_seen_at TEXT NOT NULL, effective_until TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, publisher_id, rule_key, first_seen_at));
   validation_rules:
     requirements:
       - "Rule content is validated for size, normalization, scope and action before staging or applying."
       - "Evaluation input is bounded and validated before matching so evaluation time stays predictable."
       - "Every violation maps to one stable error code."
+      - "Receiving vaults verify decisions only for rule versions that are new or changed against their applied snapshot, at the anchored activation time of the pack version that first activated them and never at the receiver's clock, so full snapshots with long-approved rules stay applicable for new and long-offline vaults."
+      - "Emergency rules are limited per (publisherId, ruleKey) over any 30-day window, and receivers enforce the limit from their stored pack history."
     rules:
       - "V01 | ruleKey matches [a-z0-9_]{3,40}; reasonKey present | VALIDATION_FAILED"
       - "V02 | rule has at least one categoryId or one keyword; keywords <= 50 of 2..60 code points after normalization | VALIDATION_FAILED"
-      - "V03 | categoryIds exist in the active taxonomy (retired ids resolve via mergedInto) | GOVERNANCE_RULE_SCOPE_INVALID"
+      - "V03 | categoryIds resolve in the pack's declared taxonomyRef when the vault holds it (retired ids via mergedInto); in the publisher vault they must resolve before release | GOVERNANCE_RULE_SCOPE_INVALID"
       - "V04 | action is block, review or allow_with_notice; notices required for review and allow_with_notice | VALIDATION_FAILED"
-      - "V05 | activation cites a verified approved proposal unless the rule is an emergency review rule | GOVERNANCE_RULE_PROPOSAL_REQUIRED"
-      - "V06 | emergency rule has action review and emergencyUntil <= activation + 7 days | GOVERNANCE_RULE_EMERGENCY_INVALID"
-      - "V07 | pack has <= 2000 active rules and <= 1 MiB; signature verifies and publisher trusted | GOVERNANCE_RULE_PACK_REJECTED"
+      - "V05 | every non-emergency rule version cites proposalId; for versions new or changed against the applied snapshot governance.policy_proposal.verify returns valid for (publisherId, prohibited_rule, [ruleKey], changeDigest = sha256-JCS({ruleKey: canonical rule content with keywordHashes for sensitive rules}), asOf = activatedAt of its rulesetVersion, priorDecisionCids of earlier versions); carried-forward versions keep their recorded verification | GOVERNANCE_RULE_PROPOSAL_REQUIRED"
+      - "V06 | emergency rule has action review and emergencyUntil <= activation + 7 days; receivers retire it at min(emergencyUntil, firstSeenAt + 7 d) with firstSeenAt from the pack's relay receipt, else the receiver's first sight | GOVERNANCE_RULE_EMERGENCY_INVALID"
+      - "V07 | pack has <= 2000 active rules and <= 1 MiB; signature verifies, the signing key is active (F07.S02.M01 key status) and the publisher is trusted for scope rules and not paused (F18.S02.M01) | GOVERNANCE_RULE_PACK_REJECTED"
       - "V08 | evaluation input title + description + tags <= 8000 code points | VALIDATION_FAILED"
       - "V09 | pack version greater than the applied version and a full snapshot | GOVERNANCE_RULE_PACK_REJECTED"
+      - "V10 | a rule whose category scope does not resolve is stored scope_unresolved and evaluated only by the fallback (category scope matches by exact categoryId equality without subtree; keyword matches in any category with the action capped at review); releasing an unresolved scope in the publisher vault is refused | GOVERNANCE_RULE_SCOPE_INVALID"
+      - "V11 | at most one emergency activation per (publisherId, ruleKey) in any 30 days and at most 7 cumulative emergency days per (publisherId, ruleKey) in any 30 days without a verified proposal, checked from stored pack history | GOVERNANCE_RULE_EMERGENCY_INVALID"
+      - "V12 | sensitive rules use matchMode whole_word, phrases of 1..5 tokens, keywordHashes = sha256 of keywordSalt followed by the normalized phrase and no plaintext keywords in the pack | GOVERNANCE_RULE_PACK_REJECTED"
+      - "V13 | the pack embeds the decision envelope and receipt for every rule version first activated in this pack version and cites older ones by decisionCid; a cited decision that cannot be fetched holds that rule at its previous version | GOVERNANCE_RULE_PROPOSAL_REQUIRED"
+      - "V14 | pack declares taxonomyRef {publisherId, packVersion?, packCid?}, and jurisdiction scopes are ProfileRefs {publisherId, code} | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - "ProhibitedRule follows the declared machine; retired is terminal and a rule is changed only by activating a new version."
       - "Activating a version retires the previous active version of the same key in the same transaction and increases the ruleset version."
-      - "Emergency rules retire automatically at emergencyUntil; the sweep and the evaluation both honour the expiry."
+      - "Emergency rules retire automatically at their effective expiry, min(emergencyUntil, firstSeenAt + 7 days); the sweep and the evaluation both honour it."
+      - "When an applied pack gives a block verdict for an already active publication, the publication is held for its owner (policy_attention in F01.S01.M03): the owner is notified, renewals and re-publication of unchanged content stop until the owner resolves it by an edit that clears the verdict or by confirming Unpublish, and nothing is unpublished or tombstoned before that confirmation."
     machines:
       - entity: ProhibitedRule
         initial: draft
         terminal: [retired]
         transitions:
-          - "draft -> active | governance.prohibited_rule.release_pack by publisher, or apply_pack in a user vault | proposal verified or emergency; previous version retired; emits governance.prohibited_rule.changed"
-          - "active -> retired | superseded by a newer version, retire command, or emergencyUntil reached | emits governance.prohibited_rule.changed"
+          - "draft -> active | governance.prohibited_rule.release_pack by publisher, apply_pack in a user vault, or relay_upload on the operator's relay | decision verified for new or changed versions, or emergency within V06 and V11; previous version retired; emits governance.prohibited_rule.changed"
+          - "active -> retired | release_pack containing a staged retirement, a snapshot without the rule key, supersession by a newer version, or the effective emergency expiry | emits governance.prohibited_rule.changed (retired or emergency_expired)"
           - "draft -> retired | discard by publisher | local only"
     timeouts:
-      - "Emergency rules retire at emergencyUntil (maximum 7 days); sweep every 5 minutes while the app is open and at app start."
-      - "A pending untrusted pack is discarded after 30 days."
+      - "Emergency rules retire at the effective expiry (at most 7 days after first sight); sweep every 5 minutes while the app is open and at app start."
+      - "Packs from untrusted or paused publishers follow the F18.S02.M01 PendingStatement lifecycle and are discarded after 30 days."
+      - "Emergency history entries are kept 30 days after their effective expiry for V11."
   commands_queries_events:
     requirements:
-      - "draft, retire and release_pack run in the publisher's vault; release_pack signs the full rule set as classrup.governance.rule_pack/v1 and queues it to the publisher's relays."
-      - "apply_pack runs in every vault: it verifies the pack, applies it atomically and emits one governance.prohibited_rule.changed event per changed rule key."
-      - "evaluate is a pure query run locally and by relays against their own pack; its result contains rule keys, reason keys, notices and the ruleset version, never matched text."
+      - "draft, retire and release_pack run in the publisher's vault; retire only stages a retirement, and release_pack signs the full rule set with its taxonomyRef, salted hashes for sensitive rules and the cited decisions as classrup.governance.rule_pack/v1 and queues it to the publisher's relays."
+      - "apply_pack runs in every vault: it verifies the pack, the publisher's trust, decisions for new or changed versions and emergency limits, applies it atomically and emits one governance.prohibited_rule.changed event per changed rule key; packs from untrusted or paused publishers wait in the F18.S02.M01 pending inbox."
+      - "evaluate is a pure query run locally and by relays against their own packs; its result contains rule keys with their publisherId, reason keys, notices and the list of evaluated packs, never matched text."
+      - "Relays apply their operator's pack through the relay command relay_upload, which verifies the operator key, applies the pack as the relay's hosting policy and emits governance.prohibited_rule.changed relay-locally, serve it unchanged through relay_latest, and evaluate index submissions against it."
+      - "governance.prohibited_rule.changed carries ruleId (the version id) besides publisherId, ruleKey and version; cross-module references use (publisherId, ruleKey), and ruleId names an exact version."
+      - "Statement types of this module are registered in the F11.S01.M01 registry with audience, signer role, role resolution and maxAge (N2)."
     commands:
       - name: governance.prohibited_rule.draft
         capability: governance.prohibited_rule.author
-        input: "[vault-local, publisher] { ruleId?, expectedRevision?, ruleKey, categoryIds, keywords, matchMode, action, kinds, jurisdictionProfileIds, noticeId?, reasonKey, sensitive?, emergencyUntil? }"
+        input: "[vault-local, publisher] { ruleId?, expectedRevision?, ruleKey, categoryIds, keywords, matchMode, action, kinds, jurisdictionScope: ProfileRef[], noticeId?, reasonKey, sensitive?, emergencyUntil?, proposalId? }"
         output: "{ ruleId, revision, version, status: draft }"
         errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_RULE_SCOPE_INVALID, GOVERNANCE_RULE_EMERGENCY_INVALID]
         emits: []
@@ -139,90 +176,110 @@ processes:
         idempotent: true
       - name: governance.prohibited_rule.release_pack
         capability: governance.prohibited_rule.release
-        input: "[vault-local, publisher + statement classrup.governance.rule_pack/v1] { expectedPackVersion, proposalId?, changelogEntry, relayIds[] }"
-        output: "{ packVersion, packCid, activeRuleCount, syncState: prepared }"
-        errors: [CONFLICT_REVISION, GOVERNANCE_RULE_PROPOSAL_REQUIRED, GOVERNANCE_RULE_EMERGENCY_INVALID, GOVERNANCE_RULE_PACK_REJECTED]
+        input: "[vault-local, publisher + statement classrup.governance.rule_pack/v1] { expectedPackVersion, changelogEntry, relayIds[] }"
+        output: "{ packVersion, packCid, activeRuleCount, embeddedDecisions, syncState: prepared }"
+        errors: [CONFLICT_REVISION, GOVERNANCE_RULE_PROPOSAL_REQUIRED, GOVERNANCE_RULE_EMERGENCY_INVALID, GOVERNANCE_RULE_PACK_REJECTED, GOVERNANCE_RULE_SCOPE_INVALID]
         emits: [governance.prohibited_rule.changed]
         idempotent: true
       - name: governance.prohibited_rule.apply_pack
         capability: governance.prohibited_rule.apply
-        input: "[vault-local, inbound statement] { envelope, provenance, trustPublisher?: boolean }"
-        output: "{ applied: boolean, packVersion, changedRuleKeys[], pendingReason? }"
-        errors: [VALIDATION_FAILED, GOVERNANCE_RULE_PACK_REJECTED, GOVERNANCE_RULE_PROPOSAL_REQUIRED, UNSUPPORTED_SCHEMA_VERSION]
+        input: "[vault-local, inbound statement or PendingApplyPort] { envelope, receipt?, provenance }"
+        output: "{ applied: boolean, packVersion, changedRuleKeys[], heldRuleKeys[], scopeUnresolvedRuleKeys[], pendingId?, pendingReason?: untrusted_publisher|paused_publisher|decision_unavailable }"
+        errors: [VALIDATION_FAILED, GOVERNANCE_RULE_PACK_REJECTED, GOVERNANCE_RULE_PROPOSAL_REQUIRED, GOVERNANCE_RULE_EMERGENCY_INVALID, UNSUPPORTED_SCHEMA_VERSION, PAYLOAD_TOO_LARGE]
+        emits: [governance.prohibited_rule.changed]
+        idempotent: true
+      - name: governance.prohibited_rule.relay_upload
+        capability: governance.prohibited_rule.relay_publish
+        input: "[relay command] { envelope }"
+        output: "{ packVersion, packCid, relayReceipt: classrup.platform.relay_receipt/v1 }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, PAYLOAD_TOO_LARGE, RATE_LIMITED, GOVERNANCE_RULE_PACK_REJECTED, GOVERNANCE_RULE_PROPOSAL_REQUIRED, GOVERNANCE_RULE_EMERGENCY_INVALID]
         emits: [governance.prohibited_rule.changed]
         idempotent: true
     queries:
       - name: governance.prohibited_rule.evaluate
         capability: governance.prohibited_rule.evaluate
-        input: "{ kind, categoryId, title, description?, tags?, jurisdictionProfileIds? }"
-        output: "{ verdict: allow|allow_with_notice|review|block, matches: [{ ruleKey, action, reasonKey, noticeId? }] (<= 10), rulesetVersion }"
+        input: "{ kind, categoryId, title, description?, tags?, profileRefs?: ProfileRef[] }"
+        output: "{ verdict: allow|allow_with_notice|review|block, matches: [{ publisherId, ruleKey, ruleId, action, reasonKey, noticeId?, viaFallback: boolean }] (<= 10), packs: [{ publisherId, packVersion, packCid }], packsDigest: sha256-JCS(packs) }"
         errors: [VALIDATION_FAILED, NOT_FOUND]
       - name: governance.prohibited_rule.get
         capability: governance.prohibited_rule.read
-        input: "{ ruleKey }"
+        input: "{ publisherId, ruleKey, version? } or { ruleId }"
         output: "{ rule: ProhibitedRule }"
         errors: [NOT_FOUND]
       - name: governance.prohibited_rule.list_active
         capability: governance.prohibited_rule.read
-        input: "{ cursor?, limit <= 200 }"
-        output: "{ rulesetVersion, items: ProhibitedRule[], nextCursor? }"
+        input: "{ publisherId?, cursor?, limit <= 200 }"
+        output: "{ packs: [{ publisherId, packVersion, packCid }], items: ProhibitedRule[], nextCursor? }"
         errors: [VALIDATION_FAILED]
+      - name: governance.prohibited_rule.relay_latest
+        capability: governance.prohibited_rule.relay_read
+        input: "[relay query] { sinceVersion? }"
+        output: "{ envelope, receipt } of the relay's current pack, byte-identical to the signed statement, or notModified"
+        errors: [NOT_FOUND, RATE_LIMITED]
     events_produced:
-      - {type: governance.prohibited_rule.changed, privacy: P0, payload: "{ ruleKey, version, change: activated|retired|emergency_expired, action, rulesetVersion, publisherId }"}
+      - {type: governance.prohibited_rule.changed, privacy: P0, payload: "{ ruleId, publisherId, ruleKey, version, change: activated|retired|emergency_expired, action, rulesetVersion, packCid, scope: vault|relay } — vault-local, or relay-local after relay_upload (scope relay) for relay consumers such as F12.S02.M01 case review"}
     events_consumed:
-      - {type: governance.category.changed, effect: "revalidate category scopes of stored rules; retired categories follow mergedInto and the rule keeps its scope"}
+      - {type: governance.category.changed, effect: "revalidate category scopes of stored rules; retired categories follow mergedInto and the rule keeps its scope; scope_unresolved rules whose ids now resolve in the declared taxonomy become resolved"}
+      - {type: governance.policy_proposal.decided, effect: "for outcome approved, retry rule versions held because their cited decision was unavailable; outcome conflicted keeps them held"}
     errors:
-      - "GOVERNANCE_RULE_SCOPE_INVALID | 422 | no | a category scope does not resolve in the active taxonomy"
-      - "GOVERNANCE_RULE_PROPOSAL_REQUIRED | 412 | no | activation needs a verified approved policy decision"
-      - "GOVERNANCE_RULE_EMERGENCY_INVALID | 422 | no | emergency rule is not review-level or exceeds 7 days"
-      - "GOVERNANCE_RULE_PACK_REJECTED | 422 | no | pack signature, trust, size or version check failed"
+      - "GOVERNANCE_RULE_SCOPE_INVALID | 422 | no | a category scope does not resolve in the declared taxonomy in the publisher vault"
+      - "GOVERNANCE_RULE_PROPOSAL_REQUIRED | 412 | no | activation needs a verified approved policy decision for this publisher, rule key and content"
+      - "GOVERNANCE_RULE_EMERGENCY_INVALID | 422 | no | emergency rule is not review-level, exceeds 7 days or exceeds the 30-day emergency limit"
+      - "GOVERNANCE_RULE_PACK_REJECTED | 422 | no | pack signature, trust, size, sensitive-hash format or version check failed"
+    note: |
+      Statements and signer roles (N2, registered in F11.S01.M01): classrup.governance.rule_pack/v1 - audience public; signer role publisher (principal: author = payload.publisherId, ext.signerKey active per F07.S02.M01 key_status at first sight; revoked keys quarantined); maxAge none (versioned configuration, superseded by version). The bundled rule pack ships signed by the release-pinned project key, is approved by the release review (F17 release gates) and is applied without decisions with provenance bundled; later changes follow the proposal path. The vault acts only on packs its receiving path accepted. This module registers apply for classrup.governance.rule_pack/v1 in the F18.S02.M01 PendingApplyPort.
+      Sensitive keyword evaluation: the text is normalized and tokenized once, every whole-word n-gram of 1 to 5 tokens is hashed with each sensitive rule's keywordSalt and compared with keywordHashes. Hashing hides the terms from casual reading of the public pack only; anyone holding the pack can test text against it and short terms can be recovered by dictionary search.
     example: |
       query governance.prohibited_rule.evaluate { "kind": "sell", "categoryId": "0192f3a4-1111-7000-8000-0000000000c1", "title": "Used road bike", "description": "Good shape" }
-      => { "verdict": "allow", "matches": [], "rulesetVersion": 41 }
-      query ... title "Fake designer bag replica" => { "verdict": "block", "matches": [ { "ruleKey": "counterfeit_goods", "action": "block", "reasonKey": "policy.counterfeit" } ], "rulesetVersion": 41 }
-      publisher vault: dispatch("governance.prohibited_rule.release_pack", { "expectedPackVersion": 41, "proposalId": "0192f3b2-...", "changelogEntry": "Add counterfeit goods rule", "relayIds": ["relay:berlin.example"] })
-      => { "packVersion": 42, "packCid": "sha256-Zm9v...", "activeRuleCount": 87, "syncState": "prepared" }
+      => { "verdict": "allow", "matches": [], "packs": [{ "publisherId": "did:key:z6MkP...", "packVersion": 41, "packCid": "sha256-Zm9v..." }], "packsDigest": "sha256-UGFj..." }
+      query ... title "Fake designer bag replica" => { "verdict": "block", "matches": [ { "publisherId": "did:key:z6MkP...", "ruleKey": "counterfeit_goods", "ruleId": "0192f3b6-...", "action": "block", "reasonKey": "policy.counterfeit", "viaFallback": false } ], "packs": [...], "packsDigest": "sha256-UGFj..." }
+      publisher vault: dispatch("governance.prohibited_rule.release_pack", { "expectedPackVersion": 41, "changelogEntry": "Add counterfeit goods rule", "relayIds": ["relay:berlin.example"] })
+      => { "packVersion": 42, "packCid": "sha256-Zm9v...", "activeRuleCount": 87, "embeddedDecisions": 1, "syncState": "prepared" }
   authorization_capabilities:
     requirements:
-      - "Vault policy: authoring and releasing require the publisher key; apply is available to the vault owner for trusted publishers; evaluate is callable by the owner and internal callers F01.S01.M02 and F01.S01.M03."
+      - "Vault policy: authoring and releasing require the publisher key; apply is available to the vault owner for publishers trusted for scope rules in F18.S02.M01 and never grants trust; evaluate is callable by the owner and internal callers F01.S01.M02 and F01.S01.M03."
       - "Relay policy (CAP-9): a relay evaluates its own rule pack on index submissions and may refuse or remove content from its index with a signed statement of reasons; this has no effect on other relays or on the author's vault."
       - "There is no global rule authority; each user chooses which publishers to trust."
     capabilities:
       - "governance.prohibited_rule.author | owner | local principal holds the publisher key; rule status draft"
-      - "governance.prohibited_rule.release | owner | local principal is the publisher; proposal verified or emergency review rule; signing key unrevoked"
-      - "governance.prohibited_rule.apply | owner | vault unlocked; pack signature valid and publisher trusted or trusted in the same action"
-      - "governance.prohibited_rule.evaluate | owner | vault unlocked; internal callers F01.S01.M02 and F01.S01.M03 on the owner's behalf"
+      - "governance.prohibited_rule.release | owner | local principal is the publisher; decision verified or emergency review rule within limits; signing key unrevoked"
+      - "governance.prohibited_rule.apply | owner | vault unlocked; pack signature valid and publisher trusted for scope rules and not paused (otherwise held pending)"
+      - "governance.prohibited_rule.evaluate | owner | vault unlocked; internal callers F01.S01.M02 and F01.S01.M03 on the owner's behalf; on a relay, in-process index intake (F06.S01.M01, F11.S01.M02) against the relay's own pack"
       - "governance.prohibited_rule.read | owner | vault unlocked; reads the local mirror"
-      - "governance.prohibited_rule.relay_read | relay-anonymous | relay policy: public read of the latest pack; sensitive keywords returned as hashes; 60 requests per minute per IP prefix"
-      - "governance.prohibited_rule.relay_publish | relay-operator | relay policy: request signed by the operator device key; pack <= 1 MiB"
+      - "governance.prohibited_rule.relay_read | relay-anonymous | relay policy: public read of the latest pack exactly as signed (sensitive rules contain only hashes); 60 requests per minute per IP prefix"
+      - "governance.prohibited_rule.relay_publish | relay-operator | relay policy: request signed by the operator device key of this relay; pack <= 1 MiB; 10 uploads per day per key"
   failure_recovery_idempotency:
     requirements:
       - "Authoring and apply commands are idempotent per CTR-IDM-001; packs are deduplicated by packCid."
       - "apply_pack replaces the active rule set atomically; evaluation always sees a complete pack, never a partial one."
       - "Offline vaults evaluate with the last applied pack; relay unavailability never blocks local evaluation."
-    idempotency: "Idempotency-Key required on authoring and release; keys kept 24 h; apply_pack is idempotent by packCid; evaluate is a pure query."
-    concurrency: "expectedRevision on draft and retire; expectedPackVersion on release; apply_pack runs in one IndexedDB transaction so a concurrent evaluate sees the previous or the new pack, never a mix; competing packs from different publishers coexist and results are merged by strictest action."
-    retries: "Relay upload retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts); apply failures are validation outcomes and are not retried."
-    offline: "Evaluation, apply and authoring work offline; release shows prepared until a relay receipt exists."
-    partial_failure: "A failing validation rejects the whole pack and keeps the previous version; consumers of the changed event retry per CTR-EVT-001 and a failure in one consumer does not roll back the applied pack."
+    idempotency: "Idempotency-Key required on authoring and release; keys kept 24 h; apply_pack and relay_upload are idempotent by packCid; evaluate is a pure query."
+    concurrency: "expectedRevision on draft and retire; expectedPackVersion on release; apply_pack runs in one IndexedDB transaction so a concurrent evaluate sees the previous or the new pack, never a mix; competing packs from different publishers coexist, results are merged by strictest action and evaluate lists every pack it used."
+    retries: "Relay upload retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts); apply failures are validation outcomes and are not retried; rule versions held for an unavailable decision are retried when the decision arrives."
+    offline: "Evaluation, apply and authoring work offline; embedded decisions verify offline; release shows prepared until a relay receipt exists."
+    partial_failure: "A failing pack-level validation rejects the whole pack and keeps the previous version; a rule whose new version cannot be verified stays at its previous version; consumers of the changed event retry per CTR-EVT-001 and a failure in one consumer does not roll back the applied pack."
   privacy_retention_abuse:
     requirements:
       - "Evaluated listing text is processed only in memory in the user's vault; the module stores no copy and logs no matched text."
-      - "Rule packs are public signed configuration; sensitive keyword lists may be published as salted hashes so the list itself does not help evaders or spread harmful terms."
+      - "Rule packs are public signed configuration; sensitive keyword lists are published only as salted hashes, which hides them from casual reading but does not resist dictionary search, and anyone can test text against the pack; the UI says so."
       - "Rule versions are retained RET-STANDARD with the last 3 packs kept locally; decisions that created them are RET-EVIDENCE in F18.S02.M01."
+      - "A signed change from a trusted but compromised or malicious publisher never removes a user's publications by itself: block verdicts caused by a pack change hold the publication for its owner with a grace of at least 7 days before a reminder, and a tombstone is signed only after the owner confirms."
     data:
-      - "ProhibitedRule: P0 signed configuration."
-      - "Evaluation input and result: P3, memory only; result summary is stored in the PublicationRecord by F01.S01.M03."
+      - "ProhibitedRule: P0 signed configuration; plaintext of sensitive keywords only in the publisher vault (P3 there)."
+      - "Evaluation input and result: P3, memory only; the result summary (verdict, rule references, packsDigest) is stored in the PublicationRecord by F01.S01.M03."
     retention:
-      - "ProhibitedRule mirror and last 3 packs: RET-STANDARD."
+      - "ProhibitedRule mirror and last 3 packs: RET-STANDARD; older packs purged."
+      - "Emergency history: 30 days after effective expiry."
     threats:
       - "T01 | Evasion with look-alike characters, spacing or misspelling | normalization pipeline, whole-word and phrase modes, publishers can add variants; honest limit stated in the UI"
-      - "T02 | Overblocking and censorship through broad rules | proposal and comment period for activation, public rule list, strictest-wins reporting with reason keys, user can choose another publisher"
+      - "T02 | Overblocking and censorship through broad rules | proposal and comment period for activation, decisions verified by receivers, public rule list, strictest-wins reporting with reason keys, user can choose another publisher"
       - "T03 | Rule pack tampering or downgrade | signature over JCS, version monotonic, trusted publishers only"
-      - "T04 | Denial of service with huge input or pathological rules | 8 000 code-point input limit, 1 MiB pack limit, literal phrase matching without regular expressions, evaluation budget 20 ms"
-      - "T05 | Emergency rule abused as permanent control | review-level only, 7-day expiry, automatic retirement and public announcement"
+      - "T04 | Denial of service with huge input or pathological rules | 8 000 code-point input limit, 1 MiB pack limit, literal phrase matching without regular expressions, n-grams of at most 5 tokens, evaluation budget"
+      - "T05 | Emergency rule abused as permanent control | review-level only, effective expiry at most 7 days after first sight, one emergency activation per rule key per 30 days and 7 cumulative days per 30 days, automatic retirement and public announcement"
+      - "T06 | Sensitive keyword list recovered or used as an evasion oracle | stated honestly: hashes hide terms from casual reading only; local evaluation lets anyone test text; publishers choose sensitive only to avoid spreading harmful terms"
+      - "T07 | Publisher key compromise or malicious pack used as a takedown of users' publications | F07 key status quarantines revoked keys, pause-trust command in F18.S02.M01, block verdicts only hold publications for owner decision, no automatic tombstones (ADR-0016 §3 and §8)"
     abuse_controls:
-      - "Evaluate limited to 600 calls per minute per vault; pack applications limited to 20 per day."
+      - "Local resource protection (not an abuse control, it runs on the user's own device): evaluate limited to 600 calls per minute per vault; pack applications limited to 20 per day."
       - "Publisher limit of 2 000 active rules; emergency rules limited to 5 active at once."
   observability_performance:
     requirements:
@@ -234,42 +291,51 @@ processes:
       - "classrup_governance_rule_evaluate_duration_ms (local histogram)"
       - "classrup_governance_rule_pack_applied_total{outcome} (local)"
     logs:
-      - "info prohibited_rule.evaluated {verdict, matchedCount, rulesetVersion, correlationId} in local diagnostics; no text and no keywords."
+      - "info prohibited_rule.evaluated {verdict, matchedCount, packsDigest, correlationId} in local diagnostics; no text and no keywords."
     budgets:
-      - "evaluate p95 <= 20 ms for 8 000 code points against 2 000 rules on Moto G-class hardware."
+      - "evaluate p95 <= 20 ms for 8 000 code points against 2 000 rules, and <= 30 ms when 200 of them are sensitive (n-grams of 1 to 5 tokens hashed once per evaluation), on Moto G-class hardware."
       - "apply_pack of 2 000 rules p95 <= 800 ms; relay evaluate p95 <= 100 ms at 50 req/s."
   contract_and_acceptance_tests:
     requirements:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate pack statements, commands, evaluate results and events against the registry and verify signatures."
       - "Evaluation determinism is covered by property tests with at least 200 runs, 10 000 nightly."
-    fixtures: "Rule pack version 41 with rules counterfeit_goods (block), age_restricted_goods (review, notice), used_electronics_notice (allow_with_notice), and one emergency review rule; trusted publisher PK1, untrusted PK2; clock 2026-11-04T10:00:00Z."
+    fixtures: "Rule pack version 41 with rules counterfeit_goods (block), age_restricted_goods (review, notice), used_electronics_notice (allow_with_notice), one sensitive rule and one emergency review rule; 200-sensitive-rule load pack; decisions D1 (a year old, for rules first activated in pack 12) and D2 (for pack 41); trusted publisher PK1, untrusted PK2, publisher PB; taxonomy T1 held and T2 not held; F01.S01.M03 publication fixture; relay stub with receipts; clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | draft valid rule and one with 51 keywords | stored immutable version; invalid rejected with documented code"
-      - "T02 | unit | 02.R03 | violate each rule V01-V09 | documented error code returned; nothing released or applied"
-      - "T03 | property | 01.R03,02.R02 | random texts with look-alikes and zero-width characters | verdict deterministic and stable under normalization; whole-word mode avoids substring matches"
-      - "T04 | property | 03.R01,03.R02 | random lifecycle commands | only declared transitions; one active version per key; new version retires old one atomically"
-      - "T05 | integration | 03.R03,08.R03 | emergency rule passes 7 days | retired automatically, emergency_expired event emitted, evaluation ignores it"
-      - "T06 | contract | 04.R01,04.R02,09.R02 | release, apply, evaluate | pack validates against classrup.governance.rule_pack/v1, signature verifies, result has no matched text, event valid"
-      - "T07 | integration | 04.R03,06.R03 | apply pack while publications are active | changed event emitted; F01.S01.M03 re-evaluation ends a publication that now blocks"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | draft valid rule and one with 51 keywords | stored immutable version; invalid rejected with documented code"
+      - "T02 | unit | 02.R03 | violate each rule V01-V14 | documented error code returned; nothing released or applied"
+      - "T03 | property | 01.R02 | random texts with look-alikes and zero-width characters | verdict deterministic and stable under normalization; whole-word mode avoids substring matches"
+      - "T04 | property | 03.R01,03.R02 | random lifecycle commands | only declared transitions; one active version per key; new version retires old one atomically; retirement only through a released pack"
+      - "T05 | integration | 03.R03 | emergency rule passes its effective expiry | retired automatically, emergency_expired event emitted, evaluation ignores it"
+      - "T06 | contract | 04.R01,04.R02,04.R03,09.R02 | release, apply, evaluate | pack validates against classrup.governance.rule_pack/v1, signature verifies, result has no matched text and lists packs with publisherId and packsDigest, event valid"
+      - "T07 | integration | 03.R04,07.R04 | apply a pack that blocks an active publication in the F01.S01.M03 fixture; advance 7 days; owner confirms Unpublish | publication held as policy_attention with owner notice, renewals and unchanged re-publication stopped, an edit that clears the verdict resolves it; no tombstone signed before confirmation; reminder after 7 days; tombstone only after confirmation"
       - "T08 | abuse | 05.R01,05.R02,05.R03 | untrusted publisher pack; non-publisher release; relay removal | pending or FORBIDDEN; relay removal affects only that relay"
       - "T09 | integration | 06.R01,06.R02 | replay release; apply two packs concurrently with evaluate | one packCid; evaluate sees old or new pack only"
-      - "T10 | chaos | 06.R03 | relay down during release; one consumer fails | local state intact; delivery prepared; consumer retries without rolling back the pack"
-      - "T11 | abuse | 07.R01,07.R02,07.R03 | scan logs, storage and events after evaluating text | no listing text or keywords stored or logged; sensitive keywords only as hashes in public copy"
-      - "T12 | abuse | 07.R03 | 100 000-code-point input; 2 001 rules; 601 evaluations in a minute | rejected before matching; pack rejected; RATE_LIMITED"
-      - "T13 | load | 08.R01,08.R02,08.R03 | 2 000 rules, 8 000 code points on Moto G profile; relay at 50 req/s | evaluate p95 <= 20 ms, apply p95 <= 800 ms, relay p95 <= 100 ms, no telemetry"
+      - "T10 | chaos | 06.R02 | relay down during release; one consumer fails | local state intact; delivery prepared; consumer retries without rolling back the pack"
+      - "T11 | abuse | 07.R01,07.R02 | scan logs, storage and events after evaluating text; inspect the operator editor and settings strings | no listing text or keywords stored or logged; sensitive keywords only as hashes in the pack; UI states hashes do not resist dictionary search"
+      - "T12 | abuse | 02.R02 | 100 000-code-point input; 2 001 rules; 601 evaluations in a minute | rejected before matching; pack rejected; RATE_LIMITED as local resource protection"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 2 000 rules (and the 200-sensitive-rule pack), 8 000 code points on Moto G profile; relay at 50 req/s | evaluate p95 <= 20 ms (<= 30 ms with sensitive rules), apply p95 <= 800 ms, relay p95 <= 100 ms, no telemetry"
       - "T14 | unit | 09.R01,09.R03 | traceability tool run, nightly property seeds | every PS-146 requirement maps to a passing test"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import pack with bad signature | rules round-trip with provenance; bad pack rejected"
+      - "T16 | integration | 07.R03 | apply 5 successive packs | the vault keeps exactly the last 3 packs; older ones purged under RET-STANDARD"
+      - "T17 | integration | 06.R03 | network disabled after pack 41 is applied; evaluate | evaluate succeeds with pack 41 and no network call is attempted"
+      - "T18 | abuse | 01.R03 | network spy during evaluate, apply_pack and policy result display | no request carries evaluation input or results; rules readable through relay_latest anonymously"
+      - "T19 | integration | 02.R04,01.R05 | vault offline 45 days applies pack 41; fresh vault applies pack 41 whose rules from pack 12 cite the year-old D1; PB's pack cites D2 of PK1; a rule version whose keywords differ from D2's approved content | both vaults apply pack 41 (asOf from anchors or claimed createdAt, never the vault clock); PB's rule rejected with publisher_mismatch; changed rule rejected with content_mismatch and held at its previous version"
+      - "T20 | abuse | 02.R05,03.R03 | emergency rule re-issued under the same key each week; emergency rule with activation dated 30 days in the future | second activation within 30 days rejected with GOVERNANCE_RULE_EMERGENCY_INVALID; future-dated rule expires 7 days after first sight"
+      - "T21 | integration | 01.R04 | pack scoped to T2 applied in a vault that holds only T1; listing with a T2 category id; listing whose text matches a T2-scoped block keyword; T2 arrives later | rules stored scope_unresolved and listed in settings; exact id match applies; keyword match capped at review with viaFallback true; after T2 arrives scopes resolve"
+      - "T22 | unit | 01.R02,07.R02 | sensitive whole-word rule with a 3-token phrase; phrase-mode sensitive rule; relay serves the pack | n-gram hashing matches the phrase; phrase-mode sensitive rule rejected; pack contains no plaintext and its signature still verifies as served"
+      - "T23 | integration | 04.R04 | relay_upload by the operator key and by another key; index submission evaluated on the relay | operator pack applied as hosting policy with relay-local changed events consumed by an F12.S02.M01 case fixture; other key FORBIDDEN; intake evaluates against the operator pack; relay_latest byte-identical"
+      - "T24 | contract | 04.R05,04.R06 | changed event payload; F11.S01.M01 registry row for rule_pack/v1 | payload has ruleId, publisherId, ruleKey and version; registry row has audience, signer role, resolution and maxAge"
     acceptance:
-      - All tests T01-T15 pass in CI.
-      - Blocking and review rules are never activated without a verified approved decision; emergency rules are review-level and expire within 7 days.
-      - Evaluation is deterministic, bounded to 20 ms p95, offline capable, and never stores or logs listing text.
+      - All tests T01-T24 pass in CI.
+      - Blocking and review rules are never activated in any vault without a verified approved decision for that publisher and content, except emergency review rules within their 7-day window and the 30-day emergency limit.
+      - Evaluation is deterministic, bounded to 20 ms p95 (30 ms with sensitive rules), offline capable, never stores or logs listing text, and a pack change never unpublishes a listing without its owner's confirmation.
   import_export_backup_rollback:
     requirements:
-      - "The user export contains the applied rule mirror with provenance and the trusted publisher list; publisher vaults also export drafts and signing history."
-      - "Import re-verifies pack signatures, publisher trust and size limits; failing packs are stored as pending or rejected."
+      - "The user export contains the applied rule mirror with provenance; the trusted-publisher list is exported by F18.S02.M01; publisher vaults also export drafts, the plaintext of their own sensitive keywords and signing history."
+      - "Import re-verifies pack signatures, publisher trust, size limits and recorded decisions; failing packs are stored as pending or rejected."
       - "Schema changes follow expand/contract and keep v1 readable for 180 days; the last 3 packs allow review of what changed."
-    export: "Section governance.prohibited_rules in classrup-export/v1, one line per ProhibitedRule (schema classrup.governance.prohibited_rule/v1) and the latest rule pack statement."
-    import: "Signature, trust and limits re-verified; untrusted packs import as pending; emergency rules past emergencyUntil import as retired."
+    export: "Section governance.prohibited_rules in classrup-export/v1, one line per ProhibitedRule (schema classrup.governance.prohibited_rule/v1) and the latest rule pack statement of each publisher with its receipt."
+    import: "Signature, trust and limits re-verified; packs from publishers not trusted in the importing vault go to the pending inbox; emergency rules past their effective expiry import as retired."
     backup: "Vault export is the primary backup (IOX-6); relays hold public signed packs that vaults can re-fetch."
-    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; to undo a rule change the publisher releases the earlier content as a higher pack version."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; to undo a rule change the publisher releases the earlier content as a higher pack version with a decision."

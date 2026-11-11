@@ -16,8 +16,9 @@
 |---|---|---|
 | bazaar.giveaway_terms.define | owner | listing.ownerId = local principal; listing kind giveaway; status draft, published or unpublished |
 | bazaar.giveaway_request.create | owner | local principal is the requester; not blocked by the giver; one live request per giveaway |
-| bazaar.giveaway_request.receive | peer | statement signed by the requester key; signature verified; giveaway owned by local principal |
-| bazaar.giveaway_request.decide | owner | request.giverId = local principal |
+| bazaar.giveaway_request.receive | peer | giver vault: statement signed by the requester key; signature verified; giveaway owned by local principal |
+| bazaar.giveaway_selection.receive | peer | requester vault: statement signed by the author key of the verified listing projection; binds the local principal's own request |
+| bazaar.giveaway_request.decide | owner | giver vault: request.giverId = local principal; requester vault: confirm_collected only, request.requesterId = local principal (mark received) |
 | bazaar.giveaway_request.read_as_giver | owner | listing.ownerId = local principal |
 | bazaar.giveaway_request.read_own | owner | request.requesterId = local principal |
 | bazaar.giveaway_request.relay_mailbox | relay-member | relay policy: request signed by the recipient device key; ciphertext only; mailbox quota default 10 MiB |
@@ -33,4 +34,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

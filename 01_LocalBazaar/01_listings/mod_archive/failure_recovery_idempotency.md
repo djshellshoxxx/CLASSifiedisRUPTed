@@ -7,16 +7,16 @@
 ## Requirements
 
 - **PS-001-06.R01** Commands are idempotent per CTR-IDM-001 and sweeps are safe to run twice.
-- **PS-001-06.R02** Ending a publication, changing the Listing status and writing the ArchiveRecord commit together; the tombstone transport is a separate retried step.
+- **PS-001-06.R02** Ending a publication, converting or releasing holds, cancelling Deals, changing the Listing status and writing the ArchiveRecord commit together; the tombstone and release transport is a separate retried step.
 - **PS-001-06.R03** Offline use is complete locally; nothing here claims relay delivery.
 
 ## Specification
 
 - **idempotency:** Idempotency-Key required on close, archive and restore; sweeps use the natural key (listingId, target status) so a second run changes nothing.
-- **concurrency:** expectedRevision on commands; a unique partial index allows one open ArchiveRecord per listing; two tabs closing the same listing give CONFLICT_REVISION to the second.
+- **concurrency:** expectedRevision on commands; a unique partial index allows one open ArchiveRecord per listing; two tabs closing the same listing give CONFLICT_REVISION to the second. A hold that becomes active during a sweep run is seen by the next run because the sweep re-reads holds inside its transaction.
 - **retries:** Sweeps retry per batch of 100 listings after a transaction abort (max 3); tombstone transport follows IDM-4 backoff (base 500 ms, cap 30 s, 6 attempts).
-- **offline:** All commands work offline. Tombstones stay prepared in the sync outbox; the UI says the ended listing may still be visible on relays until they receive it.
-- **partial failure:** If ending the publication fails (signing key locked), the whole close is refused with PRECONDITION_FAILED and nothing changes; if tombstone transport fails later, the local close stands and delivery is retried.
+- **offline:** All commands work offline. Tombstones and reservation releases stay prepared in the sync outbox; the UI says the ended listing may still be visible on relays until they receive it.
+- **partial failure:** If ending the publication fails (signing key locked) or commerce.deal.cancel fails, the whole close is refused with PRECONDITION_FAILED and nothing changes; if tombstone transport fails later, the local close stands and delivery is retried.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -30,4 +30,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

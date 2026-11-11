@@ -6,9 +6,11 @@
 
 ## Requirements
 
-- **PS-056-04.R01** update, publish, block add and block remove are vault commands; publish produces the signed statement classrup.identity.profile/v1; receive is the vault intake of someone else's profile statement.
+- **PS-056-04.R01** update, publish, unpublish, block add and block remove are vault commands; publish produces the signed statement classrup.identity.profile/v1 and unpublish produces classrup.federation.tombstone/v1, both signed by a device key active in the owner's document; receive is the vault intake of someone else's profile statement.
 - **PS-056-04.R02** Block commands emit local P3 events that other modules consume to cancel work; block data is never placed in a statement.
 - **PS-056-04.R03** Reads of profiles apply the viewer's perspective - strangers see public fields, conversation participants see contacts fields, the owner sees all.
+- **PS-056-04.R04** A tombstone withdraws a received profile only when its author equals the profile's DID and its signer key is active in that DID's document; a tombstone signed by an origin relay only removes that relay from the profile's provenance.
+- **PS-056-04.R05** Relay hosting actions (moderation.action.applied and moderation.action.reverted) are consumed only by the relay runtime for the relay's own copy and never change vault records.
 
 ## Specification
 
@@ -17,8 +19,9 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `identity.profile.update` | identity.profile.write_own | { bio?, avatar?, languages?, visibility?, expectedRevision } | { profileId, revision } | VALIDATION_FAILED, IDENTITY_AVATAR_INVALID, IDENTITY_REGION_INVALID, CONFLICT_REVISION | identity.profile.updated | yes (Idempotency-Key) |
-| `identity.profile.publish` | identity.profile.publish_own | { audience: public\|contacts, targetRelays?: array, threadIds?: array, expectedRevision } | { profileId, seq, cid, statement: classrup.identity.profile/v1, syncState: local_committed } | CONFLICT_REVISION, VALIDATION_FAILED | identity.profile.updated | yes (Idempotency-Key) |
-| `identity.profile.receive` | identity.profile.receive | { statement: classrup.identity.profile/v1, provenance } | { profileId, seq, status } | IDENTITY_PROFILE_INVALID, BLOCKED_PARTY, VALIDATION_FAILED | identity.profile.updated | yes (Idempotency-Key) |
+| `identity.profile.publish` | identity.profile.publish_own | { audience: public\|contacts, targetRelays?: array, threadIds?: array, expectedRevision } | { profileId, seq, cid, statement: classrup.identity.profile/v1, syncState: local_committed, skippedRelays: array } | CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_REGION_INVALID, PRECONDITION_FAILED | identity.profile.updated | yes (Idempotency-Key) |
+| `identity.profile.unpublish` | identity.profile.unpublish_own | { targetRelays?: array (default every relay that received it), expectedRevision } | { profileId, revision, tombstone: classrup.federation.tombstone/v1, syncStates: [{ relayId, syncState }] } | CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED | identity.profile.updated | yes (Idempotency-Key) |
+| `identity.profile.receive` | identity.profile.receive | { statement: classrup.identity.profile/v1, provenance } | { profileId, seq, status } | IDENTITY_PROFILE_INVALID, VALIDATION_FAILED, RATE_LIMITED | identity.profile.updated | yes (Idempotency-Key) |
 | `identity.block.add` | identity.block_entry.write_own | { blockedDid, note? } | { blockId, revision: 1 } | VALIDATION_FAILED, IDENTITY_BLOCK_LIMIT, CONFLICT_STATE | identity.block.added | yes (Idempotency-Key) |
 | `identity.block.remove` | identity.block_entry.write_own | { blockId, expectedRevision } | { blockId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | identity.block.removed | yes (Idempotency-Key) |
 
@@ -33,7 +36,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `identity.profile.updated` | P0 | { did, origin: own\|received, seq, changedFields: array } |
+| `identity.profile.updated` | P0 | { did, origin: own\|received, seq, changedFields: array (field names only, for example withdrawn) } |
 | `identity.block.added` | P3 | { blockId, blockerDid, blockedDid } |
 | `identity.block.removed` | P3 | { blockId, blockerDid, blockedDid } |
 
@@ -43,27 +46,33 @@
 |---|---|
 | `identity.account.created` | create the default own Profile with the pseudonym, visibility region private, no bio |
 | `identity.pseudonym.changed` | refresh displayPseudonym on the own profile and mark it unpublished-changes |
-| `discovery.location.updated` | set regionCell to the public cell (L1 or L2) or clear it at L0, still subject to the region visibility |
-| `moderation.action.applied` | relay: hide the targeted profile on that relay under its hosting policy; vault: apply the user's local hide |
-| `federation.tombstone.applied` | delete the received profile the signed tombstone targets |
-| `privacy.deletion.completed` | vault erase - delete all profiles and blocks |
+| `discovery.location.updated` | set regionCell to publicCell after F06.S02.M01 assertPublicCell, or clear it at L0, still subject to the region visibility |
+| `identity.portable_doc.published` | origin received - re-verify quarantined profile statements of that DID whose signer key was unknown; profiles first seen before a revocation stay valid |
+| `moderation.action.applied` | relay runtime only - the relay stops serving its own copy of the targeted profile statement under its hosting policy; vault records are never changed |
+| `moderation.action.reverted` | relay runtime only - the relay serves its copy of the profile statement again; vault records are never changed |
+| `federation.tombstone.applied` | delete the received profile only when the tombstone author equals Profile.did and its signer key was active in that DID's document; a tombstone signed by an origin relay only drops that relay from provenance and the profile stays |
+| `privacy.deletion.completed` | final cleanup only - the DeletionPort steps already sent the own profile tombstone and deleted profiles and blocks |
 
 ### Module errors
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | IDENTITY_AVATAR_INVALID | 422 | no | avatar is not a 128 by 128 WebP under 24 KiB without metadata |
-| IDENTITY_REGION_INVALID | 422 | no | region cell is longer than 5 characters or differs from the public cell of the location settings |
+| IDENTITY_REGION_INVALID | 422 | no | region cell fails assertPublicCell or differs from the public cell of the location settings |
 | IDENTITY_BLOCK_LIMIT | 409 | no | 1 000 active blocks already exist |
-| IDENTITY_PROFILE_INVALID | 422 | no | received profile signature, size or sequence check failed |
+| IDENTITY_PROFILE_INVALID | 422 | no | received profile signature, signer key status, size or sequence check failed |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Statements and signer roles (N2): classrup.identity.profile/v1 - a device key active in the owner's portable document (key id in the envelope); classrup.federation.tombstone/v1 for unpublish (CTR-FED-001 FED-4, the format owned by F11.S01.M02) - a device key of the profile's DID. F11.S01.M02 is not listed in depends_on because it already depends on this module through F11.S03.M02; the tombstone is built per CTR-FED-001 and delivered by the sync outbox, and F11.S01.M02 applies it on relays and in receiving vaults. A received statement from a blocked DID is dropped silently - receive returns no error the sender could observe. Ports provided: isBlockedEither(a, b), filterBlocked(dids up to 500), and BlockFilterPort.isBlocked(did) for F07.S02.M01 (N7).
 
 ### Example
 
 ```
 vault command: identity.profile.update { "bio": "Fixes bikes on weekends.", "visibility": { "bio": "public", "region": "contacts" }, "expectedRevision": 2 }
 -> { "profileId": "0192f440-…", "revision": 3 }
+vault command: identity.profile.unpublish { "expectedRevision": 3 }
+-> { "profileId": "0192f440-…", "revision": 4, "tombstone": { "type": "classrup.federation.tombstone/v1", "author": "did:key:z6Mk…", "payload": { "target": "sha256-…", "reason": "withdrawn" }, "sig": "…" }, "syncStates": [ { "relayId": "relay.example.org", "syncState": "prepared" } ] }
 vault command: identity.block.add { "blockedDid": "did:key:z6Mk…", "note": "spam offers" }
 -> { "blockId": "0192f441-…", "revision": 1 }
 port: isBlockedEither("did:key:z6MkA…", "did:key:z6MkB…") -> true
@@ -74,9 +83,12 @@ port: isBlockedEither("did:key:z6MkA…", "did:key:z6MkB…") -> true
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-056-09.T05 | integration | PS-056-01.R02, PS-056-04.R02 | block S2 then deliver a profile, an offer card and a message from S2 | all dropped silently; S2 gets no error; isBlockedEither is true both ways |
-| TEST-PS-056-09.T06 | contract | PS-056-04.R01, PS-056-04.R03, PS-056-09.R02 | every command, query and event run | outputs, statements and payloads validate against registry schemas; signatures verify |
-| TEST-PS-056-09.T07 | integration | PS-056-04.R02, PS-056-06.R01 | consumer fakes subscribe to identity.block.added | open offers, drafts, shares and outbox items to the blocked DID are cancelled with reason blocked |
+| TEST-PS-056-09.T06 | contract | PS-056-04.R01, PS-056-04.R03 | every command, query and event run | outputs, statements and payloads validate against registry schemas; signatures verify; a stranger view has only public fields |
+| TEST-PS-056-09.T07 | integration | PS-056-04.R02, PS-056-09.R03 | consumer fakes subscribe to identity.block.added | open offers, drafts, shares and outbox items to the blocked DID are cancelled with reason blocked |
+| TEST-PS-056-09.T15 | integration | PS-056-04.R01 | unpublish a profile published to R1 while R1 is offline, then online | tombstone signed by P1 queued with per-relay sync state; identity.profile.updated with changedFields [withdrawn]; after delivery a viewer vault deletes the profile |
+| TEST-PS-056-09.T16 | abuse | PS-056-04.R04 | a tombstone for P's profile signed by origin relay R1, then one signed by P1 | after the relay tombstone the profile stays active with R1 removed from provenance; the author tombstone deletes it |
+| TEST-PS-056-09.T17 | integration | PS-056-04.R05, PS-056-03.R01 | moderation.action.applied and moderation.action.reverted delivered to a vault and to the relay runtime | the relay stops and then resumes serving its copy; the vault Profile is unchanged except an optional notServedBy provenance entry |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -210,7 +210,7 @@ processes:
     fixtures: "Vault with draft sell listing L and published sell listing P (EUR 50.00); currency registry with EUR, JPY, USD, BTC, ETH, USDC; clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01,02.R02 | define valid terms; send amount 49.99 as float; unknown currency | stored with integer string; float and unknown currency rejected with documented codes"
-      - "T02 | unit | 01.R02,01.R03,02.R03 | violate each rule V01-V11 | documented error code returned and nothing stored"
+      - "T02 | unit | 02.R03 | violate each rule V01-V11 | documented error code returned and nothing stored"
       - "T03 | property | 03.R01,03.R02,03.R03 | random define sequences across listing statuses | revision increments by 1 per accepted change; closed or archived listing refuses changes"
       - "T04 | contract | 04.R01,04.R03,09.R02 | define and get run | outputs and bazaar.sell_terms.set payload validate; minOffer absent from event"
       - "T05 | integration | 04.R02,06.R03 | define on published P with price change | event emitted once; revision recorded as material; draft L emits no event"
@@ -218,7 +218,7 @@ processes:
       - "T07 | integration | 06.R01,06.R02 | replay define; stale expectedRevision | original result; CONFLICT_REVISION with currentRevision"
       - "T08 | chaos | 06.R03 | revision record fails inside define | terms write rolled back"
       - "T09 | integration | 06.R03 | edit offline then send projection | state unsent, then prepared, transport_acknowledged, peer_accepted only after signed ack"
-      - "T10 | abuse | 07.R01,07.R02 | scan projection, events and logs; note with IBAN | no minOffer or drafts leave device; note rejected"
+      - "T10 | abuse | 01.R02,01.R03,07.R01,07.R02 | scan projection, events and logs; note with IBAN; schema search for payment instruction fields | no minOffer or drafts leave device; projected subset only after publish; note rejected; no payment instruction field exists"
       - "T11 | abuse | 02.R03 | 11 price changes within 24 h | 11th returns RATE_LIMITED with retryAfterMs"
       - "T12 | load | 08.R01,08.R02,08.R03 | 1 000 define calls on Moto G profile | p95 <= 60 ms, counters present, no network"
       - "T13 | unit | 09.R01,09.R03 | traceability tool and wording test | every PS-006 requirement maps to a passing test; no UI string implies platform-held funds"

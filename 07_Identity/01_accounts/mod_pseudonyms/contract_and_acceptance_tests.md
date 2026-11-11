@@ -7,42 +7,54 @@
 ## Requirements
 
 - **PS-052-09.R01** Every requirement is covered by at least one automated test with injected clock, ID generator and fixed key pairs.
-- **PS-052-09.R02** Pseudonym tests run the UTS
+- **PS-052-09.R02** Pseudonym tests run the UTS 39 conformance vectors for skeleton and a corpus of confusable and mixed-script samples.
 - **PS-052-09.R03** Statement tests verify signatures with RFC 8032 vectors and domain-separation negative cases.
+- **PS-052-09.R04** Accessibility and UI copy tests check the identity and device screens with axe-core and verify that the honest-limit texts (offline guessing, no global uniqueness, revocation reaching others only on delivery, stolen root device) are present.
 
 ## Specification
 
 See the module test table below (all processes).
 
-**Fixtures:** Fixed Ed25519 key pairs A1, A2, B1; pseudonym corpus (valid, mixed script, homoglyph pairs 'paypal' and Cyrillic lookalike, RTL override, zero-width); pinned confusables data 16.0.0; fixed clock 2026-11-04T10:00:00Z; relay with registry enabled.
+**Fixtures:** Fixed Ed25519 key pairs - root R, devices A1, A2, A3 of account A, device B1 of account B; pseudonym corpus (valid, mixed script, homoglyph pairs 'paypal' and Cyrillic lookalike, RTL override, zero-width); pinned confusables data 16.0.0; fixed clock 2026-11-04T10:00:00Z; relays R1 and R2 with registry enabled; RecoveryKitStatusPort and KeyStatusPort stubs.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-052-09.T01 | unit | PS-052-01.R01, PS-052-01.R02, PS-052-04.R01 | create account with valid pseudonym | Account stored with did:key (prefix z6Mk), no private key in records, events emitted |
-| TEST-PS-052-09.T02 | unit | PS-052-02.R01, PS-052-02.R02 | pseudonym corpus - too short, 33 code points, spaces, all digits, mixed Latin and Cyrillic, RTL override, zero-width joiner | IDENTITY_PSEUDONYM_INVALID for each; valid CJK and Latin samples accepted |
-| TEST-PS-052-09.T03 | property | PS-052-02.R01, PS-052-02.R02 | UTS #39 confusable pairs and 10 000 random NFKC-equivalent strings | equal skeletons for confusable pairs; normalization is idempotent |
-| TEST-PS-052-09.T04 | unit | PS-052-02.R03, PS-052-02.R01 | reserved names and their homoglyph forms | IDENTITY_PSEUDONYM_RESERVED |
-| TEST-PS-052-09.T05 | integration | PS-052-01.R03, PS-052-02.R03, PS-052-03.R03 | two DIDs claim confusable handles on one relay; release then reclaim within and after 30 days | second claim IDENTITY_PSEUDONYM_TAKEN or CONFUSABLE; only former DID can reclaim within 30 days; purge after |
-| TEST-PS-052-09.T06 | integration | PS-052-02.R03, PS-052-03.R01 | change pseudonym twice within 30 days in vault and on registry | vault asks confirmation; registry returns IDENTITY_PSEUDONYM_COOLDOWN |
-| TEST-PS-052-09.T07 | unit | PS-052-02.R02, PS-052-02.R03, PS-052-03.R02 | add device with valid, stale (11 min), wrong-signer link; add 11th device | success then IDENTITY_LINK_INVALID and IDENTITY_DEVICE_LIMIT; revoked key cannot be re-added |
-| TEST-PS-052-09.T08 | integration | PS-052-03.R02, PS-052-02.R03 | revoke last device with and without verified recovery kit | IDENTITY_LAST_DEVICE_KEY without kit; allowed with kit |
-| TEST-PS-052-09.T09 | contract | PS-052-04.R01, PS-052-04.R02, PS-052-04.R03, PS-052-09.R02 | each command and query run | outputs, statements and events validate against registry schemas; statement signatures verify per RFC 8032 |
-| TEST-PS-052-09.T10 | abuse | PS-052-05.R01, PS-052-05.R02, PS-052-05.R03 | locked vault mutates; claim signed by a different DID; operator tries to create a DID on the registry | FORBIDDEN or VALIDATION_FAILED; no registry row created |
-| TEST-PS-052-09.T11 | integration | PS-052-06.R01, PS-052-06.R02, PS-052-06.R03 | replay same Idempotency-Key; two tabs and two devices act concurrently; keystore write fails during creation | one result; CONFLICT_REVISION or contested document; nothing persisted on failure |
-| TEST-PS-052-09.T12 | abuse | PS-052-07.R01, PS-052-07.R02, PS-052-07.R03 | scan storage, logs and exports of other users for private keys, emails and passwords; 6 claims in an hour from one IP /24 | none found; 6th claim RATE_LIMITED |
-| TEST-PS-052-09.T13 | load | PS-052-08.R01, PS-052-08.R02, PS-052-08.R03 | 50 claims per second for 5 minutes on a relay; account creation on emulated Moto G | p95 <= 300 ms on relay and <= 2 s creation; skeleton <= 5 ms |
-| TEST-PS-052-09.T14 | a11y | PS-052-01.R01 | create identity and devices screens with axe-core and keyboard only | zero serious or critical issues; validation messages announced |
-| TEST-PS-052-09.T15 | unit | PS-052-09.R01, PS-052-09.R03 | traceability run over PS-052 | every requirement maps to a passing test |
-| TEST-PS-052-09.T16 | integration | PS-052-10.R01, PS-052-10.R02, PS-052-10.R03 | export, import into a fresh vault, vault erase | Account and DeviceKey public data round-trip; private keys excluded; erase deletes all |
+| TEST-PS-052-09.T01 | unit | PS-052-01.R01, PS-052-01.R04, PS-052-04.R03 | create account with a valid pseudonym on device A1 | Account stored with did:key, rootDevice true and rootKeyRef only on A1, no private key in records; identity.account.created and identity.device_key.added emitted in the same transaction |
+| TEST-PS-052-09.T02 | unit | PS-052-02.R01 | pseudonym corpus - too short, 33 code points, spaces, all digits, mixed Latin and Cyrillic, RTL override, zero-width joiner | IDENTITY_PSEUDONYM_INVALID for each; valid CJK and Latin samples accepted |
+| TEST-PS-052-09.T03 | property | PS-052-02.R01, PS-052-09.R02 | UTS 39 conformance vectors, confusable pairs and 10 000 random NFKC-equivalent strings | skeletons equal the vectors; equal skeletons for confusable pairs; normalization is idempotent |
+| TEST-PS-052-09.T04 | unit | PS-052-02.R01 | reserved names and their homoglyph forms | IDENTITY_PSEUDONYM_RESERVED for each |
+| TEST-PS-052-09.T05 | integration | PS-052-01.R03, PS-052-02.R03, PS-052-03.R03 | two DIDs claim confusable handles on one relay; release then reclaim within and after 30 days | second claim IDENTITY_PSEUDONYM_TAKEN or CONFUSABLE; only the former DID can reclaim within 30 days; row purged after; the vault never reports global uniqueness |
+| TEST-PS-052-09.T06 | integration | PS-052-03.R01, PS-052-02.R03 | change pseudonym twice within 30 days in the vault and on a registry | vault asks for confirmation and keeps the Account active with revision bumped; registry returns IDENTITY_PSEUDONYM_COOLDOWN |
+| TEST-PS-052-09.T07 | unit | PS-052-01.R02, PS-052-02.R02, PS-052-02.R04 | add device with a valid dual-signed link; stale link (11 min); link signed by a device key; missing possession signature; reused offer nonce; another user's device key B1 listed under A | success first, then IDENTITY_LINK_INVALID for every other case |
+| TEST-PS-052-09.T08 | integration | PS-052-03.R02, PS-052-04.R05 | revoke the last device with and without a verified kit (RecoveryKitStatusPort stub); add an 11th device; re-add a revoked key | IDENTITY_LAST_DEVICE_KEY without kit and allowed with kit; IDENTITY_DEVICE_LIMIT; a revoked key never becomes active again |
+| TEST-PS-052-09.T09 | contract | PS-052-04.R01, PS-052-04.R02, PS-052-04.R03, PS-052-04.R04 | each command, query and event run | outputs, statements and events validate against registry schemas; device_key events carry the DID; statement signatures verify per RFC 8032 |
+| TEST-PS-052-09.T10 | abuse | PS-052-05.R01, PS-052-05.R02, PS-052-05.R03 | locked vault mutates; claim signed by a key not active in the DID's document; operator tries to create a DID on the registry; 21 availability checks in a minute | FORBIDDEN, UNAUTHENTICATED or VALIDATION_FAILED; no registry row created; 21st check RATE_LIMITED |
+| TEST-PS-052-09.T11 | integration | PS-052-06.R01, PS-052-06.R02, PS-052-06.R03 | replay the same Idempotency-Key; two tabs edit; A2 and A3 revoke each other concurrently; keystore write fails during creation | one result; CONFLICT_REVISION; both keys contested and nothing revoked silently; outbox state never above the reached state; nothing persisted on failure |
+| TEST-PS-052-09.T12 | abuse | PS-052-07.R01, PS-052-07.R02 | scan storage, logs, events and exports for private keys, emails and passwords | none found; the root key appears only inside the encrypted keystore |
+| TEST-PS-052-09.T13 | load | PS-052-08.R01, PS-052-08.R02, PS-052-08.R03 | 50 claims per second for 5 minutes on a relay; account creation on emulated Moto G; 32 code point skeletons | p95 <= 300 ms on relay and <= 2 s creation; skeleton <= 5 ms; registry metrics exported |
+| TEST-PS-052-09.T14 | a11y | PS-052-09.R04 | create identity, devices and handle screens with axe-core and keyboard only | zero serious or critical issues; validation messages announced; QR flow has a text code |
+| TEST-PS-052-09.T15 | unit | PS-052-09.R01 | traceability run over PS-052 | every requirement maps to a passing test |
+| TEST-PS-052-09.T16 | integration | PS-052-10.R01, PS-052-10.R02, PS-052-10.R03 | export, import into a fresh vault, second-principal import, Unicode data bump migration and rollback | public data and statements round-trip; private keys only in the encrypted bundle; CONFLICT_STATE for a second principal; skeletons recomputed and restored on rollback |
+| TEST-PS-052-09.T17 | abuse | PS-052-02.R02, PS-052-09.R03 | a valid signature over a device_link presented as handle_claim, as a relay login message and as a keyrevocation, and the reverse | rejected each time because the domain-separated prefixes differ |
+| TEST-PS-052-09.T18 | abuse | PS-052-02.R04 | claim from relay R1 replayed to R2; old release replayed after a reclaim; claim with claimedAt 11 minutes old | UNAUTHENTICATED for the wrong relay, CONFLICT_REVISION for the old release, EXPIRED for the stale claim; registries unchanged |
+| TEST-PS-052-09.T19 | abuse | PS-052-02.R05, PS-052-03.R02 | stolen A3 revokes A1 and A2 | both revocation_pending for 7 days; A1's counter-revocation of A3 makes A1 and A3 contested; a revocation signed by contested A3 is refused with SECURITY_KEY_UNAUTHORIZED; the root key decision ends the contest |
+| TEST-PS-052-09.T20 | abuse | PS-052-01.R04, PS-052-05.R04 | A2 signs a profile after its revocation; verifier V1 learned of the revocation before first seeing the profile, verifier V2 first saw it earlier | V1 rejects (KeyStatusPort at first-seen time), V2 keeps it with the revocation date shown as a claim |
+| TEST-PS-052-09.T21 | property | PS-052-01.R05 | fingerprints of 10 000 random keys | 16 base58btc characters from SHA-256 of the raw key, no shared z6Mk prefix, no collisions, 8-word form decodes to the same 88 bits |
+| TEST-PS-052-09.T22 | unit | PS-052-07.R03 | identity.pseudonym.check on a relay for a taken and a confusable candidate, and locally for a contact lookalike | relay output has only reason codes and taken, never the colliding handle, DID or registration id; the local warning names only a known contact |
+| TEST-PS-052-09.T23 | e2e | PS-052-09.R04 | UI copy check of the create identity, devices and handle screens | offline-guessing warning, 'unique only on this relay', 'revocation reaches others when delivered' and stolen-root-device texts are present in every locale bundle |
+| TEST-PS-052-09.T24 | integration | PS-052-07.R04 | F10 export section, deletion plan execution and retention sweep with stub registries; handle claim without federation_publish consent | sections identity.account and identity.device_keys exported; handles released before key destruction; privacy.deletion.completed only cleans up; claim not sent without consent |
+| TEST-PS-052-09.T25 | unit | PS-052-04.R05 | registerRecoveredKey with the root seed and a verified latest document, at 10 active keys, and without a document | Account rebuilt with rootDevice true and a recovery device_link; IDENTITY_DEVICE_LIMIT with nothing stored; without a document the key is added and no other key is known for revocation |
+| TEST-PS-052-09.T26 | unit | PS-052-05.R04, PS-052-02.R05 | linked device A2 tries identity.device_key.add and confirms another key's revocation | IDENTITY_ROOT_KEY_REQUIRED for both; A2 can still sign routine statements and revoke itself |
 
 ## Acceptance criteria
 
-- All tests T01-T16 pass in CI.
-- No private key, passphrase or email is ever present in module storage, events, logs or relay payloads (privacy suite).
+- All tests T01-T26 pass in CI.
+- No private key, passphrase or email is ever present in module storage, events, logs or relay payloads (privacy suite), and the root key exists only on the root device keystore and in the kit.
 - Homoglyph and mixed-script pseudonym samples are rejected or warned according to the rules, and no claim of global pseudonym uniqueness appears in the UI or docs.
+- A stolen linked device cannot revoke the legitimate devices on its own, and the UI states that a stolen root device or kit can still sign as the account.
 
 ## Dependencies
 
-Module depends on: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

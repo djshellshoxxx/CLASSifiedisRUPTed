@@ -13,15 +13,15 @@
 ## Specification
 
 **Metrics**
-- classrup_identity_handle_claims_total{outcome=ok|taken|confusable|invalid|rate_limited} (relay)
+- classrup_identity_handle_claims_total{outcome=ok|taken|confusable|invalid|replay|stale|rate_limited} (relay)
 - classrup_identity_registry_size (gauge, relay)
-- local counter device_key_changes_total{kind=added|revoked}
+- local counter device_key_changes_total{kind=added|revoked|pending|contested}
 
 **Logs**
 - info identity.device_key {event, correlationId} - no keys, labels, pseudonyms or DIDs.
 
 **Budgets**
-- Account creation p95 <= 2 s on a Moto G-class device (scrypt dominates); claim and check p95 <= 300 ms on the relay; skeleton <= 5 ms.
+- Account creation p95 <= 2 s on a Moto G-class device (scrypt dominates); claim and check p95 <= 300 ms on the relay; skeleton <= 5 ms; fingerprint <= 1 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -29,8 +29,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-052-09.T13 | load | PS-052-08.R01, PS-052-08.R02, PS-052-08.R03 | 50 claims per second for 5 minutes on a relay; account creation on emulated Moto G | p95 <= 300 ms on relay and <= 2 s creation; skeleton <= 5 ms |
+| TEST-PS-052-09.T13 | load | PS-052-08.R01, PS-052-08.R02, PS-052-08.R03 | 50 claims per second for 5 minutes on a relay; account creation on emulated Moto G; 32 code point skeletons | p95 <= 300 ms on relay and <= 2 s creation; skeleton <= 5 ms; registry metrics exported |
 
 ## Dependencies
 
-Module depends on: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

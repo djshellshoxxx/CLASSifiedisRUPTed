@@ -2,67 +2,81 @@ id: F14.S01.M03
 scope: MVP
 summary: >-
   The WCAG 2.2 Level AA conformance gate. It runs axe-core through @axe-core/playwright 4.14.0 on every
-  route and every documented state in CI (zero serious or critical findings allowed), checks colour tokens for
-  contrast (4.5:1 for text, 3:1 for UI components and focus rings) in light, dark and forced-colors themes, and
-  keeps a manual checklist for criteria that tools cannot decide, notably 2.4.11 focus not obscured, 2.5.7
-  dragging movements, 2.5.8 target size (project minimum 44 px, WCAG minimum 24 px) and 3.3.8 accessible
-  authentication (key-based and passkey-style login with no cognitive test). Automated checks find some issues
-  only, so a release also needs the manual pass. The gate has no runtime component and the PWA sends no telemetry.
+  route and every state that route declares applicable in CI (zero serious or critical findings allowed), with
+  a pairwise theme, viewport and locale subset on each pull request and the full matrix nightly and on every
+  release commit. It checks colour tokens for contrast (4.5:1 for text, 3:1 for UI components and focus rings)
+  in light, dark and forced-colors themes, and keeps a manual checklist for criteria that tools cannot decide,
+  notably 2.4.11 focus not obscured, 2.5.7 dragging movements, 2.5.8 target size (project minimum 44 px, WCAG
+  minimum 24 px) and 3.3.8 accessible authentication. There are no accounts (ADR-0016): the authentication
+  steps are vault unlock with a memorized passphrase (F16.S02.M01), recovery-kit restore (F07.S01.M03) and
+  backup passphrase entry (F16.S02.M01), which are cognitive function tests that pass 3.3.8 only through its
+  assistance-mechanism exception, so an automated check verifies that password managers and paste work and
+  that the kit can be imported by file or QR. Automated checks find some issues only, so a release also needs
+  the manual pass. The gate has no runtime component and the PWA sends no telemetry.
 responsibilities:
-  - Maintain the route and state inventory (tests/a11y/routes.yaml) and fail CI when a route in the app's route registry has no a11y test.
-  - Run axe-core 4.x rules tagged wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa and best-practice on every route in states loading, empty, error, offline-pending, conflict and success, in light, dark, 320 px width and RTL (ar-XB pseudolocale).
+  - Maintain the route and state inventory (tests/a11y/routes.yaml), in which every route declares its applicable UX states and a reason and reviewer for each excluded state, and fail CI when a route in the app's route registry or one of its applicable states has no a11y test.
+  - Run axe-core 4.x rules tagged wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa and best-practice on every route in each applicable state (loading, empty, error, offline-pending, conflict and success by default); pull requests run the pairwise subset light + 320 px + en and dark + desktop + ar-XB, and the nightly and release runs cover light and dark, 320 px and desktop, and en and RTL (ar-XB pseudolocale).
   - Compute contrast for every colour token pair from the design tokens and fail below 4.5:1 for text and 3:1 for UI components, focus rings and graphical objects.
-  - Maintain the manual checklist per release with an owner, date, device and result for each non-automatable criterion, including 2.4.11, 2.5.7, 2.5.8, 3.3.7 redundant entry, 3.3.8 accessible authentication, 3.2.6 consistent help, 1.4.10 reflow and 1.4.12 text spacing.
-  - Manage waivers in tests/a11y/waivers.yaml, each with rule, route, reason, owner and an expiry of at most 90 days, and publish an accessibility statement draft from the results.
+  - Maintain the manual checklist per release with an owner, date, device and result for each non-automatable criterion, including 2.4.11, 2.5.7, 2.5.8, 3.3.7 redundant entry, 3.3.8 accessible authentication for the vault unlock, recovery-kit restore and backup export and import passphrase screens, 3.2.6 consistent help, 1.4.10 reflow and 1.4.12 text spacing, plus the recorded manual test runs of F14.S01.M01 T14 and F14.S01.M02 T11.
+  - Manage waivers in tests/a11y/waivers.yaml, each with rule, exactly one target (route, file glob or component), reason, owner and an expiry of at most 90 days, read by this gate and by the lint runners of F14.S01.M01 and F14.S01.M02, and publish an accessibility statement draft from the results.
+  - Run the authentication-assistance check (V07) on the vault unlock, recovery-kit restore and backup passphrase screens so the 3.3.8 assistance-mechanism exception cannot silently regress.
 non_responsibilities:
   - Implementation of keyboard behaviour (F14.S01.M01), screen reader structure (F14.S01.M02) and localization (F14.S02).
+  - Implementation of the vault unlock and backup passphrase screens (F16.S02.M01) and of the recovery-kit restore screen (F07.S01.M03); this module only checks them.
   - General CI pipeline, release gating mechanics and test infrastructure (F17).
   - Legal accessibility statements and jurisdiction rules (F18); this module supplies the evidence.
   - "Future: automated visual regression of focus indicators and assistive technology farm testing; MVP uses manual device passes."
-depends_on: [F14.S01.M01, F14.S01.M02, F14.S02.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
+depends_on: [F14.S01.M01, F14.S01.M02, F14.S02.M01, F16.S02.M01, F07.S01.M03, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
 user_stories:
   - As a maintainer, I see a failing CI job naming the route, state, rule and element when a change introduces a serious accessibility issue.
   - As a release manager, I can open the accessibility report and see automated results and the signed-off manual checklist for this release.
   - As a designer, I get a failing check when a new colour token pair does not reach the required contrast.
   - As a user with low vision, I can rely on every screen meeting contrast and reflow criteria in dark mode and at 200 percent zoom.
+  - As a user who relies on a password manager, I can always unlock my vault with autofill or paste and restore from my recovery kit file or QR without retyping 24 words.
 edge_cases:
   - A new route is added without an a11y test; CI fails with I18N_A11Y_ROUTE_UNCOVERED.
   - An axe rule has a false positive on a third-party widget; a waiver with a 90-day expiry is added and CI warns 14 days before it expires.
   - Axe reports moderate and minor findings only; the build passes but the findings are listed in the report.
   - A state cannot be reached in CI because it needs a relay; the test seeds the state through the vault fixtures instead of skipping it.
+  - A static help route has no asynchronous data; routes.yaml declares only success and loading as applicable and lists empty, error, offline-pending and conflict as excluded with a reason and reviewer, so no waiver is needed.
   - Contrast of a semi-transparent token depends on the background; the check blends it against each documented background.
   - Pseudolocale ar-XB expands strings by 40 percent; the gate checks no horizontal scroll at 320 px (1.4.10).
-  - Login uses a passkey-style flow; the manual checklist records that no cognitive function test (memorization, transcription, puzzle) is required (3.3.8).
+  - Vault unlock asks for a memorized passphrase, which is a cognitive function test under 3.3.8; V07 and the checklist confirm the assistance-mechanism exception holds (autocomplete=current-password, paste and password-manager autofill not blocked, show/hide toggle) and that recovery offers kit import by file or QR, not retyping only.
+  - A fixture passphrase field cancels the paste event; V07 fails with I18N_A11Y_AUTH_ASSIST.
 ux:
-  notes: "Tooling module with no end-user screens. Its output is the CI report tests/a11y/report.html and report.json (route, state, theme, rule, impact, selector) and the release checklist tests/a11y/checklist.md."
+  notes: "Tooling module with no end-user screens. Its output is the CI report tests/a11y/report.html and report.json (route, state, theme, viewport, locale, rule id, impact, selector, WCAG success criterion), validated against tests/a11y/report.schema.json, and the release checklist tests/a11y/checklist.md."
 processes:
   domain_schema:
     requirements:
       - The module owns no stored entity; its artifacts are route inventory, waiver file, checklist and report in the repository.
-      - The report schema lists for each run the route, state, theme, viewport, locale, rule id, impact, selector and WCAG success criterion.
-      - Waivers are structured data with an expiry and cannot be open-ended.
+      - The report schema lists for each run the route, state, theme, viewport, locale, rule id, impact, selector and WCAG success criterion, and report.json is validated against the JSON Schema tests/a11y/report.schema.json that requires all nine fields.
+      - Waivers are structured data with an expiry, cannot be open-ended, and each names exactly one target (a route, a file glob or a component), so route-level axe findings and the file- or component-level lint findings of F14.S01.M01 and F14.S01.M02 are waived through the same file.
+      - routes.yaml lists for every route its applicable UX states (by default all six of CTR-UX-001 UX-2) and, for each excluded state, a reason and the reviewer who approved the exclusion; waivers are for rule failures only, never for states a route does not have.
     entities: []
-    note: "CI tooling; it stores no application data and owns no catalog entity."
+    note: "CI tooling; it stores no application data and owns no catalog entity. Waiver row: { rule, target: { route } | { glob } | { component }, reason, owner, created, expires }. Route row: { route, states: [..], excluded: [{ state, reason, reviewer }] }."
   validation_rules:
     requirements:
       - CI fails on any serious or critical axe violation that has no valid waiver.
       - CI fails on contrast failures, missing route coverage, expired waivers and incomplete manual checklist at release time.
       - Each failure has one stable code printed in CI output.
+      - CI fails when a passphrase or recovery input on the vault unlock, recovery-kit restore or backup passphrase screens lacks the correct autocomplete value, blocks paste, drop or password-manager autofill, has no show/hide toggle, or when recovery offers transcription as the only path.
     rules:
-      - "V01 | zero serious or critical axe-core violations per route, state, theme and viewport after waivers | I18N_A11Y_AXE_VIOLATION"
-      - "V02 | every route in the route registry appears in routes.yaml with tests for all six states | I18N_A11Y_ROUTE_UNCOVERED"
+      - "V01 | zero serious or critical axe-core violations per route, applicable state, theme and viewport after waivers | I18N_A11Y_AXE_VIOLATION"
+      - "V02 | every route in the route registry appears in routes.yaml with its applicable states, every applicable state has a test, and every excluded state has a reason and a reviewer | I18N_A11Y_ROUTE_UNCOVERED"
       - "V03 | text token pairs reach 4.5:1 (3:1 for large text), UI component, focus ring and graphic pairs reach 3:1, in light, dark and forced-colors themes | I18N_A11Y_CONTRAST"
-      - "V04 | each waiver has rule, route, reason, owner and expiry within 90 days of creation and is not expired | I18N_A11Y_WAIVER_INVALID"
-      - "V05 | the release checklist has a passed result with date, device and owner for every manual criterion | I18N_A11Y_CHECKLIST_INCOMPLETE"
+      - "V04 | each waiver has rule, exactly one target (route, file glob or component), reason, owner and expiry within 90 days of creation and is not expired | I18N_A11Y_WAIVER_INVALID"
+      - "V05 | the release checklist has a passed result with date, device and owner for every manual criterion and every recorded manual test of F14 | I18N_A11Y_CHECKLIST_INCOMPLETE"
       - "V06 | no horizontal scroll at 320 CSS px width and 400 percent zoom equivalent, and text spacing overrides do not clip content | I18N_A11Y_REFLOW"
+      - "V07 | on the vault unlock, recovery-kit restore and backup export and import screens, passphrase inputs carry autocomplete current-password (existing secret) or new-password (new secret), no handler cancels paste, drop or input events, a show/hide toggle exists, and recovery offers kit import by file or QR in addition to typing | I18N_A11Y_AUTH_ASSIST"
   workflow_state_machine:
     requirements:
-      - The gate runs as a pipeline of install, build, route discovery, axe runs, contrast check, report and gate decision, and any failing step fails the build.
+      - The gate runs as a pipeline of install, build, route discovery, axe runs, contrast check, authentication-assistance check, report and gate decision, and any failing step fails the build.
       - A release candidate cannot be tagged until the manual checklist for that candidate is complete.
       - There is no persisted lifecycle, so no entity state machine is declared.
+      - Pull requests run the pairwise subset (light + 320 px + en and dark + desktop + ar-XB) over every route and applicable state; the full matrix runs nightly and must pass on the exact commit of a release candidate before it is tagged.
     machines: []
     timeouts:
-      - "Axe suite timeout 20 min in CI; a hung browser run is killed and retried once."
+      - "Pull-request axe subset timeout 20 min and nightly full-matrix timeout 75 min in CI; a hung browser run is killed and retried once."
       - "Waiver warning 14 days before expiry; expired waivers fail the build."
     note: "Pipeline tooling; steps and decisions are defined by the CI configuration and are not entity lifecycles."
   commands_queries_events:
@@ -72,21 +86,24 @@ processes:
       - Failures use stable codes so dashboards and triage can group them.
     commands: []
     queries: []
-    note: "CLI tasks: pnpm a11y:axe (Playwright with @axe-core/playwright 4.14.0), pnpm a11y:contrast, pnpm a11y:routes, pnpm a11y:waivers, pnpm a11y:report, pnpm a11y:checklist --release <tag>."
+    note: "CLI tasks: pnpm a11y:axe --matrix pr|full (Playwright with @axe-core/playwright 4.14.0), pnpm a11y:contrast, pnpm a11y:routes, pnpm a11y:auth, pnpm a11y:waivers, pnpm a11y:report, pnpm a11y:checklist --release <tag>."
     events_produced: []
     events_consumed: []
     errors:
       - "I18N_A11Y_AXE_VIOLATION | 400 | no | serious or critical axe violation without waiver"
-      - "I18N_A11Y_ROUTE_UNCOVERED | 400 | no | route or state lacks an a11y test"
+      - "I18N_A11Y_ROUTE_UNCOVERED | 400 | no | route or applicable state lacks an a11y test, or a state exclusion lacks reason or reviewer"
       - "I18N_A11Y_CONTRAST | 400 | no | colour token pair below required contrast"
-      - "I18N_A11Y_WAIVER_INVALID | 400 | no | waiver missing fields, expired or longer than 90 days"
+      - "I18N_A11Y_WAIVER_INVALID | 400 | no | waiver missing fields, not exactly one target, expired or longer than 90 days"
       - "I18N_A11Y_CHECKLIST_INCOMPLETE | 400 | no | manual checklist incomplete for the release"
       - "I18N_A11Y_REFLOW | 400 | no | content scrolls horizontally or clips at 320 px or with text spacing overrides"
+      - "I18N_A11Y_AUTH_ASSIST | 400 | no | authentication screen blocks paste or autofill, lacks autocomplete or show/hide, or offers transcription only"
     example: |
-      $ pnpm a11y:axe
+      $ pnpm a11y:axe --matrix pr
       route /listings/:id  state offline-pending  theme dark  viewport 320x640  locale ar-XB
       FAIL I18N_A11Y_AXE_VIOLATION color-contrast (serious) wcag2aa 1.4.3 selector .chip--local  -> 2.9:1, needs 4.5:1
-      $ pnpm a11y:report   # writes tests/a11y/report.json and report.html; exit code 1 while any V01..V06 fails
+      $ pnpm a11y:auth
+      FAIL I18N_A11Y_AUTH_ASSIST route /unlock selector #passphrase  paste event cancelled by handler
+      $ pnpm a11y:report   # writes tests/a11y/report.json (validated against report.schema.json) and report.html; exit code 1 while any V01..V07 fails
   authorization_capabilities:
     requirements:
       - The tooling needs no application authorization and runs only in CI and on developer machines.
@@ -99,7 +116,7 @@ processes:
       - Flaky browser failures are retried once and reported as flaky if the retry passes, without hiding real findings.
       - Partial runs never mark a build green; a missing report fails the gate.
     idempotency: "Tasks are pure functions of the commit and fixtures; re-running overwrites the report."
-    concurrency: "Axe runs are sharded across at most 4 parallel Playwright workers; each route-state-theme combination is an independent job."
+    concurrency: "Axe runs are sharded across at most 4 parallel Playwright workers; each route-state-theme-viewport-locale combination is an independent job."
     retries: "A failed browser launch or navigation timeout retries once; assertion failures are never retried."
     offline: "CI uses a seeded offline-capable fixture server; no external network is needed for the checks."
     partial_failure: "If a shard crashes, the aggregator marks the run failed with the missing combinations listed."
@@ -107,56 +124,58 @@ processes:
     requirements:
       - Test runs use synthetic data only, so reports contain no user data.
       - Reports contain selectors and rule ids, never text typed by users, and are kept as CI artifacts for 90 days.
-      - The gate cannot be silently weakened, because waivers expire, require two reviewers and are listed in every report.
+      - The gate cannot be silently weakened, because waivers expire, require two reviewers and are listed in every report, and state exclusions in routes.yaml carry a reviewer.
     data:
       - "Report and checklist: repository artifacts, P0 (no personal data)."
     retention:
       - "CI artifacts 90 days; checklists and accessibility statement drafts are kept in the repository with each release tag."
     threats:
-      - "T01 | Gate bypass by broad rule disabling or never-expiring waivers | waiver schema (max 90 days), two reviewers, report lists active waivers, CI blocks rule disabling in config"
-      - "T02 | Tests passing only on the default state while other states are inaccessible | V02 requires six states per route and the state fixtures are seeded"
+      - "T01 | Gate bypass by broad rule disabling or never-expiring waivers | waiver schema (max 90 days, exactly one target), two reviewers, report lists active waivers, CI blocks rule disabling in config"
+      - "T02 | Tests passing only on the default state while other states are inaccessible | V02 requires a test for every applicable state, each excluded state carries a reviewed reason, and the state fixtures are seeded"
       - "T03 | Contrast regression via new tokens or themes | V03 runs on all token pairs and all themes on every change to tokens"
+      - "T04 | Authentication screens regress into blocking paste or autofill, locking out users who rely on password managers | V07 automated check on every pull request with a paste-blocking fixture that must fail"
     abuse_controls:
-      - "Changes to tests/a11y/waivers.yaml and axe configuration require CODEOWNERS approval from two reviewers."
+      - "Changes to tests/a11y/waivers.yaml, the excluded states in tests/a11y/routes.yaml and axe configuration require CODEOWNERS approval from two reviewers."
   observability_performance:
     requirements:
       - CI publishes violation counts by rule, route and impact as artifacts and a trend over the last 30 builds.
-      - The full axe suite completes in 15 minutes or less on the CI runner.
+      - The pull-request axe subset completes in 15 minutes or less and the nightly full matrix in 60 minutes or less on the CI runner, assuming at most 60 routes with 4 applicable states on average; above 60 routes the budget and the subset are revisited.
       - The contrast check completes in 10 seconds or less.
     metrics:
       - "ci_a11y_axe_violations_total{impact, rule} (CI artifact)"
       - "ci_a11y_routes_covered_ratio (CI artifact)"
       - "ci_a11y_waivers_active (CI artifact)"
-      - "ci_a11y_suite_duration_s (CI artifact)"
+      - "ci_a11y_suite_duration_s{matrix} (CI artifact)"
     logs:
-      - "CI log lines per failure: code, route, state, theme, rule, selector; no page text."
+      - "CI log lines per failure: code, route, state, theme, viewport, locale, rule, selector; no page text."
     budgets:
-      - "Axe suite ≤ 15 min over all routes, 6 states, 2 themes, 2 viewports and 2 locales."
-      - "Contrast check ≤ 10 s; report generation ≤ 30 s."
+      - "Pull-request subset ≤ 15 min over all routes and applicable states in 2 combinations; nightly full matrix ≤ 60 min over 2 themes, 2 viewports and 2 locales; both assume ≤ 60 routes and ≤ 4 applicable states on average with 4 workers."
+      - "Contrast check ≤ 10 s; authentication-assistance check ≤ 60 s; report generation ≤ 30 s."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test or documented manual pass.
       - The gate itself is tested with seeded broken fixtures that must fail it, proving it detects what it claims to.
       - Manual criteria are recorded per release with device, date and owner.
-    fixtures: "Fixture app routes with intentionally failing variants (low contrast chip, missing label, 40 px button, obscured focus, drag-only reorder); token set with one failing pair; waiver files valid and expired."
+    fixtures: "Fixture app routes with intentionally failing variants (low contrast chip, missing label, 40 px button, obscured focus, drag-only reorder, passphrase field that cancels paste, passphrase field with autocomplete=off, recovery screen with typing only); token set with one failing pair; waiver files valid, expired, without target and with two targets, including a lint waiver on a component path; routes.yaml with a static route excluding four states with reasons and one exclusion without reviewer; all fixtures generated from seeds in the repository."
     tests:
       - "T01 | integration | 01.R01,02.R01 | run axe task on the fixture app with a missing label and a 2.9:1 chip | I18N_A11Y_AXE_VIOLATION reported with route, state, theme and selector; exit code 1"
-      - "T02 | integration | 01.R02,02.R02 | add a route without tests; remove one state test | I18N_A11Y_ROUTE_UNCOVERED naming route and state"
-      - "T03 | unit | 01.R03,02.R03 | token pairs at 4.49:1, 4.5:1, 2.99:1 and 3:1 in all themes including semi-transparent tokens | failures below thresholds only; blended backgrounds evaluated"
-      - "T04 | unit | 01.R03,02.R03,03.R03 | waivers with 91 days, missing owner, expired, valid | I18N_A11Y_WAIVER_INVALID for the first three; valid waiver suppresses only its rule and route; 14-day warning emitted"
-      - "T05 | integration | 03.R01,03.R02,01.R02 | create a release candidate with an incomplete checklist | tagging blocked with I18N_A11Y_CHECKLIST_INCOMPLETE until all criteria have result, date, device, owner"
+      - "T02 | integration | 02.R02,01.R04 | add a route without tests; remove one applicable state test; exclude a state without reviewer; exclude four states with reasons and reviewer on a static route | I18N_A11Y_ROUTE_UNCOVERED naming route and state for the first three; the reviewed exclusions pass without waivers"
+      - "T03 | unit | 02.R03 | token pairs at 4.49:1, 4.5:1, 2.99:1 and 3:1 in all themes including semi-transparent tokens | failures below thresholds only; blended backgrounds evaluated"
+      - "T04 | unit | 01.R03,02.R03,03.R03 | waivers with 91 days, missing owner, expired, no target, two targets, a valid route waiver and a valid lint waiver on a component path read by the F14.S01.M01 lint runner | I18N_A11Y_WAIVER_INVALID for the first five; the route waiver suppresses only its rule and route; the component waiver suppresses only its lint rule on that component; 14-day warning emitted"
+      - "T05 | integration | 03.R01,03.R02,03.R04 | create a release candidate with an incomplete checklist, then with a complete checklist but no full-matrix run on its commit | tagging blocked with I18N_A11Y_CHECKLIST_INCOMPLETE until all criteria have result, date, device, owner, and blocked until the full matrix passes on that commit"
       - "T06 | e2e | 02.R03,01.R01 | pseudolocale ar-XB at 320 px and text-spacing override on all routes | no horizontal scroll or clipping (V06); axe passes in RTL"
-      - "T07 | integration | 04.R01,04.R02,04.R03 | run each CLI task and inspect outputs | exit codes, machine-readable report schema and stable error codes present; no app commands or events"
-      - "T08 | abuse | 05.R01,05.R02,05.R03,07.R01,07.R03 | PR that edits waivers.yaml or disables an axe rule with one reviewer | CI requires two CODEOWNERS approvals; rule disabling in config rejected"
+      - "T07 | integration | 04.R01,04.R02,04.R03,01.R02 | run each CLI task and validate report.json against tests/a11y/report.schema.json | exit codes and stable error codes present; every finding has route, state, theme, viewport, locale, rule id, impact, selector and WCAG success criterion; a report missing any of the nine fields fails schema validation; no app commands or events"
+      - "T08 | abuse | 05.R01,05.R02,07.R01,07.R03 | PR that edits waivers.yaml, the excluded states of routes.yaml or disables an axe rule with one reviewer | CI requires two CODEOWNERS approvals; rule disabling in config rejected"
       - "T09 | chaos | 06.R01,06.R02,06.R03 | kill one Playwright shard; inject a flaky navigation timeout | run marked failed listing missing combinations; flaky retry reported, real findings not hidden"
-      - "T10 | unit | 06.R01,07.R01,07.R02 | run twice on the same commit; scan report for page text or user data | identical findings; reports contain selectors and rule ids only"
-      - "T11 | manual | 01.R02,09.R03 | release pass on Pixel 7 and iPhone 14 for 2.4.11, 2.5.7, 2.5.8, 3.3.7, 3.3.8, 3.2.6, 1.4.10, 1.4.12 | each criterion recorded pass with owner, date, device; 3.3.8 confirms no cognitive function test"
-      - "T12 | load | 08.R01,08.R02,08.R03 | full suite on the CI runner | axe ≤ 15 min, contrast ≤ 10 s, trend artifact published"
+      - "T10 | unit | 06.R01,07.R01,07.R02,05.R03 | run twice on the same commit; scan reports for page text or user data; regenerate fixtures from their seeds | identical findings; reports contain selectors and rule ids only; regenerated fixtures are byte-identical to the committed ones and contain only synthetic data"
+      - "T11 | manual | 09.R03 | release pass on Pixel 7 and iPhone 14 for 2.4.11, 2.5.7, 2.5.8, 3.3.7, 3.3.8, 3.2.6, 1.4.10, 1.4.12 | each criterion recorded pass with owner, date, device; 3.3.8 confirms on vault unlock, recovery-kit restore and backup passphrase screens that a password manager fills the passphrase, paste works, show/hide works and the kit imports by file and by QR"
+      - "T12 | load | 08.R01,08.R02,08.R03 | pull-request subset and nightly full matrix on the CI runner with the 60-route fixture | subset ≤ 15 min, full ≤ 60 min, contrast ≤ 10 s, trend artifact published"
       - "T13 | unit | 09.R01,09.R02 | traceability tool run | every PS-111 requirement maps to a passing test or recorded manual pass"
       - "T14 | integration | 10.R01,10.R02,10.R03 | generate accessibility statement draft; upgrade axe-core minor version | draft lists results and waivers; new findings from the upgrade listed before the pin changes"
+      - "T15 | integration | 02.R04,02.R03 | run pnpm a11y:auth on the vault unlock, recovery-kit restore and backup passphrase screens and on the fixtures with a paste-cancelling field, autocomplete=off and a typing-only recovery screen | real screens pass; each fixture fails with I18N_A11Y_AUTH_ASSIST naming route and selector"
     acceptance:
-      - All tests T01–T14 pass in CI and the manual checklist for the release is complete.
-      - Zero serious or critical axe violations across all routes, states, themes and viewports.
+      - All automated tests pass in CI; manual test T11 is recorded as passed in the release checklist (V05), together with F14.S01.M01 T14 and F14.S01.M02 T11.
+      - Zero serious or critical axe violations across all routes, applicable states, themes and viewports in the full matrix of the release commit.
       - Every colour token pair meets the contrast thresholds in all themes.
   import_export_backup_rollback:
     requirements:
@@ -166,4 +185,4 @@ processes:
     export: "The report (json and html), checklist and statement draft are attached to each release as artifacts; no user data."
     import: "Nothing is imported; fixtures are generated from seeds in the repository."
     backup: "Artifacts live in version control and the CI artifact store; no separate backup is needed."
-    migration_rollback: "Pins: @axe-core/playwright 4.14.0 with a matching axe-core version; to upgrade, run the trial, review new findings, change the pin; rollback is a pin revert with the previous baseline report."
+    migration_rollback: "Pins: @axe-core/playwright 4.14.0 with a matching axe-core version; to upgrade, run the trial, review new findings, change the pin; rollback is a pin revert with the previous baseline report. Waiver files written before the target field are migrated by converting route to target.route."

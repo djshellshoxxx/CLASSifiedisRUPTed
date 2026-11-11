@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section bazaar.variants in classrup-export/v1, one line per Variant (schema classrup.bazaar.variant/v1); quantities travel in the inventory section.
-- **import:** Rows import only for listings present in the import or vault; quantities imported from the inventory section; duplicates and over-limit rows are rejected.
+- **import:** Rows import only for listings present in the import or vault; quantities imported from the inventory section through set_quantity; duplicates and over-limit rows are rejected.
 - **backup:** Vault export is the primary backup (IOX-6); no relay holds variants other than inside public projections.
 - **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release; older readers ignore new fields.
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S02.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S01.M03, F01.S02.M01, F01.S04.M01, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

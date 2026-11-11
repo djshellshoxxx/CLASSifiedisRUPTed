@@ -25,8 +25,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-002-09.T08 | integration | PS-002-06.R01, PS-002-06.R02 | replay create with same key (same and different body) and two tabs editing | original result replayed; IDEMPOTENCY_KEY_REUSED; second tab CONFLICT_REVISION |
-| TEST-PS-002-09.T09 | chaos | PS-002-06.R03 | abort the IndexedDB transaction after the outbox write | neither the listing nor the outbox event persists |
+| TEST-PS-002-09.T09 | chaos | PS-002-04.R02, PS-002-06.R03 | abort the IndexedDB transaction after the outbox write | neither the listing nor the outbox event persists |
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

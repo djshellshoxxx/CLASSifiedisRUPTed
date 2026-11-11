@@ -15,10 +15,10 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | bazaar.negotiation.counter | owner | local principal is buyer or seller of the chain and awaiting = local principal; not blockedWith(counterparty) |
-| bazaar.negotiation.decide | owner | local principal is a party of the chain; accept requires awaiting = local principal |
+| bazaar.negotiation.decide | owner | local principal is a party of the chain; accept requires awaiting = local principal; keep_frozen only for the seller of a hold_fork chain |
 | bazaar.negotiation.withdraw | owner | local principal is a party of the chain |
 | bazaar.negotiation.receive | peer | statement signed by the stated counterparty key; signature, role and chain consistency verified |
-| bazaar.negotiation.read | owner | local principal is buyer or seller of the chain |
+| bazaar.negotiation.read | owner | local principal is buyer or seller of the chain; F01.S01.M04 may read counts on the owner's behalf for the evidence check |
 | bazaar.negotiation.relay_mailbox | relay-member | relay policy: request signed by the recipient device key; ciphertext only; mailbox quota default 10 MiB |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
@@ -31,4 +31,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M03, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

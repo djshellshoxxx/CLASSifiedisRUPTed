@@ -6,35 +6,41 @@
 
 ## Requirements
 
-- **PS-010-02.R01** Every outgoing command and every incoming statement is validated for roles, turn, convergence, currency, listing revision and expiry before it changes state.
+- **PS-010-02.R01** Every outgoing command and every incoming statement is validated for roles, turn, convergence, currency, listing revision and expiry before it changes state, in the vault each rule names: the buyer vault against the verified listing projection (F11.S01.M02 mirror view), the seller vault against its own listing and sell terms.
 - **PS-010-02.R02** Statements that fail verification are quarantined with a reason and never change a negotiation.
 - **PS-010-02.R03** Every violation maps to one stable error code.
+- **PS-010-02.R04** A round in another currency or quantity than the root offer is refused with VALIDATION_FAILED.
 
 ## Specification
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | signature verifies over JCS bytes, author is the stated buyer or seller key, schema version supported | VALIDATION_FAILED |
-| V02 | it is the actor's turn (awaiting equals the actor) and status is open | CONFLICT_STATE |
-| V03 | roundNo = lastRoundNo + 1 and roundNo <= 10 | BAZAAR_NEGOTIATION_ROUND_LIMIT |
-| V04 | seller counter amount >= buyer's previous amount and <= seller's previous amount (or asking price at round 1); buyer counter symmetric | BAZAAR_NEGOTIATION_NOT_CONVERGING |
-| V05 | amount is a positive integer string in a currency the listing accepts (bazaar.sell_terms.accepts) | VALIDATION_FAILED |
-| V06 | listing is negotiable, published, and the cited listingRevision equals the current revision for accept | BAZAAR_NEGOTIATION_LISTING_CHANGED |
+| V01 | both vaults: signature verifies over JCS bytes, author is the stated buyer or seller key, schema version supported | VALIDATION_FAILED |
+| V02 | both vaults: it is the actor's turn (awaiting equals the actor) and status is open | CONFLICT_STATE |
+| V03 | both vaults: roundNo = lastRoundNo + 1 and roundNo <= 10 | BAZAAR_NEGOTIATION_ROUND_LIMIT |
+| V04 | both vaults: seller counter amount >= buyer's previous amount and <= seller's previous amount (or asking price at round 1); buyer counter symmetric; amounts compared in the chain currency | BAZAAR_NEGOTIATION_NOT_CONVERGING |
+| V05 | amount is a positive integer string <= maxAmount(currency) in a currency the listing accepts (seller vault: bazaar.sell_terms.accepts; buyer vault: acceptedCurrencies of the verified projection) | VALIDATION_FAILED |
+| V06 | listing is negotiable and published (seller vault: own Listing and SellTerms; buyer vault: verified projection, not tombstoned), and the cited listingRevision equals the current revision for accept | BAZAAR_NEGOTIATION_LISTING_CHANGED |
 | V07 | round expiry between 1 h and 7 days and not later than hardDeadline | VALIDATION_FAILED |
-| V08 | accept is made before the round expiresAt according to the receiving vault clock | EXPIRED |
-| V09 | neither party blocks the other (F07.S02.M02) | BLOCKED_PARTY |
+| V08 | seller vault: accept or acceptance consent is applied before the round expiresAt according to the seller's clock; buyer vault: a confirmation is applied until expiresAt + 24 h on the buyer's clock | EXPIRED |
+| V09 | both vaults: neither party blocks the other (F07.S02.M02 isBlockedEither); statements from blocked DIDs are dropped silently (N7) | BLOCKED_PARTY |
 | V10 | note <= 280 code points | VALIDATION_FAILED |
-| V11 | seller inventory check (bazaar.inventory.check) succeeds before confirmation | BAZAAR_NEGOTIATION_HOLD_FAILED |
+| V11 | seller vault: inventory check (bazaar.inventory.check) succeeds before confirmation | BAZAAR_NEGOTIATION_HOLD_FAILED |
 | V12 | expectedRevision matches | CONFLICT_REVISION |
+| V13 | both vaults: round currency equals Negotiation.currency and quantity equals Negotiation.quantity (the root offer's) | VALIDATION_FAILED |
+| V14 | both vaults: an acceptance counts only when comms.consent.verify returns valid for the accepting party (signerDid = buyer or seller as stated) over the SHA-256 of the round statement under statementKey consent.bazaar.negotiation.accept.v1; conflicted freezes the chain | VALIDATION_FAILED |
+| V15 | both vaults: a close or confirmation binds the negotiationId and the cid of the round it answers | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-010-09.T01 | unit | PS-010-01.R01, PS-010-01.R03, PS-010-02.R01 | S counters EUR 48.00 then B counters EUR 44.00 | rounds stored immutable with prev chain; ordering by roundNo not clock |
-| TEST-PS-010-09.T03 | unit | PS-010-02.R02, PS-010-02.R03 | violate each rule V01-V12 in turn | documented error code returned or statement quarantined with reason; state unchanged |
+| TEST-PS-010-09.T03 | unit | PS-010-02.R02, PS-010-02.R03 | violate each rule V01-V15 in turn in the vault the rule names | documented error code returned or statement quarantined with reason; state unchanged |
 | TEST-PS-010-09.T07 | integration | PS-010-03.R02, PS-010-02.R03 | last unit held for B2 while B's acceptance is in transit | S sends signed close superseded; B shows rejected superseded; no double hold |
+| TEST-PS-010-09.T14 | abuse | PS-010-02.R03 | 21 counters in an hour; 11th round | RATE_LIMITED; BAZAAR_NEGOTIATION_ROUND_LIMIT |
+| TEST-PS-010-09.T21 | unit | PS-010-01.R04, PS-010-02.R04 | EUR root offer, then a USD counter, then a EUR counter with quantity 2 | both refused with VALIDATION_FAILED; chain currency and quantity unchanged |
 
 ## Dependencies
 
-Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M03, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

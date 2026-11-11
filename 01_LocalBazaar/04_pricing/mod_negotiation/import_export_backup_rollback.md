@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Sections bazaar.negotiations and bazaar.negotiation_rounds in classrup-export/v1, one line per record (schemas classrup.bazaar.negotiation/v1 and classrup.bazaar.negotiation_round/v1) plus the signed statements.
+- **export:** Sections bazaar.negotiations and bazaar.negotiation_rounds in classrup-export/v1, one line per record (schemas classrup.bazaar.negotiation/v1 and classrup.bazaar.negotiation_round_record/v1) plus the signed statements and acceptance consents.
 - **import:** Chains where the importing principal is not a party are rejected; broken hash chains or bad signatures are quarantined; open chains become expired so stale promises are never revived.
 - **backup:** Vault export is the primary backup (IOX-6); relays keep only encrypted mailbox envelopes under their retention policy.
-- **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release; sent statements remain valid because their schemas are unchanged.
+- **migration rollback:** Additive optional fields only in v1; round records written under the earlier record name classrup.bazaar.negotiation_round/v1 are read as classrup.bazaar.negotiation_round_record/v1 for 180 days; rollback is by reinstalling the previous release; sent statements remain valid because their schemas are unchanged.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M03, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -26,11 +26,11 @@ user_stories:
   - As a buyer, I post that I want a used road bike in good condition or better within 25 km and keep my maximum budget private.
   - As a trader, I mark my want as barter-acceptable so the matcher can include it in swap cycles.
   - As a member, I mark my want fulfilled and it stops appearing in matches.
-  - As a member, when my wanted listing expires and I renew it, my want is matchable again without re-entering it.
+  - As a member, when my wanted listing expires and I publish it again, my want is matchable again without re-entering it.
 edge_cases:
   - Budget currency not registered; BAZAAR_WANT_CURRENCY_UNKNOWN is returned.
   - Owner publishes the wanted listing, then unpublishes it; the want pauses and stops being matchable until republished.
-  - The wanted listing expires; the want pauses, and renewing or republishing the listing reopens it and emits bazaar.want.declared again.
+  - The wanted listing expires; the want pauses, and publishing the listing again reopens it and emits bazaar.want.declared again.
   - Keywords include a prohibited term; publication is blocked by the listing publication module, and the want stays draft.
   - Owner sets budgetVisible true after publishing; the change is recorded as a listing revision, shows unsent changes, requires a new signed projection and warns that fetched copies of earlier versions remain private.
   - Two devices of the same owner mark the want fulfilled and withdrawn at once; the second gets CONFLICT_STATE.
@@ -110,7 +110,7 @@ processes:
       - "WantSpec follows the declared machine; fulfilled and withdrawn are terminal."
       - "A want becomes open only when its listing is published and pauses when the listing is unpublished or expired or when neededBy is more than 7 days past; the matching engine treats only open wants as matchable."
       - "Owner actions and listing events race safely: the first committed transition wins and the other receives CONFLICT_STATE."
-      - "Closing the listing moves an open or paused want to fulfilled when closeReason is fulfilled and to withdrawn otherwise; listing expiry pauses rather than withdraws, so a renewed or republished want is matchable again."
+      - "Closing the listing moves an open or paused want to fulfilled when closeReason is fulfilled and to withdrawn otherwise; listing expiry pauses rather than withdraws, so a want whose listing is published again is matchable again."
     machines:
       - entity: WantSpec
         initial: draft
@@ -118,7 +118,7 @@ processes:
         transitions:
           - "draft -> open | consumes bazaar.listing.published for the listing and neededBy is not more than 7 days past | emits bazaar.want.declared"
           - "open -> paused | consumes bazaar.listing.unpublished or bazaar.listing.expired, or the neededBy + 7 d sweep | pauseReason set; no event; matching engines see the unpublish or expiry through the listing tombstone or projection expiresAt"
-          - "paused -> open | consumes bazaar.listing.published again (renew or republish), or bazaar.want.define extends neededBy while the listing is published | emits bazaar.want.declared"
+          - "paused -> open | consumes bazaar.listing.published again (the listing is published again), or bazaar.want.define extends neededBy while the listing is published | emits bazaar.want.declared"
           - "open -> fulfilled | bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled | emits bazaar.want.fulfilled"
           - "paused -> fulfilled | bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled | emits bazaar.want.fulfilled"
           - "open -> withdrawn | bazaar.want.withdraw by owner, or consumes bazaar.listing.closed with closeReason other than fulfilled, or bazaar.listing.archived | emits bazaar.want.withdrawn with reason"
@@ -126,7 +126,7 @@ processes:
           - "draft -> withdrawn | bazaar.want.withdraw by owner or listing deleted | no event because the want was never declared"
     timeouts:
       - "neededBy sweep daily and at app start: an open want whose neededBy is more than 7 days past moves to paused (needed_by_passed) and the owner is asked to extend or withdraw."
-      - "Listing expiry pauses the want (listing_expired); it reopens when the listing is renewed or republished."
+      - "Listing expiry pauses the want (listing_expired); it reopens when the listing is published again."
   commands_queries_events:
     requirements:
       - "define, mark_fulfilled and withdraw are vault-local commands; none produces a signed statement; the want's public data reaches others in the signed projection of F01.S01.M03."
@@ -248,8 +248,8 @@ processes:
     fixtures: "Vault with draft wanted listing W, published wanted listing X, categories C1 (active leaf) and C2 (retired), currency registry with EUR and ETH, clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | define a valid want with minCondition good and a private budget | stored; keywords normalized; budget absent from projection builder output"
-      - "T02 | unit | 01.R03,02.R03 | violate each rule V01-V09 | documented error code returned and nothing stored"
-      - "T03 | property | 03.R01,03.R02,03.R03 | random owner commands and duplicated listing events | only declared transitions; terminal states never regress; open implies listing published"
+      - "T02 | unit | 02.R03 | violate each rule V01-V09 | documented error code returned and nothing stored"
+      - "T03 | property | 01.R03,03.R01,03.R02,03.R03 | random owner commands and duplicated listing events | only declared transitions; terminal states never regress; open implies listing published"
       - "T04 | contract | 04.R01,04.R02,09.R02 | define, fulfil and withdraw | outputs and events validate; event payloads carry no budget or keywords"
       - "T05 | integration | 04.R03,05.R03 | list_open as owner, as matching module and as relay-facing call | private fields for owner and matching module only; minCondition present; relay-facing path sees projection fields only"
       - "T06 | abuse | 05.R01,05.R02 | another principal defines or withdraws | FORBIDDEN or NOT_FOUND"
@@ -261,14 +261,14 @@ processes:
       - "T12 | load | 08.R01,08.R02,08.R03 | 100 wants on Moto G profile | define p95 <= 60 ms, list p95 <= 100 ms, event handling p95 <= 30 ms, no network"
       - "T13 | unit | 09.R01,09.R03 | traceability tool run, duplicate-event seed replay | every PS-007 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, import want for foreign listing | round-trip identical; foreign want rejected; open imports as paused"
-      - "T15 | property | 03.R04,03.R02 | event orders unpublished -> closed(fulfilled), unpublished -> closed(sold), expired -> published (renew), and the neededBy + 7 d sweep followed by define extending neededBy | paused want becomes fulfilled or withdrawn without CONFLICT_STATE; expiry pauses and renew reopens with bazaar.want.declared; the sweep pauses and the extension reopens"
+      - "T15 | property | 03.R04,03.R02 | event orders unpublished -> closed(fulfilled), unpublished -> closed(sold), expired -> published again, and the neededBy + 7 d sweep followed by define extending neededBy | paused want becomes fulfilled or withdrawn without CONFLICT_STATE; expiry pauses and publishing again reopens with bazaar.want.declared; the sweep pauses and the extension reopens"
       - "T16 | integration | 04.R04 | define with budgetVisible true on published X, then on draft W | X records a listing revision with source wanted_spec and unsentChanges true in the same transaction; W records none"
       - "T17 | property | 02.R04 | maxBudget at and above maxAmount(currency) for EUR and ETH | at the cap accepted, above refused; ETH budgets with 18 decimals are representable"
       - "T18 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.wants present with field classes, maxBudget marked P3; deletion plan deletes own wants"
     acceptance:
       - All tests T01-T18 pass in CI.
       - Budget never appears in events, logs, projections or relay matching unless the owner turned budgetVisible on.
-      - A want is open only while its listing is published, under duplicated and out-of-order events, and a renewed or republished want is matchable again.
+      - A want is open only while its listing is published, under duplicated and out-of-order events, and a want whose listing is published again is matchable again.
   import_export_backup_rollback:
     requirements:
       - "The user export contains all WantSpec rows of own wanted listings in section bazaar.wants."

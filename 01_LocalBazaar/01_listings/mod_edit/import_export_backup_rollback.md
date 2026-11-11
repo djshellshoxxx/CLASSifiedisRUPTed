@@ -12,8 +12,8 @@
 
 ## Specification
 
-- **export:** Section bazaar.listing_revisions in classrup-export/v1, one line per ListingRevision (schema classrup.bazaar.listing_revision/v1).
-- **import:** Rows whose listing is not in the import are held until the listing arrives; hash mismatches are quarantined and reported in the dry-run.
+- **export:** Section bazaar.listing_revisions in classrup-export/v1, one line per ListingRevision (schema classrup.bazaar.listing_revision/v1); the derived edit state is not exported.
+- **import:** Rows whose listing is not in the import are held until the listing arrives; hash mismatches are quarantined and reported in the dry-run; the derived edit state is rebuilt after import.
 - **backup:** Covered by the vault export (IOX-6); no relay copy exists.
 - **migration rollback:** Additive fields only in v1; rollback to the previous release is safe because older readers ignore new optional fields.
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

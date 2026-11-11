@@ -13,15 +13,15 @@
 ## Specification
 
 **Metrics**
-- classrup_identity_doc_publications_total{outcome=ok|invalid|chain|rate_limited} (relay)
+- classrup_identity_doc_publications_total{outcome=ok|invalid|chain|possession|rate_limited} (relay)
 - classrup_identity_doc_contested_total (relay)
-- local counter portable_doc_total{event=issued|received|contested}
+- local counter portable_doc_total{event=issued|received|contested|gap|recovery_pending|history}
 
 **Logs**
 - info portable_doc.stored {outcome, correlationId} - no DID, keys or relay URLs.
 
 **Budgets**
-- verify and store p95 <= 10 ms on device and <= 5 ms on relay; relay read p95 <= 150 ms; issue p95 <= 100 ms.
+- verify and store p95 <= 10 ms on device (including up to 10 possession signatures) and <= 5 ms on relay; relay read p95 <= 150 ms; issue p95 <= 100 ms; key_status p95 <= 2 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -29,8 +29,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-055-09.T12 | load | PS-055-08.R01, PS-055-08.R02, PS-055-08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms |
+| TEST-PS-055-09.T12 | load | PS-055-08.R01, PS-055-08.R02, PS-055-08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms; metrics exported without DIDs |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

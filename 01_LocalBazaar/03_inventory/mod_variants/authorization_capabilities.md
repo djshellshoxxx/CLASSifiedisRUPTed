@@ -17,7 +17,7 @@
 | bazaar.variant.add | owner | listing.ownerId = local principal; listing status draft, published or unpublished |
 | bazaar.variant.update | owner | variant.ownerId = local principal; variant status active or retired |
 | bazaar.variant.retire | owner | variant.ownerId = local principal; no active hold or open offer |
-| bazaar.variant.read | owner | variant.ownerId = local principal |
+| bazaar.variant.read | owner | variant.ownerId = local principal, or F01.S01.M03 through the ProjectionContributorPort on the owner's behalf |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -29,4 +29,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S02.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S01.M03, F01.S02.M01, F01.S04.M01, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

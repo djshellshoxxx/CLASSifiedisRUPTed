@@ -6,9 +6,10 @@
 
 ## Requirements
 
-- **PS-052-05.R01** Vault policy - only the unlocked local principal mutates its Account and DeviceKey records; a new device is authorized only by a link statement signed by the account signing key or an active device key.
-- **PS-052-05.R02** Relay policy - a relay registry accepts a claim or release only when it is signed by the claimed DID's account signing key; relay operators can refuse a handle by hosting policy but cannot create or change a DID.
+- **PS-052-05.R01** Vault policy - only the unlocked local principal mutates its Account and DeviceKey records; a new device is authorized only by a link statement signed by the root key and by the new key's own possession signature.
+- **PS-052-05.R02** Relay policy - a relay registry accepts a claim or release only when it names that relay and is signed by a device key active in the claimed DID's portable document; relay operators can refuse a handle by hosting policy but cannot create or change a DID.
 - **PS-052-05.R03** Pseudonym availability checks on a relay are public and rate limited by relay policy; local checks need only the unlocked vault.
+- **PS-052-05.R04** Routine statements are signed by device keys; only the root key may issue identity documents, link devices, confirm another key's revocation and sign recovery notices, and a linked device that lacks it gets IDENTITY_ROOT_KEY_REQUIRED.
 
 ## Specification
 
@@ -18,10 +19,11 @@
 | identity.account.update_pseudonym | principal | unlocked local principal |
 | identity.account.read_own | principal | unlocked local principal |
 | identity.account.check_pseudonym | principal, anonymous | vault - unlocked principal; relay - public with relay quota |
-| identity.device_key.add | principal | unlocked principal and a valid link statement from an active key |
-| identity.device_key.revoke | principal | unlocked principal; target key belongs to the account |
-| identity.handle_registration.claim | anonymous, principal | relay policy allows registrations; claim signed by the DID signing key; within quota |
-| identity.handle_registration.release | principal | release statement signed by the DID signing key |
+| identity.device_key.add | principal | unlocked principal on the root device; valid possession signature by the new key |
+| identity.device_key.revoke | principal | unlocked principal; target key belongs to the account; signer role decides immediate or pending |
+| identity.device_key.receive | principal | statement for the own DID; signer role verified per V07 and V11 |
+| identity.handle_registration.claim | anonymous, principal | relay policy allows registrations; claim names this relay and is signed by a device key active in the DID's document; within quota |
+| identity.handle_registration.release | principal | release names this relay, the registration and its current revision, signed by a device key active in the DID's document |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -29,8 +31,10 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-052-09.T10 | abuse | PS-052-05.R01, PS-052-05.R02, PS-052-05.R03 | locked vault mutates; claim signed by a different DID; operator tries to create a DID on the registry | FORBIDDEN or VALIDATION_FAILED; no registry row created |
+| TEST-PS-052-09.T10 | abuse | PS-052-05.R01, PS-052-05.R02, PS-052-05.R03 | locked vault mutates; claim signed by a key not active in the DID's document; operator tries to create a DID on the registry; 21 availability checks in a minute | FORBIDDEN, UNAUTHENTICATED or VALIDATION_FAILED; no registry row created; 21st check RATE_LIMITED |
+| TEST-PS-052-09.T20 | abuse | PS-052-01.R04, PS-052-05.R04 | A2 signs a profile after its revocation; verifier V1 learned of the revocation before first seeing the profile, verifier V2 first saw it earlier | V1 rejects (KeyStatusPort at first-seen time), V2 keeps it with the revocation date shown as a claim |
+| TEST-PS-052-09.T26 | unit | PS-052-05.R04, PS-052-02.R05 | linked device A2 tries identity.device_key.add and confirms another key's revocation | IDENTITY_ROOT_KEY_REQUIRED for both; A2 can still sign routine statements and revoke itself |
 
 ## Dependencies
 
-Module depends on: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

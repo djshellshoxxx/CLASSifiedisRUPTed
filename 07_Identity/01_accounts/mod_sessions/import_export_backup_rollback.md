@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Not exported: sessions and challenges are ephemeral; the vault export (IOX-6) excludes them.
-- **import:** Nothing imported; the user signs in again to each relay with their device key.
+- **export:** Section identity.sessions in classrup-export/v1 holds only the lock timeout preference; sessions and challenges are ephemeral and excluded (IOX-6).
+- **import:** Only the lock timeout preference is imported; the user signs in again to each relay with their device key.
 - **backup:** Relay SQLite backup (IOX-3, IOX-7) includes token hashes; the operator can revoke all sessions of a relay with the operator tool after a restore.
-- **migration rollback:** Additive fields only in v1; rollback is redeploying the previous release, and sessions stay valid because hashes and expiries keep the same format.
+- **migration rollback:** Additive fields only in v1; rollback is redeploying the previous release, and sessions stay valid because hashes and expiries keep the same format; a rotating row read by an older release is treated as active until graceUntil.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-054-09.T15 | integration | PS-054-10.R01, PS-054-10.R02, PS-054-10.R03 | vault export and relay backup restore | no tokens or vault key in exports; restored relay has hashes only and sessions expire naturally |
+| TEST-PS-054-09.T15 | integration | PS-054-10.R01, PS-054-10.R02, PS-054-10.R03 | vault export, relay backup restore and an additive v1 field read by the previous release | no tokens or vault key in exports; restored relay has hashes only and sessions expire naturally; older reader ignores the new field |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

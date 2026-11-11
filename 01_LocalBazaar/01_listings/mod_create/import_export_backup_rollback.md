@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section bazaar.listings in classrup-export/v1, one JSON line per Listing (schema classrup.bazaar.listing/v1); drafts are included because the export is P3 and goes only to the user.
+- **export:** Section bazaar.listings in classrup-export/v1, one JSON line per Listing (schema classrup.bazaar.listing_record/v1); drafts are included because the export is P3 and goes only to the user.
 - **import:** Skip identical ids, reject conflicting ids with a dry-run report; listings whose ownerId differs from the importing principal are stored as read-only history.
 - **backup:** The vault export is the primary backup (IOX-6); the app warns when the last export is older than 30 days; no relay holds drafts.
-- **migration rollback:** Additive optional fields only within v1; older app builds ignore unknown optional fields; rollback is by reinstalling the previous release and re-importing the last export.
+- **migration rollback:** Additive optional fields only within v1; older app builds ignore unknown optional fields; rollback is by reinstalling the previous release and re-importing the last export. Records written under the earlier name classrup.bazaar.listing/v1 are read as classrup.bazaar.listing_record/v1 for 180 days.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

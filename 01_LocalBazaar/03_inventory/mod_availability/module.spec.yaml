@@ -413,7 +413,7 @@ processes:
       - "T11 | chaos | 06.R03 | abort caller transaction after hold | hold rolled back with it; signing failure leaves valid hold and queued retry"
       - "T12 | integration | 06.R01,06.R03 | offline reservation issued | outbox prepared, UI text says not yet received; peer_accepted only after signed ack"
       - "T13 | integration | 07.R03 | deal completed event then listing deleted | hold converted once; evidence kept per class; non-converted holds removed"
-      - "T14 | abuse | 07.R01,07.R03 | 201 hold commands in one hour | 201st returns RATE_LIMITED; holds above 14 d ttl refused"
+      - "T14 | abuse | 02.R01 | 201 hold commands in one hour | 201st returns RATE_LIMITED; holds above 14 d ttl refused"
       - "T15 | load | 08.R01,08.R02,08.R03 | 500 active holds on Moto G profile | hold p95 <= 60 ms, sweep <= 100 ms, no telemetry requests"
       - "T16 | unit | 09.R01,09.R03 | traceability tool run, race test seed replay | every PS-008 requirement maps to a passing test; seeds printed on failure"
       - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault with expired and frozen holds and peer reservations | items round-trip; expired imported as expired; frozen imported frozen; peer reservations read-only"

@@ -13,14 +13,14 @@
 ## Specification
 
 **Metrics**
-- classrup_bazaar_wants_total{outcome=declared|fulfilled|withdrawn} (local)
+- classrup_bazaar_wants_total{outcome=declared|paused|fulfilled|withdrawn} (local)
 - classrup_bazaar_want_consumer_lag_ms (local gauge)
 
 **Logs**
 - info want.declared {wantId, listingId, correlationId} in local diagnostics; no keywords or budgets.
 
 **Budgets**
-- define p95 <= 60 ms; list_open of 100 wants p95 <= 100 ms on Moto G-class hardware.
+- define p95 <= 60 ms including the revision record; list_open of 100 wants p95 <= 100 ms on Moto G-class hardware.
 - Event handling p95 <= 30 ms per event.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -33,4 +33,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M03, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -252,7 +252,7 @@ processes:
       - "T09 | chaos | 06.R02,06.R03 | inventory set_quantity fails below reserved | variant change rolled back, inventory error returned unchanged"
       - "T10 | integration | 06.R02 | two tabs add the 50th variant | one succeeds, other BAZAAR_VARIANT_LIMIT"
       - "T11 | abuse | 07.R02,07.R03 | variant attribute with prohibited keyword at publish | publication blocked by policy; retention shows RET-STANDARD"
-      - "T12 | abuse | 07.R01,07.R03 | 101 commands in an hour; 11 price changes in a day | RATE_LIMITED on the 101st and 11th"
+      - "T12 | abuse | 02.R03 | 101 commands in an hour; 11 price changes in a day | RATE_LIMITED on the 101st and 11th"
       - "T13 | load | 08.R01,08.R02,08.R03 | 50 variants on Moto G profile | add p95 <= 80 ms, list p95 <= 100 ms, no telemetry"
       - "T14 | unit | 09.R01,09.R03 | traceability tool run | every PS-009 requirement maps to a passing test; failures print seeds"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import duplicate attributes | round-trip identical; duplicate rejected in dry-run"

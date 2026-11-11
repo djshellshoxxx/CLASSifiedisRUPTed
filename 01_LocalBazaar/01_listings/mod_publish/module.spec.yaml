@@ -10,14 +10,14 @@ summary: >-
   tombstone. Each destination relay applies its own hosting policy and may refuse or remove the projection; such a
   relay-signed notice changes only that relay's delivery state, never the owner's records. The owner sees
   per-relay sync state (prepared, transport_acknowledged, peer_accepted) and never more certainty than that.
-  Optional promotion is a relay-local policy paid through a noncustodial Deal and is shown only after the relay
-  signs it. Copies already fetched by other vaults cannot be recalled.
+  Optional promotion is a relay-local policy whose fee is claimed through a noncustodial Deal and is shown only after
+  the relay signs it. Copies already fetched by other vaults cannot be recalled.
 responsibilities:
   - Own PublicationRecord: one record per publish attempt with verdict, signed statement digest, expiry (default 30 days, range 1 to 90) and per-relay delivery states.
-  - Evaluate prohibited-item rules (F18.S01.M02), jurisdiction notices (F18.S01.M01), local spam heuristics (F12.S02.M02), the risk assessment (F12.S03.M01, N19), the federation consent purpose (F10.S01.M01, N6) and the public-cell assertion (F06.S02.M01, N8) before signing; block, hold for owner confirmation, or allow.
+  - Evaluate prohibited-item rules (F18.S01.M02), jurisdiction notices (F18.S01.M01), local spam heuristics (moderation.spam.evaluate of F12.S02.M02, N19), the risk assessment (moderation.risk.assess of F12.S03.M01, N19), the federation consent purpose (F10.S01.M01, N6) and the public-cell assertion (F06.S02.M01, N8) before signing; block, hold for owner confirmation, or allow.
   - Build the projection from an exact P0 allowlist (maximum location L2, EXIF-free media, mailbox hints, barterAcceptable, in-stock flag, kind-specific public subsets) and sign and queue it and tombstones through the sync outbox.
   - Renew a publication (last 7 days of life, +30 days, maximum 3 renewals and 120 days in total), also on request of the F01.S01.M04 expiry deferral.
-  - Record optional per-relay promotion paid through a Deal with the relay operator (F09), active only on that relay's signed promotion statement and revocable by it.
+  - Record optional per-relay promotion whose fee is claimed through a Deal with the relay operator (F09), active only on that relay's signed promotion statement and revocable by it.
   - Verify inbound relay-signed hosting notices and promotion statements, quarantine anything not signed by the relay of that delivery, and react to policy pack changes without claiming any global takedown.
 non_responsibilities:
   - Listing record and status field (F01.S01.M01); this module requests changes through apply_status and never because of a relay notice.
@@ -124,7 +124,7 @@ processes:
       - "Publication is allowed only for a complete listing whose kind-specific terms exist and whose region is at least L1."
       - "Policy checks run in the vault before signing and cannot be skipped by the caller."
       - "Every violation maps to one stable error code with a localized message key."
-      - "Before anything leaves the vault, publish runs the in-process risk assessment moderation.risk.assess (N19), the federation_publish consent check when federation is opted in (N6) and assertPublicCell on the region (N8); elevated risk holds the publication for owner confirmation."
+      - "Before anything leaves the vault, publish runs the in-process spam evaluation moderation.spam.evaluate and risk assessment moderation.risk.assess (N19), the federation_publish consent check when federation is opted in (N6) and assertPublicCell on the region (N8); an elevated spam score or risk level holds the publication for owner confirmation."
       - "The clock sanity check trusts no single relay: it compares the device clock with the median of the latest receipts from at least 2 distinct relays in the last 7 days, discards receipts more than 24 h ahead of that median and flags their relay untrusted, and only warns when fewer than 2 relays are available (ADR-0016 §5)."
       - "Unpublishing a listing that has active local inventory holds requires explicit owner confirmation; the holds stay valid and are listed."
     rules:
@@ -225,7 +225,7 @@ processes:
         input: "[vault-local + statement classrup.bazaar.listing/v1] { publicationId, expectedRevision, requestedBy?: owner|expiry_deferral }"
         output: "{ publicationId, expiresAt, renewals, statementCid }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_PUBLISH_RENEW_NOT_ALLOWED, PRECONDITION_FAILED]
-        emits: [bazaar.publication.renewed, bazaar.listing.published]
+        emits: [bazaar.publication.renewed]
         idempotent: true
       - name: bazaar.publication.attach_promotion
         capability: bazaar.publication.promote
@@ -395,7 +395,7 @@ processes:
       - "T16 | load | 08.R01,08.R02,08.R03 | 200 publications re-evaluated on Moto G profile; relay at 50 req/s | publish p95 <= 150 ms, batch <= 2 s, relay p95 <= 300 ms, no telemetry requests"
       - "T17 | unit | 09.R01,09.R03 | traceability and honesty test | every PS-004 requirement maps to a passing test; UI never shows accepted without receipt"
       - "T18 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import with wrong owner | records round-trip; active publications import as unpublished-pending-resign; foreign owner read-only"
-      - "T19 | integration | 02.R04 | risk stub returns elevated; federationOptIn without consent for R1; regionCell of 6 characters injected past the record check | held_for_confirmation and no signature; BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED; DISCOVERY_PRECISION_FORBIDDEN; nothing queued in each case"
+      - "T19 | integration | 02.R04 | spam stub (moderation.spam.evaluate) scores high, then risk stub (moderation.risk.assess) returns elevated; federationOptIn without consent for R1; regionCell of 6 characters injected past the record check | held_for_confirmation and no signature in both first cases; BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED; DISCOVERY_PRECISION_FORBIDDEN; nothing queued in each case"
       - "T20 | abuse | 02.R05 | R3 returns receipts 3 days in the future while R1 and R2 agree with the device; then only R3 is configured | R3 flagged untrusted and publish succeeds; with R3 alone the command proceeds with clockWarning instead of PRECONDITION_FAILED"
       - "T21 | integration | 02.R06 | unpublish L with an active deal hold without and with confirmHolds | BAZAAR_PUBLISH_HOLDS_ACTIVE first; then unpublished with the hold still active and listed"
       - "T22 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.publications present with field classes; deletion ends publications with account_deleted and pseudonymizes retained records"

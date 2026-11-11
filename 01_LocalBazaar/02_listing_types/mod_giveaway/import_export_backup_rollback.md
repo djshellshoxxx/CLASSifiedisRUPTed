@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Sections bazaar.giveaway_terms and bazaar.giveaway_requests in classrup-export/v1, one line per record (schemas classrup.bazaar.giveaway_terms/v1 and classrup.bazaar.giveaway_request/v1) plus the signed statements.
+- **export:** Sections bazaar.giveaway_terms and bazaar.giveaway_requests in classrup-export/v1, one line per record (schemas classrup.bazaar.giveaway_terms/v1 and classrup.bazaar.giveaway_request_record/v1) plus the signed statements.
 - **import:** Records with invalid signatures are quarantined; requests where neither party is the importing principal are rejected; imported pending requests become expired to avoid stale commitments.
 - **backup:** Vault export is the primary backup (IOX-6); relays keep only encrypted mailbox envelopes for a limited retention period per their policy.
-- **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release; statements already sent remain valid because their schemas are unchanged.
+- **migration rollback:** Additive optional fields only in v1; records exported under the earlier record name classrup.bazaar.giveaway_request/v1 are read as classrup.bazaar.giveaway_request_record/v1 for 180 days; rollback is by reinstalling the previous release; statements already sent remain valid because their schemas are unchanged.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

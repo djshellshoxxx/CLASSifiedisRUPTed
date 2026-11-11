@@ -41,7 +41,7 @@ edge_cases:
   - Close command replayed after a crash; one ArchiveRecord and one tombstone exist.
   - Mark traded with a reference to a cycle that was not completed; the record stores the reference as owner-asserted and labels it unverified.
   - A listing with a 14-day cycle hold reaches its expiry on day 10; the sweep renews the publication instead of expiring it, and records the extension.
-  - An expired listing is renewed through F01.S01.M03; the expired record closes as superseded and the listing is live again.
+  - An expired listing is published again through F01.S01.M03; the expired record closes as superseded and the listing is live again.
   - A listing expired before the in-person sale; the owner closes it as sold directly from expired.
 ux:
   screens:
@@ -120,7 +120,7 @@ processes:
       - "Every transition runs together with the matching Listing.apply_status call and, where a publication is active, with bazaar.publication.end, in one transaction."
       - "Restored listings return as unpublished and must go through publication checks again; restore never republishes automatically."
       - "The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows, and otherwise defers the local expiry and records the deferral until the holds end."
-      - "An expired listing can be closed directly by the owner, and an expired listing that is renewed or republished closes its record as superseded."
+      - "An expired listing can be closed directly by the owner, and an expired listing that is published again closes its record as superseded."
     machines:
       - entity: ArchiveRecord
         initial: live
@@ -134,7 +134,7 @@ processes:
           - "deferred -> expired | sweep finds no active Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired"
           - "deferred -> closed | bazaar.listing.close by owner | holds handled per V04; end publication; Listing -> closed; emits bazaar.listing.closed"
           - "expired -> closed | bazaar.listing.close by owner | holds handled per V04; Listing expired -> closed; emits bazaar.listing.closed"
-          - "expired -> superseded | consumes bazaar.listing.published for the listing (renew or republish by F01.S01.M03) | record closed; the listing is live again and a later end creates a new record"
+          - "expired -> superseded | consumes bazaar.listing.published for the listing (published again by F01.S01.M03) | record closed; the listing is live again and a later end creates a new record"
           - "expired -> archived | owner archive or 30 days after endedAt | emits bazaar.listing.archived"
           - "closed -> archived | owner archive or 30 days after endedAt | emits bazaar.listing.archived"
           - "archived -> restored | bazaar.listing.restore within 90 days | Listing archived -> unpublished; emits bazaar.listing.restored"
@@ -198,7 +198,7 @@ processes:
     events_consumed:
       - {type: bazaar.inventory.depleted, effect: "start the 7-day sold-out timer for the listing when every variant is depleted with reason sold"}
       - {type: bazaar.inventory.restocked, effect: "cancel the sold-out timer"}
-      - {type: bazaar.listing.published, effect: "close an expired record of the listing as superseded (renew or republish)"}
+      - {type: bazaar.listing.published, effect: "close an expired record of the listing as superseded (published again)"}
       - {type: privacy.deletion.requested, effect: "end publications, archive all own listings, and set deletionRequestedAt so purgeAt = min(restoreUntil, request time + 30 days)"}
       - {type: privacy.deletion.completed, effect: "replace ownerId with the payload pseudonym in records kept until evidenceUntil"}
     errors:
@@ -276,7 +276,7 @@ processes:
       - "T01 | unit | 01.R01,01.R02,02.R01 | close A with reason sold and a deal ref | ArchiveRecord closed, closedWithRef.verified false, Listing closed"
       - "T02 | contract | 07.R01 | close A and inspect bazaar.listing.closed | payload key set equals {listingId, ownerId, closeReason}; no closedWithRef or reference id"
       - "T03 | unit | 02.R03 | violate each rule V01-V09 | documented error code returned and nothing changes"
-      - "T04 | property | 03.R01,03.R02,03.R05 | random command and clock sequences including close from expired and renew after expiry | only declared transitions; expired -> closed and expired -> superseded allowed; at most one open record per listing"
+      - "T04 | property | 03.R01,03.R02,03.R05 | random command and clock sequences including close from expired and publishing again after expiry | only declared transitions; expired -> closed and expired -> superseded allowed; at most one open record per listing"
       - "T05 | integration | 03.R02,03.R03,06.R02 | close A with active publication | publication ended and tombstone queued in the same transaction; restore of C gives unpublished, never published"
       - "T06 | contract | 04.R01,04.R02,09.R02 | each command runs | events expired, archived, restored, closed validate; consumers in F01.S04.M01 accept them"
       - "T07 | integration | 04.R03 | expiry sweep with clock advanced one week | all overdue listings expired in one batch, one event each, expiresAt from the statement honoured"

@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-002-02.R01** Input is parsed strictly against classrup.bazaar.listing/v1; unknown keys are rejected and location keys are rejected with a dedicated code.
+- **PS-002-02.R01** Input is parsed strictly against classrup.bazaar.listing_record/v1; unknown keys are rejected and location keys are rejected with a dedicated code.
 - **PS-002-02.R02** Referenced category, media and subtype must resolve locally before the draft is stored.
 - **PS-002-02.R03** Every violation maps to one stable error code with a localized message key.
 
@@ -24,14 +24,16 @@
 | V08 | mediaRefs <= 10; each blob exists locally, is jpeg/png/webp, <= 5 MiB and has no GPS tag | BAZAAR_LISTING_MEDIA_INVALID |
 | V09 | vault holds fewer than 50 drafts | BAZAAR_LISTING_DRAFT_LIMIT |
 | V10 | delete is requested only for status draft | CONFLICT_STATE |
+| V11 | apply_edit patch contains no kind, ownerId, status or id key; apply_status never changes kind or ownerId | VALIDATION_FAILED |
+| V12 | apply_status reason is one of owner, policy_changed, expiry, renew, deferral, close, archive, restore, purge; a relay notice is never a valid reason | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-002-09.T01 | unit | PS-002-01.R01, PS-002-01.R03, PS-002-02.R01 | create a valid sell draft | Listing stored with status draft, revision 1; unknown field rejected |
-| TEST-PS-002-09.T02 | unit | PS-002-02.R02, PS-002-02.R03 | violate each rule V01-V10 in turn | the documented error code is returned and nothing is stored |
+| TEST-PS-002-09.T01 | unit | PS-002-01.R01, PS-002-02.R01 | create a valid sell draft | Listing stored with status draft, revision 1; unknown field rejected |
+| TEST-PS-002-09.T02 | unit | PS-002-02.R02, PS-002-02.R03 | violate each rule V01-V12 in turn | the documented error code is returned and nothing is stored |
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -6,9 +6,10 @@
 
 ## Requirements
 
-- **PS-053-04.R01** All commands are vault commands; begin, complete and cancel produce signed statements (classrup.identity.recovery_notice/v1 signed by the account key, classrup.identity.recovery_dispute/v1 signed by an existing device key) delivered through the sync outbox.
+- **PS-053-04.R01** All commands are vault commands; begin produces classrup.identity.recovery_notice/v1 signed by the root key decrypted from the kit, dispute produces classrup.identity.recovery_dispute/v1 signed by an existing device key active in the latest document, and receive_notice and receive_dispute are the intakes of those statements; statements travel through the sync outbox.
 - **PS-053-04.R02** No command contacts a relay with a secret; statements go to relays and mailboxes only as signed public or end-to-end encrypted items.
-- **PS-053-04.R03** Recovery registers and revokes device keys by calling F07.S01.M01, which emits the device key events.
+- **PS-053-04.R03** Recovery registers the new device key through the F07.S01.M01 port registerRecoveredKey, issues identity documents through F07.S02.M01 and revokes device keys through F07.S01.M01, which emit the device key events.
+- **PS-053-04.R04** Begin obtains and verifies the latest identity document before planning any revocation, or runs in the explicit device_list_unknown mode that can add a key but never revokes others.
 
 ## Specification
 
@@ -16,32 +17,37 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `identity.recovery.create_kit` | identity.recovery_kit.create | { kdf, cipher, encryptedAccountKey, verifierPublicKey, blobChecksum, confirmedWordIndexes: [3 numbers], storedSeparately: true, backupLabel? } | { kitId, revision, supersededKitId? } | VALIDATION_FAILED, IDENTITY_KIT_PARAMS_INVALID, CONFLICT_STATE | identity.recovery.kit_created | yes (Idempotency-Key) |
+| `identity.recovery.create_kit` | identity.recovery_kit.create | { kdf, cipher, encryptedAccountKey, verifierPublicKey, blobChecksum, docHint, confirmedWordIndexes: [3 numbers], storedSeparately: true, backupLabel? } | { kitId, revision, supersededKitId? } | VALIDATION_FAILED, IDENTITY_KIT_PARAMS_INVALID, CONFLICT_STATE | identity.recovery.kit_created | yes (Idempotency-Key) |
 | `identity.recovery.verify_kit` | identity.recovery_kit.verify | { kitId, words (24), kitFileChecksum } | { kitId, verifiedAt } | NOT_FOUND, IDENTITY_KIT_WORDS_INVALID, IDENTITY_KIT_CORRUPT, RATE_LIMITED |  | yes (Idempotency-Key) |
-| `identity.recovery.begin` | identity.recovery_kit.begin | { kitFile, words (24), newDeviceLabel, revokeOthers: boolean } | { kitId, newDeviceKeyId, revokeOthersNotBefore?, noticeStatementCid } | IDENTITY_KIT_WORDS_INVALID, IDENTITY_KIT_CORRUPT, IDENTITY_KIT_PARAMS_INVALID, CONFLICT_STATE, RATE_LIMITED | identity.recovery.requested | yes (Idempotency-Key) |
-| `identity.recovery.complete` | identity.recovery_kit.complete | { kitId, expectedRevision } | { kitId, revision, revokedDeviceKeyIds: array, statementCids: array } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_RECOVERY_WINDOW_OPEN | identity.recovery.completed | yes (Idempotency-Key) |
-| `identity.recovery.cancel` | identity.recovery_kit.cancel | { kitId, expectedRevision, reason: user_cancelled\|disputed } | { kitId, revision, disputeStatementCid? } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | identity.recovery.cancelled | yes (Idempotency-Key) |
+| `identity.recovery.begin` | identity.recovery_kit.begin | { kitFile, words (24), newDevicePublicKey, possessionSig, newDeviceLabel, revokeOthers: boolean, latestDoc?: classrup.identity.portable_doc/v1, allowUnknownDeviceList?: boolean } | { kitId, newDeviceKeyId, mode: full\|device_list_unknown, latestDocSeq?, revokeOthersNotBefore?, noticeStatementCid } | IDENTITY_KIT_WORDS_INVALID, IDENTITY_KIT_CORRUPT, IDENTITY_KIT_PARAMS_INVALID, IDENTITY_DEVICE_LIMIT, DEPENDENCY_UNAVAILABLE, CONFLICT_STATE, RATE_LIMITED | identity.recovery.requested | yes (Idempotency-Key) |
+| `identity.recovery.complete` | identity.recovery_kit.complete | { kitId, expectedRevision } | { kitId, revision, revokedDeviceKeyIds: array, statementCids: array, contested: boolean } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_RECOVERY_WINDOW_OPEN, DEPENDENCY_UNAVAILABLE | identity.recovery.completed | yes (Idempotency-Key) |
+| `identity.recovery.cancel` | identity.recovery_kit.cancel | { kitId, expectedRevision } | { kitId, revision, keptDeviceKeyId } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | identity.recovery.cancelled | yes (Idempotency-Key) |
+| `identity.recovery.receive_notice` | identity.recovery_kit.receive_notice | { statement: classrup.identity.recovery_notice/v1, provenance } | { did, noticeCid, status: recorded\|observed\|quarantined, firstSeenAt } | IDENTITY_RECOVERY_STATEMENT_INVALID, VALIDATION_FAILED, RATE_LIMITED | identity.recovery.requested | yes (Idempotency-Key) |
+| `identity.recovery.dispute` | identity.recovery_kit.dispute | { noticeCid, reason?: not_me\|lost_device_found } | { noticeCid, disputeCid, syncState: local_committed } | NOT_FOUND, CONFLICT_STATE, RATE_LIMITED |  | yes (Idempotency-Key) |
+| `identity.recovery.acknowledge` | identity.recovery_kit.acknowledge | { noticeCid } | { noticeCid, status: accepted } | NOT_FOUND, CONFLICT_STATE |  | yes (Idempotency-Key) |
+| `identity.recovery.receive_dispute` | identity.recovery_kit.receive_dispute | { statement: classrup.identity.recovery_dispute/v1, provenance } | { did, disputeCid, effect: kit_contested\|did_contested\|quarantined } | IDENTITY_RECOVERY_STATEMENT_INVALID, VALIDATION_FAILED, RATE_LIMITED |  | yes (Idempotency-Key) |
 
 ### Queries
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `identity.recovery.get_status` | identity.recovery_kit.read_own | { includeHistory?: boolean } | { kit?: RecoveryKit (without blob), pending?: { requestedAt, revokeOthersNotBefore, newDeviceLabel }, lastVerifiedAt?, verifyDue: boolean } | NOT_FOUND |
+| `identity.recovery.get_status` | identity.recovery_kit.read_own | { includeHistory?: boolean } | { kit?: RecoveryKit (without blob), pending?: { requestedAt, revokeOthersNotBefore, newDeviceLabel, mode, contested }, observed?: [{ noticeCid, firstSeenAt, status }], lastVerifiedAt?, verifyDue: boolean } | NOT_FOUND |
 
 ### Events produced
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `identity.recovery.kit_created` | P3 | { accountId, kitId, supersededKitId?, createdAt } |
-| `identity.recovery.completed` | P3 | { accountId, kitId, newDeviceKeyId, revokedDeviceKeyIds, completedAt } |
-| `identity.recovery.requested` | P3 | { accountId, kitId, newDeviceKeyId, revokeOthersNotBefore?, requestedAt } |
-| `identity.recovery.cancelled` | P3 | { accountId, kitId, reason: user_cancelled\|disputed\|expired } |
+| `identity.recovery.kit_created` | P3 | { accountId, did, kitId, supersededKitId?, createdAt } |
+| `identity.recovery.completed` | P3 | { accountId, did, kitId, newDeviceKeyId, revokedDeviceKeyIds, contested, completedAt } |
+| `identity.recovery.requested` | P3 | { accountId, did, kitId?, newDevicePublicKey, noticeCid, revokeOthersNotBefore?, requestedAt, origin: own\|observed } |
+| `identity.recovery.cancelled` | P3 | { accountId, did, kitId, keptDeviceKeyId, reason: user_cancelled\|expired } |
 
 ### Events consumed
 
 | Type | Effect |
 |---|---|
-| `privacy.deletion.completed` | vault erase - delete all RecoveryKit records; the user's printed kit remains valid and the UI says so |
+| `identity.portable_doc.published` | own DID, origin received or relay_stored - when F07.S02.M01 applied a document completing a recovery after its 72 h wait, move the matching observed record from received to accepted |
+| `privacy.deletion.completed` | final cleanup only - the DeletionPort steps already deleted kit metadata and pseudonymized observed notices and disputes kept as evidence; the user's printed kit remains valid and the UI says so |
 
 ### Module errors
 
@@ -50,27 +56,33 @@
 | IDENTITY_KIT_PARAMS_INVALID | 422 | no | KDF or cipher parameters differ from the required fixed set |
 | IDENTITY_KIT_WORDS_INVALID | 422 | no | words are not 24 valid list words or the checksum fails |
 | IDENTITY_KIT_CORRUPT | 422 | no | kit file checksum mismatch or authenticated decryption failed |
-| IDENTITY_RECOVERY_WINDOW_OPEN | 409 | no | revocation of other devices requested before the 72 hour window ended |
+| IDENTITY_RECOVERY_WINDOW_OPEN | 409 | no | revocation of other devices requested before the 72 hour (or, when contested, 7 day) window ended |
+| IDENTITY_RECOVERY_STATEMENT_INVALID | 422 | no | a recovery notice or dispute does not verify against the DID root key or an active device key of the latest document |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Statements and signer roles (N2): classrup.identity.recovery_notice/v1 { did, newDevicePublicKey, plannedRevocations, notBeforeClaim, docCid } - the DID root key decrypted from the kit; classrup.identity.recovery_dispute/v1 { did, noticeCid, reason } - a device key active in the latest document the receiver holds, never the new key. Incoming disputes - in the recovering vault a verified dispute moves the kit to contested (complete allowed after 7 days); in every other vault receive_dispute calls the F07.S02.M01 port recordRecoveryDispute and the DID shows as contested until the viewer resolves it. Incoming notices - receive_notice calls F07.S02.M01 recordRecoveryNotice for any DID so the receiver's own 72 h wait starts at its first sight, and for the own DID on an existing device also creates an observed record and the banner. Notices and disputes are sent to relays only after privacy.consent.check(federation_publish, relayId); without consent they go only to the own devices' mailboxes or as a file or QR. This module implements RecoveryKitStatusPort.hasVerifiedKit() for F07.S01.M01.
 
 ### Example
 
 ```
-vault command: identity.recovery.begin { "kitFile": "<bytes>", "words": ["abandon", "…24 words…"], "newDeviceLabel": "New phone", "revokeOthers": true }
--> { "kitId": "0192f420-…", "newDeviceKeyId": "0192f421-…", "revokeOthersNotBefore": "2026-11-07T10:00:00.000Z", "noticeStatementCid": "sha256-Qm…" }
-(72 hours later) vault command: identity.recovery.complete { "kitId": "0192f420-…", "expectedRevision": 2 }
--> { "kitId": "0192f420-…", "revision": 3, "revokedDeviceKeyIds": ["0192f401-…"], "statementCids": ["sha256-Zx…"] }
+vault command: identity.recovery.begin { "kitFile": "<bytes>", "words": ["abandon", "…24 words…"], "newDevicePublicKey": "…", "possessionSig": "…", "newDeviceLabel": "New phone", "revokeOthers": true }
+-> latest document fetched from the relays in the kit's docHint and verified (seq 7)
+-> { "kitId": "0192f420-…", "newDeviceKeyId": "0192f421-…", "mode": "full", "latestDocSeq": 7, "revokeOthersNotBefore": "2026-11-07T10:00:00.000Z", "noticeStatementCid": "sha256-Qm…" }
+(72 hours later, no dispute) vault command: identity.recovery.complete { "kitId": "0192f420-…", "expectedRevision": 2 }
+-> { "kitId": "0192f420-…", "revision": 3, "revokedDeviceKeyIds": ["0192f401-…"], "statementCids": ["sha256-Zx…"], "contested": false }
+peer vault that first saw the notice at 2026-11-04T20:00Z applies the revocation only from 2026-11-07T20:00Z
 ```
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-053-09.T06 | integration | PS-053-03.R02, PS-053-04.R03 | begin then dispute statement from D2 | kit returns to active, contested identity flagged, cancelled event emitted |
-| TEST-PS-053-09.T07 | contract | PS-053-04.R01, PS-053-04.R02, PS-053-09.R02 | every command, query and event run | outputs, statements and payloads validate against registry schemas; statement signatures verify |
-| TEST-PS-053-09.T08 | integration | PS-053-04.R03, PS-053-06.R02 | begin registers a new device key through F07.S01.M01 | identity.device_key.added emitted by M01 once; revocations emitted on complete |
+| TEST-PS-053-09.T07 | contract | PS-053-04.R01, PS-053-09.R02 | every command, query and event run | outputs, statements and payloads validate against registry schemas; notice signed by the root key and dispute by a device key verify |
+| TEST-PS-053-09.T08 | integration | PS-053-04.R03, PS-053-06.R02 | begin registers the new key through registerRecoveredKey; then begin with 10 active keys | identity.device_key.added emitted once by F07.S01.M01; revocations emitted on complete; IDENTITY_DEVICE_LIMIT with nothing stored; outbox states shown honestly |
+| TEST-PS-053-09.T11 | abuse | PS-053-04.R02, PS-053-07.R01, PS-053-07.R02, PS-053-09.R03 | inspect storage, events, logs, exports and network traces during create and begin | words and derived keys appear nowhere; no kit upload without the user's choice; relays receive only signed public or encrypted items |
+| TEST-PS-053-09.T18 | integration | PS-053-04.R04 | offline begin in an empty vault without a latest document and revokeOthers true, then with device_list_unknown, then reconnect | DEPENDENCY_UNAVAILABLE first; unknown mode adds the key and plans no revocation; after reconnect the fetched document is verified and a seq collision is reported as a fork |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

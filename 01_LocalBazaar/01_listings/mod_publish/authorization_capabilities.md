@@ -16,13 +16,15 @@
 |---|---|---|
 | bazaar.publication.publish | owner | listing.ownerId = local principal; vault unlocked; signing key unrevoked |
 | bazaar.publication.confirm | owner | publication.ownerId = local principal and status held_for_confirmation |
-| bazaar.publication.unpublish | owner | publication.ownerId = local principal and status active |
+| bazaar.publication.unpublish | owner | publication.ownerId = local principal and status active; confirmHolds when holds exist |
 | bazaar.publication.end | system | caller is F01.S01.M04 or the policy-change consumer in this module |
-| bazaar.publication.renew | owner | publication.ownerId = local principal; renewal window met |
-| bazaar.publication.promote | owner | publication.ownerId = local principal; claim payer is the local principal |
+| bazaar.publication.renew | owner | publication.ownerId = local principal; renewal window met; or system caller F01.S01.M04 expiry deferral within the 120-day cap |
+| bazaar.publication.promote | owner | publication.ownerId = local principal; Deal payer is the local principal and payee the operator DID of that relay |
 | bazaar.publication.read | owner | publication.ownerId = local principal |
+| bazaar.publication.receive_relay_notice | peer (relay) | vault policy: statement signed by the pinned key of the relay of that delivery and targeting this vault's own publication; otherwise quarantined (CAP-8) |
 | bazaar.publication.relay_index_write | relay-member | relay policy: request signed by a registered device key, within the relay's published quota (default 100 projections per key) |
 | bazaar.publication.relay_remove | relay-moderator | relay policy: removal from that relay's index only, with a signed statement of reasons delivered to the author |
+| bazaar.publication.relay_promote | relay-operator | relay policy: signs classrup.bazaar.promotion/v1 for its own index after acknowledging the payment claim or seeing it final; may withdraw it with a signed statement |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -31,8 +33,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-004-09.T08 | abuse | PS-004-05.R01, PS-004-05.R02 | another principal's key or revoked key signs publish | FORBIDDEN; no statement produced |
-| TEST-PS-004-09.T09 | abuse | PS-004-05.R03, PS-004-07.R03 | relay moderator removal for R2 and a foreign-author statement at a receiving vault | delivery relay_removed only for R2; foreign statement quarantined; wording says pseudonymous not anonymous |
+| TEST-PS-004-09.T09 | abuse | PS-004-05.R03, PS-004-07.R03, PS-004-04.R04 | R2 signs a statement of reasons for L, then a foreign-author statement reaches a receiving vault | delivery relay_removed with hostingRemoved only for R2; Listing status and R1 delivery unchanged; foreign statement quarantined; wording says pseudonymous not anonymous |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F09.S01.M01, F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

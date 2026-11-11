@@ -9,11 +9,12 @@
 - **PS-007-07.R01** The maximum budget is private by default because revealing it weakens the buyer's negotiating position; it is never in an event payload.
 - **PS-007-07.R02** Wants follow RET-STANDARD with the listing; fulfilled and withdrawn wants are purged with the listing and leave a 180-day tombstone.
 - **PS-007-07.R03** Wants reveal interests, so the UI states that published keywords are public and linkable to the pseudonym.
+- **PS-007-07.R04** The module registers ExportSectionPort (section bazaar.wants), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every WantSpec field with its F10.S02.M02 class.
 
 ## Specification
 
 **Data classification**
-- WantSpec: P3 draft; category, keywords and conditions P0 when projected; maxBudget P3 unless budgetVisible.
+- WantSpec: P3 draft; category, keywords, minCondition and conditions of the want P0 when projected; maxBudget P3 unless budgetVisible; field classes annotated per F10.S02.M02.
 
 **Retention**
 - WantSpec: RET-STANDARD; deleted 30 days after the listing is deleted.
@@ -22,7 +23,7 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Budget leakage lets sellers price up | budget excluded from events and from projection unless budgetVisible; contract test checks allowlist |
+| T01 | Budget leakage lets sellers price up | budget excluded from events, from list_open results for relay-facing callers and from the projection unless budgetVisible; contract test checks allowlist |
 | T02 | Fake wants to pollute matching or harvest offers | cap of 100 open wants, matching requires signed projection and local block lists, relay hosting policy |
 | T03 | Sensitive interest disclosure through keywords | owner sees exactly what becomes public before publishing; pseudonymity is not anonymity notice |
 | T04 | Keyword stuffing | at most 10 keywords of 2..40 code points; duplicates rejected |
@@ -38,8 +39,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-007-09.T10 | abuse | PS-007-07.R01, PS-007-07.R02, PS-007-07.R03 | scan events, logs and projection; delete listing | budget absent everywhere; tombstone after purge; public-keywords notice present |
-| TEST-PS-007-09.T11 | abuse | PS-007-07.R03 | create 101st open want and 31st define in an hour | BAZAAR_WANT_LIMIT and RATE_LIMITED |
+| TEST-PS-007-09.T18 | integration | PS-007-07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.wants present with field classes, maxBudget marked P3; deletion plan deletes own wants |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M03, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

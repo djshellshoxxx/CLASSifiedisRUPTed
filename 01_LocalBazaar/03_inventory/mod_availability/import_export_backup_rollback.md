@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Sections bazaar.inventory_items and bazaar.inventory_holds in classrup-export/v1, one line per record, with reservation statements as separate lines.
-- **import:** Items imported if the listing exists; holds whose holder module is absent are kept read-only; conflicting ids are rejected with a dry-run report.
+- **export:** Sections bazaar.inventory_items, bazaar.inventory_holds and bazaar.peer_reservations in classrup-export/v1, one line per record, with reservation and release statements as separate lines.
+- **import:** Items imported if the listing exists; holds whose holder module is absent are kept read-only; peer reservations re-verified; conflicting ids are rejected with a dry-run report.
 - **backup:** Vault export is the primary backup (IOX-6); no relay holds inventory.
-- **migration rollback:** Additive optional fields only in v1; rollback to the previous release is safe because older readers ignore new fields and leases are recomputed from expiresAt.
+- **migration rollback:** Expand/contract: earlier InventoryHold rows with origin peer_statement are migrated into PeerReservation and kept readable for 180 days; rollback to the previous release is safe because older readers ignore new fields and leases are recomputed from expiresAt.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-008-09.T17 | integration | PS-008-10.R01, PS-008-10.R02, PS-008-10.R03 | export, import to fresh vault with expired and frozen holds | items round-trip; expired imported as expired; frozen imported frozen; peer holds read-only |
+| TEST-PS-008-09.T17 | integration | PS-008-10.R01, PS-008-10.R02, PS-008-10.R03 | export, import to fresh vault with expired and frozen holds and peer reservations | items round-trip; expired imported as expired; frozen imported frozen; peer reservations read-only |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

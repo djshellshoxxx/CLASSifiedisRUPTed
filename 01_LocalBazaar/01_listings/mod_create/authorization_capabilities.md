@@ -16,7 +16,7 @@
 |---|---|---|
 | bazaar.listing.create | owner | vault unlocked; principal is the listing author |
 | bazaar.listing.delete | owner | listing.ownerId = local principal and status draft |
-| bazaar.listing.apply_status | system | caller module is F01.S01.M03 or F01.S01.M04; transition allowed by the machine |
+| bazaar.listing.apply_status | system | caller module is F01.S01.M03 or F01.S01.M04; transition allowed by the machine; reason is never a relay notice |
 | bazaar.listing.apply_edit | system | caller module is F01.S01.M02 or the owner draft autosave; listing status draft, published or unpublished |
 | bazaar.listing.read | owner | listing.ownerId = local principal |
 | bazaar.listing.read_own | owner | vault unlocked |
@@ -28,8 +28,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-002-09.T06 | integration | PS-002-04.R03, PS-002-05.R01 | query another principal's listing id | NOT_FOUND; list_mine returns only own listings |
-| TEST-PS-002-09.T07 | abuse | PS-002-05.R02, PS-002-05.R03 | UI-context dispatch of apply_status and a network spy during create | FORBIDDEN for non-sibling callers; zero network requests |
+| TEST-PS-002-09.T07 | abuse | PS-002-03.R02, PS-002-05.R02, PS-002-05.R03 | UI-context dispatch of apply_status and a network spy during create | FORBIDDEN for non-sibling callers; zero network requests |
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

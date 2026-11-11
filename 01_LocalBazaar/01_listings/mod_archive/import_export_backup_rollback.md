@@ -13,9 +13,9 @@
 ## Specification
 
 - **export:** Section bazaar.archive_records in classrup-export/v1, one line per ArchiveRecord (schema classrup.bazaar.archive_record/v1).
-- **import:** Records whose listing is absent are held read-only; records past purgeAt are imported as purged without content; closed references stay unverified.
+- **import:** Records whose listing is absent are held read-only; records past purgeAt are imported as purged without content (evidence fields kept until evidenceUntil); closed references stay unverified.
 - **backup:** Vault export is the primary backup (IOX-6); the app warns after 30 days without export.
-- **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release, which ignores unknown fields.
+- **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release, which ignores unknown fields and the deferred and superseded statuses as closed records.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

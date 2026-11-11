@@ -14,14 +14,15 @@
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| bazaar.inventory.hold | system | caller is F01.S04.M01, F01.S04.M02, F01.S02.M03 or F02.S03.M02 in the vault that owns the item |
-| bazaar.inventory.release | system | caller is the holder module, the lease sweep, or the owner via override |
-| bazaar.inventory.renew | system | caller is the holder module; hold not frozen |
-| bazaar.inventory.convert | system | caller is the holder module or the deal/cycle completion consumer |
-| bazaar.inventory.adjust | owner | item.ownerId = local principal |
-| bazaar.inventory.issue_reservation | owner | hold.origin local and active; audience at most 10 principals |
-| bazaar.inventory.record_peer | peer | statement signed by listing owner key; signature, schema and expiry verified |
+| bazaar.inventory.hold | system | caller is F01.S04.M01, F01.S04.M02, F01.S02.M03 or F02.S03.M02 in the vault that owns the item; holderType cycle only from F02.S03.M02 |
+| bazaar.inventory.release | system | caller is the holder module, the lease sweep, the Deal consumer, F01.S01.M04 close or archive, or the owner via override |
+| bazaar.inventory.renew | system | caller is the holder module or the lease sweep for Deal-linked holds; hold not frozen |
+| bazaar.inventory.convert | system | caller is the holder module, F01.S01.M04 close for the closing Deal, or the deal completion consumer |
+| bazaar.inventory.adjust | owner | item.ownerId = local principal; also callable by F01.S03.M02 inside its own transaction |
+| bazaar.inventory.issue_reservation | owner | hold active and owned locally; audience at most 10 principals |
+| bazaar.inventory.record_peer | peer | statement signed by the author key of the verified listing projection; signature, schema and expiry verified |
 | bazaar.inventory.read | owner | item.ownerId = local principal or caller module on its behalf |
+| bazaar.inventory.read_peer | owner | local principal is in the statement audience or the caller module acts on its behalf |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -33,4 +34,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

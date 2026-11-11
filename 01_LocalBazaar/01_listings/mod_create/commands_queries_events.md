@@ -18,7 +18,7 @@
 |---|---|---|---|---|---|---|
 | `bazaar.listing.create` | bazaar.listing.create | [vault-local] { id? (uuidv7), kind, title, description?, categoryId, condition?, mediaRefs?, tags?, locale?, regionCell?, subtypeRef? } | { listingId, revision: 1, status: draft } | VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID, BAZAAR_LISTING_DRAFT_LIMIT, FEATURE_DISABLED | bazaar.listing.created | yes (Idempotency-Key) |
 | `bazaar.listing.delete` | bazaar.listing.delete | [vault-local] { listingId, expectedRevision } | { listingId, deletedAt } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | bazaar.listing.deleted | yes (Idempotency-Key) |
-| `bazaar.listing.apply_status` | bazaar.listing.apply_status | [vault-local, internal port] { listingId, expectedRevision, to, expiresAt?, publicationId?, closeReason?, reason } | { listingId, revision, status } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED |  | yes (Idempotency-Key) |
+| `bazaar.listing.apply_status` | bazaar.listing.apply_status | [vault-local, internal port] { listingId, expectedRevision, to, expiresAt?, publicationId?, closeReason?, keepEvidence?, reason: owner\|policy_changed\|expiry\|renew\|deferral\|close\|archive\|restore\|purge } | { listingId, revision, status } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED | bazaar.listing.deleted | yes (Idempotency-Key) |
 | `bazaar.listing.apply_edit` | bazaar.listing.apply_edit | [vault-local, internal port] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, mediaRefs?, tags?, regionCell? } } | { listingId, revision, changedFields } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID |  | yes (Idempotency-Key) |
 
 ### Queries
@@ -33,7 +33,7 @@
 | Type | Privacy | Payload |
 |---|---|---|
 | `bazaar.listing.created` | P3 | { listingId, ownerId, kind, categoryId, status: draft } |
-| `bazaar.listing.deleted` | P1 | { listingId, ownerId, reason: owner\|draft_purge\|archive_purge } |
+| `bazaar.listing.deleted` | P1 | { listingId, ownerId, reason: owner\|draft_purge\|archive_purge, keepEvidence: boolean } |
 
 ### Events consumed
 
@@ -50,6 +50,8 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
+**Note:** Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listings), DeletionPort (plan: tombstone and purge every own Listing and its blob keys) and RetentionPurgePort (draft purge and post-tombstone content purge) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. Listing records hold no counterparty evidence, so nothing is pseudonymized here.
+
 ### Example
 
 ```
@@ -64,9 +66,10 @@ vault.dispatch("bazaar.listing.create", { "kind": "sell", "title": "x", "lat": 5
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-002-09.T05 | contract | PS-002-04.R01, PS-002-04.R02, PS-002-09.R02 | each command runs | outputs and bazaar.listing.created/deleted payloads validate against registry schemas |
+| TEST-PS-002-09.T05 | contract | PS-002-04.R01, PS-002-09.R02 | each command runs | outputs and bazaar.listing.created/deleted payloads validate against registry schemas; no command enqueues a statement |
 | TEST-PS-002-09.T06 | integration | PS-002-04.R03, PS-002-05.R01 | query another principal's listing id | NOT_FOUND; list_mine returns only own listings |
+| TEST-PS-002-09.T09 | chaos | PS-002-04.R02, PS-002-06.R03 | abort the IndexedDB transaction after the outbox write | neither the listing nor the outbox event persists |
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

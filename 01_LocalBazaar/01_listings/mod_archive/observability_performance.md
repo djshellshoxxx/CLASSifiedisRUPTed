@@ -13,7 +13,8 @@
 ## Specification
 
 **Metrics**
-- classrup_bazaar_listings_ended_total{outcome=expired|closed|archived|restored|purged} (local)
+- classrup_bazaar_listings_ended_total{outcome=expired|closed|archived|restored|superseded|purged} (local)
+- classrup_bazaar_expiry_deferrals_total{outcome=renewed|deferred} (local)
 - classrup_bazaar_expiry_lag_ms (local gauge: now - oldest overdue expiresAt)
 - classrup_bazaar_sweep_duration_ms{sweep} (local histogram)
 
@@ -34,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

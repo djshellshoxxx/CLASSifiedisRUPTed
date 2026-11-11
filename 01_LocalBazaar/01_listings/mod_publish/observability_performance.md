@@ -16,13 +16,14 @@
 - classrup_bazaar_publications_total{outcome=active|blocked|held|unpublished|ended} (local)
 - classrup_bazaar_publication_delivery_total{state} (local)
 - classrup_bazaar_publication_policy_duration_ms (local histogram)
+- classrup_bazaar_relay_notice_quarantined_total{reason} (local)
 - classrup_bazaar_relay_index_writes_total{outcome} (relay, OBS-2 labels only)
 
 **Logs**
 - info publication.active {publicationId, listingId, correlationId} in local diagnostics; no titles or text.
 
 **Budgets**
-- publish p95 <= 150 ms locally including policy evaluation (2 000 rules, 8 000 code points) and Ed25519 signing, excluding network.
+- publish p95 <= 150 ms locally including policy evaluation (2 000 rules, 8 000 code points), risk assessment and Ed25519 signing, excluding network.
 - Relay index write p95 <= 300 ms at 50 req/s (OBS-4).
 - Policy re-evaluation sweep: 200 publications per batch in <= 2 s.
 
@@ -36,4 +37,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F09.S01.M01, F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

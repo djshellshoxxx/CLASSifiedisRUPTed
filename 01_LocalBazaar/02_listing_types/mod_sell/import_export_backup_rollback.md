@@ -13,9 +13,9 @@
 ## Specification
 
 - **export:** Section bazaar.sell_terms in classrup-export/v1, one line per SellTerms (schema classrup.bazaar.sell_terms/v1), including minOffer because the export goes to the owner only.
-- **import:** Unknown currencies keep the record read-only with a warning; duplicates by listing id are rejected; minOffer stays local.
+- **import:** Unknown currencies keep the record read-only with a warning; duplicates by listing id are rejected; minOffer stays local; records without barterAcceptable import with false.
 - **backup:** Vault export is the primary backup (IOX-6); relays hold only the public subset inside listing projections.
-- **migration rollback:** Additive optional fields only in v1; rollback is by reinstalling the previous release; older readers ignore new fields.
+- **migration rollback:** Additive optional fields only in v1 (barterAcceptable defaults to false); rollback is by reinstalling the previous release; older readers ignore new fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

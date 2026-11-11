@@ -14,7 +14,7 @@
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| bazaar.listing.close | owner | listing.ownerId = local principal; status published, unpublished or expired |
+| bazaar.listing.close | owner | listing.ownerId = local principal; status published, unpublished, deferred or expired |
 | bazaar.listing.archive | owner | listing.ownerId = local principal; status published, unpublished, expired or closed |
 | bazaar.listing.restore | owner | record.ownerId = local principal; status archived; within 90 days |
 | bazaar.listing.expire | system | vault scheduler; listing status published and expiresAt <= now |
@@ -30,4 +30,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

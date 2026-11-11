@@ -128,7 +128,7 @@ processes:
           - "unpublished -> published | apply_status by F01.S01.M03 republish | requires new PublicationRecord"
           - "unpublished -> closed | apply_status by F01.S01.M04 close | closeReason required"
           - "unpublished -> archived | apply_status by F01.S01.M04 archive | restorableUntil = now + 90 d"
-          - "expired -> published | apply_status by F01.S01.M03 renew or republish | new expiresAt"
+          - "expired -> published | apply_status by F01.S01.M03 publish (a new PublicationRecord, the expired one has ended) | new expiresAt"
           - "expired -> closed | apply_status by F01.S01.M04 close | closeReason required; the owner sold, gave or traded after expiry"
           - "expired -> archived | apply_status by F01.S01.M04 | automatic 30 days after expiry"
           - "closed -> archived | apply_status by F01.S01.M04 | automatic 30 days after close"

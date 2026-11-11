@@ -12,11 +12,11 @@
 
 ## Specification
 
-- **idempotency:** Idempotency-Key required on every command; the vault keeps key and request hash 24 h. A hold call with an existing active (item, holderType, holderId) returns the existing hold unchanged.
+- **idempotency:** Idempotency-Key required on every command; the vault keeps key and request hash 24 h. A hold call with an existing active (item, holderType, holderId) returns the existing hold unchanged. Peer statements are deduplicated by cid.
 - **concurrency:** BEGIN-equivalent IndexedDB readwrite transaction per command re-reads availability; expectedRevision on set_quantity. Forks from a second device of the same principal are detected by reservation statements with the same item and overlapping quantity that exceed onHand; affected holds freeze and neither is converted automatically.
 - **retries:** Port callers do not retry BAZAAR_INVENTORY_INSUFFICIENT; transaction aborts are retried up to 3 times 50 ms apart; statement transport follows IDM-4.
-- **offline:** All commands work offline. Reservation statements wait in the sync outbox as prepared; the UI states that the buyer has not yet received the promise until transport_acknowledged and shows peer_accepted only after the buyer's signed acknowledgement.
-- **partial failure:** If signing the reservation fails after a hold was taken, the hold remains valid locally and the statement is retried; if the caller's transaction aborts, the hold in the same transaction is rolled back with it.
+- **offline:** All commands work offline. Reservation and release statements wait in the sync outbox as prepared; the UI states that the buyer has not yet received the promise until transport_acknowledged and shows peer_accepted only after the buyer's signed acknowledgement.
+- **partial failure:** If signing the reservation or release fails after a hold change, the hold change remains valid locally and the statement is retried; if the caller's transaction aborts, the hold in the same transaction is rolled back with it.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -25,11 +25,11 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-008-09.T05 | integration | PS-008-03.R02, PS-008-06.R02 | two tabs hold the last unit concurrently | exactly one hold succeeds, other gets INSUFFICIENT |
-| TEST-PS-008-09.T06 | integration | PS-008-03.R03, PS-008-06.R02 | D2 holds the same last unit offline then syncs | both holds frozen, conflict event emitted, convert refused with FROZEN until owner releases one |
+| TEST-PS-008-09.T06 | integration | PS-008-03.R03, PS-008-06.R02 | D2 holds the same last unit offline then syncs | both holds frozen, conflict event with linkedDealIds emitted, convert refused with FROZEN until owner releases one |
 | TEST-PS-008-09.T10 | integration | PS-008-06.R01 | replay hold with same key and same holder with new key | same hold returned, units taken once |
 | TEST-PS-008-09.T11 | chaos | PS-008-06.R03 | abort caller transaction after hold | hold rolled back with it; signing failure leaves valid hold and queued retry |
 | TEST-PS-008-09.T12 | integration | PS-008-06.R01, PS-008-06.R03 | offline reservation issued | outbox prepared, UI text says not yet received; peer_accepted only after signed ack |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

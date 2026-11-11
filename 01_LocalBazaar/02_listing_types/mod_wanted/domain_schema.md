@@ -6,8 +6,8 @@
 
 ## Requirements
 
-- **PS-007-01.R01** WantSpec holds the search intent of a wanted listing: category, keywords, acceptable conditions, quantity, optional budget as Money, barter flag, distance bucket and needed-by date.
-- **PS-007-01.R02** The maximum budget is P3 by default and part of any projection only when budgetVisible is true; keywords and category are P0 once published.
+- **PS-007-01.R01** WantSpec holds the search intent of a wanted listing: category, keywords, the minimum acceptable condition (minCondition, ordered new > like_new > good > fair > poor > for_parts), quantity, optional budget as Money, barter flag, distance bucket and needed-by date.
+- **PS-007-01.R02** The maximum budget is P3 by default and part of any projection only when budgetVisible is true, so relay matching never sees it otherwise; keywords, category and minCondition are P0 once published.
 - **PS-007-01.R03** WantSpec status is derived from the listing lifecycle events plus explicit owner actions.
 
 ## Specification
@@ -24,16 +24,17 @@ Schema `classrup.bazaar.want_spec/v1` · storage **device** · privacy **P3** ·
 | ownerId | did:key — local principal |
 | categoryId | uuidv7 — ref F18.S01.M03 Category; active leaf |
 | keywords | string[] — 1..10 items, each 2..40 code points lowercase |
-| conditionsAccepted | string[] — subset of new \| like_new \| good \| fair \| poor \| for_parts; at least 1 |
+| minCondition | enum — new \| like_new \| good \| fair \| poor \| for_parts; ordered best to worst; the want accepts this condition or better (N15) |
 | quantityWanted | int — 1..100 |
-| maxBudget? | Money — CTR-MNY-001; > 0; <= 1 000 000 000 000 minor units |
-| budgetVisible | boolean — default false |
+| maxBudget? | Money — CTR-MNY-001; > 0; <= maxAmount(currency) = 10^(10 + registry decimals) minor units (F09.S03.M03) |
+| budgetVisible | boolean — default false; maxBudget is in the projection and relay matching only when true |
 | barterAcceptable | boolean — default false |
 | barterNote? | string — <= 280 code points, plain text |
 | maxDistanceBucket? | enum — lt_5km \| 5_10km \| 10_25km \| 25_50km \| gt_50km (CTR-PRV-001 PRV-2 buckets) |
 | neededBy? | date — ISO 8601 date, not more than 365 days ahead |
 | status | enum — draft \| open \| paused \| fulfilled \| withdrawn |
-| withdrawReason? | enum — owner \| expired \| listing_closed \| listing_archived \| listing_deleted |
+| pauseReason? | enum — listing_unpublished \| listing_expired \| needed_by_passed |
+| withdrawReason? | enum — owner \| listing_closed \| listing_archived \| listing_deleted |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC |
 | updatedAt | timestamp — RFC 3339 UTC |
@@ -41,7 +42,8 @@ Schema `classrup.bazaar.want_spec/v1` · storage **device** · privacy **P3** ·
 **Invariants**
 - Exactly one WantSpec exists per wanted listing and none for other kinds.
 - maxBudget never appears in an event payload, and in a projection only if budgetVisible is true.
-- status open implies the listing status is published.
+- status open implies the listing status is published and neededBy is not more than 7 days past.
+- Field classes are annotated per F10.S02.M02 (maxBudget P3 unless budgetVisible; categoryId, keywords, minCondition, quantityWanted, barterAcceptable, barterNote, maxDistanceBucket and neededBy P0 once projected).
 
 ### Storage DDL
 
@@ -57,9 +59,9 @@ CREATE INDEX bazaar_want_spec_open ON bazaar_want_spec(tenant_id, status, catego
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-007-09.T01 | unit | PS-007-01.R01, PS-007-01.R02, PS-007-02.R01, PS-007-02.R02 | define a valid want with private budget | stored; keywords normalized; budget absent from projection builder output |
-| TEST-PS-007-09.T02 | unit | PS-007-01.R03, PS-007-02.R03 | violate each rule V01-V09 | documented error code returned and nothing stored |
+| TEST-PS-007-09.T01 | unit | PS-007-01.R01, PS-007-01.R02, PS-007-02.R01, PS-007-02.R02 | define a valid want with minCondition good and a private budget | stored; keywords normalized; budget absent from projection builder output |
+| TEST-PS-007-09.T03 | property | PS-007-01.R03, PS-007-03.R01, PS-007-03.R02, PS-007-03.R03 | random owner commands and duplicated listing events | only declared transitions; terminal states never regress; open implies listing published |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M03, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

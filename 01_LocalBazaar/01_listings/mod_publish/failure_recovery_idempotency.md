@@ -12,11 +12,11 @@
 
 ## Specification
 
-- **idempotency:** Idempotency-Key required on every command; keys and request hashes kept 24 h in the vault. Statements are additionally deduplicated by cid at relays and peers (CTR-FED-001 FED-3).
+- **idempotency:** Idempotency-Key required on every command; keys and request hashes kept 24 h in the vault. Statements are additionally deduplicated by cid at relays and peers (CTR-FED-001 FED-3); inbound relay notices are deduplicated by cid.
 - **concurrency:** expectedRevision on the listing and on the publication; one live publication per listing is enforced by a partial unique index. A forked statement chain (same seq, different prev from another device of the principal) is detected on sync, the publication is frozen and the owner chooses which chain to keep; no last-writer-wins.
-- **retries:** Transport retries follow IDM-4: exponential backoff with full jitter, base 500 ms, cap 30 s, 6 attempts per burst, then waits for the next app start or network event; a relay_rejected result is never retried.
-- **offline:** Everything except relay delivery works offline. The sync outbox entry stays prepared; entries older than 7 days prompt the user to resend or discard.
-- **partial failure:** Delivery to relay A may succeed while relay B fails; each destination has its own state. A local policy-change unpublish with some relays unreachable queues tombstones for them and shows tombstone pending.
+- **retries:** Transport retries follow IDM-4: exponential backoff with full jitter, base 500 ms, cap 30 s, 6 attempts per burst, then waits for the next app start or network event; a relay_rejected or relay_removed result is never retried to that relay.
+- **offline:** Everything except relay delivery works offline. The sync outbox entry stays prepared; entries older than 7 days prompt the user to resend or discard. Offline publish uses the last known receipt median for V10 and warns when it is older than 7 days.
+- **partial failure:** Delivery to relay A may succeed while relay B fails; each destination has its own state. A local policy-change unpublish with some relays unreachable queues tombstones for them and shows tombstone pending. If commerce.deal.open fails, attach_promotion stores nothing.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -31,4 +31,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F09.S01.M01, F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

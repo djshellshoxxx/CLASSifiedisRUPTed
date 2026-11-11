@@ -11,7 +11,26 @@ A modular, mobile-first, privacy-aware PWA for local commerce, classifieds (Loca
 
 ## Planning status
 
-Hierarchy and module-level specification inventories only. Process specifications remain to be written in Prompt 2. No application implementation, security certification or production deployment is claimed.
+**Phase:** Prompt 2 structural pass complete; semantic review open (see [inventory audit](planning/INVENTORY_AUDIT.md)).
+
+| Item | Count |
+|---|---|
+| Features (`NN_Name/`) | 18 |
+| Directories with `SPEC.md` + `TODO.md` | 218 |
+| Modules (`mod_*`) | 148 |
+| Process placeholders (10 per module) | 1480 |
+| Requirement placeholders | 4440 |
+
+Process contracts are DRAFT. Next gate: Prompt 3 (developer-ready specs, semantic overlap review, GO/NO-GO). No application code, screenshots, security certification or production deployment exist or are claimed.
+
+## Repository layout
+
+- `NN_Feature/` → `NN_subfeature/` → `mod_name/`: each level has `SPEC.md` and `TODO.md`; each module also has `PROCESS_CHECKLIST.md` and ten process specs.
+- `planning/`: [registry](planning/SPEC_REGISTRY.md), [contracts](planning/CONTRACTS.md), [requirements checklist](planning/REQUIREMENTS_CHECKLIST.json) and the four staged [metaprompts](planning/metaprompts/README.md).
+
+## Screenshots
+
+None yet: this repository contains specifications only. Screenshots will be added when the Prompt 4 PWA implementation exists.
 
 ## Principles
 

@@ -1,0 +1,387 @@
+[
+  {
+    "id": "B1",
+    "pkg": "bazaar",
+    "task": "offers-negotiation",
+    "model": null,
+    "branch": "agents/bazaar/offers-negotiation",
+    "modules": [
+      {
+        "id": "F01.S04.M01",
+        "ps": "PS-011",
+        "title": "Purchase offers",
+        "specDir": "01_LocalBazaar/04_pricing/mod_offers",
+        "codeDir": "packages/bazaar/src/pricing/offers"
+      },
+      {
+        "id": "F01.S04.M02",
+        "ps": "PS-010",
+        "title": "Price negotiation",
+        "specDir": "01_LocalBazaar/04_pricing/mod_negotiation",
+        "codeDir": "packages/bazaar/src/pricing/negotiation"
+      }
+    ],
+    "guidance": "N10: offers have decisionReason `countered`; bazaar.offer.reject takes an optional reason; negotiation treats the offer as round zero; offers are vault commands plus signed statements (classrup.bazaar.offer/v1 and the others the spec names), never relay-authoritative. Read the listing through the existing listingRepo/inventoryHoldRepo exported by packages/bazaar/src/listings/index.ts (import it relatively as ../../listings/index.ts; do not edit it). Ports to declare and inject: DealPort (shape per 09_Commerce/01_payments/mod_noncustodial/module.spec.yaml and N5: open(ctx, { contextRef, contextCid, parties, obligations }) and cancel(ctx, { dealId, reason }), both called inside your transaction), BlockPort (N7: isBlockedEither(a, b)), and an InventoryPort whose default adapter writes inventoryHoldRepo so the existing held() check in listings sees a sale hold. Acceptance, the hold and the Deal must commit or fail together; two concurrent acceptances for the last unit must yield exactly one accepted offer.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "B2",
+    "pkg": "bazaar",
+    "task": "listing-types",
+    "model": null,
+    "branch": "agents/bazaar/listing-types",
+    "modules": [
+      {
+        "id": "F01.S02.M01",
+        "ps": "PS-006",
+        "title": "Sell listing type",
+        "specDir": "01_LocalBazaar/02_listing_types/mod_sell",
+        "codeDir": "packages/bazaar/src/listing_types/sell"
+      },
+      {
+        "id": "F01.S02.M02",
+        "ps": "PS-007",
+        "title": "Wanted listing type",
+        "specDir": "01_LocalBazaar/02_listing_types/mod_wanted",
+        "codeDir": "packages/bazaar/src/listing_types/wanted"
+      },
+      {
+        "id": "F01.S02.M03",
+        "ps": "PS-005",
+        "title": "Giveaway listing type",
+        "specDir": "01_LocalBazaar/02_listing_types/mod_giveaway",
+        "codeDir": "packages/bazaar/src/listing_types/giveaway"
+      }
+    ],
+    "guidance": "These modules attach type-specific terms to listings owned by the existing listings module. Read listings through listingRepo exported by packages/bazaar/src/listings/index.ts (relative import ../../listings/index.ts; do not edit that file). Only the listing owner may set terms. Ports to inject: CurrencyPort.isRegistered(code), BlockPort.isBlockedEither(a, b) (N7), InventoryPort for giveaway recipient selection. N15: WantSpec has category, minCondition, maxBudget; the listing projection has a barterAcceptable boolean. Giveaway request queues must enforce the anti-hoarding limits and never reveal requester identities to other requesters.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "C1",
+    "pkg": "commerce",
+    "task": "deal-cash-receipts",
+    "model": null,
+    "branch": "agents/commerce/deal-cash-receipts",
+    "modules": [
+      {
+        "id": "F09.S01.M01",
+        "ps": "PS-069",
+        "title": "Noncustodial payment claims",
+        "specDir": "09_Commerce/01_payments/mod_noncustodial",
+        "codeDir": "packages/commerce/src/payments/noncustodial"
+      },
+      {
+        "id": "F09.S01.M02",
+        "ps": "PS-067",
+        "title": "Cash payments",
+        "specDir": "09_Commerce/01_payments/mod_cash",
+        "codeDir": "packages/commerce/src/payments/cash"
+      },
+      {
+        "id": "F09.S02.M01",
+        "ps": "PS-071",
+        "title": "Receipts",
+        "specDir": "09_Commerce/02_settlement/mod_receipts",
+        "codeDir": "packages/commerce/src/settlement/receipts"
+      }
+    ],
+    "guidance": "N5 defines the Deal contract: commerce.deal.open is a generic vault command { contextRef { type, id }, contextCid, parties[], obligations[] } with a deterministic dealId; context types offer, auction_result, cycle_compensation, service_milestone, rental_deposit, rental_damage, listing_fee; payment events carry contextRef; commerce.deal.cancelled releases holds. Besides the commands, export `createDealPort(options)` returning { open(ctx, input), cancel(ctx, input) } that other modules call INSIDE their own command transaction (it must use ctx.tx, never open a transaction). N3: completion events carry contextId, completionCid and parties [{ did, role }]. There is no custody anywhere: payments are claims and attestations; a signature is evidence of an assertion, not of delivery. Do not implement the currency registry, FX or money precision (valuation/* belongs to another lane): inject CurrencyPort.isRegistered(code) and use the kernel `money` schema with integer minor-unit strings.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "D1",
+    "pkg": "discovery",
+    "task": "coarse-filters",
+    "model": "sonnet",
+    "branch": "agents/discovery/coarse-filters",
+    "modules": [
+      {
+        "id": "F06.S02.M01",
+        "ps": "PS-047",
+        "title": "Coarse location regions",
+        "specDir": "06_Discovery/02_geoprivacy/mod_coarse",
+        "codeDir": "packages/discovery/src/geoprivacy/coarse"
+      },
+      {
+        "id": "F06.S01.M03",
+        "ps": "PS-044",
+        "title": "Search filters",
+        "specDir": "06_Discovery/01_search/mod_filter",
+        "codeDir": "packages/discovery/src/search/filter"
+      }
+    ],
+    "guidance": "Both modules are headless (no commands or queries): export pure functions and types named after the spec. N8: publishing code calls assertPublicCell (maximum public precision is geohash length 5). The existing packages/discovery/src/search/index.ts (alpha retain/search) must not be edited; your filter module is a separate pure library it will adopt later. Geohash logic must be exact: test against known vectors and with property tests (prefix containment, neighbour symmetry).",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "D2",
+    "pkg": "discovery",
+    "task": "ranking",
+    "model": "sonnet",
+    "branch": "agents/discovery/ranking",
+    "modules": [
+      {
+        "id": "F06.S03.M01",
+        "ps": "PS-051",
+        "title": "Relevance ranking",
+        "specDir": "06_Discovery/03_ranking/mod_relevance",
+        "codeDir": "packages/discovery/src/ranking/relevance"
+      },
+      {
+        "id": "F06.S03.M02",
+        "ps": "PS-050",
+        "title": "Ranking fairness",
+        "specDir": "06_Discovery/03_ranking/mod_fairness",
+        "codeDir": "packages/discovery/src/ranking/fairness"
+      }
+    ],
+    "guidance": "Relevance has two commands and one query; fairness is a pure library. Another lane is writing packages/discovery/src/geoprivacy/coarse right now: do not import it. Take the region functions you need (cell distance, containment) as an injected RegionPort in options and fake it in tests. Ranking must be deterministic for equal inputs (stable tie-breaks) and must never use private fields or exact coordinates.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "G1",
+    "pkg": "governance",
+    "task": "taxonomy-prohibited",
+    "model": "sonnet",
+    "branch": "agents/governance/taxonomy-prohibited",
+    "modules": [
+      {
+        "id": "F18.S01.M03",
+        "ps": "PS-144",
+        "title": "Goods taxonomy",
+        "specDir": "18_Governance/01_policy/mod_goods",
+        "codeDir": "packages/governance/src/policy/goods"
+      },
+      {
+        "id": "F18.S01.M02",
+        "ps": "PS-146",
+        "title": "Prohibited items",
+        "specDir": "18_Governance/01_policy/mod_prohibited",
+        "codeDir": "packages/governance/src/policy/prohibited"
+      }
+    ],
+    "guidance": "The alpha hard-codes one category and passes BazaarOptions.categoryAllowed. Besides the spec's commands and queries, export a small adapter that turns the taxonomy and prohibited-item policy into `(categoryId: string) => boolean` so the composition root can pass it to bazaarDefinitions. Policy packs are data: versioned, validated strictly, and (where the spec says so) signed with verification through an injected callback. ADR-0016: there is no central authority; a pack applies to the vault that adopted it or to a relay that chose it. Community governance (F18.S02.M01) does not exist yet: inject what you need from it.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "I1",
+    "pkg": "i18n",
+    "task": "languages-currencies",
+    "model": "sonnet",
+    "branch": "agents/i18n/languages-currencies",
+    "modules": [
+      {
+        "id": "F14.S02.M01",
+        "ps": "PS-113",
+        "title": "Languages",
+        "specDir": "14_Accessibility/02_internationalization/mod_languages",
+        "codeDir": "packages/i18n/src/internationalization/languages"
+      },
+      {
+        "id": "F14.S02.M02",
+        "ps": "PS-112",
+        "title": "Currency display",
+        "specDir": "14_Accessibility/02_internationalization/mod_currencies",
+        "codeDir": "packages/i18n/src/internationalization/currencies"
+      }
+    ],
+    "guidance": "Both modules are headless (no commands or queries). Use the standard Intl APIs so the code stays isomorphic. Currency display formats integer minor-unit strings exactly: never convert money to a floating-point number, and handle currencies with 0, 2 and 3 minor digits. The canonical currency registry belongs to F09.S03.M01 and is not implemented yet: take minor-digit data through an injected port with a small built-in fallback table only if the spec allows it. The PWA is out of scope.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "M1",
+    "pkg": "comms",
+    "task": "threads-messages",
+    "model": null,
+    "branch": "agents/comms/threads-messages",
+    "modules": [
+      {
+        "id": "F08.S01.M02",
+        "ps": "PS-061",
+        "title": "Conversation threads",
+        "specDir": "08_Communications/01_messaging/mod_threads",
+        "codeDir": "packages/comms/src/messaging/threads"
+      },
+      {
+        "id": "F08.S01.M01",
+        "ps": "PS-060",
+        "title": "Private messages",
+        "specDir": "08_Communications/01_messaging/mod_private",
+        "codeDir": "packages/comms/src/messaging/private"
+      }
+    ],
+    "guidance": "Messages are end-to-end encrypted between vaults; no relay ever sees plaintext (ADR-0016 item 3). Do not implement cryptography and do not import identity/security internals: inject a MessageCryptoPort (seal(recipients, plaintext) and open(sealed)) plus sign/verify callbacks, and use deterministic fakes in tests. Blocked parties (N7 BlockPort.isBlockedEither) are dropped silently. Enforce ordering, deduplication of redelivered statements, size limits and the rate limits the spec requires. Only thread participants can read a thread; everyone else gets NOT_FOUND. N15: delivery uses the author's mailbox hint, but transport itself is out of scope: emit the sealed statement through ctx.tx.sync.enqueue from deliveryEligible definitions as KERNEL_API rule 4 describes.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "M2",
+    "pkg": "comms",
+    "task": "consent-meetup",
+    "model": null,
+    "branch": "agents/comms/consent-meetup",
+    "modules": [
+      {
+        "id": "F08.S02.M02",
+        "ps": "PS-062",
+        "title": "Explicit consent capture",
+        "specDir": "08_Communications/02_negotiation/mod_consent",
+        "codeDir": "packages/comms/src/negotiation/consent"
+      },
+      {
+        "id": "F08.S03.M01",
+        "ps": "PS-066",
+        "title": "Safe meetup guidance",
+        "specDir": "08_Communications/03_meetups/mod_safe",
+        "codeDir": "packages/comms/src/meetups/safe"
+      }
+    ],
+    "guidance": "N13 fixes the consent API: commands comms.consent.sign and comms.consent.verify; verify statuses valid | stale | revoked | conflicted | missing; subjectType enum bazaar_offer, bazaar_negotiation, mutiny_proposal, mutiny_cycle, services_booking, rentals_reservation, rentals_deposit, comms_meetup; statement keys consent.<slug>.<subject>.<action>.v1. A consent is bound to the exact subject revision or digest: any material revision makes earlier consents stale, and conflicting signed consents from one signer are reported as conflicted, never resolved by last-writer-wins (ADR-0016 item 5). Signing and verification are injected callbacks. For safe meetup guidance, N8 applies: any location that leaves the vault is a coarse cell checked by an injected assertPublicCell; exact addresses are never stored in shareable records.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "N1",
+    "pkg": "notify",
+    "task": "prefs-inapp",
+    "model": "sonnet",
+    "branch": "agents/notify/prefs-inapp",
+    "modules": [
+      {
+        "id": "F13.S02.M03",
+        "ps": "PS-107",
+        "title": "Channel opt-in/opt-out",
+        "specDir": "13_Notifications/02_preferences/mod_opt",
+        "codeDir": "packages/notify/src/preferences/opt"
+      },
+      {
+        "id": "F13.S02.M04",
+        "ps": "PS-106",
+        "title": "In-app notification preferences",
+        "specDir": "13_Notifications/02_preferences/mod_in",
+        "codeDir": "packages/notify/src/preferences/in"
+      },
+      {
+        "id": "F13.S01.M03",
+        "ps": "PS-103",
+        "title": "In-app notifications",
+        "specDir": "13_Notifications/01_delivery/mod_inapp",
+        "codeDir": "packages/notify/src/delivery/inapp"
+      }
+    ],
+    "guidance": "N4: events carry the party DIDs needed to resolve recipients; a notification is only ever created for a DID named in the event. N6: before any channel that leaves the device, call the injected privacy consent port (privacy.consent.check with purposes notify_email / notify_push). In-app notifications are local vault records: content-minimal (no message text, amounts or exact locations), deduplicated per event, with read/unread state. Subscribe with defineSubscriber; declare the consumed event types by their spec names without importing the producing packages.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "P1",
+    "pkg": "privacy",
+    "task": "classification-metadata-consent",
+    "model": "sonnet",
+    "branch": "agents/privacy/classification-metadata-consent",
+    "modules": [
+      {
+        "id": "F10.S02.M02",
+        "ps": "PS-081",
+        "title": "Data classification model",
+        "specDir": "10_Privacy/02_security_boundaries/mod_model",
+        "codeDir": "packages/privacy/src/security_boundaries/model"
+      },
+      {
+        "id": "F10.S02.M03",
+        "ps": "PS-080",
+        "title": "Metadata minimization",
+        "specDir": "10_Privacy/02_security_boundaries/mod_metadata",
+        "codeDir": "packages/privacy/src/security_boundaries/metadata"
+      },
+      {
+        "id": "F10.S01.M01",
+        "ps": "PS-076",
+        "title": "Privacy consent",
+        "specDir": "10_Privacy/01_data_controls/mod_consent",
+        "codeDir": "packages/privacy/src/data_controls/consent"
+      }
+    ],
+    "guidance": "N6: privacy.consent.check is called by other modules for the purposes federation_publish, notify_email, notify_push, analytics_share and location_precise; missing or withdrawn consent means deny (fail closed). The classification model is the single source for P0–P4 classes and field classification helpers used by every other module. N9: media metadata is stripped before storing; implement the byte-level stripping the spec requires as pure, bounds-checked parsing of untrusted input (never read past the buffer, cap sizes, reject malformed files) with hostile-input tests. No new dependencies.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "U1",
+    "pkg": "mutiny",
+    "task": "execution-recovery",
+    "model": null,
+    "branch": "agents/mutiny/execution-recovery",
+    "modules": [
+      {
+        "id": "F02.S03.M04",
+        "ps": "PS-024",
+        "title": "Cycle execution and recovery",
+        "specDir": "02_LocalMutiny/03_cycle_execution/mod_recovery",
+        "codeDir": "packages/mutiny/src/cycle_execution/recovery"
+      }
+    ],
+    "guidance": "This module adds per-leg handover and receipt attestations, completion and partial-execution recovery on top of the alpha barter coordination. Read packages/mutiny/src/trade_proposals/index.ts and repository.ts, packages/mutiny/README.md and docs/BARTER_ALPHA.md in full first: the alpha uses its own state names and classrup.alpha.* statement types. Build on the committed coordination records it stores; do not edit existing mutiny files (if a tiny export is unavoidable, say so in NOTES.md and keep the existing tests green). N3: mutiny.cycle.completed carries contextId, completionCid, parties [{ did, role }] and legs. A leg is complete only with attestations from both its giver and its receiver; nothing is ever inferred or rerouted. Disputes go through an injected DisputePort (F09.S02.M02 does not exist yet). Attestations are signed statements through injected sign/verify callbacks; only the leg's giver may attest handover and only its receiver may attest receipt.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "X1",
+    "pkg": "moderation",
+    "task": "rate-limits-signals",
+    "model": "sonnet",
+    "branch": "agents/moderation/rate-limits-signals",
+    "modules": [
+      {
+        "id": "F12.S03.M03",
+        "ps": "PS-099",
+        "title": "Rate limiting",
+        "specDir": "12_Moderation/03_antifraud/mod_rate",
+        "codeDir": "packages/moderation/src/antifraud/rate"
+      },
+      {
+        "id": "F12.S03.M04",
+        "ps": "PS-098",
+        "title": "Account limits",
+        "specDir": "12_Moderation/03_antifraud/mod_limits",
+        "codeDir": "packages/moderation/src/antifraud/limits"
+      },
+      {
+        "id": "F12.S03.M02",
+        "ps": "PS-101",
+        "title": "Fraud signals",
+        "specDir": "12_Moderation/03_antifraud/mod_signals",
+        "codeDir": "packages/moderation/src/antifraud/signals"
+      }
+    ],
+    "guidance": "N18: the command bus calls RateLimitPort.consume and the account-limits check in process. Read packages/kernel/src/bus/ports.ts and export an implementation of the kernel RateLimitPort from the rate module so the composition root can pass it to createBus. Counters live in the local vault (and optionally a relay); they must be deterministic under the injected clock (no Date.now). Risk scoring (F12.S03.M01) does not exist yet: inject a RiskPort. Signals must never contain message text, exact locations or amounts.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  },
+  {
+    "id": "X2",
+    "pkg": "moderation",
+    "task": "flags-evidence-spam",
+    "model": null,
+    "branch": "agents/moderation/flags-evidence-spam",
+    "modules": [
+      {
+        "id": "F12.S01.M01",
+        "ps": "PS-094",
+        "title": "Content flags",
+        "specDir": "12_Moderation/01_reporting/mod_flags",
+        "codeDir": "packages/moderation/src/reporting/flags"
+      },
+      {
+        "id": "F12.S01.M02",
+        "ps": "PS-093",
+        "title": "Moderation evidence",
+        "specDir": "12_Moderation/01_reporting/mod_evidence",
+        "codeDir": "packages/moderation/src/reporting/evidence"
+      },
+      {
+        "id": "F12.S02.M02",
+        "ps": "PS-097",
+        "title": "Spam detection",
+        "specDir": "12_Moderation/02_policy/mod_spam",
+        "codeDir": "packages/moderation/src/policy/spam"
+      }
+    ],
+    "guidance": "ADR-0016 item 8: moderation is local filtering plus the hosting policy of a relay the user chose; there is no global takedown or suspension (N20: any wording or behaviour implying one is a blocker). N19: spam detection exposes the in-process vault query moderation.spam.evaluate used by listing publication. Flags carry evidence snapshots; evidence is integrity-protected by content hash and never includes more private data than the reporter already holds. Fraud signals (F12.S03.M02) are written by another lane: inject a SignalPort.",
+    "base": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+  }
+]

@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+import { formatMoney, formatMoneyParts, type CurrencySpec } from './index.ts';
+
+const spec = (code: string, exponent: number, kind: CurrencySpec['kind'] = 'iso'): CurrencySpec => ({ code, exponent, kind });
+const show = (s: string) => [...s].map(c => { const cp = c.codePointAt(0)!; return cp < 0x20 || cp > 0x7e ? `<U+${cp.toString(16).toUpperCase().padStart(4, '0')}>` : c; }).join('');
+
+describe('probe 1: bigint vs decimal engine', () => {
+  it('display name', () => {
+    const rows: string[] = [];
+    const cases: Array<[string, CurrencySpec, string, object]> = [
+      ['200', spec('EUR', 2), 'fr', { display: 'name' }],
+      ['500', spec('EUR', 2), 'fr', { display: 'name' }],
+      ['100', spec('EUR', 2), 'fr', { display: 'name' }],
+      ['1500', spec('EUR', 2), 'fr', { display: 'name' }],
+      ['5', spec('CLP', 0), 'en', { display: 'name' }],
+      ['1', spec('CLP', 0), 'en', { display: 'name' }],
+      ['200', spec('EUR', 2), 'en', { display: 'name', trimZeros: true }],
+      ['100', spec('EUR', 2), 'en', { display: 'name', trimZeros: true }],
+      ['200', spec('EUR', 2), 'de', { display: 'name', trimZeros: true }],
+      ['200', spec('EUR', 2), 'es', { display: 'name' }],
+      ['200', spec('EUR', 2), 'es', { display: 'name', trimZeros: true }],
+      ['1234567', spec('JPY', 0), 'fr', { display: 'name' }],
+      ['1000000', spec('JPY', 0), 'fr', { display: 'name' }],
+      ['2000000', spec('JPY', 0), 'fr', { display: 'name' }],
+      ['1234567', spec('JPY', 0), 'es', { display: 'name' }],
+      ['200', spec('EUR', 2), 'ar-XB', { display: 'name' }],
+      ['300', spec('EUR', 2), 'ar-XB', { display: 'name' }],
+      ['1100', spec('EUR', 2), 'ar-XB', { display: 'name' }],
+    ];
+    let mismatches = 0;
+    for (const [amount, s, locale, o] of cases) {
+      const a = formatMoney({ amount, currency: s.code }, s, locale, { ...o, engine: 'decimal' });
+      const b = formatMoney({ amount, currency: s.code }, s, locale, { ...o, engine: 'bigint' });
+      const same = a.ok && b.ok && a.value === b.value;
+      if (!same) mismatches++;
+      rows.push(`${same ? 'same' : 'DIFF'} ${amount} ${s.code}/${s.exponent} ${locale} ${JSON.stringify(o)} decimal=${a.ok ? show(a.value) : a.error.code} | bigint=${b.ok ? show(b.value) : b.error.code}`);
+    }
+    console.log(rows.join('\n'));
+    console.log('mismatches', mismatches, 'of', cases.length);
+    expect(true).toBe(true);
+  });
+  it('symbol and code displays across locales: exhaustive small sweep', () => {
+    const locales = ['en', 'de', 'fr', 'es', 'ar-XB', 'en-XA'];
+    const specs = [spec('EUR', 2), spec('USD', 2), spec('JPY', 0), spec('KWD', 3), spec('BTC', 8, 'crypto'), spec('ETH', 18, 'crypto'), spec('USDC', 6, 'crypto')];
+    const amounts = ['0', '1', '-1', '5', '-5', '99', '100', '-100', '999', '1000', '1234', '-1234', '12345', '123456', '1234567', '-999999999', '1000000000000', '9007199254740993', '12345678901234567890', '9'.repeat(78), '-' + '9'.repeat(78), '1' + '0'.repeat(77)];
+    const diffs: string[] = [];
+    let n = 0;
+    for (const l of locales) for (const s of specs) for (const a of amounts) for (const display of ['symbol', 'code', 'name'] as const) for (const trimZeros of [false, true]) {
+      const x = formatMoney({ amount: a, currency: s.code }, s, l, { display, trimZeros, engine: 'decimal' });
+      const y = formatMoney({ amount: a, currency: s.code }, s, l, { display, trimZeros, engine: 'bigint' });
+      n++;
+      if (!x.ok || !y.ok || x.value !== y.value) diffs.push(`${a.length > 24 ? a.slice(0, 6) + '..(' + a.length + ')' : a} ${s.code}/${s.exponent} ${l} ${display}${trimZeros ? ' trim' : ''}: decimal=${x.ok ? show(x.value) : x.error.code} | bigint=${y.ok ? show(y.value) : y.error.code}`);
+    }
+    const byDisplay = { symbol: 0, code: 0, name: 0 } as Record<string, number>;
+    for (const d of diffs) for (const k of Object.keys(byDisplay)) if (d.includes(` ${k}`)) byDisplay[k]!++;
+    console.log('combos', n, 'diffs', diffs.length, JSON.stringify(byDisplay));
+    console.log(diffs.slice(0, 40).join('\n'));
+    expect(true).toBe(true);
+  });
+  it('parts for non-BMP numbering systems', () => {
+    for (const l of ['ff-Adlm', 'en-u-nu-mathbold', 'en-u-nu-arab', 'hi-u-nu-deva', 'en-IN']) {
+      const s = spec('AAA', 2, 'crypto');
+      const x = formatMoney({ amount: '123456789012', currency: 'AAA' }, s, l, { engine: 'decimal' });
+      const y = formatMoney({ amount: '123456789012', currency: 'AAA' }, s, l, { engine: 'bigint' });
+      console.log(l, x.ok && y.ok && x.value === y.value ? 'same' : 'DIFF', x.ok ? show(x.value) : x.error.code, '|', y.ok ? show(y.value) : y.error.code);
+    }
+    const p = formatMoneyParts({ amount: '-123456', currency: 'EUR' }, spec('EUR', 2), 'ar-XB');
+    console.log(JSON.stringify(p.ok ? p.value.map(q => [q.type, show(q.value)]) : p.error));
+    expect(true).toBe(true);
+  });
+});

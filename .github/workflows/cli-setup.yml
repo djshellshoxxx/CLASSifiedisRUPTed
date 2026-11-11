@@ -1,18 +1,41 @@
 name: CLI setup
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      os: ${{ steps.plan.outputs.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: plan
+        name: Decide which operating systems this change needs
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=""
+          if [ "$EVENT" = "pull_request" ] && git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+            files="$(git diff --name-only "$BASE_SHA" HEAD || true)"
+          fi
+          printf '%s\n' "$files" | node tools/ci/plan.mjs "$EVENT" | tee -a "$GITHUB_OUTPUT"
   clean-install:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
         node: [22.18.0, 24.x]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -33,6 +56,14 @@ jobs:
         run: corepack pnpm run doctor
       - name: Production build
         run: corepack pnpm build
+      - name: Locate the browser cache
+        shell: bash
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"
+      - name: Restore the pinned browser download
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/pw-browsers
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install browser
         run: corepack pnpm exec playwright install --with-deps chromium
       - name: Real development and production browser smoke

@@ -51,6 +51,7 @@ processes:
       - "V01 | toleranceBps override is an integer in 0..1000 | VALIDATION_FAILED"
       - "V02 | every participant has maxCycleLength ≥ 4 | MUTINY_FOUR_LENGTH_PREFERENCE"
       - "V03 | every adjacent pair distance bucket ordinal ≤ 2 (10_25), computed by F02.S02.M03 from the giver's listing cell and the receiver's want cell (≤ L2) | MUTINY_FOUR_DISTANCE"
+      - "V04 | a maxOtherOpenCycles override is an integer in 0..5; the value is never an admission rule over other participants and is enforced only by the consent-time guard in each participant's own vault from local counts (F02.S03.M01 MUTINY_PARTICIPANT_OVERLOADED) | VALIDATION_FAILED"
       - "V05 | explanation subject exists in this vault and has length 4 | MUTINY_PROFILE_LENGTH_MISMATCH"
   workflow_state_machine:
     machines: []

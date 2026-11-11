@@ -104,7 +104,7 @@ processes:
       - "V01 | revisionNo is 1..20; revisionNo > 20 is refused and the parties must start a new subject | MUTINY_REVISION_LIMIT"
       - "V02 | authorId is a party of the subject in the roster (F02.S01.M02) | MUTINY_REVISION_AUTHOR_INVALID"
       - "V03 | for trade_proposal the author differs from the author of the head revision (turn-taking); for cycle the author is the coordinator | MUTINY_REVISION_TURN"
-      - "V04 | snapshot size ≤ 65536 bytes and contentHash equals cid of JCS(snapshot) | MUTINY_REVISION_HASH_MISMATCH"
+      - "V04 | snapshot size ≤ 65536 bytes and contentHash equals the cid of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}) | MUTINY_REVISION_HASH_MISMATCH"
       - "V05 | sig verifies Ed25519 over JCS of the envelope without sig against authorId's registered device key | MUTINY_STATEMENT_SIGNATURE_INVALID"
       - "V06 | subject is open (trade_proposal draft or open; cycle proposed) | CONFLICT_STATE"
       - "V07 | for subjectType cycle the party set and legIds equal the head revision's | MUTINY_REVISION_MATERIAL_FORBIDDEN"

@@ -11,7 +11,7 @@ summary: >-
   committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects.
   The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement.
 responsibilities:
-  - Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d).
+  - "Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d)."
   - Renew the local hold internally with bazaar.inventory.renew before it lapses, up to the statement's absolute expiresAt and never beyond the hold's maxExpiresAt, without re-signing.
   - Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1.
   - Verify peers' reservation statements and release notices (storing the generic statement through bazaar.inventory.record_peer_reservation), detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
@@ -179,7 +179,7 @@ processes:
         output: "{ items: CycleLock[], nextCursor? }"
         errors: []
     events_produced:
-      - {type: mutiny.cycle.locked, privacy: P2, payload: "{ lockId, reservationCid, subjectType, subjectId, giverId, direction, revisionHash, itemCount, inventoryItemIds, expiresAt }"}
+      - {type: mutiny.cycle.locked, privacy: P2, payload: "{ lockId, reservationCid (the cid of the signed classrup.bazaar.reservation/v1), subjectType, subjectId, giverId, direction, revisionHash, itemCount, inventoryItemIds, expiresAt }"}
       - {type: mutiny.cycle.unlocked, privacy: P2, payload: "{ lockId, subjectType, subjectId, giverId, direction, revisionHash, inventoryItemIds, holdIds? (own only), reason: released|converted|superseded|expired|item_lost|conflict|subject_ended }"}
       - {type: mutiny.lock.conflict_detected, privacy: P2, payload: "{ giverId, inventoryItemId, subjectIds[2], lockIds[2], detectedAt }"}
     events_consumed:
@@ -209,7 +209,7 @@ processes:
       mutiny.lock.reserve  Idempotency-Key: 0192f420-0000-7000-8000-000000000001
       { "subjectType":"cycle", "subjectId":"0192f400-…", "revisionHash":"sha256-Zk8…", "items":[{"inventoryItemId":"0192f421-…","quantity":1}],
         "consentDeadline":"2026-11-07T10:00:00.000Z", "executionWindowMs":1209600000 }
-      -> { "lockId":"0192f422-…", "cid":"sha256-Rr4…", "expiresAt":"2026-11-21T10:00:00.000Z", "syncState":"prepared" }
+      -> { "lockId":"0192f422-…", "reservationCid":"sha256-Rr4…", "expiresAt":"2026-11-21T10:00:00.000Z", "holdIds":["0192f423-…"], "syncState":"prepared" }
       Bob, Carol and Dan do the same in their own vaults. Each vault's commit verdict needs all 4 reservation statements (2 for a 2-party, 3 for a 3-party, N for N-party).
       A fifth statement naming Dan's item for another cycle triggers mutiny.lock.conflict_detected and freezes both subjects at the vault that sees both.
   authorization_capabilities:

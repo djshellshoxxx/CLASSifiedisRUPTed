@@ -6,10 +6,10 @@
 
 ## Requirements
 
-- **PS-057-04.R01** issue, revoke, endorse and set_visibility are vault commands; issue, revoke and endorse produce the signed statements classrup.identity.attestation/v1, classrup.identity.attestation_revocation/v1 and classrup.identity.attestation_endorsement/v1 signed by a device key; receive is the vault intake of someone else's statement.
+- **PS-057-04.R01** issue, revoke, endorse and set_visibility are vault commands; issue, revoke and endorse produce the signed statements classrup.identity.attestation/v1, classrup.identity.attestation_revocation/v1 and classrup.identity.attestation_endorsement/v1 signed by a device key and signed and stored only through the F11.S01.M01 StatementPublisherPort (implemented by F11.S01.M02); receive is the vault intake of someone else's statement.
 - **PS-057-04.R02** issue_relay is a relay command signed with the relay key that names the relay origin, is delivered only to the subject end-to-end encrypted, and stores no personal data beyond the subject DID and date.
 - **PS-057-04.R03** Every command emits its events in the same transaction as the state change.
-- **PS-057-04.R04** identity.attestation.list_linkage returns the same_owner links of a DID with their status for key-linkage checks (N11).
+- **PS-057-04.R04** identity.attestation.list_linkage returns the same_owner links of a DID, signed by both the issuer's and the subject's device keys, with their status for key-linkage checks (N11); on a host relay it runs in-process only over cosigned same_owner attestations published to that relay, for anti-shill checks of auctions whose seller chose it (F04.S02.M01 V03, PT-15), and SameOwnerLinkPort.linked(didA, didB) serves the same data to F07.S02.M01 KeyLinkagePort.
 
 ## Specification
 
@@ -44,7 +44,7 @@
 | Type | Effect |
 |---|---|
 | `federation.tombstone.applied` | mark the targeted attestation revoked with reason tombstoned only when the tombstone author equals issuerDid and its signer key was active; a tombstone signed by an origin relay only drops that relay from provenance and the attestation stays active |
-| `identity.portable_doc.published` | origin received - re-verify attestations, endorsements and cosignatures signed by keys of that DID; statements first seen before a revocation stay valid, later ones are rejected, quarantined ones re-verify |
+| `identity.portable_doc.published` | origin received - re-verify attestations, endorsements and cosignatures signed by keys of that DID; for each newly revoked key those first seen at or after its clamped revokesEffectiveAt are quarantined, earlier ones stay valid with a revoked-signer marker, quarantined ones re-verify |
 | `identity.device_key.revoked` | own principal only - statements this vault issued stay valid for viewers who first saw them before the revocation; refresh the displayed signer device and warn that the revoked key cannot sign new ones |
 | `federation.peer.added` | add the peer relay key to the relay key set and re-check relay_email_check attestations naming that relay |
 | `federation.peer.removed` | remove the peer relay key from the relay key set unless the viewer selected that relay, and re-check affected relay_email_check attestations |
@@ -59,13 +59,13 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statements and signer roles (N2): classrup.identity.attestation/v1 - a device key of issuerDid active in its document, or for relay_email_check the relay key listed for issuerRelayOrigin; classrup.identity.attestation_revocation/v1 - the original issuer; classrup.identity.attestation_endorsement/v1 and the same_owner cosignature - a device key of subjectDid. Relay key set - descriptors from /.well-known/classrup-relay.json of F15.S02.M01 fetched over HTTPS from issuerRelayOrigin, peer records of F11.S03.M01, key records of F16.S02.M02, and rotations via classrup.federation.key_rotation/v1 (F11.S03.M01); retired keys keep verifying old statements with 'signer key retired'. Display rule - the badge for relay_email_check reads 'Email check claimed by relay <host>' followed by 'this shows they said so', and no UI string for any kind says 'verified'. Statements from blocked DIDs are dropped silently (N7).
+**Note:** Statements and signer roles (N2), all signed and stored through the F11.S01.M01 StatementPublisherPort (envelope per F11.S01.M03, author the principal did:key, ext.signerKey the device key): classrup.identity.attestation/v1 - a device key of issuerDid active in its document, or for relay_email_check the relay key listed for issuerRelayOrigin; classrup.identity.attestation_revocation/v1 - the original issuer; classrup.identity.attestation_endorsement/v1 and the same_owner cosignature - a device key of subjectDid. Relay key set - descriptors from /.well-known/classrup-relay.json of F15.S02.M01 fetched over HTTPS from issuerRelayOrigin, peer records of F11.S03.M01, key records of F16.S02.M02, and rotations via classrup.federation.key_rotation/v1 (F11.S03.M01); retired keys keep verifying old statements with 'signer key retired'. Display rule - the badge for relay_email_check reads 'Email check claimed by relay <host>' followed by 'this shows they said so', and no UI string for any kind says 'verified'. Statements from blocked DIDs are dropped silently (N7). Port provided: SameOwnerLinkPort.linked(didA, didB) for F07.S02.M01 KeyLinkagePort, wired by the composition root because this module depends on F07.S02.M01; a cosigned same_owner attestation may be published, after federation_publish consent, to a host relay, which stores it for in-process list_linkage.
 
 ### Example
 
 ```
 vault command: identity.attestation.issue { "kind": "peer_met_in_person", "subjectDid": "did:key:z6Mk…", "claimKey": "met_in_person", "label": "Met at the Saturday swap meet", "contextRef": { "type": "meetup", "id": "0192f460-…" }, "audience": "subject_only" }
--> { "attestationId": "0192f461-…", "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "type": "classrup.identity.attestation/v1", "author": "did:key:z6MkIssuer…", "keyId": "…device…", "payload": { "subject": "did:key:z6Mk…", "claimKey": "met_in_person", "contextRef": { "type": "meetup", "blindedRef": "…" } }, "sig": "…" } }
+-> { "attestationId": "0192f461-…", "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "type": "classrup.identity.attestation/v1", "author": "did:key:z6MkIssuer…", "ext": { "signerKey": "did:key:z6Mk…device…" }, "payload": { "subject": "did:key:z6Mk…", "claimKey": "met_in_person", "contextRef": { "type": "meetup", "blindedRef": "…" } }, "sig": "…" } }
 subject vault: identity.attestation.endorse { "attestationId": "0192f462-…", "publish": true, "expectedRevision": 1 } -> endorsement queued to the subject's relays
 meaning shown to viewers: "Signed by Riverstone (fingerprint 7Qx2 9mKp R4tW 8vNe) on 2026-11-04. This shows they said so; it does not prove it is true."
 ```
@@ -76,7 +76,9 @@ meaning shown to viewers: "Signed by Riverstone (fingerprint 7Qx2 9mKp R4tW 8vNe
 |---|---|---|---|---|
 | TEST-PS-057-09.T06 | contract | PS-057-04.R01, PS-057-04.R02, PS-057-04.R03 | all commands, queries and events run | outputs, statements, endorsements and payloads validate against registry schemas; signatures verify; events in the same transaction |
 | TEST-PS-057-09.T17 | integration | PS-057-02.R05, PS-057-04.R04 | A issues same_owner about B, B co-signs; list_linkage for A and B; a same_owner with only A's signature | linkage returned for both with status active; the single-signature one rejected with IDENTITY_ATTESTATION_KIND_INVALID |
+| TEST-PS-057-09.T24 | contract | PS-057-04.R01 | issue, revoke and endorse with a StatementPublisherPort spy | each call goes through StatementPublisherPort.publish; cid and signature follow F11.S01.M03; no other signing path |
+| TEST-PS-057-09.T25 | integration | PS-057-04.R04, PS-057-05.R03 | A and B co-sign a same_owner attestation and publish it to host relay H with consent; list_linkage on H in-process and over HTTP; SameOwnerLinkPort.linked(A, B) and (A, C) | in-process result lists the link with both signatures; HTTP refused; the port returns true for A and B and false for A and C |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -8,8 +8,11 @@ summary: >-
   hash of the previous one, and any vault can verify it offline. Relays store and serve it; vaults store the documents
   of people they interact with, accept a first document on first contact, buffer chain gaps, detect forks, keep
   revocations as a grow-only union, and apply revocations made by a recovery only 72 hours after they first saw the
-  recovery notice. It evidences that the holder of the root key asserted these facts - not who the person is, and not
-  delivery of anything. It also answers the key-linkage reads other modules need (N11).
+  recovery notice. Key status follows the single F11 key model - evaluated at the receiver's time, a key the latest
+  verified document marks revoked is refused whatever createdAt claims, and a revocation learned later quarantines the
+  statements first seen at or after its clamped revokesEffectiveAt. It evidences that the holder of the root key
+  asserted these facts - not who the person is, and not delivery of anything. It also answers the key-linkage reads
+  other modules need (N11).
 responsibilities:
   - Encode and decode did:key for Ed25519 (multicodec 0xed01, multibase base58btc) and verify that a document's DID matches its signing key.
   - Issue a new signed document version from the current Account and DeviceKey state (vault command, root device only) with seq increased by 1 and prev set to the previous cid.
@@ -17,17 +20,19 @@ responsibilities:
   - Keep revocations as a grow-only union per DID, require resolving documents to carry every revocation of every competing branch, and hold recovery-driven revocations until 72 hours after this vault's first sight of the recovery notice.
   - Serve and accept documents on a relay (public read, signed publish with quotas, at most 20 versions per DID).
   - Mark the owner's own current document stale when device keys or the pseudonym change or 150 days pass, and treat any document past expiresAt as expired.
-  - Publish identity.portable_doc.published for own, received and relay-stored documents, and answer the key-linkage reads key_set, find_by_key and key_status.
+  - Publish identity.portable_doc.published for own, received and relay-stored documents, and answer the key-linkage reads key_set, find_by_key and key_status, including the keys removed from documents and the classrup.security.keyrevocation/v1 statements a relay received with them.
+  - Provide KeyStatusPort, KeyLinkagePort.linked(didA, didB) for F10.S01.M02 legal-hold approval and IdentityRefreshPort.refresh(did, relays) for F16.S02.M02 refresh hints, and declare the injected ports ListedRelaysPort (F11.S03.M01) and SameOwnerLinkPort (F07.S03.M02).
+  - Clamp revokesEffectiveAt to no earlier than 30 days before this vault's earliest evidence of the revoking document, label clamped values, never drop a revocation that arrives late, and record each key's first-seen time per DID.
 non_responsibilities:
   - Device key and pseudonym management (F07.S01.M01) and recovery (F07.S01.M03), which reports recovery notices and disputes through this module's ports.
   - Federation transport and peer policy (F11); this module supplies the signed document that F11 and account migration use.
   - Trust in the person behind a key; that comes from attestations and reputation (F07.S03).
   - Block lists (F07.S02.M02); blocked DIDs are filtered through the injected BlockFilterPort.
   - "Future: DID methods other than did:key, rotation of the account root key with a signed move statement (no rotation chain exists in MVP), witness co-signatures."
-depends_on: [F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+depends_on: [F07.S01.M01, F11.S01.M03, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
 user_stories:
   - As a user, my devices and pseudonym are published in a signed document that anyone can verify without trusting a server.
-  - As a counterparty, I can check that a statement was signed by a key that the author's document listed as active when my device first saw the statement.
+  - As a counterparty, I can check that a statement was signed by a key that the author's latest document I hold does not mark revoked, and statements I first saw after a later-learned revocation took effect are set aside.
   - As a user who moves to another relay, I publish a new document version listing the new relay, and my history stays intact.
   - As a contact, I am warned if two conflicting versions of someone's identity document appear, and no resolution can silently bring back a revoked key.
   - As a contact meeting someone whose document is already at version 25, I can still start trusting it, and I see that it was first seen by me now.
@@ -35,7 +40,8 @@ edge_cases:
   - A document has a valid signature but seq lower than the stored one; it is kept as history and never replaces the current document.
   - Two documents have the same DID and seq but different content; both are stored, marked contested, and the UI shows a warning with both device key lists until a resolving document that chains from one branch and lists every revocation of both branches is accepted.
   - A document passes its expiresAt (180 days); it remains evidence but is marked expired for trust decisions and the UI prompts a refresh.
-  - A revoked device key signed a statement before the verifier saw the revocation; the verifier accepts it by its own first-seen time and the UI shows the revocation date as a claim.
+  - A revoked device key signed a statement; a verifier holding the revoking document refuses it whatever createdAt claims, and a verifier that learns of the revocation later quarantines it if it first saw it at or after the clamped effective time, otherwise keeps it with a revoked-signer marker and the revocation date shown as a claim.
+  - A revoking document claims revokesEffectiveAt 90 days before this vault first received it; the effective time is clamped to 30 days before that receipt, labelled clamped, and the revocation is applied, never dropped as late.
   - The document exceeds 8 KiB or lists more than 20 device key entries or more than 10 active keys; rejected.
   - A user who replaced many devices has more revoked keys than entries allow; the newest revoked keys stay listed and older ones move to revokedKeyHashes, and verifiers keep every revocation they already saw.
   - First contact with a DID whose relay holds only versions 21 to 25; version 25 is accepted as current on first use and firstSeenAt is recorded.
@@ -61,6 +67,7 @@ processes:
       - A PortableIdentityDoc stores the signed document bytes' fields, its cid, sequence, previous cid, status and provenance, for the owner's own versions and for received versions of others.
       - The signed payload lists the DID, seq, prev, pseudonym, device keys with statuses and possession signatures, hashes of older revoked keys, relays and issuedAt/expiresAt, is signed only by the DID root key, and is at most 8 KiB.
       - Statuses express verification outcomes - verifying, current, gap_pending, recovery_pending, stale (own, needs reissue), expired, superseded, history and contested - and never imply real-world identity.
+      - The document keeps its root-key seq and prev chain but uses the F11.S01.M03 cid and signed-bytes definition and its shared golden vectors, and each stored version records its earliest evidence time, the first-seen time of every key and the keyrevocation statements verified with it.
     entities:
       - name: PortableIdentityDoc
         schema: classrup.identity.portable_doc/v1
@@ -73,20 +80,23 @@ processes:
           - "did: did — did:key subject, derived from the account root key"
           - "seq: int — starts at 1, increases by exactly 1 per version of one DID"
           - "prev?: string — cid of the previous version; absent for seq 1"
-          - "cid: string — sha256-base64url of JCS(document without sig) per CTR-ID-001 ID-3"
+          - "cid: string — the F11.S01.M03 definition, \"sha256-\" + base64url(SHA-256(JCS(envelope minus sig and cid))), checked against the shared golden vectors tests/fixtures/federation/envelope-golden.json (CTR-FED-001 FED-7)"
           - "pseudonym: string — display label claimed by the owner, 3..32 code points"
-          - "deviceKeys: array — at most 20 entries, at most 10 active { publicKey (43 chars), status: active|revoked, addedAt, linkNonce, possessionSig (active entries), revokedAt?, revokesEffectiveAt?, revokeReason?: lost|stolen|retired|compromised|recovery, recoveryNoticeCid? }"
+          - "deviceKeys: array — at most 20 entries, at most 10 active { publicKey (43 chars), status: active|revoked, addedAt, linkNonce, possessionSig (active entries), revokedAt?, revokesEffectiveAt?, revokeReason?: lost|stolen|retired|compromised|recovery|superseded, recoveryNoticeCid? }"
           - "revokedKeyHashes: array — at most 64 base64url first-16-byte SHA-256 hashes of keys revoked in the last 180 days that no longer fit in deviceKeys"
-          - "relays: array — at most 5 HTTPS URLs without credentials or query, each at most 255 characters"
+          - "relays: array — at most 5 HTTPS URLs without credentials or query, each at most 255 characters; for own documents exactly the selected relays with listInIdentityDoc true in F11.S03.M01 (ListedRelaysPort)"
           - "issuedAt: timestamp — the owner's claim"
           - "expiresAt: timestamp — issuedAt plus 180 days"
-          - "sig: string — Ed25519 signature by the account root key over JCS bytes, base64url"
+          - "sig: string — Ed25519 signature by the account root key over JCS(envelope minus sig) per F11.S01.M03, so the cid is signed, base64url"
+          - "earliestEvidenceAt: timestamp — local; the verified relay receipt time of this version, else this vault's first receipt; never issuedAt or another claim"
+          - "keyFirstSeen?: array — local; { publicKey, firstSeenAt } the local time this vault first saw each key in a verified version of this DID (not the addedAt claim), used by the F11.S03.M03 key-age rule"
+          - "revocationCids?: array — at most 64 cids of classrup.security.keyrevocation/v1 statements verified with this DID's documents (relay publish or vault intake), kept for N11 linkage reads"
           - "origin: enum — own | received | relay_stored"
           - "provenance: object — { originRelay?, via: array, receivedAt (local clock), verifiedAt (local clock) } per CTR-FED-001 FED-6"
           - "firstSeenAt: timestamp — local clock when this vault first stored any document of this DID (trust on first use)"
           - "gap: boolean — true when accepted as current while intermediate versions were missing"
           - "pendingRecoveries?: array — at most 2 { noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt (local clock), disputeCids } recorded through recordRecoveryNotice and recordRecoveryDispute"
-          - "revokedUnion?: array — local, not signed; every key ever seen revoked for this DID, grow-only"
+          - "revokedUnion?: array — local, not signed, grow-only; { publicKey or keyHash, effectiveRevokedAt (clamped revokesEffectiveAt), clamped: boolean, learnedAt (local clock), removedInSeq?, revocationCid? } for every key ever seen revoked or removed for this DID"
           - "status: enum — verifying | current | gap_pending | recovery_pending | stale | expired | superseded | history | contested"
           - "contestReason?: enum — fork | rollback | two_recoveries | recovery_disputed | missing_notice | early_revocation"
           - "statementSyncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (own documents only)"
@@ -99,6 +109,7 @@ processes:
           - Serialized signed document is at most 8 192 bytes.
           - At most one document per DID has status current or expired unless the DID is contested.
           - revokedUnion never shrinks, and no key in it is treated as active whatever a later document lists.
+          - effectiveRevokedAt lies between earliestEvidenceAt minus 30 days and earliestEvidenceAt of the first version that revoked the key, and clamped is true whenever the claimed revokesEffectiveAt was moved.
     sql: |
       CREATE TABLE identity_portable_doc (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, seq INTEGER NOT NULL, cid TEXT NOT NULL,
@@ -114,6 +125,8 @@ processes:
       - Relay publication adds quotas and URL checks.
       - First contact, chain gaps and recovery-driven revocations have explicit rules - trust on first use, a 24 hour gap buffer with fetches from the listed relays, and a 72 hour wait from this vault's first sight of the recovery notice.
       - Revocations are a grow-only union - a key once seen revoked stays revoked, a resolving document must list every revocation of every competing branch, and the deviceKeys cap is met by moving older revocations to key hashes rather than dropping them.
+      - "Key status is evaluated at the receiver's time - a key the latest verified document marks revoked is refused whatever createdAt claims; when a revocation is learned later, statements first seen at or after its effective time are quarantined (replacing plain first-seen acceptance); the effective time is the claimed revokesEffectiveAt clamped to no earlier than earliestEvidenceAt minus 30 days and no later than earliestEvidenceAt, clamped values are labelled, and a revocation is applied whatever its age."
+      - Own documents list only the relays that F11.S03.M01 reports as selected with listInIdentityDoc true, at most 5.
     rules:
       - "V01 | did is a did:key with multicodec 0xed01 and the signature verifies against that key over JCS bytes of the document without sig | IDENTITY_DOC_SIGNATURE_INVALID"
       - "V02 | document size is at most 8 192 bytes, deviceKeys at most 20 entries of which at most 10 active, revokedKeyHashes at most 64, relays at most 5 HTTPS URLs without credentials | VALIDATION_FAILED"
@@ -127,6 +140,9 @@ processes:
       - "V10 | a document resolving a contested DID chains from one competing version and lists as revoked, or in revokedKeyHashes, every key revoked in any competing branch; otherwise the DID stays contested | IDENTITY_DOC_CHAIN_INVALID"
       - "V11 | a later document that lists as active a key in revokedUnion is a rollback and makes the DID contested | IDENTITY_DOC_CHAIN_INVALID"
       - "V12 | issue runs only on the root device of the local principal | IDENTITY_ROOT_KEY_REQUIRED"
+      - "V13 | every revoked entry's revokesEffectiveAt is an RFC 3339 UTC timestamp; the effective time is clamped into earliestEvidenceAt minus 30 days to earliestEvidenceAt (never measured from issuedAt or a signedAt claim) and labelled clamped when moved; revocations in any verified version - history, gap_pending and contested included - join revokedUnion at once, and no document is refused because a revocation arrives late | VALIDATION_FAILED"
+      - "V14 | an own document's relays equal the relays ListedRelaysPort reports (F11.S03.M01 selected relays with listInIdentityDoc true, at most 5) | CONFLICT_STATE"
+      - "V15 | relay publish - each accompanying classrup.security.keyrevocation/v1 names the document's DID and a key it lists as revoked or removed, and its signer role holds per F07.S01.M01 V11 against the stored versions (the key itself or the root key; another device key only as pending) | SECURITY_KEY_UNAUTHORIZED"
   workflow_state_machine:
     requirements:
       - A document moves from current to superseded when a valid newer version is accepted, to stale when the owner's state changes or 150 days pass, to expired when expiresAt passes, and to contested when a fork is detected.
@@ -165,12 +181,13 @@ processes:
       - Issue is a vault command that produces the root-signed statement classrup.identity.portable_doc/v1; receive is the vault intake of someone else's document; resolve is the user's explicit choice for a contested DID; publish and the public read are relay endpoints.
       - The event identity.portable_doc.published is emitted when a document is issued locally, when a received document changes a DID's current document or status, and when a relay stores a verified document, in the same transaction as the state change.
       - Documents are public P0 statements and are only sent to relays the owner selected, after privacy.consent.check(federation_publish, relayId), or directly to peers.
-      - Key-linkage reads (N11) return the key set and seq chain of a DID, the DIDs that list a given key, and a key's status at a point in time; there is no account key rotation chain in MVP.
-      - Counterparty modules learn of other people's key changes only from identity.portable_doc.published with origin received, which carries the added and revoked keys; identity.device_key events describe only the local principal's keys.
+      - Key-linkage reads (N11) return the key set with each key's first-seen time and the seq chain of a DID, the keys removed from its documents and the classrup.security.keyrevocation/v1 statements verified with them, the DIDs that list a given key, and a key's status at a point in time; on a relay they run in-process only, for the anti-shill checks of an auction whose seller chose that relay as host (PT-15) and for F10.S01.M02 legal-hold approval, and there is no account key rotation chain in MVP.
+      - Counterparty modules learn of other people's key changes only from identity.portable_doc.published with origin received, which carries the added and revoked keys with the clamped effective revocation time; identity.device_key events describe only the local principal's keys.
+      - "Ports provided - KeyStatusPort.isActive and keyStatus(did, publicKey, at) at receiver time; KeyLinkagePort.linked(didA, didB) -> boolean, true when a device key is listed, revoked or removed under both DIDs or SameOwnerLinkPort reports a same_owner attestation between them, failing closed when the linkage store is unreadable; IdentityRefreshPort.refresh(did, relays) for F16.S02.M02, which fetches the DID's latest document from at most 5 given relays and runs it through receive. Injected ports - ListedRelaysPort (F11.S03.M01) and SameOwnerLinkPort (F07.S03.M02), wired by the composition roots because both implementers depend on this module."
     commands:
       - name: identity.portable_doc.issue
         capability: identity.portable_doc.issue
-        input: "{ relays?: array of at most 5 URLs, expectedSeq }"
+        input: "{ expectedSeq } (relays taken from ListedRelaysPort, at most 5)"
         output: "{ docId, seq, cid, statement: classrup.identity.portable_doc/v1 (signed by the root key), syncState: local_committed, skippedRelays: array (no federation_publish consent) }"
         errors: [CONFLICT_STATE, CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_ROOT_KEY_REQUIRED]
         emits: [identity.portable_doc.published]
@@ -191,12 +208,12 @@ processes:
         idempotent: true
       - name: identity.portable_doc.publish
         capability: identity.portable_doc.publish
-        input: "{ document: classrup.identity.portable_doc/v1 }"
-        output: "{ docId, seq, cid, storedAt }"
-        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        input: "{ document: classrup.identity.portable_doc/v1, revocations?: at most 20 classrup.security.keyrevocation/v1 statements queued with it by F07.S01.M01 }"
+        output: "{ docId, seq, cid, storedAt, revocationCids }"
+        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, SECURITY_KEY_UNAUTHORIZED, VALIDATION_FAILED, RATE_LIMITED]
         emits: [identity.portable_doc.published]
         idempotent: true
-    note: "Statements and signer roles (N2): classrup.identity.portable_doc/v1 - only the DID root key (the key encoded in the did:key). Ports provided: KeyStatusPort.isActive(did, publicKey, at) and keyStatus(did, publicKey, at) for every verifier (F07.S01.M01, F07.S01.M02, F07.S02.M02, F07.S03.M01, F07.S03.M02 and other features), implementing the rule 'signer key active in the author's document at this vault's first-seen time of the statement'; recordRecoveryNotice(did, noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt) and recordRecoveryDispute(did, disputeCid, signerKey) for F07.S01.M03. Injected port: BlockFilterPort.isBlocked(did), implemented by F07.S02.M02 and wired by the vault composition root because F07.S02.M02 depends on this module (N7); a blocked DID's document is dropped silently with no error to the intake pipeline or the sender."
+    note: "Statements and signer roles (N2): classrup.identity.portable_doc/v1 - only the DID root key (the key encoded in the did:key); the cid and signed bytes follow F11.S01.M03 and its golden vectors while seq and prev stay this module's root-key chain. Ports provided: KeyStatusPort.isActive(did, publicKey, at) and keyStatus(did, publicKey, at) for every verifier (F07.S01.M01, F07.S01.M02, F07.S02.M02, F07.S03.M01, F07.S03.M02, F11.S01.M02, F16.S02.M02 and other features), implementing the F11 key model - called with at = receipt time on intake, a key the latest verified document marks revoked is refused whatever createdAt claims, and called again with at = the statement's first-seen time when a revocation is learned, a result revoked (first seen at or after the clamped effective time) quarantines the statement; KeyLinkagePort.linked(didA, didB) for F10.S01.M02 legal-hold approval; IdentityRefreshPort.refresh(did, relays) for F16.S02.M02 refresh hints; recordRecoveryNotice(did, noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt) and recordRecoveryDispute(did, disputeCid, signerKey) for F07.S01.M03. Injected port: BlockFilterPort.isBlocked(did), implemented by F07.S02.M02 and wired by the vault composition root because F07.S02.M02 depends on this module (N7); a blocked DID's document is dropped silently with no error to the intake pipeline or the sender. Injected ports ListedRelaysPort.listed() (F11.S03.M01, selected relays with listInIdentityDoc true) and SameOwnerLinkPort.linked(didA, didB) (F07.S03.M02 list_linkage) are wired the same way. On a relay, linkage reads and KeyLinkagePort run in-process only over documents, revocations and attestations that relay stores."
     queries:
       - name: identity.portable_doc.get
         capability: identity.portable_doc.read_public
@@ -211,7 +228,7 @@ processes:
       - name: identity.portable_doc.key_set
         capability: identity.portable_doc.read_linkage
         input: "{ did: did:key }"
-        output: "{ did, seq, currentCid, activeKeys: publicKey[], revokedKeys: [{ publicKey, revokedAt?, revokeReason? }], revokedKeyHashes, seqChain: [{ seq, cid, status }], contested: boolean }"
+        output: "{ did, seq, currentCid, activeKeys: [{ publicKey, keyFirstSeenAt }], revokedKeys: [{ publicKey, revokedAt?, effectiveRevokedAt, clamped, revokeReason?, revocationCid? }], removedKeys: [{ publicKey or keyHash, removedInSeq }], revokedKeyHashes, revocationCids, seqChain: [{ seq, cid, status }], contested: boolean }"
         errors: [NOT_FOUND]
       - name: identity.portable_doc.find_by_key
         capability: identity.portable_doc.read_linkage
@@ -220,11 +237,11 @@ processes:
         errors: []
       - name: identity.portable_doc.key_status
         capability: identity.portable_doc.read_linkage
-        input: "{ did, publicKey, at?: timestamp (default now; local first-seen time of the statement being verified) }"
-        output: "{ status: active|revoked|unknown, revokedAt?, learnedAt, contested: boolean, recoveryPending: boolean }"
+        input: "{ did, publicKey, at?: timestamp (default now = receipt time; the statement's local first-seen time when re-checking after a revocation is learned) }"
+        output: "{ status: active|revoked|pending|unknown, effectiveRevokedAt?, clamped?: boolean, learnedAt, keyFirstSeenAt?, contested: boolean, recoveryPending: boolean }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: identity.portable_doc.published, privacy: P0, payload: "{ did, seq, cid, origin: own|received|relay_stored, status, addedKeys: publicKey[], revokedKeys: [{ publicKey, revokesEffectiveAt, revokeReason }], gap, issuedAt }"}
+      - {type: identity.portable_doc.published, privacy: P0, payload: "{ did, seq, cid, origin: own|received|relay_stored, status, addedKeys: publicKey[], revokedKeys: [{ publicKey, revokesEffectiveAt (effective, clamped), clamped, revokeReason }], gap, issuedAt }"}
     events_consumed:
       - {type: identity.device_key.added, effect: "own document becomes stale and the reissue prompt is shown on the root device"}
       - {type: identity.device_key.revoked, effect: "own document becomes stale; reissue lists the key as revoked with revokesEffectiveAt, or in revokedKeyHashes when entries are full"}
@@ -234,10 +251,11 @@ processes:
       - "IDENTITY_DOC_SIGNATURE_INVALID | 422 | no | DID derivation or Ed25519 signature check failed"
       - "IDENTITY_DOC_CHAIN_INVALID | 409 | no | seq or prev does not extend the stored chain, a resolving document omits a revocation, or a revoked key is listed as active again"
     example: |
-      vault command (root device): identity.portable_doc.issue { "expectedSeq": 3, "relays": ["https://relay.example.org"] }
+      vault command (root device): identity.portable_doc.issue { "expectedSeq": 3 }   (relays from ListedRelaysPort: ["https://relay.example.org"])
       -> { "docId": "0192f430-…", "seq": 4, "cid": "sha256-Qm…", "syncState": "local_committed", "skippedRelays": [], "statement": { "v": 1, "type": "classrup.identity.portable_doc/v1", "author": "did:key:z6Mk…", "seq": 4, "prev": "sha256-Zx…", "payload": { "pseudonym": "Riverstone", "deviceKeys": [ { "publicKey": "…", "status": "active", "linkNonce": "…", "possessionSig": "…" } ], "revokedKeyHashes": [], "relays": [ … ] }, "sig": "…root…" } }
       relay query: POST /api/v1/query/identity.portable_doc.get { "did": "did:key:z6Mk…" } -> 200 { "document": { … }, "status": "current" }
-      vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publicKey": "…", "at": "2026-11-04T10:00:00.000Z" } -> { "status": "active", "learnedAt": "…", "contested": false, "recoveryPending": false }
+      vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publicKey": "…", "at": "2026-11-04T10:00:00.000Z" } -> { "status": "active", "learnedAt": "…", "keyFirstSeenAt": "2026-10-01T08:00:00.000Z", "contested": false, "recoveryPending": false }
+      relay publish with revocations: identity.portable_doc.publish { "document": { … seq 5 … }, "revocations": [ { "type": "classrup.security.keyrevocation/v1", … } ] } -> { "seq": 5, "revocationCids": ["sha256-Rv…"] }
   authorization_capabilities:
     requirements:
       - Vault policy - only the unlocked principal on its root device issues documents for its own DID; any signed document is accepted into the store only after cryptographic verification, so authority comes from the root key signature, not from the sender.
@@ -250,7 +268,7 @@ processes:
       - "identity.portable_doc.publish | anonymous, principal | valid signed document within relay quota; relay hosting policy allows the DID"
       - "identity.portable_doc.read_public | principal, anonymous | public read; relay quota applies"
       - "identity.portable_doc.read_own | principal | unlocked local principal"
-      - "identity.portable_doc.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - the host relay's anti-shill checks over documents it stores (N11)"
+      - "identity.portable_doc.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - in-process only, for anti-shill checks of an auction whose seller chose this relay as host (N11, PT-15) and for F10.S01.M02 legal-hold approval through KeyLinkagePort, over documents, revocations and attestations this relay stores; never served over HTTP or to another relay"
   failure_recovery_idempotency:
     requirements:
       - Issue and receive are idempotent by cid, so duplicate delivery never creates a duplicate version.
@@ -268,7 +286,7 @@ processes:
       - Relays honor signed tombstones within 24 hours (FED-4, PRV-6) and may not rewrite documents.
       - The module meets the N6 privacy duties - it registers ExportSectionPort (section identity.portable_docs), DeletionPort (tombstone the own document on the selected relays, delete received documents, pseudonymize documents kept as evidence) and RetentionPurgePort, classifies provenance fields with F10.S02.M02, checks federation_publish consent per relay before publication, and treats privacy.deletion.completed only as final cleanup.
     data:
-      - "PortableIdentityDoc: P0 public; provenance, firstSeenAt, pendingRecoveries and revokedUnion are local metadata (P3 on device)."
+      - "PortableIdentityDoc: P0 public; provenance, firstSeenAt, earliestEvidenceAt, keyFirstSeen, pendingRecoveries and revokedUnion are local metadata (P3 on device); revocationCids reference public signed revocation statements."
     retention:
       - "Own and received documents until vault erase or contact removal (RET-STANDARD); superseded and history versions kept for 2 years (RET-EVIDENCE) to verify old statements; relay keeps the latest 20 versions per DID."
     threats:
@@ -281,6 +299,8 @@ processes:
       - "T07 | Fork resolution that brings back a revoked key | a resolving document must list every revocation of every competing branch (V10) and revokedUnion never shrinks"
       - "T08 | Quick takeover by a recovery that revokes the owner's devices | revocations with reason recovery wait 72 h from this vault's own first sight of the notice; no notice or a self-contradicting timeline contests the DID"
       - "T09 | Foreign key listed to fake same-owner linkage | possession signatures over the DID-bound message are required for every active key (V07)"
+      - "T10 | Backdated revokesEffectiveAt used to quarantine a victim's older statements, or a late revocation dropped | the effective time is clamped to no earlier than 30 days before this vault's earliest evidence of the revoking document, the clamp is labelled, and a late revocation is always applied"
+      - "T11 | Key-linkage reads used to link one user across relays (PT-15) | reads run in-process only on the relay that stores the data, for its own hosted auctions and legal-hold approvals; no HTTP endpoint serves find_by_key, key_set linkage or KeyLinkagePort"
     abuse_controls:
       - "Relay quotas as above; vault intake accepts at most 50 documents per hour from one transport source and quarantines the rest; gap fetches at most 4 per DID per 24 h."
       - "Documents from blocked DIDs are dropped silently through BlockFilterPort; the sender cannot tell."
@@ -325,14 +345,19 @@ processes:
       - "T18 | integration | 02.R04 | revoking document with revokeReason recovery whose notice was first seen 10 h earlier; a revoking document with no notice for 24 h; one whose issuedAt precedes the notice's notBefore claim | first recovery_pending until 72 h after the notice's first sight then current; second and third contested with missing_notice and early_revocation"
       - "T19 | unit | 02.R05 | own document with 10 active and 11 revoked keys; received document with 21 entries | 20 entries plus 1 key hash, valid and under 8 KiB; the received one VALIDATION_FAILED"
       - "T20 | abuse | 01.R02,02.R01 | received document lists an active key without a possession signature, and one whose signature is over another DID | IDENTITY_LINK_INVALID; nothing stored as current"
-      - "T21 | contract | 04.R04 | key_set, find_by_key and key_status at points in time with active, revoked, pending and contested keys | outputs validate and match the fixtures; key_status at a time before the revocation was learned returns active"
+      - "T21 | contract | 04.R04 | key_set, find_by_key and key_status at points in time with active, revoked, pending and contested keys | outputs validate and match the fixtures; key_status at a time before the effective revocation time returns active and after it revoked"
       - "T22 | integration | 04.R05,04.R03 | receive a counterparty document that adds D3 and revokes D1; the same document again; issue with one relay lacking federation_publish consent | published with origin received, addedKeys [D3] and revokedKeys [D1]; nothing emitted for the duplicate; the relay without consent is skipped and shown"
       - "T23 | integration | 03.R01 | a received current document passes expiresAt; then a newer document arrives | status expired and key_status flags it; the newer one supersedes the expired one"
       - "T24 | integration | 07.R04 | F10 export section, deletion plan and retention sweep with stub registries | section identity.portable_docs exported; own document tombstoned on selected relays; received documents deleted; superseded versions kept as evidence are pseudonymized"
       - "T25 | e2e | 07.R02,09.R04 | UI copy check before first publication and on the contact identity screen | no-recall notice shown before the first publication; 'first seen by this device' and recovery pending texts present"
       - "T26 | abuse | 02.R05,07.R01 | a later document lists revoked key D1 as active again | rollback detected; DID contested; D1 stays revoked in key_status"
+      - "T27 | contract | 01.R04,01.R02 | shared golden envelopes from tests/fixtures/federation/envelope-golden.json (root-signed) and an issued document; then a document received first through relay X with a verified receipt and later directly | cid and sig byte-equal to the fixtures and to F11.S01.M03 cidOf; earliestEvidenceAt is the relay receipt time, never issuedAt; keyFirstSeen records the local first sighting of D3 and is not changed by a later addedAt claim"
+      - "T28 | integration | 02.R06,02.R03 | statement by D2 with backdated createdAt after the revoking seq 5 is current; revocation of D2 learned later with records first seen before and after its effective time; seq 5 claiming revokesEffectiveAt 90 days before receipt; a lower-seq history version carrying a revocation | the first refused at receipt; on learning, key_status at firstSeenAt quarantines only the later record; the effective time is clamped to receipt minus 30 days and labelled; the history revocation joins revokedUnion; no document refused as late"
+      - "T29 | unit | 02.R07 | issue with ListedRelaysPort reporting 3 listed relays, then 6 selected relays of which 5 listed, then a stale relays list | the document lists exactly the 3 and then the 5 listed relays; a list differing from ListedRelaysPort is refused with CONFLICT_STATE"
+      - "T30 | integration | 04.R06 | KeyLinkagePort.linked for DIDs sharing revoked key D4, for DIDs linked only by a same_owner attestation (SameOwnerLinkPort stub), for unrelated DIDs and with the store unreadable; IdentityRefreshPort.refresh(did, [R1, R2]) with R1 down | true, true, false and a fail-closed error; refresh fetches from R2, the document runs through receive and identity.portable_doc.published is emitted once"
+      - "T31 | integration | 04.R04,02.R06 | host relay H receives publish with seq 5 and two keyrevocation statements, one signed by the revoked key and one by an unrelated key; key_set and find_by_key called in-process and over HTTP | the valid revocation stored and returned in revocationCids with the key in removedKeys and revokedKeys; the other SECURITY_KEY_UNAUTHORIZED; HTTP linkage reads refused"
     acceptance:
-      - All tests T01-T26 pass in CI.
+      - All tests T01-T31 pass in CI.
       - A forked or rolled-back identity document is never silently accepted and no resolution can bring back a revoked key (fork, rollback and union tests).
       - No document contains private keys or P3 data and no UI text claims real-world identity verification.
       - Recovery-driven revocations are never applied by a verifying vault before 72 hours after its own first sight of the notice.

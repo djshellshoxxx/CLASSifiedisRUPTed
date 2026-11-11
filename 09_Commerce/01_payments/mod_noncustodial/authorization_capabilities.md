@@ -22,6 +22,7 @@
 | commerce.payment.dispute | local-principal | principal is the claim payee |
 | commerce.statement.ingest | local-principal | internal ingest pipeline of the unlocked vault (or of a relay for its own listing_fee Deals); statement signer authorized by Deal role |
 | commerce.deal.read | local-principal | principal is a party of the Deal |
+| commerce.deal.export | local-principal | principal is a party of a completed Deal whose completion statements from every party are held; the user confirmed the disclosure preview |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -31,7 +32,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 |---|---|---|---|---|
 | TEST-PS-069-09.T10 | abuse | PS-069-05.R01, PS-069-05.R02, PS-069-07.R01, PS-069-02.R02 | forged statement, wrong-role signer, signing key not active in the signer's identity document, third party reading | statement quarantined with reason, no state change, NOT_FOUND for non-parties, no deal data in public payloads |
 | TEST-PS-069-09.T11 | contract | PS-069-05.R03, PS-069-01.R03 | inspect relay double traffic | only ciphertext and routing metadata observed |
-| TEST-PS-069-09.T22 | integration | PS-069-03.R05, PS-069-05.R04 | context owner voids an open Deal through DealPort.cancel; a non-owner tries; the owner tries after a claim was acknowledged | one-sided cancel applied in the other vault and labelled one-sided; non-owner FORBIDDEN or quarantined; CONFLICT_STATE after acknowledgement |
+| TEST-PS-069-09.T22 | integration | PS-069-03.R05, PS-069-05.R04 | context owner cancels open Deals through DealPort.cancel with each reason context_voided, withdrawn_before_accept, non_payment, buyer_timeout and conflict_resolved; a non-owner tries; the owner tries after a claim was acknowledged | one-sided cancel applied in the other vault, labelled one-sided and emitted with that reason; non-owner FORBIDDEN or quarantined; CONFLICT_STATE after acknowledgement |
 | TEST-PS-069-09.T29 | integration | PS-069-05.R03, PS-069-04.R01 | listing_fee Deal on relay R - claim delivered to the operator mailbox, operator acknowledges through the relay command, then a moderator of R and the operator of another relay try | ack signed by the operator DID from R's signed policy document and applied in the seller vault; the other attempts FORBIDDEN |
 
 ## Dependencies

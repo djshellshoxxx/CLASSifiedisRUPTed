@@ -39,7 +39,7 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module. Package surface (packages/commerce/src/valuation/precision): money(amount, currency), parseMinor(str), parseDecimal(str, decimals, mode?), formatDecimal(money, decimals), add, sub, neg, cmp, sum, convert(money, quote, dbExp, dqExp, mode?), percentBps(money, bps, mode?), capFee(money, capMoney) (FLOOR), allocate(money, weights), splitEven(money, n). No relay commands, queries or events exist for this module.
+**Note:** Library module. Package surface (packages/commerce/src/valuation/precision): money(amount, currency), parseMinor(str), parseDecimal(str, decimals, mode?), formatDecimal(money, decimals), add, sub, neg, cmp, sum, convert(money, quote, dbExp, dqExp, mode?), percentBps(money, bps, mode?), capFee(money, capMoney) (FLOOR), allocate(money, weights), splitEven(money, n), maxAmount(currencyDef: {code, decimals}) -> Result<Money> (10^(10 + decimals) minor units, at most 10^38 - 1; callers pass the F09.S03.M01 CurrencyDef and cap with amount <= maxAmount). No relay commands, queries or events exist for this module.
 
 ### Example
 
@@ -47,6 +47,8 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 convert({ amount: "12345", currency: "EUR" }, { base: "EUR", quote: "JPY", rate: { num: "16312", den: "100" } }, 2, 0)
 => { amount: "20137", currency: "JPY" }   // 12345 * 16312 * 10^0 / (100 * 10^2) = 20137.164, HALF_EVEN once
 allocate({ amount: "100", currency: "EUR" }, [1, 1, 1]) => parts ["34", "33", "33"]
+maxAmount({ code: "EUR", decimals: 2 }) => { amount: "1000000000000", currency: "EUR" }   // 10^12 minor units = 10^10 EUR
+maxAmount({ code: "ETH", decimals: 18 }) => { amount: "10000000000000000000000000000", currency: "ETH" }   // 10^28
 ```
 
 ## Verification

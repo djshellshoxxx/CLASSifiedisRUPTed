@@ -23,6 +23,7 @@
 | identity.recovery_kit.dispute | principal | unlocked vault holding a device key active in the latest document; no kit state required |
 | identity.recovery_kit.acknowledge | principal | unlocked vault with an observed notice for the own DID |
 | identity.recovery_kit.receive_dispute | principal | intake pipeline of the unlocked vault; dispute signed by an active device key other than the new key |
+| identity.recovery_kit.receive_kit_notice | principal | intake pipeline of the unlocked vault; notice for the own DID signed by another own device key that is not revoked |
 | identity.recovery_kit.read_own | principal | unlocked local principal |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).

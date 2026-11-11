@@ -52,6 +52,9 @@ A shared dispute case for any context that has parties and evidence: payment cla
 - The opener has blocked the respondent; the respondent's response and evidence in the open case are stored with notifications suppressed, and the timeline says 'responses from a party you blocked are hidden'; noResponseReceivedHere stays false.
 - A context type that no module registered (for example a legacy rental type) is refused with COMMERCE_DISPUTE_CONTEXT_INVALID.
 - 10 000 fresh dids each send one dispute statement; the bounded quarantine evicts the oldest entries and then drops statements from dids that are party to no known context.
+- F03.S02.M03 retries a booking case open with the same idempotencyRef (its linkId) after a crash; the existing case is returned and no second dispute statement is signed.
+- A services.dispute.opened event arrives with origin federated, or a local one for a booking whose case already exists; neither creates a case, and the local one only prefills evidence in the opener vault.
+- The owner opens a rental_damage case against a renter they blocked after the reservation was confirmed; the open is not refused and the renter's statements in the case are stored with notifications suppressed.
 
 ## UX and accessibility
 
@@ -84,9 +87,9 @@ F09.S01.M01, F09.S02.M01, F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F0
 | ID | Process | Requirements |
 |---|---|---|
 | PS-070-01 | [Domain schema](domain_schema.md) | 6 |
-| PS-070-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-070-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-070-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-070-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-070-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-070-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-070-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-070-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
@@ -98,7 +101,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T27 pass in CI.
+- All tests T01 to T30 pass in CI.
 - No dispute state, event or outcome invokes any payment, refund, freeze or release operation.
 - A mediator sees only evidence the parties chose to share and only after every party of the case accepted the mediator.
 - Conflicting accepted outcomes always freeze the case.

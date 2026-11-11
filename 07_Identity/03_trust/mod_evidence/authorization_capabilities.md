@@ -22,7 +22,7 @@
 | identity.attestation.issue_relay | operator | operator role on this relay and relay signing key available; delivered only to the subject |
 | identity.attestation.read_view | principal, anonymous | vault - unlocked principal; relay copies - public endorsed attestations only |
 | identity.attestation.read_issued | principal | unlocked local principal |
-| identity.attestation.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - the host relay's anti-shill checks over public same_owner attestations it stores (N11) |
+| identity.attestation.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - in-process only, the host relay's anti-shill checks for auctions whose seller chose it and F10.S01.M02 legal-hold approval, over cosigned same_owner attestations it stores (N11, PT-15); never served over HTTP |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -31,7 +31,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-057-09.T07 | abuse | PS-057-05.R01, PS-057-05.R02, PS-057-05.R03 | non-operator issues a relay attestation; non-issuer revokes; stranger reads a private attestation; issuer publishes a public peer claim without endorsement | FORBIDDEN or NOT_FOUND; private claim never exposed; viewers store the unendorsed claim but do not display it |
+| TEST-PS-057-09.T25 | integration | PS-057-04.R04, PS-057-05.R03 | A and B co-sign a same_owner attestation and publish it to host relay H with consent; list_linkage on H in-process and over HTTP; SameOwnerLinkPort.linked(A, B) and (A, C) | in-process result lists the link with both signatures; HTTP refused; the port returns true for A and B and false for A and C |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

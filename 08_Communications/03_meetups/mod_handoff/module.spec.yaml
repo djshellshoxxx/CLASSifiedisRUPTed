@@ -25,7 +25,7 @@ non_responsibilities:
   - Emergency services contact or monitoring; the module is not a safety monitoring service.
   - Serving the trusted-contact viewer page (the PWA static origin, F15 platform); the relay serves only ciphertext.
   - "Future: scheduled safety reminders pushed through a relay, check-out confirmation, check-in by scanning the other party's QR code."
-depends_on: [F08.S03.M03, F08.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001]
+depends_on: [F08.S03.M03, F08.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001]
 user_stories:
   - As a buyer, I tap I have arrived at the meetup and the seller's app shows that I checked in at the time my phone claims.
   - As a seller waiting alone, I can report that the other party did not show up after the grace period, knowing it is recorded as my claim.
@@ -133,7 +133,7 @@ processes:
       - "V07 | share expiry is at most 24 hours ahead and not after windowEnd plus 6 hours; at most 3 active shares per meetup | COMMS_SHARE_LIMIT"
       - "V08 | UX guard in the reporter vault: at most 5 no-shows per day; receiving vaults keep at most 3 reports per meetup and reporter and drop the rest silently | RATE_LIMITED"
       - "V09 | share snapshot plaintext is at most 1 024 bytes before encryption and ciphertext at most 2 048 bytes | PAYLOAD_TOO_LARGE"
-      - "V10 | share blob put, update and delete requests are signed by the creating device key (classrup/relay-request/v1, F16.S02.M03) | FORBIDDEN"
+      - "V10 | share blob put, update and delete requests carry an RFC 9421 request signature by the creating device key, made with F11.S01.M03 signRequest under the request-signature tag classrup/relay-request/v1 (not an F16.S02.M03 envelope) | FORBIDDEN"
       - "V11 | inbound check-in and report statements from DIDs the local principal blocked (F07.S02.M02 isBlockedEither over local data) are dropped silently; a party blocked by someone else sees no difference | BLOCKED_PARTY"
       - "V12 | the share snapshot plaintext holds exactly placeLabel, windowStart, windowEnd, ownCheckinState and updatedAt | VALIDATION_FAILED"
   workflow_state_machine:
@@ -165,7 +165,7 @@ processes:
       - Check-in and no-show report are vault commands that produce signed statements; share creation and revocation are vault commands that call the relay commands comms.meetup_share.put and comms.meetup_share.delete for the share blob, and view is a public relay query returning ciphertext only.
       - Each state-changing vault command emits its event in the same IndexedDB transaction as the change.
       - The module consumes meetup agreement, reschedule and cancellation events to create and void check-in records.
-      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.checkin/v1 { meetupId, proposalHash, partyDid, checkedInAtClaim } signed by a device key of that party, and classrup.comms.no_show_report/v1 { meetupId, proposalHash, targetDid, reportedAtClaim } signed by a device key of a checked-in party; share blob requests are classrup/relay-request/v1 envelopes of F16.S02.M03."
+      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.checkin/v1 { meetupId, proposalHash, partyDid, checkedInAtClaim } signed by a device key of that party, and classrup.comms.no_show_report/v1 { meetupId, proposalHash, targetDid, reportedAtClaim } signed by a device key of a checked-in party; share blob requests are RFC 9421 HTTP message signatures of F11.S01.M03 with the request-signature tag classrup/relay-request/v1, not F16.S02.M03 envelopes."
       - The trusted-contact viewer is served from the app's static, integrity-pinned PWA origin with relay ID, share ID and key in the URL fragment; the relay answers comms.meetup_share.view with ciphertext only, under a CORS allowance for the app origin, and never serves viewer code.
       - The module registers ExportSectionPort (section comms.checkins), DeletionPort (plan, execute, pseudonymize - kept check-in and report evidence gets the deleted party's DID replaced by the deletion pseudonym, share blobs are deleted while the keys exist) and RetentionPurgePort (RET-EVIDENCE independent of the thread purge, shares RET-EPHEMERAL) with F10 (N6).
     commands:

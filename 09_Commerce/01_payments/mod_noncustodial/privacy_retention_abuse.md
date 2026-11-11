@@ -11,7 +11,7 @@
 - **PS-069-07.R03** Claim spam, false claims and acknowledgement pressure are limited by per-vault limits, local blocking and the dispute path; signatures evidence assertions only.
 - **PS-069-07.R04** The module registers ExportSectionPort (section commerce.deals), DeletionPort (the pseudonymization above) and RetentionPurgePort (RET-EVIDENCE) with F10 (N6), annotates every Deal and PaymentClaim field with its F10.S02.M02 class, and consumes privacy.deletion.completed.
 - **PS-069-07.R05** Ingest is flood-bounded - per-did buffering applies only to known parties, the quarantine holds at most 500 entries or 5 MiB with oldest-first eviction, and once it is full statements whose signer is party to no known Deal or context are dropped instead of quarantined.
-- **PS-069-07.R06** Statements from a blocked did are dropped silently at ingest (N7, F07.S02.M02), except statements for a Deal with an open dispute case, which are stored as evidence with notifications suppressed.
+- **PS-069-07.R06** Statements from a blocked did are dropped silently at ingest (N7, F07.S02.M02), except statements for a Deal with an open dispute case or a Deal that ContextTermsPort.blockExempt reports exempt under the N7a rentals exception, which are stored as evidence with notifications suppressed (F07.S02.M02 filterBlocked) and never answered with the reason blocked.
 
 ## Specification
 
@@ -19,6 +19,7 @@
 - Deal and PaymentClaim: P2 (parties). txRef and note: P2 free text; never federated.
 - Field classes annotated per F10.S02.M02: party dids, amounts, statement cids, txRef and note are P2; no P3 or P4 field exists.
 - The UI and exports state that a claim is an assertion by the payer and an acknowledgement is an assertion by the payee.
+- The completion proof export (commerce.deal.export_completion) discloses only dealId, dealCid, completionCid, outcome and the parties' signed completion envelopes; it is produced only on the user's explicit action after a preview, tells the user that the receiving relay learns that the signing keys dealt, and is never sent automatically.
 
 **Retention**
 - RET-EVIDENCE (2 years after last related activity); expired and cancelled Deals follow the same class; purged through the RetentionPurgePort unless a legal hold applies (F10.S01.M02).
@@ -38,10 +39,12 @@
 | T07 | Counterparty signs a Deal with inflated or redirected obligations | ContextTermsPort recomputes parties and obligations from the verified context statement; mismatch quarantined with COMMERCE_DEAL_CONTEXT_CONFLICT |
 | T08 | Sybil flood from freshly generated did:keys exhausts vault storage | vault-wide quarantine cap of 500 entries or 5 MiB with oldest-first eviction; non-party signers dropped once full; per-did buffering only for known parties |
 | T09 | Private key pasted as a crypto txid would be signed and sent | MethodRulePort hold keeps the claim unsigned and unsent until the verifier finds the transaction or the payer attests it is a public transaction ID |
+| T10 | A forked seller vault promises the last unit to two buyers and both Deals complete | bazaar.inventory.conflict_detected freezes both Deals; no acknowledgement or completion until the owner keeps one and cancels the other with conflict_resolved |
+| T11 | A renter blocks the owner to strand the deposit release or rent | N7a exception through ContextTermsPort.blockExempt keeps statements and commands of a reservation confirmed before the block |
 
 **Abuse controls**
 - Ingest limit 20 statements per hour per known party did and 200 per day; statements from dids that are party to no known Deal or context share a vault-wide quarantine cap of 500 entries or 5 MiB (oldest-first eviction) and are dropped once it is full.
-- Local block (F07.S02.M02) rejects commands with BLOCKED_PARTY and drops incoming statements from blocked parties silently with no signal to the sender, except evidence for a Deal with an open dispute case.
+- Local block (F07.S02.M02) rejects commands with BLOCKED_PARTY and drops incoming statements from blocked parties silently with no signal to the sender, except evidence for a Deal with an open dispute case and statements and commands for a Deal that ContextTermsPort.blockExempt reports exempt (N7a rentals: reservation confirmed before the block).
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
@@ -55,6 +58,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-069-09.T30 | abuse | PS-069-07.R05 | 10 000 fresh dids each send one statement to vault B | quarantine never exceeds 500 entries or 5 MiB; oldest evicted first; once full, statements from non-parties are dropped; known parties' statements still applied |
 | TEST-PS-069-09.T31 | integration | PS-069-07.R04 | export, deletion and retention purge driven by F10 | section commerce.deals exported; DeletionPort plan pseudonymizes the principal; RetentionPurgePort purges records past RET-EVIDENCE; every field carries an F10.S02.M02 class |
 | TEST-PS-069-09.T34 | integration | PS-069-07.R06 | blocked counterparty sends a claim, and an acknowledgement on a Deal with an open dispute case | first dropped silently with no signal; second stored as evidence with notification suppressed |
+| TEST-PS-069-09.T36 | integration | PS-069-02.R07, PS-069-07.R06 | the renter blocks the owner after confirmation; the owner opens the rental_deposit_release Deal and claims, and the renter's vault ingests the claim; then a blocked did sends a claim on an offer Deal | ContextTermsPort.blockExempt returns true for the rental Deal - open and claim not refused, claim stored with notification suppressed and no blocked reason sent; the offer Deal claim is dropped silently |
+| TEST-PS-069-09.T37 | contract | PS-069-10.R04, PS-069-07.R01 | export the completion proof of a completed two-party Deal, of a Deal missing the counterparty's completion statement, and submit the first to an F12.S03.M04 relay double | first returns dealId, dealCid, completionCid, outcome and both signed envelopes with no amount, obligation or contextRef field and verifies at the double; second CONFLICT_STATE; nothing is exported without the preview confirmation |
 
 ## Dependencies
 

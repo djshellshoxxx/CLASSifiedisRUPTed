@@ -15,6 +15,7 @@ A dependency-free library that implements the Money type of CTR-MNY-001. It repr
 - Provide rational conversion using FX quote {num, den} and minor-unit exponents with HALF_EVEN rounding applied once at the end, plus FLOOR for fee caps.
 - Provide allocation by integer weights (largest remainder) and even split so that parts sum exactly to the total.
 - Provide neutral decimal-string parse and format for a given decimals count, never locale aware.
+- Provide the pure per-currency cap maxAmount(currencyDef) = 10^(10 + decimals) minor units (10^10 major units), bounded by the 38-digit limit, used by every module that caps a Money amount.
 
 ## Not responsible for
 
@@ -63,7 +64,7 @@ CTR-MNY-001, CTR-ERR-001, CTR-TST-001
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-074-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-074-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-074-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-074-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-074-04 | [Commands, queries and events](commands_queries_events.md) | 3 |

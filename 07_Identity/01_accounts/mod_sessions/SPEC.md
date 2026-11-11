@@ -16,6 +16,8 @@ Two kinds of session, neither needing a central account. A vault unlock session 
 - Issue, rotate and revoke relay access tokens (256-bit random, SHA-256 hash stored, idle 7 days, absolute 30 days, max 20 active per DID per relay, 30 second rotation grace).
 - End relay tokens of revoked device keys - the vault revokes them on every known relay through the outbox, and the relay ends tokens whose key is no longer active in the stored document within 60 seconds.
 - List sessions - the vault shows its unlock state and its known relay tokens; a relay shows the sessions of the DID that presents a valid token.
+- Drop the in-memory raw relay access tokens and the vault key on vault lock and on principal switch, and send CLEAR_USER_CACHES with reason lock or principal_switch to the F15.S01.M02 service worker so the principal's image partition is unbound.
+- Answer, on a host relay and in-process only, which device keys were authenticated in one relay access-token session of that relay (identity.session.linked_keys) for anti-shill linkage (F04.S02.M01, N11), with no IP, network or timing data.
 
 ## Not responsible for
 
@@ -64,13 +66,13 @@ Two kinds of session, neither needing a central account. A vault unlock session 
 ## Interfaces
 
 - Commands: `identity.session.unlock`, `identity.session.lock`, `identity.session.change_passphrase`, `identity.login_challenge.issue`, `identity.session.start`, `identity.session.rotate`, `identity.session.revoke`
-- Queries: `identity.session.list_own`
+- Queries: `identity.session.linked_keys`, `identity.session.list_own`
 - Emits: `identity.session.started`, `identity.session.revoked`
 - Consumes: `identity.device_key.revoked`, `identity.recovery.completed`, `identity.portable_doc.published`, `security.role.assigned`, `security.role.revoked`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001
+F07.S01.M01, F07.S02.M01, F15.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -79,7 +81,7 @@ F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CT
 | PS-054-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-054-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-054-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-054-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-054-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-054-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-054-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-054-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -91,7 +93,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T23 pass in CI.
 - Tokens, nonces, passphrases and vault keys never appear in storage as plaintext, logs, events or URLs (privacy suite).
 - Idle and absolute expiry, rotation grace and device-revocation effects on every known relay are verified with an injected clock.
 - Login endpoints answer identically for known and unknown DIDs, and a challenge flood from one network cannot lock a victim out.

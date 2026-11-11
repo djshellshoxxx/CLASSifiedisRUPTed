@@ -22,8 +22,8 @@ Schema `classrup.commerce.deal/v1` · storage **relay+device** · privacy **P2**
 |---|---|
 | id | uuid — UUIDv8 (RFC 9562 §5.8) from sha256(JCS {contextRef, contextCid}); explicit CTR-ID-001 ID-1 exception; primary key |
 | vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot); the relay instance id for a relay-held listing_fee Deal |
-| contextRef | object — {type, id: uuid}; type is a registered context type: core N5 types offer \| auction_result \| cycle_compensation \| service_milestone \| rental_deposit \| rental_damage \| listing_fee, plus types a context module registers through ContextTermsPort (MVP rental_reservation and rental_cancellation_fee by F05.S01.M01, rental_deposit_release by F05.S01.M02, rental_late_fee by F05.S02.M02) |
-| contextCid | string — sha256 cid of the signed context statement (accepted offer, auction result or second-chance offer, committed cycle revision or accepting recovery action, milestone approval, reservation confirmation, deposit terms, damage acceptance, publication statement) |
+| contextRef | object — {type, id: uuid}; type is a registered context type: core N5 types offer (id offerId; the root offerId for a Deal negotiated through F01.S04.M02) \| auction_result (id the auction result id; for a second-chance Deal the id F04.S01.M03 derives as the first 16 bytes of sha256(second_chance_offer cid) formatted as a UUID) \| cycle_compensation (id the cycle id, or recoveryCaseId for a recovery compensation) \| service_milestone (id milestoneId) \| rental_deposit (id depositId) \| rental_damage (id claimId) \| listing_fee (id publicationId), plus types a context module registers through ContextTermsPort (N5a: rental_reservation {id reservationId} and rental_cancellation_fee {id reservationId} by F05.S01.M01, rental_deposit_release {id depositId} by F05.S01.M02, rental_late_fee {id returnId} by F05.S02.M02); rental_deposit is implemented by F05.S01.M02 and rental_damage by F05.S02.M03 |
+| contextCid | string — sha256 cid of the signed context statement: offerCid (offer), auction result or, for a second-chance Deal, the second_chance_response cid (auction_result), committed cycle revision or the accepting classrup.mutiny.recovery_action/v1 cid (cycle_compensation), milestone approvalCid (service_milestone), reservation requestCid (rental_reservation), the renter's cancellation cid (rental_cancellation_fee), deposit agreementCid (rental_deposit), release attestation cid (rental_deposit_release), return attestation or receipt cid (rental_late_fee), damage acceptance, counter acceptance or F09.S02.M02 dispute outcomeCid (rental_damage), publication statementCid (listing_fee) |
 | parties | array — 2..20 entries {did (principal DID), role: payer\|payee\|both} |
 | openerRole | string — role in the context that signs the deal statement, resolved by ContextTermsPort.openerRole (for example listing author for offer) |
 | obligations | array — 1..10 entries {obligationId, payerId, payeeId, amount: Money, asset?: AssetDescriptor (F09.S03.M01), purpose: goods\|service\|deposit\|compensation\|rent\|damage\|listing_fee\|other, allowedMethods: cash\|crypto\|external subset} |
@@ -34,8 +34,9 @@ Schema `classrup.commerce.deal/v1` · storage **relay+device** · privacy **P2**
 | dealCid | string — cid of JCS {contextRef, contextCid, parties, obligations}; equal in every vault for the same terms |
 | peerSync | object — per party sync state: local_committed \| prepared \| transport_acknowledged \| peer_accepted |
 | cancelSigners | array — parties whose deal_cancel statement is held |
-| cancellation? | object — {mode: mutual\|unilateral, reason: mutual\|context_voided\|withdrawn_before_accept\|non_payment\|expired\|expired_partial, byDid?, cancelCids[]} |
+| cancellation? | object — {mode: mutual\|unilateral, reason: mutual\|context_voided\|withdrawn_before_accept\|non_payment\|buyer_timeout\|conflict_resolved\|expired\|expired_partial, byDid?, cancelCids[]} |
 | completion? | object — {completionCid, signedBy: dids[], completedAt (local clock)} |
+| frozen? | object — {reason: inventory_conflict, since (local clock), holdIds[]}; set from bazaar.inventory.conflict_detected in the vault that detected the fork; a local flag, never a status and never sent |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC, local clock |
 | updatedAt | timestamp — RFC 3339 UTC, local clock |
@@ -46,6 +47,7 @@ Schema `classrup.commerce.deal/v1` · storage **relay+device** · privacy **P2**
 - status completed implies every obligation is covered by claims holding a payee-signed acknowledgement (source counterparty for cash or external, source chain for crypto) summing to at least its amount, and completion.completionCid is set.
 - id equals the UUIDv8 derivation of (contextRef, contextCid); one Deal per (vaultId, contextRef, contextCid), and a later Deal for the same contextRef needs a new context statement.
 - A relay holds a Deal only for a listing_fee context whose payee is that relay's operator DID.
+- A Deal with frozen set is never completed and no acknowledgement is signed for its claims in this vault until DealPort.unfreeze clears the flag or the Deal is cancelled.
 
 ### PaymentClaim
 

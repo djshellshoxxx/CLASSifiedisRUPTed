@@ -16,14 +16,15 @@ responsibilities:
   - Let a relay operator issue a relay_email_check attestation signed with the relay's key after an out-of-band check, naming the relay origin and delivered only to the subject, storing only the fact and the date, never the email.
   - Keep the relay key set - keys from the signed descriptors of the viewer's chosen relays and peers (F15.S02.M01, F11.S03.M01, F16.S02.M02) - and re-check relay_email_check attestations whenever it changes.
   - Let the subject endorse a claim about itself so it can be shown publicly, co-sign same_owner links, and set local visibility; show attestations with issuer provenance.
-  - Answer identity.attestation.list_linkage with same_owner links for a DID (N11).
+  - Answer identity.attestation.list_linkage with the same_owner links of a DID, which both the issuer's and the subject's device keys signed, for in-process host relay anti-shill checks (F04.S02.M01 V03, N11, PT-15), and implement SameOwnerLinkPort for the F07.S02.M01 KeyLinkagePort.
+  - Sign and store attestations, revocations and endorsements only through the F11.S01.M01 StatementPublisherPort (implemented by F11.S01.M02).
 non_responsibilities:
   - Reputation from reviews (F07.S03.M01) and account recovery (F07.S01.M03).
   - Performing email or phone verification flows; MVP relies on an operator's out-of-band check, and automated email proof through notification channels is Future.
   - Collecting, storing or evaluating identity documents (KYC); explicitly out of scope.
   - Relay identity keys and their rotation (F15.S02.M01, F11.S03.M01); this module only reads them.
   - "Future: automated email proof flow through F13, web-of-trust path display, attestation revocation lists distributed by relays."
-depends_on: [F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+depends_on: [F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
 user_stories:
   - As a user, I add a self-declared label such as 'Member of the Elm Street repair cafe' and it is shown as self-declared.
   - As a buyer who just met a seller, I can sign 'met in person' about them and send it to them, and they can endorse it to show it on their profile.
@@ -59,7 +60,7 @@ processes:
   domain_schema:
     requirements:
       - A TrustAttestation stores kind, subject, issuer, claim label, validity, the signed statement fields, endorsement and provenance; it stores no email, phone, document or biometric data.
-      - Every attestation carries the issuer's Ed25519 signature over JCS bytes by a device key active in the issuer's portable document at this vault's first-seen time (a relay key from the relay key set for relay_email_check), and is verifiable offline.
+      - Every attestation carries the issuer's Ed25519 envelope signature (F11.S01.M03) by a device key in ext.signerKey that the issuer's latest verified portable document does not mark revoked at this vault's receipt (a relay key from the relay key set for relay_email_check), is quarantined when a revocation learned later took effect before this vault first saw it, and is verifiable offline.
       - Visibility is a local setting of the subject and never alters the signed statement; public display of a claim about another person requires the subject's endorsement countersignature, and a same_owner link requires signatures by both DIDs.
     entities:
       - name: TrustAttestation
@@ -74,11 +75,11 @@ processes:
           - "subjectDid: did — the DID the claim is about"
           - "issuerDid: did — signer; equals subjectDid for self_claim; the relay key did:key for relay_email_check"
           - "issuerRelayOrigin?: string — HTTPS origin of the issuing relay, relay_email_check only, bound into the signed payload"
-          - "signerKey: string — device public key of issuerDid active at first-seen time, or the relay key"
+          - "signerKey: string — ext.signerKey, a device key of issuerDid not revoked in its latest verified document at receipt, or the relay key"
           - "claimKey: string — 1..40 characters from a fixed vocabulary or custom:<slug> for self_claim and third_party"
           - "label: string — 1..80 code points, plain text, no links, no reserved official words for self_claim"
           - "contextRef?: object — { type: meetup|deal, blindedRef (base64url SHA-256 of JCS({ id, issuerDid, subjectDid })), localEvidence: boolean }; the raw id appears only in the subject-only delivery"
-          - "cosignature?: object — same_owner only; { did: subjectDid, keyId, sig } by an active device key of the subject over the same JCS bytes with prefix classrup-attestation-cosign:v1"
+          - "cosignature?: object — same_owner only; { did: subjectDid, keyId, sig } by an active device key of the subject over the attestation cid with prefix classrup-attestation-cosign:v1, delivered inside the subject's classrup.identity.attestation_endorsement/v1, so the issuer's and the subject's keys both sign"
           - "endorsement?: object — { statementCid, keyId } of the subject's classrup.identity.attestation_endorsement/v1 countersignature"
           - "audience: enum — subject_only | public; every kind except self_claim is issued subject_only"
           - "claimedIssuedAt: timestamp — issuer's claim"
@@ -88,8 +89,8 @@ processes:
           - "origin: enum — issued | received"
           - "provenance?: object — { originRelay?, via, receivedAt, verifiedAt }"
           - "relayKeyCheck?: object — relay_email_check only; { result: listed|retired|not_listed|unverifiable, checkedAt }"
-          - "cid: string — sha256-base64url of JCS(statement without sig)"
-          - "sig: string — Ed25519 signature by signerKey over JCS bytes with prefix classrup-attestation:v1"
+          - "cid: string — per F11.S01.M03, sha256- plus base64url(SHA-256(JCS(envelope minus sig and cid))), computed by the StatementPublisherPort for issued statements"
+          - "sig: string — Ed25519 signature by signerKey over JCS(envelope minus sig) per F11.S01.M03; the envelope type classrup.identity.attestation/v1 separates it from other statement types"
           - "visibility: enum — public | contacts | private; local to the subject, default private for received, public for issued self_claim"
           - "syncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (issued statements)"
           - "status: enum — active | revoked | expired"
@@ -98,7 +99,7 @@ processes:
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - The signature verifies with signerKey over JCS bytes of the statement without sig, and signerKey was active for issuerDid (or listed for issuerRelayOrigin) at firstSeenAt.
+          - The envelope signature verifies with signerKey per F11.S01.M03, signerKey was not revoked for issuerDid (or was listed for issuerRelayOrigin) at receipt, and no revocation learned later took effect at or before firstSeenAt.
           - issuerDid equals subjectDid exactly when kind is self_claim; a same_owner attestation has issuer different from subject and a valid cosignature by the subject.
           - A non-self claim is displayed publicly only with a valid endorsement by the subject (same_owner counts its cosignature).
           - effectiveExpiresAt is at most 365 days after firstSeenAt (180 days for peer_met_in_person).
@@ -118,13 +119,13 @@ processes:
       - The relay key set used to check relay_email_check is built from the signed descriptors of the viewer's chosen relays and peers (F15.S02.M01 descriptor, F11.S03.M01 peer records, F16.S02.M02 key records) and every affected attestation is re-checked when the set changes.
       - same_owner attestations require valid signatures by both DIDs, and endorsements must be signed by the subject.
     rules:
-      - "V01 | signature verifies over JCS bytes with prefix classrup-attestation:v1 using a device key active in the issuer's document at this vault's first-seen time (F07.S02.M01 key_status), or for relay_email_check the relay key, and the statement is at most 4 KiB | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
+      - "V01 | the envelope signature verifies per F11.S01.M03 with ext.signerKey a device key that the issuer's latest verified document does not mark revoked at receipt, whatever createdAt claims (F07.S02.M01 key_status at receiver time), or for relay_email_check the relay key, and the statement is at most 4 KiB | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
       - "V02 | kind rules hold - self_claim has issuer equal to subject; peer_met_in_person, third_party and same_owner have issuer different from subject; same_owner carries a valid cosignature by the subject; relay_email_check names issuerRelayOrigin and its key is listed active for that origin in the relay key set, a key absent from a fetched descriptor being rejected | IDENTITY_ATTESTATION_KIND_INVALID"
       - "V03 | label is 1..80 code points of plain text without links, and for self_claim contains none of the reserved words verified, official, certified, government, police | VALIDATION_FAILED"
       - "V04 | claimedExpiresAt is after claimedIssuedAt, and effectiveExpiresAt is capped at 365 days (180 days for peer_met_in_person) after firstSeenAt | VALIDATION_FAILED"
       - "V05 | the issuer has issued fewer than 10 attestations in the last 24 hours and the subject has at most 20 active displayed attestations | RATE_LIMITED"
       - "V06 | one active peer_met_in_person and one active same_owner per (issuerDid, subjectDid) pair | CONFLICT_STATE"
-      - "V07 | revocation is signed by a device key of the original issuerDid active at first-seen time (or the relay key) and refers to the attestation cid | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
+      - "V07 | revocation is signed by a device key of the original issuerDid not revoked at receipt (or the relay key) and refers to the attestation cid | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
       - "V08 | issued non-self attestations use audience subject_only; a received public non-self claim without a valid subject endorsement is stored but never displayed | VALIDATION_FAILED"
       - "V09 | an endorsement or cosignature is signed by an active device key of subjectDid over the attestation cid with prefix classrup-attestation-endorsement:v1 or classrup-attestation-cosign:v1 | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
       - "V10 | public statements and endorsements carry only the blinded contextRef; the raw context id appears only in the subject-only delivery | VALIDATION_FAILED"
@@ -150,10 +151,10 @@ processes:
       - "Expired and revoked attestations are kept 2 years (RET-EVIDENCE) for verifying past statements, then deleted or pseudonymized."
   commands_queries_events:
     requirements:
-      - issue, revoke, endorse and set_visibility are vault commands; issue, revoke and endorse produce the signed statements classrup.identity.attestation/v1, classrup.identity.attestation_revocation/v1 and classrup.identity.attestation_endorsement/v1 signed by a device key; receive is the vault intake of someone else's statement.
+      - issue, revoke, endorse and set_visibility are vault commands; issue, revoke and endorse produce the signed statements classrup.identity.attestation/v1, classrup.identity.attestation_revocation/v1 and classrup.identity.attestation_endorsement/v1 signed by a device key and signed and stored only through the F11.S01.M01 StatementPublisherPort (implemented by F11.S01.M02); receive is the vault intake of someone else's statement.
       - issue_relay is a relay command signed with the relay key that names the relay origin, is delivered only to the subject end-to-end encrypted, and stores no personal data beyond the subject DID and date.
       - Every command emits its events in the same transaction as the state change.
-      - identity.attestation.list_linkage returns the same_owner links of a DID with their status for key-linkage checks (N11).
+      - identity.attestation.list_linkage returns the same_owner links of a DID, signed by both the issuer's and the subject's device keys, with their status for key-linkage checks (N11); on a host relay it runs in-process only over cosigned same_owner attestations published to that relay, for anti-shill checks of auctions whose seller chose it (F04.S02.M01 V03, PT-15), and SameOwnerLinkPort.linked(didA, didB) serves the same data to F07.S02.M01 KeyLinkagePort.
     commands:
       - name: identity.attestation.issue
         capability: identity.attestation.issue
@@ -197,7 +198,7 @@ processes:
         errors: [VALIDATION_FAILED, CONFLICT_STATE, FORBIDDEN, RATE_LIMITED]
         emits: [identity.attestation.added]
         idempotent: true
-    note: "Statements and signer roles (N2): classrup.identity.attestation/v1 - a device key of issuerDid active in its document, or for relay_email_check the relay key listed for issuerRelayOrigin; classrup.identity.attestation_revocation/v1 - the original issuer; classrup.identity.attestation_endorsement/v1 and the same_owner cosignature - a device key of subjectDid. Relay key set - descriptors from /.well-known/classrup-relay.json of F15.S02.M01 fetched over HTTPS from issuerRelayOrigin, peer records of F11.S03.M01, key records of F16.S02.M02, and rotations via classrup.federation.key_rotation/v1 (F11.S03.M01); retired keys keep verifying old statements with 'signer key retired'. Display rule - the badge for relay_email_check reads 'Email check claimed by relay <host>' followed by 'this shows they said so', and no UI string for any kind says 'verified'. Statements from blocked DIDs are dropped silently (N7)."
+    note: "Statements and signer roles (N2), all signed and stored through the F11.S01.M01 StatementPublisherPort (envelope per F11.S01.M03, author the principal did:key, ext.signerKey the device key): classrup.identity.attestation/v1 - a device key of issuerDid active in its document, or for relay_email_check the relay key listed for issuerRelayOrigin; classrup.identity.attestation_revocation/v1 - the original issuer; classrup.identity.attestation_endorsement/v1 and the same_owner cosignature - a device key of subjectDid. Relay key set - descriptors from /.well-known/classrup-relay.json of F15.S02.M01 fetched over HTTPS from issuerRelayOrigin, peer records of F11.S03.M01, key records of F16.S02.M02, and rotations via classrup.federation.key_rotation/v1 (F11.S03.M01); retired keys keep verifying old statements with 'signer key retired'. Display rule - the badge for relay_email_check reads 'Email check claimed by relay <host>' followed by 'this shows they said so', and no UI string for any kind says 'verified'. Statements from blocked DIDs are dropped silently (N7). Port provided: SameOwnerLinkPort.linked(didA, didB) for F07.S02.M01 KeyLinkagePort, wired by the composition root because this module depends on F07.S02.M01; a cosigned same_owner attestation may be published, after federation_publish consent, to a host relay, which stores it for in-process list_linkage."
     queries:
       - name: identity.attestation.list_for_subject
         capability: identity.attestation.read_view
@@ -219,7 +220,7 @@ processes:
       - {type: identity.attestation.revoked, privacy: P1, payload: "{ attestationId, kind, subjectDid, issuerDid, reason: issuer_revoked|key_retired|tombstoned|expired }"}
     events_consumed:
       - {type: federation.tombstone.applied, effect: "mark the targeted attestation revoked with reason tombstoned only when the tombstone author equals issuerDid and its signer key was active; a tombstone signed by an origin relay only drops that relay from provenance and the attestation stays active"}
-      - {type: identity.portable_doc.published, effect: "origin received - re-verify attestations, endorsements and cosignatures signed by keys of that DID; statements first seen before a revocation stay valid, later ones are rejected, quarantined ones re-verify"}
+      - {type: identity.portable_doc.published, effect: "origin received - re-verify attestations, endorsements and cosignatures signed by keys of that DID; for each newly revoked key those first seen at or after its clamped revokesEffectiveAt are quarantined, earlier ones stay valid with a revoked-signer marker, quarantined ones re-verify"}
       - {type: identity.device_key.revoked, effect: "own principal only - statements this vault issued stay valid for viewers who first saw them before the revocation; refresh the displayed signer device and warn that the revoked key cannot sign new ones"}
       - {type: federation.peer.added, effect: "add the peer relay key to the relay key set and re-check relay_email_check attestations naming that relay"}
       - {type: federation.peer.removed, effect: "remove the peer relay key from the relay key set unless the viewer selected that relay, and re-check affected relay_email_check attestations"}
@@ -229,7 +230,7 @@ processes:
       - "IDENTITY_ATTESTATION_KIND_INVALID | 422 | no | issuer, subject, cosignature or relay key do not satisfy the rules of the attestation kind"
     example: |
       vault command: identity.attestation.issue { "kind": "peer_met_in_person", "subjectDid": "did:key:z6Mk…", "claimKey": "met_in_person", "label": "Met at the Saturday swap meet", "contextRef": { "type": "meetup", "id": "0192f460-…" }, "audience": "subject_only" }
-      -> { "attestationId": "0192f461-…", "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "type": "classrup.identity.attestation/v1", "author": "did:key:z6MkIssuer…", "keyId": "…device…", "payload": { "subject": "did:key:z6Mk…", "claimKey": "met_in_person", "contextRef": { "type": "meetup", "blindedRef": "…" } }, "sig": "…" } }
+      -> { "attestationId": "0192f461-…", "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "type": "classrup.identity.attestation/v1", "author": "did:key:z6MkIssuer…", "ext": { "signerKey": "did:key:z6Mk…device…" }, "payload": { "subject": "did:key:z6Mk…", "claimKey": "met_in_person", "contextRef": { "type": "meetup", "blindedRef": "…" } }, "sig": "…" } }
       subject vault: identity.attestation.endorse { "attestationId": "0192f462-…", "publish": true, "expectedRevision": 1 } -> endorsement queued to the subject's relays
       meaning shown to viewers: "Signed by Riverstone (fingerprint 7Qx2 9mKp R4tW 8vNe) on 2026-11-04. This shows they said so; it does not prove it is true."
   authorization_capabilities:
@@ -246,7 +247,7 @@ processes:
       - "identity.attestation.issue_relay | operator | operator role on this relay and relay signing key available; delivered only to the subject"
       - "identity.attestation.read_view | principal, anonymous | vault - unlocked principal; relay copies - public endorsed attestations only"
       - "identity.attestation.read_issued | principal | unlocked local principal"
-      - "identity.attestation.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - the host relay's anti-shill checks over public same_owner attestations it stores (N11)"
+      - "identity.attestation.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - in-process only, the host relay's anti-shill checks for auctions whose seller chose it and F10.S01.M02 legal-hold approval, over cosigned same_owner attestations it stores (N11, PT-15); never served over HTTP"
   failure_recovery_idempotency:
     requirements:
       - Issue, receive, endorse and revoke are idempotent by statement cid, and duplicate delivery never creates a duplicate attestation.
@@ -326,9 +327,11 @@ processes:
       - "T20 | abuse | 07.R05 | endorsed public peer claim with a meetup context | the public statement and endorsement carry only blindedRef; the raw meetup id is absent"
       - "T21 | integration | 02.R04 | federation.peer.removed for a peer relay, and R1's descriptor lists O0 as retired after classrup.federation.key_rotation/v1 | relay key set rebuilt; attestations by the removed relay re-checked; O0 attestations show 'signer key retired'"
       - "T22 | integration | 07.R04 | F10 export, deletion and retention sweep with stub registries; endorsement publish to a relay without federation_publish consent | section exported; attestations pseudonymized, not deleted; PRECONDITION_FAILED or relay skipped"
-      - "T23 | unit | 01.R02 | an attestation signed by an issuer device key revoked before this vault first saw it, and one first seen before the revocation | the first rejected with IDENTITY_ATTESTATION_SIGNATURE_INVALID; the second stays active"
+      - "T23 | unit | 01.R02 | an attestation signed by an issuer device key that the latest verified document already marks revoked, with a backdated createdAt; the revocation learned later for one attestation first seen after its effective time and one first seen before it | the first rejected with IDENTITY_ATTESTATION_SIGNATURE_INVALID; on learning, the later-seen one quarantined and the earlier-seen one stays active with a revoked-signer marker"
+      - "T24 | contract | 04.R01 | issue, revoke and endorse with a StatementPublisherPort spy | each call goes through StatementPublisherPort.publish; cid and signature follow F11.S01.M03; no other signing path"
+      - "T25 | integration | 04.R04,05.R03 | A and B co-sign a same_owner attestation and publish it to host relay H with consent; list_linkage on H in-process and over HTTP; SameOwnerLinkPort.linked(A, B) and (A, C) | in-process result lists the link with both signatures; HTTP refused; the port returns true for A and B and false for A and C"
     acceptance:
-      - All tests T01-T23 pass in CI.
+      - All tests T01-T25 pass in CI.
       - No KYC, email, phone or document data is stored or logged by this module (privacy suite).
       - Every displayed attestation shows its signer and the wording that it evidences an assertion, not truth, and no UI string calls a claim verified.
       - A claim about another person is never displayed publicly without the subject's endorsement, and a relay badge appears only for keys listed in the named relay's descriptor.

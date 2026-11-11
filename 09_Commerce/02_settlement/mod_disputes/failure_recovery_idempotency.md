@@ -13,7 +13,7 @@
 
 ## Specification
 
-- **idempotency:** Vault command ID recorded for 24 h; statements deduplicated by cid; caseId is deterministic so repeated opens converge.
+- **idempotency:** Vault command ID recorded for 24 h; statements deduplicated by cid; caseId is deterministic so repeated opens converge; an open carrying an idempotencyRef already stored in this vault returns that case without signing a new statement.
 - **concurrency:** expectedRevision on every mutation; unique partial index for one open case per context and opener; Web Lock commerce-dispute per case; across vaults conflicts are detected by statement chain and acceptance sets and freeze the case.
 - **retries:** Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h until the case is terminal plus 7 days.
 - **offline:** All commands commit locally and show pending; evidence attachments are sent through the AttachmentTransportPort (F08.S01.M01 mailbox adapter) when online; deadlines still run on the local clock.

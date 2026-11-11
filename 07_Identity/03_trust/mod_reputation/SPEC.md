@@ -11,8 +11,9 @@ Reviews and reputation computed locally from signed statements. When a transacti
 ## Responsibilities
 
 - Sign and send per-pair review tickets when a local opening event arrives for a context the principal takes part in, and receive and store the counterparties' tickets in a pending ReviewWindow.
-- Open the ReviewWindow (30 days) when an outcome event carrying the N3 fields arrives, label it completed, disputed or cancelled, and quarantine it when a required field is missing rather than guessing.
-- Create, sign, withdraw and receive reviews; accept a received review only if its signer key was active in the author's document at first sight and its proof carries the subject's ticket naming the author and the pair.
+- Open the ReviewWindow (30 days) when an outcome event carrying the N3 fields arrives and the completion statements behind its completionCid verify in this vault, label it completed, disputed or cancelled, and quarantine it when a required field or statement is missing rather than guessing.
+- Create, sign, withdraw and receive reviews; accept a received review only if its signer key is not revoked in the author's latest verified document at receipt (and quarantine it when a revocation learned later took effect before first sight) and its proof carries the subject's ticket naming the author and the pair.
+- Sign and store reviews, review tickets and withdrawal tombstones only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02).
 - Own ReputationSummary per subject DID and recompute it deterministically with the documented weights and input selection; emit identity.reputation.recomputed and identity.review.posted.
 - Keep dampening honest and visible - show raw counts, outcome labels, displayed no-show claims and the number of sources next to the Bayesian average.
 
@@ -69,11 +70,11 @@ Reviews and reputation computed locally from signed statements. When a transacti
 - Commands: `identity.review.post`, `identity.review.receive`, `identity.review_ticket.receive`, `identity.review.withdraw`, `identity.review.hide`
 - Queries: `identity.reputation.get`, `identity.review.list_for_subject`, `identity.review.list_eligible`
 - Emits: `identity.review.posted`, `identity.reputation.recomputed`
-- Consumes: `commerce.deal.opened`, `mutiny.cycle.committed`, `services.booking.confirmed`, `rentals.reservation.confirmed`, `commerce.deal.completed`, `mutiny.cycle.completed`, `services.booking.completed`, `rentals.rental.closed`, `commerce.dispute.resolved`, `commerce.deal.cancelled`, `comms.meetup.no_show`, `federation.tombstone.applied`, `identity.portable_doc.published`, `privacy.deletion.completed`
+- Consumes: `commerce.deal.opened`, `mutiny.cycle.committed`, `services.booking.confirmed`, `rentals.reservation.confirmed`, `commerce.deal.completed`, `mutiny.cycle.completed`, `services.booking.completed`, `rentals.rental.closed`, `commerce.dispute.resolved`, `mutiny.recovery.resolved`, `commerce.deal.cancelled`, `comms.meetup.no_show`, `comms.meetup.no_show_contradicted`, `federation.record.accepted`, `federation.tombstone.applied`, `identity.portable_doc.published`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M01, F07.S02.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001
+F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -94,7 +95,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T27 pass in CI.
+- All tests T01-T31 pass in CI.
 - Golden dampening and selection vectors are stable, a sybil ring cannot raise the effective weight of its reviews above 15 percent of raw, and 500 sybil reviews cannot push genuine reviews out of the summary.
 - The UI always shows raw counts, outcome labels, source count and the dampening notice, and never claims verified identity of persons.
 - No relay action or relay-signed tombstone withdraws or hides a review in a vault, and two public reviews from one cycle share no identifier.

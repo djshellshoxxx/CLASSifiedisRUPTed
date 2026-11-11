@@ -24,6 +24,7 @@ Issues FX quotes with exact rational rates {num, den}, a named source and a shor
 - Which currencies exist and their decimals (F09.S03.M01 currency registry).
 - Re-consent flows after quote expiry (F02.S04.M02 normalization and the barter consent modules).
 - Choosing a trusted relay or rate provider; the user selects it in settings (F15 platform) and this module only records the choice in each quote's source.
+- Locale-aware formatting of approximate values (F14.S02.M02 formatApprox, reached through the injected ApproxFormatPort) and collecting consent for a pinned quote (the pinning module passes pinned.consentCollected).
 - Future: live crypto market-data adapters and multi-source median quotes; MVP crypto pairs use manual quotes or a configured adapter disabled by default.
 
 ## User stories
@@ -52,7 +53,7 @@ Issues FX quotes with exact rational rates {num, den}, a named source and a shor
 
 ## UX and accessibility
 
-- Rate chip next to converted values: shows 1 EUR = 1.087 USD, source name, 'expires in 14:32' on this device's clock, and a Manual rate label when applicable.
+- Rate chip next to converted values: the approximate value is rendered through the ApproxFormatPort (F14.S02.M02 formatApprox) from the QuoteLabel of commerce.fx_quote.quote_label, showing 1 EUR = 1.087 USD, the provenance wording (quote from <provider>, manual rate by <issuer>, unverified source, pinned rate agreed by all parties), 'expires in 14:32' on this device's clock and an expired or revoked marker; without a source or time the chip shows the original price with 'conversion unavailable'.
 - Origin line under an embedded rate: 'signed by relay <name>', 'manual rate by <pseudonym>' or 'source asserted by <pseudonym>, not verifiable', plus 'ECB reference rate differs by 3.2 %' when re-derived.
 - Pinned barter rate: 'pinned rate agreed by all parties' with source, asOf and expiry; relay times shown as 'according to relay <name>'.
 - Manual-rate form: pair, rate as decimal or fraction, reason (≤ 200 chars), validity 15 min to 24 h.
@@ -68,7 +69,7 @@ Issues FX quotes with exact rational rates {num, den}, a named source and a shor
 ## Interfaces
 
 - Commands: `commerce.fx_quote.request`, `commerce.fx_quote.issue_manual`, `commerce.fx_quote.relay_issue`, `commerce.fx_quote.revoke`, `commerce.fx_quote.ingest_revocation`
-- Queries: `commerce.fx_quote.check`, `commerce.fx_quote.get`, `commerce.fx_quote.verify_embedded`
+- Queries: `commerce.fx_quote.check`, `commerce.fx_quote.get`, `commerce.fx_quote.verify_embedded`, `commerce.fx_quote.quote_label`
 - Emits: `commerce.fx_quote.issued`, `commerce.fx_quote.revoked`
 - Consumes: `commerce.currency.registered`, `commerce.currency.status_changed`, `privacy.deletion.completed`
 
@@ -83,7 +84,7 @@ F09.S03.M01, F09.S03.M03, F11.S01.M01, F11.S01.M03, F07.S02.M01, F07.S02.M02, F1
 | PS-075-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-075-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-075-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-075-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-075-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-075-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-075-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-075-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -95,7 +96,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - An expired or revoked quote can never be pinned or used, and the response is always EXPIRED or an explicit invalid status.
 - Every manual quote is visibly labelled manual in API output and UI.
 - Quote validity is decided by the local clock of the checking vault; no relay clock can make a quote valid or expired.

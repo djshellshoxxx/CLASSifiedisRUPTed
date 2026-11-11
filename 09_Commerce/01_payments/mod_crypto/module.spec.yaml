@@ -235,7 +235,7 @@ processes:
       - Observation transitions emit the catalog events into the vault outbox in the same IndexedDB transaction as the observation update; the extra event commerce.payment.failed is also emitted.
       - The module consumes the claim and Deal events to start and stop observation and never writes a PaymentClaim status directly.
       - The module registers a StatementHandlerPort handler with F09.S01.M01 for classrup.commerce.crypto_request/v1 and classrup.commerce.crypto_request_cancel/v1 (signer - obligation payee) that checks the signer role, re-validates address, chain and asset descriptor, deduplicates by cid, buffers statements whose Deal is unknown for 24 h, quarantines with reasons signer_not_payee, address_invalid, asset_mismatch or request_unknown, and drops statements from blocked dids silently.
-      - Every commerce.payment.* event this module produces carries contextRef, payerId and payeeId besides claimId and dealId, so consumers route and filter without reading the Deal (N4, N5).
+      - Every commerce.payment.* event this module produces carries contextRef, obligationId, payerId and payeeId besides claimId and dealId, so consumers route and filter without reading the Deal (N4, N5).
       - The crypto MethodRulePort returns fail for invalid, secret-looking, reused or out-of-request input, hold(txid_lookup_pending) while a configured verifier has not found the txid, and release or discard through the F09.S01.M01 callbacks; with no verifier it fails with COMMERCE_CLAIM_METHOD_RULE unless txidAttested is true.
     commands:
       - name: commerce.crypto_request.create
@@ -295,11 +295,11 @@ processes:
       and use a fetch context and connection separate from mailbox traffic. In the payee's vault the F09.S01.M01 consumer of
       commerce.payment.finalized signs classrup.commerce.payment_ack/v1 with verification.source chain.
     events_produced:
-      - {type: commerce.payment.confirming, privacy: P2, payload: "{ claimId, dealId, contextRef, payerId, payeeId, chainId, txid, confirmations, requiredConfirmations, finalityPolicy, verifierId, label }"}
-      - {type: commerce.payment.confirmed, privacy: P2, payload: "{ claimId, dealId, contextRef, payerId, payeeId, chainId, txid, confirmations, blockHeight, verifierId }"}
-      - {type: commerce.payment.finalized, privacy: P2, payload: "{ claimId, dealId, contextRef, payerId, payeeId, chainId, txid, finalityPolicy, checkedAt, verifierId, observerRole: payer|payee }"}
-      - {type: commerce.payment.reorged, privacy: P2, payload: "{ claimId, dealId, contextRef, payerId, payeeId, chainId, txid, previousBlockHash, reorgCount }"}
-      - {type: commerce.payment.failed, privacy: P2, payload: "{ claimId, dealId, contextRef, payerId, payeeId, chainId, txid, reason: absent|reverted|underpaid|wrong_address|wrong_asset|before_request, receivedAmount? }"}
+      - {type: commerce.payment.confirming, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, confirmations, requiredConfirmations, finalityPolicy, verifierId, label }"}
+      - {type: commerce.payment.confirmed, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, confirmations, blockHeight, verifierId }"}
+      - {type: commerce.payment.finalized, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, finalityPolicy, checkedAt, verifierId, observerRole: payer|payee }"}
+      - {type: commerce.payment.reorged, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, previousBlockHash, reorgCount }"}
+      - {type: commerce.payment.failed, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, reason: absent|reverted|underpaid|wrong_address|wrong_asset|before_request, receivedAmount? }"}
     events_consumed:
       - {type: commerce.payment.claimed, effect: "for method crypto with a matching request, attach the claim to the request and create a watching ChainObservation when a verifier exists and chain_lookup consent is granted; otherwise leave the claim claimed"}
       - {type: commerce.payment.acknowledged, effect: "for a crypto claim acknowledged by the payee with verificationSource chain, add its amount to coveredAmount and settle the request when covered, also in a payer vault without its own verifier"}
@@ -321,7 +321,7 @@ processes:
         "address": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", "amount": { "amount": "125000", "currency": "BTC" } }
       => { "requestId": "0192f3a9-…", "revision": 1, "requestCid": "sha256-1ab2…", "expiresAt": "2026-11-11T10:00:00.000Z", "chainTipAtCreation": 871204, "peerSync": "prepared" }
       payer vault: commerce.statement.ingest dispatches the request to this module's handler, which stores it with origin peer
-      later in each vault: observation watching -> pending -> confirmed (2 of 6 per your verifier) -> final; each step emits commerce.payment.* with contextRef, payerId and payeeId
+      later in each vault: observation watching -> pending -> confirmed (2 of 6 per your verifier) -> final; each step emits commerce.payment.* with contextRef, obligationId, payerId and payeeId
   authorization_capabilities:
     requirements:
       - Under vault policy (CAP-8) only the unlocked principal mutates its vault; request creation and cancellation require the payee role in the Deal.
@@ -425,7 +425,7 @@ processes:
       - "T25 | integration | 07.R04,05.R04 | inspect every verifier request (own node, direct endpoint, relay endpoint) with chain_lookup consent granted and then withdrawn | no DID, device-key signature, relay access token or cookie; connection separate from mailbox traffic; with consent withdrawn no lookup happens and refresh returns PRECONDITION_FAILED"
       - "T26 | load | 08.R04 | 60 active observations with two endpoints per chain for one hour | at most 900 endpoint calls; observations closest to finality checked first; deferred ones show 'verification paused - check budget reached'; tip polls continue"
       - "T27 | integration | 04.R04 | payer vault ingests a crypto_request signed by the payee, one signed by the payer, one with an invalid address, one with an 18-decimal USDC descriptor, a duplicate and one from a blocked did | first stored with origin peer and its address; then signer_not_payee, address_invalid and asset_mismatch (COMMERCE_CURRENCY_MISMATCH) quarantined; duplicate no-op; blocked dropped silently"
-      - "T28 | contract | 04.R05 | assert every produced event against the expectations of F09.S01.M01, F01.S01.M03, F05.S01.M02, F03.S02.M02, F02.S04.M01 and F13.S01.M03 | each commerce.payment.* event carries contextRef, payerId and payeeId"
+      - "T28 | contract | 04.R05 | assert every produced event against the expectations of F09.S01.M01, F01.S01.M03, F05.S01.M02, F03.S02.M02, F02.S04.M01 and F13.S01.M03 | each commerce.payment.* event carries contextRef, obligationId, payerId and payeeId; commerce.payment.finalized carries the obligationId of the claim's Deal obligation"
       - "T29 | integration | 07.R06 | export, deletion and retention purge driven by F10 | section commerce.crypto exported without verifier settings; DeletionPort pseudonymizes the principal; RetentionPurgePort purges after RET-EVIDENCE; every field carries an F10.S02.M02 class"
       - "T30 | abuse | 07.R07 | 10 000 fresh dids send crypto_request statements to vault A; blocked payee sends one | quarantine stays within 500 entries or 5 MiB; non-party statements dropped once full; blocked statement dropped silently"
       - "T31 | unit | 08.R03 | two endpoints disagree twice and one reorg and one deep reorg occur; diagnostics opened | commerce.crypto_observation.diagnostics and the verification panel show 2 disagreements, 1 reorg and 1 deep-reorg alert"

@@ -30,7 +30,7 @@ Schema `classrup.identity.review/v1` · storage **relay+device** · privacy **P1
 | authorRole | string — role in the context, 1..24 characters, for example buyer or giver |
 | outcome | enum — completed \| disputed \| cancelled; shown as a label |
 | disputeFlag | boolean — true when outcome is disputed (dispute closed unresolved, FLOW-08) |
-| disputeCaseCid? | string — own records and subject_only reviews only; cid of the F09.S02.M02 dispute case |
+| disputeCaseCid? | string — own records and subject_only reviews only; cid of the F09.S02.M02 dispute case, or for a cycle recovery the first of the F02.S03.M04 reviewUnlock evidenceCids |
 | audience | enum — subject_only \| public |
 | rating | int — 1..5 |
 | tags? | array — at most 3 of as_described, on_time, communicative, safe_meetup, fair_price, careless |
@@ -40,9 +40,9 @@ Schema `classrup.identity.review/v1` · storage **relay+device** · privacy **P1
 | firstSeenAt | timestamp — local clock when this vault first saw the review |
 | origin | enum — own \| received |
 | provenance? | object — { originRelay?, via, receivedAt, verifiedAt, notServedBy?: relay ids } |
-| cid | string — sha256-base64url of JCS(review statement without sig) |
-| signerKey | string — device public key of the author, active in the author's document at firstSeenAt |
-| sig | string — Ed25519 signature by signerKey over JCS bytes with prefix classrup-review:v1 |
+| cid | string — per F11.S01.M03, sha256- plus base64url(SHA-256(JCS(envelope minus sig and cid))), computed by the StatementPublisherPort for own reviews |
+| signerKey | string — ext.signerKey, a device key of the author not revoked in the author's latest verified document at receipt |
+| sig | string — Ed25519 signature by signerKey over JCS(envelope minus sig) per F11.S01.M03; the envelope type classrup.identity.review/v1 separates it from other statement types |
 | syncState? | enum — local_committed \| prepared \| transport_acknowledged \| peer_accepted (own reviews) |
 | status | enum — pending_verification \| posted \| hidden \| quarantined \| withdrawn |
 | quarantineReason? | enum — signature_invalid \| signer_revoked \| proof_incomplete \| not_eligible \| outside_window \| schema_invalid \| duplicate |
@@ -52,7 +52,7 @@ Schema `classrup.identity.review/v1` · storage **relay+device** · privacy **P1
 
 **Invariants**
 - At most one review per (authorDid, pairRef).
-- A posted review has a valid signature by a device key active in the author's document at firstSeenAt and a ticket signed by subjectDid that names authorDid as holder for pairRef.
+- A posted review has a valid signature by a device key not revoked in the author's latest verified document at receipt, with no later-learned revocation effective at or before firstSeenAt, and a ticket signed by subjectDid that names authorDid as holder for pairRef.
 - A public review contains no contextId, completionCid, disputeCaseCid or openingEvidence.
 - Rating, tags, comment and outcome are immutable after creation.
 
@@ -76,7 +76,8 @@ Schema `classrup.identity.reputation_summary/v1` · storage **derived** · priva
 | priorMean | number — 4.0 unless the vault has at least 50 reviews, then their mean limited to 3.5..4.5 |
 | completedByType | object — { deal, cycle, booking, rental } counts of distinct verified completed pair references |
 | noShowClaims | int — comms.meetup.no_show claims recorded for the subject, displayed, weight 0 in rep-1 |
-| noShowClaimRefs | array — at most 100 { meetupRefHash, reportedByDid, firstSeenAt } kept as recompute input |
+| contradictedNoShowClaims | int — claims among noShowClaims contradicted by the accused's check-in, displayed together with that check-in |
+| noShowClaimRefs | array — at most 100 { meetupRefHash, reportedByDid, reportStatementCid, firstSeenAt, contradicted: boolean, checkinStatementCid? } kept as recompute input |
 | sourceCount | int — distinct transports or relays the reviews came from, lowered by notServedBy entries |
 | dampeningNotice | enum — none \| many_new_authors \| linked_authors \| island |
 | algorithmVersion | string — for example rep-1 |
@@ -103,13 +104,16 @@ Schema `classrup.identity.review_window/v1` · storage **device** · privacy **P
 | contextCid | string — cid of the bilateral opening statement (deal opening, cycle revision hash, booking or reservation confirmation) |
 | completionCid? | string — set from the outcome event (N3) |
 | outcome? | enum — completed \| disputed \| cancelled |
-| disputeCaseCid? | string — set from commerce.dispute.resolved |
+| disputeCaseCid? | string — set from the caseCid of commerce.dispute.resolved |
+| recoveryEvidence? | object — { recoveryCaseId, evidenceCids } from mutiny.recovery.resolved reviewUnlock |
 | parties | array — [{ did, role }] from the event payload (N3) |
-| legs? | array — [{ giverDid, receiverDid }] for cycles |
+| legs? | array — [{ legId, giverId, receiverId }] for cycles, giverId and receiverId being DIDs as in mutiny.cycle.completed and mutiny.recovery.resolved |
+| completionProof? | object — { kind: deal_completion\|cycle_receipts\|booking_completion\|rental_completion\|return_attestation\|dispute_case\|recovery_evidence, statementCids: array, verifiedAt? } the statements this vault verified before opening |
+| closeReason? | enum — completed \| deposit_unsettled; rentals only, from rentals.rental.closed |
 | pairs | array — at most 66 eligible [authorDid, subjectDid] pairs where the local principal is the author |
 | issuedTicketCids | array — tickets this principal signed for its counterparties |
 | receivedTickets | array — { subjectDid, ticketCid, phase: opening\|completion } tickets naming the principal as holder |
-| missingFields? | array — N3 fields absent from the outcome event |
+| missingFields? | array — N3 fields absent from the outcome event, or completion statements and receipts not yet verified in this vault |
 | opensAt? | timestamp — local receipt time of the outcome event |
 | closesAt? | timestamp — opensAt plus 30 days |
 | status | enum — pending \| open \| quarantined \| closed |
@@ -146,7 +150,8 @@ CREATE UNIQUE INDEX identity_review_window_ctx ON identity_review_window(tenant_
 | TEST-PS-058-09.T02 | unit | PS-058-01.R01, PS-058-02.R01 | post a valid review | statement signed by an active device key, stored posted, immutable fields unchanged, outcome label set, cid computed |
 | TEST-PS-058-09.T05 | unit | PS-058-01.R03, PS-058-09.R02 | golden review set with no-show claims | reviewCount raw, selection, effectiveWeight and bayesianAvg equal golden values within 1e-9; no-show claims leave the average unchanged; recompute twice gives identical results |
 | TEST-PS-058-09.T18 | abuse | PS-058-01.R04, PS-058-09.R04 | two public reviews from one 4-party cycle (A about B, C about D) and one subject_only review | the public ones share no identifier (different pairRef, no contextId or completionCid); the subject_only one carries the full ids encrypted to its subject |
+| TEST-PS-058-09.T30 | integration | PS-058-04.R02, PS-058-01.R02 | mutiny.cycle.completed with receiptCids for all legs; mutiny.recovery.resolved with outcome unresolved, with dispute_outcome and with agreed for another cycle | the completed cycle opens leg-connected windows with the receipts as proof; unresolved and dispute_outcome give outcome disputed with disputeFlag and the evidenceCids recorded; agreed gives outcome cancelled; non-adjacent pairs get no window |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

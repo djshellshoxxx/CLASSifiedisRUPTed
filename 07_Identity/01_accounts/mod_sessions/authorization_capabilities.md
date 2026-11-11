@@ -22,6 +22,7 @@
 | identity.session.rotate | principal | valid relay token of the DID |
 | identity.session.revoke | principal | valid token or unlocked vault; sessions belong to the DID |
 | identity.session.read_own | principal | unlocked vault or valid relay token; own DID only |
+| identity.session.read_linkage | operator | relay only - in-process call by this host relay's anti-shill checks for auctions it hosts by the seller's choice (N11, PT-15); never served over HTTP or to another relay |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -32,7 +33,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | TEST-PS-054-09.T08 | abuse | PS-054-05.R01, PS-054-05.R02, PS-054-05.R03 | non-owner revokes another DID's session; unauthenticated rotate; role change on relay | NOT_FOUND or UNAUTHENTICATED; role change ends sessions on the next request |
 | TEST-PS-054-09.T18 | integration | PS-054-04.R03, PS-054-05.R03 | injected clock - A1 revoked in the vault while sessions exist on relays R and S | vault publishes the new document to R and S and queues revokes; each relay ends A1's tokens within 60 s of storing the document with endReason device_revoked |
 | TEST-PS-054-09.T19 | integration | PS-054-04.R01, PS-054-02.R05, PS-054-05.R01 | change_passphrase with a crash midway; then a full change; weak new passphrase | after the crash the old passphrase unlocks and the new does not; after success the old fails with UNAUTHENTICATED and other tabs are locked; weak passphrase VALIDATION_FAILED |
+| TEST-PS-054-09.T23 | abuse | PS-054-04.R05, PS-054-05.R03 | session of seller key S1 on host H accepts a signed request by key B1 with S1's token; linked_keys called in-process for B1 and over HTTP | in-process result lists S1 and B1 in one session chain without IP prefix, user agent or times; the HTTP call is refused with FORBIDDEN |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F15.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

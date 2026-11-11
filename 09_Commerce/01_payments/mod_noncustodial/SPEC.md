@@ -10,19 +10,22 @@ A Deal records what two or more parties owe each other for something agreed else
 
 ## Responsibilities
 
-- Provide the generic command commerce.deal.open and the in-process DealPort {open, cancel} that context modules call with contextRef {type, id}, contextCid, parties and obligations; derive dealId as a UUIDv8 from contextRef and contextCid so every vault converges.
+- Provide the generic command commerce.deal.open and the in-process DealPort {open, cancel, unfreeze} that context modules call with contextRef {type, id}, contextCid, parties and obligations; derive dealId as a UUIDv8 from contextRef and contextCid so every vault converges.
 - Own Deal and PaymentClaim and the COM-3 status machine in each vault, including the 14-day no-progress expiry, open dispute case tracking and partial-coverage expiry.
 - Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1, classrup.commerce.deal_cancel/v1 and classrup.commerce.deal_completion/v1, each with the signer role registered in F11.S01.M01.
 - Ingest incoming statements, check signer role and context terms, order them by the per-author seq and prev chain (FED-3), store with provenance, quarantine invalid ones within a bounded quarantine, dispatch the method modules' statement types to their StatementHandlerPort handlers, and freeze a claim only on a true fork.
 - Expose the MethodRulePort so cash (F09.S01.M02), crypto (F09.S01.M03) and external methods plug in their rules, hold claims the method rule has not cleared, and track peer sync state without claiming more certainty than reached.
 - Mark a Deal completed only when every obligation is covered by payee-acknowledged claims, sign the completion body and emit commerce.deal.completed with its completionCid.
 - Support MVP listing_fee Deals whose payee is a relay operator named in that relay's signed policy document, acknowledged through a relay command under relay policy.
+- Freeze a Deal named in bazaar.inventory.conflict_detected linkedDealIds until the context owner resolves the inventory fork, and apply the rentals block exception (N7a) that ContextTermsPort.blockExempt reports.
+- Let a party export the all-party signed deal_completion/v1 proof without amounts or obligations for voluntary submission to a relay (F12.S03.M04 moderation.accountlimit.submit_completion).
 
 ## Not responsible for
 
 - Cash-specific rules and the cash receipt prompt (F09.S01.M02) and on-chain verification (F09.S01.M03).
 - Signed receipts (F09.S02.M01), dispute cases (F09.S02.M02) and reconciliation (F09.S02.M03).
-- Deciding what is owed; context modules (bazaar offers, auctions, mutiny compensation, services milestones, rentals rent, deposits and damage, listing publication) own their agreements, implement ContextTermsPort and call commerce.deal.open.
+- Deciding what is owed; context modules (bazaar offers, auctions, mutiny compensation, services milestones, rental reservations, cancellation fees, deposits, deposit releases, late fees and damage, listing publication) own their agreements, implement ContextTermsPort and call commerce.deal.open.
+- Issuing or requiring reputation review tickets (F07.S03.M01 signs them on commerce.deal.opened and commerce.deal.completed).
 - Moving, escrowing, converting or refunding money; refunds are new obligations the parties settle themselves.
 - Future: multi-currency obligations settled through a pinned FX quote and split payments across more than 10 claims per obligation.
 
@@ -49,16 +52,20 @@ A Deal records what two or more parties owe each other for something agreed else
 - A counterparty signs a Deal statement whose obligation is larger than the accepted offer; ContextTermsPort recomputes the terms from the offer statement and the Deal is quarantined with COMMERCE_DEAL_CONTEXT_CONFLICT.
 - Only the payer configured a chain verifier; the payer's vault shows 'final per your verifier; payee has not confirmed' and neither vault completes the Deal until the payee's vault signs its chain acknowledgement.
 - 10 000 freshly generated dids each send one statement; the bounded quarantine evicts the oldest entries and then drops statements from dids that are party to no known Deal or context.
+- Two devices of the seller accepted different offers for the last unit while offline; on sync the inventory module emits bazaar.inventory.conflict_detected with both dealIds, both Deals are frozen in the seller vault, the buyer's claim is stored but cannot be acknowledged, and the owner keeps one Deal (DealPort.unfreeze) and cancels the other with reason conflict_resolved.
+- The renter blocks the owner after the reservation was confirmed; the deposit release claim and its acknowledgement are still verified and stored with notifications suppressed because ContextTermsPort.blockExempt reports the rental Deal exempt, while a new rental request from the blocked owner is dropped.
+- An auction seller opens a second-chance Deal whose contextRef id is derived from the second_chance_offer cid and whose contextCid is the candidate's second_chance_response cid; V01 accepts it as an auction_result context and the Deal does not collide with the original winner's Deal.
 
 ## UX and accessibility
 
-- Deal card: parties by pseudonym, context link, obligations with amount and currency, status chip (Open, Disputed, Completed, Cancelled, Cancelled by one party, Expired, Partly paid and expired) and the sentence 'Payments happen directly between you; ClassRup never holds money.'
+- Deal card: parties by pseudonym, context link, obligations with amount and currency, status chip (Open, Disputed, Completed, Cancelled, Cancelled by one party, Expired, Partly paid and expired, Frozen - stock conflict being resolved) and the sentence 'Payments happen directly between you; ClassRup never holds money.'
 - Payer sheet: choose method (cash, crypto, external), enter note or txRef, confirm 'I say I paid'; status then reads 'claimed (unverified)'. For crypto without a verifier the sheet asks to confirm 'this is a public transaction ID, never a key'; a txid the verifier has not found yet shows 'kept on this device until the transaction is found'.
 - Payee sheet: Acknowledge received or Dispute for cash and external claims; acknowledging shows the exact amount and currency being confirmed. Crypto claims show the payee's own verifier status and 'confirmed for you when your verifier reports final'.
 - Crypto status line: 'confirmed N of M per your verifier', 'awaiting finalized checkpoint' on EVM chains, 'final per your verifier; payee has not confirmed' in the payer vault, 'final - confirmed by the payee's verifier (signed)' once the payee's chain acknowledgement arrives.
 - Sync strip under every statement: saved on this device, prepared, relay received, peer accepted; unknown when a relay is unreachable.
+- Completion proof export on a completed Deal: preview of exactly what is sent (dealId, dealCid, completionCid, outcome and every party's signature; no amounts, obligations or context), the sentence 'The relay will learn that these keys completed a deal', Export and Cancel.
 
-**States:** loading; empty; open; claimed-unverified; held-on-device; acknowledged-by-payee; confirming-on-chain; final-per-your-verifier; final-confirmed-by-payee; disputed; frozen-conflict; expired; expired-partial; cancelled; cancelled-one-sided; pending-offline; quarantined
+**States:** loading; empty; open; claimed-unverified; held-on-device; acknowledged-by-payee; confirming-on-chain; final-per-your-verifier; final-confirmed-by-payee; disputed; frozen-conflict; frozen-inventory-conflict; expired; expired-partial; cancelled; cancelled-one-sided; pending-offline; quarantined
 
 **Accessibility:** Status chips use text plus icon and are announced through an aria-live polite region when they change.; Acknowledge and Dispute are buttons of at least 44 by 44 px with accessible names that include the amount and currency.; The honest-label sentence is plain text associated with the status chip through aria-describedby.
 
@@ -70,9 +77,9 @@ A Deal records what two or more parties owe each other for something agreed else
 ## Interfaces
 
 - Commands: `commerce.deal.open`, `commerce.deal.cancel`, `commerce.payment.claim`, `commerce.payment.acknowledge`, `commerce.payment.dispute`, `commerce.statement.ingest`
-- Queries: `commerce.deal.get`, `commerce.deal.list_mine`, `commerce.payment.list_for_deal`, `commerce.statement.diagnostics`
+- Queries: `commerce.deal.get`, `commerce.deal.list_mine`, `commerce.payment.list_for_deal`, `commerce.statement.diagnostics`, `commerce.deal.export_completion`
 - Emits: `commerce.deal.opened`, `commerce.payment.claimed`, `commerce.payment.acknowledged`, `commerce.payment.disputed`, `commerce.payment.expired`, `commerce.deal.completed`, `commerce.deal.cancelled`
-- Consumes: `commerce.payment.confirming`, `commerce.payment.confirmed`, `commerce.payment.finalized`, `commerce.payment.reorged`, `commerce.payment.failed`, `commerce.dispute.opened`, `commerce.dispute.resolved`, `commerce.dispute.withdrawn`, `privacy.deletion.completed`
+- Consumes: `commerce.payment.confirming`, `commerce.payment.confirmed`, `commerce.payment.finalized`, `commerce.payment.reorged`, `commerce.payment.failed`, `commerce.dispute.opened`, `commerce.dispute.resolved`, `commerce.dispute.withdrawn`, `privacy.deletion.completed`, `bazaar.inventory.conflict_detected`
 
 ## Dependencies
 
@@ -83,21 +90,21 @@ F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F1
 | ID | Process | Requirements |
 |---|---|---|
 | PS-069-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-069-02 | [Validation rules](validation_rules.md) | 6 |
-| PS-069-03 | [Workflow state machine](workflow_state_machine.md) | 9 |
+| PS-069-02 | [Validation rules](validation_rules.md) | 7 |
+| PS-069-03 | [Workflow state machine](workflow_state_machine.md) | 10 |
 | PS-069-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-069-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-069-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-069-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
 | PS-069-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-069-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
-| PS-069-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+| PS-069-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 4 |
 
 Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/commerce/src/payments/noncustodial/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01 to T34 pass in CI.
+- All tests T01 to T38 pass in CI.
 - No state or label ever shows a payment as completed on the strength of a payer claim alone.
 - Two independent vaults converge on the same Deal status and on the statement-driven claim statuses (cash and external claims and the claim, acknowledgement and dispute chain) after exchanging the same signed statements in any order; crypto observation statuses are per vault and labelled according to your verifier, and crypto-driven completion converges through the payee's signed chain acknowledgement.
 - A forked claim is frozen and never silently resolved.

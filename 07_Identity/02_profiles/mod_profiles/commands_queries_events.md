@@ -6,11 +6,12 @@
 
 ## Requirements
 
-- **PS-056-04.R01** update, publish, unpublish, block add and block remove are vault commands; publish produces the signed statement classrup.identity.profile/v1 and unpublish produces classrup.federation.tombstone/v1, both signed by a device key active in the owner's document; receive is the vault intake of someone else's profile statement.
+- **PS-056-04.R01** update, publish, unpublish, block add and block remove are vault commands; publish produces the signed statement classrup.identity.profile/v1 and unpublish produces classrup.federation.tombstone/v1, both signed by a device key active in the owner's document and both signed and stored only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02, which allocates seq and prev); receive is the vault intake of someone else's profile statement.
 - **PS-056-04.R02** Block commands emit local P3 events that other modules consume to cancel work; block data is never placed in a statement.
 - **PS-056-04.R03** Reads of profiles apply the viewer's perspective - strangers see public fields, conversation participants see contacts fields, the owner sees all.
 - **PS-056-04.R04** A tombstone withdraws a received profile only when its author equals the profile's DID and its signer key is active in that DID's document; a tombstone signed by an origin relay only removes that relay from the profile's provenance.
 - **PS-056-04.R05** Relay hosting actions (moderation.action.applied and moderation.action.reverted) are consumed only by the relay runtime for the relay's own copy and never change vault records.
+- **PS-056-04.R06** F08.S01.M01 calls MailboxHintPort.set(relayId, mailboxId, previousMailboxId?) after comms.mailbox.register and comms.mailbox.rotate; the own profile keeps at most 5 mailbox IDs, and when the profile is published a new version with seq plus 1 carrying the new or replacement ID is published to the relays that hold the current version, with federation_publish consent re-checked (N15).
 
 ## Specification
 
@@ -36,7 +37,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `identity.profile.updated` | P0 | { did, origin: own\|received, seq, changedFields: array (field names only, for example withdrawn) } |
+| `identity.profile.updated` | P0 | { did, origin: own\|received, seq, changedFields: array (field names only, for example withdrawn or mailboxes) } |
 | `identity.block.added` | P3 | { blockId, blockerDid, blockedDid } |
 | `identity.block.removed` | P3 | { blockId, blockerDid, blockedDid } |
 
@@ -47,7 +48,7 @@
 | `identity.account.created` | create the default own Profile with the pseudonym, visibility region private, no bio |
 | `identity.pseudonym.changed` | refresh displayPseudonym on the own profile and mark it unpublished-changes |
 | `discovery.location.updated` | set regionCell to publicCell after F06.S02.M01 assertPublicCell, or clear it at L0, still subject to the region visibility |
-| `identity.portable_doc.published` | origin received - re-verify quarantined profile statements of that DID whose signer key was unknown; profiles first seen before a revocation stay valid |
+| `identity.portable_doc.published` | origin received - re-verify quarantined profile statements of that DID whose signer key was unknown; for each newly revoked key, profiles first seen at or after its clamped revokesEffectiveAt are quarantined and earlier ones stay valid with a revoked-signer marker |
 | `moderation.action.applied` | relay runtime only - the relay stops serving its own copy of the targeted profile statement under its hosting policy; vault records are never changed |
 | `moderation.action.reverted` | relay runtime only - the relay serves its copy of the profile statement again; vault records are never changed |
 | `federation.tombstone.applied` | delete the received profile only when the tombstone author equals Profile.did and its signer key was active in that DID's document; a tombstone signed by an origin relay only drops that relay from provenance and the profile stays |
@@ -64,7 +65,7 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statements and signer roles (N2): classrup.identity.profile/v1 - a device key active in the owner's portable document (key id in the envelope); classrup.federation.tombstone/v1 for unpublish (CTR-FED-001 FED-4, the format owned by F11.S01.M02) - a device key of the profile's DID. F11.S01.M02 is not listed in depends_on because it already depends on this module through F11.S03.M02; the tombstone is built per CTR-FED-001 and delivered by the sync outbox, and F11.S01.M02 applies it on relays and in receiving vaults. A received statement from a blocked DID is dropped silently - receive returns no error the sender could observe. Ports provided: isBlockedEither(a, b), filterBlocked(dids up to 500), and BlockFilterPort.isBlocked(did) for F07.S02.M01 (N7).
+**Note:** Statements and signer roles (N2): classrup.identity.profile/v1 - a device key active in the owner's portable document (author the principal did:key, ext.signerKey the device key, CTR-FED-001 FED-7); classrup.federation.tombstone/v1 for unpublish (CTR-FED-001 FED-4 and FED-9, the format owned by F11.S01.M02) - a device key of the profile's DID. Both are signed and stored through the StatementPublisherPort declared in F11.S01.M01 and implemented by F11.S01.M02 (wired at composition, since F11.S01.M02 depends on this module), delivered by the sync outbox, and applied by F11.S01.M02 on relays and in receiving vaults. Port provided to F08.S01.M01: MailboxHintPort.set(relayId, mailboxId, previousMailboxId?). A received statement from a blocked DID is dropped silently - receive returns no error the sender could observe. Ports provided: isBlockedEither(a, b), filterBlocked(dids up to 500), and BlockFilterPort.isBlocked(did) for F07.S02.M01 (N7).
 
 ### Example
 
@@ -88,7 +89,9 @@ port: isBlockedEither("did:key:z6MkA…", "did:key:z6MkB…") -> true
 | TEST-PS-056-09.T15 | integration | PS-056-04.R01 | unpublish a profile published to R1 while R1 is offline, then online | tombstone signed by P1 queued with per-relay sync state; identity.profile.updated with changedFields [withdrawn]; after delivery a viewer vault deletes the profile |
 | TEST-PS-056-09.T16 | abuse | PS-056-04.R04 | a tombstone for P's profile signed by origin relay R1, then one signed by P1 | after the relay tombstone the profile stays active with R1 removed from provenance; the author tombstone deletes it |
 | TEST-PS-056-09.T17 | integration | PS-056-04.R05, PS-056-03.R01 | moderation.action.applied and moderation.action.reverted delivered to a vault and to the relay runtime | the relay stops and then resumes serving its copy; the vault Profile is unchanged except an optional notServedBy provenance entry |
+| TEST-PS-056-09.T22 | integration | PS-056-04.R06 | F08.S01.M01 stub calls MailboxHintPort.set after register on R1, then after rotate with a new ID, with the profile published to R1 and mailboxes visibility public; then with mailboxes private | the own profile holds the ID, then the replacement; a new version with seq plus 1 carrying only the replacement is published to R1 after the consent check; identity.profile.updated lists mailboxes; private mailboxes never enter a statement |
+| TEST-PS-056-09.T23 | contract | PS-056-04.R01 | publish and unpublish with a StatementPublisherPort spy | publish calls StatementPublisherPort.publish and unpublish calls issueTombstone; seq and prev come from the port; no other signing path is used |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -15,7 +15,8 @@ Trust attestations are small signed claims about a DID - self-declared labels, '
 - Let a relay operator issue a relay_email_check attestation signed with the relay's key after an out-of-band check, naming the relay origin and delivered only to the subject, storing only the fact and the date, never the email.
 - Keep the relay key set - keys from the signed descriptors of the viewer's chosen relays and peers (F15.S02.M01, F11.S03.M01, F16.S02.M02) - and re-check relay_email_check attestations whenever it changes.
 - Let the subject endorse a claim about itself so it can be shown publicly, co-sign same_owner links, and set local visibility; show attestations with issuer provenance.
-- Answer identity.attestation.list_linkage with same_owner links for a DID (N11).
+- Answer identity.attestation.list_linkage with the same_owner links of a DID, which both the issuer's and the subject's device keys signed, for in-process host relay anti-shill checks (F04.S02.M01 V03, N11, PT-15), and implement SameOwnerLinkPort for the F07.S02.M01 KeyLinkagePort.
+- Sign and store attestations, revocations and endorsements only through the F11.S01.M01 StatementPublisherPort (implemented by F11.S01.M02).
 
 ## Not responsible for
 
@@ -73,7 +74,7 @@ Trust attestations are small signed claims about a DID - self-declared labels, '
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001
+F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -94,7 +95,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T23 pass in CI.
+- All tests T01-T25 pass in CI.
 - No KYC, email, phone or document data is stored or logged by this module (privacy suite).
 - Every displayed attestation shows its signer and the wording that it evidences an assertion, not truth, and no UI string calls a claim verified.
 - A claim about another person is never displayed publicly without the subject's endorsement, and a relay badge appears only for keys listed in the named relay's descriptor.

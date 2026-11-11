@@ -13,7 +13,7 @@ summary: >-
   kill file lets the static host replace a bad build with a known-good one. The static PWA host serves only
   these files; it is never a relay and never authoritative (ADR-0016).
 responsibilities:
-  - Precache the app shell (HTML entry, hashed JS and CSS, fonts, icons, locale catalogs for the default locale) within a 1.5 MiB budget and serve navigations from the precached index.html when offline.
+  - Precache the app shell (HTML entry, hashed JS and CSS, fonts, icons and every shipped production locale catalog - en, de, fr and es of F14.S02.M01, at most 120 KiB gzip together - installed together at service-worker install, never only the default locale) within a 1.5 MiB budget and serve navigations from the precached index.html when offline.
   - Serve public listing images cache-first from the per-principal cache classrup-img-v1-<partition>, keyed by content address and independent of the relay that served them, limited to 200 entries and 30 days per partition, after verifying SHA-256 of the body against the content address, and drop them first under storage pressure.
   - Send every other request to a user-selected relay origin (relay commands and queries, mailbox, private or encrypted media) and every non-GET request straight to the network (NetworkOnly) so no user data is ever written to a cache.
   - Delete outdated precaches and runtime caches on activate using the cache-name allowlist, unbind the principal's image partition on vault lock and principal switch, and delete it on Erase vault (CLEAR_USER_CACHES).
@@ -57,6 +57,7 @@ processes:
       - A response is cached or handed to the page only when it passes the cacheability checks (status 200, image content type, no private directives, no cookies, at most 5 MiB) and the SHA-256 of its body equals the requested content address.
       - Violations during build are reported with stable codes; at runtime a cacheability violation means the response is not stored, and a digest mismatch means it is neither stored nor shown.
       - Control messages are accepted only from controlled same-origin window clients, and SKIP_WAITING only with the one-time nonce that the waiting worker issued in its GET_VERSION reply.
+      - The build fails unless the precache manifest holds every shipped production locale catalog (en, de, fr, es) together within 120 KiB gzip, so the catalogs are installed in one step and no catalog is ever fetched per locale at runtime.
     rules:
       - "V01 | precache manifest total size ≤ 1572864 bytes and entry count ≤ 120 | PLATFORM_CACHE_PRECACHE_BUDGET"
       - "V02 | every precache URL is same-origin and versioned by content hash; no relay origin URL and no /__media/ URL is ever precached | PLATFORM_CACHE_PRIVATE_RESPONSE"
@@ -67,6 +68,7 @@ processes:
       - "V07 | SKIP_WAITING comes from a controlled same-origin window client and carries the nonce this waiting worker issued in its GET_VERSION reply, unused and at most 60000 ms old | FORBIDDEN"
       - "V08 | SHA-256 of the response body equals the content address in the request path, checked before the response is cached and before it is handed to the page | PLATFORM_CACHE_DIGEST_MISMATCH"
       - "V09 | /sw-kill.json is fetched network-only with cache no-store and parses as { formatVersion: 1, minReleaseSeq: int, killedBuilds: buildId[], knownGood?: buildId }; anything else is ignored | VALIDATION_FAILED"
+      - "V10 | the precache manifest lists every production catalog packages/i18n/messages/<locale>.json that the build ships (en, de, fr, es; pseudolocales excluded), their gzip sizes sum to ≤ 122880 bytes (120 KiB), and no route fetches a catalog outside the precache | PLATFORM_CACHE_PRECACHE_BUDGET"
   workflow_state_machine:
     requirements:
       - The worker follows the browser lifecycle installing, installed (waiting), activating, activated, redundant, and does not skip waiting on its own.
@@ -134,7 +136,7 @@ processes:
     idempotency: "Fetch handling is idempotent: caches are keyed by URL and revision for the shell and by content address for media, and replays of install or activate produce the same cache contents. Non-GET requests are never handled. A SKIP_WAITING nonce works once."
     concurrency: "Several tabs share one worker; cache writes are by key and identical content by construction (content addressing). Update takes effect for all tabs at once after consent, and the page reloads each tab on controllerchange. Only the partition bound by the unlocked principal is read or written."
     retries: "The worker does not retry fetches except trying the next bound relay origin after a digest mismatch or network error for media; page code retries relay commands per CTR-IDM-001 IDM-4. Install retries automatically by the browser's update check on the next trigger."
-    offline: "After first visit the shell, route chunks needed by the entry route, icons and the default locale load without network. Dynamic route chunks not yet visited need network; the router shows an offline page with Retry (precached offline.html, 4 KiB). After a kill-switch unregistration without a known-good build the next start needs the network once."
+    offline: "After first visit the shell, route chunks needed by the entry route, icons and all production locale catalogs (en, de, fr, es, precached together) load without network, so a locale switch never needs the network. Dynamic route chunks not yet visited need network; the router shows an offline page with Retry (precached offline.html, 4 KiB). After a kill-switch unregistration without a known-good build the next start needs the network once."
     partial_failure: "If precache of one entry fails the whole install is aborted and the previous version stays active. If activation cleanup fails midway, the next activation re-runs the allowlist deletion, which is safe to repeat. If the known-good build fails to install after a kill, the worker unregisters itself so the bad build cannot keep running."
   privacy_retention_abuse:
     requirements:
@@ -142,8 +144,9 @@ processes:
       - Cached public images are limited to 200 entries and 30 days per partition, are unbound on vault lock and principal switch, are deleted on Erase vault, and are deleted on version change of the cache name.
       - The worker scope is limited to the application path and refuses to cache cross-origin opaque responses.
       - A relay cannot substitute or alter a cached or displayed image, because bytes are verified against the content address before caching and before display, and the cache is keyed by content address independent of the relay.
+      - Catalog loads never reveal the chosen locale, because every production catalog is precached together at install and served from the precache, so neither the static host nor a relay sees a per-locale request (F14.S02.M01 T03 and T10).
     data:
-      - "classrup-precache-v{buildId}: P0 build assets."
+      - "classrup-precache-v{buildId}: P0 build assets, including all four production locale catalogs, so the cache contents do not depend on the chosen locale."
       - "classrup-img-v1-<partition>: P0 public listing images verified against their content address; metadata (EXIF, GPS) is stripped in the author's vault by F10.S02.M03 before content addressing (N9), so a relay cannot add location data without breaking the hash. Which images a principal viewed is kept per partition and never shared across principals."
       - "Bound relay origins and partition id: in worker memory only, dropped on lock, principal switch and worker restart."
     retention:
@@ -156,6 +159,7 @@ processes:
       - "T04 | Worker scope hijack via path confusion | worker served from the app root with Service-Worker-Allowed unset, scope '/', navigation denylist on /__media/"
       - "T05 | Principal B on a shared profile learns which listings principal A viewed | per-principal partitions; only the bound partition is readable; unbound on lock and switch, deleted on erase"
       - "T06 | Malicious relay swaps a listing photo (bait-and-switch) or serves one with GPS data | content-address verification before caching and display; mismatches discarded and counted; cache keyed by content address, so revalidating against the same relay is never relied on"
+      - "T07 | Static host or network observer learns the user's language from which catalog is fetched | all production catalogs precached together at install (V10); no runtime catalog request by locale"
     abuse_controls:
       - "Cache limits (200 images per partition, 30 days, 5 MiB per image) bound local storage use from a hostile feed of image URLs."
       - "No background fetch loop; update and kill-file checks at most hourly so the worker cannot be used to amplify requests to a relay; media fetched only from bound relay origins."
@@ -171,7 +175,7 @@ processes:
     logs:
       - "console.debug only in development builds; production worker logs nothing. Errors are counted, not described."
     budgets:
-      - "Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip."
+      - "Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip; the four production locale catalogs ≤ 120 KiB gzip together inside the precache."
       - "Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms; SHA-256 verification of a 1 MiB image ≤ 15 ms (SubtleCrypto)."
       - "Activation cleanup completes in ≤ 500 ms for 5 stale caches."
   contract_and_acceptance_tests:
@@ -179,7 +183,7 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Routing, cacheability and verification logic is unit tested as pure functions, and lifecycle and offline behavior is tested in real browsers with Playwright.
       - Tests assert the negative property that no relay command, vault or private response ever reaches Cache Storage and no unverified image is ever shown.
-    fixtures: "Built PWA served by a static server on :4173 plus stub relays r1 on :8787 and r2 on :8788 with /api/v1/q/bazaar.listing.get (relay access token required), /media/v1/sha256-<b64> for img1.webp (r1 honest, r2 optionally lying), /mailbox/v1/m1; two builds A and B with different buildId and releaseSeq; principals P1 and P2 sharing one browser profile; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Built PWA served by a static server on :4173 plus stub relays r1 on :8787 and r2 on :8788 with /api/v1/q/bazaar.listing.get (relay access token required), /media/v1/sha256-<b64> for img1.webp (r1 honest, r2 optionally lying), /mailbox/v1/m1; two builds A and B with different buildId and releaseSeq; catalogs en, de, fr, es plus pseudolocales en-XA and ar-XB and an oversized de fixture; principals P1 and P2 sharing one browser profile; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02,01.R03 | routing table evaluated for 30 sample URLs (shell, /__media/ path, relay media, relay command, mailbox, cross-origin) | each URL maps to the documented strategy and cache name"
       - "T02 | unit | 02.R02,02.R03 | cacheability and verification over responses with private, no-store, Set-Cookie, Vary Authorization, 404, text/html, 6 MiB, wrong digest | only 200 image responses without private markers whose digest matches return true; others yield PLATFORM_CACHE_UNCACHEABLE or PLATFORM_CACHE_DIGEST_MISMATCH"
@@ -203,8 +207,10 @@ processes:
       - "T20 | integration | 07.R02,03.R04 | 201 distinct images viewed, then clock advanced 31 days and 3 new images viewed | at most 200 entries after the first step; after the advance only the 3 fresh entries remain"
       - "T21 | abuse | 04.R02,02.R04 | page script posts SKIP_WAITING with no nonce, an expired nonce, a used nonce and a nonce from another waiting worker | all ignored with FORBIDDEN counted; the waiting worker stays waiting"
       - "T22 | integration | 01.R04,04.R04 | img1 fetched from r1, then the same content address requested while only r2 (honest) is bound and then offline | second and third requests served from the cache entry keyed by content address without contacting a relay; r1 response headers match the F15.S02.M01 media contract"
+      - "T23 | integration | 02.R05,01.R02 | CI build with the four production catalogs; then with fr removed from the manifest; then with the oversized de fixture pushing the catalogs past 120 KiB gzip | first build lists en, de, fr, es in classrup-precache-v{buildId} and no pseudolocale; the other two fail with PLATFORM_CACHE_PRECACHE_BUDGET"
+      - "T24 | e2e | 07.R05,02.R05 | first visit online, then capture all network traffic while switching the locale en, de, fr, es and back, online and offline | every catalog is served from the precache; zero catalog requests reach the static host or any relay; offline switches succeed"
     acceptance:
-      - All tests T01-T22 pass in CI.
+      - All tests T01-T24 pass in CI.
       - After first visit the app shell opens offline in under 2.5 s LCP on a Moto G-class 4G profile.
       - No relay command response, vault data or private media is ever present in Cache Storage, and no image whose bytes fail content-address verification is ever cached or shown (abuse suite T08, T09, T18).
       - A new release never takes control without user consent while a client is open, except a known-good replacement ordered by the kill file.

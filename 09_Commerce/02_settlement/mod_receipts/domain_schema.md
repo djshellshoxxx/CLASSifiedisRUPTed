@@ -8,7 +8,7 @@
 
 - **PS-071-01.R01** A Receipt stores claimId, dealId, statement type, canonical statement body, signerId, role, signedAt (the signer's claim), local receivedAt, signature and receipt cid, matching COM-6.
 - **PS-071-01.R02** Receipts are P2, retained as RET-EVIDENCE, and immutable once created; corrections are new receipts.
-- **PS-071-01.R03** The statement body binds the claim cid, amount and currency so a receipt cannot be moved to another claim.
+- **PS-071-01.R03** The statement body binds the claim cid, dealId, the Deal's contextCid, amount and currency so a receipt cannot be moved to another claim or Deal (the F16.S02.M03 inventory binding for classrup/receipt/v1).
 - **PS-071-01.R04** signerId is the principal DID of the Deal party and signingKeyId names the device key that signed; the receipt embeds the device-link chain (root-signed classrup.identity.device_link/v1 statements) or an identity-document snapshot, so offline verification can link the key to the principal.
 - **PS-071-01.R05** Key status is stored with the trusted receipt time it was derived from - local receivedAt, or a relay-signed receipt time labelled as that relay's evidence - and the revocation's effective-from time; signedAt is never used for key status.
 
@@ -25,7 +25,7 @@ Schema `classrup.commerce.receipt/v1` · storage **device** · privacy **P2** ·
 | claimId | uuidv7 — ref F09.S01.M01 PaymentClaim |
 | dealId | uuid — ref F09.S01.M01 Deal (UUIDv8) |
 | statementType | enum — payer_asserts_paid \| payee_asserts_received |
-| statement | object — {claimCid, amount: Money, method, text?: ≤ 280 code points} canonicalized with JCS |
+| statement | object — {claimCid, dealId, contextCid, amount: Money, method, text?: ≤ 280 code points} canonicalized with JCS; the F16.S02.M03 envelope payload |
 | signerId | did — principal DID of the signing party as named in the Deal (or per-deletion pseudonym after deletion) |
 | signingKeyId | string — F16.S02.M03 signer key ID of the device key that signed |
 | keyLink | object — {deviceLinkCids[], chain: root-signed classrup.identity.device_link/v1 envelopes, or identityDocSnapshot: classrup.identity.portable_doc/v1} |
@@ -33,16 +33,17 @@ Schema `classrup.commerce.receipt/v1` · storage **device** · privacy **P2** ·
 | signedAt | timestamp — signer's claimed time, RFC 3339 UTC; never used for key status |
 | receivedAt | timestamp — local clock when stored |
 | relayReceipt? | object — {relayId, at, sig} relay-signed receipt time; evidence only of that relay's clock |
-| sig | string — base64url Ed25519 by signingKeyId in a classrup.security.envelope/v1 with context classrup/receipt/v1 (F16.S02.M03) |
+| sig | string — base64url Ed25519 by signingKeyId in a classrup.security.envelope/v1 {v: 1, ctx: classrup/receipt/v1, kid: signingKeyId, alg: ed25519, signedAt, payloadHash, payload?, sig} over JCS({v, ctx, kid, alg, signedAt, payloadHash}), payloadHash = sha256-<base64url> of SHA-256(JCS(statement)) (F16.S02.M03) |
+| envelopeMode | enum — inline \| hash_only; hash_only envelopes travel beside the statement, which this module supplies to verify |
 | receiptCid | string — sha256 of the signed receipt |
-| verification | object — {checkedAt, result: valid\|invalid, partyBinding: verified\|unverified, keyStatus: active\|revoked_before_receipt\|revoked_after_receipt\|revoked_receipt_time_unknown\|unknown, trustedReceiptTime?: {source: local\|relay, at, relayId?}, revocationEffectiveFrom?, provenance: local\|peer} |
+| verification | object — {checkedAt, accepted: boolean (F16.S02.M03 verify result.accepted), reason?: F16 SECURITY_* code, result: valid\|invalid, partyBinding: verified\|unverified, keyStatus: active\|revoked_before_receipt\|revoked_after_receipt\|revoked_receipt_time_unknown\|unknown, trustedReceiptTime?: {source: local\|relay, at, relayId?}, revocationEffectiveFrom?, provenance: local\|peer} |
 | peerSync | string — local_committed \| prepared \| transport_acknowledged \| peer_accepted \| not_applicable |
 | revision | int — CTR-ID-001 ID-4 |
 
 **Invariants**
 - One receipt per (claimId, signerId, statementType).
 - signerRole matches the signer's role in the claim (payer or payee).
-- sig verifies over the stored bytes at the time of storage, or the row is quarantined and not stored as a Receipt.
+- F16.S02.M03 verify returned accepted true for the stored envelope and statement at the time of storage, or the row is quarantined and not stored as a Receipt.
 - A receipt is presented as valid for a party only when the signature verifies, partyBinding is verified and keyStatus is active or revoked_after_receipt.
 - keyStatus is derived only from trustedReceiptTime and revocationEffectiveFrom, never from signedAt.
 
@@ -66,6 +67,7 @@ CREATE INDEX commerce_receipt_key ON commerce_receipt(vault_id, signing_key_id);
 | TEST-PS-071-09.T16 | abuse | PS-071-01.R05, PS-071-02.R04, PS-071-04.R05 | a receipt signed with a key revoked at 09:00 and signedAt backdated to 08:00 arrives at 10:00; the same file verified offline with no trusted receipt time; a receipt with a relay-signed receipt time of 08:30 | first reads revoked_before_receipt and is quarantined with COMMERCE_RECEIPT_KEY_REVOKED, never Valid; second reads 'key revoked; signing time unverifiable'; third reads revoked_after_receipt labelled 'according to relay <name>' |
 | TEST-PS-071-09.T17 | abuse | PS-071-01.R04, PS-071-02.R04 | file signed by a self-generated key with no device-link chain to the payee, and one whose chain links to a different principal | signature valid but partyBinding unverified, label 'Signature valid - party not proven'; ingest quarantines with party_unbound (COMMERCE_RECEIPT_PARTY_UNBOUND) |
 | TEST-PS-071-09.T18 | integration | PS-071-01.R04, PS-071-04.R05 | export a receipt and verify the file on a device with no network and no vault | result names the signing device key and the principal it is linked to, partyBinding verified, file ≤ 8 KiB |
+| TEST-PS-071-09.T22 | contract | PS-071-04.R06, PS-071-02.R04, PS-071-01.R03 | sign a receipt and check the envelope bytes; ingest a hash-only envelope with its statement supplied, with a different statement, and with none; change kid or signedAt in the header; replay the statement under another dealId | signature covers exactly JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over the JCS statement; the first is accepted and stored; the others return accepted false (SECURITY_PAYLOAD_HASH_MISMATCH or SECURITY_SIGNATURE_INVALID) and are quarantined with that reason as COMMERCE_RECEIPT_SIGNATURE_INVALID; the replay returns COMMERCE_RECEIPT_MISMATCH; nothing is stored or emitted unless accepted is true |
 
 ## Dependencies
 

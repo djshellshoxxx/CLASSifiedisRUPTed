@@ -45,23 +45,23 @@ Initial **pending**; terminal **closed**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| pending -> open | outcome event with the N3 fields - completion, rentals.rental.closed with reason completed, commerce.dispute.resolved with resolution lapsed, or commerce.deal.cancelled | set outcome, compute pairs, opensAt = receipt time, closesAt = opensAt + 30 days; sign completion tickets after a completion |
+| pending -> open | outcome event with the N3 fields and a verified proof (V12, V13) - commerce.deal.completed, mutiny.cycle.completed, services.booking.completed, rentals.rental.closed with reason completed or deposit_unsettled and oneSided false, commerce.dispute.resolved with resolution lapsed, mutiny.recovery.resolved with reviewUnlock.unlocked, or commerce.deal.cancelled | set outcome (disputed with disputeFlag for lapsed disputes and for recovery outcomes unresolved or dispute_outcome, cancelled for recovery outcome agreed), compute pairs, opensAt = receipt time, closesAt = opensAt + 30 days; sign completion tickets after a completion |
 | pending -> quarantined | outcome event lacks a required N3 field | record missingFields; no pair guessed |
-| quarantined -> open | the missing fields arrive in a re-delivered or corrected event | compute pairs and open as above |
+| quarantined -> open | the missing fields arrive in a re-delivered or corrected event, or federation.record.accepted delivers the missing completion statement or receipt | re-run V12 and V13, compute pairs and open as above |
 | quarantined -> closed | 30 days in quarantine | nothing can be posted |
 | pending -> closed | 180 days without an outcome event | tickets kept as evidence |
-| open -> open | commerce.dispute.resolved with resolution lapsed after completion | outcome becomes disputed and disputeFlag is set; closesAt unchanged |
+| open -> open | commerce.dispute.resolved with resolution lapsed, or mutiny.recovery.resolved with outcome unresolved or dispute_outcome, after the window opened | outcome becomes disputed and disputeFlag is set; closesAt unchanged |
 | open -> closed | 30 days after opensAt | no further own reviews for this context |
 
 ```mermaid
 stateDiagram-v2
   [*] --> pending
-  pending --> open: outcome event with the N3 fields - completion, rentals.rental.closed with reason completed, commerce.dispute.resolved with resolution lapsed, or commerce.deal.cancelled
+  pending --> open: outcome event with the N3 fields and a verified proof (V12, V13) - commerce.deal.completed, mutiny.cycle.completed, services.booking.completed, rentals.rental.closed with reason completed or deposit_unsettled and oneSided false, commerce.dispute.resolved with resolution lapsed, mutiny.recovery.resolved with reviewUnlock.unlocked, or commerce.deal.cancelled
   pending --> quarantined: outcome event lacks a required N3 field
-  quarantined --> open: the missing fields arrive in a re-delivered or corrected event
+  quarantined --> open: the missing fields arrive in a re-delivered or corrected event, or federation.record.accepted delivers the missing completion statement or receipt
   quarantined --> closed: 30 days in quarantine
   pending --> closed: 180 days without an outcome event
-  open --> open: commerce.dispute.resolved with resolution lapsed after completion
+  open --> open: commerce.dispute.resolved with resolution lapsed, or mutiny.recovery.resolved with outcome unresolved or dispute_outcome, after the window opened
   open --> closed: 30 days after opensAt
   closed --> [*]
 ```
@@ -82,4 +82,4 @@ stateDiagram-v2
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

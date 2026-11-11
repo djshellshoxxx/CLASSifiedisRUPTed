@@ -23,12 +23,14 @@ Schema `classrup.commerce.dispute/v1` · storage **device** · privacy **P2** ·
 |---|---|
 | id | uuid — deterministic from sha256 of contextRef plus opener did plus openedSeq so mirrors converge |
 | vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot) |
-| contextRef | object — {type: a DisputeContextPort-registered type - deal \| payment_claim \| cycle \| booking \| rental_deposit \| rental_damage, id: uuid} |
+| contextRef | object — {type: a DisputeContextPort-registered type - deal {id dealId} \| payment_claim {id claimId} \| cycle {id cycleId} \| booking {id bookingId} \| rental_deposit {id depositId, resolved by F05.S01.M02} \| rental_damage {id damage claimId, resolved by F05.S02.M03}, id: uuid}; carried unchanged in every dispute statement and event |
 | contextCid | string — cid of the signed context statement returned by DisputeContextPort.resolve |
 | parties | array — [{did, role}] returned by DisputeContextPort.resolve; opener plus respondents, 2..20 |
 | openerId | did — party who opened |
 | respondentIds | array — 1..19 dids |
 | reason | enum — not_received \| not_as_described \| payment_not_acknowledged \| no_show \| damage \| other |
+| serviceScope? | object — {scope, scopeKey (1..200 chars), milestoneId?: uuid}; only for contextRef type booking, supplied by F03.S02.M03 and signed into classrup.commerce.dispute/v1 |
+| idempotencyRef? | string — caller reference (F03.S02.M03 linkId); a repeated open with the same value returns the existing case |
 | description | string — 1..1000 code points plain text |
 | evidence | array — up to 20 per party {id, authorId, kind: message\|attachment\|receipt\|claim\|statement\|note, refCid (blob:sha256-<base64url> for attachments), sha256?, sizeBytes ≤ 5242880, stripped: boolean, caption ≤ 280, sharedWithMediator: boolean} |
 | mediator? | object — {did, relayId, directoryEntry?: {mediatorDid, relayId, policyUrl, validUntil, relaySig}, trust: relay_verified\|self_declared, acceptedBy: dids[], status: proposed\|active\|unavailable} |
@@ -37,7 +39,7 @@ Schema `classrup.commerce.dispute/v1` · storage **device** · privacy **P2** ·
 | noResponseReceivedHere | boolean — set when the 7-day response window passes without any respondent statement received in this vault (stored statements from blocked parties count as received) |
 | hiddenFromBlocked | int — number of stored statements from parties this vault has blocked |
 | status | enum — opened \| evidence \| mediation \| outcome_proposed \| resolved \| withdrawn |
-| resolution? | enum — no_fault_close \| refund_claimed \| return_agreed \| enforcement_referral \| lapsed |
+| resolution? | enum — no_fault_close \| refund_claimed \| return_agreed \| enforcement_referral \| lapsed (the FLOW-08 closed-unresolved outcome after 30 days of inactivity) |
 | deadlines | object — {responseBy, evidenceBy, proposalBy, lapseAt} local clock |
 | caseCid | string — sha256 of the opening statement |
 | forkDetected | boolean — conflicting accepted outcomes seen |
@@ -59,9 +61,10 @@ Schema `classrup.commerce.dispute/v1` · storage **device** · privacy **P2** ·
 ```sql
 CREATE TABLE commerce_dispute_case (
   id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, context_type TEXT NOT NULL, context_id TEXT NOT NULL,
-  opener_id TEXT NOT NULL, status TEXT NOT NULL, lapse_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+  opener_id TEXT NOT NULL, status TEXT NOT NULL, lapse_at TEXT NOT NULL, idempotency_ref TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE UNIQUE INDEX commerce_dispute_open ON commerce_dispute_case(vault_id, context_type, context_id, opener_id)
   WHERE status NOT IN ('resolved','withdrawn');
+CREATE UNIQUE INDEX commerce_dispute_idem ON commerce_dispute_case(vault_id, idempotency_ref) WHERE idempotency_ref IS NOT NULL;
 ```
 
 ## Verification

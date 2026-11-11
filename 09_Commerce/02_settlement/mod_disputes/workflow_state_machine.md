@@ -74,6 +74,7 @@ stateDiagram-v2
 | TEST-PS-070-09.T06 | integration | PS-070-03.R03, PS-070-06.R03 | two conflicting accepted outcomes delivered to vault B | case frozen with COMMERCE_DISPUTE_FORK, both retained, no auto-resolution |
 | TEST-PS-070-09.T15 | e2e | PS-070-03.R04, PS-070-09.R03 | opener and respondent complete a return_agreed outcome on two devices | both screens show resolved with the no-money-movement note; axe zero serious issues |
 | TEST-PS-070-09.T18 | integration | PS-070-03.R05, PS-070-01.R05 | 3-party cycle case; A selects mediator M and B accepts; then C accepts | M stays proposed and receives nothing after A and B; becomes active only when acceptedBy equals {A, B, C} |
+| TEST-PS-070-09.T30 | contract | PS-070-04.R04, PS-070-03.R04 | a case resolved by accepted return_agreed and a case lapsed after 30 days | resolved payload carries caseCid, contextCid, the exact contextRef, parties, acceptedBy and outcomeCid for the first; the second carries resolution lapsed, documented as the FLOW-08 closed-unresolved outcome, with no outcomeCid |
 
 ## Dependencies
 

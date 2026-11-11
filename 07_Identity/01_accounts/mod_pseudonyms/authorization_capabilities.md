@@ -32,7 +32,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-052-09.T10 | abuse | PS-052-05.R01, PS-052-05.R02, PS-052-05.R03 | locked vault mutates; claim signed by a key not active in the DID's document; operator tries to create a DID on the registry; 21 availability checks in a minute | FORBIDDEN, UNAUTHENTICATED or VALIDATION_FAILED; no registry row created; 21st check RATE_LIMITED |
-| TEST-PS-052-09.T20 | abuse | PS-052-01.R04, PS-052-05.R04 | A2 signs a profile after its revocation; verifier V1 learned of the revocation before first seeing the profile, verifier V2 first saw it earlier | V1 rejects (KeyStatusPort at first-seen time), V2 keeps it with the revocation date shown as a claim |
+| TEST-PS-052-09.T20 | abuse | PS-052-01.R04, PS-052-05.R04 | A2 signs a profile with a backdated createdAt after its revocation; verifier V1 holds the revoking document, verifier V2 first saw the profile after revokesEffectiveAt and learns of the revocation later, verifier V3 first saw an older profile before revokesEffectiveAt | V1 refuses it (KeyStatusPort at receiver time); V2 quarantines it on learning the revocation; V3 keeps its profile with a revoked-signer marker and the revocation date shown as a claim |
 | TEST-PS-052-09.T26 | unit | PS-052-05.R04, PS-052-02.R05 | linked device A2 tries identity.device_key.add and confirms another key's revocation | IDENTITY_ROOT_KEY_REQUIRED for both; A2 can still sign routine statements and revoke itself |
 
 ## Dependencies

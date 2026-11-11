@@ -16,6 +16,7 @@
 **Data classification**
 - Profile: P3 record with field classes - public fields P0 once published; contacts fields P2 end-to-end encrypted to participants; private fields stay P3 in the vault.
 - BlockEntry: P3, device only; note is a private free text.
+- Profile mailboxes: P0 once published with visibility public (the N15 mailbox hint), P2 for contacts, never sent when private.
 
 **Retention**
 - Own profile and blocks until the user deletes them or vault erase (RET-STANDARD); removed blocks purged after 30 days; received profiles evicted after 180 days unviewed; tombstones kept 180 days (FED-4).
@@ -31,6 +32,7 @@
 | T05 | Mass profile spam from throwaway DIDs | vault intake limit of 50 profiles per hour per transport source, unknown DIDs shown as strangers, relay quotas apply |
 | T06 | Relay deletes or hides a user's profile in other people's vaults | relay hosting actions affect only the relay copy, and relay-signed tombstones only drop that relay from provenance |
 | T07 | Private field values leak through the record class | the record is P3 with per-field classes; logs, events below P3 and relay payloads carry only public fields |
+| T08 | A published mailbox ID is harvested to flood the owner's mailbox | F08.S01.M01 put proofs and quotas apply; the owner rotates the mailbox and the next profile version publishes only the replacement ID |
 
 **Abuse controls**
 - Intake limits - 50 received profiles per hour per source, 32 KiB per statement, quarantine beyond.
@@ -49,4 +51,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

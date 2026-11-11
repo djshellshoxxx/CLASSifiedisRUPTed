@@ -41,10 +41,11 @@ See the module test table below (all processes).
 | TEST-PS-071-09.T19 | integration | PS-071-04.R04 | receipt delivered through F09.S01.M01 commerce.statement.ingest, then the same envelope again | dispatched once to commerce.receipt.ingest and stored; duplicate is a no-op |
 | TEST-PS-071-09.T20 | integration | PS-071-07.R04 | export, deletion and retention purge driven by F10 | section commerce.receipts exported; DeletionPort pseudonymizes signerId; RetentionPurgePort purges after RET-EVIDENCE; every field carries an F10.S02.M02 class |
 | TEST-PS-071-09.T21 | abuse | PS-071-07.R05 | blocked payee sends a receipt, then one on a Deal with an open dispute case; 10 000 fresh dids each send one receipt | first dropped silently; second stored as evidence with notification suppressed; quarantine stays within 500 entries or 5 MiB and non-party receipts are dropped once full |
+| TEST-PS-071-09.T22 | contract | PS-071-04.R06, PS-071-02.R04, PS-071-01.R03 | sign a receipt and check the envelope bytes; ingest a hash-only envelope with its statement supplied, with a different statement, and with none; change kid or signedAt in the header; replay the statement under another dealId | signature covers exactly JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over the JCS statement; the first is accepted and stored; the others return accepted false (SECURITY_PAYLOAD_HASH_MISMATCH or SECURITY_SIGNATURE_INVALID) and are quarantined with that reason as COMMERCE_RECEIPT_SIGNATURE_INVALID; the replay returns COMMERCE_RECEIPT_MISMATCH; nothing is stored or emitted unless accepted is true |
 
 ## Acceptance criteria
 
-- All tests T01 to T21 pass in CI.
+- All tests T01 to T22 pass in CI.
 - Every receipt view and export carries the statement that it evidences an assertion and not delivery.
 - A receipt file verifies offline with no network and no vault, naming both the signing device key and the principal it is linked to.
 - No receipt reads valid for a party unless its device key is linked to that party and was not revoked before a trusted receipt time; signedAt never decides key status.

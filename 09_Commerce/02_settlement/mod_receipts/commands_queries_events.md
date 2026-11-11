@@ -11,6 +11,7 @@
 - **PS-071-04.R03** The module consumes claim and key-revocation events to prompt for receipts and to update key status.
 - **PS-071-04.R04** classrup.commerce.receipt/v1 (signer - the claim payer for payer_asserts_paid, the claim payee for payee_asserts_received, through a device key linked to that principal) is registered with the F09.S01.M01 ingest dispatcher through StatementHandlerPort, which hands it to commerce.receipt.ingest with cid deduplication, quarantine reasons and block filtering.
 - **PS-071-04.R05** The verify output names both the device key that signed and the principal it is linked to, with partyBinding, keyStatus and the trusted receipt time used, and its label never shows Valid together with 'revoked later' on the strength of signedAt.
+- **PS-071-04.R06** The module acts only on F16.S02.M03 result.accepted - issue stores, ingest stores and emits, and verify reports valid only when accepted is true - supplies the statement as payload for hash-only envelopes, and keeps the F16 reason (SECURITY_*) with every quarantined receipt.
 
 ## Specification
 
@@ -25,7 +26,7 @@
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `commerce.receipt.verify` | commerce.receipt.read | { receiptId } or { file: classrup-receipt/v1 JSON, ≤ 16 KiB } | { result: valid\|invalid, reasons[], signerId (principal), signingKeyId (device key), partyBinding: verified\|unverified, signedAt (signer's claim), keyStatus: active\|revoked_before_receipt\|revoked_after_receipt\|revoked_receipt_time_unknown\|unknown, trustedReceiptTime?, label } | VALIDATION_FAILED, NOT_FOUND, PAYLOAD_TOO_LARGE |
+| `commerce.receipt.verify` | commerce.receipt.read | { receiptId } or { file: classrup-receipt/v1 JSON, ≤ 16 KiB } | { accepted (F16.S02.M03 result.accepted), result: valid\|invalid (valid only when accepted), reasons[], signerId (principal), signingKeyId (device key), partyBinding: verified\|unverified, signedAt (signer's claim), keyStatus: active\|revoked_before_receipt\|revoked_after_receipt\|revoked_receipt_time_unknown\|unknown, trustedReceiptTime?, label } | VALIDATION_FAILED, NOT_FOUND, PAYLOAD_TOO_LARGE |
 | `commerce.receipt.export` | commerce.receipt.read | { receiptId } | { file: classrup-receipt/v1 JSON with keyLink chain, sizeBytes ≤ 8192 } | NOT_FOUND |
 | `commerce.receipt.list_for_claim` | commerce.receipt.read | { claimId } | { items: Receipt[] } | NOT_FOUND |
 
@@ -57,7 +58,7 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statement registry (N2, registered in F11.S01.M01): classrup.commerce.receipt/v1 - signer role is the claim payer for payer_asserts_paid and the claim payee for payee_asserts_received; the signing device key must be linked to that principal by a root-signed classrup.identity.device_link/v1 chain. Signing and verification use the F16.S02.M03 envelope classrup.security.envelope/v1 with context classrup/receipt/v1 and its verifier receipt time; this module supplies as receipt time the local receivedAt or a relay-signed receipt time (labelled 'according to relay <name>'). The type is registered with the F09.S01.M01 ingest dispatcher through StatementHandlerPort. Labels - valid and bound 'Valid for <party>'; party unbound 'Signature valid - party not proven'; revoked_before_receipt 'Key revoked before this receipt arrived'; revoked_after_receipt 'Key revoked after this receipt arrived'; revoked_receipt_time_unknown 'Key revoked; signing time unverifiable'.
+**Note:** Statement registry (N2, registered in F11.S01.M01): classrup.commerce.receipt/v1 - signer role is the claim payer for payer_asserts_paid and the claim payee for payee_asserts_received; the signing device key must be linked to that principal by a root-signed classrup.identity.device_link/v1 chain. Signing and verification use the F16.S02.M03 envelope classrup.security.envelope/v1 with context classrup/receipt/v1 (signed bytes JCS({v, ctx, kid, alg, signedAt, payloadHash}), payloadHash over the JCS statement) and its verifier receipt time; for a hash-only envelope this module supplies the statement as payload, and it acts only on result.accepted; as receipt time it supplies the local receivedAt or a relay-signed receipt time (labelled 'according to relay <name>'). The type is registered with the F09.S01.M01 ingest dispatcher through StatementHandlerPort. Labels - valid and bound 'Valid for <party>'; party unbound 'Signature valid - party not proven'; revoked_before_receipt 'Key revoked before this receipt arrived'; revoked_after_receipt 'Key revoked after this receipt arrived'; revoked_receipt_time_unknown 'Key revoked; signing time unverifiable'.
 
 ### Example
 
@@ -79,6 +80,7 @@ verify of that file offline => { "result": "valid", "partyBinding": "verified", 
 | TEST-PS-071-09.T16 | abuse | PS-071-01.R05, PS-071-02.R04, PS-071-04.R05 | a receipt signed with a key revoked at 09:00 and signedAt backdated to 08:00 arrives at 10:00; the same file verified offline with no trusted receipt time; a receipt with a relay-signed receipt time of 08:30 | first reads revoked_before_receipt and is quarantined with COMMERCE_RECEIPT_KEY_REVOKED, never Valid; second reads 'key revoked; signing time unverifiable'; third reads revoked_after_receipt labelled 'according to relay <name>' |
 | TEST-PS-071-09.T18 | integration | PS-071-01.R04, PS-071-04.R05 | export a receipt and verify the file on a device with no network and no vault | result names the signing device key and the principal it is linked to, partyBinding verified, file ≤ 8 KiB |
 | TEST-PS-071-09.T19 | integration | PS-071-04.R04 | receipt delivered through F09.S01.M01 commerce.statement.ingest, then the same envelope again | dispatched once to commerce.receipt.ingest and stored; duplicate is a no-op |
+| TEST-PS-071-09.T22 | contract | PS-071-04.R06, PS-071-02.R04, PS-071-01.R03 | sign a receipt and check the envelope bytes; ingest a hash-only envelope with its statement supplied, with a different statement, and with none; change kid or signedAt in the header; replay the statement under another dealId | signature covers exactly JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over the JCS statement; the first is accepted and stored; the others return accepted false (SECURITY_PAYLOAD_HASH_MISMATCH or SECURITY_SIGNATURE_INVALID) and are quarantined with that reason as COMMERCE_RECEIPT_SIGNATURE_INVALID; the replay returns COMMERCE_RECEIPT_MISMATCH; nothing is stored or emitted unless accepted is true |
 
 ## Dependencies
 

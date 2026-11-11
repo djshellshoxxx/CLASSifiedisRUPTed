@@ -40,7 +40,7 @@ edge_cases:
   - Two relays hold the same handle for different DIDs; allowed and shown with the DID fingerprint (16 base58btc characters of SHA-256 of the root public key, about 93 bits, never the constant did:key prefix) wherever ambiguity is possible.
   - The user tries to change the pseudonym twice within 30 days; the local guard warns and requires confirmation, and a relay registry refuses with IDENTITY_PSEUDONYM_COOLDOWN.
   - The user revokes the only active device key; refused with IDENTITY_LAST_DEVICE_KEY unless RecoveryKitStatusPort reports a created and verified recovery kit.
-  - A revoked device signs a statement; each verifier judges by its own first-seen time of the statement, accepting statements it first saw before it learned of the revocation and rejecting later ones, because the time of signing cannot be proven.
+  - A revoked device signs a statement; a verifier whose latest verified document already marks the key revoked refuses it whatever createdAt claims, and a verifier that learns of the revocation later quarantines the statements it first saw at or after revokesEffectiveAt (clamped to no earlier than 30 days before its earliest evidence of the revoking document) and keeps earlier ones with a revoked-signer marker, because the time of signing cannot be proven (F07.S02.M01, F11.S01.M02).
   - The 11th device is added; refused with IDENTITY_DEVICE_LIMIT.
   - Pseudonym contains right-to-left override or zero-width characters; rejected.
   - The user forgets the vault passphrase and has no recovery kit; the account cannot be recovered, and the creation flow states this before finishing.
@@ -64,7 +64,7 @@ processes:
       - An Account stores the did:key, the account root public key, the pseudonym with its normalized skeleton and Unicode data version, the root device flag and timestamps; it holds no email, no password and no private key, only an opaque keystore handle for the root key on the root device.
       - A DeviceKey stores a public key, label, link evidence with the key's own possession signature, revocation evidence and status; private keys are referenced by keyRef into the kernel keystore where they are encrypted with XChaCha20-Poly1305 under a key derived by scrypt (N=2^17, r=8, p=1) per ADR-0013.
       - A HandleRegistration is relay-side data derived from a signed claim statement and enforces uniqueness of the skeleton only within that relay.
-      - "Key custody - the account root key is held only on the root device and inside the recovery kit and signs only classrup.identity.portable_doc/v1, classrup.identity.device_link/v1, classrup.security.keyrevocation/v1 and classrup.identity.recovery_notice/v1; every other statement is signed by a device key that the author's current portable document lists as active, with the did:key principal in author and the device key id in the envelope, and verifiers accept it only if the signer key was active in the author's document they knew at their first-seen time of the statement."
+      - "Key custody - the account root key is held only on the root device and inside the recovery kit and signs only classrup.identity.portable_doc/v1, classrup.identity.device_link/v1, classrup.security.keyrevocation/v1 and classrup.identity.recovery_notice/v1; every other statement is signed by a device key that the author's current portable document lists as active, with the did:key principal in author and the device key in ext.signerKey (CTR-FED-001 FED-7); verifiers evaluate the signer key at their receipt time (F07.S02.M01 KeyStatusPort), refuse it when the author's latest verified document marks it revoked whatever createdAt claims, and quarantine statements first seen at or after revokesEffectiveAt when they learn of a revocation later."
       - The fingerprint of a DID or key is the first 16 base58btc characters of base58btc(SHA-256(raw 32-byte public key)), shown in groups of 4, with an 8-word form from the first 88 bits of the same hash; the multicodec prefix of did:key never enters it.
     entities:
       - name: Account
@@ -114,7 +114,8 @@ processes:
           - "linkStatementCid?: string — cid of the root-signed classrup.identity.device_link/v1 statement (absent for signup)"
           - "revocationStatementCid?: string — cid of the classrup.security.keyrevocation/v1 statement (type owned by F16.S02.M02)"
           - "revokedByKey?: string — public key that signed the revocation (this key, the root key or another device key)"
-          - "revokeReason?: enum — lost | stolen | retired | compromised | recovery"
+          - "revokeReason?: enum — lost | stolen | retired | compromised | recovery | superseded (old key after a device rotation, F16.S02.M01) | account_deleted (DeletionPort revoke_keys step)"
+          - "finalCids?: array — account_deleted only; at most 120 cids of the final statements signed in the DeletionPort sign step that the revocation still vouches for"
           - "pendingUntil?: timestamp — local clock, revocation_pending start plus 7 days"
           - "lastUsedDay?: date — UTC day of last use, day granularity"
           - "addedAt: timestamp — local clock"
@@ -193,17 +194,17 @@ processes:
         terminal: [erased]
         transitions:
           - "active -> active | identity.pseudonym.change | validate, update pseudonym and skeleton, emit identity.pseudonym.changed"
-          - "active -> erased | privacy.deletion.completed for the vault after the DeletionPort steps ran | final cleanup of any remaining rows, no further events"
+          - "active -> erased | DeletionPort destroy_keys step, the last step of the F10.S01.M04 deletion | destroy every keystore entry including the root key, delete DeviceKey rows and keep only the erased Account stub; privacy.deletion.completed later removes leftovers and never touches keys"
       - entity: DeviceKey
         initial: active
         terminal: [revoked]
         transitions:
-          - "active -> revoked | identity.device_key.revoke signed by the key itself or by the root key, or such a statement received | sign or record classrup.security.keyrevocation/v1, emit identity.device_key.revoked"
+          - "active -> revoked | identity.device_key.revoke signed by the key itself or by the root key, such a statement received, or the DeletionPort revoke_keys step | sign or record classrup.security.keyrevocation/v1 (reason account_deleted with finalCids in revoke_keys), emit identity.device_key.revoked"
           - "active -> revocation_pending | revocation of this key signed by another active device key | set pendingUntil = now + 7 days, show it on every own device, no event yet"
-          - "revocation_pending -> revoked | root key confirms, or pendingUntil passes without a counter-revocation or root decision | emit identity.device_key.revoked"
+          - "revocation_pending -> revoked | root key confirms, pendingUntil passes without a counter-revocation or root decision, or the DeletionPort revoke_keys step | emit identity.device_key.revoked"
           - "revocation_pending -> active | root key rejects the revocation by revoking the revoking key instead | pending entry closed"
           - "revocation_pending -> contested | this key revokes the revoking key (mutual), or two device keys revoke each other concurrently | freeze both keys for key management; routine statements still verify with a contested warning"
-          - "contested -> revoked | root key or recovery kit decision revokes this key | emit identity.device_key.revoked"
+          - "contested -> revoked | root key or recovery kit decision revokes this key, or the DeletionPort revoke_keys step | emit identity.device_key.revoked"
           - "contested -> active | root key or recovery kit decision keeps this key | the other key's revocation stands"
       - entity: HandleRegistration
         initial: active
@@ -221,8 +222,9 @@ processes:
       - Account creation, pseudonym change and device key add and revoke are vault commands; add produces classrup.identity.device_link/v1 signed by the root key and the new key, revoke produces classrup.security.keyrevocation/v1 (statement type owned by F16.S02.M02), and a pseudonym change may produce classrup.identity.handle_claim/v1 signed by a device key for registered relays.
       - handle claim and release are relay commands that verify the signed statement and update only that relay's registry.
       - Every command emits its events in the same local transaction as the state change.
-      - identity.device_key.added and identity.device_key.revoked describe only the local principal's own keys and carry its DID; counterparty key changes are published by F07.S02.M01 as identity.portable_doc.published with origin received, which counterparty consumers must use.
+      - identity.device_key.added and identity.device_key.revoked describe only the local principal's own keys and carry its DID; when identity.device_key.receive derives them from a verified statement signed on another device of the principal, the event has actor.kind federated and provenance { signerKey, statementCid } (CTR-EVT-001 EVT-7) so F13.S01.M03 can alert this device; counterparty key changes are published by F07.S02.M01 as identity.portable_doc.published with origin received, which counterparty consumers must use.
       - The module exposes the port registerRecoveredKey to F07.S01.M03 and the pure function fingerprintOf, and consumes the injected ports RecoveryKitStatusPort, KeyStatusPort, ConsentCheckPort and the F10 registries, whose implementing modules depend on this one.
+      - Every classrup.security.keyrevocation/v1 this module signs is queued, after privacy.consent.check(federation_publish, relayId), together with the reissued portable document to the relays that document lists (identity.portable_doc.publish with revocations), so a host relay can serve the revocation and the keys it removed through the F07.S02.M01 key-linkage reads (N11).
     commands:
       - name: identity.account.create
         capability: identity.account.create
@@ -247,14 +249,14 @@ processes:
         idempotent: true
       - name: identity.device_key.revoke
         capability: identity.device_key.revoke
-        input: "{ deviceKeyId, reason: lost|stolen|retired|compromised, expectedRevision }"
+        input: "{ deviceKeyId, reason: lost|stolen|retired|compromised|superseded, expectedRevision }"
         output: "{ deviceKeyId, revision, status: revoked|revocation_pending|contested, statementCid, revokedAt? }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_LAST_DEVICE_KEY, SECURITY_KEY_UNAUTHORIZED]
         emits: [identity.device_key.revoked]
         idempotent: true
       - name: identity.device_key.receive
         capability: identity.device_key.receive
-        input: "{ statement: classrup.identity.device_link/v1 | classrup.security.keyrevocation/v1 for the own DID, provenance }"
+        input: "{ statement: classrup.identity.device_link/v1 | classrup.security.keyrevocation/v1 for the own DID signed on another device of the principal, provenance }"
         output: "{ deviceKeyId, status: active|revocation_pending|contested|revoked }"
         errors: [IDENTITY_LINK_INVALID, SECURITY_KEY_UNAUTHORIZED, IDENTITY_DEVICE_LIMIT, VALIDATION_FAILED, RATE_LIMITED]
         emits: [identity.device_key.added, identity.device_key.revoked]
@@ -273,7 +275,7 @@ processes:
         errors: [NOT_FOUND, CONFLICT_STATE, CONFLICT_REVISION, EXPIRED, UNAUTHENTICATED, VALIDATION_FAILED]
         emits: []
         idempotent: true
-    note: "Statements and signer roles (N2): classrup.identity.device_link/v1 - the root key plus a possession signature by the new key; classrup.security.keyrevocation/v1 (single revocation type, owned by F16.S02.M02; this module adds the identity rules) - the revoked key itself or the root key (immediate) or another active device key (pending 7 days); classrup.identity.handle_claim/v1 and classrup.identity.handle_release/v1 - a device key active in the DID's portable document. Ports provided: registerRecoveredKey(accountSeed, newDevicePublicKey, possessionSig, label, verifiedLatestDoc?) for F07.S01.M03 rebuilds the Account from the root seed plus the latest portable document that the caller already verified with F07.S02.M01 (from the kit file, an export or a relay), signs a device_link with linkedBy recovery, marks this vault as the root device and returns IDENTITY_DEVICE_LIMIT at 10 active keys; without a document it can add the key but knows no other keys to revoke. fingerprintOf(publicKey) is a pure function for every module. Injected ports (dependency inversion, wired by the vault composition root because the implementers depend on this module): RecoveryKitStatusPort.hasVerifiedKit() by F07.S01.M03, KeyStatusPort.isActive(did, publicKey, at) by F07.S02.M01, ConsentCheckPort by F10.S01.M01 privacy.consent.check, and the ExportSectionPort, DeletionPort and RetentionPurgePort registries of F10.S01.M03, F10.S01.M04 and F10.S01.M02."
+    note: "Statements and signer roles (N2): classrup.identity.device_link/v1 - the root key plus a possession signature by the new key; classrup.security.keyrevocation/v1 (single revocation type, owned by F16.S02.M02; this module adds the identity rules and the reasons lost, stolen, retired, compromised, recovery, superseded and account_deleted, the last one with finalCids) - the revoked key itself or the root key (immediate) or another active device key (pending 7 days), queued with the reissued portable document to the relays it lists; classrup.identity.handle_claim/v1 and classrup.identity.handle_release/v1 - a device key active in the DID's portable document. Ports provided: registerRecoveredKey(accountSeed, newDevicePublicKey, possessionSig, label, verifiedLatestDoc?) for F07.S01.M03 rebuilds the Account from the root seed plus the latest portable document that the caller already verified with F07.S02.M01 (from the kit file, an export or a relay), signs a device_link with linkedBy recovery, marks this vault as the root device and returns IDENTITY_DEVICE_LIMIT at 10 active keys; without a document it can add the key but knows no other keys to revoke. fingerprintOf(publicKey) is a pure function for every module. Injected ports (dependency inversion, wired by the vault composition root because the implementers depend on this module): RecoveryKitStatusPort.hasVerifiedKit() by F07.S01.M03, KeyStatusPort.isActive(did, publicKey, at) by F07.S02.M01, ConsentCheckPort by F10.S01.M01 privacy.consent.check, and the ExportSectionPort, DeletionPort and RetentionPurgePort registries of F10.S01.M03, F10.S01.M04 and F10.S01.M02. DeletionPort steps implemented for F10.S01.M04 (N6a order sign, revoke_keys, pseudonymize, shred, purge, destroy_keys) - sign: signed handle releases for every registered relay; revoke_keys: one classrup.security.keyrevocation/v1 per registered device key with reason account_deleted and finalCids, the cids of the final statements every module signed in the sign step; destroy_keys: the last step of the whole deletion, which destroys every keystore entry including the root key. Events derived by identity.device_key.receive from a statement signed on another device carry actor.kind federated and provenance { signerKey, statementCid }."
     queries:
       - name: identity.pseudonym.check
         capability: identity.account.check_pseudonym
@@ -288,10 +290,10 @@ processes:
     events_produced:
       - {type: identity.account.created, privacy: P0, payload: "{ accountId, did, pseudonym, origin: created|recovered, createdAt }"}
       - {type: identity.pseudonym.changed, privacy: P0, payload: "{ accountId, did, pseudonym, skeletonVersion, revision }"}
-      - {type: identity.device_key.added, privacy: P3, payload: "{ accountId, did, deviceKeyId, publicKey, linkedBy, linkStatementCid? } - own principal only"}
-      - {type: identity.device_key.revoked, privacy: P3, payload: "{ accountId, did, deviceKeyId, publicKey, revokedAt, revokeReason, statementCid } - own principal only"}
+      - {type: identity.device_key.added, privacy: P3, payload: "{ accountId, did, deviceKeyId, publicKey, linkedBy, linkStatementCid?, origin: this_device|other_device } - own principal only; other_device events have actor.kind federated and provenance { signerKey, statementCid }"}
+      - {type: identity.device_key.revoked, privacy: P3, payload: "{ accountId, did, deviceKeyId, publicKey, revokedAt, revokeReason: lost|stolen|retired|compromised|recovery|superseded|account_deleted, statementCid, origin: this_device|other_device } - own principal only; other_device events have actor.kind federated and provenance { signerKey, statementCid }"}
     events_consumed:
-      - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already released relay handles and removed key records before F10.S01.M04 destroyed the keys; remove leftovers and set the Account to erased"}
+      - {type: privacy.deletion.completed, effect: "notification only - the DeletionPort steps already released relay handles (sign), revoked every device key with reason account_deleted (revoke_keys) and destroyed the keys (destroy_keys); remove leftover rows only, never sign, call relays, delete or destroy keys here (N6a)"}
     errors:
       - "IDENTITY_PSEUDONYM_INVALID | 422 | no | pseudonym violates length, character, script or format rules"
       - "IDENTITY_PSEUDONYM_RESERVED | 422 | no | pseudonym skeleton is reserved"
@@ -307,7 +309,7 @@ processes:
       -> { "accountId": "0192f400-…", "did": "did:key:z6Mk…", "fingerprint": "7Qx2 9mKp R4tW 8vNe", "deviceKeyId": "0192f401-…", "revision": 1 }
       vault command (root device): identity.device_key.add { "newPublicKey": "…", "label": "Laptop", "linkOffer": { "offerNonce": "…", "possessionSig": "…" }, "expectedRevision": 1 }
       -> { "deviceKeyId": "0192f403-…", "linkStatement": { "type": "classrup.identity.device_link/v1", "author": "did:key:z6Mk…", … "sig": "…root…" }, "statementCid": "sha256-…" }
-      relay command: identity.handle.claim { "claim": { "type": "classrup.identity.handle_claim/v1", "author": "did:key:z6Mk…", "keyId": "…device…", "payload": { "handle": "Riverstone", "relayId": "relay.example.org", "claimedAt": "2026-11-04T10:00:00.000Z" }, "sig": "…" } }
+      relay command: identity.handle.claim { "claim": { "type": "classrup.identity.handle_claim/v1", "author": "did:key:z6Mk…", "ext": { "signerKey": "did:key:z6Mk…device…" }, "payload": { "handle": "Riverstone", "relayId": "relay.example.org", "claimedAt": "2026-11-04T10:00:00.000Z" }, "sig": "…" } }
       -> 201 { "registrationId": "0192f402-…", "handle": "Riverstone", "revision": 1, "registeredAt": "2026-11-04T10:00:00.400Z" }
   authorization_capabilities:
     requirements:
@@ -340,19 +342,19 @@ processes:
       - The vault holds no email, phone, real name or password for the account; the pseudonym is a public label and the DID a stable pseudonymous identifier, which is not anonymity.
       - Private keys never leave the device unencrypted; the relay never sees them and the recovery kit is separate (F07.S01.M03).
       - Pseudonym checks never reveal which existing handle a candidate collides with beyond the reason code and the taken flag, except a local warning naming a contact the user already knows.
-      - The module meets the N6 privacy duties - it implements ExportSectionPort (sections identity.account and identity.device_keys), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort, classifies every field with F10.S02.M02, checks federation_publish consent through ConsentCheckPort before a handle claim, and treats privacy.deletion.completed only as final cleanup.
+      - The module meets the N6 and N6a privacy duties - it implements ExportSectionPort (sections identity.account and identity.device_keys), DeletionPort with the steps sign (signed handle releases), revoke_keys (one classrup.security.keyrevocation/v1 per registered device key with reason account_deleted and finalCids of at most 120 final statement cids) and destroy_keys (the last step of the whole deletion) and RetentionPurgePort, classifies every field with F10.S02.M02, checks federation_publish consent through ConsentCheckPort before a handle claim, and treats privacy.deletion.completed only as a notification that never deletes or destroys keys.
     data:
       - "Account: P0 public (did, pseudonym, fingerprint); rootKeyRef is an opaque local handle; DeviceKey: P3 (labels, last-used day); keystore blobs: P4 in the kernel keystore."
       - "HandleRegistration: P0 on the relay that holds it; claims and releases are signed statements."
     retention:
       - "Account and DeviceKey until vault erase (RET-STANDARD); revoked key records kept so old signatures remain verifiable."
       - "Released handles reserved 30 days then purged; relay request counters 24 h (RET-EPHEMERAL); seen statement cids kept 30 days after the registration is purged."
-      - "Deletion plan: release relay handles with signed releases first, then delete DeviceKey and Account rows and crypto-shred keystore handles; F10.S01.M04 destroys the keys last."
+      - "Deletion plan in the F10.S01.M04 step order: sign releases relay handles, revoke_keys signs an account_deleted revocation with finalCids for every registered device key, and destroy_keys - the final step of the whole deletion - destroys every keystore entry and deletes the DeviceKey rows; nothing is signed after revoke_keys."
     threats:
       - "T01 | Homoglyph impersonation of a known pseudonym | NFKC, Highly Restrictive script rule, UTS 39 skeleton equality check on a relay registry and local contact-confusable warning on every display"
       - "T02 | Squatting or impersonation by claiming a recently changed handle | released handles reserved 30 days for the former DID, 30 day change cooldown per DID on a registry"
       - "T03 | Mass creation of identities (Sybil, Douceur 2002) | creating a DID costs nothing and cannot be prevented without a central authority; relays can set claim rate limits and allowlists, and reputation dampens new identities (F07.S03.M01); the spec makes no uniqueness-of-person claim"
-      - "T04 | Stolen device keeps acting after revocation | a stolen non-root device is cut off for every verifier that has learned of the revocation, judged at the verifier's first-seen time; statements first seen earlier stay accepted, an explicit limit; a stolen root device whose passphrase is guessed, or a copied kit, can sign as the account and revocation cannot stop it, so the UI advises moving to a new identity"
+      - "T04 | Stolen device keeps acting after revocation | a stolen non-root device is refused by every verifier whose latest verified document marks it revoked, whatever createdAt claims, and a verifier that learns of the revocation later quarantines statements it first saw at or after revokesEffectiveAt (clamped to at most 30 days before its earliest evidence); statements first seen earlier stay accepted with a revoked-signer marker, an explicit limit; a stolen root device whose passphrase is guessed, or a copied kit, can sign as the account and revocation cannot stop it, so the UI advises moving to a new identity"
       - "T05 | Malicious link statement adds an attacker's device | the link needs the root key and a possession signature by the new key and is valid 10 minutes; the UI shows the new device label and fingerprint for confirmation"
       - "T06 | Weak vault passphrase enables offline guessing of the keystore blob | scrypt N=2^17, r=8, p=1, strength meter requiring at least 12 characters or 4 words, honest text that a stolen device file can be attacked offline"
       - "T07 | Foreign public key listed under a DID to fake linkage (F04 anti-shill reads key linkage) | every listed key carries its own possession signature over the DID-bound message, so another user's key cannot be listed"
@@ -402,15 +404,18 @@ processes:
       - "T17 | abuse | 02.R02,09.R03 | a valid signature over a device_link presented as handle_claim, as a relay login message and as a keyrevocation, and the reverse | rejected each time because the domain-separated prefixes differ"
       - "T18 | abuse | 02.R04 | claim from relay R1 replayed to R2; old release replayed after a reclaim; claim with claimedAt 11 minutes old | UNAUTHENTICATED for the wrong relay, CONFLICT_REVISION for the old release, EXPIRED for the stale claim; registries unchanged"
       - "T19 | abuse | 02.R05,03.R02 | stolen A3 revokes A1 and A2 | both revocation_pending for 7 days; A1's counter-revocation of A3 makes A1 and A3 contested; a revocation signed by contested A3 is refused with SECURITY_KEY_UNAUTHORIZED; the root key decision ends the contest"
-      - "T20 | abuse | 01.R04,05.R04 | A2 signs a profile after its revocation; verifier V1 learned of the revocation before first seeing the profile, verifier V2 first saw it earlier | V1 rejects (KeyStatusPort at first-seen time), V2 keeps it with the revocation date shown as a claim"
+      - "T20 | abuse | 01.R04,05.R04 | A2 signs a profile with a backdated createdAt after its revocation; verifier V1 holds the revoking document, verifier V2 first saw the profile after revokesEffectiveAt and learns of the revocation later, verifier V3 first saw an older profile before revokesEffectiveAt | V1 refuses it (KeyStatusPort at receiver time); V2 quarantines it on learning the revocation; V3 keeps its profile with a revoked-signer marker and the revocation date shown as a claim"
       - "T21 | property | 01.R05 | fingerprints of 10 000 random keys | 16 base58btc characters from SHA-256 of the raw key, no shared z6Mk prefix, no collisions, 8-word form decodes to the same 88 bits"
       - "T22 | unit | 07.R03 | identity.pseudonym.check on a relay for a taken and a confusable candidate, and locally for a contact lookalike | relay output has only reason codes and taken, never the colliding handle, DID or registration id; the local warning names only a known contact"
       - "T23 | e2e | 09.R04 | UI copy check of the create identity, devices and handle screens | offline-guessing warning, 'unique only on this relay', 'revocation reaches others when delivered' and stolen-root-device texts are present in every locale bundle"
-      - "T24 | integration | 07.R04 | F10 export section, deletion plan execution and retention sweep with stub registries; handle claim without federation_publish consent | sections identity.account and identity.device_keys exported; handles released before key destruction; privacy.deletion.completed only cleans up; claim not sent without consent"
+      - "T24 | integration | 07.R04 | F10 export section, DeletionPort steps sign, revoke_keys and destroy_keys run in order by a recording F10.S01.M04 stub, retention sweep; handle claim without federation_publish consent; privacy.deletion.completed delivered | sections identity.account and identity.device_keys exported; handles released in sign; one account_deleted keyrevocation per registered device key listing the final statement cids (at most 120); keys destroyed only in destroy_keys; privacy.deletion.completed removes leftovers and never touches keys; claim not sent without consent"
       - "T25 | unit | 04.R05 | registerRecoveredKey with the root seed and a verified latest document, at 10 active keys, and without a document | Account rebuilt with rootDevice true and a recovery device_link; IDENTITY_DEVICE_LIMIT with nothing stored; without a document the key is added and no other key is known for revocation"
       - "T26 | unit | 05.R04,02.R05 | linked device A2 tries identity.device_key.add and confirms another key's revocation | IDENTITY_ROOT_KEY_REQUIRED for both; A2 can still sign routine statements and revoke itself"
+      - "T27 | integration | 04.R06 | A1 revoked on the root device; relays R1 (consented, listed in the document) and R2 (not consented) | the keyrevocation statement is queued with the reissued document to R1 only; on R1 identity.portable_doc.key_set and find_by_key return A1 as revoked with the revocation cid and A1 as a key removed from the document"
+      - "T28 | integration | 04.R04 | on root device A1 the principal links A3 and later revokes it; the vault on linked device A2 receives the device_link and the keyrevocation through identity.device_key.receive | A2 emits identity.device_key.added and identity.device_key.revoked with actor.kind federated, provenance { signerKey, statementCid } and origin other_device; A1's own events carry origin this_device and actor.kind user"
+      - "T29 | unit | 04.R01,02.R05 | identity.device_key.revoke with reason superseded for the old key after a device rotation, and a received revocation with reason account_deleted and finalCids | old key revoked with revokeReason superseded and identity.device_key.revoked carries it; the account_deleted revocation is recorded with its finalCids"
     acceptance:
-      - All tests T01-T26 pass in CI.
+      - All tests T01-T29 pass in CI.
       - No private key, passphrase or email is ever present in module storage, events, logs or relay payloads (privacy suite), and the root key exists only on the root device keystore and in the kit.
       - Homoglyph and mixed-script pseudonym samples are rejected or warned according to the rules, and no claim of global pseudonym uniqueness appears in the UI or docs.
       - A stolen linked device cannot revoke the legitimate devices on its own, and the UI states that a stolen root device or kit can still sign as the account.

@@ -43,15 +43,17 @@ See the module test table below (all processes).
 | TEST-PS-057-09.T20 | abuse | PS-057-07.R05 | endorsed public peer claim with a meetup context | the public statement and endorsement carry only blindedRef; the raw meetup id is absent |
 | TEST-PS-057-09.T21 | integration | PS-057-02.R04 | federation.peer.removed for a peer relay, and R1's descriptor lists O0 as retired after classrup.federation.key_rotation/v1 | relay key set rebuilt; attestations by the removed relay re-checked; O0 attestations show 'signer key retired' |
 | TEST-PS-057-09.T22 | integration | PS-057-07.R04 | F10 export, deletion and retention sweep with stub registries; endorsement publish to a relay without federation_publish consent | section exported; attestations pseudonymized, not deleted; PRECONDITION_FAILED or relay skipped |
-| TEST-PS-057-09.T23 | unit | PS-057-01.R02 | an attestation signed by an issuer device key revoked before this vault first saw it, and one first seen before the revocation | the first rejected with IDENTITY_ATTESTATION_SIGNATURE_INVALID; the second stays active |
+| TEST-PS-057-09.T23 | unit | PS-057-01.R02 | an attestation signed by an issuer device key that the latest verified document already marks revoked, with a backdated createdAt; the revocation learned later for one attestation first seen after its effective time and one first seen before it | the first rejected with IDENTITY_ATTESTATION_SIGNATURE_INVALID; on learning, the later-seen one quarantined and the earlier-seen one stays active with a revoked-signer marker |
+| TEST-PS-057-09.T24 | contract | PS-057-04.R01 | issue, revoke and endorse with a StatementPublisherPort spy | each call goes through StatementPublisherPort.publish; cid and signature follow F11.S01.M03; no other signing path |
+| TEST-PS-057-09.T25 | integration | PS-057-04.R04, PS-057-05.R03 | A and B co-sign a same_owner attestation and publish it to host relay H with consent; list_linkage on H in-process and over HTTP; SameOwnerLinkPort.linked(A, B) and (A, C) | in-process result lists the link with both signatures; HTTP refused; the port returns true for A and B and false for A and C |
 
 ## Acceptance criteria
 
-- All tests T01-T23 pass in CI.
+- All tests T01-T25 pass in CI.
 - No KYC, email, phone or document data is stored or logged by this module (privacy suite).
 - Every displayed attestation shows its signer and the wording that it evidences an assertion, not truth, and no UI string calls a claim verified.
 - A claim about another person is never displayed publicly without the subject's endorsement, and a relay badge appears only for keys listed in the named relay's descriptor.
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

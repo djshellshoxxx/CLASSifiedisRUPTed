@@ -5,23 +5,28 @@ summary: >-
   immutable ListingRevision for every non-draft change, and detects material changes (price, condition,
   category). A material change on a published listing is announced by event so offers and negotiations can flag
   their assumptions, and the owner is offered a re-publish that sends a new signed projection (F01.S01.M03).
-  Material edits are refused while an auction on the listing has bids (N11). The module never changes what other
-  parties already hold; their copies change only when they accept the new statement.
+  Before a material edit the module asks the listing edit-lock port, which F04.S01.M01 registers with its vault
+  query auctions.auction.edit_lock (inverted port registration, because F04.S01.M01 already depends on F01), and
+  refuses the edit while the port reports locked (N11). On an auction host relay the same module derives
+  bazaar.listing.edited host-side from a changed public projection of a listing that a hosted auction references, so
+  F04.S02.M03 consumes the edit signal as an event. The module never changes what other parties already hold; their
+  copies change only when they accept the new statement.
 responsibilities:
   - Apply owner edits to Listing through bazaar.listing.apply_edit with expectedRevision and no silent merging.
   - Own ListingRevision, an immutable snapshot of public fields per non-draft change, up to 100 per listing.
   - Detect material changes (price, condition, category) and set the material flag and changedFields on bazaar.listing.edited.
   - Provide the system command bazaar.listing_revision.record so F01.S02.M01 (price), F01.S02.M02 (want spec) and F01.S03.M02 (variant price) report their changes as listing revisions inside their own transaction.
   - Re-run local prohibited-item rules on edits of published listings.
-  - Refuse material edits while an auction on the listing has at least one bid, tracked from consumed auction events (N11).
+  - Refuse material edits while the ListingEditLockPort (implemented by F04.S01.M01 auctions.auction.edit_lock) reports the listing locked, asking it synchronously before every material edit or record (N11).
   - Keep revisions cited by offers, negotiations or deals for the evidence window when the listing is purged.
+  - On an auction host relay, compare each newly accepted public projection of an auction-kind listing with the previous one and raise bazaar.listing.edited host-side (listingId, material, changedFields) when a hosted auction references the listing.
 non_responsibilities:
   - Creating listings and the Listing status field (F01.S01.M01).
   - Signing and sending the updated public projection (F01.S01.M03); this module only marks the listing as having unsent changes.
   - Notifying offerers; offers (F01.S04.M01) and negotiations (F01.S04.M02) consume bazaar.listing.edited and notify through F13.
-  - Auction bidding and close (F04); this module only reads their events in the seller's vault.
+  - Auction bidding, close and the edit-lock answer (F04); this module only declares the ListingEditLockPort and asks it, and F04.S02.M03 decides what a host-side edit signal means for fraud review.
   - "Future: three-way merge of concurrent edits from two devices."
-depends_on: [F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001]
+depends_on: [F01.S01.M01, F18.S01.M02, F18.S01.M03, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001]
 user_stories:
   - As a seller, I can fix a typo in my published listing and see that it is not treated as a price change.
   - As a seller, I am told before I save that changing the price or condition will mark open offers as based on an older version.
@@ -35,7 +40,9 @@ edge_cases:
   - The listing reaches 100 revisions; the next edit returns BAZAAR_EDIT_REVISION_LIMIT and suggests archiving and relisting.
   - An edit arrives for an expired, closed or archived listing; CONFLICT_STATE is returned.
   - The owner edits a published listing offline; the edit is committed locally and the UI shows that other parties still see the earlier version until the new projection is sent.
-  - An auction on the listing has one bid and the seller changes the condition; BAZAAR_EDIT_AUCTION_HAS_BIDS is returned while a title typo fix is still allowed.
+  - An auction on the listing has one bid and the seller changes the condition; the edit-lock port answers locked and BAZAAR_EDIT_AUCTION_HAS_BIDS is returned while a title typo fix is still allowed.
+  - The edit-lock port cannot answer (auction store unreadable) during a material edit of an auction-kind listing; the edit is refused with DEPENDENCY_UNAVAILABLE (fail closed), while non-material edits proceed.
+  - The seller fixes a title typo after bids; the host relay receives the new projection, finds the listing referenced by a hosted auction and raises bazaar.listing.edited host-side with material false and changedFields [title].
   - The listing is purged 90 days after archive while a two-year-old accepted offer cites revision 4; revision 4 and later rows are kept as evidence, the rest of the listing content is purged.
 ux:
   screens:
@@ -53,7 +60,7 @@ processes:
       - "A ListingRevision is an immutable snapshot of the public fields of a listing at one revision number, with changedFields, a material flag and the editor principal."
       - "Revisions are written only for listings that have been published at least once; plain draft edits only bump Listing.revision to bound storage."
       - "Revision snapshots are P1 data in the owner's vault and are retained as commerce evidence because offers cite the revision the buyer saw."
-      - "A derived, rebuildable per-listing edit state {listingId, lastProjectedRevision, auctions [{auctionId, bidCount, open}]} is kept from consumed bazaar.listing.published, bazaar.publication.renewed and auction events; it is not an exported record and is rebuilt from the local outbox history."
+      - "A derived, rebuildable per-listing edit state {listingId, lastProjectedRevision} is kept from consumed bazaar.listing.published and bazaar.publication.renewed events; auction lock state is never cached here but asked from the ListingEditLockPort before each material edit. On an auction host relay a derived host baseline {listingId, projectionCid, listingRevision, public field values} is kept for each accepted auction-kind listing projection. Neither is an exported record; both are rebuilt from the local outbox history or the stored projections."
     entities:
       - name: ListingRevision
         schema: classrup.bazaar.listing_revision/v1
@@ -69,7 +76,7 @@ processes:
           - "source: enum — owner_edit | sell_terms | variant | wanted_spec | system"
           - "changedFields: string[] — <= 20 names such as title, price, condition, categoryId"
           - "material: boolean — true when price, condition or category changed"
-          - "snapshot: object — public fields as published (title, description, categoryId, condition, mediaRefs, tags, regionCell, price?), <= 32 KiB"
+          - "snapshot: object — public fields as published (title, description, categoryId, condition, media [{ref, alt?, decorative?}], tags, regionCell, price?), <= 32 KiB"
           - "snapshotHash: string — sha256- over JCS(snapshot)"
           - "wasPublic: boolean — listing status was published or unpublished-after-publish at the time"
           - "evidenceUntil?: timestamp — set when the listing is purged with keepEvidence true; listing deletion time + 2 years (RET-EVIDENCE)"
@@ -89,17 +96,17 @@ processes:
       - "Edit input is a strict patch; fields that never change (kind, ownerId, status) are rejected."
       - "Published listings are re-checked against the active prohibited-item rules before the edit is stored."
       - "Every rule violation maps to one stable error code."
-      - "Material edits (condition, categoryId or price from any source) are refused while an auction on a listing of kind auction has at least one bid (N11); non-material edits stay allowed."
+      - "Material edits (condition, categoryId or price from any source) of a listing of kind auction are refused while the ListingEditLockPort registered by F04.S01.M01 (auctions.auction.edit_lock) answers locked for the listing (N11); a port that cannot answer refuses with DEPENDENCY_UNAVAILABLE, no registered port means no auction can exist (F04 off), and non-material edits stay allowed."
     rules:
-      - "V01 | patch contains only title, description, categoryId, condition, mediaRefs, tags, regionCell | VALIDATION_FAILED"
-      - "V02 | patch field limits equal creation limits in F01.S01.M01 (title 3..120, description <= 5000, mediaRefs <= 10) | VALIDATION_FAILED"
+      - "V01 | patch contains only title, description, categoryId, condition, media, tags, regionCell | VALIDATION_FAILED"
+      - "V02 | patch field limits equal creation limits in F01.S01.M01 (title 3..120, description <= 5000, media <= 10 MediaRef entries with alt <= 140 code points) | VALIDATION_FAILED"
       - "V03 | listing status is draft, published or unpublished | CONFLICT_STATE"
       - "V04 | expectedRevision equals the current Listing.revision | CONFLICT_REVISION"
       - "V05 | published or unpublished listing has fewer than 100 revisions | BAZAAR_EDIT_REVISION_LIMIT"
       - "V06 | prohibited-item evaluation of the edited text and category returns allow or allow_with_notice | BAZAAR_EDIT_POLICY_BLOCKED"
       - "V07 | patch is not empty after removing unchanged values | VALIDATION_FAILED"
       - "V08 | regionCell, if present, has length 4 or 5 | BAZAAR_EDIT_POLICY_BLOCKED"
-      - "V09 | kind auction with an open auction holding at least 1 bid (derived edit state): a patch or record touching condition, categoryId or price is refused | BAZAAR_EDIT_AUCTION_HAS_BIDS"
+      - "V09 | kind auction: before a patch or record touching condition, categoryId or price, ListingEditLockPort.editLock({listingId}) (auctions.auction.edit_lock) is asked in the edit transaction; locked true refuses the change with params bidCount, lastKnownAt and auctionId; a port error refuses with DEPENDENCY_UNAVAILABLE | BAZAAR_EDIT_AUCTION_HAS_BIDS"
   workflow_state_machine:
     requirements:
       - "ListingRevision has no lifecycle beyond creation; the listing's status machine is owned by F01.S01.M01."
@@ -113,22 +120,24 @@ processes:
       - "bazaar.listing.edit is a vault-local command; it produces no signed statement. Sending the new projection is the explicit command bazaar.publication.publish in F01.S01.M03."
       - "bazaar.listing_revision.record is an internal vault port used by sibling modules in their own transaction."
       - "bazaar.listing.edited is emitted only for published or unpublished listings and carries field names, never field values, so it is safe for notification channels."
+      - "On an auction host relay the module consumes federation.record.accepted for type classrup.bazaar.listing/v1 with payload kind auction, reads the verified projection with federation.record.get, compares its public fields with the host baseline of the same listing and, when the listingRevision is higher, a field changed and the ListingEditLockPort registered on the host by the auction host returns an auctionId for the listing, emits bazaar.listing.edited host-side with source host_projection; the baseline is updated in the same relay transaction."
+      - "The ListingEditLockPort {editLock({listingId}) -> {locked, bidCount, lastKnownAt, auctionId?}} is declared here and implemented by F04.S01.M01 (auctions.auction.edit_lock in the seller vault, answered from hosted auctions on a host relay); it is registered at composition, so this module never lists F04 in depends_on."
     commands:
       - name: bazaar.listing.edit
         capability: bazaar.listing.edit
-        input: "[vault-local] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, mediaRefs?, tags?, regionCell? } }"
+        input: "[vault-local] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, media?: [{ ref, alt?, decorative? }], tags?, regionCell? } }"
         output: "{ listingId, revision, material, changedFields, unsentChanges }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_POLICY_BLOCKED, BAZAAR_EDIT_AUCTION_HAS_BIDS]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_POLICY_BLOCKED, BAZAAR_EDIT_AUCTION_HAS_BIDS, DEPENDENCY_UNAVAILABLE]
         emits: [bazaar.listing.edited]
         idempotent: true
       - name: bazaar.listing_revision.record
         capability: bazaar.listing_revision.record
         input: "[vault-local, internal port] { listingId, expectedRevision, source, changedFields, snapshotPatch }"
         output: "{ listingId, revision, material, unsentChanges }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_AUCTION_HAS_BIDS]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_AUCTION_HAS_BIDS, DEPENDENCY_UNAVAILABLE]
         emits: [bazaar.listing.edited]
         idempotent: true
-    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listing_revisions), DeletionPort (plan: purge unreferenced revisions, pseudonymize editorId in rows kept as evidence) and RetentionPurgePort (purge rows past evidenceUntil) with F10.S01.M03, F10.S01.M04 and F10.S01.M02."
+    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listing_revisions), DeletionPort (plan: purge unreferenced revisions, pseudonymize editorId in rows kept as evidence) and RetentionPurgePort (purge rows past evidenceUntil) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. Declared port ListingEditLockPort { editLock({listingId}) -> { locked, bidCount, lastKnownAt, auctionId? } }: F04.S01.M01 registers auctions.auction.edit_lock as its implementation in the seller vault and the auction host registers the same port on a host relay for the auctions it hosts (inverted registration; F04.S01.M01 depends on F01, so a direct edge would form a cycle). Host-side derivation runs only on a relay where that port is registered and emits a relay-local event (EVT-8) carrying IDs and field names only."
     queries:
       - name: bazaar.listing_revision.list
         capability: bazaar.listing_revision.read
@@ -141,20 +150,17 @@ processes:
         output: "{ revision: ListingRevision }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: bazaar.listing.edited, privacy: P1, payload: "{ listingId, ownerId, revision, status, material, changedFields: string[], source }"}
+      - {type: bazaar.listing.edited, privacy: P1, payload: "{ listingId, ownerId, revision, status, material, changedFields: string[], source: owner_edit|sell_terms|variant|wanted_spec|system|host_projection, projectionCid? (host_projection only), auctionId? (host_projection only) }"}
     events_consumed:
       - {type: bazaar.listing.published, effect: "set lastProjectedRevision = payload listingRevision for the listing, so unsentChanges becomes false when it equals Listing.revision"}
       - {type: bazaar.publication.renewed, effect: "set lastProjectedRevision = payload listingRevision of the renewed signed projection"}
       - {type: bazaar.listing.deleted, effect: "keepEvidence true: keep the listing's revisions and set evidenceUntil = deletion time + 2 years; keepEvidence false: purge the revisions in the same transaction"}
-      - {type: auctions.auction.scheduled, effect: "seller vault: record auctionId for the payload listingId in the derived edit state with bidCount 0 and open true"}
-      - {type: auctions.bid.placed, effect: "seller vault, as re-derived from the host relay's signed bid ledger (N17): increment bidCount of the auction; V09 then refuses material edits"}
-      - {type: auctions.auction.cancelled, effect: "mark the auction closed in the derived edit state so material edits are allowed again"}
-      - {type: auctions.auction.unsold, effect: "mark the auction closed in the derived edit state so material edits are allowed again"}
+      - {type: federation.record.accepted, effect: "host relay only: for type classrup.bazaar.listing/v1 with payload kind auction (not local), read the projection with federation.record.get, diff it against the host baseline and, when the listingRevision is higher, a public field changed and the host-registered ListingEditLockPort returns an auctionId, emit bazaar.listing.edited with source host_projection, material per the price, condition and categoryId rule, changedFields and projectionCid; always update the baseline"}
       - {type: privacy.deletion.completed, effect: "replace editorId with the payload pseudonym in revisions retained under evidenceUntil and purge the derived edit state"}
     errors:
       - "BAZAAR_EDIT_REVISION_LIMIT | 409 | no | listing already has 100 revisions"
       - "BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.ruleKeys"
-      - "BAZAAR_EDIT_AUCTION_HAS_BIDS | 409 | no | an auction on this listing has bids; condition, category and price cannot change (N11)"
+      - "BAZAAR_EDIT_AUCTION_HAS_BIDS | 409 | no | the auction edit lock (auctions.auction.edit_lock) reports this listing locked because an auction on it has bids or its bid count is not confirmed; condition, category and price cannot change (N11); params bidCount, lastKnownAt, auctionId"
     example: |
       vault.dispatch("bazaar.listing.edit", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 4,
         "patch": { "condition": "like_new" } }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000021")
@@ -176,10 +182,10 @@ processes:
       - "The revision snapshot, the Listing update and the outbox event commit in one IndexedDB transaction or not at all."
       - "Edits made offline are committed locally; no relay acknowledgement is claimed, and the UI shows unsent changes until the projection is sent."
     idempotency: "Idempotency-Key required on edit; the key and request hash are kept 24 h in the vault; replay returns the stored result. Event consumers record (consumer, eventId) before side effects and skip duplicates (EVT-3)."
-    concurrency: "expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. Auction events and edits serialize on the IndexedDB transaction; an edit committed before the first bid event stands."
+    concurrency: "expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. The edit-lock port is asked inside the edit transaction; it answers from the cached host projection and locks an open auction whose host projection is older than 5 minutes, so a bid in transit cannot be overtaken by a material edit. Host-side baselines serialize per listing in the relay transaction that stores the derived event."
     retries: "Only IndexedDB transaction aborts are retried (max 3); policy and validation errors are not retried."
     offline: "Edits work offline. Sync-outbox state for the projection belongs to F01.S01.M03: local committed, prepared, transport_acknowledged, peer_accepted."
-    partial_failure: "If the prohibited-rule pack cannot be read, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history before the next material edit is accepted."
+    partial_failure: "If the prohibited-rule pack cannot be read, or the edit-lock port fails during a material edit, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history; a missing host baseline is rebuilt from the stored projections before the next comparison, and a projection without a baseline only seeds it."
   privacy_retention_abuse:
     requirements:
       - "Revision snapshots contain only fields that are already public when published; drafts store no snapshots."
@@ -196,7 +202,7 @@ processes:
       - "T01 | Bait-and-switch: seller changes price after buyers commit | material flag, event to offers, and explicit buyer re-confirmation in F01.S04.M01/M02; revision history is evidence"
       - "T02 | Edit used to smuggle prohibited content past publication checks | rules re-evaluated on every edit of a published listing; relay hosting policy applies again when the new projection is sent"
       - "T03 | History tampering | revisions are immutable and carry snapshotHash; the signed projection of F01.S01.M03 binds listingRevision and hash"
-      - "T04 | Auction bait-and-switch against bidders | V09 refuses condition, category and price changes while bids exist (N11)"
+      - "T04 | Auction bait-and-switch against bidders | V09 asks the F04.S01.M01 edit lock before every material change and refuses while it is locked, failing closed when it cannot answer (N11); a modified client that publishes anyway is seen by the host relay, which raises bazaar.listing.edited host-side with material true for F04.S02.M03"
       - "T05 | Evidence lost when the listing is purged | keepEvidence keeps cited revisions for the evidence window"
     abuse_controls:
       - "At most 20 edits per hour per listing and 100 revisions per listing; exceeding returns RATE_LIMITED or BAZAAR_EDIT_REVISION_LIMIT."
@@ -220,7 +226,7 @@ processes:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate command output and bazaar.listing.edited payloads against the schema registry."
       - "Material-change detection has property tests over random patches."
-    fixtures: "Vault with published listing L (revision 4, EUR sell terms 50.00, condition good), auction listing A with a scheduled auction, policy pack with one blocked keyword, clock 2026-11-04T10:00:00Z."
+    fixtures: "Vault with published listing L (revision 4, EUR sell terms 50.00, condition good), auction listing A with an edit-lock port stub of F04.S01.M01 (unlocked, locked with bidCount 1, failing), a host relay H with a hosted auction on A and its host edit-lock port, policy pack with one blocked keyword, clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02 | edit title of published L then edit draft D | revision row exists for L with snapshotHash; none for D, whose Listing.revision still increments"
       - "T02 | property | 02.R01 | random patches | material equals intersection of changedFields with price, condition, categoryId; ownerId and kind patches rejected"
@@ -237,14 +243,17 @@ processes:
       - "T13 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import row with gap in revisionNo | rows round-trip identical; gap import kept read-only with warning"
       - "T14 | abuse | 02.R03 | 21 edits within an hour on one listing | 21st returns RATE_LIMITED"
       - "T15 | integration | 03.R02 | edit published L to revision 5, then deliver bazaar.listing.published with listingRevision 5, then edit again | unsentChanges true, then false, then true; renewed event with the latest revision also clears it"
-      - "T16 | integration | 02.R04 | auction A scheduled, one auctions.bid.placed delivered, then patch condition, record a price, and patch the title; then auctions.auction.cancelled | condition and price give BAZAAR_EDIT_AUCTION_HAS_BIDS, title edit succeeds; after cancel the condition edit succeeds"
+      - "T16 | integration | 02.R04 | edit-lock stub for A answers locked (bidCount 1), then patch condition, record a price and patch the title; stub then answers unlocked; then the stub fails | condition and price give BAZAAR_EDIT_AUCTION_HAS_BIDS with params bidCount, lastKnownAt, auctionId and the title edit succeeds; unlocked lets the condition edit pass; the failing port gives DEPENDENCY_UNAVAILABLE for material edits only"
       - "T17 | integration | 07.R02 | purge listing L with keepEvidence true and listing M with keepEvidence false, then privacy.deletion.completed | L revisions kept with evidenceUntil 2 years and editorId replaced by the pseudonym; M revisions purged"
       - "T18 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.listing_revisions present with field classes; deletion plan pseudonymizes retained rows; retention purge removes rows past evidenceUntil"
-      - "T19 | unit | 01.R04 | drop the derived edit state and replay the outbox history | rebuilt state equals the original lastProjectedRevision and auction bid counts; it is absent from the export"
+      - "T19 | unit | 01.R04 | drop the derived edit state and the host baseline and rebuild them | rebuilt state equals the original lastProjectedRevision and the baseline equals the last stored projection; neither holds auction bid counts and both are absent from the export"
+      - "T20 | integration | 04.R04 | host relay H accepts a new projection of A (title changed, revision 6), then one with condition changed (revision 7), then a changed projection of a listing that no hosted auction references | bazaar.listing.edited host-side with source host_projection, material false and changedFields [title], then material true with [condition] and projectionCid; nothing for the unreferenced listing; baselines updated"
+      - "T21 | contract | 04.R05 | F04.S01.M01 conformance stub registers auctions.auction.edit_lock as ListingEditLockPort; inspect the depends_on graph | the edit transaction calls editLock with {listingId} and maps the output fields; F01.S01.M02 does not list F04 in depends_on and the graph stays acyclic"
+      - "T22 | unit | 02.R01,02.R02 | patch media with alt text, decorative and 11 entries | media patch accepted and snapshot holds the MediaRef entries; 11 entries VALIDATION_FAILED; media change is not material"
     acceptance:
-      - All tests T01-T19 pass in CI.
+      - All tests T01-T22 pass in CI.
       - A material change always produces bazaar.listing.edited with material true and never carries field values.
-      - No edit path changes Listing.status or bypasses expectedRevision, and no material edit succeeds while an auction on the listing has bids.
+      - No edit path changes Listing.status or bypasses expectedRevision, and no material edit succeeds while the auction edit lock reports locked or cannot answer.
   import_export_backup_rollback:
     requirements:
       - "The user export contains all ListingRevision rows of own listings."

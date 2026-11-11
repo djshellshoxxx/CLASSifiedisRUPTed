@@ -20,7 +20,7 @@
 | identity.portable_doc.publish | anonymous, principal | valid signed document within relay quota; relay hosting policy allows the DID |
 | identity.portable_doc.read_public | principal, anonymous | public read; relay quota applies |
 | identity.portable_doc.read_own | principal | unlocked local principal |
-| identity.portable_doc.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - the host relay's anti-shill checks over documents it stores (N11) |
+| identity.portable_doc.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - in-process only, for anti-shill checks of an auction whose seller chose this relay as host (N11, PT-15) and for F10.S01.M02 legal-hold approval through KeyLinkagePort, over documents, revocations and attestations this relay stores; never served over HTTP or to another relay |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -32,4 +32,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M03, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -10,7 +10,7 @@
 - **PS-068-04.R02** Observation transitions emit the catalog events into the vault outbox in the same IndexedDB transaction as the observation update; the extra event commerce.payment.failed is also emitted.
 - **PS-068-04.R03** The module consumes the claim and Deal events to start and stop observation and never writes a PaymentClaim status directly.
 - **PS-068-04.R04** The module registers a StatementHandlerPort handler with F09.S01.M01 for classrup.commerce.crypto_request/v1 and classrup.commerce.crypto_request_cancel/v1 (signer - obligation payee) that checks the signer role, re-validates address, chain and asset descriptor, deduplicates by cid, buffers statements whose Deal is unknown for 24 h, quarantines with reasons signer_not_payee, address_invalid, asset_mismatch or request_unknown, and drops statements from blocked dids silently.
-- **PS-068-04.R05** Every commerce.payment.* event this module produces carries contextRef, payerId and payeeId besides claimId and dealId, so consumers route and filter without reading the Deal (N4, N5).
+- **PS-068-04.R05** Every commerce.payment.* event this module produces carries contextRef, obligationId, payerId and payeeId besides claimId and dealId, so consumers route and filter without reading the Deal (N4, N5).
 - **PS-068-04.R06** The crypto MethodRulePort returns fail for invalid, secret-looking, reused or out-of-request input, hold(txid_lookup_pending) while a configured verifier has not found the txid, and release or discard through the F09.S01.M01 callbacks; with no verifier it fails with COMMERCE_CLAIM_METHOD_RULE unless txidAttested is true.
 
 ## Specification
@@ -36,11 +36,11 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `commerce.payment.confirming` | P2 | { claimId, dealId, contextRef, payerId, payeeId, chainId, txid, confirmations, requiredConfirmations, finalityPolicy, verifierId, label } |
-| `commerce.payment.confirmed` | P2 | { claimId, dealId, contextRef, payerId, payeeId, chainId, txid, confirmations, blockHeight, verifierId } |
-| `commerce.payment.finalized` | P2 | { claimId, dealId, contextRef, payerId, payeeId, chainId, txid, finalityPolicy, checkedAt, verifierId, observerRole: payer\|payee } |
-| `commerce.payment.reorged` | P2 | { claimId, dealId, contextRef, payerId, payeeId, chainId, txid, previousBlockHash, reorgCount } |
-| `commerce.payment.failed` | P2 | { claimId, dealId, contextRef, payerId, payeeId, chainId, txid, reason: absent\|reverted\|underpaid\|wrong_address\|wrong_asset\|before_request, receivedAmount? } |
+| `commerce.payment.confirming` | P2 | { claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, confirmations, requiredConfirmations, finalityPolicy, verifierId, label } |
+| `commerce.payment.confirmed` | P2 | { claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, confirmations, blockHeight, verifierId } |
+| `commerce.payment.finalized` | P2 | { claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, finalityPolicy, checkedAt, verifierId, observerRole: payer\|payee } |
+| `commerce.payment.reorged` | P2 | { claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, previousBlockHash, reorgCount } |
+| `commerce.payment.failed` | P2 | { claimId, dealId, contextRef, obligationId, payerId, payeeId, chainId, txid, reason: absent\|reverted\|underpaid\|wrong_address\|wrong_asset\|before_request, receivedAmount? } |
 
 ### Events consumed
 
@@ -77,7 +77,7 @@ vault command commerce.crypto_request.create (payee vault)
   "address": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", "amount": { "amount": "125000", "currency": "BTC" } }
 => { "requestId": "0192f3a9-…", "revision": 1, "requestCid": "sha256-1ab2…", "expiresAt": "2026-11-11T10:00:00.000Z", "chainTipAtCreation": 871204, "peerSync": "prepared" }
 payer vault: commerce.statement.ingest dispatches the request to this module's handler, which stores it with origin peer
-later in each vault: observation watching -> pending -> confirmed (2 of 6 per your verifier) -> final; each step emits commerce.payment.* with contextRef, payerId and payeeId
+later in each vault: observation watching -> pending -> confirmed (2 of 6 per your verifier) -> final; each step emits commerce.payment.* with contextRef, obligationId, payerId and payeeId
 ```
 
 ## Verification
@@ -88,7 +88,7 @@ later in each vault: observation watching -> pending -> confirmed (2 of 6 per yo
 | TEST-PS-068-09.T09 | integration | PS-068-04.R03, PS-068-06.R01 | consumed events delivered twice; same command ID replayed | one request and one observation; original result returned |
 | TEST-PS-068-09.T18 | unit | PS-068-02.R04, PS-068-04.R06 | with a verifier configured, claim with a 0x plus 64-hex value the verifier never finds, then with a real txid; without a verifier, claim without and with txidAttested | first held with sendHold txid_lookup_pending, never signed into a claim or sent to the payee, discarded after 24 h; real txid released and sent; without verifier refused with COMMERCE_CLAIM_METHOD_RULE until attested |
 | TEST-PS-068-09.T27 | integration | PS-068-04.R04 | payer vault ingests a crypto_request signed by the payee, one signed by the payer, one with an invalid address, one with an 18-decimal USDC descriptor, a duplicate and one from a blocked did | first stored with origin peer and its address; then signer_not_payee, address_invalid and asset_mismatch (COMMERCE_CURRENCY_MISMATCH) quarantined; duplicate no-op; blocked dropped silently |
-| TEST-PS-068-09.T28 | contract | PS-068-04.R05 | assert every produced event against the expectations of F09.S01.M01, F01.S01.M03, F05.S01.M02, F03.S02.M02, F02.S04.M01 and F13.S01.M03 | each commerce.payment.* event carries contextRef, payerId and payeeId |
+| TEST-PS-068-09.T28 | contract | PS-068-04.R05 | assert every produced event against the expectations of F09.S01.M01, F01.S01.M03, F05.S01.M02, F03.S02.M02, F02.S04.M01 and F13.S01.M03 | each commerce.payment.* event carries contextRef, obligationId, payerId and payeeId; commerce.payment.finalized carries the obligationId of the claim's Deal obligation |
 
 ## Dependencies
 

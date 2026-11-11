@@ -15,32 +15,39 @@ summary: >-
   static PWA host cannot be a relay; the relay is a separate deployment.
 responsibilities:
   - Start, serve and stop the relay process: HTTP/1.1 server on node:http with request, header and route-class body limits (JSON 262144 bytes per CTR-SCH-001 SCH-6, media 5242880 bytes plus 65536 bytes overhead), CORS allowlist, /healthz and /readyz routing to the observability module, and graceful shutdown with a 10 s drain that runs registered pre-checkpoint hooks before the final WAL checkpoint.
-  - Own the RelayIdentity record: generate an Ed25519 key pair on first start, derive the self-certifying relayId from that genesis key, keep the private seed in a 0600 key file outside the database, write a pre-signed revocation certificate for every new key, publish the key history (active, retired and revoked keys with their signed rotation and revocation statements) and restore announcements at /.well-known/classrup-relay.json, and support rotation signed by the previous key and revocation from the local CLI.
+  - Own the RelayIdentity record: generate an Ed25519 key pair on first start, derive the self-certifying relayId from that genesis key, keep the private seed in a key file outside the database that passes F16.S01.M02 checkSecretFile and is held in memory only inside the F16.S01.M02 Secret wrapper, write a pre-signed revocation certificate for every new key, publish the key history (active, retired and revoked keys with their signed rotation and revocation statements) and restore announcements at /.well-known/classrup-relay.json, and support rotation signed by the previous key and revocation from the local CLI.
   - Define the canonical identifiers used by every vault and relay module (relayId, keyId and destination strings) and issue signed relay receipts through ReceiptPort.issue for every route that accepts bytes for storage or forwarding.
   - Serve the public media route GET /media/v1/sha256-<base64url> for P0 unencrypted F15.S02.M03 blobs with cache-friendly headers outside the command bus, and accept media uploads under the media body limit and the tenant maxUploadBytes reported by the TenantPort that F15.S04.M03 registers.
-  - Load and validate configuration from RELAY_* environment variables once at startup, failing fast with exit code 78 and a message that lists offending variable names but never values.
+  - Load and validate configuration from RELAY_* environment variables once at startup, failing fast with exit code 78 and a message that lists offending variable names but never values; the RELAY_SECRET_<NAME> and RELAY_SECRET_<NAME>_FILE names are reserved for secrets that F16.S01.M02 loadSecret reads and are never read, printed or validated by this loader.
   - Run the outbox dispatcher: deliver relay-local events at least once in (aggregate.id, revision) order to relay-local consumers, retry with CTR-IDM-001 backoff, dead-letter after 8 attempts, and append every dispatched event to the hourly outbox archive used by recovery.
   - Record and publish the runtime risk that node:sqlite is stability 1.1 (active development) and keep the SQLite access behind the repository port of F15.S02.M03.
+  - Link identities after a compromise - relay identity revoke --reason compromised names the successor relayId in the revocation statement, and relay identity init --new-identity publishes a relay-signed restore announcement (classrup.platform.relay_restore/v1, written through the NewIdentityHook that F15.S03.M03 registers) from the new identity before the port opens (F16.S03.M03 RB-01).
+  - Ship production relay builds without any test-only route or hook (clock, seed); end-to-end and chaos suites start the relay through the separate in-process entry apps/relay/src/e2e.ts, which injects the FakeClock and seeding through the returned handle (F17.S01.M04 V07, T21).
 non_responsibilities:
   - Command and query registry, validation, idempotency, rate limits and error mapping (F15.S02.M02 mod_api).
   - SQLite repository, migrations, blob storage and the in-memory test adapter (F15.S02.M03 mod_storage).
   - Logging, metrics registry and health handlers (F15.S03.M01 mod_observability).
-  - Backups, the WAL archive and restore (F15.S03.M02 registers the pre-checkpoint hook; F15.S03.M03 writes restore announcements).
+  - Backups, the WAL archive and restore (F15.S03.M02 registers the pre-checkpoint hook; F15.S03.M03 writes restore announcements and registers the NewIdentityHook; no depends_on edge, because both depend on this module).
+  - Secret loading, the Secret wrapper, file permission checks and the secret manifest (F16.S01.M02 loadSecret, checkSecretFile and Secret, used here for the relay key file).
   - Relay role assignments and authorization decisions (F16.S01.M01 RoleAssignment and authorize(); this module only names the roles its capabilities need).
   - Tenant configuration and limits (F15.S04.M03 registers TenantPort with this process; no depends_on edge because F15.S04.M03 depends on this module for relay signing).
   - User accounts, passwords or any server-held user secret; the relay has no account database (ADR-0016).
   - Moderation decisions and relay access tokens (relay policy modules in F12 and F07.S01.M02 use this process but own their logic).
   - "Future: clustering several relay processes behind one database with a shared dispatcher lease; Future: HTTP/2 and built-in TLS termination (MVP expects a reverse proxy)."
-depends_on: [F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001]
+depends_on: [F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001]
 user_stories:
   - As a community organizer, I can start my own relay with a handful of environment variables, share its address, and my members' vaults can use it for discovery and mailboxes while keeping their records on their own devices.
   - As a relay operator, I can stop the relay for maintenance without dropping in-flight requests, and members see their deliveries as pending rather than lost.
   - As a member, I can verify a relay's identity and see that a receipt was signed by the relay I selected for exactly the bytes I sent, understanding that its timestamp only proves that relay's clock.
   - As an operator, I can rotate the relay signing key without invalidating receipts issued earlier, and revoke a stolen key from the command line even though the thief may have signed a rotation.
+  - As a member, after my relay's key was compromised I see the old relay's revocation name its successor and the new relay's signed announcement name the old one, and I confirm the new fingerprint before my vault uses it.
 edge_cases:
   - Required configuration is missing or malformed (for example RELAY_PUBLIC_URL is http in production); the process exits with code 78 before opening the port and names the variable, never its value.
   - The key file is missing but the database holds a RelayIdentity; startup refuses with PLATFORM_RELAY_IDENTITY_MISSING instead of silently generating a new identity; relay identity init --new-identity creates a new genesis key and therefore always a new relayId, and vaults treat it as a different relay.
-  - The active key is stolen; the operator runs relay identity revoke --reason compromised from the CLI (signed with the key itself or its pre-signed revocation certificate, no prior-key authorization needed, exempt from the 24 h limit), then relay identity init --new-identity; receipts by the revoked key stay valid only in vaults that stored them before revokedAt.
+  - The active key is stolen; the operator runs relay identity revoke --reason compromised from the CLI (no prior-key authorization needed, exempt from the 24 h limit), which generates the pending successor genesis key and signs the revocation with the revoked key itself naming successorRelayId, then relay identity init --new-identity, which activates that successor and publishes its restore announcement naming predecessorRelayId; receipts by the revoked key stay valid only in vaults that stored them before revokedAt.
+  - The key file of the compromised key is unreadable, so only the pre-signed revocation certificate can revoke it; that certificate predates any successor and carries no successorRelayId, so the link rests on the new identity's restore announcement naming predecessorRelayId and on the out-of-band fingerprint check of F16.S03.M03 RB-01.
+  - A production relay build is probed for test routes such as a clock or seed endpoint; none exists, the probe answers 404 and the bundle contains no test hook, while the e2e entry drives the FakeClock in-process only.
+  - The key file is world-readable (0644), a symlink or owned by another user; startup refuses with SECURITY_SECRET_PERMISSIONS from checkSecretFile before the seed is read.
   - The thief signs a rotation from the stolen key while the operator signs another one from the same previous key; vaults see two rotations with the same prevKeyId, treat it as equivocation and freeze that relay with a warning.
   - SIGTERM arrives while a long request is in flight; the process stops accepting connections, finishes in-flight requests within 10 s, closes the rest, runs the pre-checkpoint hooks (final WAL archive), checkpoints the WAL with TRUNCATE only if every hook succeeded, and exits 0 (1 if requests were cut).
   - A second SIGTERM or SIGINT arrives during drain; the process exits immediately with code 130 after closing the database handle, without TRUNCATE.
@@ -59,6 +66,7 @@ processes:
       - The relayId is derived once from the genesis public key and stays stable across rotations signed by the previous key, so vaults keep their relay selection and can verify the chain; any key not reachable through that chain (after a revocation of the active key, a lost key file or --new-identity) always yields a new relayId.
       - Rotated-out keys remain published with status retired for at least 400 days so older receipts stay verifiable, and revoked keys remain published with their signed revocation for as long as the relay exists; a receipt signed by a revoked key is valid only in a vault that stored it before revokedAt.
       - The canonical identifiers are defined here and referenced by F15.S01.M01, F15.S02.M03, F11.S02.M01 and F01.S01.M03 - relayId 'relay:' plus the first 26 characters of lowercase RFC 4648 base32 (no padding) of SHA-256 of the genesis public key; keyId '<relayId>#k<seq>'; destination '<relayId>', '<relayId>/mailbox/<mailboxId>', '<relayId>/index/<indexName>', '<relayId>/auction/<auctionId>' or 'direct:<did>'.
+      - A revocation with reason compromised signed by the revoked key itself names successorRelayId, the relayId of the successor genesis key generated in the same CLI run, and the successor identity records predecessorRelayId and publishes, as its first statement, a relay-signed restore announcement naming the predecessor.
     entities:
       - name: RelayIdentity
         schema: classrup.platform.relay_identity/v1
@@ -80,11 +88,13 @@ processes:
           - "rotationStatement?: json — classrup.platform.relay_rotation/v1 { relayId, prevKeyId, newKeyId, newPublicKey, seq, rotatedAt } signed by prevKeyId under context classrup-relay-rotate:v1"
           - "revokedAt?: timestamp — set when revoked"
           - "revokeReason?: enum — compromised | lost | superseded"
-          - "revocationStatement?: json — classrup.platform.relay_key_revocation/v1 { relayId, keyId, revokedAt, reason, successorRelayId? } signed by the revoked key itself or its pre-signed revocation certificate under context classrup-relay-revoke:v1"
+          - "revocationStatement?: json — classrup.platform.relay_key_revocation/v1 { relayId, keyId, revokedAt, reason, successorRelayId? } signed by the revoked key itself or its pre-signed revocation certificate under context classrup-relay-revoke:v1; successorRelayId is set for reason compromised when the key itself signs (the pre-signed certificate, written before any successor exists, cannot carry it)"
+          - "predecessorRelayId?: string — genesis key of an identity created by relay identity init --new-identity only: the relayId it replaces, also named in its first classrup.platform.relay_restore/v1 announcement"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
           - At most one RelayIdentity row has status active; when the active key is revoked no row is active and the relay refuses to serve until relay identity init --new-identity creates a new relayId.
-          - The private seed is stored only in the key file (mode 0600, optionally wrapped with scrypt N=2^17, r=8, p=1) and never in SQLite, logs or events; the pre-signed revocation certificate is written next to it for the operator to move offline.
+          - The private seed is stored only in the key file (mode 0400 or 0600, owned by the process user, not a symlink, checked by F16.S01.M02 checkSecretFile before every read, optionally wrapped with scrypt N=2^17, r=8, p=1), is held in memory only inside the F16.S01.M02 Secret wrapper whose reveal() is called only at the signing call, and never appears in SQLite, logs or events; the pre-signed revocation certificate is written next to it for the operator to move offline.
+          - Every row with seq > 1 carries a rotationStatement signed by the key of its prevKeyId, and only such rows are published as successors of the genesis key.
           - relayId never changes within one rotation chain; each row's prevKeyId is the keyId of the row with seq - 1.
           - This relay never issues two rotation statements with the same prevKeyId, and a revoked row never changes status again.
     sql: |
@@ -101,9 +111,10 @@ processes:
       - Every HTTP request is bounded by size and time limits for its route class before it reaches the command bus or the media store.
       - Violations map to stable codes; configuration failures use exit code 78 (EX_CONFIG).
       - Identity changes are checked for revision, rate and signing authority before any statement is signed, and the media route serves only public unencrypted blobs.
+      - The relay key file is checked with F16.S01.M02 checkSecretFile before it is read and the seed is held only in the Secret wrapper, and the secrets owned by F16.S01.M02 use RELAY_SECRET_<NAME> or RELAY_SECRET_<NAME>_FILE and are never read, printed or validated by this module's configuration loader.
     rules:
       - "V01 | process.versions.node ≥ 22.18.0 and node:sqlite loads | PLATFORM_RELAY_RUNTIME_UNSUPPORTED"
-      - "V02 | RELAY_DATA_DIR and RELAY_DB_PATH are set, writable, and the key file mode is 0600 | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V02 | RELAY_DATA_DIR and RELAY_DB_PATH are set and writable | PLATFORM_RELAY_CONFIG_INVALID"
       - "V03 | RELAY_PUBLIC_URL is an https origin (http allowed only when RELAY_ENV=development) | PLATFORM_RELAY_CONFIG_INVALID"
       - "V04 | RELAY_ALLOWED_ORIGINS is a comma list of https origins of allowed PWA hosts, no wildcard, ≤ 20 entries | PLATFORM_RELAY_CONFIG_INVALID"
       - "V05 | RELAY_PORT 1..65535, RELAY_JSON_BODY_LIMIT_BYTES 1024..262144 (default 262144), RELAY_MEDIA_BODY_LIMIT_BYTES 65536..5308416 (default 5308416), RELAY_DRAIN_MS 1000..30000, RELAY_OUTBOX_BATCH 1..500 | PLATFORM_RELAY_CONFIG_INVALID"
@@ -115,17 +126,21 @@ processes:
       - "V11 | rotate: no rotation completed in the last 86400000 ms; revoke and the --new-identity compromise path are exempt | RATE_LIMITED"
       - "V12 | GET /media/v1/sha256-<base64url> serves a blob only when its privacy is P0 and encrypted is false; any other blob answers exactly like a missing one | NOT_FOUND"
       - "V13 | an access log line carries only a registered route template (for example /api/v1/cmd/:name, /mailbox/v1/:id, /media/v1/:ref), never a raw path, path parameter, query string, mailbox id or listing id, and no IP prefix on mailbox routes; the CI log lint fails otherwise | VALIDATION_FAILED"
+      - "V14 | the key file (and a pending successor key file) passes F16.S01.M02 checkSecretFile - mode 0400 or 0600, owner is the process user, not a symlink, at most 4096 bytes - before it is read | SECURITY_SECRET_PERMISSIONS"
+      - "V15 | the configuration loader ignores RELAY_SECRET_<NAME> and RELAY_SECRET_<NAME>_FILE variables (reserved for F16.S01.M02 loadSecret): they are neither warned about as unknown nor printed, and no RELAY_* variable other than these holds a secret value | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V16 | the route table and the bundle of a production build (RELAY_ENV production or staging, entry apps/relay/src/main.ts) contain no test-only route or hook such as a clock or seed endpoint; only apps/relay/src/e2e.ts registers them, in process | PLATFORM_RELAY_CONFIG_INVALID"
   workflow_state_machine:
     requirements:
       - The process follows starting, ready, draining, stopped, and /readyz is true only in ready.
       - Shutdown is ordered, meaning stop accepting, drain in-flight requests for up to 10 s, stop the dispatcher after its current batch, run the registered pre-checkpoint hooks (the F15.S03.M02 final WAL archive), checkpoint with TRUNCATE only if every hook succeeded, and close the database.
       - A RelayIdentity key moves from active to retired only through a rotation that it signs itself, from active or retired to revoked only through revocation from the local CLI with filesystem access (no prior-key authorization required), and never back.
+      - relay identity init --new-identity activates the pending successor key named by a compromise revocation (or a fresh genesis key), and before the port opens it calls the NewIdentityHook that F15.S03.M03 registers with the relay process to sign and publish a classrup.platform.relay_restore/v1 announcement from the new identity naming predecessorRelayId; the relay does not become ready without that announcement.
     machines:
       - entity: RelayProcess
         initial: starting
         terminal: [stopped]
         transitions:
-          - "starting -> ready | configuration valid, migrations current, identity loaded with an active key, dispatcher lease held, port bound | /readyz returns 200"
+          - "starting -> ready | configuration valid, key file passes checkSecretFile, migrations current, identity loaded with an active key (for a new identity, its restore announcement written through the NewIdentityHook), dispatcher lease held, port bound | /readyz returns 200"
           - "starting -> stopped | configuration or runtime check fails, or no active key exists | exit code 78 or 1; no port opened"
           - "ready -> draining | SIGTERM or SIGINT | /readyz returns 503, server.close() called, idle connections closed, new requests get PLATFORM_RELAY_DRAINING"
           - "draining -> stopped | in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed | dispatcher stopped after current batch, remaining connections closed, pre-checkpoint hooks run with a 5000 ms budget (F15.S03.M02 archives WAL frames up to mxFrame), wal_checkpoint(TRUNCATE) only if every hook succeeded, database closed, exit 0 (1 if requests were cut, 130 on second signal without TRUNCATE)"
@@ -134,7 +149,7 @@ processes:
         terminal: [revoked]
         transitions:
           - "active -> retired | platform.relay_identity.rotate by a relay_operator or admin, V10 and V11 pass | new key generated, rotation statement signed by this key with prevKeyId and seq, new revocation certificate written; old key published as retired"
-          - "active -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | revocation statement signed by the key itself or its pre-signed certificate, published; relay stops serving until --new-identity creates a new relayId"
+          - "active -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | for reason compromised with a readable key file the pending successor genesis key is generated first and the revocation, signed by the key itself, names successorRelayId; otherwise the revocation is signed by the key or its pre-signed certificate; published; relay stops serving until --new-identity activates the successor or creates a new relayId"
           - "retired -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | revocation statement published; receipts by this key are valid only if stored before revokedAt"
     timeouts:
       - "Drain deadline RELAY_DRAIN_MS default 10000 ms (range 1000..30000); pre-checkpoint hook budget 5000 ms."
@@ -149,6 +164,7 @@ processes:
       - Every relay route that accepts bytes for storage or forwarding (mailbox put of F08.S01.M01, index and publication intake of F06.S01.M01 and F11.S01.M02, federation inbox POST /fed/v1/inbox, media upload PUT /media/v1, auction bid intake of F04.S01.M02) returns in its response field receipt a classrup.platform.relay_receipt/v1 from ReceiptPort.issue - the RFC 8785 JCS body { relayId, keyId, destination, digest, cid?, receivedAt, epoch, seq } signed with Ed25519 over the bytes of context 'classrup-relay-receipt:v1', a 0x0A byte and the JCS body, where digest is sha256- plus base64url SHA-256 of the exact request bytes received (the ciphertext for mailbox puts) and cid is present only for P0 public statements; vaults verify it against the published key set including retired keys.
       - Statements signed by this module and their signer role relay_identity are registered with F11.S01.M01 (N2) - classrup.platform.relay_receipt/v1, classrup.platform.relay_rotation/v1 and classrup.platform.relay_key_revocation/v1; the restore announcements classrup.platform.relay_restore/v1 written by F15.S03.M03 are served here unchanged.
       - The public media route GET /media/v1/sha256-<base64url> is handled before the command bus and sends Cache-Control public, max-age=31536000, immutable, ETag equal to the content address, Content-Type of the blob, X-Content-Type-Options nosniff, Cross-Origin-Resource-Policy cross-origin, Access-Control-Allow-Origin echoing an allowlisted PWA origin with Vary Origin, and never Set-Cookie (exempt from the bus's no-store policy).
+      - Every non-genesis key is published at /.well-known/classrup-relay.json only together with its rotation statement signed by the previous key under classrup-relay-rotate:v1, so a vault that pinned the relay's key set when the user selected the relay follows only signed rotations (F01.S01.M03 V16, F15.S01.M01 V15) and treats any key outside the chain as a different relay.
     commands:
       - name: platform.relay_identity.rotate
         capability: platform.relay_identity.rotate
@@ -159,8 +175,8 @@ processes:
         idempotent: true
       - name: platform.relay_identity.revoke
         capability: platform.relay_identity.revoke
-        input: "{ keyId, reason: compromised|lost|superseded, expectedRevision, useCertificate?: boolean } — relay command dispatched only by the local CLI (relay identity revoke) with filesystem access to RELAY_DATA_DIR; no prior-key authorization; exempt from the 24 h rotation limit"
-        output: "{ keyId, revokedAt, revocationStatementCid, activeKeyRemaining: boolean }"
+        input: "{ keyId, reason: compromised|lost|superseded, expectedRevision, useCertificate?: boolean } — relay command dispatched only by the local CLI (relay identity revoke) with filesystem access to RELAY_DATA_DIR; no prior-key authorization; exempt from the 24 h rotation limit; for reason compromised without useCertificate the CLI first writes the pending successor genesis key (checked by checkSecretFile) and the revocation names its successorRelayId"
+        output: "{ keyId, revokedAt, revocationStatementCid, activeKeyRemaining: boolean, successorRelayId? }"
         errors: [FORBIDDEN, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: [platform.relay_identity.rotated]
         idempotent: true
@@ -168,7 +184,7 @@ processes:
       - name: platform.relay_identity.get
         capability: platform.relay_identity.read_public
         input: "{ includeRetired?: boolean } — relay query, public; also served as /.well-known/classrup-relay.json"
-        output: "{ relayId, displayName, publicUrl, keys: [{ keyId, seq, publicKey, status, prevKeyId?, createdAt, retiredAt?, revokedAt?, rotationStatement?, revocationStatement? }], restoreAnnouncements: classrup.platform.relay_restore/v1[] (newest 10), receiptEpoch, software: { name, version }, features: string[] }"
+        output: "{ relayId, displayName, publicUrl, predecessorRelayId?, keys: [{ keyId, seq, publicKey, status, prevKeyId?, createdAt, retiredAt?, revokedAt?, rotationStatement (required when seq > 1, signed by prevKeyId), revocationStatement? }], restoreAnnouncements: classrup.platform.relay_restore/v1[] (newest 10; the first one of a new identity names predecessorRelayId), receiptEpoch, software: { name, version }, features: string[] }"
         errors: []
       - name: platform.relay.get_status
         capability: platform.relay.read_status
@@ -188,7 +204,10 @@ processes:
       # minimal environment
       RELAY_ENV=production RELAY_PUBLIC_URL=https://relay.example.org RELAY_DATA_DIR=/var/lib/classrup
       RELAY_DB_PATH=/var/lib/classrup/relay.sqlite RELAY_ALLOWED_ORIGINS=https://app.example.org RELAY_PORT=8787
-      $ node apps/relay/src/main.ts      # Node >=22.18 strips types natively, no build step
+      $ node apps/relay/src/main.ts      # Node >=22.18 strips types natively, no build step; key file checked by checkSecretFile
+      # tests only: import { startRelay } from 'apps/relay/src/e2e.ts' -> { url, clock: FakeClock, seed(fixture) } in process; main.ts has no such route
+      $ relay identity revoke --key relay:7k3m...#k2 --reason compromised -> { successorRelayId: "relay:q4n8..." }
+      $ relay identity init --new-identity -> relay:q4n8... active; restore announcement { relayId: "relay:q4n8...", predecessorRelayId: "relay:7k3m...", epoch: 0 } served before readyz 200
       GET /.well-known/classrup-relay.json -> 200 { "relayId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk",
         "keys": [{ "keyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k2", "seq": 2, "status": "active", "prevKeyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k1" },
                  { "keyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k1", "seq": 1, "status": "retired" }], "receiptEpoch": 0 }
@@ -236,7 +255,9 @@ processes:
       - "T03 | Slowloris and oversized body denial of service | headersTimeout 10 s, requestTimeout 30 s, JSON body limit 262144 bytes, media 5308416 bytes, per-connection cap 256, reverse proxy rate limits"
       - "T04 | Cross-origin abuse from a malicious page | CORS allowlist without wildcard, no cookies, bearer tokens only in Authorization headers, preflight cache 600 s"
       - "T05 | Malicious relay impersonates another or a thief forks the identity | relayId self-certifying from the genesis key; rotations signed by the previous key with prevKeyId and seq; two rotations from one prevKeyId are equivocation that vaults detect and freeze; new identities always get a new relayId"
-      - "T06 | Config secrets leak through logs or crash dumps | config printer redacts names containing KEY, SECRET, PASSPHRASE or TOKEN; *_FILE variants for secrets; startup errors list names only"
+      - "T06 | Config secrets leak through logs or crash dumps | secrets use the F16.S01.M02 RELAY_SECRET_<NAME>[_FILE] names, which this loader never reads or prints; the relay seed lives only in the Secret wrapper (renders [REDACTED]); config printer redacts names containing KEY, SECRET, PASSPHRASE or TOKEN; startup errors list names only"
+      - "T09 | A test-only clock or seed route shipped in production lets anyone move receipt or auction times or plant data | production entry main.ts registers no such route (V16); the FakeClock and seeding exist only in the in-process e2e entry; F17.S01.M04 V07 and T21 probe and scan the build"
+      - "T10 | Users follow an attacker's relay after a compromise, or lose their relay because nothing links the new identity | the compromise revocation names successorRelayId and the new identity's first restore announcement names predecessorRelayId, both signed; vaults still require an out-of-band fingerprint confirmation (F16.S03.M03 RB-01) before rerouting"
       - "T07 | Operator or seizer rebuilds the communication graph from access logs | route templates only, no mailbox or listing ids, no query strings, no IP prefix on mailbox routes; mailbox-id canary test"
       - "T08 | A receipt for one mailbox presented as proof for another | receipt binds destination and the digest of the exact bytes; vault verification compares both"
     abuse_controls:
@@ -266,7 +287,8 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Configuration, identity, shutdown and dispatcher behavior are tested against a real node:http server and a real node:sqlite database in CI.
       - A canary suite runs the node:sqlite adapter on the pinned Node version and on the latest 22.x to detect behavior changes in the stability 1.1 API early.
-    fixtures: "Temp data dir per test; Node 22.18.0 pinned in .nvmrc and Docker image plus latest 22.x canary; stub consumers (ok, flaky, always-failing); F16.S01.M01 role fixtures (relay_operator RO1 scope relay, tenant operator TO1 scope tenant:T1, member M1); stub TenantPort with maxUploadBytes 4194304; vault-side receipt verifier shared with F15.S01.M01; fixed clock 2026-11-04T10:00:00Z."
+      - Production relay builds expose no test-only route or hook (clock, seed); end-to-end and chaos suites start the relay through the separate in-process e2e entry that injects the FakeClock and seeding, and F17.S01.M04 V07 and T21 probe and scan the production build.
+    fixtures: "Temp data dir per test; Node 22.18.0 pinned in .nvmrc and Docker image plus latest 22.x canary; stub consumers (ok, flaky, always-failing); F16.S01.M01 role fixtures (relay_operator RO1 scope relay, tenant operator TO1 scope tenant:T1, member M1); stub TenantPort with maxUploadBytes 4194304; vault-side receipt verifier shared with F15.S01.M01 with a key set pinned at relay selection; key files with modes 0600, 0400, 0644, a symlink and a foreign owner; RELAY_SECRET_DATA_KEY_FILE set; a stub NewIdentityHook standing in for F15.S03.M03; fixed clock 2026-11-04T10:00:00Z (FakeClock through apps/relay/src/e2e.ts)."
     tests:
       - "T01 | unit | 01.R01,01.R03 | first start, restart, rotate twice | one active key, stable relayId, keyIds #k1..#k3 with prevKeyId chain, retired keys published, seed only in key file, revocation certificate written per key"
       - "T02 | unit | 02.R01,02.R02 | each config rule V01-V05 violated in turn plus an unknown RELAY_* variable | exit code 78, names listed, values absent from output; unknown variable only warned"
@@ -294,11 +316,16 @@ processes:
       - "T24 | integration | 06.R01,04.R02,02.R04 | rotate replayed with the same Idempotency-Key and body, with the same key and a different body, with a stale expectedRevision, and a second rotation 2 h later | original response replayed; IDEMPOTENCY_KEY_REUSED; CONFLICT_REVISION; RATE_LIMITED"
       - "T25 | integration | 05.R01,05.R02 | relay_operator RO1 with an active relay-scope RoleAssignment rotates and reads status; RO1 after the assignment expires | allowed; then FORBIDDEN; no capability consults relay configuration for roles"
       - "T26 | unit | 01.R04 | derive relayId from a fixed genesis key; format and parse keyId and each destination form; parse malformed strings | values equal the published vectors used by F15.S01.M01, F15.S02.M03, F11.S02.M01 and F01.S01.M03; malformed strings rejected with VALIDATION_FAILED"
+      - "T27 | abuse | 09.R04,02.R01 | build and start the production relay, probe clock and seed routes and list the route table; scan the bundle; then start apps/relay/src/e2e.ts in process and advance its FakeClock | 404 on both probes, no test route or hook in the table or bundle (V16); the e2e handle moves receipt time in process only, with no HTTP route for it"
+      - "T28 | integration | 02.R05,01.R01 | key file 0644, symlink, foreign owner, then 0400; RELAY_SECRET_DATA_KEY_FILE set; inspect startup output, logs and util.inspect of the loaded key | SECURITY_SECRET_PERMISSIONS for the first three and no seed read; 0400 starts; RELAY_SECRET_* neither warned nor printed; the key renders [REDACTED]"
+      - "T29 | integration | 01.R05,03.R04 | revoke the active key with reason compromised while its key file is readable, then relay identity init --new-identity; repeat with the key file deleted using the pre-signed certificate | revocation signed by the key names successorRelayId equal to the new relayId; the new identity records predecessorRelayId and its restore announcement naming it is served before readyz 200; without the announcement hook the relay stays in starting; the certificate path has no successorRelayId and the announcement still names the predecessor"
+      - "T30 | contract | 04.R07,01.R03 | well-known document after two rotations; a fault-injected row with seq 4 and no rotation statement; a vault verifier with the key set pinned at selection | k2 and k3 published with rotations signed by k1 and k2 under classrup-relay-rotate:v1; the unchained row is never published; the verifier follows k1 to k3 and treats an unchained key as a different relay"
     acceptance:
-      - All tests T01-T26 pass in CI.
+      - All tests T01-T30 pass in CI.
       - The relay starts from environment variables alone, serves its identity and key history, and shuts down within the drain and hook budgets without losing in-flight committed work or unarchived WAL frames.
       - No plaintext private user data and no private key material is ever stored in the database or logs, and no log line links a client address to a mailbox.
-      - Every receipt binds destination and the digest of the exact bytes and verifies against the published key history; a stolen key can be revoked from the CLI at once.
+      - Every receipt binds destination and the digest of the exact bytes and verifies against the published key history; a stolen key can be revoked from the CLI at once, the revocation names the successor, and the successor's first statement is a signed restore announcement naming the predecessor.
+      - No production relay build exposes a test-only route or hook.
       - Stopping or losing the relay loses no vault data; vault tests still pass with the relay stopped.
   import_export_backup_rollback:
     requirements:

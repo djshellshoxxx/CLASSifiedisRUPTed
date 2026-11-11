@@ -3,7 +3,9 @@ scope: MVP
 summary: >-
   Creates and owns the Listing record in the principal's local vault. A listing starts as a private draft
   (P3, vault only, schema classrup.bazaar.listing_record/v1) with kind, title, description, category, condition,
-  media references and a coarse region (L1 or L2 geohash). It never stores an exact address. Later lifecycle
+  photos as shared MediaRef entries {ref, alt?, decorative?} and a coarse region (L1 or L2 geohash). It never stores
+  an exact address. Listing ids are minted with publicRecordId (F10.S02.M03) because they appear in the public
+  projection, and the module answers the ThreadContextPort of F08.S01.M02 for listing threads. Later lifecycle
   changes (publish, renew, expire, close, archive) are applied by sibling modules through narrow system commands
   on this module, so Listing keeps a single owner. Publishing is done by F01.S01.M03 as a separate signed public
   projection statement (classrup.bazaar.listing/v1); this module never talks to a relay, and no relay notice can
@@ -14,6 +16,9 @@ responsibilities:
   - Expose the vault-local commands apply_status and apply_edit that F01.S01.M02, F01.S01.M03 and F01.S01.M04 use inside their own transactions.
   - Purge drafts untouched for 180 days after a 14-day in-app warning.
   - Register the F10 privacy ports (export section, deletion plan, retention purge) for Listing records and classify every field (N6).
+  - Mint every listing id with F10.S02.M03 publicRecordId (UUIDv7 with the hour-floored time), since the id is part of the signed public projection.
+  - Hold photos as shared MediaRef entries {ref, alt? (plain text up to 140 code points), decorative?} so the projection carries author alt text (F14.S01.M02).
+  - Implement the ThreadContextPort {exists, isParty, roster, isClosed} that F08.S01.M02 declares for context type listing; F08.S01.M02 depends on this module, so no reverse edge exists.
 non_responsibilities:
   - Revision history and material-change detection (F01.S01.M02).
   - Policy checks, signing and relay submission of the public projection (F01.S01.M03).
@@ -21,12 +26,14 @@ non_responsibilities:
   - Kind-specific terms: price (F01.S02.M01), wanted spec (F01.S02.M02), giveaway terms (F01.S02.M03).
   - Storing listings authored by other principals; verified mirrors of them are kept by F11.S01.M02.
   - Relay hosting decisions; a relay's removal of a projection changes only that relay's delivery state in F01.S01.M03.
+  - Thread storage, derivation of threadIds and message delivery (F08.S01.M02, F08.S01.M01); the contextTenantId used for derivation travels in the signed projection of F01.S01.M03.
   - "Future: photo upload pipeline owner; this module only holds content-addressed media references."
-depends_on: [F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001]
+depends_on: [F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001]
 user_stories:
   - As a seller, I can start a listing offline, add photos and a coarse region, and finish it later; nothing leaves my device until I publish.
   - As a seller without location permission, I can pick my region by name and the app stores only a 5-character area cell, never coordinates.
   - As a member, I can delete a draft I no longer want and know it is gone from my vault.
+  - As a seller using a screen reader, I give each photo a short description or mark it decorative, and buyers' screen readers read my description.
 edge_cases:
   - Client sends latitude/longitude or a street address field; the whole command is rejected with BAZAAR_LISTING_LOCATION_TOO_PRECISE and nothing is stored.
   - A photo still carries GPS EXIF data; the media reference is rejected with BAZAAR_LISTING_MEDIA_INVALID until the image is re-encoded.
@@ -36,9 +43,11 @@ edge_cases:
   - Two devices of the same principal edit the same draft; the second apply_edit gets CONFLICT_REVISION and is never auto-merged.
   - A relay removes the published projection from its index; the Listing stays published in the vault and only that relay's delivery in F01.S01.M03 becomes relay_removed.
   - A listing expired before the owner sold it in person; the owner closes it directly from expired without republishing.
+  - A photo alt text of 141 code points or containing a control character is refused with VALIDATION_FAILED; a photo with neither alt text nor decorative stays allowed in the draft and is refused only at publication (F01.S01.M03).
+  - A client supplies a listing id whose embedded UUIDv7 time is not floored to the hour; create refuses it with VALIDATION_FAILED, and without a supplied id the vault mints one with publicRecordId.
 ux:
   screens:
-    - "Create listing wizard: kind chooser, title (3-120), description (up to 5000, counter), category picker (tree, depth 4), condition, up to 10 photos, region picker (name search or map snapped to 5-character cell, shows the approximate area size)."
+    - "Create listing wizard: kind chooser, title (3-120), description (up to 5000, counter), category picker (tree, depth 4), condition, up to 10 photos each with an alt text field (up to 140 characters) or a Decorative toggle, region picker (name search or map snapped to 5-character cell, shows the approximate area size)."
     - "Drafts list: sorted by last edit, shows days until automatic purge when under 14, delete with confirm dialog."
   states: [loading, empty, saving-local, saved-local, error, conflict, over-limit]
   a11y:
@@ -51,6 +60,8 @@ processes:
       - A Listing stores owner principal, kind, title, description, category, condition, media references, tags, locale, coarse region cell, status and revision; it has no field that can hold an exact address or coordinates.
       - Drafts are P3 and live only in the owner's vault (IndexedDB) under the record schema classrup.bazaar.listing_record/v1; the public projection is a different signed statement (classrup.bazaar.listing/v1) produced by F01.S01.M03, and the Listing record itself is never uploaded.
       - Kind and ownerId are immutable after creation; every other mutation goes through apply_edit or apply_status with expectedRevision.
+      - "Photos are stored as media, a list of the shared MediaRef {ref, alt?, decorative?} (F14.S01.M02): ref is a content-addressed blob reference, alt is plain text of at most 140 code points written by the author, decorative marks a photo that needs no description; the same entries are copied unchanged into the signed projection."
+      - "Listing ids are minted in the vault with publicRecordId of F10.S02.M03 (UUIDv7 whose embedded time is floored to the UTC hour, random remaining bits), so the public projection reveals no finer creation time; a supplied id must already have that form."
     entities:
       - name: Listing
         schema: classrup.bazaar.listing_record/v1
@@ -58,7 +69,7 @@ processes:
         privacy: P3
         retention: RET-STANDARD
         fields:
-          - "id: uuidv7 — primary key, writer-generated (client)"
+          - "id: uuidv7 — primary key, minted in the vault with F10.S02.M03 publicRecordId (hour-floored UUIDv7 time)"
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
           - "ownerId: did:key — local principal; immutable"
           - "kind: enum — sell | wanted | giveaway | service | rental | auction; immutable"
@@ -67,7 +78,7 @@ processes:
           - "description: string — 0..5000 code points (publication requires >= 10)"
           - "categoryId: uuidv7 — ref F18.S01.M03 Category; active leaf"
           - "condition?: enum — new | like_new | good | fair | poor | for_parts; required for sell, giveaway, rental"
-          - "mediaRefs: string[] — <= 10 items, each blob:sha256-<base64url>, image/jpeg|png|webp, <= 5 MiB, EXIF/GPS stripped"
+          - "media: MediaRef[] — <= 10 items {ref: blob:sha256-<base64url> (image/jpeg|png|webp, <= 5 MiB, EXIF/GPS stripped), alt?: plain text 1..140 code points, decorative?: boolean}; shared MediaRef of F14.S01.M02"
           - "tags?: string[] — <= 10 items, each 2..30 code points lowercase"
           - "locale: string — BCP 47, default vault locale"
           - "regionCell?: string — geohash length 4 (L1) or 5 (L2), lowercase base32; never longer"
@@ -83,7 +94,8 @@ processes:
           - No persisted field holds latitude, longitude, street address or a geohash longer than 5 characters.
           - status published implies currentPublicationId and expiresAt are set; status draft implies publishedAt is unset.
           - kind and ownerId never change; at most 50 listings with status draft per vault.
-          - Every field carries an F10.S02.M02 classification (P3 for the record; title, description, categoryId, condition, mediaRefs, tags, locale and regionCell become P0 only inside the signed projection).
+          - Every field carries an F10.S02.M02 classification (P3 for the record; title, description, categoryId, condition, media with its alt text, tags, locale and regionCell become P0 only inside the signed projection).
+          - A media entry with decorative true carries no alt text; at most 10 media entries and no two with the same ref.
     sql: |
       CREATE TABLE bazaar_listing (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
@@ -96,6 +108,7 @@ processes:
       - Input is parsed strictly against classrup.bazaar.listing_record/v1; unknown keys are rejected and location keys are rejected with a dedicated code.
       - Referenced category, media and subtype must resolve locally before the draft is stored.
       - Every violation maps to one stable error code with a localized message key.
+      - "Media entries are validated as MediaRef: blob checks per photo, alt text plain and at most 140 code points, and decorative never combined with alt text; a missing description is allowed in drafts and checked at publication by F01.S01.M03."
     rules:
       - "V01 | payload has no unknown keys and no keys named lat, lon, latitude, longitude, address, street, postcode | BAZAAR_LISTING_LOCATION_TOO_PRECISE"
       - "V02 | regionCell is lowercase geohash base32 of length 4 or 5 | BAZAAR_LISTING_LOCATION_TOO_PRECISE"
@@ -104,11 +117,13 @@ processes:
       - "V05 | kind in enum and subtypeRef present iff kind is service, rental or auction | VALIDATION_FAILED"
       - "V06 | categoryId resolves to an active leaf category (depth 1..4, no children) in the active policy pack | BAZAAR_LISTING_CATEGORY_INVALID"
       - "V07 | condition present when kind is sell, giveaway or rental | VALIDATION_FAILED"
-      - "V08 | mediaRefs <= 10; each blob exists locally, is jpeg/png/webp, <= 5 MiB and has no GPS tag | BAZAAR_LISTING_MEDIA_INVALID"
+      - "V08 | media <= 10 entries with distinct refs; each ref blob exists locally, is jpeg/png/webp, <= 5 MiB and has no GPS tag | BAZAAR_LISTING_MEDIA_INVALID"
       - "V09 | vault holds fewer than 50 drafts | BAZAAR_LISTING_DRAFT_LIMIT"
       - "V10 | delete is requested only for status draft | CONFLICT_STATE"
       - "V11 | apply_edit patch contains no kind, ownerId, status or id key; apply_status never changes kind or ownerId | VALIDATION_FAILED"
       - "V12 | apply_status reason is one of owner, policy_changed, expiry, renew, deferral, close, archive, restore, purge; a relay notice is never a valid reason | VALIDATION_FAILED"
+      - "V13 | each media alt is plain text of 1..140 code points after NFC with no control or zero-width characters, and decorative true has no alt | VALIDATION_FAILED"
+      - "V14 | a supplied id is a lowercase UUIDv7 whose embedded time is floored to the UTC hour (publicRecordId of F10.S02.M03) and not more than 1 h in the future | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Listing status follows the declared machine; any other transition is refused with CONFLICT_STATE and nothing changes.
@@ -141,10 +156,11 @@ processes:
       - "Commands are vault commands run by the unlocked local principal; none contacts a relay, and none produces a signed statement (publication is F01.S01.M03)."
       - Every command writes its state change and its outbox event in one IndexedDB transaction (EVT-8).
       - Query results contain only the owner's own listings; other principals' listings arrive as verified mirrors owned by F11.S01.M02.
+      - "The module implements the ThreadContextPort declared by F08.S01.M02 for context type listing: exists(listingId) is true for an own listing that is not deleted; isParty(listingId, did) is true for the owner, since any other signer may open a listing thread with the author as participant; roster(listingId) is [ownerId]; isClosed(listingId) is true for status closed, archived or deleted. Mirrors of other principals' listings are answered by F08.S01.M02 from the verified projection, not here."
     commands:
       - name: bazaar.listing.create
         capability: bazaar.listing.create
-        input: "[vault-local] { id? (uuidv7), kind, title, description?, categoryId, condition?, mediaRefs?, tags?, locale?, regionCell?, subtypeRef? }"
+        input: "[vault-local] { id? (uuidv7 minted by publicRecordId; minted by the vault when absent), kind, title, description?, categoryId, condition?, media?: [{ ref, alt?, decorative? }], tags?, locale?, regionCell?, subtypeRef? }"
         output: "{ listingId, revision: 1, status: draft }"
         errors: [VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID, BAZAAR_LISTING_DRAFT_LIMIT, FEATURE_DISABLED]
         emits: [bazaar.listing.created]
@@ -165,12 +181,12 @@ processes:
         idempotent: true
       - name: bazaar.listing.apply_edit
         capability: bazaar.listing.apply_edit
-        input: "[vault-local, internal port] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, mediaRefs?, tags?, regionCell? } }"
+        input: "[vault-local, internal port] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, media?: [{ ref, alt?, decorative? }], tags?, regionCell? } }"
         output: "{ listingId, revision, changedFields }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID]
         emits: []
         idempotent: true
-    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listings), DeletionPort (plan: tombstone and purge every own Listing and its blob keys) and RetentionPurgePort (draft purge and post-tombstone content purge) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. Listing records hold no counterparty evidence, so nothing is pseudonymized here."
+    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listings), DeletionPort (plan: tombstone and purge every own Listing and its blob keys) and RetentionPurgePort (draft purge and post-tombstone content purge) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. Listing records hold no counterparty evidence, so nothing is pseudonymized here. ThreadContextPort (F08.S01.M02) for context type listing: {exists, isParty, roster, isClosed} as stated in the requirements; it is registered at composition, because F08.S01.M02 lists this module in its depends_on and this module does not list F08.S01.M02. Ids are minted with F10.S02.M03 publicRecordId(now)."
     queries:
       - name: bazaar.listing.get
         capability: bazaar.listing.read
@@ -193,8 +209,8 @@ processes:
       - "BAZAAR_LISTING_DRAFT_LIMIT | 409 | no | vault already holds 50 drafts"
     example: |
       vault.dispatch("bazaar.listing.create", { "kind": "sell", "title": "Road bike, 54 cm", "categoryId": "0192f3a4-1111-7000-8000-0000000000c1",
-        "condition": "good", "regionCell": "u33db", "mediaRefs": ["blob:sha256-Qm9..."] }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000011")
-      => { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "revision": 1, "status": "draft" }
+        "condition": "good", "regionCell": "u33db", "media": [{ "ref": "blob:sha256-Qm9...", "alt": "Blue road bike leaning on a wall" }] }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000011")
+      => { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "revision": 1, "status": "draft" }   (id minted by publicRecordId, time floored to 10:00 UTC)
       vault.dispatch("bazaar.listing.create", { "kind": "sell", "title": "x", "lat": 52.5, "lon": 13.4 })
       => 422 BAZAAR_LISTING_LOCATION_TOO_PRECISE
   authorization_capabilities:
@@ -227,6 +243,7 @@ processes:
       - "The module registers ExportSectionPort (section bazaar.listings), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every Listing field with its F10.S02.M02 class; unannotated fields fail the CI lint."
     data:
       - "Listing draft: P3 (owner only); published fields are copied into a signed P0 projection by F01.S01.M03; field classes annotated per F10.S02.M02."
+      - "media alt text: P3 in the draft and P0 inside the signed projection; it is author-written plain text and is never interpreted as markup."
       - "regionCell: at most geohash 5 (about 4.9 km x 4.9 km); coordinates are never stored."
     retention:
       - "Listing: RET-STANDARD; deleted listings keep a tombstone {id, type, deletedAt} for 180 days."
@@ -281,8 +298,11 @@ processes:
       - "T17 | integration | 01.R02 | create, edit and delete drafts with a network spy, then inspect the sync outbox | zero network requests; no outbox entry has a destination or payload derived from a draft; stored record validates as classrup.bazaar.listing_record/v1, never as the projection schema"
       - "T18 | property | 03.R04,03.R01 | random apply_status calls including reason relay_notice and a relay removal processed by F01.S01.M03 | relay_notice refused with VALIDATION_FAILED; Listing.status unchanged by any relay removal"
       - "T19 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.listings lists every own listing with field classes; deletion plan tombstones and purges all; CI lint fails on an injected unannotated field"
+      - "T20 | unit | 01.R04,02.R04 | create with media [{ref, alt of 140 code points}, {ref, decorative true}, {ref}] then with alt of 141 code points, alt with a control character, decorative true plus alt and a duplicated ref | first stored as MediaRef entries unchanged; the others return VALIDATION_FAILED or BAZAAR_LISTING_MEDIA_INVALID and nothing is stored"
+      - "T21 | property | 01.R05 | create 1 000 listings at random clock times without an id, then with supplied ids of finer and floored time | every minted id is a UUIDv7 whose embedded time equals the hour floor of the clock (F10.S02.M03 assertCoarseTime passes); supplied finer ids are refused with VALIDATION_FAILED"
+      - "T22 | contract | 04.R04 | F08.S01.M02 conformance suite calls the listing ThreadContextPort for an own published, closed and deleted listing and an unknown id | exists, isParty (owner true), roster [ownerId] and isClosed answer as specified; unknown id returns exists false"
     acceptance:
-      - All tests T01-T19 pass in CI.
+      - All tests T01-T22 pass in CI.
       - No draft or listing payload leaves the device from this module (network spy test).
       - No stored Listing field can hold coordinates or an address, region cells never exceed 5 characters, and no relay notice changes Listing.status.
   import_export_backup_rollback:
@@ -293,4 +313,4 @@ processes:
     export: "Section bazaar.listings in classrup-export/v1, one JSON line per Listing (schema classrup.bazaar.listing_record/v1); drafts are included because the export is P3 and goes only to the user."
     import: "Skip identical ids, reject conflicting ids with a dry-run report; listings whose ownerId differs from the importing principal are stored as read-only history."
     backup: "The vault export is the primary backup (IOX-6); the app warns when the last export is older than 30 days; no relay holds drafts."
-    migration_rollback: "Additive optional fields only within v1; older app builds ignore unknown optional fields; rollback is by reinstalling the previous release and re-importing the last export. Records written under the earlier name classrup.bazaar.listing/v1 are read as classrup.bazaar.listing_record/v1 for 180 days."
+    migration_rollback: "Additive optional fields only within v1; older app builds ignore unknown optional fields; rollback is by reinstalling the previous release and re-importing the last export. Records written under the earlier name classrup.bazaar.listing/v1 are read as classrup.bazaar.listing_record/v1 for 180 days, and their earlier mediaRefs string list is read as media entries with ref only (no alt, decorative absent) so the owner is asked for descriptions before publishing."

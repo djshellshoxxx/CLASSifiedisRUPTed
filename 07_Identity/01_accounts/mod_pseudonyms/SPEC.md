@@ -41,7 +41,7 @@ Local-first identity. An Account is the local principal in the user's vault - an
 - Two relays hold the same handle for different DIDs; allowed and shown with the DID fingerprint (16 base58btc characters of SHA-256 of the root public key, about 93 bits, never the constant did:key prefix) wherever ambiguity is possible.
 - The user tries to change the pseudonym twice within 30 days; the local guard warns and requires confirmation, and a relay registry refuses with IDENTITY_PSEUDONYM_COOLDOWN.
 - The user revokes the only active device key; refused with IDENTITY_LAST_DEVICE_KEY unless RecoveryKitStatusPort reports a created and verified recovery kit.
-- A revoked device signs a statement; each verifier judges by its own first-seen time of the statement, accepting statements it first saw before it learned of the revocation and rejecting later ones, because the time of signing cannot be proven.
+- A revoked device signs a statement; a verifier whose latest verified document already marks the key revoked refuses it whatever createdAt claims, and a verifier that learns of the revocation later quarantines the statements it first saw at or after revokesEffectiveAt (clamped to no earlier than 30 days before its earliest evidence of the revoking document) and keeps earlier ones with a revoked-signer marker, because the time of signing cannot be proven (F07.S02.M01, F11.S01.M02).
 - The 11th device is added; refused with IDENTITY_DEVICE_LIMIT.
 - Pseudonym contains right-to-left override or zero-width characters; rejected.
 - The user forgets the vault passphrase and has no recovery kit; the account cannot be recovered, and the creation flow states this before finishing.
@@ -84,7 +84,7 @@ F16.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR
 | PS-052-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-052-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-052-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-052-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-052-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-052-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-052-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-052-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -96,7 +96,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T26 pass in CI.
+- All tests T01-T29 pass in CI.
 - No private key, passphrase or email is ever present in module storage, events, logs or relay payloads (privacy suite), and the root key exists only on the root device keystore and in the kit.
 - Homoglyph and mixed-script pseudonym samples are rejected or warned according to the rules, and no claim of global pseudonym uniqueness appears in the UI or docs.
 - A stolen linked device cannot revoke the legitimate devices on its own, and the UI states that a stolen root device or kit can still sign as the account.

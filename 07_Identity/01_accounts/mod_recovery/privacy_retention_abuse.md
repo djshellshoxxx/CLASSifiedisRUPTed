@@ -35,6 +35,8 @@
 | T07 | Stolen device blocks recovery by disputing it | a dispute freezes the recovery as contested and extends the window to 7 days but cannot cancel it, revoke the new key or reset the kit; one dispute per key per 24 h |
 | T08 | Leaked old kit after the user created a new one | every kit wraps the same root key, so superseding does not revoke the old kit; the UI says so and suggests a new identity; a dedicated recovery key is Future |
 | T09 | Concurrent recoveries from two vaults | no lock can prevent them; receivers see two notices for one DID and freeze the identity as contested until explicit resolution |
+| T10 | A thief on the root device silently creates a fresh kit to keep access | every other device receives the device-signed recovery_kit_notice and shows an alert; honest limit - a thief who also blocks delivery delays the alert until the next sync |
+| T11 | A photo of the printed QR leaks the kit core | the core is encrypted under a key from the 256-bit secret, so it is useless without the 24 words; the sheet advises storing words and sheet separately |
 
 **Abuse controls**
 - Local backoff after 5 failed attempts: 60 s doubling to 900 s; at most 3 begin attempts per hour.

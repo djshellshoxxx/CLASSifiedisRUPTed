@@ -18,7 +18,7 @@
 | V01 | kdf is scrypt with N=131072, r=8, p=1, salt 16 bytes, cipher xchacha20poly1305 with a 24-byte nonce | IDENTITY_KIT_PARAMS_INVALID |
 | V02 | the user confirmed 3 randomly chosen words and the stored-separately acknowledgement before the kit is activated | VALIDATION_FAILED |
 | V03 | entered words are 24 words of the 2048-word list and the 8-bit checksum matches | IDENTITY_KIT_WORDS_INVALID |
-| V04 | the kit file checksum equals blobChecksum and decryption authenticates with the derived key | IDENTITY_KIT_CORRUPT |
+| V04 | the checksum of the kit core read from the file or the scanned QR equals blobChecksum and decryption authenticates with the derived key | IDENTITY_KIT_CORRUPT |
 | V05 | within this vault no other recovery is pending or contested and no kit replacement is attempted meanwhile; recoveries in other vaults are not visible here and receivers detect two notices for one DID as a fork | CONFLICT_STATE |
 | V06 | the recovering vault requests revocation of other device keys only at or after revokeOthersNotBefore (72 h after begin, or 7 days after begin when contested) | IDENTITY_RECOVERY_WINDOW_OPEN |
 | V07 | failed recovery attempts are fewer than 5 before the backoff of 60 s doubling to 900 s applies | RATE_LIMITED |
@@ -26,6 +26,7 @@
 | V09 | a received recovery notice verifies against the DID root key with prefix classrup-recovery-notice:v1; a received dispute verifies with prefix classrup-recovery-dispute:v1 against a device key active in the latest document this vault holds for the DID that is not the new key | IDENTITY_RECOVERY_STATEMENT_INVALID |
 | V10 | at most one recovery notice per DID and one dispute per signing key are processed per 24 hours; extra ones are quarantined | RATE_LIMITED |
 | V11 | registering the new device key keeps the account at no more than 10 active device keys (F07.S01.M01 registerRecoveredKey) | IDENTITY_DEVICE_LIMIT |
+| V12 | a received classrup.identity.recovery_kit_notice/v1 names the own DID and its envelope (F11.S01.M03) is signed with ext.signerKey of another device of the principal that the latest verified document does not mark revoked at receipt (F07.S02.M01 key_status) | IDENTITY_RECOVERY_STATEMENT_INVALID |
 
 ## Verification
 
@@ -38,6 +39,7 @@
 | TEST-PS-053-09.T17 | integration | PS-053-09.R04, PS-053-02.R02, PS-053-05.R02 | two isolated vaults begin offline from the same kit with N1 and N2; a second begin inside one vault | both succeed locally; after sync receivers see two notices for one DID and freeze it as contested; the second begin in one vault returns CONFLICT_STATE |
 | TEST-PS-053-09.T19 | abuse | PS-053-09.R04, PS-053-02.R04 | stolen D2 sends 5 disputes within 24 h | one processed, four quarantined with RATE_LIMITED; recovery contested and completed after 7 days with D2 revoked and contested visible to peers |
 | TEST-PS-053-09.T20 | integration | PS-053-03.R04, PS-053-02.R04 | existing device D2 without a kit record receives the notice, disputes it; a second notice for the same DID within 24 h; a dispute signed by revoked key D3 | observed record received then disputed and dispute queued; second notice quarantined and the DID contested; D3 dispute IDENTITY_RECOVERY_STATEMENT_INVALID |
+| TEST-PS-053-09.T27 | e2e | PS-053-04.R06, PS-053-02.R03 | begin with the kit QR scanned from the printed sheet, with the kit file, with the whole phrase pasted into the first field, and with a QR core that has one changed byte | QR and file give the same kit core and recover; the pasted phrase fills all 24 fields; the changed core IDENTITY_KIT_CORRUPT |
 
 ## Dependencies
 

@@ -19,7 +19,7 @@
 | V03 | F06.S02.M01 assertPublicCell(regionCell) passes and regionCell equals the last publicCell received via discovery.location.updated | IDENTITY_REGION_INVALID |
 | V04 | languages has at most 5 valid BCP 47 tags | VALIDATION_FAILED |
 | V05 | blockedDid is a valid did:key, differs from the principal, and fewer than 1 000 active blocks exist | IDENTITY_BLOCK_LIMIT |
-| V06 | received profile statement is at most 32 KiB, its signature verifies with a device key that the DID's document listed as active at this vault's first-seen time (F07.S02.M01 key_status), and seq is greater than the stored seq | IDENTITY_PROFILE_INVALID |
+| V06 | received profile statement is at most 32 KiB, its envelope signature verifies per F11.S01.M03 with ext.signerKey a device key that the DID's latest verified document does not mark revoked at receipt, whatever createdAt claims (F07.S02.M01 key_status at receiver time), and seq is greater than the stored seq | IDENTITY_PROFILE_INVALID |
 | V07 | expectedRevision equals the current revision on profile update | CONFLICT_REVISION |
 | V08 | unpublish targets an own profile with publishState published | CONFLICT_STATE |
 | V09 | privacy.consent.check(federation_publish, relayId) is granted for each target relay before a public statement is queued; relays without consent are skipped and a publish with no remaining relay is refused; tombstones are always sent | PRECONDITION_FAILED |
@@ -30,8 +30,8 @@
 |---|---|---|---|---|
 | TEST-PS-056-09.T02 | unit | PS-056-02.R01, PS-056-01.R03 | upload 3 MB JPEG with GPS EXIF and an oversized WebP | re-encoded WebP 128 by 128 under 24 KiB, stripped by F10.S02.M03 and stored as a MediaBlob, or IDENTITY_AVATAR_INVALID |
 | TEST-PS-056-09.T03 | unit | PS-056-02.R01, PS-056-02.R02 | bio 501 code points, 6 languages, region cell with 6 characters, region differing from the last publicCell, stale expectedRevision | VALIDATION_FAILED, IDENTITY_REGION_INVALID (assertPublicCell called) or CONFLICT_REVISION each time |
-| TEST-PS-056-09.T18 | abuse | PS-056-05.R01, PS-056-02.R03 | a profile signed by P2 first seen after P2's revocation, and one signed by P2 first seen before it | the first rejected with IDENTITY_PROFILE_INVALID; the second kept |
+| TEST-PS-056-09.T18 | abuse | PS-056-05.R01, PS-056-02.R03 | a profile signed by P2 with a backdated createdAt arriving after the revoking document; P2's revocation learned later for a profile first seen after its effective time and one first seen before it | the first rejected with IDENTITY_PROFILE_INVALID; on learning, the later-seen one quarantined and the earlier-seen one kept with a revoked-signer marker |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

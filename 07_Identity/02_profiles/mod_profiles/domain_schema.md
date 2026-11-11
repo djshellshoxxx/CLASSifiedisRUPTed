@@ -28,12 +28,14 @@ Schema `classrup.identity.profile/v1` · storage **relay+device** · privacy **P
 | avatar? | object — { ref: blob:sha256-<base64url> MediaBlob of F15.S02.M03, mime: image/webp, widthPx: 128, heightPx: 128, bytes at most 24 576, sha256 }; class follows its visibility |
 | languages? | array — at most 5 BCP 47 tags; class follows its visibility |
 | regionCell? | string — geohash of 4 or 5 characters, never longer (CTR-PRV-001 L1 or L2), equal to the last publicCell from discovery.location.updated |
-| visibility | object — per field bio, avatar, languages, region: public \| contacts \| private; default private for region and public for others |
+| mailboxes? | array — own profile; at most 5 { relayId, mailboxId (128-bit base64url) } set through MailboxHintPort by F08.S01.M01 after comms.mailbox.register, the old ID replaced after comms.mailbox.rotate; class follows its visibility; part of the F11.S01.M01 profile allowlist |
+| visibility | object — per field bio, avatar, languages, region, mailboxes: public \| contacts \| private; default private for region and public for others |
 | fieldClasses | object — F10.S02.M02 class per field derived from visibility - public P0, contacts P2, private P3 |
 | publishState? | enum — never \| published \| withdrawn (own profile) |
-| cid? | string — cid of the signed statement for published or received versions |
-| signerKey? | string — device public key that signed the statement, active in the DID's document at first-seen time |
-| sig? | string — Ed25519 signature by signerKey over JCS bytes |
+| cid? | string — cid of the signed statement for published or received versions, per F11.S01.M03 (computed by the StatementPublisherPort for own versions) |
+| signerKey? | string — ext.signerKey, the device key that signed the statement, not revoked in the DID's latest verified document at receipt (F07.S02.M01 key_status at receiver time) |
+| firstSeenAt? | timestamp — received profiles; local clock when this vault first saw the statement, used when a revocation is learned later |
+| sig? | string — Ed25519 signature by signerKey over JCS(envelope minus sig) per F11.S01.M03 |
 | provenance? | object — { originRelay?, via, receivedAt, verifiedAt, notServedBy?: relay ids } for received profiles |
 | syncState? | enum — local_committed \| prepared \| transport_acknowledged \| peer_accepted |
 | status | enum — active \| hidden \| deleted |
@@ -93,4 +95,4 @@ CREATE UNIQUE INDEX identity_profile_did ON identity_profile(tenant_id, did, ori
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

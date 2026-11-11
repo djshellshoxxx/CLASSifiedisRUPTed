@@ -10,7 +10,7 @@ A party signs a short statement about a payment claim with a device key linked t
 
 ## Responsibilities
 
-- Create receipts by signing a canonical statement with the local principal's device key under the F16.S02.M03 context classrup/receipt/v1 (JCS bytes, Ed25519), only for claims the signer is a party to, embedding the device-link chain that links the key to the principal.
+- Create receipts by signing a canonical statement with the local principal's device key under the F16.S02.M03 context classrup/receipt/v1 (signature over the JCS header {v, ctx, kid, alg, signedAt, payloadHash}, Ed25519), only for claims the signer is a party to, embedding the device-link chain that links the key to the principal.
 - Ingest, verify and store receipts signed by the counterparty, with provenance, and quarantine invalid ones.
 - Verify any receipt offline from its content, the embedded key-link chain and signerId through F16.S02.M03 and the F07 identity checks, reporting the signature result, partyBinding verified or unverified, and key status.
 - Export a receipt as a portable classrup-receipt/v1 file and embed it in the vault export.
@@ -80,7 +80,7 @@ F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F1
 | PS-071-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-071-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-071-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-071-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-071-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-071-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-071-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-071-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -92,7 +92,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T21 pass in CI.
+- All tests T01 to T22 pass in CI.
 - Every receipt view and export carries the statement that it evidences an assertion and not delivery.
 - A receipt file verifies offline with no network and no vault, naming both the signing device key and the principal it is linked to.
 - No receipt reads valid for a party unless its device key is linked to that party and was not revoked before a trusted receipt time; signedAt never decides key status.

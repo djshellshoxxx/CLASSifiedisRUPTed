@@ -14,6 +14,8 @@ The user's own public profile (pseudonym, avatar, bio, languages and an L1 or L2
 - Compose and sign the profile statement with only fields marked public (published to selected relays after federation_publish consent) or contacts (sent end-to-end encrypted to conversation participants), and withdraw it with a signed tombstone on unpublish.
 - Own BlockEntry records and expose the block port isBlockedEither(a, b) and filterBlocked(list of up to 500 DIDs) used by every module before acting and by search for result filtering, and implement BlockFilterPort for F07.S02.M01.
 - Drop statements from blocked DIDs silently at intake so the sender cannot learn of the block from this vault.
+- Publish the mailbox IDs that comms.mailbox.register created and the replacement ID after comms.mailbox.rotate (F08.S01.M01 through MailboxHintPort) in the profile statement, so contacts can reach the owner end to end (N15).
+- Sign and store profile statements and withdrawal tombstones only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02).
 - Keep avatar and bio within strict size and content limits (avatar WebP at most 128 by 128 px and 24 KiB, metadata stripped by F10.S02.M03 and stored as a MediaBlob of F15.S02.M03) and check the region with F06.S02.M01 assertPublicCell.
 
 ## Not responsible for
@@ -71,7 +73,7 @@ The user's own public profile (pseudonym, avatar, bio, languages and an L1 or L2
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001
+F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -80,7 +82,7 @@ F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F1
 | PS-056-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-056-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-056-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-056-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-056-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-056-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-056-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-056-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -92,7 +94,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T23 pass in CI.
 - The block list never appears in any statement, relay payload, log or event class below P3 (privacy suite).
 - A blocked DID's statements are dropped on intake in every module that consumes the block port.
 - No relay action or relay-signed tombstone changes or deletes a profile record inside a vault.

@@ -10,6 +10,7 @@
 - **PS-070-02.R02** Incoming statements are verified for signature, signer role and chain position before any state change.
 - **PS-070-02.R03** Outcome rules enforce who must accept and that outcomes carry no executable money action.
 - **PS-070-02.R04** Context types are a registry - only types a module registered through DisputeContextPort are accepted, and an unregistered type or a context the resolver cannot resolve returns COMMERCE_DISPUTE_CONTEXT_INVALID.
+- **PS-070-02.R05** A block never removes the right to dispute - commerce.dispute.open is never refused with BLOCKED_PARTY for any context type, including booking cases opened through the F03.S02.M03 port and rental_deposit or rental_damage cases of a reservation confirmed before the block (N7a), and serviceScope is accepted only for booking contexts.
 
 ## Specification
 
@@ -29,7 +30,8 @@
 | V12 | a mediator-only outcome requires a directory entry signed by the named relay's key, naming that mediator did and relayId and not past validUntil | COMMERCE_DISPUTE_MEDIATOR_UNVERIFIED |
 | V13 | a disposition is advisory only - kind continue, settled, cancelled or waived, favouredDid one of the parties, agreedAmount in a registry currency and only with kind settled | COMMERCE_DISPUTE_OUTCOME_INVALID |
 | V14 | attachment bytes passed F10.S02.M03 stripping before encryption and the MediaBlob digest matches the bytes | VALIDATION_FAILED |
-| V15 | a statement from a blocked did is dropped silently only when it belongs to no open case of this vault; statements of an open case are stored with notifications suppressed, and open is allowed against a blocked party | BLOCKED_PARTY |
+| V15 | a statement from a blocked did is dropped silently only when it belongs to no open case of this vault; statements of an open case are stored with notifications suppressed, and open is allowed against a blocked party for every context type (booking, rental_deposit and rental_damage included) | BLOCKED_PARTY |
+| V16 | serviceScope is present only with contextRef type booking and carries scope, a scopeKey of 1 to 200 characters and an optional milestoneId uuid; idempotencyRef is at most 64 characters | VALIDATION_FAILED |
 
 ## Verification
 
@@ -40,6 +42,7 @@
 | TEST-PS-070-09.T03 | unit | PS-070-02.R02, PS-070-02.R03 | rules V01 to V15 violated in turn | documented error code and nothing stored |
 | TEST-PS-070-09.T08 | integration | PS-070-04.R03, PS-070-02.R01 | commerce.payment.disputed delivered | draft prefilled, no case opened automatically |
 | TEST-PS-070-09.T24 | unit | PS-070-02.R04, PS-070-01.R06 | open cases for each registered type and for an unregistered type | registered types store parties and contextCid from their resolver; unregistered returns COMMERCE_DISPUTE_CONTEXT_INVALID |
+| TEST-PS-070-09.T28 | integration | PS-070-04.R07, PS-070-02.R05 | F03.S02.M03 port opens a booking case with serviceScope {scope, scopeKey, milestoneId} and idempotencyRef L1 against a counterparty the opener blocked, then retries with L1; a deal case carrying serviceScope; owner opens rental_deposit and rental_damage cases against a renter blocked after confirmation | booking case opened, serviceScope signed into dispute/v1 and carried in commerce.dispute.opened; the retry returns the same caseId with no new statement; the deal case returns VALIDATION_FAILED; no open is refused with BLOCKED_PARTY |
 
 ## Dependencies
 

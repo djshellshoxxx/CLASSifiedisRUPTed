@@ -4,30 +4,31 @@ summary: >-
   The shared signed consent record used by bazaar offers and negotiations, mutiny proposals and cycles, service
   bookings, rental reservations and deposits, and meetups. A ConsentStatement binds a signer (did:key) and signer
   key, a subject reference, the CTR-ID-001 ID-3 cid of the exact subject revision, a statement key and locale naming
-  the displayed wording, and a signing time claim. It is signed through the F16.S02.M03 envelope with context
-  classrup/consent/v1, which binds the context and the signer key-ID digest into the signed bytes, produced in the
-  signer's vault, sent as a signed statement through any transport, verified by every receiving vault and kept as
-  evidence. Each owning module registers a ConsentSubjectPort for its subject type, so this module can check the
+  the displayed wording, and a signing time claim. It is signed as a hash-only F16.S02.M03 envelope with ctx
+  classrup/consent/v1, whose signature covers JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash the
+  sha256-<base64url> of SHA-256 over the JCS bytes of the signed field set, produced in the signer's vault, sent as a
+  signed statement through any transport, verified by every receiving vault and kept as evidence. Each owning
+  module registers a SubjectCanonicalizerPort for its subject type, so this module can check the
   current revision, the signer's role and whether the subject is committed. Duplicates resolve to the same record
   in every vault, a revocation that arrives after an owning module committed makes verify return conflicted so the
   parties freeze instead of diverging, and validity after a device-key revocation is judged by first-seen time. A
   consent evidences that a key holder asserted agreement with that exact revision; it is not evidence of delivery,
   payment or that the other party will perform. Revocation is a second signed statement and never rewrites history.
 responsibilities:
-  - Own the ConsentStatement record and its canonical signing bytes, produced through the F16.S02.M03 envelope with context classrup/consent/v1 over the exact signed field list.
+  - Own the ConsentStatement record and its signed field set, signed as a hash-only F16.S02.M03 envelope (ctx classrup/consent/v1, payloadHash over the JCS bytes of the exact signed field set) and verified only through F16.S02.M03 verify with the payload, the expected binding and the signer key status.
   - Provide the reusable vault command comms.consent.sign that other modules call after showing the user the exact revision and wording, and the pure verify query comms.consent.verify.
   - Accept inbound consent statements through comms.consent.accept, verify signer key status, signature, subject hash and role, and store them with provenance and first-seen time or quarantine them with a reason.
   - Provide comms.consent.revoke which signs a revocation statement targeting a consent or its dedupe tuple, and report conflicts (consent and decline, or a revocation that arrived after the owning module committed, for one subject hash) so owning modules freeze instead of resolving by timestamp.
-  - Maintain the registry of statement keys with versions, locales and text hashes so the wording the signer saw can be proven later.
-  - Define the ConsentSubjectPort {canonicalBytes(ref, rev), currentRevision(ref), partyRole(ref, did), isCommitted(ref)} that each owning module registers for its subjectType.
+  - Maintain the registry of statement keys with versions, locales and text hashes so the wording the signer saw can be proven later; v1 registers the keys of every owning feature (bazaar, mutiny, services, rentals, meetups) with subjectType, subjectRef kind, signer role, owning port and wording.
+  - Define the SubjectCanonicalizerPort {canonicalBytes(ref, rev), currentRevision(ref), partyRole(ref, did), isCommitted(ref)} that each owning module registers for its subjectType by inverted registration (owners depend on this module, never the reverse) - F01.S04.M01 bazaar_offer, F01.S04.M02 bazaar_negotiation, the F02 mutiny modules for mutiny_proposal and mutiny_cycle with F02.S01.M04 canonicalBytes, F03.S02.M01 services_booking, F05.S01.M01 rentals_reservation, F05.S01.M02 rentals_deposit and F08.S03.M03 comms_meetup.
   - Resolve duplicates deterministically (lowest cid kept in every vault, others stored as aliases) and register the F10 privacy ports, pseudonymizing signerDid in kept consents on principal deletion (N6).
 non_responsibilities:
   - Deciding what a consent means for a trade, cycle, booking or meetup; the owning modules (F01, F02, F03, F05, F08.S03.M03) decide and call this module.
-  - Computing the canonical subject bytes, current revision, party roles and commit state; each owning module registers a ConsentSubjectPort for its subjectType (F08.S03.M03 registers it for comms_meetup).
-  - Key generation and storage (F07.S01.M01, F16.S02.M01), key status, revocation and freshness (F16.S02.M02) and the signature envelope and context registry (F16.S02.M03).
+  - Computing the canonical subject bytes, current revision, party roles and commit state; each owning module registers a SubjectCanonicalizerPort for its subjectType (F08.S03.M03 registers it for comms_meetup).
+  - Key generation and storage (F07.S01.M01, F16.S02.M01), key validity (F07.S02.M01 KeyStatusPort) read through one F16.S02.M02 security.keyrecord.get_status call with freshness, and the signature envelope and context registry (F16.S02.M03).
   - Message transport (F08.S01.M01), delivery and outbox states (F11.S02.M01 on F15.S01.M01) and relay forwarding (F11 federation).
   - "Future: threshold and multi-device co-signing, time-stamping authority anchoring, hardware-key attestation of the signing device."
-depends_on: [F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001]
+depends_on: [F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001]
 user_stories:
   - As a cycle participant, I confirm one exact revision of a proposal and my signature is bound to that revision so a later edit cannot reuse it.
   - As a buyer, I can look at a stored consent and see who signed what wording on which revision, and whether the signature verifies.
@@ -59,9 +60,10 @@ processes:
   domain_schema:
     requirements:
       - A ConsentStatement stores exactly the signed fields v, type, tenantId, signerDid, signerKeyId, subjectType, subjectRef, subjectRevision, subjectRevisionHash (CTR-ID-001 ID-3 cid form sha256-<base64url>), statementKey, statementLocale, statementTextHash, kind, revokes? and signedAtClaim, plus the signature envelope, provenance with first-seen time and the derived status, with revision per CTR-ID-001.
-      - The signed bytes are produced by the F16.S02.M03 envelope with context classrup/consent/v1 - UTF-8 context, a zero byte, the 32-byte signer key-ID digest, a zero byte, then the RFC 8785 JCS bytes of the signed field set - so a consent signature can never validate as another statement type, and the known-answer vectors publish these exact input bytes.
+      - "The signed bytes are those of the F16.S02.M03 envelope classrup.security.envelope/v1 - the RFC 8785 JCS bytes of the header {v, ctx, kid, alg, signedAt, payloadHash} with ctx classrup/consent/v1, kid the signer key ID and payloadHash = sha256-<base64url>(SHA-256(JCS(signed field set))) - signed hash-only with the signed field set stored beside the envelope as its payload, so a consent signature can never validate as another statement type, and the regenerated known-answer vectors publish these exact header bytes and payload hashes."
       - ConsentStatements are P2 evidence kept under RET-EVIDENCE, are immutable after storage apart from the derived status, and carry provenance for statements received from other vaults.
-      - id is the CTR-ID-001 ID-3 cid of the JCS bytes of the signed fields and signature; among non-revoked records with the same dedupe tuple (signerDid, subjectRef, subjectRevisionHash, statementKey, kind) every vault keeps the lexicographically lowest cid as the record and stores the others as aliases.
+      - id is the CTR-ID-001 ID-3 cid of the JCS bytes of the signed fields and envelope; among non-revoked records with the same dedupe tuple (signerDid, subjectRef, subjectRevisionHash, statementKey, kind) every vault keeps the lexicographically lowest cid as the record and stores the others as aliases.
+      - "The v1 statement key registry ships these keys, each with consent wording per locale (plus decline wording where the owner signs declines), its subjectType, subjectRef kind, the signer role SubjectCanonicalizerPort.partyRole must return and the owner whose registered port canonicalizes the subject - consent.bazaar.offer.accept.v1 (bazaar_offer, offerId, listing author; F01.S04.M01, JCS of the offer statement); consent.bazaar.negotiation.accept.v1 (bazaar_negotiation, negotiationId, the accepting buyer or seller; F01.S04.M02, JCS of the round statement); consent.mutiny.proposal.accept.v1 (mutiny_proposal, proposal subjectId, party) and consent.mutiny.cycle.commit.v1 (mutiny_cycle, cycle subjectId, participant), both with decline wording and canonicalized by F02.S01.M04 canonicalBytes, so subjectRevisionHash equals that revision's contentHash cid; consent.services.booking.accept.v1 (services_booking, quoteId, client), consent.services.booking.cancel.v1 with decline wording and consent.services.booking.resume.v1 (services_booking, bookingId, client or provider; F03.S02.M01); consent.rentals.reservation.request.v1 (rentals_reservation, reservationId, renter) and consent.rentals.reservation.confirm.v1 (rentals_reservation, reservationId, owner; F05.S01.M01); consent.rentals.deposit.agree.v1 (rentals_deposit, depositId, renter; F05.S01.M02), whose registered wording states that the owner, not ClassRup, holds the deposit; consent.comms.meetup.agree.v1 (comms_meetup, meetupId, party; F08.S03.M03)."
     entities:
       - name: ConsentStatement
         schema: classrup.comms.consent/v1
@@ -74,18 +76,18 @@ processes:
           - "type: string — classrup.comms.consent/v1, signed"
           - "tenantId: uuidv7 — tenant scope, signed"
           - "signerDid: did:key — principal that signed; replaced by the deletion pseudonym in the deleting user's own kept evidence"
-          - "signerKeyId: string — device Ed25519 key that produced the signature; its digest is bound into the signed bytes"
+          - "signerKeyId: string — device Ed25519 key that produced the signature; equals envelope kid, which the signed header covers"
           - "subjectType: enum — bazaar_offer | bazaar_negotiation | mutiny_proposal | mutiny_cycle | services_booking | rentals_reservation | rentals_deposit | comms_meetup"
           - "subjectRef: uuidv7 — record ID in the owning module"
           - "subjectRevision: int — revision of the subject at signing"
-          - "subjectRevisionHash: string — sha256-<base64url> cid (ID-3) of ConsentSubjectPort.canonicalBytes of the subject at that revision"
+          - "subjectRevisionHash: string — sha256-<base64url> cid (ID-3) of SubjectCanonicalizerPort.canonicalBytes of the subject at that revision; for mutiny subjects it is the F02.S01.M04 contentHash itself, never a hex form"
           - "statementKey: string — registry key consent.<slug>.<subject>.<action>.v1 such as consent.mutiny.cycle.commit.v1; lowercase dotted, ≤ 80 chars"
           - "statementLocale: string — BCP 47 locale of the wording shown to the signer, signed"
           - "statementTextHash: string — SHA-256 lowercase hex (64 chars) of the exact wording shown in statementLocale"
           - "signedAtClaim: timestamp — signer clock, RFC 3339 UTC, a claim"
           - "kind: enum — consent | decline | revocation"
           - "revokes?: object — revocation only: { consentId } or the dedupe tuple { subjectRef, subjectRevisionHash, statementKey }"
-          - "envelope: object — classrup.security.envelope/v1 { context: classrup/consent/v1, signerKeyId, alg: ed25519, signedAt, payloadHash, sig (64 bytes base64url) }"
+          - "envelope: object — hash-only classrup.security.envelope/v1 { v: 1, ctx: classrup/consent/v1, kid (= signerKeyId), alg: ed25519, signedAt, payloadHash (sha256-<base64url> of SHA-256 over JCS of the signed field set), sig (64 bytes base64url over JCS of the six header members) }; the signed field set stored beside it is the payload passed to verify"
           - "status: enum — quarantined | valid | revoked | erased; decline and revocation records are valid once verified and are never revoked themselves"
           - "aliasOf?: string — set on a duplicate: cid of the kept record of the same dedupe tuple"
           - "quarantineReason?: enum — subject_missing | key_missing | wording_unknown | signature_invalid | role_mismatch"
@@ -95,27 +97,27 @@ processes:
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
           - id equals the ID-3 cid, so two statements with equal content are the same record; among non-revoked duplicates of one dedupe tuple the lowest cid is the record and the others have aliasOf set.
-          - status valid implies the envelope verified under context classrup/consent/v1 for signerKeyId, F16.S02.M02 reported the key active for signerDid at firstSeenAt, and subjectRevisionHash matched the owning module's ConsentSubjectPort.canonicalBytes.
+          - status valid implies F16.S02.M03 verify returned accepted for the envelope with the stored payload, expected context classrup/consent/v1, the expected binding and the key status that security.keyrecord.get_status returned for signerDid at firstSeenAt, and subjectRevisionHash matched the owning module's SubjectCanonicalizerPort.canonicalBytes.
           - A revocation is stored as its own record with revokes set; the revoked consent rows only have their status changed to revoked, never deleted.
           - At most 20 records per (signerDid, subjectRef) are stored to bound abuse.
           - firstSeenAt is never derived from signedAtClaim and survives export and import unchanged.
           - Field classes are annotated per F10.S02.M02 (DIDs, hashes and keys P2; no subject content is ever stored here).
   validation_rules:
     requirements:
-      - Signing validates the subject through its ConsentSubjectPort (current revision, the signer's role, commit state), the wording and the hash before any signature is made.
+      - Signing validates the subject through its SubjectCanonicalizerPort (current revision, the signer's role, commit state), the wording and the hash before any signature is made.
       - Inbound statements are validated for structure, signature, key status, role and hash before storage as valid.
       - Every violation maps to one stable error code.
       - The commit guard V07 applies only to the local comms.consent.revoke command; inbound revocations are always stored, and verify returns conflicted when the owning module has already committed, so the parties freeze for renegotiation instead of diverging silently.
       - "Validity after a device-key revocation follows one rule: first-seen time is provenance.verifiedAt recorded at the first successful verification, kept through export and import in the signed manifest and never taken from signedAtClaim; a statement first seen after the key's revocationEffectiveFrom is rejected."
-      - Each owning module registers a ConsentSubjectPort for its subjectType; signing and verification for a subjectType without a registered port are refused, and the shared conformance suite checks every registered port.
+      - Each owning module registers a SubjectCanonicalizerPort for its subjectType; signing and verification for a subjectType without a registered port are refused, and the shared conformance suite checks every registered port.
     rules:
       - "V01 | payload has exactly the signed field set, subjectRevisionHash is an ID-3 cid (sha256- plus 43 base64url characters), statementTextHash is 64-char lowercase hex, signature decodes to 64 bytes, statementKey matches the key grammar | VALIDATION_FAILED"
       - "V02 | sign: statementKey exists in the registry, is active for the subjectType, and statementTextHash equals the hash of the registered wording for statementLocale; receive: an unknown key or wording version is quarantined with reason wording_unknown until the registry updates, never rejected | COMMS_CONSENT_STATEMENT_UNKNOWN"
-      - "V03 | subject exists in the local vault and subjectRevisionHash equals the ID-3 cid of ConsentSubjectPort.canonicalBytes(subjectRef, subjectRevision) of the owning module | COMMS_CONSENT_SUBJECT_MISMATCH"
-      - "V04 | sign: subjectRevision equals ConsentSubjectPort.currentRevision(subjectRef) | COMMS_CONSENT_STALE"
-      - "V05 | ConsentSubjectPort.partyRole(subjectRef, signerDid) returns the role the statement key requires (for example participant of the cycle) | FORBIDDEN"
-      - "V06 | the envelope verifies through F16.S02.M03 with expected context classrup/consent/v1 and signerKeyId, and F16.S02.M02 security.keyrecord.get_status(signerKeyId, asOfReceiptTime = firstSeenAt) is active for signerDid; freshness unknown is stored valid with a stale-key flag that owning modules can require to be refreshed | COMMS_CONSENT_SIGNATURE_INVALID"
-      - "V07 | local comms.consent.revoke only: the target is a valid consent of the local signer (by consentId or dedupe tuple) and ConsentSubjectPort.isCommitted(subjectRef) is false; inbound revocations are never refused by this rule | COMMS_CONSENT_NOT_REVOCABLE"
+      - "V03 | subject exists in the local vault and subjectRevisionHash equals the ID-3 cid of SubjectCanonicalizerPort.canonicalBytes(subjectRef, subjectRevision) of the owning module | COMMS_CONSENT_SUBJECT_MISMATCH"
+      - "V04 | sign: subjectRevision equals SubjectCanonicalizerPort.currentRevision(subjectRef) | COMMS_CONSENT_STALE"
+      - "V05 | SubjectCanonicalizerPort.partyRole(subjectRef, signerDid) returns the role the statement key requires (for example participant of the cycle) | FORBIDDEN"
+      - "V06 | F16.S02.M03 verify(envelope, { expectedContext: classrup/consent/v1, expectedBinding: { subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey } }, keyStatus, payload = the signed field set) returns accepted true, and the statement is acted on only then; keyStatus is the result of one F16.S02.M02 security.keyrecord.get_status { did: signerDid, publicKey: the public key of signerKeyId, at: firstSeenAt } call, which delegates to F07.S02.M01 KeyStatusPort.keyStatus(signerDid, signerPublicKey, at = firstSeenAt); an accepted result with freshness unknown is stored valid with a stale-key flag that owning modules can require to be refreshed | COMMS_CONSENT_SIGNATURE_INVALID"
+      - "V07 | local comms.consent.revoke only: the target is a valid consent of the local signer (by consentId or dedupe tuple) and SubjectCanonicalizerPort.isCommitted(subjectRef) is false; inbound revocations are never refused by this rule | COMMS_CONSENT_NOT_REVOCABLE"
       - "V08 | receiving vault cap: at most 20 records per (signerDid, subjectRef) and 200 quarantined statements per vault are kept; UX guard in the signer vault: at most 60 signatures per hour | RATE_LIMITED"
       - "V09 | the confirmation flag read is true in the sign request | VALIDATION_FAILED"
       - "V10 | statements from DIDs the local principal blocked are dropped silently (F07.S02.M02 isBlockedEither over local data); a signer blocked by someone else sees no difference | BLOCKED_PARTY"
@@ -139,7 +141,7 @@ processes:
       - The vault commands sign and revoke produce signed statements and are called by owning modules or the UI; accept is a vault command invoked by the transport layer for inbound statements.
       - Each command emits its event in the same IndexedDB transaction as the stored record (CTR-EVT-001 EVT-8).
       - "Verify and list are pure vault queries with no side effects; verify resolves by the dedupe tuple and its result for consent plus revocation is defined in one table - valid (verified consent, no stored decline or revocation), stale (subjectRevisionHash differs from the current revision), revoked (revocation stored while the subject is not committed), conflicted (consent and decline, a revocation stored after the owning module committed, or a peer-reported invalidity), missing (no record)."
-      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.consent/v1 with kind consent, decline or revocation, signer role = the role the statement key requires per ConsentSubjectPort.partyRole, signed through F16.S02.M03 with context classrup/consent/v1; owning modules echo every received consent statement to all participants before they commit."
+      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.consent/v1 with kind consent, decline or revocation, signer role = the role the statement key requires per SubjectCanonicalizerPort.partyRole, signed through F16.S02.M03 with context classrup/consent/v1; owning modules echo every received consent statement to all participants before they commit."
       - The module registers ExportSectionPort (section comms.consents, including firstSeenAt in the signed manifest), DeletionPort (plan, execute, pseudonymize - kept consents get signerDid replaced by the deletion pseudonym when keepEvidence is true and are purged otherwise) and RetentionPurgePort (RET-EVIDENCE) with F10 (N6).
     commands:
       - name: comms.consent.sign
@@ -176,13 +178,12 @@ processes:
         errors: [NOT_FOUND]
     events_produced:
       - {type: comms.consent.signed, privacy: P2, payload: "{ consentId, signerDid, subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey, statementLocale, kind, revokes? }"}
-      - {type: comms.consent.revoked, privacy: P2, payload: "{ revocationId, revokedIds[], signerDid, subjectType, subjectRef, subjectRevisionHash, statementKey, afterCommit, origin: local|federated }"}
+      - {type: comms.consent.revoked, privacy: P2, payload: "{ revocationId, revokedIds[], signerDid, subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey, afterCommit, origin: local|federated } — subjectRevision is taken from the revoked consent record"}
       - {type: comms.consent.received, privacy: P2, payload: "{ consentId, signerDid, subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey, kind, aliasOf?, firstSeenAt, provenance }"}
     events_consumed:
-      - {type: security.key.registered, effect: "add the key for ownerPrincipal to the verifier key set and re-verify quarantined statements waiting for it (reason key_missing)"}
-      - {type: security.key.revoked, effect: "record revocationEffectiveFrom for keyId of ownerPrincipal; statements by that key first seen after it are rejected, statements first seen earlier stay valid"}
-      - {type: identity.device_key.added, effect: "own account only: add the new own device to the local signer's device list shown on the consent detail"}
-      - {type: identity.device_key.revoked, effect: "own account only: stop offering the revoked own device for signing"}
+      - {type: identity.portable_doc.published, effect: "origin received only, the single source of counterparty key changes: for addedKeys re-verify quarantined statements of that did waiting for a key (reason key_missing); for revokedKeys[].revokesEffectiveAt re-run the get_status check so statements by that key first seen after it are rejected and statements first seen earlier stay valid; a status change is passed to verify through the next get_status call; origin own and relay_stored are ignored"}
+      - {type: identity.device_key.added, effect: "the local principal's own keys only (payload did is the local principal): add the new own device to the local signer's device list shown on the consent detail"}
+      - {type: identity.device_key.revoked, effect: "the local principal's own keys only (payload did is the local principal): stop offering the revoked own device for signing"}
       - {type: privacy.deletion.completed, effect: "replace remaining references to the deleted principal by the payload pseudonym in consents kept as evidence (keepEvidence true); evidence copies in other vaults remain"}
     errors:
       - "COMMS_CONSENT_STATEMENT_UNKNOWN | 422 | no | statement key is not in the registry or its text hash does not match the wording for the locale"
@@ -198,7 +199,8 @@ processes:
         "statementTextHash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
         "kind": "consent", "readConfirmed": true }
       -> { "consentId": "sha256-OnvT4jYKPSnupDb8-35ExzXRF8QtHBg1QgtrmULdTxs", "signedAtClaim": "2026-11-04T10:00:00.000Z", "firstSeenAt": "2026-11-04T10:00:00.000Z", "revision": 1 }
-      signed bytes = "classrup/consent/v1" 0x00 keyIdDigest(32 bytes) 0x00 JCS(signed fields)
+      signed bytes = JCS({ "v": 1, "ctx": "classrup/consent/v1", "kid": signerKeyId, "alg": "ed25519", "signedAt": …, "payloadHash": "sha256-" + base64url(SHA-256(JCS(signed fields))) })
+      verify(envelope, { expectedContext: "classrup/consent/v1", expectedBinding: { subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey } }, keyStatus = security.keyrecord.get_status { did, publicKey, at: firstSeenAt }, payload = signed fields) -> { accepted: true }
       vault query comms.consent.verify  { "subjectType": "mutiny_cycle", "subjectRef": "…", "subjectRevisionHash": "sha256-n4bQ…", "signerDid": "did:key:z6Mk…", "statementKey": "consent.mutiny.cycle.commit.v1" }
       -> { "result": "valid", "consentId": "sha256-OnvT…", "aliasIds": [], "keyFreshness": "fresh" }
   authorization_capabilities:
@@ -207,8 +209,8 @@ processes:
       - Inbound statements are accepted only when signed by a key that F16.S02.M02 reports active for the signer at first-seen time and the signer holds the role required by the statement key in the subject; others are quarantined with a reason.
       - Verify and list are local reads with no network access; relays hold no consent data except as opaque encrypted envelopes and cannot create or alter a consent.
     capabilities:
-      - "comms.consent.sign | local principal | vault policy; party of the subject with the role required by the statement key (ConsentSubjectPort.partyRole); readConfirmed true"
-      - "comms.consent.revoke | local principal | the targeted consents are signed by the local principal; subject not committed (ConsentSubjectPort.isCommitted false)"
+      - "comms.consent.sign | local principal | vault policy; party of the subject with the role required by the statement key (SubjectCanonicalizerPort.partyRole); readConfirmed true"
+      - "comms.consent.revoke | local principal | the targeted consents are signed by the local principal; subject not committed (SubjectCanonicalizerPort.isCommitted false)"
       - "comms.consent.accept | local principal | internal; invoked by the transport layer; statement verified before storage"
       - "comms.consent.verify | local principal | any local module; pure read"
       - "comms.consent.read | local principal | party of the subject"
@@ -237,8 +239,8 @@ processes:
       - "Quarantined inbound statements: erased after 7 days."
     threats:
       - "T01 | Replay of a consent on a modified subject | signature covers the exact ID-3 cid of the revision; a changed subject has a different hash so verify returns stale"
-      - "T02 | Cross-protocol signature reuse | F16.S02.M03 envelope with context classrup/consent/v1 and the signer key-ID digest inside the signed bytes; login and other signatures use different registered contexts"
-      - "T03 | Forged consent by non-party | role check through ConsentSubjectPort.partyRole and key status check through F16.S02.M02; failure quarantines"
+      - "T02 | Cross-protocol signature reuse | the F16.S02.M03 signed header covers ctx classrup/consent/v1, kid and payloadHash, verify requires the expected context and binding, and login and other signatures use different registered contexts and leading bytes"
+      - "T03 | Forged consent by non-party | role check through SubjectCanonicalizerPort.partyRole and key status check through F16.S02.M02; failure quarantines"
       - "T04 | Backdated signing time to win an ordering dispute | signedAtClaim is only a claim; ordering between consent and revocation is never decided by it and relay receipt time is evidence of the relay clock only"
       - "T05 | Coerced or accidental signature | explicit read confirmation, wording displayed with the exact revision, revocation available until commit, and the UI explains that consent is not delivery or payment"
       - "T06 | Compromised device signs consents, possibly backdated | validity uses first-seen time recorded by the verifier, never signedAtClaim; statements first seen after revocationEffectiveFrom are rejected; consents first seen before revocation stay valid, which is disclosed"
@@ -265,11 +267,11 @@ processes:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Contract tests verify signed statements, command inputs and outputs and events against the schema registry, using fixed known-answer vectors for JCS and Ed25519 under the classrup/consent/v1 envelope.
-      - Owning modules reuse a shared conformance suite that exercises sign and verify against their own ConsentSubjectPort.
+      - Owning modules reuse a shared conformance suite that exercises sign and verify against their own SubjectCanonicalizerPort.
       - Screens meet CTR-UX-001 (WCAG 2.2 AA, 44 px targets, explicit async states, polite announcements) and the a11y items listed for this module.
-    fixtures: "Vaults P1, P2, P3 with Ed25519 device keys from fixed seeds (P1 with two devices), mutiny cycle subject at revisions 1..3 with a stub ConsentSubjectPort, statement key registry with consent.mutiny.cycle.commit.v1 and consent.comms.meetup.agree.v1 in en and de, fixed clock 2026-11-04T10:00:00Z, RFC 8785 test vectors, published KAT input bytes."
+    fixtures: "Vaults P1, P2, P3 with Ed25519 device keys from fixed seeds (P1 with two devices), mutiny cycle subject at revisions 1..3 with a stub SubjectCanonicalizerPort, stub ports for every other subjectType, the full v1 statement key registry of 01.R05 in en and de, a key status stub behind security.keyrecord.get_status, fixed clock 2026-11-04T10:00:00Z, RFC 8785 test vectors, regenerated header-form KAT bytes shared with F16.S02.M03."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01 | sign consent for cycle revision 3 and recompute the bytes independently as classrup/consent/v1, zero byte, key-ID digest, zero byte, JCS of the signed field set | signature equals the regenerated known-answer vector, the published input bytes match, and the statement verifies; payload has exactly the listed fields"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | sign consent for cycle revision 3 hash-only and recompute independently JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over JCS of the signed field set | signature equals the regenerated header-form known-answer vector shared with F16.S02.M03, the published header bytes and payload hash match, and verify with the payload returns accepted; payload has exactly the listed fields"
       - "T02 | unit | 02.R02,02.R03 | each rule V01 to V10 violated in turn | documented error code returned and nothing stored as valid"
       - "T03 | property | 01.R03,03.R01 | random sequences of sign, revoke, accept, subject revisions | revoked never returns to valid; id equals cid; verify result depends only on stored statements"
       - "T04 | unit | 01.R02,07.R01 | cross-protocol attempt using a login challenge signature as a consent and a consent signature as a login proof | both rejected by the F16.S02.M03 context check"
@@ -280,20 +282,23 @@ processes:
       - "T09 | integration | 06.R04,01.R04 | P1 signs the same consent on both devices; P2 and P3 receive the two copies in opposite orders; P1 then revokes by dedupe tuple | P2 and P3 both keep the lowest cid with the other as alias; the revocation revokes both cids in both vaults"
       - "T10 | abuse | 07.R01,07.R02,07.R03 | clock claim 3 days off; 21st statement on one subject; inspect exported records | clockSuspect true, RATE_LIMITED, no subject content in any record"
       - "T11 | load | 08.R01,08.R02,08.R03 | sign 200 statements and verify 1 000 | budgets met"
-      - "T12 | unit | 09.R01,09.R03 | traceability tool run and shared conformance suite for the bazaar, mutiny, services, rentals and meetup ConsentSubjectPorts | every PS-062 requirement maps to a passing test and every registered port passes"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run and shared conformance suite for the bazaar, mutiny, services, rentals and meetup SubjectCanonicalizerPorts | every PS-062 requirement maps to a passing test and every registered port passes"
       - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore from backup | statements round trip byte identical with firstSeenAt from the signed manifest and re-verify; tampered file entries are rejected"
       - "T14 | a11y | 09.R04 | confirm sheet with screen reader and keyboard | wording readable, Sign disabled until confirmation, verification result announced, targets ≥ 44 px, zero serious axe issues"
       - "T15 | integration | 02.R04,03.R03 | three vaults: P2 revokes after P1's owning module committed and before P3's committed | P1 stores it and verify returns conflicted so its module freezes; P3 verify returns revoked; a local revoke on the committed subject is refused with COMMS_CONSENT_NOT_REVOCABLE"
       - "T16 | abuse | 04.R04 | P1 sends a consent to P2 and a decline to P3; the owning modules echo received statements to all participants before commit | both P2 and P3 hold both statements and verify returns conflicted in each"
       - "T17 | integration | 02.R05,10.R02 | key K of P1 revoked; a statement by K backdated before the revocation reaches P2 afterwards; P2 exports and re-imports after the revocation | the backdated statement is rejected; consents first seen before the revocation stay valid after import because firstSeenAt is restored from the manifest"
       - "T18 | integration | 04.R05,07.R04 | P1 deletes the account with keepEvidence true, then repeated with false | kept consents carry the pseudonym instead of signerDid; with false they are purged; copies in P2 unchanged"
-      - "T19 | unit | 02.R06 | sign and verify for a subjectType without a registered ConsentSubjectPort; port reports isCommitted true; partyRole returns none | refused with VALIDATION_FAILED; local revoke refused; FORBIDDEN"
+      - "T19 | unit | 02.R06 | sign and verify for a subjectType without a registered SubjectCanonicalizerPort; port reports isCommitted true; partyRole returns none | refused with VALIDATION_FAILED; local revoke refused; FORBIDDEN"
       - "T20 | unit | 02.R02 | inbound statement with a wording version newer than the registry, then the registry updates | quarantined with wording_unknown, then valid without being re-sent"
       - "T21 | integration | 03.R01 | P1 consents, revokes and consents again to the same revision | the second consent is a new valid record; verify returns valid"
       - "T22 | unit | 07.R03,07.R02 | render the sign sheet in en and de | text states that pseudonymity is not anonymity, that consent evidences assertion not delivery or payment, and that copies held by counterparties are not deleted with the vault"
+      - "T23 | contract | 01.R05,02.R06 | load the v1 statement key registry and run sign and verify for each key against the stub port of its owner | every listed key exists with its subjectType, subjectRef kind, signer role, owning port and wording (decline wording for both mutiny keys and the booking cancel key; the deposit wording states that the owner, not ClassRup, holds the deposit); a mutiny_cycle subjectRevisionHash equals the F02.S01.M04 contentHash cid; a hex-encoded hash is refused with VALIDATION_FAILED; a partyRole other than the key's signer role is refused with FORBIDDEN"
+      - "T24 | unit | 02.R02,01.R02 | hash-only envelope verified without its payload, with the payload of another revision, with get_status reporting revoked before firstSeenAt, and accepted with freshness unknown | the first three are not accepted and never stored valid (COMMS_CONSENT_SIGNATURE_INVALID); exactly one security.keyrecord.get_status call with at = firstSeenAt per verification; the last is stored valid with the stale-key flag"
+      - "T25 | integration | 04.R01,04.R02 | P2's portable identity document arrives with origin received adding key K2 and revoking K1 effective at t; own identity.device_key.added carries the local did; P1 then revokes a consent | quarantined statements by K2 become valid; statements by K1 first seen after t are rejected and earlier ones stay valid; no security.key.* event is consumed; comms.consent.revoked carries subjectRevision, subjectRevisionHash and statementKey"
     acceptance:
-      - All tests T01 to T22 pass in CI.
-      - Known-answer vectors for JCS bytes and Ed25519 signatures under classrup/consent/v1 pass on all supported browsers and Node, and the vector input bytes are published.
+      - All tests T01 to T25 pass in CI.
+      - Regenerated header-form known-answer vectors (JCS of {v, ctx, kid, alg, signedAt, payloadHash} and Ed25519 signatures under classrup/consent/v1) pass on all supported browsers and Node, equal the F16.S02.M03 consent vectors, and the header bytes and payload hashes are published.
       - No code path orders consent against revocation or decline by claimed time.
       - The sign sheet states that consent evidences assertion, not delivery or payment, and that pseudonymity is not anonymity.
   import_export_backup_rollback:

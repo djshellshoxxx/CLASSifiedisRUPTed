@@ -15,7 +15,7 @@
 - **export:** ExportSectionPort section commerce.receipts in classrup-export/v1; one line per Receipt (schema classrup.commerce.receipt/v1) with its keyLink chain; single receipts also export as classrup-receipt/v1 files.
 - **import:** Receipts import as read-only evidence after signature, party-binding and key-status re-verification; the import time is not a trusted receipt time for earlier revocations, so revoked keys without a stored receivedAt read revoked_receipt_time_unknown; failures go to quarantine with reason.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext envelopes of receipts in transit.
-- **migration rollback:** Signed bytes are never rewritten by a migration; signingKeyId and keyLink are additive, and v1 receipts signed before this change keep their stored device did as signingKeyId with partyBinding recomputed; rollback is safe because older readers ignore unknown optional fields.
+- **migration rollback:** Signed bytes are never rewritten by a migration; the F16.S02.M03 header signed bytes JCS({v, ctx, kid, alg, signedAt, payloadHash}) are the only receipt signature format in v1; signingKeyId and keyLink are additive, and v1 receipts signed before this change keep their stored device did as signingKeyId with partyBinding recomputed; rollback is safe because older readers ignore unknown optional fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

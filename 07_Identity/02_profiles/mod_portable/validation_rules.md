@@ -11,6 +11,8 @@
 - **PS-055-02.R03** Relay publication adds quotas and URL checks.
 - **PS-055-02.R04** First contact, chain gaps and recovery-driven revocations have explicit rules - trust on first use, a 24 hour gap buffer with fetches from the listed relays, and a 72 hour wait from this vault's first sight of the recovery notice.
 - **PS-055-02.R05** Revocations are a grow-only union - a key once seen revoked stays revoked, a resolving document must list every revocation of every competing branch, and the deviceKeys cap is met by moving older revocations to key hashes rather than dropping them.
+- **PS-055-02.R06** Key status is evaluated at the receiver's time - a key the latest verified document marks revoked is refused whatever createdAt claims; when a revocation is learned later, statements first seen at or after its effective time are quarantined (replacing plain first-seen acceptance); the effective time is the claimed revokesEffectiveAt clamped to no earlier than earliestEvidenceAt minus 30 days and no later than earliestEvidenceAt, clamped values are labelled, and a revocation is applied whatever its age.
+- **PS-055-02.R07** Own documents list only the relays that F11.S03.M01 reports as selected with listInIdentityDoc true, at most 5.
 
 ## Specification
 
@@ -28,6 +30,9 @@
 | V10 | a document resolving a contested DID chains from one competing version and lists as revoked, or in revokedKeyHashes, every key revoked in any competing branch; otherwise the DID stays contested | IDENTITY_DOC_CHAIN_INVALID |
 | V11 | a later document that lists as active a key in revokedUnion is a rollback and makes the DID contested | IDENTITY_DOC_CHAIN_INVALID |
 | V12 | issue runs only on the root device of the local principal | IDENTITY_ROOT_KEY_REQUIRED |
+| V13 | every revoked entry's revokesEffectiveAt is an RFC 3339 UTC timestamp; the effective time is clamped into earliestEvidenceAt minus 30 days to earliestEvidenceAt (never measured from issuedAt or a signedAt claim) and labelled clamped when moved; revocations in any verified version - history, gap_pending and contested included - join revokedUnion at once, and no document is refused because a revocation arrives late | VALIDATION_FAILED |
+| V14 | an own document's relays equal the relays ListedRelaysPort reports (F11.S03.M01 selected relays with listInIdentityDoc true, at most 5) | CONFLICT_STATE |
+| V15 | relay publish - each accompanying classrup.security.keyrevocation/v1 names the document's DID and a key it lists as revoked or removed, and its signer role holds per F07.S01.M01 V11 against the stored versions (the key itself or the root key; another device key only as pending) | SECURITY_KEY_UNAUTHORIZED |
 
 ## Verification
 
@@ -42,7 +47,10 @@
 | TEST-PS-055-09.T19 | unit | PS-055-02.R05 | own document with 10 active and 11 revoked keys; received document with 21 entries | 20 entries plus 1 key hash, valid and under 8 KiB; the received one VALIDATION_FAILED |
 | TEST-PS-055-09.T20 | abuse | PS-055-01.R02, PS-055-02.R01 | received document lists an active key without a possession signature, and one whose signature is over another DID | IDENTITY_LINK_INVALID; nothing stored as current |
 | TEST-PS-055-09.T26 | abuse | PS-055-02.R05, PS-055-07.R01 | a later document lists revoked key D1 as active again | rollback detected; DID contested; D1 stays revoked in key_status |
+| TEST-PS-055-09.T28 | integration | PS-055-02.R06, PS-055-02.R03 | statement by D2 with backdated createdAt after the revoking seq 5 is current; revocation of D2 learned later with records first seen before and after its effective time; seq 5 claiming revokesEffectiveAt 90 days before receipt; a lower-seq history version carrying a revocation | the first refused at receipt; on learning, key_status at firstSeenAt quarantines only the later record; the effective time is clamped to receipt minus 30 days and labelled; the history revocation joins revokedUnion; no document refused as late |
+| TEST-PS-055-09.T29 | unit | PS-055-02.R07 | issue with ListedRelaysPort reporting 3 listed relays, then 6 selected relays of which 5 listed, then a stale relays list | the document lists exactly the 3 and then the 5 listed relays; a list differing from ListedRelaysPort is refused with CONFLICT_STATE |
+| TEST-PS-055-09.T31 | integration | PS-055-04.R04, PS-055-02.R06 | host relay H receives publish with seq 5 and two keyrevocation statements, one signed by the revoked key and one by an unrelated key; key_set and find_by_key called in-process and over HTTP | the valid revocation stored and returned in revocationCids with the key in removedKeys and revokedKeys; the other SECURITY_KEY_UNAUTHORIZED; HTTP linkage reads refused |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M03, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

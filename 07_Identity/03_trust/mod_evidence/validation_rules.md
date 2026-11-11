@@ -16,13 +16,13 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | signature verifies over JCS bytes with prefix classrup-attestation:v1 using a device key active in the issuer's document at this vault's first-seen time (F07.S02.M01 key_status), or for relay_email_check the relay key, and the statement is at most 4 KiB | IDENTITY_ATTESTATION_SIGNATURE_INVALID |
+| V01 | the envelope signature verifies per F11.S01.M03 with ext.signerKey a device key that the issuer's latest verified document does not mark revoked at receipt, whatever createdAt claims (F07.S02.M01 key_status at receiver time), or for relay_email_check the relay key, and the statement is at most 4 KiB | IDENTITY_ATTESTATION_SIGNATURE_INVALID |
 | V02 | kind rules hold - self_claim has issuer equal to subject; peer_met_in_person, third_party and same_owner have issuer different from subject; same_owner carries a valid cosignature by the subject; relay_email_check names issuerRelayOrigin and its key is listed active for that origin in the relay key set, a key absent from a fetched descriptor being rejected | IDENTITY_ATTESTATION_KIND_INVALID |
 | V03 | label is 1..80 code points of plain text without links, and for self_claim contains none of the reserved words verified, official, certified, government, police | VALIDATION_FAILED |
 | V04 | claimedExpiresAt is after claimedIssuedAt, and effectiveExpiresAt is capped at 365 days (180 days for peer_met_in_person) after firstSeenAt | VALIDATION_FAILED |
 | V05 | the issuer has issued fewer than 10 attestations in the last 24 hours and the subject has at most 20 active displayed attestations | RATE_LIMITED |
 | V06 | one active peer_met_in_person and one active same_owner per (issuerDid, subjectDid) pair | CONFLICT_STATE |
-| V07 | revocation is signed by a device key of the original issuerDid active at first-seen time (or the relay key) and refers to the attestation cid | IDENTITY_ATTESTATION_SIGNATURE_INVALID |
+| V07 | revocation is signed by a device key of the original issuerDid not revoked at receipt (or the relay key) and refers to the attestation cid | IDENTITY_ATTESTATION_SIGNATURE_INVALID |
 | V08 | issued non-self attestations use audience subject_only; a received public non-self claim without a valid subject endorsement is stored but never displayed | VALIDATION_FAILED |
 | V09 | an endorsement or cosignature is signed by an active device key of subjectDid over the attestation cid with prefix classrup-attestation-endorsement:v1 or classrup-attestation-cosign:v1 | IDENTITY_ATTESTATION_SIGNATURE_INVALID |
 | V10 | public statements and endorsements carry only the blinded contextRef; the raw context id appears only in the subject-only delivery | VALIDATION_FAILED |
@@ -41,4 +41,4 @@
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S03.M01, F15.S02.M01, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

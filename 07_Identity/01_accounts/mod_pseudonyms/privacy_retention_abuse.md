@@ -9,7 +9,7 @@
 - **PS-052-07.R01** The vault holds no email, phone, real name or password for the account; the pseudonym is a public label and the DID a stable pseudonymous identifier, which is not anonymity.
 - **PS-052-07.R02** Private keys never leave the device unencrypted; the relay never sees them and the recovery kit is separate (F07.S01.M03).
 - **PS-052-07.R03** Pseudonym checks never reveal which existing handle a candidate collides with beyond the reason code and the taken flag, except a local warning naming a contact the user already knows.
-- **PS-052-07.R04** The module meets the N6 privacy duties - it implements ExportSectionPort (sections identity.account and identity.device_keys), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort, classifies every field with F10.S02.M02, checks federation_publish consent through ConsentCheckPort before a handle claim, and treats privacy.deletion.completed only as final cleanup.
+- **PS-052-07.R04** The module meets the N6 and N6a privacy duties - it implements ExportSectionPort (sections identity.account and identity.device_keys), DeletionPort with the steps sign (signed handle releases), revoke_keys (one classrup.security.keyrevocation/v1 per registered device key with reason account_deleted and finalCids of at most 120 final statement cids) and destroy_keys (the last step of the whole deletion) and RetentionPurgePort, classifies every field with F10.S02.M02, checks federation_publish consent through ConsentCheckPort before a handle claim, and treats privacy.deletion.completed only as a notification that never deletes or destroys keys.
 
 ## Specification
 
@@ -20,7 +20,7 @@
 **Retention**
 - Account and DeviceKey until vault erase (RET-STANDARD); revoked key records kept so old signatures remain verifiable.
 - Released handles reserved 30 days then purged; relay request counters 24 h (RET-EPHEMERAL); seen statement cids kept 30 days after the registration is purged.
-- Deletion plan: release relay handles with signed releases first, then delete DeviceKey and Account rows and crypto-shred keystore handles; F10.S01.M04 destroys the keys last.
+- Deletion plan in the F10.S01.M04 step order: sign releases relay handles, revoke_keys signs an account_deleted revocation with finalCids for every registered device key, and destroy_keys - the final step of the whole deletion - destroys every keystore entry and deletes the DeviceKey rows; nothing is signed after revoke_keys.
 
 **Threats and controls**
 
@@ -29,7 +29,7 @@
 | T01 | Homoglyph impersonation of a known pseudonym | NFKC, Highly Restrictive script rule, UTS 39 skeleton equality check on a relay registry and local contact-confusable warning on every display |
 | T02 | Squatting or impersonation by claiming a recently changed handle | released handles reserved 30 days for the former DID, 30 day change cooldown per DID on a registry |
 | T03 | Mass creation of identities (Sybil, Douceur 2002) | creating a DID costs nothing and cannot be prevented without a central authority; relays can set claim rate limits and allowlists, and reputation dampens new identities (F07.S03.M01); the spec makes no uniqueness-of-person claim |
-| T04 | Stolen device keeps acting after revocation | a stolen non-root device is cut off for every verifier that has learned of the revocation, judged at the verifier's first-seen time; statements first seen earlier stay accepted, an explicit limit; a stolen root device whose passphrase is guessed, or a copied kit, can sign as the account and revocation cannot stop it, so the UI advises moving to a new identity |
+| T04 | Stolen device keeps acting after revocation | a stolen non-root device is refused by every verifier whose latest verified document marks it revoked, whatever createdAt claims, and a verifier that learns of the revocation later quarantines statements it first saw at or after revokesEffectiveAt (clamped to at most 30 days before its earliest evidence); statements first seen earlier stay accepted with a revoked-signer marker, an explicit limit; a stolen root device whose passphrase is guessed, or a copied kit, can sign as the account and revocation cannot stop it, so the UI advises moving to a new identity |
 | T05 | Malicious link statement adds an attacker's device | the link needs the root key and a possession signature by the new key and is valid 10 minutes; the UI shows the new device label and fingerprint for confirmation |
 | T06 | Weak vault passphrase enables offline guessing of the keystore blob | scrypt N=2^17, r=8, p=1, strength meter requiring at least 12 characters or 4 words, honest text that a stolen device file can be attacked offline |
 | T07 | Foreign public key listed under a DID to fake linkage (F04 anti-shill reads key linkage) | every listed key carries its own possession signature over the DID-bound message, so another user's key cannot be listed |
@@ -49,7 +49,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 |---|---|---|---|---|
 | TEST-PS-052-09.T12 | abuse | PS-052-07.R01, PS-052-07.R02 | scan storage, logs, events and exports for private keys, emails and passwords | none found; the root key appears only inside the encrypted keystore |
 | TEST-PS-052-09.T22 | unit | PS-052-07.R03 | identity.pseudonym.check on a relay for a taken and a confusable candidate, and locally for a contact lookalike | relay output has only reason codes and taken, never the colliding handle, DID or registration id; the local warning names only a known contact |
-| TEST-PS-052-09.T24 | integration | PS-052-07.R04 | F10 export section, deletion plan execution and retention sweep with stub registries; handle claim without federation_publish consent | sections identity.account and identity.device_keys exported; handles released before key destruction; privacy.deletion.completed only cleans up; claim not sent without consent |
+| TEST-PS-052-09.T24 | integration | PS-052-07.R04 | F10 export section, DeletionPort steps sign, revoke_keys and destroy_keys run in order by a recording F10.S01.M04 stub, retention sweep; handle claim without federation_publish consent; privacy.deletion.completed delivered | sections identity.account and identity.device_keys exported; handles released in sign; one account_deleted keyrevocation per registered device key listing the final statement cids (at most 120); keys destroyed only in destroy_keys; privacy.deletion.completed removes leftovers and never touches keys; claim not sent without consent |
 
 ## Dependencies
 

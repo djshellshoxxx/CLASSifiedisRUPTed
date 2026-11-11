@@ -14,7 +14,7 @@
 ## Specification
 
 **Data classification**
-- Session: P4 for token hash and vault key (memory only); metadata P3.
+- Session: P4 for token hash and vault key (memory only); metadata P3; requestSignerKeys are P3 relay metadata used only for host anti-shill linkage.
 - LoginChallenge: P4 nonce hash; ephemeral.
 
 **Retention**
@@ -32,6 +32,8 @@
 | T06 | Stolen unlocked device | 15 minute idle lock by default, lock on hide, user can lock at once and revoke the device key from another device, which revokes its relay tokens on every known relay |
 | T07 | Lock-out by filling a victim's challenge slots | caps per (DID, IP prefix) with oldest-first eviction, so an attacker only evicts its own challenges |
 | T08 | Stolen device keeps relay access after revocation | vault pushes the new document and revokes the key's tokens on every known relay; relays end such tokens within 60 s of storing the document and refresh cached documents older than 1 hour at every start |
+| T09 | Session linkage read used to profile users across relays | linked_keys returns only device keys authenticated in one token session of this relay, runs in-process for the host's own anti-shill checks, carries no IP, network or timing data, and relays never share tokens or session rows |
+| T10 | Relay tokens or the vault key survive a lock or a principal switch on a shared device | both are dropped from memory in the lock step, CLEAR_USER_CACHES unbinds the principal's image partition, and the next unlock re-authenticates to relays |
 
 **Abuse controls**
 - Relay start limits as above plus a per-relay global cap of 50 starts per second, run through the bus RateLimitPort (F12.S03.M03, N18).
@@ -49,4 +51,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F15.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

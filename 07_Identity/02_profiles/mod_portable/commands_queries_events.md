@@ -9,8 +9,9 @@
 - **PS-055-04.R01** Issue is a vault command that produces the root-signed statement classrup.identity.portable_doc/v1; receive is the vault intake of someone else's document; resolve is the user's explicit choice for a contested DID; publish and the public read are relay endpoints.
 - **PS-055-04.R02** The event identity.portable_doc.published is emitted when a document is issued locally, when a received document changes a DID's current document or status, and when a relay stores a verified document, in the same transaction as the state change.
 - **PS-055-04.R03** Documents are public P0 statements and are only sent to relays the owner selected, after privacy.consent.check(federation_publish, relayId), or directly to peers.
-- **PS-055-04.R04** Key-linkage reads (N11) return the key set and seq chain of a DID, the DIDs that list a given key, and a key's status at a point in time; there is no account key rotation chain in MVP.
-- **PS-055-04.R05** Counterparty modules learn of other people's key changes only from identity.portable_doc.published with origin received, which carries the added and revoked keys; identity.device_key events describe only the local principal's keys.
+- **PS-055-04.R04** Key-linkage reads (N11) return the key set with each key's first-seen time and the seq chain of a DID, the keys removed from its documents and the classrup.security.keyrevocation/v1 statements verified with them, the DIDs that list a given key, and a key's status at a point in time; on a relay they run in-process only, for the anti-shill checks of an auction whose seller chose that relay as host (PT-15) and for F10.S01.M02 legal-hold approval, and there is no account key rotation chain in MVP.
+- **PS-055-04.R05** Counterparty modules learn of other people's key changes only from identity.portable_doc.published with origin received, which carries the added and revoked keys with the clamped effective revocation time; identity.device_key events describe only the local principal's keys.
+- **PS-055-04.R06** Ports provided - KeyStatusPort.isActive and keyStatus(did, publicKey, at) at receiver time; KeyLinkagePort.linked(didA, didB) -> boolean, true when a device key is listed, revoked or removed under both DIDs or SameOwnerLinkPort reports a same_owner attestation between them, failing closed when the linkage store is unreadable; IdentityRefreshPort.refresh(did, relays) for F16.S02.M02, which fetches the DID's latest document from at most 5 given relays and runs it through receive. Injected ports - ListedRelaysPort (F11.S03.M01) and SameOwnerLinkPort (F07.S03.M02), wired by the composition roots because both implementers depend on this module.
 
 ## Specification
 
@@ -18,10 +19,10 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `identity.portable_doc.issue` | identity.portable_doc.issue | { relays?: array of at most 5 URLs, expectedSeq } | { docId, seq, cid, statement: classrup.identity.portable_doc/v1 (signed by the root key), syncState: local_committed, skippedRelays: array (no federation_publish consent) } | CONFLICT_STATE, CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_ROOT_KEY_REQUIRED | identity.portable_doc.published | yes (Idempotency-Key) |
+| `identity.portable_doc.issue` | identity.portable_doc.issue | { expectedSeq } (relays taken from ListedRelaysPort, at most 5) | { docId, seq, cid, statement: classrup.identity.portable_doc/v1 (signed by the root key), syncState: local_committed, skippedRelays: array (no federation_publish consent) } | CONFLICT_STATE, CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_ROOT_KEY_REQUIRED | identity.portable_doc.published | yes (Idempotency-Key) |
 | `identity.portable_doc.receive` | identity.portable_doc.receive | { document: classrup.identity.portable_doc/v1, provenance } | { docId, status: current\|gap_pending\|recovery_pending\|superseded\|contested\|history, did, seq } | IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, VALIDATION_FAILED, RATE_LIMITED | identity.portable_doc.published | yes (Idempotency-Key) |
 | `identity.portable_doc.resolve` | identity.portable_doc.resolve | { did, chosenCid, expectedRevision } | { did, currentCid, seq, status: current } | NOT_FOUND, CONFLICT_STATE, CONFLICT_REVISION, IDENTITY_DOC_CHAIN_INVALID | identity.portable_doc.published | yes (Idempotency-Key) |
-| `identity.portable_doc.publish` | identity.portable_doc.publish | { document: classrup.identity.portable_doc/v1 } | { docId, seq, cid, storedAt } | IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, VALIDATION_FAILED, RATE_LIMITED | identity.portable_doc.published | yes (Idempotency-Key) |
+| `identity.portable_doc.publish` | identity.portable_doc.publish | { document: classrup.identity.portable_doc/v1, revocations?: at most 20 classrup.security.keyrevocation/v1 statements queued with it by F07.S01.M01 } | { docId, seq, cid, storedAt, revocationCids } | IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, SECURITY_KEY_UNAUTHORIZED, VALIDATION_FAILED, RATE_LIMITED | identity.portable_doc.published | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -29,15 +30,15 @@
 |---|---|---|---|---|
 | `identity.portable_doc.get` | identity.portable_doc.read_public | { did, seq?, includeHistory?: boolean } | { document: classrup.identity.portable_doc/v1, status, provenance, firstSeenAt, history?: array of at most 20 } | NOT_FOUND |
 | `identity.portable_doc.list_contested` | identity.portable_doc.read_own | { limit? (1..50) } | { items: [{ did, versions: array, contestReason, detectedAt }] } |  |
-| `identity.portable_doc.key_set` | identity.portable_doc.read_linkage | { did: did:key } | { did, seq, currentCid, activeKeys: publicKey[], revokedKeys: [{ publicKey, revokedAt?, revokeReason? }], revokedKeyHashes, seqChain: [{ seq, cid, status }], contested: boolean } | NOT_FOUND |
+| `identity.portable_doc.key_set` | identity.portable_doc.read_linkage | { did: did:key } | { did, seq, currentCid, activeKeys: [{ publicKey, keyFirstSeenAt }], revokedKeys: [{ publicKey, revokedAt?, effectiveRevokedAt, clamped, revokeReason?, revocationCid? }], removedKeys: [{ publicKey or keyHash, removedInSeq }], revokedKeyHashes, revocationCids, seqChain: [{ seq, cid, status }], contested: boolean } | NOT_FOUND |
 | `identity.portable_doc.find_by_key` | identity.portable_doc.read_linkage | { publicKey } | { items: [{ did, status: active\|revoked\|pending\|contested, seq }] } |  |
-| `identity.portable_doc.key_status` | identity.portable_doc.read_linkage | { did, publicKey, at?: timestamp (default now; local first-seen time of the statement being verified) } | { status: active\|revoked\|unknown, revokedAt?, learnedAt, contested: boolean, recoveryPending: boolean } | NOT_FOUND |
+| `identity.portable_doc.key_status` | identity.portable_doc.read_linkage | { did, publicKey, at?: timestamp (default now = receipt time; the statement's local first-seen time when re-checking after a revocation is learned) } | { status: active\|revoked\|pending\|unknown, effectiveRevokedAt?, clamped?: boolean, learnedAt, keyFirstSeenAt?, contested: boolean, recoveryPending: boolean } | NOT_FOUND |
 
 ### Events produced
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `identity.portable_doc.published` | P0 | { did, seq, cid, origin: own\|received\|relay_stored, status, addedKeys: publicKey[], revokedKeys: [{ publicKey, revokesEffectiveAt, revokeReason }], gap, issuedAt } |
+| `identity.portable_doc.published` | P0 | { did, seq, cid, origin: own\|received\|relay_stored, status, addedKeys: publicKey[], revokedKeys: [{ publicKey, revokesEffectiveAt (effective, clamped), clamped, revokeReason }], gap, issuedAt } |
 
 ### Events consumed
 
@@ -57,15 +58,16 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statements and signer roles (N2): classrup.identity.portable_doc/v1 - only the DID root key (the key encoded in the did:key). Ports provided: KeyStatusPort.isActive(did, publicKey, at) and keyStatus(did, publicKey, at) for every verifier (F07.S01.M01, F07.S01.M02, F07.S02.M02, F07.S03.M01, F07.S03.M02 and other features), implementing the rule 'signer key active in the author's document at this vault's first-seen time of the statement'; recordRecoveryNotice(did, noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt) and recordRecoveryDispute(did, disputeCid, signerKey) for F07.S01.M03. Injected port: BlockFilterPort.isBlocked(did), implemented by F07.S02.M02 and wired by the vault composition root because F07.S02.M02 depends on this module (N7); a blocked DID's document is dropped silently with no error to the intake pipeline or the sender.
+**Note:** Statements and signer roles (N2): classrup.identity.portable_doc/v1 - only the DID root key (the key encoded in the did:key); the cid and signed bytes follow F11.S01.M03 and its golden vectors while seq and prev stay this module's root-key chain. Ports provided: KeyStatusPort.isActive(did, publicKey, at) and keyStatus(did, publicKey, at) for every verifier (F07.S01.M01, F07.S01.M02, F07.S02.M02, F07.S03.M01, F07.S03.M02, F11.S01.M02, F16.S02.M02 and other features), implementing the F11 key model - called with at = receipt time on intake, a key the latest verified document marks revoked is refused whatever createdAt claims, and called again with at = the statement's first-seen time when a revocation is learned, a result revoked (first seen at or after the clamped effective time) quarantines the statement; KeyLinkagePort.linked(didA, didB) for F10.S01.M02 legal-hold approval; IdentityRefreshPort.refresh(did, relays) for F16.S02.M02 refresh hints; recordRecoveryNotice(did, noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt) and recordRecoveryDispute(did, disputeCid, signerKey) for F07.S01.M03. Injected port: BlockFilterPort.isBlocked(did), implemented by F07.S02.M02 and wired by the vault composition root because F07.S02.M02 depends on this module (N7); a blocked DID's document is dropped silently with no error to the intake pipeline or the sender. Injected ports ListedRelaysPort.listed() (F11.S03.M01, selected relays with listInIdentityDoc true) and SameOwnerLinkPort.linked(didA, didB) (F07.S03.M02 list_linkage) are wired the same way. On a relay, linkage reads and KeyLinkagePort run in-process only over documents, revocations and attestations that relay stores.
 
 ### Example
 
 ```
-vault command (root device): identity.portable_doc.issue { "expectedSeq": 3, "relays": ["https://relay.example.org"] }
+vault command (root device): identity.portable_doc.issue { "expectedSeq": 3 }   (relays from ListedRelaysPort: ["https://relay.example.org"])
 -> { "docId": "0192f430-…", "seq": 4, "cid": "sha256-Qm…", "syncState": "local_committed", "skippedRelays": [], "statement": { "v": 1, "type": "classrup.identity.portable_doc/v1", "author": "did:key:z6Mk…", "seq": 4, "prev": "sha256-Zx…", "payload": { "pseudonym": "Riverstone", "deviceKeys": [ { "publicKey": "…", "status": "active", "linkNonce": "…", "possessionSig": "…" } ], "revokedKeyHashes": [], "relays": [ … ] }, "sig": "…root…" } }
 relay query: POST /api/v1/query/identity.portable_doc.get { "did": "did:key:z6Mk…" } -> 200 { "document": { … }, "status": "current" }
-vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publicKey": "…", "at": "2026-11-04T10:00:00.000Z" } -> { "status": "active", "learnedAt": "…", "contested": false, "recoveryPending": false }
+vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publicKey": "…", "at": "2026-11-04T10:00:00.000Z" } -> { "status": "active", "learnedAt": "…", "keyFirstSeenAt": "2026-10-01T08:00:00.000Z", "contested": false, "recoveryPending": false }
+relay publish with revocations: identity.portable_doc.publish { "document": { … seq 5 … }, "revocations": [ { "type": "classrup.security.keyrevocation/v1", … } ] } -> { "seq": 5, "revocationCids": ["sha256-Rv…"] }
 ```
 
 ## Verification
@@ -74,9 +76,11 @@ vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publi
 |---|---|---|---|---|
 | TEST-PS-055-09.T07 | contract | PS-055-04.R01, PS-055-04.R02 | commands, queries and the event run | outputs, statement and payload validate against registry schemas; published carries origin, status, addedKeys and revokedKeys |
 | TEST-PS-055-09.T08 | integration | PS-055-03.R01, PS-055-04.R02 | own device key added, pseudonym changed, and 150 days pass | own current document becomes stale each time; reissue creates seq plus 1, supersedes it and emits published with origin own |
-| TEST-PS-055-09.T21 | contract | PS-055-04.R04 | key_set, find_by_key and key_status at points in time with active, revoked, pending and contested keys | outputs validate and match the fixtures; key_status at a time before the revocation was learned returns active |
+| TEST-PS-055-09.T21 | contract | PS-055-04.R04 | key_set, find_by_key and key_status at points in time with active, revoked, pending and contested keys | outputs validate and match the fixtures; key_status at a time before the effective revocation time returns active and after it revoked |
 | TEST-PS-055-09.T22 | integration | PS-055-04.R05, PS-055-04.R03 | receive a counterparty document that adds D3 and revokes D1; the same document again; issue with one relay lacking federation_publish consent | published with origin received, addedKeys [D3] and revokedKeys [D1]; nothing emitted for the duplicate; the relay without consent is skipped and shown |
+| TEST-PS-055-09.T30 | integration | PS-055-04.R06 | KeyLinkagePort.linked for DIDs sharing revoked key D4, for DIDs linked only by a same_owner attestation (SameOwnerLinkPort stub), for unrelated DIDs and with the store unreadable; IdentityRefreshPort.refresh(did, [R1, R2]) with R1 down | true, true, false and a fail-closed error; refresh fetches from R2, the document runs through receive and identity.portable_doc.published is emitted once |
+| TEST-PS-055-09.T31 | integration | PS-055-04.R04, PS-055-02.R06 | host relay H receives publish with seq 5 and two keyrevocation statements, one signed by the revoked key and one by an unrelated key; key_set and find_by_key called in-process and over HTTP | the valid revocation stored and returned in revocationCids with the key in removedKeys and revokedKeys; the other SECURITY_KEY_UNAUTHORIZED; HTTP linkage reads refused |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M03, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

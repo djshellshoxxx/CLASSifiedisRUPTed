@@ -8,7 +8,7 @@ summary: >-
   proposal cid; propose and reschedule sign the proposer's own consent in the same transaction, so the evidence is
   uniform. The meetup is agreed in a vault only when it holds valid agreements from every party, so the UI says
   "you agreed, waiting for the other party" until the peer's signature arrives. Agreed is not a commit: consents may
-  be revoked until windowStart, which this module declares through the ConsentSubjectPort it registers for
+  be revoked until windowStart, which this module declares through the SubjectCanonicalizerPort it registers for
   comms_meetup. Any two different valid proposals with the same revision number, whoever sent them, freeze the
   meetup for renegotiation. Either party can reschedule up to 5 times or cancel. No exact home address and no live
   location are ever part of a meetup.
@@ -19,7 +19,7 @@ responsibilities:
   - Enforce the reschedule limit of 5 per meetup, the window rules, and the place rules (verified safe spot or L3 area label).
   - Cancel or expire meetups when their context closes, the local principal blocks a party, or the window passes, including frozen meetups whose competing windows all passed.
   - Detect conflicting proposals (any two different valid proposals with the same revision number, whoever proposed them) and freeze the meetup for renegotiation instead of picking one.
-  - Register the ConsentSubjectPort for subjectType comms_meetup (agreed is not committed until windowStart) and the F10 privacy ports, keeping signed proposals as evidence (N6).
+  - Register the SubjectCanonicalizerPort for subjectType comms_meetup (agreed is not committed until windowStart) and the F10 privacy ports, keeping signed proposals as evidence (N6).
 non_responsibilities:
   - Curating spots (F08.S03.M01) and check-in or no-show (F08.S03.M02).
   - Consent signing primitives and verification (F08.S02.M02).
@@ -61,7 +61,7 @@ processes:
       - Meetups are P2 and held only in participating vaults; the place is either a SafeSpot snapshot matched to a curator-verified spot statement (public P0 data at L2) or an L3 area label, and exact home addresses (P3) and live locations are never stored or accepted.
       - The proposal revision hash is the CTR-ID-001 ID-3 cid (sha256-<base64url> of the JCS bytes of the proposal payload), and agreement is a ConsentStatement with statement key consent.comms.meetup.agree.v1 and subjectType comms_meetup on that hash, signed by every party including the proposer.
       - Signed proposal and cancellation statements are evidence under RET-EVIDENCE (2 years after last related activity), kept independently of the thread purge so the agreement consents can still be re-verified against the subject bytes, and pseudonymized on principal deletion.
-      - The module registers the F08.S02.M02 ConsentSubjectPort for subjectType comms_meetup - canonicalBytes(meetupId, rev) returns the JCS bytes of that proposal revision, currentRevision the proposalRevision, partyRole party for every partyDid, and isCommitted true only once the local clock passed windowStart of the agreed revision - so an agreed meetup is not committed and its consents may be revoked until windowStart.
+      - The module registers the F08.S02.M02 SubjectCanonicalizerPort for subjectType comms_meetup - canonicalBytes(meetupId, rev) returns the JCS bytes of that proposal revision, currentRevision the proposalRevision, partyRole party for every partyDid, and isCommitted true only once the local clock passed windowStart of the agreed revision - so an agreed meetup is not committed and its consents may be revoked until windowStart.
     entities:
       - name: Meetup
         schema: classrup.comms.meetup/v1
@@ -124,7 +124,7 @@ processes:
       - A meetup starts proposed; reschedule creates a new proposal revision, clears prior agreements and stays proposed until every party agreed.
       - Agreed is computed only from verified consent statements of every party, the proposer included, for the current hash; a reschedule or a verified revocation of an agreement before windowStart moves an agreed meetup back to proposed.
       - Cancelled, expired and elapsed are terminal; conflicted ends by a new proposal revision higher than every competing one, by a cancellation, or by expiry once the local clock passes the windowStart of every competing proposal.
-      - Propose and reschedule sign the proposer's own consent.comms.meetup.agree.v1 consent in the same transaction, so the agreement evidence is uniform for every party; agreed is not a commit, and consents may be revoked until windowStart (ConsentSubjectPort.isCommitted).
+      - Propose and reschedule sign the proposer's own consent.comms.meetup.agree.v1 consent in the same transaction, so the agreement evidence is uniform for every party; agreed is not a commit, and consents may be revoked until windowStart (SubjectCanonicalizerPort.isCommitted).
       - A conflict is any two distinct valid proposals with the same proposalRevision and different proposalHash, whoever proposed them, and it freezes the meetup for explicit renegotiation.
     machines:
       - entity: Meetup

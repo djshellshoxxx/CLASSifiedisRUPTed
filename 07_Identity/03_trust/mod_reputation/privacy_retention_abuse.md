@@ -33,6 +33,8 @@
 | T06 | Comment used for harassment or doxxing | plain text, 500 code points, local hide, report to the relay hosting policy, withdraw by author |
 | T07 | Transaction graph reconstruction from public reviews (CTR-PRV-001 P2 cycle data) | per-pair blinded pairRef and per-pair tickets only; contextId, completionCid and dispute case cids only in subject_only reviews |
 | T08 | Relay withdraws or hides a user's review in other vaults | only a tombstone authored by the review author withdraws it; relay tombstones and hosting actions affect only that relay's copy and provenance |
+| T09 | A modified local producer emits a completion event without real completion statements to unlock 'confirmed' reviews | the window opens only after the completion statements behind completionCid verify in the vault record store (V13); otherwise it stays quarantined |
+| T10 | A false no-show claim harms the accused | the claim has weight 0, is labelled a claim with its reporter, and a contradicting check-in is shown next to it |
 
 **Abuse controls**
 - Author limit 30 reviews per 24 hours; vault intake 200 reviews and 200 tickets per hour per transport source; per subject at most 500 reviews are selected by weight and author diversity (every review with weight at least 0.5 kept, at most 3 per author); limits run through the bus RateLimitPort (F12.S03.M03, N18).
@@ -52,4 +54,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

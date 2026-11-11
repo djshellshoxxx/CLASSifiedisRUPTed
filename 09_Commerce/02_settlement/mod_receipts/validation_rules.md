@@ -9,7 +9,7 @@
 - **PS-071-02.R01** Receipt input is validated strictly; unknown fields are rejected with VALIDATION_FAILED.
 - **PS-071-02.R02** Role and claim-state rules check that the signer is a party and that the claim status supports the assertion.
 - **PS-071-02.R03** Signature verification is exact, so any byte change in the canonical content invalidates the receipt.
-- **PS-071-02.R04** Verification is delegated to F16.S02.M03 with expected context classrup/receipt/v1 and a key registry snapshot, party binding is checked through the embedded device-link chain against F07.S01.M01 and F07.S02.M01, and a key revoked before the trusted receipt time is refused at ingest.
+- **PS-071-02.R04** Verification is delegated to F16.S02.M03 verify(envelope, {expectedContext classrup/receipt/v1}, keyStatus, payload) - the signature covers JCS({v, ctx, kid, alg, signedAt, payloadHash}), the module supplies the statement as payload for hash-only envelopes and the key status for kid at the trusted receipt time - party binding is checked through the embedded device-link chain against F07.S01.M01 and F07.S02.M01, and a key revoked before the trusted receipt time is refused at ingest.
 
 ## Specification
 
@@ -17,13 +17,13 @@
 |---|---|---|
 | V01 | claim exists in this vault and signer is a party of its Deal | NOT_FOUND |
 | V02 | payer_asserts_paid requires the signer to be the claim payer and claim status not expired; payee_asserts_received requires the payee and claim status acknowledged, confirmed or final | COMMERCE_RECEIPT_ROLE |
-| V03 | statement.claimCid, amount and currency equal the stored claim | COMMERCE_RECEIPT_MISMATCH |
+| V03 | statement.claimCid, dealId, contextCid, amount and currency equal the stored claim and its Deal | COMMERCE_RECEIPT_MISMATCH |
 | V04 | text at most 280 code points, plain text | VALIDATION_FAILED |
-| V05 | signature is valid Ed25519 under F16.S02.M03 expected context classrup/receipt/v1 and signingKeyId is a valid device key ID | COMMERCE_RECEIPT_SIGNATURE_INVALID |
+| V05 | F16.S02.M03 verify returns accepted true - envelope v 1, ctx classrup/receipt/v1, kid equal to signingKeyId, strict Ed25519 over JCS({v, ctx, kid, alg, signedAt, payloadHash}) and payloadHash equal to SHA-256 of the JCS statement (supplied by this module for a hash-only envelope); any other F16 reason except SECURITY_KEY_REVOKED maps here | COMMERCE_RECEIPT_SIGNATURE_INVALID |
 | V06 | no receipt of the same type by the same signer exists for the claim | CONFLICT_STATE |
 | V07 | signedAt is not more than 10 minutes in the future of the local clock | COMMERCE_RECEIPT_SKEW |
 | V08 | signingKeyId is linked to signerId by a verified root-signed device-link chain or identity-document snapshot, and signerId is the claim party for the role; otherwise partyBinding is unverified and ingest quarantines with reason party_unbound | COMMERCE_RECEIPT_PARTY_UNBOUND |
-| V09 | the signing key was not revoked with an effective-from time before the trusted receipt time (local receivedAt or a relay-signed receipt time) | COMMERCE_RECEIPT_KEY_REVOKED |
+| V09 | the signing key was not revoked with an effective-from time before the trusted receipt time (local receivedAt or a relay-signed receipt time); a verify result with reason SECURITY_KEY_REVOKED for the key status at that time maps here | COMMERCE_RECEIPT_KEY_REVOKED |
 | V10 | neither party has blocked the other (F07.S02.M02 isBlockedEither); issue returns BLOCKED_PARTY and ingest drops receipts from a blocked did silently unless the claim's Deal has an open dispute case | BLOCKED_PARTY |
 
 ## Verification
@@ -35,6 +35,7 @@
 | TEST-PS-071-09.T04 | unit | PS-071-01.R03, PS-071-02.R03, PS-071-09.R03 | receipt for claim X replayed against claim Y | COMMERCE_RECEIPT_MISMATCH |
 | TEST-PS-071-09.T16 | abuse | PS-071-01.R05, PS-071-02.R04, PS-071-04.R05 | a receipt signed with a key revoked at 09:00 and signedAt backdated to 08:00 arrives at 10:00; the same file verified offline with no trusted receipt time; a receipt with a relay-signed receipt time of 08:30 | first reads revoked_before_receipt and is quarantined with COMMERCE_RECEIPT_KEY_REVOKED, never Valid; second reads 'key revoked; signing time unverifiable'; third reads revoked_after_receipt labelled 'according to relay <name>' |
 | TEST-PS-071-09.T17 | abuse | PS-071-01.R04, PS-071-02.R04 | file signed by a self-generated key with no device-link chain to the payee, and one whose chain links to a different principal | signature valid but partyBinding unverified, label 'Signature valid - party not proven'; ingest quarantines with party_unbound (COMMERCE_RECEIPT_PARTY_UNBOUND) |
+| TEST-PS-071-09.T22 | contract | PS-071-04.R06, PS-071-02.R04, PS-071-01.R03 | sign a receipt and check the envelope bytes; ingest a hash-only envelope with its statement supplied, with a different statement, and with none; change kid or signedAt in the header; replay the statement under another dealId | signature covers exactly JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over the JCS statement; the first is accepted and stored; the others return accepted false (SECURITY_PAYLOAD_HASH_MISMATCH or SECURITY_SIGNATURE_INVALID) and are quarantined with that reason as COMMERCE_RECEIPT_SIGNATURE_INVALID; the replay returns COMMERCE_RECEIPT_MISMATCH; nothing is stored or emitted unless accepted is true |
 
 ## Dependencies
 

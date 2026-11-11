@@ -16,6 +16,7 @@ Account recovery without any server holding a secret. The recovery kit is a one-
 - Hold the 72 hour window in the recovering vault, extend it to 7 days when disputed, and report the honest limit that receivers enforce their own wait (F07.S02.M01).
 - On existing devices, receive recovery notices for the own DID, show them, and let the user dispute with a device-signed statement that needs no kit state.
 - Process incoming disputes in the recovering vault and in peer vaults, and implement RecoveryKitStatusPort.hasVerifiedKit() for F07.S01.M01.
+- Tell the principal's other devices that a kit was created with a device-signed classrup.identity.recovery_kit_notice/v1 (no kit material), and on those devices emit identity.recovery.kit_created as a federated event so they can alert the user.
 
 ## Not responsible for
 
@@ -49,13 +50,13 @@ Account recovery without any server holding a secret. The recovery kit is a one-
 
 ## UX and accessibility
 
-- Create kit: words shown once in a 4 by 6 grid with copy disabled, print and download buttons, a confirmation step asking for 3 random words, a warning that anyone with the words and file can act as the account and that a newer kit does not revoke an older one, and a checkbox 'I stored the words and the file separately'.
-- Recover account: words entry with per-word autocomplete from the 2048-word list, kit file chooser, latest-document status (fetched from relays, from an export, or unknown), progress for key derivation, explanation of the 72 hour window and of contested recoveries.
+- Create kit: words shown once in a 4 by 6 grid with copy disabled, print and download buttons (the printed sheet carries the words and a QR code of the kit core), a confirmation step asking for 3 random words, a warning that anyone with the words and file can act as the account and that a newer kit does not revoke an older one, and a checkbox 'I stored the words and the file separately'.
+- Recover account: words entry that accepts a paste of the whole 24-word phrase (split across the 24 fields) and per-word autocomplete from the 2048-word list, never blocking paste or password-manager autofill, the kit by file chooser or by QR scan of the printed sheet, latest-document status (fetched from relays, from an export, or unknown), progress for key derivation, explanation of the 72 hour window and of contested recoveries.
 - Recovery notice banner on existing devices: 'A recovery was started for this account, first seen on <date>, adding device <fingerprint>. Dispute' with a Dispute button and 'This was me'.
 
 **States:** no-kit; kit-active; verifying; recovery-pending; contested; recovery-complete; disputed; expired; device-list-unknown; error
 
-**Accessibility:** Word entry supports keyboard and screen readers, each word field has a label 'Word 1 of 24', and errors are announced via aria-live polite.; The confirmation step does not require a memory puzzle beyond retyping the displayed words (no cognitive function test, WCAG 3.3.8) and allows paste of the whole phrase.; All buttons are at least 44 by 44 px and the printable sheet is high-contrast text.
+**Accessibility:** Word entry supports keyboard and screen readers, each word field has a label 'Word 1 of 24', and errors are announced via aria-live polite.; The confirmation step does not require a memory puzzle beyond retyping the displayed words (no cognitive function test, WCAG 3.3.8) and allows paste of the whole phrase.; All buttons are at least 44 by 44 px and the printable sheet is high-contrast text.; The recover screen relies on the WCAG 3.3.8 assistance-mechanism exception (CTR-UX-001 UX-5) - whole-phrase paste, password-manager autofill (autocomplete off is never set), show/hide for the words, and the kit by file chooser or QR scan, each with a visible label.
 
 ## Owned data
 
@@ -63,7 +64,7 @@ Account recovery without any server holding a secret. The recovery kit is a one-
 
 ## Interfaces
 
-- Commands: `identity.recovery.create_kit`, `identity.recovery.verify_kit`, `identity.recovery.begin`, `identity.recovery.complete`, `identity.recovery.cancel`, `identity.recovery.receive_notice`, `identity.recovery.dispute`, `identity.recovery.acknowledge`, `identity.recovery.receive_dispute`
+- Commands: `identity.recovery.create_kit`, `identity.recovery.verify_kit`, `identity.recovery.begin`, `identity.recovery.complete`, `identity.recovery.cancel`, `identity.recovery.receive_notice`, `identity.recovery.dispute`, `identity.recovery.acknowledge`, `identity.recovery.receive_kit_notice`, `identity.recovery.receive_dispute`
 - Queries: `identity.recovery.get_status`
 - Emits: `identity.recovery.kit_created`, `identity.recovery.completed`, `identity.recovery.requested`, `identity.recovery.cancelled`
 - Consumes: `identity.portable_doc.published`, `privacy.deletion.completed`
@@ -79,7 +80,7 @@ F07.S01.M01, F07.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F1
 | PS-053-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-053-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-053-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-053-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-053-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-053-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-053-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-053-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -91,7 +92,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T25 pass in CI.
+- All tests T01-T27 pass in CI.
 - The 24 words and derived keys never appear in storage, logs, events, exports or network traffic (privacy suite).
 - Honest clients and verifying vaults that saw the notice do not apply a recovery revocation before 72 hours after their own first sight of it, a dispute makes the recovery contested for every receiver without cancelling it, and the documentation states that an attacker with the words and file can sign as the account.
 - The UI and these criteria state that creating a new kit does not revoke an older kit.

@@ -21,14 +21,16 @@ Schema `classrup.identity.recovery_kit/v1` · storage **device** · privacy **P4
 | id | uuidv7 — primary key |
 | tenantId | uuidv7 — tenant scope |
 | accountId | uuidv7 — ref Account |
-| role | enum — kit \| observed |
+| role | enum — kit \| observed \| kit_observed (a kit created on another device of the principal, learned from its recovery_kit_notice) |
 | kdf? | object — kit only; { name: scrypt, N: 131072, r: 8, p: 1, saltB64: 16 bytes base64url } |
 | cipher? | object — kit only; { name: xchacha20poly1305, nonceB64: 24 bytes base64url } |
 | encryptedAccountKey? | string — kit only; ciphertext plus 16-byte tag of the 32-byte account root seed, base64url (64 characters) |
 | verifierPublicKey? | string — kit only; Ed25519 public key derived from the second 32 bytes of the KDF output, base64url (43 characters) |
-| blobChecksum? | string — kit only; SHA-256 of the kit file bytes, hex 64 characters |
+| blobChecksum? | string — kit only; SHA-256 of the JCS bytes of the kit core { kdf, cipher, encryptedAccountKey, verifierPublicKey, docHint } that both the kit file and the QR code of the printed sheet carry, hex 64 characters; the file also carries the signed identity document copy, verified by its own signature |
 | docHint? | object — kit only; { did, seq, cid, relays } of the identity document current at kit creation, also copied into the kit file |
-| status | enum — kit: active \| recovery_pending \| contested \| used \| superseded; observed: received \| disputed \| accepted \| expired |
+| status | enum — kit: active \| recovery_pending \| contested \| used \| superseded; observed: received \| disputed \| accepted \| expired; kit_observed: recorded |
+| observedKit? | object — kit_observed only; { kitNoticeCid, kitId, supersededKitId?, createdAtClaim, signerKey, firstSeenAt (local clock) } |
+| kitNoticeCid? | string — kit only; cid of the classrup.identity.recovery_kit_notice/v1 sent to the principal's other devices |
 | createdAt | timestamp — local clock |
 | lastVerifiedAt? | timestamp — local clock of the last successful verification |
 | backupLabel? | string — 1..60 code points naming a user-chosen backup place, no path or secret |
@@ -52,7 +54,7 @@ Schema `classrup.identity.recovery_kit/v1` · storage **device** · privacy **P4
 - The 24 words, the derived encryption key, the decrypted root seed and the derived verifier private key are never stored.
 - At most one role-kit record per account in a vault has status active, recovery_pending or contested.
 - revokeOthersNotBefore equals requestedAt plus 72 hours when revokeOthersRequested is true, and requestedAt plus 7 days once the record is contested.
-- Role observed records hold no blob, KDF parameters or verifier, and plannedRevocations is empty when mode is device_list_unknown.
+- Role observed and kit_observed records hold no blob, KDF parameters or verifier, and plannedRevocations is empty when mode is device_list_unknown.
 
 ## Verification
 

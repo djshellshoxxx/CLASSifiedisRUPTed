@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-075-09.T21 | unit | PS-075-05.R03 | issue a manual quote with a reason | one local audit-log entry with quoteId, pair and reason and no rate in any network payload |
 | TEST-PS-075-09.T22 | integration | PS-075-07.R03 | a quote pinned by a proposal and an unreferenced quote, clock advanced 31 days and then 2 years | unreferenced quote purged at 31 days; pinned quote retained until 2 years after the proposal's last activity |
 | TEST-PS-075-09.T23 | contract | PS-075-04.R05 | verify_embedded for relay-signed, issuer-signed, fetched and asserted quotes | outputs validate and carry the labels in the note exactly |
+| TEST-PS-075-09.T24 | contract | PS-075-04.R06 | quote_label for a fetched ecb-daily quote, a verified relay quote, an issuer-signed manual quote, an asserted_unverified embedded quote, an expired and a revoked quote, and a barter_normalization quote with pinned consentCollected true and false, each rendered by the rate chip through an ApproxFormatPort double | each QuoteLabel validates against F14.S02.M02 V05 and V08; issuerDisplay present for manual and relay quotes; signatureVerified false only for asserted_unverified; status follows the local clock; pinned passed through unchanged; the chip calls formatApprox exactly once per value and never formats a rate itself |
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - An expired or revoked quote can never be pinned or used, and the response is always EXPIRED or an explicit invalid status.
 - Every manual quote is visibly labelled manual in API output and UI.
 - Quote validity is decided by the local clock of the checking vault; no relay clock can make a quote valid or expired.

@@ -42,14 +42,16 @@ See the module test table below (all processes).
 | TEST-PS-054-09.T19 | integration | PS-054-04.R01, PS-054-02.R05, PS-054-05.R01 | change_passphrase with a crash midway; then a full change; weak new passphrase | after the crash the old passphrase unlocks and the new does not; after success the old fails with UNAUTHENTICATED and other tabs are locked; weak passphrase VALIDATION_FAILED |
 | TEST-PS-054-09.T20 | e2e | PS-054-07.R03, PS-054-09.R04 | UI copy check of unlock and change passphrase screens in every locale bundle | the offline-guessing warning and 'backoff is a convenience' text are present |
 | TEST-PS-054-09.T21 | integration | PS-054-07.R04 | F10 export section, deletion plan and retention sweep with stub registries | section identity.sessions holds only the lock timeout; deletion ends sessions on known relays before keys are destroyed; ended sessions purged after 30 days |
+| TEST-PS-054-09.T22 | integration | PS-054-04.R04, PS-054-03.R02 | P1 unlocked with relay tokens for R and S and 3 queued outbox entries locks the vault; then P2 unlocks its own vault on the same device while P1 is unlocked | on lock the raw tokens and vault key are gone from memory, the session ends with endReason locked, CLEAR_USER_CACHES reason lock is posted to the F15.S01.M02 worker stub and the entries stay unsent; P2's unlock locks P1 with endReason principal_switch and CLEAR_USER_CACHES reason principal_switch; P1's next unlock re-runs challenge-response before sending |
+| TEST-PS-054-09.T23 | abuse | PS-054-04.R05, PS-054-05.R03 | session of seller key S1 on host H accepts a signed request by key B1 with S1's token; linked_keys called in-process for B1 and over HTTP | in-process result lists S1 and B1 in one session chain without IP prefix, user agent or times; the HTTP call is refused with FORBIDDEN |
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T23 pass in CI.
 - Tokens, nonces, passphrases and vault keys never appear in storage as plaintext, logs, events or URLs (privacy suite).
 - Idle and absolute expiry, rotation grace and device-revocation effects on every known relay are verified with an injected clock.
 - Login endpoints answer identically for known and unknown DIDs, and a challenge flood from one network cannot lock a victim out.
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F15.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

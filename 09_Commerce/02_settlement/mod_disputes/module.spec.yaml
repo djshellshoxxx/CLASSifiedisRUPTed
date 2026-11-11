@@ -49,6 +49,9 @@ edge_cases:
   - The opener has blocked the respondent; the respondent's response and evidence in the open case are stored with notifications suppressed, and the timeline says 'responses from a party you blocked are hidden'; noResponseReceivedHere stays false.
   - A context type that no module registered (for example a legacy rental type) is refused with COMMERCE_DISPUTE_CONTEXT_INVALID.
   - 10 000 fresh dids each send one dispute statement; the bounded quarantine evicts the oldest entries and then drops statements from dids that are party to no known context.
+  - F03.S02.M03 retries a booking case open with the same idempotencyRef (its linkId) after a crash; the existing case is returned and no second dispute statement is signed.
+  - A services.dispute.opened event arrives with origin federated, or a local one for a booking whose case already exists; neither creates a case, and the local one only prefills evidence in the opener vault.
+  - The owner opens a rental_damage case against a renter they blocked after the reservation was confirmed; the open is not refused and the renter's statements in the case are stored with notifications suppressed.
 ux:
   screens:
     - "Open dispute: pick reason (not_received, not_as_described, payment_not_acknowledged, no_show, damage, other), describe in up to 1 000 characters, attach evidence (images stripped of location data, at most 5 MiB each), choose respondents (prefilled from the context resolver)."
@@ -78,12 +81,14 @@ processes:
         fields:
           - "id: uuid — deterministic from sha256 of contextRef plus opener did plus openedSeq so mirrors converge"
           - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
-          - "contextRef: object — {type: a DisputeContextPort-registered type - deal | payment_claim | cycle | booking | rental_deposit | rental_damage, id: uuid}"
+          - "contextRef: object — {type: a DisputeContextPort-registered type - deal {id dealId} | payment_claim {id claimId} | cycle {id cycleId} | booking {id bookingId} | rental_deposit {id depositId, resolved by F05.S01.M02} | rental_damage {id damage claimId, resolved by F05.S02.M03}, id: uuid}; carried unchanged in every dispute statement and event"
           - "contextCid: string — cid of the signed context statement returned by DisputeContextPort.resolve"
           - "parties: array — [{did, role}] returned by DisputeContextPort.resolve; opener plus respondents, 2..20"
           - "openerId: did — party who opened"
           - "respondentIds: array — 1..19 dids"
           - "reason: enum — not_received | not_as_described | payment_not_acknowledged | no_show | damage | other"
+          - "serviceScope?: object — {scope, scopeKey (1..200 chars), milestoneId?: uuid}; only for contextRef type booking, supplied by F03.S02.M03 and signed into classrup.commerce.dispute/v1"
+          - "idempotencyRef?: string — caller reference (F03.S02.M03 linkId); a repeated open with the same value returns the existing case"
           - "description: string — 1..1000 code points plain text"
           - "evidence: array — up to 20 per party {id, authorId, kind: message|attachment|receipt|claim|statement|note, refCid (blob:sha256-<base64url> for attachments), sha256?, sizeBytes ≤ 5242880, stripped: boolean, caption ≤ 280, sharedWithMediator: boolean}"
           - "mediator?: object — {did, relayId, directoryEntry?: {mediatorDid, relayId, policyUrl, validUntil, relaySig}, trust: relay_verified|self_declared, acceptedBy: dids[], status: proposed|active|unavailable}"
@@ -92,7 +97,7 @@ processes:
           - "noResponseReceivedHere: boolean — set when the 7-day response window passes without any respondent statement received in this vault (stored statements from blocked parties count as received)"
           - "hiddenFromBlocked: int — number of stored statements from parties this vault has blocked"
           - "status: enum — opened | evidence | mediation | outcome_proposed | resolved | withdrawn"
-          - "resolution?: enum — no_fault_close | refund_claimed | return_agreed | enforcement_referral | lapsed"
+          - "resolution?: enum — no_fault_close | refund_claimed | return_agreed | enforcement_referral | lapsed (the FLOW-08 closed-unresolved outcome after 30 days of inactivity)"
           - "deadlines: object — {responseBy, evidenceBy, proposalBy, lapseAt} local clock"
           - "caseCid: string — sha256 of the opening statement"
           - "forkDetected: boolean — conflicting accepted outcomes seen"
@@ -110,15 +115,17 @@ processes:
     sql: |
       CREATE TABLE commerce_dispute_case (
         id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, context_type TEXT NOT NULL, context_id TEXT NOT NULL,
-        opener_id TEXT NOT NULL, status TEXT NOT NULL, lapse_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+        opener_id TEXT NOT NULL, status TEXT NOT NULL, lapse_at TEXT NOT NULL, idempotency_ref TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX commerce_dispute_open ON commerce_dispute_case(vault_id, context_type, context_id, opener_id)
         WHERE status NOT IN ('resolved','withdrawn');
+      CREATE UNIQUE INDEX commerce_dispute_idem ON commerce_dispute_case(vault_id, idempotency_ref) WHERE idempotency_ref IS NOT NULL;
   validation_rules:
     requirements:
       - Case and evidence input is validated strictly, including context resolution through the DisputeContextPort and party membership.
       - Incoming statements are verified for signature, signer role and chain position before any state change.
       - Outcome rules enforce who must accept and that outcomes carry no executable money action.
       - Context types are a registry - only types a module registered through DisputeContextPort are accepted, and an unregistered type or a context the resolver cannot resolve returns COMMERCE_DISPUTE_CONTEXT_INVALID.
+      - A block never removes the right to dispute - commerce.dispute.open is never refused with BLOCKED_PARTY for any context type, including booking cases opened through the F03.S02.M03 port and rental_deposit or rental_damage cases of a reservation confirmed before the block (N7a), and serviceScope is accepted only for booking contexts.
     rules:
       - "V01 | contextRef.type is registered through DisputeContextPort and resolve(contextRef) returns parties that include the actor | COMMERCE_DISPUTE_CONTEXT_INVALID"
       - "V02 | respondents are the other parties returned by DisputeContextPort.resolve, between 1 and 19 | VALIDATION_FAILED"
@@ -134,7 +141,8 @@ processes:
       - "V12 | a mediator-only outcome requires a directory entry signed by the named relay's key, naming that mediator did and relayId and not past validUntil | COMMERCE_DISPUTE_MEDIATOR_UNVERIFIED"
       - "V13 | a disposition is advisory only - kind continue, settled, cancelled or waived, favouredDid one of the parties, agreedAmount in a registry currency and only with kind settled | COMMERCE_DISPUTE_OUTCOME_INVALID"
       - "V14 | attachment bytes passed F10.S02.M03 stripping before encryption and the MediaBlob digest matches the bytes | VALIDATION_FAILED"
-      - "V15 | a statement from a blocked did is dropped silently only when it belongs to no open case of this vault; statements of an open case are stored with notifications suppressed, and open is allowed against a blocked party | BLOCKED_PARTY"
+      - "V15 | a statement from a blocked did is dropped silently only when it belongs to no open case of this vault; statements of an open case are stored with notifications suppressed, and open is allowed against a blocked party for every context type (booking, rental_deposit and rental_damage included) | BLOCKED_PARTY"
+      - "V16 | serviceScope is present only with contextRef type booking and carries scope, a scopeKey of 1 to 200 characters and an optional milestoneId uuid; idempotencyRef is at most 64 characters | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Cases follow the declared lifecycle; any transition not listed is refused with CONFLICT_STATE.
@@ -171,14 +179,15 @@ processes:
     requirements:
       - Open, add_evidence, respond, select_mediator, accept_mediator, propose_outcome, accept_outcome, reject_outcome and withdraw are vault commands that each produce a signed statement; ingest is an internal vault command; no command is a relay command.
       - Mediator actions run in the mediator's own vault as the same commands under role-in-statement authorization; a relay only publishes relay-signed mediator directory entries under its hosting policy.
-      - The module consumes payment, services-dispute and deletion events to prefill drafts and pseudonymize retained records, and never opens a case automatically.
-      - Event payloads carry contextRef, openerId, respondentIds and parties [{did, role}] (N3, N4) - commerce.dispute.opened, evidence_added, outcome_proposed, resolved and withdrawn - and resolved and withdrawn also carry caseCid for reputation (F07.S03.M01).
+      - The module consumes payment, services-dispute and deletion events to prefill drafts and pseudonymize retained records, and never opens a case automatically; services.dispute.opened at most prefills evidence in the opener vault and is ignored when origin is federated, because the F03.S02.M03 port call is the single creation path for booking cases (N21).
+      - Event payloads carry the exact contextRef, openerId, respondentIds and parties [{did, role}] (N3, N4) - commerce.dispute.opened, evidence_added, outcome_proposed, resolved and withdrawn - resolved and withdrawn also carry caseCid for reputation (F07.S03.M01), resolved also carries contextCid, acceptedBy and outcomeCid, and opened carries serviceScope for booking cases.
       - dispute_outcome/v1 and commerce.dispute.resolved carry an advisory, non-executable disposition {kind continue|settled|cancelled|waived, favouredDid?, agreedAmount?}; when it is absent each consumer applies the outcome-type mapping in its own spec, and for deal and payment_claim contexts the default mapping in the note is normative.
       - Every dispute statement type is registered with its signer role in F11.S01.M01 and reaches commerce.dispute.ingest through the F09.S01.M01 ingest dispatcher (StatementHandlerPort), with cid deduplication, quarantine reasons and the block exception for open cases.
+      - commerce.dispute.open accepts optional serviceScope {scope, scopeKey, milestoneId?} for booking contexts and idempotencyRef (the F03.S02.M03 linkId), signs serviceScope into classrup.commerce.dispute/v1, carries it in commerce.dispute.opened, and returns the existing case for a repeated idempotencyRef.
     commands:
       - name: commerce.dispute.open
         capability: commerce.dispute.open
-        input: "[vault command, produces signed statement classrup.commerce.dispute/v1] { contextRef: {type, id}, reason, description, respondentIds? (default: the other parties from DisputeContextPort.resolve), evidence? }"
+        input: "[vault command, produces signed statement classrup.commerce.dispute/v1; never refused with BLOCKED_PARTY] { contextRef: {type, id}, reason, description, respondentIds? (default: the other parties from DisputeContextPort.resolve), evidence?, serviceScope?: {scope, scopeKey, milestoneId?} (booking only), idempotencyRef? (repeat returns the existing case) }"
         output: "{ caseId, revision: 1, caseCid, parties, deadlines, peerSync }"
         errors: [VALIDATION_FAILED, COMMERCE_DISPUTE_CONTEXT_INVALID, COMMERCE_DISPUTE_DUPLICATE, COMMERCE_DISPUTE_EVIDENCE_LIMIT]
         emits: [commerce.dispute.opened]
@@ -270,17 +279,19 @@ processes:
       each vault against the key of that relay. Default disposition mapping for deal and payment_claim contexts, used when an
       outcome carries no disposition - no_fault_close -> continue; refund_claimed -> settled with agreedAmount = advisoryRefund
       (refund through a new Deal); return_agreed -> cancelled (parties sign a mutual deal_cancel); enforcement_referral ->
-      continue; lapsed -> continue. Every disposition is advisory and non-executable; consumers of other context types apply the
-      mapping in their own specs.
+      continue; lapsed -> continue. Resolution lapsed is the FLOW-08 closed-unresolved outcome (unresolved after 30 days of
+      inactivity); no separate closed_unresolved value exists. Every disposition is advisory and non-executable; consumers of other
+      context types apply the mapping in their own specs. Booking cases are created only through the F03.S02.M03 port call with
+      contextRef {booking, bookingId}, serviceScope and idempotencyRef (N21).
     events_produced:
-      - {type: commerce.dispute.opened, privacy: P2, payload: "{ caseId, caseCid, contextRef, contextCid, openerId, respondentIds, parties[{did, role}], reason }"}
+      - {type: commerce.dispute.opened, privacy: P2, payload: "{ caseId, caseCid, contextRef, contextCid, openerId, respondentIds, parties[{did, role}], reason, serviceScope?: {scope, scopeKey, milestoneId?}, idempotencyRef? }"}
       - {type: commerce.dispute.evidence_added, privacy: P2, payload: "{ caseId, contextRef, evidenceId, authorId, kind, openerId, respondentIds, parties[{did, role}] }"}
-      - {type: commerce.dispute.resolved, privacy: P2, payload: "{ caseId, caseCid, contextRef, openerId, respondentIds, parties[{did, role}], resolution, outcomeType?, advisoryRefund?, disposition?: {kind, favouredDid?, agreedAmount?}, acceptedBy[], outcomeCid? }"}
+      - {type: commerce.dispute.resolved, privacy: P2, payload: "{ caseId, caseCid, contextRef, contextCid, openerId, respondentIds, parties[{did, role}], resolution (lapsed = FLOW-08 closed-unresolved), outcomeType?, advisoryRefund?, disposition?: {kind, favouredDid?, agreedAmount?}, acceptedBy[] (parties that accepted the outcome), outcomeCid? (cid of the accepted dispute_outcome/v1; absent for lapsed) }"}
       - {type: commerce.dispute.outcome_proposed, privacy: P2, payload: "{ caseId, contextRef, openerId, respondentIds, parties[{did, role}], outcomeType, disposition?, proposedBy, round, proposalBy }"}
       - {type: commerce.dispute.withdrawn, privacy: P2, payload: "{ caseId, caseCid, contextRef, openerId, respondentIds, parties[{did, role}] }"}
     events_consumed:
       - {type: commerce.payment.disputed, effect: "create a prefilled draft case for the claim's payer and prompt them; never opens a case automatically"}
-      - {type: services.dispute.opened, effect: "link the service dispute intake to the case it creates through commerce.dispute.open and prefill milestones as evidence references"}
+      - {type: services.dispute.opened, effect: "never creates a case; for origin local and a case already created by the F03.S02.M03 port call, at most prefill milestone evidence references in the opener vault; events with origin federated are ignored"}
       - {type: privacy.deletion.completed, effect: "through the DeletionPort plan, replace the deleted principal's did in retained cases with the per-deletion pseudonym; signatures kept and flagged unverifiable-after-pseudonymization; the deleted user's own evidence blobs crypto-shredded"}
     errors:
       - "COMMERCE_DISPUTE_CONTEXT_INVALID | 422 | no | context type is not registered, the context does not resolve, or the actor is not a party"
@@ -324,7 +335,7 @@ processes:
       - Statement delivery uses the sync outbox states and the UI shows only the state reached.
       - Forked or conflicting signed outcomes are detected, frozen and surfaced; there is no last-writer-wins.
       - Statements of an open case from a party this vault blocked are stored as evidence with notifications suppressed and are never dropped, the timeline says 'responses from a party you blocked are hidden', and the response window flag is noResponseReceivedHere, which such stored statements clear.
-    idempotency: "Vault command ID recorded for 24 h; statements deduplicated by cid; caseId is deterministic so repeated opens converge."
+    idempotency: "Vault command ID recorded for 24 h; statements deduplicated by cid; caseId is deterministic so repeated opens converge; an open carrying an idempotencyRef already stored in this vault returns that case without signing a new statement."
     concurrency: "expectedRevision on every mutation; unique partial index for one open case per context and opener; Web Lock commerce-dispute per case; across vaults conflicts are detected by statement chain and acceptance sets and freeze the case."
     retries: "Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h until the case is terminal plus 7 days."
     offline: "All commands commit locally and show pending; evidence attachments are sent through the AttachmentTransportPort (F08.S01.M01 mailbox adapter) when online; deadlines still run on the local clock."
@@ -400,14 +411,17 @@ processes:
       - "T19 | abuse | 05.R04,01.R05 | B selects a mediator did with no directory entry, then one with an entry signed by a different relay key, and that mediator proposes no_fault_close | both labelled self_declared; the mediator-only outcome is refused with COMMERCE_DISPUTE_MEDIATOR_UNVERIFIED; the same outcome resolves only after every party accepts"
       - "T20 | abuse | 07.R05,01.R04 | A attaches a JPEG with GPS EXIF tags and shares it with active mediator M | B and M receive a MediaBlob of at most 5 MiB with no EXIF, XMP or GPS data; an attachment whose stripping failed is refused"
       - "T21 | integration | 06.R04 | A has blocked B; A opens a case against B; B responds and adds evidence | open allowed; B's statements stored with notifications suppressed; timeline says 'responses from a party you blocked are hidden'; noResponseReceivedHere stays false"
-      - "T22 | contract | 04.R04 | assert every produced event against the expectations of F07.S03.M01, F13.S01.M03, F09.S01.M01, F02.S03.M04, F03.S02.M03, F05.S01.M02 and F05.S02.M03 | each event carries contextRef, openerId, respondentIds and parties; resolved and withdrawn carry caseCid"
+      - "T22 | contract | 04.R04 | assert every produced event against the expectations of F07.S03.M01, F13.S01.M03, F09.S01.M01, F02.S03.M04, F03.S02.M03, F05.S01.M02 and F05.S02.M03 | each event carries the exact contextRef, openerId, respondentIds and parties; resolved and withdrawn carry caseCid; resolved carries contextCid, acceptedBy and outcomeCid"
       - "T23 | contract | 04.R05,01.R03 | resolve one case per consumer context type with and without a disposition | resolved payload carries the advisory disposition when present; for deal and payment_claim the default mapping applies when absent; no consumer command that moves money is invoked"
       - "T24 | unit | 02.R04,01.R06 | open cases for each registered type and for an unregistered type | registered types store parties and contextCid from their resolver; unregistered returns COMMERCE_DISPUTE_CONTEXT_INVALID"
       - "T25 | integration | 07.R04 | export, deletion and retention purge driven by F10 | section commerce.disputes exported; DeletionPort pseudonymizes and crypto-shreds the deleted user's own evidence; RetentionPurgePort purges after RET-EVIDENCE; every field carries an F10.S02.M02 class"
       - "T26 | abuse | 07.R06 | 10 000 fresh dids each send one dispute statement | quarantine stays within 500 entries or 5 MiB, oldest evicted first, non-party statements dropped once full; parties' statements still applied"
       - "T27 | integration | 04.R06 | dispute, evidence and outcome statements delivered through F09.S01.M01 commerce.statement.ingest, plus duplicates and a statement signed by a non-party | dispatched to commerce.dispute.ingest and applied once; duplicates no-op; non-party quarantined with COMMERCE_DISPUTE_STATEMENT_INVALID"
+      - "T28 | integration | 04.R07,02.R05 | F03.S02.M03 port opens a booking case with serviceScope {scope, scopeKey, milestoneId} and idempotencyRef L1 against a counterparty the opener blocked, then retries with L1; a deal case carrying serviceScope; owner opens rental_deposit and rental_damage cases against a renter blocked after confirmation | booking case opened, serviceScope signed into dispute/v1 and carried in commerce.dispute.opened; the retry returns the same caseId with no new statement; the deal case returns VALIDATION_FAILED; no open is refused with BLOCKED_PARTY"
+      - "T29 | integration | 04.R03 | deliver services.dispute.opened with origin federated, and with origin local for a booking with and without a case created through the port | no case is created in any case; the local event for an existing case only prefills milestone evidence in the opener vault; the federated event is ignored"
+      - "T30 | contract | 04.R04,03.R04 | a case resolved by accepted return_agreed and a case lapsed after 30 days | resolved payload carries caseCid, contextCid, the exact contextRef, parties, acceptedBy and outcomeCid for the first; the second carries resolution lapsed, documented as the FLOW-08 closed-unresolved outcome, with no outcomeCid"
     acceptance:
-      - All tests T01 to T27 pass in CI.
+      - All tests T01 to T30 pass in CI.
       - No dispute state, event or outcome invokes any payment, refund, freeze or release operation.
       - A mediator sees only evidence the parties chose to share and only after every party of the case accepted the mediator.
       - Conflicting accepted outcomes always freeze the case.

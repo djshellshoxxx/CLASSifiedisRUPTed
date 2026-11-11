@@ -14,7 +14,7 @@
 ## Specification
 
 **Data classification**
-- PortableIdentityDoc: P0 public; provenance, firstSeenAt, pendingRecoveries and revokedUnion are local metadata (P3 on device).
+- PortableIdentityDoc: P0 public; provenance, firstSeenAt, earliestEvidenceAt, keyFirstSeen, pendingRecoveries and revokedUnion are local metadata (P3 on device); revocationCids reference public signed revocation statements.
 
 **Retention**
 - Own and received documents until vault erase or contact removal (RET-STANDARD); superseded and history versions kept for 2 years (RET-EVIDENCE) to verify old statements; relay keeps the latest 20 versions per DID.
@@ -32,6 +32,8 @@
 | T07 | Fork resolution that brings back a revoked key | a resolving document must list every revocation of every competing branch (V10) and revokedUnion never shrinks |
 | T08 | Quick takeover by a recovery that revokes the owner's devices | revocations with reason recovery wait 72 h from this vault's own first sight of the notice; no notice or a self-contradicting timeline contests the DID |
 | T09 | Foreign key listed to fake same-owner linkage | possession signatures over the DID-bound message are required for every active key (V07) |
+| T10 | Backdated revokesEffectiveAt used to quarantine a victim's older statements, or a late revocation dropped | the effective time is clamped to no earlier than 30 days before this vault's earliest evidence of the revoking document, the clamp is labelled, and a late revocation is always applied |
+| T11 | Key-linkage reads used to link one user across relays (PT-15) | reads run in-process only on the relay that stores the data, for its own hosted auctions and legal-hold approvals; no HTTP endpoint serves find_by_key, key_set linkage or KeyLinkagePort |
 
 **Abuse controls**
 - Relay quotas as above; vault intake accepts at most 50 documents per hour from one transport source and quarantines the rest; gap fetches at most 4 per DID per 24 h.
@@ -50,4 +52,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M03, F16.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

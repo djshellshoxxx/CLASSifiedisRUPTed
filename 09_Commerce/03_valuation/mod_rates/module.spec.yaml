@@ -26,6 +26,7 @@ non_responsibilities:
   - Which currencies exist and their decimals (F09.S03.M01 currency registry).
   - Re-consent flows after quote expiry (F02.S04.M02 normalization and the barter consent modules).
   - Choosing a trusted relay or rate provider; the user selects it in settings (F15 platform) and this module only records the choice in each quote's source.
+  - Locale-aware formatting of approximate values (F14.S02.M02 formatApprox, reached through the injected ApproxFormatPort) and collecting consent for a pinned quote (the pinning module passes pinned.consentCollected).
   - "Future: live crypto market-data adapters and multi-source median quotes; MVP crypto pairs use manual quotes or a configured adapter disabled by default."
 depends_on: [F09.S03.M01, F09.S03.M03, F11.S01.M01, F11.S01.M03, F07.S02.M01, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-FED-001, CTR-PRV-001]
 user_stories:
@@ -50,7 +51,7 @@ edge_cases:
   - A revocation statement arrives from a did that is not the quote's issuer, or from a blocked did; the first is quarantined with reason signer_not_issuer and the second dropped silently.
 ux:
   screens:
-    - "Rate chip next to converted values: shows 1 EUR = 1.087 USD, source name, 'expires in 14:32' on this device's clock, and a Manual rate label when applicable."
+    - "Rate chip next to converted values: the approximate value is rendered through the ApproxFormatPort (F14.S02.M02 formatApprox) from the QuoteLabel of commerce.fx_quote.quote_label, showing 1 EUR = 1.087 USD, the provenance wording (quote from <provider>, manual rate by <issuer>, unverified source, pinned rate agreed by all parties), 'expires in 14:32' on this device's clock and an expired or revoked marker; without a source or time the chip shows the original price with 'conversion unavailable'."
     - "Origin line under an embedded rate: 'signed by relay <name>', 'manual rate by <pseudonym>' or 'source asserted by <pseudonym>, not verifiable', plus 'ECB reference rate differs by 3.2 %' when re-derived."
     - "Pinned barter rate: 'pinned rate agreed by all parties' with source, asOf and expiry; relay times shown as 'according to relay <name>'."
     - "Manual-rate form: pair, rate as decimal or fraction, reason (≤ 200 chars), validity 15 min to 24 h."
@@ -154,6 +155,7 @@ processes:
       - Consumers pin quotes by ID only and never copy rates without the ID.
       - classrup.commerce.fx_quote_revocation/v1 (signer - the issuerRef of the manual quote) is ingested through the internal vault command commerce.fx_quote.ingest_revocation, idempotent by cid, with quarantine reasons signer_not_issuer, not_manual and quote_unknown (buffered 24 h), and statements from blocked dids are dropped silently.
       - commerce.fx_quote.verify_embedded is the one check consumers (F02.S04.M02, offers, Deals) call for quotes inside peer statements; it returns sourceSigned, the verification label, local-clock expiry with a skew note and, when asked, the ECB re-derivation.
+      - "Approximate values are rendered only through F14.S02.M02 formatApprox, reached through the injected ApproxFormatPort that the vault composition binds (F14.S02.M02 depends on this module, so there is no static edge back), with the QuoteLabel { source, sourceKind, issuerDisplay, label, signatureVerified, asOf, expiresAt, status, pinned?: { consentCollected } } from commerce.fx_quote.quote_label - issuerDisplay resolved and signatures verified before the call, signatureVerified true only for a verified relay signature, a verified manual issuer signature or a quote this vault fetched through its own direct adapter, status evaluated on the local clock, and pinned passed through only from the caller that pinned the quote."
     commands:
       - name: commerce.fx_quote.request
         capability: commerce.fx_quote.request
@@ -206,6 +208,11 @@ processes:
         input: "{ quote: classrup.commerce.fx_quote/v1, embeddingSignerId, embeddingReceivedAt, embeddingSignedAt?, reDerive?: boolean }"
         output: "{ sourceSigned, issuerSigned, verificationLabel, label (e.g. 'source asserted by <pseudonym>, not verifiable'), expired (local clock), skewNote?, issuerPseudonym, reDerived?: {referenceRate, deviationBps} }"
         errors: [VALIDATION_FAILED, COMMERCE_RATE_SIGNATURE_INVALID, COMMERCE_CURRENCY_MISMATCH, DEPENDENCY_UNAVAILABLE]
+      - name: commerce.fx_quote.quote_label
+        capability: commerce.fx_quote.read
+        input: "{ quoteId } or { quote: classrup.commerce.fx_quote/v1, embeddingSignerId, embeddingReceivedAt }, pinned?: { consentCollected: boolean } (supplied by the pinning caller)"
+        output: "QuoteLabel { source, sourceKind, issuerDisplay (manual issuer pseudonym or signing relay display name), label?, signatureVerified, asOf, expiresAt, status: issued|expired|revoked (local clock), pinned?: { consentCollected } } for F14.S02.M02 formatApprox"
+        errors: [NOT_FOUND, VALIDATION_FAILED, COMMERCE_RATE_SIGNATURE_INVALID, COMMERCE_CURRENCY_MISMATCH]
     note: >-
       Statement registry (N2, registered in F11.S01.M01): classrup.commerce.fx_quote_revocation/v1 - signer is the issuerRef of
       the manual quote it names. Quotes embedded in other modules' statements (classrup.commerce.fx_quote/v1 carried as data) are
@@ -215,7 +222,10 @@ processes:
       issuer_signed 'manual rate by <pseudonym>: <reason>'; fetched_here 'fetched by you from <source>'; asserted_unverified
       'source asserted by <issuer pseudonym>, not verifiable'; barter_normalization quotes add 'pinned rate agreed by all
       parties'. ECB re-derivation fetches the ECB daily reference rate for asOf through the user's chosen source and reports the
-      deviation; it never changes the pinned quote.
+      deviation; it never changes the pinned quote. ApproxFormatPort {formatApprox(money, currencyDef, quoteLabel, locale, {timeZone,
+      now})} is injected by the vault composition and bound to F14.S02.M02; QuoteLabel mapping - signatureVerified is sourceSigned
+      for relay quotes, issuerSigned for manual quotes and true for fetched_here, false for asserted_unverified; a quote refused by
+      verify_embedded never yields a QuoteLabel.
     events_produced:
       - {type: commerce.fx_quote.issued, privacy: P1, payload: "{ quoteId, base, quote, rate: {num, den}, source, sourceKind, purpose, issuerRef, sourceSigned, issuerSigned, expiresAt }"}
       - {type: commerce.fx_quote.revoked, privacy: P1, payload: "{ quoteId, base, quote, issuerRef, revocationCid? }"}
@@ -328,8 +338,9 @@ processes:
       - "T21 | unit | 05.R03 | issue a manual quote with a reason | one local audit-log entry with quoteId, pair and reason and no rate in any network payload"
       - "T22 | integration | 07.R03 | a quote pinned by a proposal and an unreferenced quote, clock advanced 31 days and then 2 years | unreferenced quote purged at 31 days; pinned quote retained until 2 years after the proposal's last activity"
       - "T23 | contract | 04.R05 | verify_embedded for relay-signed, issuer-signed, fetched and asserted quotes | outputs validate and carry the labels in the note exactly"
+      - "T24 | contract | 04.R06 | quote_label for a fetched ecb-daily quote, a verified relay quote, an issuer-signed manual quote, an asserted_unverified embedded quote, an expired and a revoked quote, and a barter_normalization quote with pinned consentCollected true and false, each rendered by the rate chip through an ApproxFormatPort double | each QuoteLabel validates against F14.S02.M02 V05 and V08; issuerDisplay present for manual and relay quotes; signatureVerified false only for asserted_unverified; status follows the local clock; pinned passed through unchanged; the chip calls formatApprox exactly once per value and never formats a rate itself"
     acceptance:
-      - All tests T01–T23 pass in CI.
+      - All tests T01–T24 pass in CI.
       - An expired or revoked quote can never be pinned or used, and the response is always EXPIRED or an explicit invalid status.
       - Every manual quote is visibly labelled manual in API output and UI.
       - Quote validity is decided by the local clock of the checking vault; no relay clock can make a quote valid or expired.

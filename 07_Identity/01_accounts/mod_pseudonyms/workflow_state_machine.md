@@ -19,13 +19,13 @@ Initial **active**; terminal **erased**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | active -> active | identity.pseudonym.change | validate, update pseudonym and skeleton, emit identity.pseudonym.changed |
-| active -> erased | privacy.deletion.completed for the vault after the DeletionPort steps ran | final cleanup of any remaining rows, no further events |
+| active -> erased | DeletionPort destroy_keys step, the last step of the F10.S01.M04 deletion | destroy every keystore entry including the root key, delete DeviceKey rows and keep only the erased Account stub; privacy.deletion.completed later removes leftovers and never touches keys |
 
 ```mermaid
 stateDiagram-v2
   [*] --> active
   active --> active: identity.pseudonym.change
-  active --> erased: privacy.deletion.completed for the vault after the DeletionPort steps ran
+  active --> erased: DeletionPort destroy_keys step, the last step of the F10.S01.M04 deletion
   erased --> [*]
 ```
 
@@ -35,23 +35,23 @@ Initial **active**; terminal **revoked**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| active -> revoked | identity.device_key.revoke signed by the key itself or by the root key, or such a statement received | sign or record classrup.security.keyrevocation/v1, emit identity.device_key.revoked |
+| active -> revoked | identity.device_key.revoke signed by the key itself or by the root key, such a statement received, or the DeletionPort revoke_keys step | sign or record classrup.security.keyrevocation/v1 (reason account_deleted with finalCids in revoke_keys), emit identity.device_key.revoked |
 | active -> revocation_pending | revocation of this key signed by another active device key | set pendingUntil = now + 7 days, show it on every own device, no event yet |
-| revocation_pending -> revoked | root key confirms, or pendingUntil passes without a counter-revocation or root decision | emit identity.device_key.revoked |
+| revocation_pending -> revoked | root key confirms, pendingUntil passes without a counter-revocation or root decision, or the DeletionPort revoke_keys step | emit identity.device_key.revoked |
 | revocation_pending -> active | root key rejects the revocation by revoking the revoking key instead | pending entry closed |
 | revocation_pending -> contested | this key revokes the revoking key (mutual), or two device keys revoke each other concurrently | freeze both keys for key management; routine statements still verify with a contested warning |
-| contested -> revoked | root key or recovery kit decision revokes this key | emit identity.device_key.revoked |
+| contested -> revoked | root key or recovery kit decision revokes this key, or the DeletionPort revoke_keys step | emit identity.device_key.revoked |
 | contested -> active | root key or recovery kit decision keeps this key | the other key's revocation stands |
 
 ```mermaid
 stateDiagram-v2
   [*] --> active
-  active --> revoked: identity.device_key.revoke signed by the key itself or by the root key, or such a statement received
+  active --> revoked: identity.device_key.revoke signed by the key itself or by the root key, such a statement received, or the DeletionPort revoke_keys step
   active --> revocation_pending: revocation of this key signed by another active device key
-  revocation_pending --> revoked: root key confirms, or pendingUntil passes without a counter-revocation or root decision
+  revocation_pending --> revoked: root key confirms, pendingUntil passes without a counter-revocation or root decision, or the DeletionPort revoke_keys step
   revocation_pending --> active: root key rejects the revocation by revoking the revoking key instead
   revocation_pending --> contested: this key revokes the revoking key (mutual), or two device keys revoke each other concurrently
-  contested --> revoked: root key or recovery kit decision revokes this key
+  contested --> revoked: root key or recovery kit decision revokes this key, or the DeletionPort revoke_keys step
   contested --> active: root key or recovery kit decision keeps this key
   revoked --> [*]
 ```

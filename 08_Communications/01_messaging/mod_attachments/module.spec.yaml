@@ -10,7 +10,9 @@ summary: >-
   downloaded ciphertext before decrypting. Deleting an attachment removes the blob from the relay's live store; it
   is not crypto-shredding, because recipients who received the message hold the key, and a relay that keeps its own
   backups could still hold ciphertext, which the UI says. Ciphertext is limited to 5 MiB. A relay without blob
-  storage disables attachments for its users (fail closed).
+  storage disables attachments for its users (fail closed). The same pipeline implements the F09.S02.M02
+  AttachmentTransportPort for dispute evidence, whose key material reaches recipients sealed through the
+  F08.S01.M01 mailbox; thread archives and blocks never stop evidence for a context confirmed before the block.
 responsibilities:
   - Own the Attachment record (MediaBlob reference of the ciphertext, sizes, chunk layout, declared media type, slot state) and its lifecycle.
   - Run the vault pipeline (F10.S02.M03 strip and verify, re-encode, STREAM chunk-encrypt, queue upload) as one vault command.
@@ -19,13 +21,15 @@ responsibilities:
   - Enforce size, type and quota limits on declared values and on the stored ciphertext length.
   - Provide the client-side pipeline contract for metadata stripping before encryption and verification by round-trip tests.
   - Register the F10 privacy ports so that account deletion sends signed relay deletes for every uploaded blob while the device keys still exist (N6).
+  - Implement the F09.S02.M02 AttachmentTransportPort send(blobRef, recipients[], perObjectKey) by inverted registration: encrypt the already stripped evidence MediaBlob under the caller's per-object key, upload it like any attachment and deliver the descriptor sealed to each recipient through the F08.S01.M01 MailboxPort as statement classrup.comms.attachment_share/v1.
 non_responsibilities:
   - Message text and key wrapping (F08.S01.M01); the attachment key, nonce prefix, integrity data and blob reference are carried inside the message plaintext.
   - Public listing photos and their processing (F01 listing media).
   - Image content moderation by the relay; the relay cannot read ciphertext, so reports carry plaintext from the reporter's device (F12.S01.M02).
   - Blob storage and content addressing (F15.S02.M03 MediaBlob) and the metadata stripping implementation (F10.S02.M03); this module calls them.
+  - The meaning of dispute evidence (F09.S02.M02) and the alt text component (F14.S01.M02); this module transports the evidence blob and carries altText and decorative unchanged.
   - "Future: video and audio attachments, resumable uploads over 5 MiB, perceptual-hash matching on the client."
-depends_on: [F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001]
+depends_on: [F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001]
 user_stories:
   - As a member, I can attach a photo to a message and be sure that location and device data in the photo are removed before it leaves my phone.
   - As a recipient, I can view the photo only if I received the encrypted message carrying its download token, and it is removed from the relay's live store when the sender deletes it, although a copy I already saved stays.
@@ -41,6 +45,8 @@ edge_cases:
   - A hostile relay serves chunks reordered, truncated or with one chunk dropped; the recipient rejects the ciphertext because the hash, chunk count or chunk index nonce does not match, and nothing is decrypted.
   - Same photo attached twice; two independent keys and blobs are produced, no deduplication, so identical images cannot be linked.
   - Quota exhausted (50 MiB per registered device per day); the next slot request is refused with COMMS_ATTACHMENT_QUOTA.
+  - An owner blocks the renter after a rental was confirmed and the direct thread is archived with reason blocked; the owner's damage photos for that rental still upload, the renter still downloads them, and only notifications are suppressed (N7a).
+  - Alt text of 141 characters, or decorative true together with alt text, is refused with VALIDATION_FAILED before encryption.
 ux:
   screens:
     - "Attach sheet: choose photo, shows a preview with a Remove location data and metadata notice, size after processing and a Send button."
@@ -50,7 +56,7 @@ ux:
   states: [idle, processing, uploading, uploaded, failed-retry, deleted, expired-slot, quota-exceeded, integrity-failed]
   a11y:
     - Progress bar exposes role=progressbar with aria-valuenow and an accessible name.
-    - Images carry an alt text field the sender may fill (max 200 characters) that travels inside the encrypted body; default alt is Photo attachment.
+    - Images carry an alt text field the sender may fill (plain text of at most 140 characters, the shared MediaRef limit of F14.S01.M02) or a decorative flag, both inside the encrypted body; default alt is Photo attachment and a decorative image renders with empty alt.
     - Viewer controls are keyboard operable with targets of at least 44 by 44 px.
 processes:
   domain_schema:
@@ -59,7 +65,7 @@ processes:
       - Relay-side attachment rows and blobs are RET-SHORT (deleted 30 days after upload, or earlier on delete) and the vault copy follows the referencing message's RET-STANDARD; deleting the blob removes it from the relay's live store, which is not crypto-shredding in the CTR-PRV-001 sense because every recipient of the message holds the per-object key.
       - Limits are 5 MiB (5 242 880 bytes) of ciphertext, which allows at most 5 241 600 bytes of processed plaintext in at most 80 chunks, 4096 px maximum on the long edge, and media types image/jpeg, image/png and image/webp only.
       - "Encryption is a STREAM construction over XChaCha20-Poly1305 with a fresh 32-byte key: chunk i (65 536 bytes, last chunk shorter) is sealed with the 24-byte nonce = 20-byte random prefix || uint32 big-endian i and additional data JCS({attachmentId, chunkCount, index: i, last: i = chunkCount - 1}), so reordering, truncation or dropping of chunks fails authentication."
-      - "The encrypted message body (F08.S01.M01) carries {attachmentId, relayId, blobRef, key, noncePrefix, cipherSha256, cipherSize, plainSize, chunkCount, declaredType, downloadToken, altText?}; recipients check cipherSha256 and cipherSize of the downloaded ciphertext against these values before decrypting any chunk."
+      - "The encrypted message body (F08.S01.M01) carries {attachmentId, relayId, blobRef, key, noncePrefix, cipherSha256, cipherSize, plainSize, chunkCount, declaredType, downloadToken, altText? (plain text ≤ 140 characters, the shared MediaRef limit), decorative?: boolean}; recipients check cipherSha256 and cipherSize of the downloaded ciphertext against these values before decrypting any chunk."
     entities:
       - name: Attachment
         schema: classrup.comms.attachment/v1
@@ -105,10 +111,11 @@ processes:
       - Finalization verifies stored length and hash against the declared values before the blob becomes downloadable.
       - Every violation maps to one stable error code.
       - Recipients validate the downloaded ciphertext against cipherSha256, cipherSize and chunkCount from the encrypted message body before decrypting any chunk, and reject reordered, truncated or dropped chunks.
+      - Thread archives and blocks never stop evidence for a context confirmed before the block - attaching, uploading, finalizing, relay deletes and downloads of such attachments proceed whatever the thread state, and only notifications are suppressed (N7a).
     rules:
       - "V01 | declaredType is one of image/jpeg, image/png, image/webp | COMMS_ATTACHMENT_TYPE_UNSUPPORTED"
       - "V02 | plainSize between 1 and 5 241 600, chunkCount equals ceil(plainSize / 65 536) and the ciphertext is at most 5 242 880 bytes | COMMS_ATTACHMENT_TOO_LARGE"
-      - "V03 | in the vault the thread exists, is active and the sender is a participant | NOT_FOUND"
+      - "V03 | in the vault the thread exists and the sender is a participant, and the thread is active or archived with reason blocked while the attachment is evidence for a context confirmed before the block (N7a, for example a rental handoff or damage photo); dispute evidence sent through the AttachmentTransportPort needs no thread | NOT_FOUND"
       - "V04 | the registered device has fewer than 3 pending slots and used less than 50 MiB of ciphertext in the last 24 h | COMMS_ATTACHMENT_QUOTA"
       - "V05 | each uploaded chunk has index within range, length 65 536 plus 16 (last chunk shorter) and arrives within the slot lifetime | VALIDATION_FAILED"
       - "V06 | finalize ciphertext length equals cipherSize and SHA-256 equals the declared hash | COMMS_ATTACHMENT_HASH_MISMATCH"
@@ -117,6 +124,8 @@ processes:
       - "V09 | every relay command presents a valid relay access token of a registered device; a missing or invalid token is refused before any other check | UNAUTHENTICATED"
       - "V10 | recipient: SHA-256 of the downloaded ciphertext equals cipherSha256 from the encrypted body, its length equals cipherSize, and chunk i decrypts only under nonce prefix plus index i with the last flag set only on chunk chunkCount - 1 | COMMS_ATTACHMENT_HASH_MISMATCH"
       - "V11 | the processed image passes F10.S02.M03 verifyImageClean before encryption | VALIDATION_FAILED"
+      - "V12 | altText, when present, is plain text of at most 140 characters (the shared MediaRef limit of F14.S01.M02), decorative, when present, is a boolean, and decorative true carries no altText | VALIDATION_FAILED"
+      - "V13 | an inbound classrup.comms.attachment_share/v1 is signed by a device key of its uploader, names recipients that include the local principal, and after download the decrypted plaintext's content address equals the blobRef the sharing statement cites; otherwise it is quarantined | COMMS_ATTACHMENT_HASH_MISMATCH"
   workflow_state_machine:
     requirements:
       - An Attachment starts pending, becomes uploaded only after hash verification and ends deleted or expired; both ends are terminal.
@@ -140,10 +149,11 @@ processes:
       - The uploader vault emits comms.attachment.uploaded in the same IndexedDB transaction that records a verified finalize response and comms.attachment.deleted in the transaction that records a delete response or the passing of retainUntil.
       - The module consumes message, delivery and deletion events locally to issue signed relay delete requests; every command is classed below as vault command or relay command, and the ciphertext is stored as a F15.S02.M03 MediaBlob.
       - The module registers ExportSectionPort (section comms.attachments), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort with F10 (N6); DeletionPort.execute sends signed relay deletes for every blob the user uploaded and erases local keys before F10.S01.M04 destroys the device keys.
+      - "The module implements the F09.S02.M02 AttachmentTransportPort send(blobRef, recipients[], perObjectKey) -> { attachmentId, cipherBlobRef, syncState }: it reads the local evidence MediaBlob already stripped by F10.S02.M03, re-runs verifyImageClean, STREAM-encrypts it under the caller's per-object key with a fresh nonce prefix, uploads it with create_slot, put_chunk and finalize (threadLabelHash = HMAC of the caller's context reference under the per-device salt) and delivers the descriptor {attachmentId, relayId, cipherBlobRef, plainBlobRef = blobRef, key, noncePrefix, cipherSha256, cipherSize, plainSize, chunkCount, declaredType, downloadToken} to each recipient as statement classrup.comms.attachment_share/v1 (signer a device key of the uploader, registered with F11.S01.M01, N2, ingest owner this module) sealed through the F08.S01.M01 MailboxPort; a recipient vault verifies it, downloads, checks the ciphertext and stores the plaintext as a local MediaBlob whose content address equals plainBlobRef."
     commands:
       - name: comms.attachment.attach
         capability: comms.attachment.attach
-        input: "[vault command; the message that references the blob is signed later by comms.message.send] { attachmentId, threadId, imageBytes (≤ 25 MiB source), altText? }"
+        input: "[vault command; the message that references the blob is signed later by comms.message.send] { attachmentId, threadId, imageBytes (≤ 25 MiB source), altText? (≤ 140 characters), decorative?: boolean }"
         output: "{ attachmentId, plainSize, chunkCount, syncState: local_committed }"
         errors: [VALIDATION_FAILED, COMMS_ATTACHMENT_TYPE_UNSUPPORTED, COMMS_ATTACHMENT_TOO_LARGE, NOT_FOUND]
         emits: []
@@ -178,7 +188,7 @@ processes:
         idempotent: true
       - name: comms.attachment.delete
         capability: comms.attachment.delete
-        input: "[relay command, request signed by the uploader device key (classrup/relay-request/v1)] { attachmentId, expectedRevision }"
+        input: "[relay command, RFC 9421 request signature by the uploader device key made with F11.S01.M03 signRequest under the request-signature tag classrup/relay-request/v1, not an F16.S02.M03 envelope] { attachmentId, expectedRevision }"
         output: "{ attachmentId, revision, deletedAt, relaySig }"
         errors: [UNAUTHENTICATED, NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
         emits: []
@@ -238,7 +248,7 @@ processes:
     data:
       - "Attachment ciphertext: P2, opaque to the relay, stored as an encrypted MediaBlob."
       - "Attachment metadata (uploader relay identity, size, declared type, thread label hash, timestamps): P2 visible to the relay operator."
-      - "Object key and nonce prefix: P4 inside encrypted message bodies only."
+      - "Object key and nonce prefix: P4 inside encrypted message bodies and sealed attachment_share statements only."
     retention:
       - "Relay blobs and rows: RET-SHORT (30 days after upload) or immediately on delete; no extension."
       - "Vault copies follow the vault retention of the referencing message (RET-STANDARD)."
@@ -298,8 +308,11 @@ processes:
       - "T18 | integration | 04.R04,07.R04 | account deletion with three uploaded attachments | DeletionPort.execute sends three signed relay deletes before keys are destroyed; privacy.deletion.completed finds nothing to sign; export section comms.attachments present beforehand"
       - "T19 | integration | 03.R04 | finalize, delete and expiry responses recorded | comms.attachment.uploaded and comms.attachment.deleted emitted in the uploader vault with threadId from the local record; the relay emitted nothing and holds only thread_label_hash"
       - "T20 | unit | 07.R03 | render the delete confirmation and documentation page | text says removed from the relay's live store and that recipients who saved it and relay-kept backups may still hold a copy; it never says crypto-shredded"
+      - "T21 | unit | 01.R05,02.R03 | attach with altText of 140 and 141 characters, decorative true without and with altText, then decrypt the message body | 140 accepted and carried with decorative inside the encrypted body; 141 and decorative with altText refused with VALIDATION_FAILED; nothing reaches the relay in plaintext"
+      - "T22 | integration | 02.R05,02.R01 | owner O blocks renter R after a rental was confirmed, the direct thread is archived with reason blocked, then O attaches a damage photo for that rental and R downloads it; O then attaches a photo to an unrelated new conversation with R | evidence attach, upload, finalize and download succeed and only the notification is suppressed; the unrelated attach is refused with NOT_FOUND"
+      - "T23 | integration | 04.R05,02.R04 | F09.S02.M02 calls AttachmentTransportPort.send for a stripped evidence MediaBlob with recipients B and a mediator M; a tampered share whose plaintext differs from the cited blobRef | ciphertext uploaded once, one attachment_share statement sealed per recipient through the F08.S01.M01 MailboxPort, B and M store a MediaBlob whose content address equals blobRef; the tampered share is quarantined with COMMS_ATTACHMENT_HASH_MISMATCH"
     acceptance:
-      - All tests T01 to T20 pass in CI.
+      - All tests T01 to T23 pass in CI.
       - Fixture images with GPS, XMP and text metadata produce zero metadata after the device pipeline.
       - After a message is deleted no ciphertext blob for its attachment exists in the relay's live MediaBlob store.
   import_export_backup_rollback:

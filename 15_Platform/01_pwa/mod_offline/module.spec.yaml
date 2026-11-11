@@ -7,9 +7,13 @@ summary: >-
   Whatever must reach another party or a user-selected relay (a signed statement such as a published listing,
   offer or consent, or a relay command such as an index write) becomes an OutboxEntry row in the vault's one
   IndexedDB database, written through the F15.S02.M03 transaction(fn) together with the domain record, and
-  moves through the honest states prepared (export prepared), transport_acknowledged (verified relay receipt)
-  and peer_accepted (verified signed acknowledgement of the exact digest by the acknowledger the statement
-  registry names). The UI never shows more certainty than the reached state. Entries replay in creation order
+  moves through the honest states prepared (export prepared), transport_acknowledged (verified relay receipt
+  while a peer acknowledgement is awaited), completed (verified relay receipt as the final sync state of an entry
+  that needs no peer acknowledgement: public statements and relay commands) and peer_accepted (participant
+  statements only: verified signed acknowledgement of the exact digest by the recipient the statement registry
+  names). It is the single vault-side outbox for federation statements, which it delivers through the
+  FederationTransportPort of F11.S02.M01. The UI never shows more certainty than the reached state and renders
+  every state from the shared catalog keys sync.state.<value>. Entries replay in creation order
   with the original Idempotency-Key or cid (CTR-IDM-001 IDM-1, IDM-4, IDM-5, IDM-7); relay commands older than
   the relay's 24 h idempotency window are resent only when replay is provably safe; conflicts are never merged
   automatically; unsent entries expire after 7 days following a prompt and no entry outlives 30 days. The
@@ -24,8 +28,11 @@ responsibilities:
   - Apply verified relay restore announcements and key revocations published by the destination relay, returning entries whose receipts the relay lost to prepared for resending, and freezing delivery to a relay whose identity equivocates.
   - Report vault storage status through navigator.storage.persist() and estimate(), eviction warnings and last-export age (warn at 30 days, or at 7 days without persistent storage, per CTR-IOX-001 IOX-6).
   - Register the F10 privacy ports for outbox data (N6) by inverted port registration: F10.S01.M01 and F10.S01.M04 already depend on this module, so F10.S01.M02, F10.S01.M03 and F10.S01.M04 discover ExportSectionPort, DeletionPort and RetentionPurgePort through the kernel port registry at vault composition instead of a depends_on edge that would close a cycle.
+  - "Be the single vault-side outbox for federation statements - store the F11.S02.M01 destination descriptor ({kind: selected_relay, relayId} for public statements, {kind: recipient_mailbox, recipientDid, mailboxId, relayId} for participant statements), call the FederationTransportPort that F11.S02.M01 registers in the kernel port registry (inverted registration, because F11.S02.M01 depends on this module) with that descriptor and needsPeerAck (true only for participant statements), hold entries for which the adapter reports an unresolved recipient, and accept F11.S02.M01 re-routes of recipient_mailbox entries after a recipient moves."
+  - Render the sync chip, its accessible name and the outbox sheet only from the shared catalog keys sync.state.<value> (local_committed and the nine OutboxEntry states), naming the transport (relay display name or the peer's device directly), so the visual text equals the F14.S01.M02 spokenSync text.
 non_responsibilities:
   - Verifying incoming signed statements and quarantine (F11 federation modules and the receiving domain module); this module only accepts a reference to an already verified acknowledgement and checks its binding to the entry.
+  - Routing statements to destinations, resolving recipient mailboxes after a move, RFC 9421 request signing and batching (F11.S02.M01 owns the routing, the descriptor format and the FederationTransportPort adapter); the catalog strings themselves (F14.S02.M01 catalogs, wording owned by F14.S01.M02).
   - The persistence primitive (F15.S02.M03 owns repositories and transaction(fn); it holds no outbox state machine of its own) and relay-to-relay forwarding of public records (F11.S02.M01 PeerOutbox).
   - Issuing relay receipts, relay identity documents and restore announcements (F15.S02.M01 and F15.S03.M03); relay-side idempotency storage (F15.S02.M02).
   - Service worker caching (F15.S01.M02) and install flow (F15.S01.M03); the outbox does not rely on the Background Sync API, which is missing in some supported browsers.
@@ -33,19 +40,21 @@ non_responsibilities:
   - Encrypting P2 statements to the participants' mailbox keys (the producing module encrypts; this module checks the envelope).
   - Producing the vault export itself (F10.S01.M03); this module only shows the export age it is told about.
   - "Future: outbox encryption at rest with a passphrase-derived key; Future: automatic encrypted backup to a user-selected location."
-depends_on: [F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001]
+depends_on: [F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001]
 user_stories:
-  - As a member on a train without signal, I can publish a listing and see it as saved on my device and waiting to send, then see "reached relay" when my phone reconnects, and "peer confirmed" only when the counterparty's (or, for a publication, the relay's) signed acknowledgement of exactly what I sent arrives.
+  - As a member on a train without signal, I can publish a listing and see "Saved on this device only, waiting to send", then "Delivered to relay Old Town Swap, no peer confirmation needed" when my phone reconnects, and for an offer "Confirmed by peer" only when the counterparty's signed acknowledgement of exactly what I sent arrives.
   - As a member, when a queued offer collides with a newer signed revision from the other party, I see both versions and choose to prepare a new version or discard, never a silent overwrite.
   - As a member, I am warned a day before an unsent action expires and can send it, keep it or discard it.
   - As a member, I see whether my browser granted persistent storage, how much space is left and when I last exported my vault, with a warning after 30 days, or after 7 days when the browser refused persistent storage.
   - As a member whose relay was restored from an older backup, the deliveries that relay lost are sent again without my intervention.
+  - As a member whose trading partner moved to a new relay, my queued offer waits instead of going to the old mailbox and is sent to the new mailbox once it is known.
 edge_cases:
   - Browser kills the tab while an entry is sending; at next start entries in sending older than 60 s return to prepared and are resent with the same Idempotency-Key (relay command) or the same statement cid (statement), so the destination deduplicates within its idempotency window.
   - Two tabs are open on reconnect; only the tab holding the Web Lock classrup-outbox-replay sends, the other observes through BroadcastChannel.
   - IndexedDB is unavailable or over quota; enqueue fails inside the domain command's storage.transaction(fn), the whole transaction including the domain record rolls back, enqueue reports PLATFORM_OUTBOX_STORAGE_UNAVAILABLE and the UI says nothing was saved.
   - The destination relay is stopped or removed; entries stay prepared with "relay unreachable, status unknown", other destinations keep flowing, and the user may re-route an entry to a different relay (the old entry is discarded as rerouted and a new entry is prepared) or discard it.
-  - A relay receipt arrives but the peer never acknowledges; the entry stays transport_acknowledged and shows "delivered to relay, peer has not confirmed" until createdAt + 30 days moves it to expired.
+  - A relay receipt arrives but the peer never acknowledges; the entry stays transport_acknowledged and shows "Delivered to relay <display name>, peer has not confirmed" until createdAt + 30 days moves it to expired with expiredOutcome unconfirmed, a terminal unconfirmed outcome that keeps that text and is never shown as failed or as not sent.
+  - The recipient of a queued offer moved and the FederationTransportPort reports an unresolved recipient (F11.S02.M01 retryable FEDERATION_RECIPIENT_UNRESOLVED); the entry is held in prepared without counting attempts, and when F11.S02.M01 re-routes it to the new mailbox the held entry is discarded as rerouted and a new entry with the same payload and cid is sent there.
   - A peer acknowledgement arrives before the relay receipt is recorded (or for a direct QR or file transfer that never has a receipt); the entry moves straight to peer_accepted.
   - Two vaults signed conflicting promises (for example two acceptances for the same inventory); the receiving module reports the fork, the entry becomes conflict, dependent coordination is frozen and nothing is resolved by last-writer-wins.
   - A relay command first attempted 25 h ago is retried; the relay no longer holds its idempotency record, so the command is resent only if it carries expectedRevision or a deterministic resource id, or a read-back shows it was not applied; otherwise the entry becomes conflict with "may already have been applied".
@@ -57,16 +66,16 @@ edge_cases:
   - The relay clock is wrong; relay-signed receipt time is stored as evidence of that relay's clock only, never used to order or expire entries.
 ux:
   screens:
-    - "Sync status chip on every item with queued statements, with three distinct labels and icons: Saved on this device (Export prepared for a direct transfer), Reached relay (receipt), Confirmed by peer; a fourth Needs attention state for conflict and failed (including Rejected by relay with the relay's reason)."
+    - "Sync status chip on every item with queued statements, with text and icon taken only from the shared catalog keys sync.state.<value> for local_committed and the nine OutboxEntry states, where {transport} is 'relay <display name>' or 'the peer's device directly': for example 'Saved on this device only, waiting to send', 'Delivered to relay Old Town Swap, peer has not confirmed', 'Delivered to relay Old Town Swap, no peer confirmation needed' (completed), 'Confirmed by peer', and 'Needs attention: not sent, retry or choose another relay' for failed (including Rejected by relay with the relay's reason); an expired entry that holds a verified receipt keeps the transport_acknowledged text, and the outbox sheet adds Export prepared for an exported direct transfer."
     - "Outbox sheet: entries per destination, newest first, with command label, creation time, state, attempts, and buttons Retry now, Cancel, Change relay, Export (direct transfers) and for conflicts Review."
     - "Conflict dialog: shows 'Your signed version' and 'Their signed version' for the changed fields, buttons Prepare a new version on theirs and Discard mine; for an unsafe late replay it says 'This action may already have been applied' with Check on relay, Send anyway as a new action and Discard."
     - "Expiry prompt: at day 6 lists unsent entries expiring within 24 h with Send now, Keep until expiry, Discard."
     - "Storage status panel: persistence granted yes/no with a Request persistence button, used and available space from estimate(), last export date with Export now, and a warning banner after 30 days without export (7 days when persistence is not granted)."
     - "Relay warning banner: 'This relay restored an older backup; N items are being sent again' or 'This relay's identity is inconsistent; sending is paused'."
-  states: [empty, prepared-offline, export-prepared, sending, transport-acknowledged, peer-accepted, conflict, failed, relay-rejected, expired, relay-frozen, storage-unavailable, storage-not-persistent, export-overdue]
+  states: [empty, prepared-offline, export-prepared, sending, held-recipient-unresolved, transport-acknowledged, completed, peer-accepted, conflict, failed, relay-rejected, expired-unsent, expired-unconfirmed, discarded, relay-frozen, storage-unavailable, storage-not-persistent, export-overdue]
   a11y:
     - Sync state changes are announced through one aria-live polite region; conflicts use role=alertdialog with focus on the first action.
-    - Sync state is conveyed by text and icon, never color alone, and the accessible names read "Saved on this device only", "Delivered to relay, peer has not confirmed", "Confirmed by peer".
+    - Sync state is conveyed by text and icon, never color alone, and the accessible names are the same sync.state.<value> strings that F14.S01.M02 spokenSync speaks, for example "Saved on this device only", "Delivered to relay Old Town Swap, peer has not confirmed", "Delivered to the peer's device directly, peer has not confirmed", "Confirmed by peer".
     - All outbox and storage buttons are at least 44x44 px, keyboard operable with visible focus.
     - Timestamps use locale formatting through F14.S02.M01 and relative text carries the absolute time in a title.
 processes:
@@ -76,6 +85,7 @@ processes:
       - Entries are P2 device-local data held only in the principal's vault and never uploaded as a record; expiresAt is capped at createdAt + 30 days in every state, the payload is erased at expiry, and the payload-free expired stub is deleted 24 h later, so no payload outlives 30 days (RET-SHORT) and no row outlives createdAt + 30 days + 24 h.
       - The signed payload and cid of an entry are immutable after preparation; only sync bookkeeping changes, and a rebase or reroute discards the old entry (reason superseded or rerouted) and creates a new entry with a new id and seq (and, for a rebase, a new cid) instead of editing the old one.
       - OutboxEntry rows are the vault's only sync outbox and are written through the F15.S02.M03 transaction(fn) in the vault's single IndexedDB database, so a domain record and its outbox entry always commit or roll back together; this module publishes the one OutboxEntry state machine that every sender uses.
+      - A federation statement entry also stores the F11.S02.M01 destination descriptor, {kind selected_relay, relayId} or {kind recipient_mailbox, recipientDid, mailboxId, relayId}, from which its canonical destination string is derived, and needsPeerAck (acknowledger counterparty) is true exactly for recipient_mailbox entries of participants statements.
     entities:
       - name: OutboxEntry
         schema: classrup.platform.outbox_entry/v1
@@ -87,13 +97,14 @@ processes:
           - "tenantId: uuidv7 — the vaultId of F15.S04.M03 (CTR-ID-001 ID-6 tenant slot of this vault)"
           - "principal: string — did:key of the local principal that owns the vault; entries are only shown and sent while that principal is unlocked"
           - "destination: string — canonical destination string defined by F15.S02.M01: '<relayId>' for relay commands and public statements on that relay, '<relayId>/mailbox/<mailboxId>' for an end-to-end encrypted mailbox put, '<relayId>/index/<indexName>' for an index write, or 'direct:<did>' for a QR or file transfer; relayId is 'relay:' plus 26 lowercase base32 characters"
+          - "destinationDescriptor?: json — federation statements only, the F11.S02.M01 descriptor { kind: selected_relay, relayId } (destination '<relayId>') or { kind: recipient_mailbox, recipientDid, mailboxId, relayId } (destination '<relayId>/mailbox/<mailboxId>', recipientDid equal to the entry's); passed unchanged to the FederationTransportPort"
           - "seq: int — vault-wide monotonic counter starting at 1; delivery order within a destination"
           - "kind: enum — statement | relay_command"
           - "statementSchema?: string — e.g. classrup.bazaar.offer/v1; required when kind is statement and registered in the F11.S01.M01 statement registry"
           - "privacyClass: enum — P0 | P1 | P2; registered class of the statement schema (F11.S01.M01 registry over F10.S02.M02 field classes) or of the relay command input"
-          - "acknowledger: enum — counterparty | destination_relay | none; taken per statement schema from the F11.S01.M01 registry (N2); none for relay commands"
+          - "acknowledger: enum — counterparty | none; counterparty (needsPeerAck true) exactly when the F11.S01.M01 registry (N2) gives the statement schema audience participants; none for public statements and relay commands, whose verified receipt completes the entry"
           - "recipientDid?: string — did:key of the counterparty that must acknowledge, required when acknowledger is counterparty"
-          - "cid: string — sha256- plus base64url SHA-256 of the JCS payload (CTR-ID-001 ID-3); dedupe identity of a statement"
+          - "cid: string — the envelope cid of CTR-FED-001 FED-7 as F11.S01.M03 computes it, sha256- plus base64url of SHA-256 over JCS of the envelope without sig and cid; dedupe identity of a statement"
           - "payload: json — signed CTR-FED-001 envelope (an end-to-end encrypted envelope for P2 to a relay mailbox) or { command, input } for relay commands; serialized ≤ 262144 bytes; erased at expiresAt"
           - "sentDigest?: string — sha256- plus base64url SHA-256 of the exact request bytes last sent; a relay receipt must carry this digest"
           - "idempotencyKey?: uuidv7 — required for relay_command, sent as Idempotency-Key (CTR-IDM-001 IDM-1)"
@@ -101,7 +112,9 @@ processes:
           - "resourceId?: string — deterministic, content-derived id of the relay resource for create-if-absent relay commands"
           - "replaySafety: enum — expected_revision | deterministic_id | read_back | statement_cid; declared by the owning module when it registers the relay command (statement_cid for statements)"
           - "aggregateKey: string — '<entity>:<id>' used to hold back later entries behind a blocked one"
-          - "state: enum — prepared | sending | transport_acknowledged | peer_accepted | conflict | failed | expired | discarded"
+          - "state: enum — prepared | sending | transport_acknowledged | peer_accepted | completed | conflict | failed | expired | discarded; rendered with the catalog key sync.state.<state>"
+          - "heldReason?: enum — recipient_unresolved; set while the FederationTransportPort reports that no mailbox resolves for a moved recipient; a held entry consumes no attempt and is not sent"
+          - "expiredOutcome?: enum — unsent | unconfirmed; unconfirmed when a transport_acknowledged entry expired without a peer acknowledgement (shown with the sync.state.transport_acknowledged text), unsent otherwise (sync.state.expired)"
           - "attempts: int — 0..6, reset to 0 by a manual retry or a restore announcement"
           - "firstAttemptAt?: timestamp — local clock time of the first send attempt; kept across retries and resets"
           - "nextAttemptAt?: timestamp — earliest next send, from backoff"
@@ -112,14 +125,15 @@ processes:
           - "failureReason?: enum — retry_exhausted | rejected | relay_rejected | unsafe_replay; relay_rejected carries the relay's signed reason cid in lastError"
           - "lastError?: json — { code, status, retryable, currentRevision?, fields?, reasonCid? } from the last response"
           - "supersedes?: json — { entryId, cid } of the entry this one replaced by a rebase or reroute"
-          - "discardReason?: enum — user | superseded | rerouted"
+          - "discardReason?: enum — user | superseded | rerouted; rerouted also covers an F11.S02.M01 re-route after the recipient moved (platform.outbox.resolve with cause recipient_moved)"
           - "createdAt: timestamp — RFC 3339 UTC, local clock"
           - "expiresAt: timestamp — createdAt + 604800000 ms while unsent; min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms) once transport_acknowledged; never later than createdAt + 30 days"
           - "updatedAt: timestamp — RFC 3339 UTC, local clock"
         invariants:
-          - seq is unique per vault and strictly increasing; delivery never sends an entry before every lower-seq entry for the same destination and aggregateKey has reached transport_acknowledged, peer_accepted, discarded or expired.
+          - seq is unique per vault and strictly increasing; delivery never sends an entry before every lower-seq entry for the same destination and aggregateKey has reached transport_acknowledged, completed, peer_accepted, discarded or expired.
           - At most one entry per destination is in sending at a time; entries with a direct destination are never sent by the delivery loop.
-          - peer_accepted requires only peerAckCid; transport_acknowledged requires a verified relayReceipt whose destination equals the entry destination and whose digest equals sentDigest.
+          - peer_accepted requires only peerAckCid and acknowledger counterparty; transport_acknowledged (acknowledger counterparty) and completed (acknowledger none) require a verified relayReceipt whose destination equals the entry destination and whose digest equals sentDigest.
+          - A federation statement entry carries a destinationDescriptor whose kind matches the registry audience and whose canonical form equals destination.
           - The signed payload and cid of an entry never change after creation, and a terminal entry never changes again.
           - The store holds at most min(200, LocalSettings.localLimits.maxOutboxEntries) entries and 5242880 bytes of payload per principal.
           - expiresAt is never later than createdAt + 30 days, and no payload is retained after expiresAt.
@@ -135,10 +149,11 @@ processes:
     requirements:
       - Enqueue validates destination, delivery eligibility, size, quota, privacy class and signature presence before writing, inside the caller's storage.transaction(fn); on a violation nothing is stored and the domain record rolls back with it.
       - Delivery classifies every relay response into receipt, retryable, conflict, relay rejection or failed using only the code, status and retryable flag from CTR-ERR-001, and accepts a receipt only after it verifies against the destination relay's published key set.
-      - A peer acknowledgement is accepted only when it is a verified signed statement over exactly this entry's cid, signed by the DID or relay that the statement registry names as acknowledger, with a key authorized for that DID or relay at verification time; otherwise it is refused with PLATFORM_OUTBOX_ACK_MISMATCH.
+      - A peer acknowledgement is accepted only when it is a verified signed statement over exactly this entry's cid, signed by the recipient DID that the statement registry names as acknowledger, with a key authorized for that DID at verification time; otherwise it is refused with PLATFORM_OUTBOX_ACK_MISMATCH.
       - Statements registered at class P2 or higher are accepted for a relay destination only as end-to-end encrypted envelopes addressed to the recipients' mailbox keys, and schemas or fields classified P3 or P4 are never queued (CTR-PRV-001 PRV-5).
       - Every deliveryEligible relay command declares its replay safety, and a relay command first attempted more than 23 h ago is resent only when that replay safety holds; otherwise it moves to conflict.
       - Relay key revocations, rotations and restore announcements are used only after their signatures verify against the relay's key history, and a relay whose key history equivocates is frozen for delivery.
+      - A destination descriptor must match the registry audience of the statement (public to selected_relay, participants to recipient_mailbox), its canonical string must equal the entry destination and recipientDid, and a caller-supplied needsPeerAck that disagrees with the registry is refused.
     rules:
       - "V01 | kind is statement with a CTR-FED-001 envelope whose signature the local principal made and whose schema is registered in F11.S01.M01, or relay_command registered deliveryEligible by its owning module | PLATFORM_OUTBOX_NOT_DELIVERABLE"
       - "V02 | JSON.stringify(payload) is ≤ 262144 bytes | PAYLOAD_TOO_LARGE"
@@ -148,7 +163,7 @@ processes:
       - "V06 | the vault is unlocked and entry principal equals the unlocked principal | UNAUTHENTICATED"
       - "V07 | the F15.S02.M03 IndexedDB transaction opened and committed | PLATFORM_OUTBOX_STORAGE_UNAVAILABLE"
       - "V08 | unsent entry is not older than 7 days at send time | EXPIRED"
-      - "V09 | the acknowledgement statement's payload.cid equals entry.cid; its signer equals entry.recipientDid (acknowledger counterparty) or the destination relayId (acknowledger destination_relay); and the signing key was active for that DID at verification time (the key_status fact of F07.S02.M01 that the ingest path supplies with the verified ack reference), or is an active or retired, non-revoked key in the relay's published key set | PLATFORM_OUTBOX_ACK_MISMATCH"
+      - "V09 | entry.acknowledger is counterparty; the acknowledgement statement's payload.cid equals entry.cid; its signer equals entry.recipientDid; and the signing key was active for that DID at verification time (the key_status fact of F07.S02.M01 that the ingest path supplies with the verified ack reference) | PLATFORM_OUTBOX_ACK_MISMATCH"
       - "V10 | when privacyClass is P2 or higher and the destination is a relay destination, the payload is an end-to-end encrypted envelope whose recipient key set equals the mailbox keys of recipientDid and the destination is that recipient's mailbox; otherwise nothing is stored | PLATFORM_OUTBOX_NOT_DELIVERABLE"
       - "V11 | neither the statement schema nor any payload field is classified P3 or P4 by F10.S02.M02 (unclassified fields count as P3) | PLATFORM_OUTBOX_CLASS_FORBIDDEN"
       - "V12 | a relay_command registration declares replaySafety expected_revision (with expectedRevision), deterministic_id (with resourceId and create-if-absent semantics) or read_back (with a registered read query) | PLATFORM_OUTBOX_NOT_DELIVERABLE"
@@ -156,6 +171,7 @@ processes:
       - "V14 | a relay receipt is a classrup.platform.relay_receipt/v1 whose signature under context classrup-relay-receipt:v1 verifies with keyId from the relay's published key set (active or retired; a revoked key only if the receipt was stored before the revocation's revokedAt), whose relayId and destination equal the entry's, and whose digest equals sentDigest | PLATFORM_OUTBOX_RECEIPT_INVALID"
       - "V15 | the destination relay's key history has no two rotation statements with the same prevKeyId and no revocation of every published key; otherwise delivery to that relay is frozen | PLATFORM_OUTBOX_RELAY_FROZEN"
       - "V16 | a restore announcement classrup.platform.relay_restore/v1 is applied only when signed under context classrup-relay-restore:v1 by a non-revoked key of the same relayId | PLATFORM_OUTBOX_RECEIPT_INVALID"
+      - "V17 | a statement entry for a relay destination (every locally authored statement is routed by F11.S02.M01) carries a destinationDescriptor; kind selected_relay for audience public and recipient_mailbox for audience participants; destination equals '<relayId>' or '<relayId>/mailbox/<mailboxId>' of the descriptor; recipientDid equals descriptor.recipientDid; an input needsPeerAck equals (audience participants) | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Entries follow the declared lifecycle and any transition not listed is refused with CONFLICT_STATE.
@@ -163,28 +179,34 @@ processes:
       - Conflict and failed entries block only later entries with the same destination and aggregateKey, are never auto-merged or auto-retried, and forked conflicting promises freeze the affected coordination instead of choosing a winner.
       - A rebase or reroute never edits an entry; the old entry moves to discarded with reason superseded or rerouted and supersededBy, and the replacement is a new entry with a new id and seq, re-validated by V04, V05, V10 and V11.
       - A verified restore announcement of the destination relay that covers an entry's receipt returns the entry from transport_acknowledged to prepared, and it is resent with the same cid or Idempotency-Key.
+      - An entry that needs no peer acknowledgement (a public statement on a selected relay or a relay command) moves to completed when its relay receipt verifies; completed is its final sync state, claims only relay receipt, is kept until createdAt + 30 days and is reopened to prepared only by a verified restore announcement covering its receipt.
+      - A transport_acknowledged entry that reaches its expiry without a verified acknowledgement ends in expired with expiredOutcome unconfirmed, a terminal unconfirmed outcome shown with the transport_acknowledged text (delivered to the relay, peer has not confirmed), never as failed and never as not sent.
+      - An entry for which the FederationTransportPort reports a hold (the retryable F11.S02.M01 FEDERATION_RECIPIENT_UNRESOLVED) stays prepared with heldReason recipient_unresolved, consumes no attempt and is not sent until F11.S02.M01 re-routes it, which discards it as rerouted and prepares a new entry with the same payload and cid for the recipient's new mailbox; the 7-day unsent expiry still applies.
     machines:
       - entity: OutboxEntry
         initial: prepared
         terminal: [peer_accepted, discarded, expired]
         transitions:
           - "prepared -> sending | delivery picks the lowest-seq eligible entry of a relay destination and holds the Web Lock | nextAttemptAt ≤ now, vault unlocked, relay not frozen (V15), V13 holds for relay commands, no lower-seq entry of same aggregateKey unresolved; attempts += 1; firstAttemptAt set on the first attempt; sentDigest recorded"
-          - "sending -> transport_acknowledged | relay returns a receipt that passes V14, for a statement or for a 2xx or Idempotent-Replay 2xx relay_command response | store relayReceipt and transportAcknowledgedAt; expiresAt = min(transportAcknowledgedAt + 30 d, createdAt + 30 d); relay time kept as relay-clock evidence only; for acknowledger none this is the final sync state"
+          - "sending -> transport_acknowledged | relay returns a receipt that passes V14 for an entry with acknowledger counterparty (needsPeerAck true) | store relayReceipt and transportAcknowledgedAt; expiresAt = min(transportAcknowledgedAt + 30 d, createdAt + 30 d); relay time kept as relay-clock evidence only; chip 'Delivered to relay <display name>, peer has not confirmed'"
+          - "sending -> completed | relay returns a receipt that passes V14 for an entry with acknowledger none: a public statement on a selected relay (FederationTransportPort receipt outcome accepted, duplicate, hidden or quarantined) or a 2xx or Idempotent-Replay 2xx relay_command response | store relayReceipt and transportAcknowledgedAt; expiresAt = createdAt + 30 d; final sync state, chip 'Delivered to relay <display name>, no peer confirmation needed'; receipt copied into the domain record's provenance"
+          - "completed -> prepared | the destination relay's verified restore announcement (V16) covers the receipt, by the same rule as for transport_acknowledged | relayReceipt moved to history, attempts reset to 0, resent with the same cid or Idempotency-Key; expiresAt unchanged"
           - "sending -> prepared | network failure, error with retryable=true, or a receipt failing V14 | schedule nextAttemptAt by full-jitter backoff (base 500 ms, cap 30 s, retryAfterMs honored) while attempts < 6"
+          - "sending -> prepared | the FederationTransportPort returns outcome hold with a retryable code (F11.S02.M01 FEDERATION_RECIPIENT_UNRESOLVED: no mailbox resolves for a moved recipient) | heldReason recipient_unresolved; the attempt is not counted; nextAttemptAt unset so delivery skips the entry until F11.S02.M01 re-routes it or reports a resolved route; expiresAt unchanged"
           - "sending -> conflict | CONFLICT_REVISION or CONFLICT_STATE response, or V13 fails at send time | store currentRevision and state (or failureReason unsafe_replay); show the resolve-or-discard prompt"
           - "sending -> failed | non-retryable error, relay hosting refusal (FORBIDDEN, BLOCKED_PARTY or a relay-signed rejection), or attempts reaches 6 | store error code and fields; failureReason relay_rejected with the relay's signed reason cid for hosting refusals (shown by F01.S01.M03 as relay_rejected), rejected or retry_exhausted otherwise; show failure with Retry now and Discard"
           - "sending -> prepared | entry stuck in sending for more than 60 s after a tab crash | recovery at startup; same idempotencyKey or cid is reused"
           - "transport_acknowledged -> peer_accepted | platform.outbox.record_peer_ack with an acknowledgement passing V09 | store peerAckCid"
           - "transport_acknowledged -> conflict | receiving module reports a rejection or forked conflicting signed promise | store reason; affected coordination frozen by the owning module"
-          - "transport_acknowledged -> expired | now ≥ expiresAt while acknowledger is counterparty or destination_relay | payload erased; UI says the peer never confirmed"
+          - "transport_acknowledged -> expired | now ≥ expiresAt while no acknowledgement passed V09 | expiredOutcome unconfirmed; payload erased; terminal unconfirmed outcome shown with the sync.state.transport_acknowledged text 'Delivered to relay <display name>, peer has not confirmed', never as failed"
           - "transport_acknowledged -> prepared | the destination relay's verified restore announcement (V16) covers the receipt (same relayId, receipt epoch below the announced new epoch with seq above lastReceiptSeq, or an earlier-epoch receipt whose receivedAt is inside lostWindow; receipts of the new epoch are never covered) | relayReceipt moved to history, attempts reset to 0, resent with the same cid or Idempotency-Key; expiresAt unchanged"
           - "conflict -> discarded | user chooses Prepare a new version on theirs (rebase), Change relay (reroute) or Discard mine | discardReason superseded, rerouted or user; for a rebase the owning module signs a new statement enqueued as a new entry (new id, seq and cid, supersedes {entryId, cid}, expectedRevision = currentRevision); for a reroute a new entry keeps payload and cid with a new id, seq and destination"
           - "failed -> prepared | user chooses Retry now | attempts reset to 0 and nextAttemptAt = now; firstAttemptAt kept so V13 still applies"
-          - "prepared -> discarded | user cancels the entry, or reroutes it with Change relay | removed from the delivery set; a reroute creates a new entry (same payload and cid, new id, seq and destination re-validated by V04, V05, V10, V11) with supersedes set"
-          - "failed -> discarded | user discards or reroutes | removed from the delivery set; a reroute creates a new entry as above"
-          - "prepared -> expired | now ≥ expiresAt | payload erased; UI states the action was not sent"
-          - "conflict -> expired | now ≥ expiresAt | payload erased; UI states the action was not sent"
-          - "failed -> expired | now ≥ expiresAt | payload erased; UI states the action was not sent"
+          - "prepared -> discarded | user cancels the entry or reroutes it with Change relay, or F11.S02.M01 re-routes a recipient_mailbox entry (held or not) after the recipient moved | removed from the delivery set; a reroute creates a new entry (same payload and cid, new id, seq, destination and descriptor re-validated by V04, V05, V10, V11, V17) with supersedes set and heldReason cleared"
+          - "failed -> discarded | user discards or reroutes, or F11.S02.M01 re-routes a recipient_mailbox entry after the recipient moved | removed from the delivery set; a reroute creates a new entry as above"
+          - "prepared -> expired | now ≥ expiresAt | expiredOutcome unsent; payload erased; UI states the action was not sent"
+          - "conflict -> expired | now ≥ expiresAt | expiredOutcome unsent; payload erased; UI states the action was not sent"
+          - "failed -> expired | now ≥ expiresAt | expiredOutcome unsent; payload erased; UI states the action was not sent"
           - "prepared -> peer_accepted | an acknowledgement passing V09 arrives before any receipt is recorded, including for a direct QR or file transfer | store peerAckCid"
           - "sending -> peer_accepted | an acknowledgement passing V09 arrives while the send is in flight | store peerAckCid; a late receipt is still stored as evidence"
           - "failed -> peer_accepted | an acknowledgement passing V09 arrives for a statement that was in fact delivered | store peerAckCid"
@@ -192,7 +214,8 @@ processes:
     timeouts:
       - "Unsent entries expire 604800000 ms (7 days) after createdAt; the expiry prompt is shown from day 6 (518400000 ms)."
       - "transport_acknowledged entries waiting for a counterparty or relay acknowledgement expire at min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms), never later than createdAt + 30 days."
-      - "transport_acknowledged entries with acknowledger none are deleted with their receipt at createdAt + 2592000000 ms by the retention purge; the receipt is copied into the domain record's provenance when it is verified."
+      - "completed entries (acknowledger none) are deleted with their receipt at createdAt + 2592000000 ms by the retention purge; the receipt is copied into the domain record's provenance when it is verified."
+      - "A held entry (heldReason recipient_unresolved) is not sent while held and still expires 604800000 ms (7 days) after createdAt as unsent."
       - "A relay command whose firstAttemptAt is older than 82800000 ms (23 h) is sent only when V13 holds."
       - "An entry in sending for more than 60000 ms without a response is reset to prepared at the next startup or delivery tick."
       - "Delivery tick runs on the online event, visibilitychange to visible, app start, and every 60000 ms while unsent entries exist; the destination relay's /.well-known/classrup-relay.json (key history, revocations, restore announcements) is re-read at most every 21600000 ms (6 h) and immediately after a receipt fails V14."
@@ -205,18 +228,20 @@ processes:
       - The acknowledger role and privacy class of every queued statement schema come from the F11.S01.M01 statement registry (N2); this module acts only on acknowledgements that the receiving path verified and that pass V09.
       - Enqueue is available to other modules only as OutboxPort.enqueue(tx, entry) inside their own F15.S02.M03 transaction, and the vault-local command platform.outbox.enqueue wraps the same call in a transaction of its own for entries without a domain record.
       - platform.storage.get_status reports persistence, quota, eviction risk and export age, with exportOverdue = exportAgeDays > exportOverdueThresholdDays, where the threshold is 30 days when storage is persisted and 7 days otherwise (CTR-IOX-001 IOX-6; used by F15.S01.M03).
+      - Federation statements are delivered only through the FederationTransportPort that F11.S02.M01 registers in the kernel port registry at vault composition (inverted registration, because F11.S02.M01 depends on this module), called with the entry's destination descriptor and needsPeerAck, and this module is the only vault-side outbox for them; relay commands use the relay transport of F15.S02.M01 destinations.
+      - The sync chip, its accessible name and the outbox sheet derive one SyncState per item through syncStateOf(entry) - local_committed for a committed record without an entry, otherwise the entry state, except that an expired entry with expiredOutcome unconfirmed shows transport_acknowledged - and render it only from the shared catalog keys sync.state.<value> with {transport} naming the relay display name or the peer's device directly, so the visual text equals the F14.S01.M02 spokenSync text.
     commands:
       - name: platform.outbox.enqueue
         capability: platform.outbox.enqueue
-        input: "{ destination, kind, payload, statementSchema?, recipientDid?, idempotencyKey?, expectedRevision?, resourceId?, aggregateKey } — vault-local command; OutboxPort.enqueue(tx, entry) inside the caller's storage.transaction(fn); acknowledger, privacyClass and replaySafety are read from the registries, never from input"
+        input: "{ destination, destinationDescriptor?, needsPeerAck?, kind, payload, statementSchema?, recipientDid?, idempotencyKey?, expectedRevision?, resourceId?, aggregateKey } — vault-local command; OutboxPort.enqueue(tx, entry) inside the caller's storage.transaction(fn), used by F11.S02.M01 routing for federation statements with the descriptor; acknowledger, privacyClass and replaySafety are read from the registries, never from input, and an input needsPeerAck must equal the registry value (V17)"
         output: "{ entryId, seq, cid, expiresAt }"
         errors: [PLATFORM_OUTBOX_NOT_DELIVERABLE, PLATFORM_OUTBOX_CLASS_FORBIDDEN, PAYLOAD_TOO_LARGE, PLATFORM_OUTBOX_FULL, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, UNAUTHENTICATED, VALIDATION_FAILED]
         emits: []
         idempotent: false
       - name: platform.outbox.deliver
         capability: platform.outbox.deliver
-        input: "{ entryId?, destination? } (omit to deliver everything eligible) — vault-local command that calls the relay transport for relay destinations, applies verified restore announcements and key changes first, and never sends direct destinations"
-        output: "{ sent, transportAcknowledged, peerAccepted, pending, conflict, failed, frozenRelays: relayId[] }"
+        input: "{ entryId?, destination? } (omit to deliver everything eligible) — vault-local command that calls the F11.S02.M01 FederationTransportPort for federation statements (with destinationDescriptor and needsPeerAck) and the relay transport for relay commands, applies verified restore announcements and key changes first, skips held entries and never sends direct destinations"
+        output: "{ sent, transportAcknowledged, completed, peerAccepted, pending, held, conflict, failed, frozenRelays: relayId[] }"
         errors: [UNAUTHENTICATED, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, DEPENDENCY_UNAVAILABLE]
         emits: []
         idempotent: true
@@ -236,7 +261,7 @@ processes:
         idempotent: true
       - name: platform.outbox.resolve
         capability: platform.outbox.resolve
-        input: "{ entryId, resolution: rebase|retry|reroute, newDestination? } — vault-local command; rebase asks the owning module to sign a new statement and enqueue it as a new entry; reroute creates a new entry for newDestination; both discard the old entry"
+        input: "{ entryId, resolution: rebase|retry|reroute, newDestination?, newDescriptor?, cause?: user|recipient_moved } — vault-local command; rebase asks the owning module to sign a new statement and enqueue it as a new entry; reroute creates a new entry for newDestination or, for a federation statement, newDescriptor (F11.S02.M01 calls it with cause recipient_moved for prepared, held or failed recipient_mailbox entries after a recipient moved); both discard the old entry"
         output: "{ entryId, state, newEntryId? }"
         errors: [NOT_FOUND, CONFLICT_STATE, EXPIRED, PLATFORM_OUTBOX_STORAGE_UNAVAILABLE, PLATFORM_OUTBOX_NOT_DELIVERABLE, VALIDATION_FAILED]
         emits: []
@@ -271,7 +296,7 @@ processes:
       - name: platform.outbox.count_by_state
         capability: platform.outbox.read
         input: "{ aggregateKey? }"
-        output: "{ prepared, transportAcknowledged, peerAccepted, conflict, failed, expiringWithin24h }"
+        output: "{ prepared, held, sending, transportAcknowledged, completed, peerAccepted, conflict, failed, expiredUnsent, expiredUnconfirmed, expiringWithin24h }"
         errors: [PLATFORM_OUTBOX_STORAGE_UNAVAILABLE]
       - name: platform.storage.get_status
         capability: platform.storage.read_status
@@ -283,7 +308,10 @@ processes:
       - {type: privacy.deletion.completed, effect: "delete every remaining OutboxEntry and outbox meta row of the deleted principal and confirm the DeletionPort plan is empty; the outbox holds no evidence, so nothing is pseudonymized"}
     note: >-
       Statements queued here are produced and signed by their owning modules, which register schema, signer role,
-      acknowledger and class in F11.S01.M01 (N2). This module issues no statement; it verifies relay receipts
+      audience and class in F11.S01.M01 (N2); acknowledger counterparty follows from audience participants. Federation
+      statements are routed by F11.S02.M01 and delivered through its FederationTransportPort, found in the kernel port
+      registry (no depends_on edge, since F11.S02.M01 depends on this module). syncStateOf(entry) -> SyncState is the
+      one mapping the chip and F14.S01.M02 spokenSync share. This module issues no statement; it verifies relay receipts
       (classrup.platform.relay_receipt/v1, signer role relay_identity), relay key history and restore announcements
       (classrup.platform.relay_restore/v1) defined by F15.S02.M01 and F15.S03.M03.
     errors:
@@ -305,6 +333,10 @@ processes:
       // online: mailbox put returns classrup.platform.relay_receipt/v1 { relayId, keyId: "relay:7k3m...#k2", destination, digest = sentDigest, epoch: 0, seq: 88121 }
       //   -> V14 passes -> transport_acknowledged ("Delivered to relay, peer has not confirmed")
       // seller's vault returns an acknowledgement over cid sha256-Xq1... signed by did:key:z6MkSeller -> record_peer_ack -> V09 -> peer_accepted
+      // seller accepts: comms.consent.sign produces classrup.comms.consent/v1 (statementKey consent.bazaar.offer.accept.v1), queued to the buyer's mailbox
+      //   { statementSchema: "classrup.comms.consent/v1", destinationDescriptor: { kind: "recipient_mailbox", recipientDid: "did:key:z6MkBuyer", mailboxId: "mbx_41c", relayId: "relay:7k3m..." } }
+      // public listing: F11.S02.M01 routes classrup.bazaar.listing/v1 with { kind: "selected_relay", relayId: "relay:7k3m..." }, needsPeerAck false
+      //   -> FederationTransportPort receipt outcome accepted -> V14 -> completed ("Delivered to relay Old Town Swap, no peer confirmation needed")
   authorization_capabilities:
     requirements:
       - Vault policy applies, meaning only the unlocked local principal may run any command or query here, and every entry is bound to the principal that created it.
@@ -343,7 +375,7 @@ processes:
       - "Outbox meta rows (seqCounter, storageMarker, lastExportAt, relayView): P1 local bookkeeping."
       - "relayReceipt.receivedAt: relay-clock evidence only, not a trusted timestamp."
     retention:
-      - "peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); transport_acknowledged entries with acknowledger none: kept with their receipt until createdAt + 30 d so a restore announcement can still return them, then deleted; discarded: deleted immediately (the replacement entry keeps supersedes); expired: payload erased at expiresAt, payload-free stub shown for 24 h then deleted. No payload outlives createdAt + 30 d (RET-SHORT) and no stub outlives createdAt + 30 d + 24 h."
+      - "peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); completed entries (acknowledger none): kept with their receipt until createdAt + 30 d so a restore announcement can still return them, then deleted; discarded: deleted immediately (the replacement entry keeps supersedes); expired: payload erased at expiresAt, payload-free stub shown for 24 h then deleted. No payload outlives createdAt + 30 d (RET-SHORT) and no stub outlives createdAt + 30 d + 24 h."
       - "Locking keeps entries so queued work is not lost; 'Erase vault' and F10.S01.M04 deletion (DeletionPort) remove all entries of the principal; the RetentionPurgePort runs the rules above at app start and every 60 s while the app is open."
     threats:
       - "T01 | Shared browser profile: another principal reads or sends a previous principal's queued statements | entries bound to principal DID; list and delivery filter by the unlocked principal; vault locked by default after 5 minutes idle"
@@ -365,7 +397,7 @@ processes:
       - Enqueue completes fast enough to feel instant on a Moto G-class device (CTR-OBS-001 OBS-5).
       - Delivery of 200 entries never blocks the main thread for more than 50 ms per task.
     metrics:
-      - "local counters in meta (never transmitted): outbox_delivery_total{outcome=transport_acknowledged|peer_accepted|retry|conflict|failed|relay_rejected|unsafe_replay|expired|restore_resend}"
+      - "local counters in meta (never transmitted): outbox_delivery_total{outcome=transport_acknowledged|completed|peer_accepted|retry|held|rerouted|conflict|failed|relay_rejected|unsafe_replay|expired_unsent|expired_unconfirmed|restore_resend}"
       - "local gauge outbox_pending_count and storage usageRatio, shown in the Storage status panel"
       - "local histogram outbox_age_ms (createdAt to terminal state), last 500 samples"
     logs:
@@ -379,7 +411,7 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Logic is tested with fake-indexeddb through the F15.S02.M03 IndexedDB adapter, and the Web Locks, reconnect and UI flows with a real browser (Playwright, offline emulation).
       - Conformance with CTR-IDM-001 IDM-1, IDM-4, IDM-5 and IDM-7 is tested with a stub relay that injects network failures, 429 and 409 responses, signed relay receipts, key rotations, restore announcements and peer acknowledgements.
-    fixtures: "fake-indexeddb 6.x with the F15.S02.M03 IndexedDB adapter; stub relay implementing Idempotency-Key replay (24 h), cid dedupe, classrup.platform.relay_receipt/v1 signing with keys k1 (retired), k2 (active), k3 (revoked), restore announcements and equivocating rotations; fixed clock 2026-11-04T10:00:00Z; principals P1 and P2 with Ed25519 keys; counterparties C1 and C2 (same cycle); statements offer/v1 (P2, acknowledger counterparty) and listing/v1 (P0, acknowledger destination_relay); relay commands index.put (deterministic_id) and profile.update (expected_revision)."
+    fixtures: "fake-indexeddb 6.x with the F15.S02.M03 IndexedDB adapter; stub relay implementing Idempotency-Key replay (24 h), cid dedupe, classrup.platform.relay_receipt/v1 signing with keys k1 (retired), k2 (active), k3 (revoked), restore announcements and equivocating rotations; fixed clock 2026-11-04T10:00:00Z; principals P1 and P2 with Ed25519 keys; counterparties C1 and C2 (same cycle); statements offer/v1 (P2, audience participants, acknowledger counterparty), comms.consent/v1 (P2, participants) and listing/v1 (P0, audience public, acknowledger none); relay commands index.put (deterministic_id) and profile.update (expected_revision); a FederationTransportPort stub registered in the kernel port registry that records descriptors and can return receipts, retryable errors and outcome hold with FEDERATION_RECIPIENT_UNRESOLVED; the en catalog with the ten sync.state.<value> keys and a spokenSync reference table."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R01 | enqueue a locally signed listing statement for relay:r1 and a relay command with expectedRevision 4 inside a domain transaction | entries stored in state prepared, attempts 0, seq 1 and 2, cid set, acknowledger and privacyClass from the registry, expiresAt = createdAt + 7 d"
       - "T02 | unit | 02.R01,01.R03 | enqueue violating V01, V02, V03, V04, V05 in turn | each returns its documented code, nothing is stored and the enclosing domain record rolls back"
@@ -407,17 +439,21 @@ processes:
       - "T24 | abuse | 02.R04,07.R01 | enqueue a plaintext P2 offer for a relay mailbox, an E2E envelope whose recipients differ from the seller's mailbox keys, a statement with a P3 address field, and a correct E2E envelope | PLATFORM_OUTBOX_NOT_DELIVERABLE, PLATFORM_OUTBOX_NOT_DELIVERABLE, PLATFORM_OUTBOX_CLASS_FORBIDDEN, nothing stored for those; the correct envelope is stored"
       - "T25 | integration | 02.R05,06.R01 | relay command without expectedRevision first attempted, failed, retried by the user at 25 h; same with expectedRevision; same with deterministic resourceId; registration of a relay command without replay safety | first moves to conflict with unsafe_replay and the may-already-have-been-applied prompt; second and third are resent once; registration refused with PLATFORM_OUTBOX_NOT_DELIVERABLE"
       - "T26 | integration | 03.R02 | direct:<did> entry exported as QR, then file; acknowledgement arrives while prepared; separately an ack arrives while a relay entry is sending | exportedAt set, state stays prepared, delivery loop never sends it; both acks give peer_accepted without a receipt"
-      - "T27 | integration | 03.R02,04.R05 | publication with acknowledger destination_relay: receipt, then relay-signed index acceptance; second publication refused by the relay with a signed reason | first ends peer_accepted; second ends failed with failureReason relay_rejected and the reason cid that F01.S01.M03 shows as relay_rejected"
+      - "T27 | integration | 03.R02,04.R05 | publication with audience public (acknowledger none): verified receipt with outcome accepted; second publication refused by the relay with a signed reason | first ends completed without any peer acknowledgement; second ends failed with failureReason relay_rejected and the reason cid that F01.S01.M03 shows as relay_rejected"
       - "T28 | integration | 03.R04,01.R03 | rebase a conflict entry and reroute a prepared entry to relay r2 | old entries discarded with reasons superseded and rerouted; new entries have new id and seq (new cid for the rebase, same cid for the reroute) and passed V04, V05, V10, V11"
       - "T29 | integration | 03.R05,06.R04 | stub relay restores a backup and publishes a signed restore announcement covering receipt seq above 88000; another announcement is signed by an unknown key | covered transport_acknowledged entries return to prepared and are resent once with the same cid or Idempotency-Key; the unsigned announcement is ignored with PLATFORM_OUTBOX_RECEIPT_INVALID"
       - "T30 | integration | 01.R04,02.R01 | domain command whose enqueue fails V03 and one where IndexedDB aborts the transaction | neither the domain record nor the entry exists; PLATFORM_OUTBOX_FULL and PLATFORM_OUTBOX_STORAGE_UNAVAILABLE returned; no separate outbox database exists"
       - "T31 | contract | 02.R02,02.R06,04.R04 | receipt for mailbox A presented for an entry to mailbox B; receipt with a wrong digest; receipt by retired key k1; receipt by k3 stored before and after its revocation; key history with two rotations from the same prevKeyId | wrong mailbox and wrong digest rejected with PLATFORM_OUTBOX_RECEIPT_INVALID; k1 verifies; k3 accepted only when stored before revokedAt; equivocation freezes the relay with PLATFORM_OUTBOX_RELAY_FROZEN"
       - "T32 | integration | 07.R04,04.R06 | export section, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for P1 | section platform.outbox lists counts only with field classes; deletion plan lists P1's entries and execution removes them; purge applies the retention rules; no P1 row remains"
       - "T33 | unit | 02.R01,04.R06 | LocalSettings.localLimits.maxOutboxEntries set to 50 and 50 entries queued | the 51st enqueue returns PLATFORM_OUTBOX_FULL and its domain record rolls back"
+      - "T34 | integration | 01.R05,02.R07,04.R08 | F11.S02.M01 routes a public listing to selected relay r1 and an offer to C1's recipient mailbox; then enqueue with needsPeerAck true for the listing, a recipient_mailbox descriptor for a public statement and a descriptor whose mailbox differs from destination | descriptors stored and destinations derived ('relay:r1...', 'relay:r1.../mailbox/mbx_1'); acknowledger none for the listing and counterparty for the offer; deliver passes the descriptor and needsPeerAck false or true to the FederationTransportPort stub; the three bad inputs are refused with VALIDATION_FAILED and roll back"
+      - "T35 | integration | 03.R06,03.R07 | listing receipt verifies; a restore announcement then covers it; an offer receipt verifies and no acknowledgement arrives for 30 d | listing completed, back to prepared, resent once with the same cid and completed again; offer expired with expiredOutcome unconfirmed, payload erased, chip still 'Delivered to relay Old Town Swap, peer has not confirmed', never failed"
+      - "T36 | integration | 03.R08 | FederationTransportPort returns outcome hold with FEDERATION_RECIPIENT_UNRESOLVED for an offer to moved recipient C1; 10 delivery ticks pass; F11.S02.M01 calls resolve reroute with cause recipient_moved and C1's new mailbox; separately a held entry reaches 7 d | attempts stay 0 and no request is sent while held; the held entry is discarded as rerouted and a new entry with the same payload and cid is sent to the new mailbox; the second expires with expiredOutcome unsent"
+      - "T37 | unit | 04.R09 | syncStateOf and the chip for local_committed and the nine states (relay and direct transports), and for an expired unconfirmed entry, in en and de | every text comes from sync.state.<value>, equals the spokenSync reference text, names 'relay Old Town Swap' or 'the peer's device directly', and the expired unconfirmed entry uses the transport_acknowledged key"
     acceptance:
-      - All tests T01-T33 pass in CI on Chromium, WebKit and Firefox profiles.
+      - All tests T01-T37 pass in CI on Chromium, WebKit and Firefox profiles.
       - A statement queued offline is delivered at most once per destination after reconnect, in creation order, regardless of tab crashes or duplicate deliveries inside the relay's idempotency window, and a late relay command is never blindly re-applied.
-      - A conflicting queued action is never applied without the user's explicit choice, relay receipts are never presented as peer acceptance, and an acknowledgement counts only for the exact cid it signs.
+      - A conflicting queued action is never applied without the user's explicit choice, relay receipts are never presented as peer acceptance, an acknowledgement counts only for the exact cid it signs, and a receipted statement whose peer never confirmed is never shown as failed or as not sent.
       - No P2 plaintext is ever queued for a relay and no P3/P4 data is ever queued.
       - Storage status shows persistence, quota and a warning after 30 days without export (7 days without persistence); no queued data remains after the vault is erased.
   import_export_backup_rollback:

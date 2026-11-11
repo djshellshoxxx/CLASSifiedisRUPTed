@@ -15,8 +15,9 @@ summary: >-
   it where creating identities is free (Douceur 2002).
 responsibilities:
   - Sign and send per-pair review tickets when a local opening event arrives for a context the principal takes part in, and receive and store the counterparties' tickets in a pending ReviewWindow.
-  - Open the ReviewWindow (30 days) when an outcome event carrying the N3 fields arrives, label it completed, disputed or cancelled, and quarantine it when a required field is missing rather than guessing.
-  - Create, sign, withdraw and receive reviews; accept a received review only if its signer key was active in the author's document at first sight and its proof carries the subject's ticket naming the author and the pair.
+  - Open the ReviewWindow (30 days) when an outcome event carrying the N3 fields arrives and the completion statements behind its completionCid verify in this vault, label it completed, disputed or cancelled, and quarantine it when a required field or statement is missing rather than guessing.
+  - Create, sign, withdraw and receive reviews; accept a received review only if its signer key is not revoked in the author's latest verified document at receipt (and quarantine it when a revocation learned later took effect before first sight) and its proof carries the subject's ticket naming the author and the pair.
+  - Sign and store reviews, review tickets and withdrawal tombstones only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02).
   - Own ReputationSummary per subject DID and recompute it deterministically with the documented weights and input selection; emit identity.reputation.recomputed and identity.review.posted.
   - Keep dampening honest and visible - show raw counts, outcome labels, displayed no-show claims and the number of sources next to the Bayesian average.
 non_responsibilities:
@@ -24,7 +25,7 @@ non_responsibilities:
   - Attestations such as 'met in person' (F07.S03.M02) and relay-side hosting of review copies (relay hosting policy only).
   - Identity proofing or deduplication of persons; no module can prove two DIDs are the same or different people.
   - "Future: commit-reveal double-blind reviews, vouching graphs, portable reputation proofs across relays, reputation-aware ranking."
-depends_on: [F07.S01.M01, F07.S02.M01, F07.S02.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+depends_on: [F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F09.S01.M01, F09.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
 user_stories:
   - As a buyer, after a completed deal I can rate the seller from 1 to 5, choose up to 3 tags and add a short comment; it is signed and sent to them and, if I choose, to my relays.
   - As a seller, I see the reviews I received and my summary, with an honest note about how many sources it comes from.
@@ -81,7 +82,7 @@ processes:
           - "authorRole: string — role in the context, 1..24 characters, for example buyer or giver"
           - "outcome: enum — completed | disputed | cancelled; shown as a label"
           - "disputeFlag: boolean — true when outcome is disputed (dispute closed unresolved, FLOW-08)"
-          - "disputeCaseCid?: string — own records and subject_only reviews only; cid of the F09.S02.M02 dispute case"
+          - "disputeCaseCid?: string — own records and subject_only reviews only; cid of the F09.S02.M02 dispute case, or for a cycle recovery the first of the F02.S03.M04 reviewUnlock evidenceCids"
           - "audience: enum — subject_only | public"
           - "rating: int — 1..5"
           - "tags?: array — at most 3 of as_described, on_time, communicative, safe_meetup, fair_price, careless"
@@ -91,9 +92,9 @@ processes:
           - "firstSeenAt: timestamp — local clock when this vault first saw the review"
           - "origin: enum — own | received"
           - "provenance?: object — { originRelay?, via, receivedAt, verifiedAt, notServedBy?: relay ids }"
-          - "cid: string — sha256-base64url of JCS(review statement without sig)"
-          - "signerKey: string — device public key of the author, active in the author's document at firstSeenAt"
-          - "sig: string — Ed25519 signature by signerKey over JCS bytes with prefix classrup-review:v1"
+          - "cid: string — per F11.S01.M03, sha256- plus base64url(SHA-256(JCS(envelope minus sig and cid))), computed by the StatementPublisherPort for own reviews"
+          - "signerKey: string — ext.signerKey, a device key of the author not revoked in the author's latest verified document at receipt"
+          - "sig: string — Ed25519 signature by signerKey over JCS(envelope minus sig) per F11.S01.M03; the envelope type classrup.identity.review/v1 separates it from other statement types"
           - "syncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (own reviews)"
           - "status: enum — pending_verification | posted | hidden | quarantined | withdrawn"
           - "quarantineReason?: enum — signature_invalid | signer_revoked | proof_incomplete | not_eligible | outside_window | schema_invalid | duplicate"
@@ -102,7 +103,7 @@ processes:
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
           - At most one review per (authorDid, pairRef).
-          - A posted review has a valid signature by a device key active in the author's document at firstSeenAt and a ticket signed by subjectDid that names authorDid as holder for pairRef.
+          - A posted review has a valid signature by a device key not revoked in the author's latest verified document at receipt, with no later-learned revocation effective at or before firstSeenAt, and a ticket signed by subjectDid that names authorDid as holder for pairRef.
           - A public review contains no contextId, completionCid, disputeCaseCid or openingEvidence.
           - Rating, tags, comment and outcome are immutable after creation.
       - name: ReputationSummary
@@ -125,7 +126,8 @@ processes:
           - "priorMean: number — 4.0 unless the vault has at least 50 reviews, then their mean limited to 3.5..4.5"
           - "completedByType: object — { deal, cycle, booking, rental } counts of distinct verified completed pair references"
           - "noShowClaims: int — comms.meetup.no_show claims recorded for the subject, displayed, weight 0 in rep-1"
-          - "noShowClaimRefs: array — at most 100 { meetupRefHash, reportedByDid, firstSeenAt } kept as recompute input"
+          - "contradictedNoShowClaims: int — claims among noShowClaims contradicted by the accused's check-in, displayed together with that check-in"
+          - "noShowClaimRefs: array — at most 100 { meetupRefHash, reportedByDid, reportStatementCid, firstSeenAt, contradicted: boolean, checkinStatementCid? } kept as recompute input"
           - "sourceCount: int — distinct transports or relays the reviews came from, lowered by notServedBy entries"
           - "dampeningNotice: enum — none | many_new_authors | linked_authors | island"
           - "algorithmVersion: string — for example rep-1"
@@ -150,13 +152,16 @@ processes:
           - "contextCid: string — cid of the bilateral opening statement (deal opening, cycle revision hash, booking or reservation confirmation)"
           - "completionCid?: string — set from the outcome event (N3)"
           - "outcome?: enum — completed | disputed | cancelled"
-          - "disputeCaseCid?: string — set from commerce.dispute.resolved"
+          - "disputeCaseCid?: string — set from the caseCid of commerce.dispute.resolved"
+          - "recoveryEvidence?: object — { recoveryCaseId, evidenceCids } from mutiny.recovery.resolved reviewUnlock"
           - "parties: array — [{ did, role }] from the event payload (N3)"
-          - "legs?: array — [{ giverDid, receiverDid }] for cycles"
+          - "legs?: array — [{ legId, giverId, receiverId }] for cycles, giverId and receiverId being DIDs as in mutiny.cycle.completed and mutiny.recovery.resolved"
+          - "completionProof?: object — { kind: deal_completion|cycle_receipts|booking_completion|rental_completion|return_attestation|dispute_case|recovery_evidence, statementCids: array, verifiedAt? } the statements this vault verified before opening"
+          - "closeReason?: enum — completed | deposit_unsettled; rentals only, from rentals.rental.closed"
           - "pairs: array — at most 66 eligible [authorDid, subjectDid] pairs where the local principal is the author"
           - "issuedTicketCids: array — tickets this principal signed for its counterparties"
           - "receivedTickets: array — { subjectDid, ticketCid, phase: opening|completion } tickets naming the principal as holder"
-          - "missingFields?: array — N3 fields absent from the outcome event"
+          - "missingFields?: array — N3 fields absent from the outcome event, or completion statements and receipts not yet verified in this vault"
           - "opensAt?: timestamp — local receipt time of the outcome event"
           - "closesAt?: timestamp — opensAt plus 30 days"
           - "status: enum — pending | open | quarantined | closed"
@@ -184,20 +189,21 @@ processes:
       - Reviews are validated for schema, signature, eligibility and proof before they count; failures are quarantined with a reason, not silently dropped.
       - Eligibility derives only from bilateral opening evidence - the subject's signed review ticket for the pair - and the pair list, never from the review text or the subject's later cooperation.
       - Limits on volume and size bound the work a hostile sender can cause.
-      - Signer keys of reviews, tickets and tombstones must be active in the signer's portable document at this vault's first-seen time, and outcome events must carry the N3 fields or the window is quarantined.
+      - Signer keys of reviews, tickets and tombstones must not be revoked in the signer's latest verified portable document at receipt (F07.S02.M01 key_status at receiver time), a revocation learned later quarantines those first seen at or after its clamped revokesEffectiveAt, and outcome events must carry the N3 fields and verifiable completion statements or the window is quarantined.
     rules:
       - "V01 | rating is an integer 1..5, tags at most 3 from the fixed list, comment at most 500 code points of plain text | VALIDATION_FAILED"
-      - "V02 | review signature verifies over JCS bytes with prefix classrup-review:v1 using a device key that the author's document listed as active at this vault's first-seen time (F07.S02.M01 key_status) | IDENTITY_REVIEW_SIGNATURE_INVALID"
-      - "V03 | proof carries a classrup.identity.review_ticket/v1 signed by subjectDid with an active device key over classrup-review-ticket:v1:<contextType>:<pairRef>:<subjectDid>:<authorDid>, naming authorDid as holder; a subject_only review may instead carry the subject's signed opening statement | IDENTITY_REVIEW_PROOF_INCOMPLETE"
+      - "V02 | the review envelope signature verifies per F11.S01.M03 with ext.signerKey a device key that the author's latest verified document does not mark revoked at receipt, whatever createdAt claims (F07.S02.M01 key_status at receiver time) | IDENTITY_REVIEW_SIGNATURE_INVALID"
+      - "V03 | proof carries a classrup.identity.review_ticket/v1 envelope authored by subjectDid and signed with a device key not revoked at receipt, whose payload { contextType, pairRef, issuer: subjectDid, holder: authorDid, phase, claimedAt } names authorDid as holder; a subject_only review may instead carry the subject's signed opening statement | IDENTITY_REVIEW_PROOF_INCOMPLETE"
       - "V04 | authorDid and subjectDid form an eligible pair - for own posts the pair is in the author's open window (all pairs for two-party contexts, leg-connected pairs for cycles); for received reviews the subject's ticket names this pair and pairRef | IDENTITY_REVIEW_NOT_ELIGIBLE"
       - "V05 | no review exists yet for (authorDid, pairRef) | IDENTITY_REVIEW_DUPLICATE"
       - "V06 | claimedPostedAt is within 30 days plus 2 days of skew after the ticket's claimed outcome time, and for own posts the local window is open | IDENTITY_REVIEW_WINDOW_CLOSED"
       - "V07 | the author has posted fewer than 30 reviews in the last 24 hours and the vault accepts fewer than 200 received reviews per hour from one source | RATE_LIMITED"
       - "V08 | authorDid differs from subjectDid | VALIDATION_FAILED"
       - "V09 | a public review contains no contextId, completionCid, disputeCaseCid or openingEvidence; those appear only in subject_only reviews | VALIDATION_FAILED"
-      - "V10 | outcome disputed sets disputeFlag and, in own and subject_only records, names the dispute case cid; outcome completed is shown as 'confirmed by both' only with a subject-signed completion ticket | VALIDATION_FAILED"
+      - "V10 | outcome disputed sets disputeFlag and, in own and subject_only records, names the dispute case cid or, for a cycle recovery, the reviewUnlock evidence cids; outcome completed is shown as 'confirmed by both' only with a subject-signed completion ticket | VALIDATION_FAILED"
       - "V11 | a public review is queued to a relay only after privacy.consent.check(federation_publish, relayId) is granted; tombstones are always sent | PRECONDITION_FAILED"
-      - "V12 | an outcome event carries contextId, completionCid (or caseCid for disputes), parties with roles, and legs for cycles; otherwise the window is quarantined with missingFields | VALIDATION_FAILED"
+      - "V12 | an outcome event carries contextId, completionCid (caseCid for disputes, reviewUnlock.evidenceCids for cycle recoveries), parties with roles, and legs for cycles; rentals.rental.closed also has reason completed or deposit_unsettled, completionKind and oneSided false; otherwise the window is quarantined with missingFields, and a one-sided rental closure opens no window | VALIDATION_FAILED"
+      - "V13 | the completion statements behind completionCid verify in this vault's record store (F11.S01.M02) - deal: a classrup.commerce.deal_completion/v1 by every party; booking: classrup.services.booking_completion/v1 by the client and by the provider; rental completionKind rental_completion: classrup.rentals.rental_completion/v1 by the owner and by the renter; completionKind return_attestation: completionCid is the renter's classrup.rentals.return_report/v1 and the owner's classrup.rentals.return_attestation/v1 is over it; cycle: each receiptCid is a verified classrup.mutiny.handover_attestation/v1 of kind received for one leg; otherwise the window is quarantined with the missing statements listed | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - A received review starts pending verification and ends posted or quarantined; a quarantined review may be re-verified when missing evidence arrives.
@@ -219,12 +225,12 @@ processes:
         initial: pending
         terminal: [closed]
         transitions:
-          - "pending -> open | outcome event with the N3 fields - completion, rentals.rental.closed with reason completed, commerce.dispute.resolved with resolution lapsed, or commerce.deal.cancelled | set outcome, compute pairs, opensAt = receipt time, closesAt = opensAt + 30 days; sign completion tickets after a completion"
+          - "pending -> open | outcome event with the N3 fields and a verified proof (V12, V13) - commerce.deal.completed, mutiny.cycle.completed, services.booking.completed, rentals.rental.closed with reason completed or deposit_unsettled and oneSided false, commerce.dispute.resolved with resolution lapsed, mutiny.recovery.resolved with reviewUnlock.unlocked, or commerce.deal.cancelled | set outcome (disputed with disputeFlag for lapsed disputes and for recovery outcomes unresolved or dispute_outcome, cancelled for recovery outcome agreed), compute pairs, opensAt = receipt time, closesAt = opensAt + 30 days; sign completion tickets after a completion"
           - "pending -> quarantined | outcome event lacks a required N3 field | record missingFields; no pair guessed"
-          - "quarantined -> open | the missing fields arrive in a re-delivered or corrected event | compute pairs and open as above"
+          - "quarantined -> open | the missing fields arrive in a re-delivered or corrected event, or federation.record.accepted delivers the missing completion statement or receipt | re-run V12 and V13, compute pairs and open as above"
           - "quarantined -> closed | 30 days in quarantine | nothing can be posted"
           - "pending -> closed | 180 days without an outcome event | tickets kept as evidence"
-          - "open -> open | commerce.dispute.resolved with resolution lapsed after completion | outcome becomes disputed and disputeFlag is set; closesAt unchanged"
+          - "open -> open | commerce.dispute.resolved with resolution lapsed, or mutiny.recovery.resolved with outcome unresolved or dispute_outcome, after the window opened | outcome becomes disputed and disputeFlag is set; closesAt unchanged"
           - "open -> closed | 30 days after opensAt | no further own reviews for this context"
     timeouts:
       - "ReviewWindow closes 30 days after the local outcome event (2 592 000 000 ms); a pending window without an outcome closes after 180 days; a quarantined window after 30 days."
@@ -232,10 +238,10 @@ processes:
       - "Recompute is coalesced per subject with a 5 s delay and a full recompute of all subjects runs daily at 03:00 local time while the app is open."
   commands_queries_events:
     requirements:
-      - post, withdraw and hide are vault commands; post produces the signed statement classrup.identity.review/v1, the opening and outcome handlers produce classrup.identity.review_ticket/v1, and withdraw produces classrup.federation.tombstone/v1, all signed by a device key; receive and review_ticket.receive are the vault intakes of someone else's statements.
-      - Opening, completion, dispute and cancellation events open or update review windows using their N3 fields (contextId, completionCid, parties with roles, legs for cycles); they never create reviews by themselves, and a missing field quarantines the window rather than guessing.
+      - post, withdraw and hide are vault commands; post produces the signed statement classrup.identity.review/v1, the opening and outcome handlers produce classrup.identity.review_ticket/v1, and withdraw produces classrup.federation.tombstone/v1, all signed by a device key and signed and stored only through the F11.S01.M01 StatementPublisherPort (publish for reviews and tickets, issueTombstone for withdrawals, implemented by F11.S01.M02); receive and review_ticket.receive are the vault intakes of someone else's statements.
+      - Opening, completion, dispute, cycle recovery and cancellation events open or update review windows using their N3 fields (contextId, completionCid, parties with roles, legs for cycles, reviewUnlock for cycle recoveries), and a completion opens a window only after the completion statements behind completionCid verify in this vault (V13); they never create reviews by themselves, and a missing field or statement quarantines the window rather than guessing.
       - Every command emits its events in the same local transaction as the state change.
-      - No-show claims from comms.meetup.no_show are recorded and displayed as claims with zero weight in rep-1 and never create reviews.
+      - No-show claims from comms.meetup.no_show are recorded and displayed as claims with zero weight in rep-1, a claim contradicted by the accused's check-in (comms.meetup.no_show_contradicted, or contradicted true on arrival) is displayed together with that check-in statement, and neither creates reviews.
     commands:
       - name: identity.review.post
         capability: identity.review.post
@@ -272,7 +278,7 @@ processes:
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: [identity.reputation.recomputed]
         idempotent: true
-    note: "Statements and signer roles (N2): classrup.identity.review/v1 - a device key of authorDid active in the author's document; classrup.identity.review_ticket/v1 { contextType, pairRef, issuer (the subject), holder (the author), phase: opening|completion, claimedAt } - a device key of the issuing party, signed over classrup-review-ticket:v1:<contextType>:<pairRef>:<issuer>:<holder> and sent end-to-end encrypted to the holder only; classrup.federation.tombstone/v1 (CTR-FED-001 FED-4) - a device key of authorDid. Tickets are signed automatically by the opening handlers for every eligible counterparty; honest limit - a modified client can withhold its ticket, in which case the counterparty can post only a subject_only review backed by the subject's signed opening statement, until the producers make the counterparty ticket part of their opening statements (requested from F09.S01.M01, F02.S03.M01, F03.S02.M01 and F05.S01.M01). Producers F02.S03.M04, F03.S02.M02 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F02 and F08; their events are consumed and checked against their published fixtures. A received review or ticket from a blocked DID is dropped silently (N7, F07.S02.M02 filterBlocked)."
+    note: "Statements and signer roles (N2), all signed and stored through the F11.S01.M01 StatementPublisherPort (envelope per F11.S01.M03, author the principal did:key, ext.signerKey the device key): classrup.identity.review/v1 - a device key of authorDid active in the author's document; classrup.identity.review_ticket/v1 { contextType, pairRef, issuer (the subject), holder (the author), phase: opening|completion, claimedAt } - a device key of the issuing party, audience participants, sent end-to-end encrypted to the holder only; classrup.federation.tombstone/v1 (CTR-FED-001 FED-4) - a device key of authorDid. Tickets are signed automatically by the opening handlers for every eligible counterparty; honest limit - a modified client can withhold its ticket, in which case the counterparty can post only a subject_only review backed by the subject's signed opening statement, until the producers make the counterparty ticket part of their opening statements (requested from F09.S01.M01, F02.S03.M01, F03.S02.M01 and F05.S01.M01). Producers F02.S03.M04, F03.S02.M02 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F02 and F08; their events are consumed and checked against their published fixtures. Completion proofs are read by cid and author from the vault record store of F11.S01.M02 (federation.record.get and list_by_author) - deal_completion/v1 (F09.S01.M01), booking_completion/v1 (F03.S02.M02), rental_completion/v1, return_report/v1 and return_attestation/v1 (F05.S02.M02) and handover_attestation/v1 (F02.S03.M04) - and verified with key status at receiver time. A received review or ticket from a blocked DID is dropped silently (N7, F07.S02.M02 filterBlocked)."
     queries:
       - name: identity.reputation.get
         capability: identity.reputation_summary.read
@@ -297,15 +303,18 @@ processes:
       - {type: mutiny.cycle.committed, effect: "create a pending window; sign opening tickets only for leg-connected counterparties; relies on revisionHash as contextCid, parties [{did, role}] and legs"}
       - {type: services.booking.confirmed, effect: "create a pending window for the client and provider pair; relies on contextCid and parties [{did, role}]"}
       - {type: rentals.reservation.confirmed, effect: "create a pending window for the owner and renter pair; relies on confirmationCid as contextCid and parties [{did, role}]"}
-      - {type: commerce.deal.completed, effect: "open the window with outcome completed and sign completion tickets; relies on contextId, completionCid and parties [{did, role}] (N3); a missing field quarantines the window"}
-      - {type: mutiny.cycle.completed, effect: "open the window with leg-connected pairs and outcome completed; relies on contextId, completionCid, parties [{did, role}] and legs (N3)"}
-      - {type: services.booking.completed, effect: "open the window for the client and provider pair with outcome completed; relies on contextId, completionCid and parties [{did, role}] (N3)"}
-      - {type: rentals.rental.closed, effect: "open the window for the owner and renter pair only when reason is completed; relies on contextId, completionCid and parties [{did, role}] (N3); other reasons are ignored"}
-      - {type: commerce.dispute.resolved, effect: "resolution lapsed (the FLOW-08 closed-unresolved outcome) - open or update the window with outcome disputed and disputeFlag true; the proof is the subject's opening ticket plus the dispute caseCid; relies on contextRef, caseCid and parties [{did, role}]"}
+      - {type: commerce.deal.completed, effect: "open the window with outcome completed and sign completion tickets once a classrup.commerce.deal_completion/v1 by every party over completionCid (the cid of the completion body { dealId, dealCid, outcome completed }) verifies; relies on contextId, completionCid and parties [{did, role}] (N3); a missing field or statement quarantines the window"}
+      - {type: mutiny.cycle.completed, effect: "open the window with leg-connected pairs and outcome completed; relies on contextId, completionCid, receiptCids, parties [{did, role}] and legs [{legId, giverId, receiverId}] (N3); the proof is completionCid with receiptCids, each a verified received handover attestation of one leg"}
+      - {type: services.booking.completed, effect: "open the window for the client and provider pair with outcome completed once both classrup.services.booking_completion/v1 statements, the client's and the provider's, over completionCid verify; relies on contextId (bookingId), contextType booking, completionCid and parties [{did, role: client|provider}] (N3)"}
+      - {type: rentals.rental.closed, effect: "open the window for the owner and renter pair with outcome completed only when reason is completed or deposit_unsettled, completionCid is present and oneSided is false, after the proof verifies - completionKind rental_completion: classrup.rentals.rental_completion/v1 by the owner and by the renter over completionCid; completionKind return_attestation: completionCid is the renter's classrup.rentals.return_report/v1 and the owner's classrup.rentals.return_attestation/v1 is over it; relies on contextId, completionCid, completionKind, oneSided and parties [{did, role: owner|renter}] (N3); one-sided closures and other reasons open no window"}
+      - {type: commerce.dispute.resolved, effect: "resolution lapsed (the FLOW-08 closed-unresolved outcome) - open or update the window with outcome disputed and disputeFlag true; the proof is the subject's opening ticket plus the dispute caseCid; relies on contextRef, caseCid and parties [{did, role}], which commerce.dispute.withdrawn also carries"}
+      - {type: mutiny.recovery.resolved, effect: "cycle recovery (FLOW-08) with reviewUnlock.unlocked - outcome unresolved or dispute_outcome opens or updates the cycle window with outcome disputed and disputeFlag true, outcome agreed opens it with outcome cancelled; pairs are leg-connected; relies on contextId (cycleId), parties [{did, role}], legs [{legId, giverId, receiverId}] and reviewUnlock { unlocked, disputeFlag, evidenceCids }, whose evidenceCids are the proof"}
       - {type: commerce.deal.cancelled, effect: "open the window with outcome cancelled when opening tickets were exchanged for the deal; relies on contextRef and parties [{did, role}]"}
-      - {type: comms.meetup.no_show, effect: "record a displayed no-show claim against targetDid (reportedByDid, meetup reference hash) with weight 0 in rep-1; never creates a review"}
+      - {type: comms.meetup.no_show, effect: "record a displayed no-show claim against targetDid (reportedByDid, meetup reference hash, reportStatementCid) with weight 0 in rep-1, marked contradicted when the event says so; never creates a review"}
+      - {type: comms.meetup.no_show_contradicted, effect: "mark the recorded claim with the same meetup reference hash, reportedByDid and reportStatementCid contradicted and keep checkinStatementCid, so the claim is displayed together with the contradicting check-in; weight stays 0 and no review is created"}
+      - {type: federation.record.accepted, effect: "when cid names a completion statement or receipt listed in missingFields of a quarantined window, re-run V12 and V13 and open the window if the proof now verifies"}
       - {type: federation.tombstone.applied, effect: "withdraw the targeted review only when the tombstone author equals Review.authorDid and its signer key was active; a tombstone signed by an origin relay only drops that relay from provenance and sourceCount, and the review stays valid"}
-      - {type: identity.portable_doc.published, effect: "origin received - re-verify quarantined reviews and tickets of that DID whose signer key was unknown; reviews first seen before a revocation stay valid"}
+      - {type: identity.portable_doc.published, effect: "origin received - re-verify quarantined reviews and tickets of that DID whose signer key was unknown; for each newly revoked key, reviews and tickets first seen at or after its clamped revokesEffectiveAt are quarantined with signer_revoked and earlier ones stay valid with a revoked-signer marker"}
       - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already pseudonymized reviews and windows kept as evidence and deleted the rest"}
     errors:
       - "IDENTITY_REVIEW_SIGNATURE_INVALID | 422 | no | review or review ticket signature does not verify with a device key active in the signer's document"
@@ -364,6 +373,8 @@ processes:
       - "T06 | Comment used for harassment or doxxing | plain text, 500 code points, local hide, report to the relay hosting policy, withdraw by author"
       - "T07 | Transaction graph reconstruction from public reviews (CTR-PRV-001 P2 cycle data) | per-pair blinded pairRef and per-pair tickets only; contextId, completionCid and dispute case cids only in subject_only reviews"
       - "T08 | Relay withdraws or hides a user's review in other vaults | only a tombstone authored by the review author withdraws it; relay tombstones and hosting actions affect only that relay's copy and provenance"
+      - "T09 | A modified local producer emits a completion event without real completion statements to unlock 'confirmed' reviews | the window opens only after the completion statements behind completionCid verify in the vault record store (V13); otherwise it stays quarantined"
+      - "T10 | A false no-show claim harms the accused | the claim has weight 0, is labelled a claim with its reporter, and a contradicting check-in is shown next to it"
     abuse_controls:
       - "Author limit 30 reviews per 24 hours; vault intake 200 reviews and 200 tickets per hour per transport source; per subject at most 500 reviews are selected by weight and author diversity (every review with weight at least 0.5 kept, at most 3 per author); limits run through the bus RateLimitPort (F12.S03.M03, N18)."
       - "Sybil dampening weights - w_age = clamp(authorAgeDays/30, 0.1, 1) from the earliest local sighting of the author's DID; w_exp = min(1, 0.25 + 0.25 times author's completed contexts known, at least 0.5); w_repeat = 1/n for the n-th review by one author about one subject in 180 days; w_recip = 0.5 when author and subject reviewed each other 2 or more times in 180 days; w_island = 0.25 for a review graph component of at most 6 DIDs with at least 6 edges and no edge to a DID outside the component, otherwise 1; w_outcome = 1.0 completed, 0.75 disputed, 0.5 cancelled; reviewers the viewer has a completed context with get a floor of 0.8; no-show claims weight 0."
@@ -387,7 +398,7 @@ processes:
       - Privacy and abuse tests simulate sybil rings and fabricated completions.
       - Abuse tests cover a withheld completion signature, burial by 500 sybil reviews, relay-signed tombstones and review unlinkability within one cycle.
       - Accessibility and UI copy tests check the review sheet and reputation card, including the dampening honesty text, outcome labels and the source note.
-    fixtures: "Principal P, counterparties Q and R, cycle of four DIDs A,B,C,D with legs A to B, B to C, C to D, D to A, opening and completion event fixtures published by F09.S01.M01, F02.S03.M04, F03.S02.M02, F05.S02.M02 and F09.S02.M02, signed tickets, sybil ring of 5 new DIDs, golden review set of 100 reviews with known weights, relay R1 tombstone signer, fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Principal P, counterparties Q and R, cycle of four DIDs A,B,C,D with legs A to B, B to C, C to D, D to A, opening, completion and recovery event fixtures published by F09.S01.M01, F02.S03.M04, F03.S02.M02, F05.S02.M02 and F09.S02.M02 with their completion statements (deal_completion, booking_completion, rental_completion, return_report, return_attestation, handover attestations) in a record store stub, signed tickets, sybil ring of 5 new DIDs, golden review set of 100 reviews with known weights, relay R1 tombstone signer, fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | integration | 01.R02,04.R02 | opening events then completion events for a deal, a cycle, a booking and a rental | pending windows with tickets exchanged for eligible pairs, then open windows with the documented pairs and closesAt = opensAt plus 30 days"
       - "T02 | unit | 01.R01,02.R01 | post a valid review | statement signed by an active device key, stored posted, immutable fields unchanged, outcome label set, cid computed"
@@ -410,14 +421,18 @@ processes:
       - "T19 | abuse | 09.R04,02.R02 | the subject withholds its completion ticket and the deal is cancelled | the author still posts with the opening ticket, outcome cancelled shown as a label, weight factor 0.5; without the opening ticket only subject_only is offered"
       - "T20 | abuse | 07.R05,09.R04 | 40 genuine reviews, then 500 sybil reviews about the same subject from new DIDs | every genuine review with weight at least 0.5 stays selected; at most 3 per sybil author; the average moves by less than 0.3"
       - "T21 | integration | 04.R02,02.R04 | commerce.deal.completed without completionCid, mutiny.cycle.completed without legs, later corrected events | windows quarantined with missingFields and no pairs; after the corrected events they open"
-      - "T22 | integration | 04.R02 | commerce.dispute.resolved with resolution lapsed for a completed deal | outcome becomes disputed, disputeFlag set and shown; a subject_only review names the dispute caseCid"
-      - "T23 | integration | 04.R04 | comms.meetup.no_show about Q delivered twice | one claim recorded, noShowClaims 1, bayesianAvg unchanged, the claim is shown with the reporter"
-      - "T24 | unit | 02.R04 | a review signed by a device key revoked before this vault first saw it, and one first seen before the revocation | the first quarantined with signer_revoked; the second stays posted"
+      - "T22 | integration | 04.R02 | commerce.dispute.resolved with resolution lapsed for a completed deal, carrying caseCid and parties | outcome becomes disputed, disputeFlag set and shown; a subject_only review names the dispute caseCid"
+      - "T23 | integration | 04.R04 | comms.meetup.no_show about Q delivered twice, then comms.meetup.no_show_contradicted for it, and a second no_show arriving with contradicted true | one claim recorded per report, noShowClaims 2, contradictedNoShowClaims 2, bayesianAvg unchanged; each claim is shown with the reporter and the contradicting check-in statement"
+      - "T24 | unit | 02.R04 | a review with a backdated createdAt signed by a device key the latest verified document already marks revoked; the revocation learned later for one review first seen after its clamped effective time and one first seen before it | the first quarantined with signer_revoked at receipt; on learning, the later-seen one quarantined and the earlier-seen one stays posted with a revoked-signer marker"
       - "T25 | integration | 07.R04 | F10 export, deletion and retention sweep with stub registries; public review to a relay without federation_publish consent | sections exported; reviews and windows pseudonymized, not deleted; the relay is skipped and shown"
       - "T26 | contract | 04.R02 | outcome and opening event fixtures of F09.S01.M01, F02.S03.M04, F03.S02.M02, F05.S02.M02 and F09.S02.M02 | each fixture parses and opens the documented window; a fixture missing an N3 field quarantines"
       - "T27 | e2e | 07.R03,09.R05 | UI copy check of the reputation card and review sheet in every locale bundle | dampening honesty text, 'based on N reviews from M sources seen by this device', outcome labels and the public-review privacy note are present"
+      - "T28 | integration | 04.R02,02.R04 | rentals.rental.closed with reason completed and completionKind rental_completion, with reason deposit_unsettled and completionKind return_attestation, with oneSided true, with reason not_returned, and with only the owner's rental_completion stored | windows open with outcome completed for the first two after both statements verify; no window for one-sided or not_returned closures; the last quarantined until federation.record.accepted delivers the renter's statement, then opens"
+      - "T29 | integration | 04.R02,02.R04 | commerce.deal.completed with deal_completion statements by both parties, services.booking.completed with only the provider's booking_completion stored, and a completion event whose completionCid matches no stored statement | the deal window opens; the booking window is quarantined listing the client's statement and opens when it arrives; the unmatched one stays quarantined and no 'confirmed by both' label is shown"
+      - "T30 | integration | 04.R02,01.R02 | mutiny.cycle.completed with receiptCids for all legs; mutiny.recovery.resolved with outcome unresolved, with dispute_outcome and with agreed for another cycle | the completed cycle opens leg-connected windows with the receipts as proof; unresolved and dispute_outcome give outcome disputed with disputeFlag and the evidenceCids recorded; agreed gives outcome cancelled; non-adjacent pairs get no window"
+      - "T31 | contract | 04.R01 | post, ticket signing and withdraw with a StatementPublisherPort spy | reviews and tickets go through StatementPublisherPort.publish and withdrawals through issueTombstone; cid and signatures follow F11.S01.M03; no other signing path"
     acceptance:
-      - All tests T01-T27 pass in CI.
+      - All tests T01-T31 pass in CI.
       - Golden dampening and selection vectors are stable, a sybil ring cannot raise the effective weight of its reviews above 15 percent of raw, and 500 sybil reviews cannot push genuine reviews out of the summary.
       - The UI always shows raw counts, outcome labels, source count and the dampening notice, and never claims verified identity of persons.
       - No relay action or relay-signed tombstone withdraws or hides a review in a vault, and two public reviews from one cycle share no identifier.

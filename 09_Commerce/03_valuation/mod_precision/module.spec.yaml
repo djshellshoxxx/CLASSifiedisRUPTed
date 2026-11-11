@@ -13,6 +13,7 @@ responsibilities:
   - Provide rational conversion using FX quote {num, den} and minor-unit exponents with HALF_EVEN rounding applied once at the end, plus FLOOR for fee caps.
   - Provide allocation by integer weights (largest remainder) and even split so that parts sum exactly to the total.
   - Provide neutral decimal-string parse and format for a given decimals count, never locale aware.
+  - Provide the pure per-currency cap maxAmount(currencyDef) = 10^(10 + decimals) minor units (10^10 major units), bounded by the 38-digit limit, used by every module that caps a Money amount.
 non_responsibilities:
   - Currency definitions, decimals and the allowed-currency list (F09.S03.M01 currency registry).
   - Obtaining, storing or expiring FX quotes (F09.S03.M02 rates).
@@ -38,6 +39,7 @@ processes:
       - "Money is { amount: decimal integer string of minor units with optional leading '-', currency: registry code } on the wire and a bigint plus currency code in memory (MNY-1)."
       - The absolute value of any amount is limited to 38 decimal digits (fits an unsigned 128-bit integer) so storage in SQLite text columns and cross-language vectors stay unambiguous.
       - The library owns no persistent entity; it defines the value types Money, Rational, RoundingMode and AllocationResult only.
+      - "maxAmount(currencyDef) returns Money { amount: 10^(10 + decimals), currency: code } - 10^10 major units in minor units - from the caller-supplied F09.S03.M01 CurrencyDef { code, decimals }, because this library has no registry access and F09.S03.M01 depends on it; when decimals exceeds 27 the result is the 38-digit bound 10^38 - 1, and amounts are capped with amount <= maxAmount."
     entities: []
     note: "Library module. It owns no entity; value types are Money, Rational {num, den as positive bigint}, RoundingMode (HALF_EVEN or FLOOR) and AllocationResult {parts: Money[], remainderIndexes: int[]}."
   validation_rules:
@@ -52,6 +54,7 @@ processes:
       - "V04 | decimal-string parse has at most the currency decimals fractional digits unless an explicit rounding mode is given | COMMERCE_MONEY_PRECISION_LOSS"
       - "V05 | result magnitude is at most 38 digits | COMMERCE_MONEY_OVERFLOW"
       - "V06 | rounding mode is HALF_EVEN, or FLOOR only for fee-cap operations | COMMERCE_MONEY_INVALID"
+      - "V07 | maxAmount receives a currencyDef whose code is a non-empty registry code and whose decimals is an integer from 0 to 36 (the F09.S03.M01 range) | COMMERCE_MONEY_INVALID"
   workflow_state_machine:
     requirements:
       - The library is stateless and pure; every function returns the same output for the same input with no clock, random or I/O access.
@@ -70,7 +73,9 @@ processes:
     note: >-
       Library module. Package surface (packages/commerce/src/valuation/precision): money(amount, currency), parseMinor(str),
       parseDecimal(str, decimals, mode?), formatDecimal(money, decimals), add, sub, neg, cmp, sum, convert(money, quote, dbExp, dqExp, mode?),
-      percentBps(money, bps, mode?), capFee(money, capMoney) (FLOOR), allocate(money, weights), splitEven(money, n).
+      percentBps(money, bps, mode?), capFee(money, capMoney) (FLOOR), allocate(money, weights), splitEven(money, n),
+      maxAmount(currencyDef: {code, decimals}) -> Result<Money> (10^(10 + decimals) minor units, at most 10^38 - 1; callers pass the
+      F09.S03.M01 CurrencyDef and cap with amount <= maxAmount).
       No relay commands, queries or events exist for this module.
     events_produced: []
     events_consumed: []
@@ -83,6 +88,8 @@ processes:
       convert({ amount: "12345", currency: "EUR" }, { base: "EUR", quote: "JPY", rate: { num: "16312", den: "100" } }, 2, 0)
       => { amount: "20137", currency: "JPY" }   // 12345 * 16312 * 10^0 / (100 * 10^2) = 20137.164, HALF_EVEN once
       allocate({ amount: "100", currency: "EUR" }, [1, 1, 1]) => parts ["34", "33", "33"]
+      maxAmount({ code: "EUR", decimals: 2 }) => { amount: "1000000000000", currency: "EUR" }   // 10^12 minor units = 10^10 EUR
+      maxAmount({ code: "ETH", decimals: 18 }) => { amount: "10000000000000000000000000000", currency: "ETH" }   // 10^28
   authorization_capabilities:
     requirements:
       - The library performs no authorization; callers authorize before using it.
@@ -148,6 +155,7 @@ processes:
       - "T13 | unit | 08.R01,08.R03,09.R01 | CI report generation | vector count and seeds are present in the CI artifact; traceability tool maps every requirement to a passing test"
       - "T14 | unit | 01.R01,09.R02 | lint rule run on a file using parseFloat | lint fails the build"
       - "T15 | unit | 10.R01,10.R02,10.R03 | publish vectors file and load it from a fresh checkout and the previous major | vectors load, versions are recorded and backward compatible"
+      - "T16 | property | 01.R04,02.R01 | maxAmount for decimals 0 to 36 including EUR 2, JPY 0, BTC 8, ETH 18, USDC 6 and a 36-decimal asset, plus decimals -1, 37 and 2.5 | 10^(10 + decimals) for decimals up to 27 and 10^38 - 1 above, always a canonical amount of at most 38 digits that parseMinor accepts; out-of-range decimals return COMMERCE_MONEY_INVALID; identical results in the shared JSON vectors"
     acceptance:
       - Every property test passes with at least 10 000 cases and the shared vectors give identical results in all implementations.
       - Allocation never produces parts that fail to sum to the total in any generated case.

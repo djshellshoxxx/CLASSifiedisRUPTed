@@ -57,13 +57,14 @@ Schema `classrup.identity.session/v1` · storage **relay+device** · privacy **P
 | uaLabel? | string — coarse label such as 'Firefox on Android', at most 80 code points |
 | ipPrefix? | string — /24 or /48 at start, relay_token only |
 | status | enum — active \| rotating \| revoked \| expired |
-| endReason? | enum — locked \| idle \| absolute \| user_revoked \| device_revoked \| recovery \| erased \| limit \| rotated \| passphrase_changed |
+| endReason? | enum — locked \| principal_switch \| idle \| absolute \| user_revoked \| device_revoked \| recovery \| erased \| limit \| rotated \| passphrase_changed |
+| requestSignerKeys? | array — relay_token only; at most 20 device public keys other than deviceKeyPublic whose signed requests (F11.S01.M03 request signatures) this relay accepted with this token, kept for host anti-shill linkage only; no IP, network or timing data |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC |
 | updatedAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
-- Raw tokens and the vault key are never stored; vault_unlock rows exist only in memory.
+- Raw tokens and the vault key are never stored; vault_unlock rows exist only in memory, and in the vault the raw relay access tokens exist only in memory while the vault is unlocked.
 - A relay_token session has tokenHash, relayId and absoluteExpiresAt; a vault_unlock session has none of them.
 - A DID has at most 20 active relay_token sessions per relay; the 21st start revokes the least recently used with reason limit.
 - A rotating session has graceUntil and successorSessionId, and its token is accepted only until graceUntil.
@@ -94,4 +95,4 @@ CREATE INDEX identity_session_key ON identity_session(tenant_id, did, device_key
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F15.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

@@ -34,7 +34,7 @@ See the module test table below (all processes).
 | TEST-PS-053-09.T10 | chaos | PS-053-06.R01, PS-053-06.R03 | crash during begin, queue failure, replay of begin | no partial state; old kit intact; one pending record; no key revoked |
 | TEST-PS-053-09.T11 | abuse | PS-053-04.R02, PS-053-07.R01, PS-053-07.R02, PS-053-09.R03 | inspect storage, events, logs, exports and network traces during create and begin | words and derived keys appear nowhere; no kit upload without the user's choice; relays receive only signed public or encrypted items |
 | TEST-PS-053-09.T12 | load | PS-053-08.R01, PS-053-08.R02, PS-053-08.R03 | scrypt derivation on emulated Moto G and laptop | <= 1.5 s and <= 600 ms; create_kit <= 3 s; counters hold no secrets |
-| TEST-PS-053-09.T13 | a11y | PS-053-09.R05 | create and recover screens and the notice banner with axe-core and keyboard only | zero serious or critical issues; paste of full phrase works |
+| TEST-PS-053-09.T13 | a11y | PS-053-09.R05 | create and recover screens and the notice banner with axe-core and keyboard only | zero serious or critical issues; paste of the full phrase fills all 24 fields; no field sets autocomplete off or blocks paste; file chooser and QR scan are labelled and keyboard reachable |
 | TEST-PS-053-09.T14 | unit | PS-053-09.R01 | traceability run over PS-053 | every requirement maps to a passing test |
 | TEST-PS-053-09.T15 | integration | PS-053-10.R01, PS-053-10.R02, PS-053-10.R03 | export, import to a fresh vault, vault erase, and a stronger-KDF kit version next to a v1 kit | kit metadata and blob round-trip; words never in export; erase leaves the printed kit valid; v1 kit still recovers |
 | TEST-PS-053-09.T16 | abuse | PS-053-09.R04, PS-053-03.R03 | modified client completes at t+0 and publishes a revoking document whose issuedAt is before the notice's notBefore claim | peers mark the DID contested and keep D1 and D2 active |
@@ -47,10 +47,12 @@ See the module test table below (all processes).
 | TEST-PS-053-09.T23 | unit | PS-053-01.R03, PS-053-07.R03 | create kit 2 after kit 1, then decrypt kit 1 | kit 1 superseded locally but still decrypts the root seed; the UI copy states that superseding does not revoke the old kit |
 | TEST-PS-053-09.T24 | integration | PS-053-07.R04 | F10 export section, deletion plan and retention sweep with stub registries; notice to a relay without federation_publish consent | section identity.recovery_kit exported; observed notices and disputes pseudonymized, not deleted; notice delivered only to own mailboxes or as a file |
 | TEST-PS-053-09.T25 | e2e | PS-053-09.R05, PS-053-07.R03 | UI copy check of create kit, recover and banner screens in every locale bundle | texts about kit possession, separate storage, superseded kits, receivers' 72 h wait and contested recoveries are present |
+| TEST-PS-053-09.T26 | integration | PS-053-04.R05 | create_kit on root device D1; device D2 receives the notice; a forged notice signed by revoked key D3; the same notice twice | D2 records kit_observed and emits identity.recovery.kit_created with actor.kind federated, provenance { signerKey, statementCid } and origin other_device; D1's event has origin this_device; D3's notice IDENTITY_RECOVERY_STATEMENT_INVALID; the duplicate is a no-op; no notice contains words, blob or verifier |
+| TEST-PS-053-09.T27 | e2e | PS-053-04.R06, PS-053-02.R03 | begin with the kit QR scanned from the printed sheet, with the kit file, with the whole phrase pasted into the first field, and with a QR core that has one changed byte | QR and file give the same kit core and recover; the pasted phrase fills all 24 fields; the changed core IDENTITY_KIT_CORRUPT |
 
 ## Acceptance criteria
 
-- All tests T01-T25 pass in CI.
+- All tests T01-T27 pass in CI.
 - The 24 words and derived keys never appear in storage, logs, events, exports or network traffic (privacy suite).
 - Honest clients and verifying vaults that saw the notice do not apply a recovery revocation before 72 hours after their own first sight of it, a dispute makes the recovery contested for every receiver without cancelling it, and the documentation states that an attacker with the words and file can sign as the account.
 - The UI and these criteria state that creating a new kit does not revoke an older kit.

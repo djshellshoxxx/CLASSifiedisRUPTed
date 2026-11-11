@@ -38,18 +38,20 @@ See the module test table below (all processes).
 | TEST-PS-056-09.T15 | integration | PS-056-04.R01 | unpublish a profile published to R1 while R1 is offline, then online | tombstone signed by P1 queued with per-relay sync state; identity.profile.updated with changedFields [withdrawn]; after delivery a viewer vault deletes the profile |
 | TEST-PS-056-09.T16 | abuse | PS-056-04.R04 | a tombstone for P's profile signed by origin relay R1, then one signed by P1 | after the relay tombstone the profile stays active with R1 removed from provenance; the author tombstone deletes it |
 | TEST-PS-056-09.T17 | integration | PS-056-04.R05, PS-056-03.R01 | moderation.action.applied and moderation.action.reverted delivered to a vault and to the relay runtime | the relay stops and then resumes serving its copy; the vault Profile is unchanged except an optional notServedBy provenance entry |
-| TEST-PS-056-09.T18 | abuse | PS-056-05.R01, PS-056-02.R03 | a profile signed by P2 first seen after P2's revocation, and one signed by P2 first seen before it | the first rejected with IDENTITY_PROFILE_INVALID; the second kept |
+| TEST-PS-056-09.T18 | abuse | PS-056-05.R01, PS-056-02.R03 | a profile signed by P2 with a backdated createdAt arriving after the revoking document; P2's revocation learned later for a profile first seen after its effective time and one first seen before it | the first rejected with IDENTITY_PROFILE_INVALID; on learning, the later-seen one quarantined and the earlier-seen one kept with a revoked-signer marker |
 | TEST-PS-056-09.T19 | abuse | PS-056-01.R01, PS-056-07.R04 | contacts and private field values with their F10 classes; scan logs, events below P3 and relay payloads | no private-visibility field anywhere; contacts fields only inside end-to-end encrypted statements |
 | TEST-PS-056-09.T20 | integration | PS-056-07.R04 | publish to R1 and R2 where only R1 has federation_publish consent; publish with no consented relay; F10 export, deletion and retention sweep | R1 queued and R2 skipped and shown; PRECONDITION_FAILED; sections exported; deletion tombstones the own profile |
 | TEST-PS-056-09.T21 | e2e | PS-056-07.R02, PS-056-09.R04 | UI copy check before first publication and on unpublish | no-recall notice shown before the first publication; unpublish explains that fetched copies cannot be recalled |
+| TEST-PS-056-09.T22 | integration | PS-056-04.R06 | F08.S01.M01 stub calls MailboxHintPort.set after register on R1, then after rotate with a new ID, with the profile published to R1 and mailboxes visibility public; then with mailboxes private | the own profile holds the ID, then the replacement; a new version with seq plus 1 carrying only the replacement is published to R1 after the consent check; identity.profile.updated lists mailboxes; private mailboxes never enter a statement |
+| TEST-PS-056-09.T23 | contract | PS-056-04.R01 | publish and unpublish with a StatementPublisherPort spy | publish calls StatementPublisherPort.publish and unpublish calls issueTombstone; seq and prev come from the port; no other signing path is used |
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T23 pass in CI.
 - The block list never appears in any statement, relay payload, log or event class below P3 (privacy suite).
 - A blocked DID's statements are dropped on intake in every module that consumes the block port.
 - No relay action or relay-signed tombstone changes or deletes a profile record inside a vault.
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

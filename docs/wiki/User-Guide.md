@@ -57,6 +57,6 @@ For the exact supported buttons and edge cases consult the [barter alpha workflo
 
 **How can I verify a failed import?** Check that you selected the original signed file, not an edited representation; invalid/tampered inputs are rejected. Recheck current proposal revision and signatures.
 
-**Does the alpha work without JavaScript?** No; vault access requires the browser module to initialize. Draft [PR #21](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/21) proposes disabling the vault-access forms until scripts initialize and showing an explicit no-script explanation. That correction is **unmerged and still undergoing CI**. Do not treat the older draft alpha's forms as validated for script-disabled operation.
+**Does the alpha work without JavaScript?** No; vault access requires the browser module to initialize. Draft [PR #21](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/21) proposes disabling the vault-access forms until scripts initialize and showing an explicit no-script explanation. Its corrected head `968d63d8aebac1055ffc911fcceec519f30c8855` **passed exact-head Alpha and six-platform CLI CI**, but remains **draft and unmerged**. It prevents pre-initialization form interaction with native hidden/inert controls and displays a no-script explanation. Do not assume the older unmerged alpha baseline includes those controls, or that the application functions without JavaScript.
 
 **Where are developer tests and contribution details?** See the [Developer Guide](Developer-Guide.md).

@@ -6,14 +6,14 @@
 
 ## Requirements
 
-- **PS-040-10.R01** The vault export contains deposit terms, payment context references and all signed statements with their cids so evidence survives vault loss.
+- **PS-040-10.R01** The vault export contains deposit terms, Deal context references, consents and all signed statements with their cids so evidence survives vault loss.
 - **PS-040-10.R02** Import verifies every signature and cid before restoring; unverifiable items stay read-only history.
 - **PS-040-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
 
-- **export:** Section rentals.deposits in classrup-export/v1; one line per DepositTerms with the original statement envelopes.
-- **import:** Terminal deposits import as history; proposed terms import as expired; funded, release_pending, forfeit_claimed and disputed deposits import as is and resume their clocks from the stored times.
+- **export:** Section rentals.deposits in classrup-export/v1 (ExportSectionPort); one line per DepositTerms with the original statement and consent envelopes.
+- **import:** Terminal deposits import as history; proposed terms import as expired; funded, release_pending, forfeit_claimed, escalation_due, escalated_pending, frozen and disputed deposits import as is and resume their clocks from the stored signed times.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7).
 - **migration rollback:** Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields.
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F05.S01.M01, F09.S01.M01, F09.S02.M02, F09.S03.M01, F08.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F05.S01.M01, F09.S01.M01, F09.S01.M03, F09.S02.M02, F09.S03.M01, F09.S03.M03, F08.S01.M01, F08.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

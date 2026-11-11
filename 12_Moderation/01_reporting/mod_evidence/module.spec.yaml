@@ -351,8 +351,9 @@ processes:
       - "T19 | abuse | 07.R01,07.R04 | report message M without disclosure and inspect the relay copy and moderator view | relay holds only targetCid, sender key, sender signature and reason; no plaintext; label 'metadata only' shown"
       - "T20 | integration | 07.R06 | ExportSectionPort run, then privacy.deletion.completed in the vault with keepEvidence true and false | export section moderation.evidence produced; evidence purged or pseudonymized as documented"
       - "T21 | integration | 04.R03 | privacy.legal_hold.placed then released on a relay | snapshots of the held author flagged after privacy.legal_hold.check; flag cleared on release; purge only afterwards"
+      - "T22 | abuse | 07.R01,07.R04 | F12 privacy suite after captures, ingests, disclosures and purges in a vault and on a relay: scan federation payloads, public projections, relay and vault logs, events and notification payloads | no snapshot body, media reference of a P2 item, accessorId or redacted value appears in any of them; events carry only ids, hashes and enums"
     acceptance:
-      - All tests T01–T21 pass in CI.
+      - All tests T01–T22 pass in CI.
       - Every read, verify, export and purge of a snapshot produces exactly one access row (property and abuse tests).
       - A modified snapshot body, media or author signature is always detected by verification, and no P2 plaintext reaches a relay without an approved disclosure.
   import_export_backup_rollback:

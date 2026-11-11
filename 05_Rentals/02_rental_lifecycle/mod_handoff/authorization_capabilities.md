@@ -25,8 +25,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-042-09.T08 | abuse | PS-042-05.R01, PS-042-05.R02, PS-042-05.R03 | attestation by a non-party key; author attests own report; photo with GPS to relay | quarantined or FORBIDDEN; relay rejects GPS photo; no state change |
+| TEST-PS-042-09.T08 | abuse | PS-042-05.R01, PS-042-05.R02, PS-042-05.R03, PS-042-07.R02 | inbound attestation by a non-party key; local attest by the author of the report; photo with GPS EXIF sent by a modified client | the attestation is quarantined with RENTALS_STATEMENT_INVALID; the local attest returns FORBIDDEN; the receiving vault quarantines the photo with RENTALS_PHOTO_METADATA and the relay payload is ciphertext only; no state change |
 
 ## Dependencies
 
-Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

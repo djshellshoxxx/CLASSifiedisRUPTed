@@ -6,8 +6,8 @@
 
 ## Requirements
 
-- **PS-043-01.R01** A RentalReturn stores reservation, due time, grace, return report content with photo hashes, effective return time, late minutes and fee, attestation mode, closure checks and state, with revision per CTR-ID-001.
-- **PS-043-01.R02** Returns are P2 in both vaults, retained under RET-EVIDENCE; the late fee is integer minor units per CTR-MNY-001 computed from terms copied into the reservation at confirmation.
+- **PS-043-01.R01** A RentalReturn stores reservation, parties, due time, grace, return report content with photo references, the transport receipt of the report, effective return time, late minutes and fee, attestation mode and cids, closure checks, completion signatures and state, with revision per CTR-ID-001.
+- **PS-043-01.R02** Returns are P2 in both vaults, retained under RET-EVIDENCE; the late fee is integer minor units per CTR-MNY-001 computed from the terms the renter signed in the rental request and copied into the reservation.
 - **PS-043-01.R03** Report revisions and attestations are immutable once signed and bind to the exact report cid.
 
 ## Specification
@@ -18,33 +18,53 @@ Schema `classrup.rentals.return/v1` · storage **device** · privacy **P2** · r
 
 | Field | Type and constraints |
 |---|---|
-| id | uuidv7 — primary key |
+| id | uuidv7 — primary key (returnId) |
 | tenantId | uuidv7 — vault tenant scope |
 | reservationId | uuidv7 — ref F05.S01.M01 RentalReservation; unique |
+| ownerId | actorId — owner key |
+| renterId | actorId — renter key |
 | handoffReportCid | string — cid of the attested handoff report to compare with |
 | dueAt | timestamp — reservation endsAt |
 | graceUntil | timestamp — dueAt plus graceMinutes (0..1440) |
 | checklist | ChecklistItem[] — 0..30 items as in the handoff, with the condition at return |
-| photos | PhotoRef[] — 0..20 items {attachmentId, sha256} |
+| photos | PhotoRef[] — 0..20 items {blobId: blob:sha256-<base64url>, attachmentId, heldLocally: boolean} |
 | notes? | string — ≤ 1000 code points, plain text |
 | reportCid? | string — cid of the signed return_report |
+| reportCreatedAt? | timestamp — signed createdAt of the return report |
+| transportAck? | object — {relayId, at} relay-signed transport receipt of the report for the owner's mailbox; the renter vault holds it from the mailbox put and the owner vault receives the same signed receipt with the fetched envelope |
 | returnedAtClaim? | timestamp — time stated by the signer of the report |
-| effectiveReturnedAt? | timestamp — claim if within 72 h before local receipt time, else receipt time |
-| attestedBy? | enum — both \| renter_only_silent_owner \| owner_only |
+| evidenceAt? | timestamp — earliest verifiable evidence: transportAck.at or the owner's signed receipt createdAt, whichever is earlier |
+| effectiveReturnedAt? | timestamp — returnedAtClaim when it lies within 72 h before evidenceAt and not after evidenceAt + 5 min, else evidenceAt |
+| silenceDeadline? | timestamp — max(reportCreatedAt, transportAck.at) + 72 h; unset while no transport receipt is held |
+| receiptCid? | string — cid of the owner_receipt (record_received or contest) |
+| receiptVerdict? | enum — received \| not_received \| differs |
+| attestationCid? | string — cid of the return_attestation, or of the owner_receipt for owner_only and owner_differs |
+| attestedAtClaim? | timestamp — signed createdAt of that owner statement |
+| returnConditionCid? | string — reportCid when attestedBy both, receiptCid otherwise |
+| attestedBy? | enum — both \| owner_only \| owner_differs |
+| conflictingReportCid? | string — the renter's report when the owner's receipt differs from it |
 | conditionVerdict? | enum — matches_handoff \| differences_noted |
-| lateMinutes | int — 0 or more, after grace |
+| lateMinutes | int — 0 or more, after grace, up to effectiveReturnedAt |
 | lateFee | Money — CTR-MNY-001; ≥ 0; ≤ cap; only decreasing by owner adjustment |
-| lateFeeContext? | string — payment context id registered with the Deal |
-| damageWindowEndsAt? | timestamp — attestation time plus 7 days |
-| closureChecks | object — {damageWindowOver, noOpenDamageClaim, depositSettled, ownerWaivedDamage} |
-| state | enum — due \| overdue \| awaiting_owner \| attested \| closed |
+| lateFeeDealId? | uuidv7 — F09 Deal for contextRef {rental_late_fee, returnId} |
+| damageWindowEndsAt? | timestamp — attestedAtClaim plus 7 days |
+| waiverCid? | string — cid of a verified return_waiver |
+| declarationCid? | string — cid of a not_returned_declaration |
+| closureChecks | object — {attested, damageWindowOver: now ≥ damageWindowEndsAt + 72 h, ownerWaivedDamage, noOpenDamageClaim, depositSettled: no deposit, deposit terminal, or deposit decision overdue} |
+| completionCid? | string — sha256 of JCS {reservationId, handoffReportCid, returnConditionCid, attestationCid} signed by both parties, or for the fallback the reportCid of a return attested by both |
+| completionKind? | enum — rental_completion (two rental_completion signatures over completionCid) \| return_attestation (the renter's signed return_report and the owner's return_attestation over that cid) |
+| completionSignatures | object[] — 0..2 {did, statementCid, closedAtClaim} |
+| closeReason? | enum — completed \| deposit_unsettled \| not_returned \| owner_silent \| unresolved |
+| frozenFrom? | enum — awaiting_owner \| renter_reported_unconfirmed \| attested |
+| state | enum — due \| overdue \| awaiting_owner \| renter_reported_unconfirmed \| contested \| attested \| completion_pending \| frozen \| closed |
 | syncState | map — per peer {state: prepared \| transport_acknowledged \| peer_accepted, at} |
 | revision | int — CTR-ID-001 ID-4 |
 
 **Invariants**
 - lateFee is at most the capAmount in the reservation lateFeeTerms and never negative.
-- state closed implies attested and all four closure checks true.
-- effectiveReturnedAt is never earlier than local receipt time minus 72 hours.
+- state closed with closeReason completed or deposit_unsettled implies attested and (damageWindowOver or ownerWaivedDamage) and noOpenDamageClaim and depositSettled; deposit_unsettled exactly when the deposit was neither absent nor terminal but its decision was overdue.
+- state closed with closeReason not_returned implies a not_returned damage claim ended with outcome accepted, counter_accepted, refund_claimed or dispute_unresolved or a verified not_returned_declaration is held; not_returned, owner_silent and unresolved closures carry no completionCid.
+- effectiveReturnedAt is never earlier than evidenceAt minus 72 hours, and rentals.return.attested is never derived from silence.
 
 ### Storage DDL
 
@@ -60,11 +80,11 @@ CREATE INDEX rentals_return_due ON rentals_return(state, grace_until);
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-043-09.T01 | unit | PS-043-01.R01, PS-043-01.R02, PS-043-01.R03, PS-043-02.R02 | returns at +30 min, +130 min after grace, +20 h and across a DST change | lateMinutes 0, 130 with fee 15.00, capped at 40.00; elapsed UTC time used |
-| TEST-PS-043-09.T06 | integration | PS-043-01.R03, PS-043-06.R02 | sweep runs twice across the grace boundary and across restart | one overdue event per vault; closure emitted once |
-| TEST-PS-043-09.T07 | integration | PS-043-04.R03, PS-043-01.R02 | closure with open damage claim, funded deposit, damage window, owner waiver | closed only when all four checks pass; waiver ends the window early |
-| TEST-PS-043-09.T15 | e2e | PS-043-01.R01, PS-043-02.R01 | mobile renter returns 2 h late, owner attests in second browser | late fee preview matches, both show attested; axe zero serious issues |
+| TEST-PS-043-09.T01 | unit | PS-043-01.R01, PS-043-01.R02, PS-043-02.R02 | returns at +30 min, +130 min after grace, +20 h and across a DST change | lateMinutes 0, 130 with fee 15.00, capped at 40.00; elapsed UTC time used |
+| TEST-PS-043-09.T07 | integration | PS-043-04.R03, PS-043-01.R02, PS-043-03.R07 | closure with an open damage claim, a funded deposit whose decision becomes overdue, the damage window, the window plus 72 h, an owner waiver, and a deposit that expired unfunded | closed only when attested and (window plus 72 h over or waived) and no open claim and the deposit absent, terminal or decision overdue; reason deposit_unsettled when overdue; not_funded counts as settled; the waiver only re-evaluates closure and emits nothing itself |
+| TEST-PS-043-09.T15 | e2e | PS-043-01.R01, PS-043-04.R01 | mobile renter returns 2 h late, owner attests in second browser | late fee preview matches, both show attested; axe zero serious issues |
+| TEST-PS-043-09.T21 | unit | PS-043-01.R03 | modify a signed report or attestation, then sign a new report | signed bytes cannot change; any change is a new cid; the attestation binds only the exact earlier cid |
 
 ## Dependencies
 
-Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

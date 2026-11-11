@@ -4,11 +4,11 @@
 
 - [x] [PS-040-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
 - [x] [PS-040-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
-- [x] [PS-040-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
-- [x] [PS-040-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped
+- [x] [PS-040-03 Workflow state machine](workflow_state_machine.md) — 7 requirements, tests mapped
+- [x] [PS-040-04 Commands, queries and events](commands_queries_events.md) — 5 requirements, tests mapped
 - [x] [PS-040-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-040-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped
-- [x] [PS-040-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 3 requirements, tests mapped
+- [x] [PS-040-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 5 requirements, tests mapped
 - [x] [PS-040-08 Observability and performance](observability_performance.md) — 3 requirements, tests mapped
 - [x] [PS-040-09 Contract and acceptance tests](contract_and_acceptance_tests.md) — 3 requirements, tests mapped
 - [x] [PS-040-10 Import, export, backup and rollback](import_export_backup_rollback.md) — 3 requirements, tests mapped

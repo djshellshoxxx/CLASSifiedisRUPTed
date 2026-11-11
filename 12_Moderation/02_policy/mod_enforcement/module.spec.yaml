@@ -13,7 +13,7 @@ summary: >-
   its own local events; users' local records are never touched.
 responsibilities:
   - Own ModerationCase and EnforcementAction records on the relay, with case assignment, notes and closure, and the subject's verified copy of their own actions in the vault.
-  - Open cases from relay-origin report filings, spam detections, shill suspicions, high risk levels and the operator command, and merge new reports about the same target into the open case.
+  - Open cases from received reports (moderation.report.received), spam detections, shill suspicions, high risk levels and the operator command, and merge new reports about the same target into the open case.
   - Apply relay-scoped actions (warn, remove from index, restrict feature, suspend relay access) with rule IDs, facts summary and expiry, never silently, several per case when needed.
   - Produce and deliver the relay-signed statement of reasons (classrup.moderation.reasons/v1) and optionally an expiring advisory (classrup.moderation.advisory/v1) others may subscribe to.
   - Revert actions on moderator decision, expiry or appeal overturn, replace them on an appeal outcome reduced, and publish the reversal and the advisory retraction.
@@ -147,7 +147,7 @@ processes:
       - "V05 | case is open or assigned and expectedRevision matches | CONFLICT_REVISION"
       - "V06 | decider is an assigned moderator whose principal (F07.S02.M01 key set and the relay moderator registry) is neither the case subject nor the reporter of any linked report (F12.S01.M01 moderation.report.ledger_for_case) | FORBIDDEN"
       - "V07 | remove_from_index targets content currently in this relay's index (F06.S01.M01) | NOT_FOUND"
-      - "V08 | restrictedCapabilities lists 1..20 capabilities of this relay and none of moderation.appeal.receive, moderation.appeal.withdraw, moderation.action.read_own, moderation.evidence.read_as_subject or any privacy export or deletion capability | MODERATION_CAPABILITY_PROTECTED"
+      - "V08 | restrictedCapabilities lists 1..20 capabilities of this relay and none of moderation.appeal.receive, moderation.appeal.withdraw, moderation.appeal.read_status_own, moderation.action.read_own, moderation.evidence.read_as_subject or any privacy export or deletion capability | MODERATION_CAPABILITY_PROTECTED"
       - "V09 | a replacement for an appeal outcome reduced has a kind no more severe and an expiry no later than the contested action | VALIDATION_FAILED"
       - "V10 | case.open has a did:key subjectKey, a targetType in the enum (account allowed), a reason of 10..500 code points and at most 20 snapshotIds | VALIDATION_FAILED"
       - "V11 | case.close with outcome actioned requires at least one action on the case; no_action, duplicate and content_removed_by_owner require none to be active | CONFLICT_STATE"
@@ -183,7 +183,7 @@ processes:
   commands_queries_events:
     requirements:
       - Every command declares whether it is a relay command or a vault-local intake and which signed statements it produces.
-      - Case opening is driven by consumed events (relay-origin report filings, spam detections, shill suspicions, high risk levels) and by the operator command moderation.case.open, and emits moderation.case.opened in the same transaction as the case.
+      - Case opening is driven by consumed events (received reports through moderation.report.received, spam detections, shill suspicions, high risk levels) and by the operator command moderation.case.open, and emits moderation.case.opened in the same transaction as the case.
       - Apply and revert emit action events in the same transaction, and the statement of reasons is stored before the event is dispatched.
       - A subject's vault verifies received classrup.moderation.reasons/v1 and reversal/v1 statements and derives local moderation.action.applied and moderation.action.reverted events (EVT-9, actor.kind federated) with the same target fields and without deciderKey.
       - Action events carry the target, restricted capabilities, rule references, expiry, statement content id and issue time that appeals, limits, signals, index and notification consumers need.
@@ -258,10 +258,10 @@ processes:
       - {type: moderation.action.applied, privacy: P2, payload: "{ actionId, caseId, origin: relay|vault, kind, subjectKey, targetType, targetId, targetRef?, restrictedCapabilities?, ruleRefs, expiresAt, reasonsStatementCid, reasonsIssuedAt, deciderKey? (relay origin only), replacesActionId? } — relay-local on the relay (EVT-8); the vault copy is derived from the verified statement (EVT-9, actor.kind federated) and never carries deciderKey"}
       - {type: moderation.action.reverted, privacy: P2, payload: "{ actionId, caseId, origin: relay|vault, kind, subjectKey, targetType, targetId, targetRef?, restrictedCapabilities?, reason: moderator_decision|appeal_overturned|appeal_reduced|error_correction|expired, replacedByActionId?, reversalStatementCid }"}
     events_consumed:
-      - {type: moderation.report.filed, effect: "relay origin only (origin relay, receiptId set): open a case for (targetType, targetId) with subjectKey and source report, or attach the receiptId and snapshot to the open case; vault-origin events are ignored"}
+      - {type: moderation.report.received, effect: "relay only: open a case for (targetType, targetId) with subjectKey and source report, or attach receiptId and snapshotId to the open case, and in the same transaction call F12.S01.M01 moderation.report.link_case { receiptId, caseRef } so the reporter is told for new and merged cases; dedupe on receiptId"}
       - {type: moderation.spam.detected, effect: "relay origin only: open or extend a case for subjectKey and the target with source spam_detection when score ≥ 80; lower scores only add signals (F12.S03.M02)"}
       - {type: auctions.shill.suspected, effect: "open or extend a case with source shill_suspicion and subjectKey = subjectId for the auction hosted on this relay"}
-      - {type: moderation.appeal.decided, effect: "overturned: revert the contested action with reason appeal_overturned; reduced: revert with appeal_reduced and apply the replacement described by reducedTo { kind, expiresInMs?, restrictedCapabilities? } with a new statement of reasons in the same transaction; upheld: no change"}
+      - {type: moderation.appeal.decided, effect: "relay origin only (vault-derived copies are ignored): overturned reverts the contested action with reason appeal_overturned; reduced reverts it with appeal_reduced and applies the replacement described by reducedTo { kind, expiresAt?, restrictedCapabilities? } with a new statement of reasons in the same transaction; upheld changes nothing; moot closures never produce this event"}
       - {type: governance.prohibited_rule.changed, effect: "mark open cases that cite the changed prohibited-goods rule for moderator review"}
       - {type: moderation.risk.elevated, effect: "relay only, level high for subjectType key: open or extend a case with source risk_review and targetType account for human review; the level is never a rule and never an action by itself"}
       - {type: privacy.deletion.completed, effect: "vault: delete received statements of reasons and reversals unless the request kept evidence, in which case subjectKey is replaced by the payload pseudonym; relay cases and actions are pseudonymized by the DeletionPort when the relay applies the signed deletion request and stay for RET-EVIDENCE"}
@@ -295,7 +295,7 @@ processes:
       - "Vault policy: a user's vault accepts a statement of reasons only when signed by the issuing relay key, shows it with the relay name, and never changes local records because of it."
       - A moderator cannot decide a case in which their own principal, by any linked key, is the subject or a reporter.
       - Conflict-of-interest checks compare principals, not single keys, using the F07.S02.M01 key set (device keys and seq chain), same-owner attestations and the relay moderator registry, in assignment, apply, close and revert.
-      - Keys suspended or restricted on this relay keep moderation.appeal.receive, moderation.appeal.withdraw, moderation.action.read_own and moderation.evidence.read_as_subject, in addition to the CAP-5 read, export and deletion rights.
+      - Keys suspended or restricted on this relay keep moderation.appeal.receive, moderation.appeal.withdraw, moderation.appeal.read_status_own, moderation.action.read_own and moderation.evidence.read_as_subject, in addition to the CAP-5 read, export and deletion rights.
     capabilities:
       - "moderation.case.open | operator | relay role operator; principal is not the subject"
       - "moderation.case.assign | moderator, operator | relay role; case in tenant; assignee principal is neither the subject nor a reporter of a linked report"
@@ -371,7 +371,7 @@ processes:
       - "T04 | integration | 03.R02 | mailbox acknowledges the statement after 2 h; mailbox down for 24 h; imminent-harm rule | active at acknowledgement; active at 24 h with the statement retrievable; imminent-harm effect first and notice follows"
       - "T05 | integration | 03.R03,04.R03 | operator revert and expiry of actions that published advisories | effect removed, reversal and advisory retraction signed, original statement unchanged, events in the same transaction as the state change"
       - "T06 | contract | 04.R01,04.R05,09.R02 | each command, statement and event | validate against registry schemas; action.applied and reverted carry target, restricted capabilities, ruleRefs, expiresAt, reasonsStatementCid and reasonsIssuedAt; statements verify with the relay key"
-      - "T07 | integration | 04.R02,06.R03 | relay-origin report.filed delivered twice; a vault-origin report.filed; spam.detected score 79 and 80; risk.elevated high | one case with source report; vault event ignored; 79 adds signals only, 80 opens or extends a case for subjectKey; risk case has source risk_review"
+      - "T07 | integration | 04.R02,06.R03 | moderation.report.received delivered twice; a second report on the same target; spam.detected score 79 and 80; risk.elevated high | one case with source report, both receipts attached and link_case called once per receipt; 79 adds signals only, 80 opens or extends a case for subjectKey; risk case has source risk_review and targetType account"
       - "T08 | abuse | 05.R01,05.R03 | moderator suspends permanently; moderator decides a case about self; non-moderator applies | MODERATION_ACTION_LIMIT, FORBIDDEN, FORBIDDEN"
       - "T09 | abuse | 05.R02,07.R03,09.R03 | statement signed by wrong key; unsigned statement; schema with shadow kind | vault ignores first two; shadow kind rejected by validation"
       - "T10 | integration | 06.R01,06.R02,09.R03 | same Idempotency-Key replayed; two moderators apply concurrently | original response replayed; one succeeds, other CONFLICT_REVISION"
@@ -387,7 +387,7 @@ processes:
       - "T20 | abuse | 07.R04 | apply remove_from_index with publishAdvisory on listing L that relay Y mirrors; capture every outbound statement | no classrup.federation.tombstone/v1 produced; relay Y keeps its copy; only reasons and advisory statements sent"
       - "T21 | integration | 04.R04 | subject vault receives reasons/v1, later reversal/v1, and one statement with a forged signature | local moderation.action.applied and reverted derived with actor.kind federated, same target fields, no deciderKey; forged statement quarantined"
       - "T22 | abuse | 05.R04 | M2 applies on a case whose subject lists M2's second key; M2 applies on a case with M2's report linked; assignment of M2 to either case | FORBIDDEN in each case through key-set linkage and the report ledger"
-      - "T23 | abuse | 05.R05,02.R04 | suspended key files an appeal and reads its own action and evidence; apply with restrictedCapabilities containing moderation.appeal.receive | appeal accepted and reads allowed; MODERATION_CAPABILITY_PROTECTED"
+      - "T23 | abuse | 05.R05,02.R04 | suspended key files an appeal, reads its appeal status, its own action and its evidence; apply with restrictedCapabilities containing moderation.appeal.receive or moderation.appeal.read_status_own | appeal accepted and reads allowed; MODERATION_CAPABILITY_PROTECTED for both"
       - "T24 | integration | 07.R05 | ExportSectionPort run and privacy.deletion.completed in the subject vault with keepEvidence true and false | section moderation.actions exported; statements deleted or pseudonymized"
       - "T25 | contract | 04.R05 | action.applied restrict_feature and action.reverted consumed by F12.S03.M04, F12.S03.M02 and F12.S01.M03 contract fixtures | each consumer resolves subject key, capabilities, expiry and reasonsIssuedAt from the payload without extra lookups"
     acceptance:

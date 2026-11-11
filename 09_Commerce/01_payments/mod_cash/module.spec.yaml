@@ -21,7 +21,7 @@ non_responsibilities:
   - Signing and verifying receipts (F09.S02.M01); this module only records that a bilateral receipt is required and prompts the parties.
   - Meetup scheduling and safe-spot suggestions (F08.S03); this module links to them by reference.
   - "Future: cash handover QR attestations and counterfeit-detection partners."
-depends_on: [F09.S01.M01, F09.S03.M03, F18.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+depends_on: [F09.S01.M01, F09.S02.M01, F09.S03.M03, F18.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
 user_stories:
   - As a seller accepting cash, I require the buyer to sign a receipt, and I see a reminder to count the cash together in a public place.
   - As a buyer paying cash for a high-value item, I see safety guidance and can still proceed if I choose.

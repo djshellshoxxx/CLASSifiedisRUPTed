@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-043-10.R01** The vault export contains returns, return reports, attestations, fee adjustments, waivers and photo references with hashes.
+- **PS-043-10.R01** The vault export contains returns, return reports, attestations, receipts, fee adjustments, waivers, declarations, completion signatures and photo references with MediaBlob ids.
 - **PS-043-10.R02** Import verifies every signature and cid before restoring and recomputes the late fee from the stored terms, flagging mismatches.
 - **PS-043-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
 
-- **export:** Section rentals.returns in classrup-export/v1; one line per RentalReturn with the signed envelopes of each statement.
-- **import:** Closed returns import as history; due, overdue, awaiting_owner and attested returns import as is and resume their clocks from stored times.
+- **export:** Section rentals.returns in classrup-export/v1 (ExportSectionPort); one line per RentalReturn with the signed envelopes of each statement and the relay transport receipts.
+- **import:** Closed returns import as history; due, overdue, awaiting_owner, renter_reported_unconfirmed, contested, attested, completion_pending and frozen returns import as is and resume their clocks from stored signed times.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7).
-- **migration rollback:** Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields.
+- **migration rollback:** Additive optional fields only in v1; records with attestedBy renter_only_silent_owner written by earlier builds are migrated to renter_reported_unconfirmed and their rentals.return.attested is not re-derived; rollback is safe because statements are immutable and older readers ignore unknown fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

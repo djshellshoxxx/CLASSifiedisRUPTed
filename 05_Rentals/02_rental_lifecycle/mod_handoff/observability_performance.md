@@ -7,8 +7,8 @@
 ## Requirements
 
 - **PS-042-08.R01** The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
-- **PS-042-08.R02** Signing and verification of a report with 20 photo hashes meet p95 ≤ 120 ms on a mid-range phone, excluding image re-encoding.
-- **PS-042-08.R03** Re-encoding and hashing a 5 MB photo runs in a worker and completes in ≤ 800 ms without blocking the UI longer than 50 ms per slice.
+- **PS-042-08.R02** Signing and verification of a report with 20 photo references meet p95 ≤ 120 ms on a mid-range phone, excluding image re-encoding.
+- **PS-042-08.R03** Re-encoding and hashing a 5 MiB photo runs in a worker and completes in ≤ 800 ms without blocking the UI longer than 50 ms per slice.
 
 ## Specification
 
@@ -21,7 +21,7 @@
 - info handoff.attested {handoffId, correlationId} in the local diagnostics log - no item names, notes or photo names.
 
 **Budgets**
-- sign or verify report p95 ≤ 120 ms; get p95 ≤ 50 ms; photo re-encode and hash 5 MB ≤ 800 ms in a worker.
+- sign or verify report p95 ≤ 120 ms; get p95 ≤ 50 ms; photo re-encode and hash 5 MiB ≤ 800 ms in a worker.
 - Sweep over 2 000 handoffs ≤ 100 ms in slices of at most 50 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -30,8 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-042-09.T12 | load | PS-042-08.R01, PS-042-08.R02, PS-042-08.R03 | 2 000 handoffs; 20-photo report; throttled mobile profile | sign/verify p95 ≤ 120 ms, 5 MB photo ≤ 800 ms in worker, no telemetry request |
+| TEST-PS-042-09.T12 | load | PS-042-08.R01, PS-042-08.R02, PS-042-08.R03 | 2 000 handoffs; 20-photo report; throttled mobile profile | sign/verify p95 ≤ 120 ms, 5 MiB photo ≤ 800 ms in worker, no telemetry request |
 
 ## Dependencies
 
-Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

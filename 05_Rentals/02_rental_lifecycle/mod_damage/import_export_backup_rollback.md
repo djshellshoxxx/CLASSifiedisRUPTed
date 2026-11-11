@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-041-10.R01** The vault export contains claims, responses, acceptances, withdrawals, comparison bases and evidence references with hashes.
+- **PS-041-10.R01** The vault export contains claims, responses, acceptances, withdrawals, escalation notices, comparison bases and evidence references with MediaBlob ids.
 - **PS-041-10.R02** Import verifies every signature and cid and recomputes the basis; mismatches are kept as read-only history with a warning.
 - **PS-041-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
 
-- **export:** Section rentals.damage in classrup-export/v1; one line per DamageClaim with the signed statement envelopes.
-- **import:** Terminal claims import as history; claimed and countered claims import as is and resume their deadlines from stored receipt times; escalated claims re-link to their dispute case on import.
+- **export:** Section rentals.damage in classrup-export/v1 (ExportSectionPort); one line per DamageClaim with the signed statement envelopes.
+- **import:** Terminal claims import as history; claimed, countered, escalation_due and frozen claims import as is and resume their deadlines from the signed values; escalated and escalated_pending claims re-link to their dispute case on import.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7).
-- **migration rollback:** Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields.
+- **migration rollback:** Additive optional fields only in v1; outcomes dispute_for_owner, dispute_for_renter and dispute_split written by earlier builds are read as dispute_unresolved; rollback is safe because statements are immutable and older readers ignore unknown fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F05.S02.M01, F05.S02.M02, F05.S01.M01, F05.S01.M02, F09.S01.M01, F09.S02.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F05.S02.M01, F05.S02.M02, F05.S01.M01, F05.S01.M02, F09.S01.M01, F09.S01.M03, F09.S02.M02, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

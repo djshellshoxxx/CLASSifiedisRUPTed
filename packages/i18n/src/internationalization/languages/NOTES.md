@@ -23,3 +23,7 @@ Headless library (ADR-0016: runs in the vault, no network, no telemetry). No com
 
 ## Open questions
 - Where the diagnostics sink lives (F10 settings / local diagnostics) and who purges after 30 days (RET-SHORT).
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 41 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

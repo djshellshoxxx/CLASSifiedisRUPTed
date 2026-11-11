@@ -25,3 +25,7 @@ Headless library: no commands, queries, events, capabilities or statement handle
 
 ## Open questions
 - Golden strings were generated with the local Node ICU (78.x); the Chromium/WebKit cross-check and an ICU pin are not part of this lane.
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 41 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

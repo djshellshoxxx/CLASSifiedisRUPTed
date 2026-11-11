@@ -2,9 +2,9 @@ id: F17.S01.M02
 scope: MVP
 summary: 'Property-based test suites using fast-check 4.10.2 for the invariants that example tests cannot exhaust: money arithmetic and allocation, cycle matching, state machine transitions, geohash coarsening and idempotency replay. Runs are seeded and reproducible, with at least 200 runs per property on pull requests and 10 000 runs in the nightly profile.'
 responsibilities:
-- Provide the property suites for money (CTR-MNY-001), matching (F02.S02), state machines (every machines[] block), geohash (F04), idempotency (CTR-IDM-001) and signed statements (RFC 8785 JCS canonicalization, Ed25519 verification, fork detection) under tests/property.
+- Provide the property suites for money (CTR-MNY-001, F09.S03.M03), matching (F02.S02.M03), state machines (every machines[] block), geohash and geoprivacy (F06.S02.M01), idempotency (CTR-IDM-001) and signed statements (RFC 8785 JCS canonicalization, Ed25519 verification, fork detection, N2 signer roles from the F11.S01.M01 statement registry, re-delivery by cid) under tests/property.
 - 'Define two run profiles: pr (numRuns 200, fixed base seed derived from the commit SHA, 60 s budget) and nightly (numRuns 10 000, fresh random seed, 20 min budget).'
-- Record the seed and the shrunk counterexample path on failure and persist it as a regression case that is replayed on every later run.
+- Record the seed and the shrunk counterexample on failure as a classrup-regression/v1 case. An open case (bug not yet fixed) lives only as a CI artifact and an issue; the case is merged into tests/property/regressions/ on main only in the pull request that fixes the bug, with status fixed, and is then replayed on every later run as an expected-pass example (the property must hold for the shrunk value).
 - Provide shared arbitraries (Money, ActorId, Listing, Edge graph, Command sequence) so suites stay consistent with production schemas.
 non_responsibilities:
 - Example-based unit tests (F17.S01.M01).
@@ -17,13 +17,28 @@ depends_on:
 - CTR-IDM-001
 - CTR-ID-001
 - CTR-OBS-001
+- CTR-PRV-001
+- CTR-FED-001
+- CTR-CAP-001
 - F17.S01.M01
+- F09.S03.M03
+- F02.S02.M03
+- F06.S02.M01
+- F15.S02.M02
+- F11.S01.M01
+- F11.S01.M03
+- F11.S02.M03
+- F16.S01.M01
 user_stories:
 - As a developer, I get the failing seed and a minimal counterexample when a property fails so I can replay it locally with one command.
 - As a maintainer, I see the nightly 10 000-run profile report any new counterexample as an issue within 24 h.
 - As a reviewer, I can see which invariant from which module spec a property encodes by its TEST ID.
 edge_cases:
-- A property finds a counterexample that is later fixed; the stored regression case keeps running as an example forever.
+- A property finds a counterexample that is later fixed; the case is merged with the fix as status fixed and keeps running as an expected-pass example forever.
+- Nightly finds a counterexample for a bug nobody has fixed yet; it is uploaded as an open regression artifact and filed as one issue, never committed to main, so unrelated pull requests stay green.
+- A fix pull request adds a regression file; CI runs the case on the parent commit, where it must fail, and on the pull request head, where it must pass.
+- A generated exact coordinate (L4) or a precision-7 cell reaches a public projection builder; the geoprivacy property fails unless the output is snap(input) at precision 5 or coarser.
+- A correctly signed acceptance arrives from a key that is not the listing author; the trust property expects quarantine with reason signer_role_invalid and no state change.
 - Arbitrary generation produces a degenerate value (empty graph, zero amount); generators include them deliberately and properties handle them or assert the documented error.
 - A property exceeds the per-property 10 s timeout on a pathological graph; the run fails with QUALITY_PROP_TIMEOUT and the seed instead of hanging CI.
 - The same seed on a different Node patch version yields different values; the seed is paired with the fast-check version in the report and the lockfile pins 4.10.2.
@@ -34,10 +49,11 @@ ux:
 processes:
   domain_schema:
     requirements:
-    - The module owns no persisted entities; regression counterexamples are stored as JSON files in tests/property/regressions/ versioned in git.
-    - Each regression file records property ID, fast-check version, seed, path and the shrunk value so it can be replayed as a plain example.
+    - The module owns no persisted entities; fixed regression cases are stored as JSON files in tests/property/regressions/ versioned in git, and open cases exist only as CI artifacts and issues.
+    - Each regression file (classrup-regression/v1) records property ID, generator ID and version, fast-check version, seed, path, the shrunk concrete value, status open or fixed, and the expectation that the property holds for that value, so it replays as a plain expected-pass example.
     - Arbitraries are derived from production schemas and never construct invalid Money (non-integer or negative amount strings) unless an invalid-input arbitrary is named explicitly.
     - 'Envelope properties are included: JCS canonical bytes are stable under object key reordering, any single-byte mutation of a signed envelope fails verification, and two conflicting signed promises on the same subject are detected as a fork regardless of delivery order and never resolved by last-writer-wins.'
+    - 'Statement-trust properties are included: for any generated (statement type, signer role) pair that the F11.S01.M01 statement registry (N2) does not allow, the receiving vault quarantines the statement with reason signer_role_invalid and its state is unchanged; re-delivering any accepted envelope any number of times and in any order yields the same vault state as one delivery (dedupe by cid, CTR-FED-001 FED-7).'
     entities: []
     note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
   validation_rules:
@@ -45,17 +61,18 @@ processes:
     - Every property declares numRuns and a seed; the pr profile requires numRuns of at least 200 and the nightly profile exactly 10 000.
     - A property title must be a valid TEST-PS-NNN-PP.Tnn ID matching CTR-TST-001, plus a short human name after a space.
     - Each property must finish within 10 s per property in the pr profile and 120 s in nightly, otherwise it fails with a timeout code.
+    - 'Geoprivacy properties generate raw L4 latitude and longitude and cells of precision 6 to 9, and assert for any input: every public, search or federated output is a cell of precision 5 or coarser equal to the F06.S02.M01 snap of the input (assertPublicCell, N8; CTR-PRV-001 PRV-1, PRV-3); every shown distance is one of the PRV-2 buckets computed cell to cell with a search radius of at least 5 km; and repeated queries from origins shifted inside one cell return identical results.'
     rules:
     - V01 | Every property sets numRuns of at least 200 (pr) or exactly 10 000 (nightly) and records its seed | QUALITY_PROP_RUNS_TOO_LOW
     - V02 | Property title starts with a valid TEST-PS-NNN-PP.Tnn ID | QUALITY_PROP_TITLE_INVALID
     - V03 | Property finishes within 10 s (pr) or 120 s (nightly) | QUALITY_PROP_TIMEOUT
     - V04 | Arbitraries for Money generate integer strings only unless named invalid_money | QUALITY_PROP_ARBITRARY_INVALID
-    - V05 | A regression file parses and replays to the recorded failure before the fix and passes after | QUALITY_PROP_REGRESSION_STALE
+    - V05 | A regression file parses as classrup-regression/v1, its property ID exists, its generator and fast-check versions are compatible and its stored concrete value decodes against the current arbitrary; the replayed example must then pass, and a failure is an ordinary counterexample (exit 1) | QUALITY_PROP_REGRESSION_STALE
   workflow_state_machine:
     requirements:
     - There is no entity lifecycle; a property run is a stateless process with exit code 0 or 1.
     - A failing property is shrunk by fast-check to a minimal counterexample and the run always exits 1, never retries with a different seed to turn red green.
-    - 'Regression cases are promoted automatically: a counterexample from nightly is written to tests/property/regressions/ in a pull request opened by the nightly workflow.'
+    - 'A nightly counterexample is never committed automatically: the nightly report job uploads it as a classrup-regression/v1 file with status open as an artifact and opens or updates one issue per counterexample hash (issues: write on that schedule-only job, F17.S03.M01). The fix pull request adds the file with status fixed, and CI in that pull request runs the case once on the parent commit, where it must fail, to prove the fail-before-fix condition.'
     machines: []
     note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
     timeouts: []
@@ -73,7 +90,7 @@ processes:
     - QUALITY_PROP_TITLE_INVALID | 422 | no | property title is not a valid TEST ID (exit 3)
     - QUALITY_PROP_TIMEOUT | 422 | no | property exceeded its time budget (exit 2)
     - QUALITY_PROP_ARBITRARY_INVALID | 422 | no | arbitrary produced a value outside its declared schema (exit 1)
-    - QUALITY_PROP_REGRESSION_STALE | 422 | no | stored regression case no longer replays as recorded (exit 1)
+    - QUALITY_PROP_REGRESSION_STALE | 422 | no | regression file unparsable, names an unknown property, or its generator or fast-check version is incompatible so it cannot be replayed (exit 3)
     note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
     example: |-
       $ pnpm test:property
@@ -91,27 +108,27 @@ processes:
   failure_recovery_idempotency:
     requirements:
     - Replaying the same seed and path reproduces the same counterexample deterministically on the pinned fast-check and Node 22 versions.
-    - Property runs are pure, write only to reports/ and tests/property/regressions/, and are safe to re-run any number of times.
+    - Property runs are pure, write only to reports/ (open regression cases go to reports/regressions/), never modify tests/property/regressions/, and are safe to re-run any number of times.
     - A property that mutates shared state in a test double resets it in a beforeEach hook; the lint rule forbids module-level mutable state in property files.
-    idempotency: Property runs have no side effects other than report files and optional regression pull requests, which are opened at most once per distinct counterexample hash.
+    idempotency: Property runs have no side effects other than report files and open regression artifacts; the nightly report job opens at most one issue per distinct counterexample hash and later runs update that issue.
     concurrency: Each property runs in its own worker with its own PRNG derived from the base seed plus property index so parallelism does not change results.
     retries: No automatic retries of failed properties. The nightly workflow reruns infrastructure failures once.
     offline: Fully offline; no network access is permitted and the unit guard from F17.S01.M01 applies.
     partial_failure: If one property crashes the worker, remaining properties still run and the final exit code is 1 with all failures listed; partial reports are written even on crash.
   privacy_retention_abuse:
     requirements:
-    - Generated data is synthetic; arbitraries produce coordinates only after geohash coarsening to L2 (precision 5) when asserting privacy invariants.
+    - Generated data is synthetic and comes only from the shared generators under tests/property/arbitraries; geoprivacy generators deliberately produce raw L4 coordinates and precision-6+ cells as P3 inputs, so a leak of finer precision into a public, search or federated output can fail a property.
     - Reports contain generated values only for failures, retained 30 days as CI artifacts, and never contain real data.
     - Seeds are not secret; they are printed in logs and PR comments.
     data:
     - 'Generated values: synthetic P0.'
     - 'Reports: seeds, paths and shrunk counterexamples.'
     retention:
-    - Reports 30 days as CI artifacts; regression JSON files are kept in git indefinitely.
+    - Reports and open regression artifacts 30 days as CI artifacts (the issue stays until closed); fixed regression JSON files are kept in git indefinitely.
     threats:
     - T01 | Counterexample contains real data pasted by a developer into a regression | regression files are generated by the tool only; lint rejects hand-edited files without the generator signature
     - T02 | Properties silently weakened by lowering numRuns | numRuns floor enforced by the runner (QUALITY_PROP_RUNS_TOO_LOW); the config file is code-owned
-    - 'T03 | Nightly job used to exfiltrate secrets | nightly workflow has permissions contents: read and no secrets; fork pull requests never run it'
+    - 'T03 | Nightly job used to exfiltrate secrets or push code | nightly property job has permissions contents: read and no secrets; only the separate schedule-triggered nightly-report job holds issues: write; no property job holds contents: write or pull-requests: write and no pull request is opened automatically; fork pull requests never run it'
     abuse_controls:
     - A property that always passes (no assertion) is caught by a self-test requiring at least one assertion call per property.
     - 'Seeds are never reused to hide a failure: reruns use the printed seed only for replay.'
@@ -134,36 +151,43 @@ processes:
     - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
     - Self-tests prove that planted bugs (an off-by-one money split, a broken cycle checker, a state machine with a missing guard) are found within 200 runs.
     - The nightly profile is verified by a dry-run with numRuns 10 000 on a small property set in CI weekly.
-    fixtures: Base seed derived from commit SHA (pr) or Date seconds (nightly) and printed; FakeClock 2026-11-04T10:00:00Z; Money currencies EUR, JPY, KWD to cover 0, 2 and 3 minor digits.
+    fixtures: Base seed derived from commit SHA (pr) or Date seconds (nightly) and printed; FakeClock 2026-11-04T10:00:00Z; Money currencies EUR, JPY, KWD to cover 0, 2 and 3 minor digits; geo generators for raw lat/lon and cells of precision 6 to 9; statement generators over every registry type and every signer role; one open and one fixed regression file.
     tests:
-    - T01 | unit | 01.R01,01.R02,06.R01 | write a counterexample, reload it and replay | the JSON round-trips and replay reproduces the same failure
+    - T01 | unit | 01.R01,01.R02,06.R01 | write a counterexample, reload it and replay before and after a planted fix | the JSON round-trips; replay on the unfixed code reproduces the failure; after the fix the same case passes as an expected-pass example
     - T02 | unit | 01.R03,02.R01 | run an invalid_money arbitrary and a normal one | normal arbitrary yields integer strings only; floats rejected with QUALITY_PROP_ARBITRARY_INVALID
     - T03 | unit | 02.R02 | load properties with valid and invalid titles | invalid titles rejected with QUALITY_PROP_TITLE_INVALID
     - T04 | unit | 02.R03,04.R03 | property sleeping 11 s in pr profile | aborted with QUALITY_PROP_TIMEOUT and exit 2
     - 'T05 | property | 03.R01,03.R02 | planted bug: money allocation drops 1 minor unit | found within 200 runs, shrunk, exit 1, no retry'
-    - T06 | integration | 03.R03,07.R01 | nightly workflow dry run with a planted counterexample | a regression file and pull request body are generated with the seed
+    - T06 | integration | 03.R03 | nightly workflow dry run with a planted counterexample | a classrup-regression/v1 file with status open is uploaded as an artifact and one issue is opened with the seed; nothing is committed and no pull request is opened
     - T07 | unit | 04.R01,04.R02 | invoke each documented script | reports/property.json and JUnit exist; exit codes as documented
     - T08 | unit | 05.R01,05.R02,05.R03 | authorize() property with generated actors and capabilities | default deny holds for all 200 runs; import of secrets or network clients rejected
-    - T09 | property | 06.R01,06.R02 | run the same seed twice | identical counterexamples and identical reports
+    - T09 | property | 06.R01 | run the same seed twice | identical counterexamples and identical reports
     - T10 | unit | 06.R03 | two properties mutate one test double | reset hook isolates them; lint rejects module-level mutable state
     - T11 | unit | 07.R02,07.R03 | inspect reports from a failing run | only minimal counterexample values present; seed printed
     - T12 | load | 08.R01,08.R02,08.R03 | run all property suites in pr profile on 2 vCPU | finishes in at most 60 s and slow properties are flagged
     - 'T13 | property | 09.R02 | planted bugs: off-by-one split, broken cycle checker, missing guard | each found in at most 200 runs'
-    - T14 | integration | 09.R01,09.R03 | weekly dry run of the nightly profile on a small set | 10 000 runs complete and the report lists numRuns 10000
-    - T15 | unit | 07.R03,10.R01 | confirm lint on hand-edited regression file | rejected without generator signature
+    - T14 | integration | 09.R03 | weekly dry run of the nightly profile on a small set | 10 000 runs complete and the report lists numRuns 10000
+    - T15 | unit | 10.R01 | confirm lint on hand-edited regression file | rejected without generator signature
     - T16 | integration | 10.R02,10.R03 | upgrade fast-check in a branch then revert | pinned 4.10.2 restored; regressions still replay
     - T17 | property | 01.R04 | generate envelopes, reorder keys, flip one byte, and deliver conflicting promises in random orders | canonical bytes identical; mutated envelope rejected; fork detected in every order and coordination frozen
+    - T18 | integration | 06.R02 | snapshot the working tree, run the pr profile with a failing property, and diff the file system | only reports/ changed (including reports/regressions/); tests/property/regressions/ and all other paths are byte-identical
+    - T19 | integration | 09.R01 | tools/trace run over this module's spec and the JUnit report of a full property run | every requirement of this module maps to a passing test title
+    - T20 | abuse | 07.R01 | self-test scans property files for values not produced by tests/property/arbitraries and runs a property seeded with a literal personal-looking value | literal values outside the shared generators are rejected; every generated value carries the synthetic generator tag
+    - 'T21 | property | 02.R04 | geoprivacy - raw L4 points and precision 6 to 9 cells through publish, search and federation export builders and distance bucketing from shifted origins; planted leaks (precision-6 cell in a projection, raw km distance, radius 2 km accepted) | correct code holds for 200 runs; each planted leak is found within 200 runs and shrunk'
+    - 'T22 | property | 01.R05 | statement trust - every type and signer-role pair outside the N2 registry, and random re-delivery sequences of accepted envelopes; planted bug (acceptance by a non-author applied) | outside pairs quarantined with signer_role_invalid and state unchanged; re-delivery state equals single delivery; planted bug found within 200 runs'
+    - T23 | integration | 01.R02,03.R03 | regression files - unparsable, unknown property ID, incompatible fast-check major, valid fixed case; a fix pull request run on the parent commit | first three fail with QUALITY_PROP_REGRESSION_STALE and exit 3; fixed case passes; parent-commit run of the new case fails as required
     acceptance:
     - Every property runs at least 200 times on pull requests and exactly 10 000 times nightly, with the seed printed on failure.
     - A planted off-by-one money split is detected within 200 runs and reported with a minimal counterexample.
     - Replaying a recorded seed and path reproduces the failure deterministically.
-    - Property suites exist for money, matching, state machines, geohash and idempotency.
+    - Property suites exist for money, matching, state machines, geohash and geoprivacy, idempotency, and signed statements with signer roles.
+    - No nightly counterexample is committed to main before its fix, and a fixed regression replays as an expected-pass example.
   import_export_backup_rollback:
     requirements:
-    - Regression files are the only exported artifact; they are plain JSON and portable.
+    - Regression files are the only exported artifact; they are plain JSON and portable, open ones as CI artifacts and fixed ones in git.
     - Upgrading fast-check changes value generation, so the version is pinned at 4.10.2 and upgrades require a full nightly run with zero new counterexamples before merge.
     - Rollback is a git revert; regression files remain valid because they store concrete values, not seeds alone.
     export: Reports in reports/property.json and tests/property/regressions/*.json; no user data.
     backup: Regression files are committed to git; CI artifacts retained 30 days.
     migration_rollback: Pinned fast-check 4.10.2; upgrade only after a zero-counterexample nightly; rollback by git revert.
-    import: Regression files are imported by replay at start of every run and must parse as schema classrup-regression/v1; unparsable files fail the run.
+    import: Fixed regression files are imported by replay at start of every run and must parse as schema classrup-regression/v1 with compatible generator and fast-check versions; unparsable or incompatible files fail the run with QUALITY_PROP_REGRESSION_STALE (exit 3).

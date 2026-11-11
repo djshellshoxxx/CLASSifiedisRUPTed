@@ -1,28 +1,33 @@
 id: F13.S02.M02
 scope: MVP
 summary: >-
-  The user's quiet-hours schedule: up to four weekly windows in an IANA time zone, evaluated by a pure,
-  DST-correct function isQuiet(at) and a companion nextQuietEnd(at). The schedule is authored and evaluated in
-  the user's vault; when a relay sends push or email for the user, the schedule (time zone and windows, nothing
-  else) is mirrored to that relay as a signed statement so it can defer sends at the right local time. This module
-  only defines and evaluates the schedule; deferral, release and the security bypass are enforced by
-  F13.S02.M01 (ADR-0014).
+  The user's quiet-hours schedule: up to four weekly windows in an IANA time zone, evaluated by a pure, DST-correct
+  function isQuiet(at) and a companion nextQuietEnd(at). The schedule is authored and evaluated in the user's vault.
+  When a relay sends push or email for the user, the schedule is mirrored to that relay as a signed statement
+  (classrup.notify.quiet_hours_mirror/v1) carrying only a rule-equivalent canonical time zone, the windows and the
+  tzdata version, so the relay can defer its hook sends at the right local time without learning more than a region
+  shared by many places. Each device of the principal is its own vault with its own mirror chain; the relay applies the
+  statement it accepted most recently across the user's active devices, rejects forks, and emits a relay-local event
+  when the effective schedule changes. This module only defines and evaluates the schedule; deferral, release and the
+  security bypass are enforced by F13.S02.M01 (ADR-0014).
 responsibilities:
-  - Own the QuietHoursSchedule record per user (time zone, up to 4 windows, enabled flag, sequence).
+  - Own the vault QuietHoursSchedule (classrup.notify.quiet_hours/v1) and the relay mirror copy (classrup.notify.quiet_hours_relay/v1) keyed by user and device chain.
   - Provide the pure evaluation functions isQuiet(at, schedule) and nextQuietEnd(at, schedule) with documented DST behavior, identical in the vault and on the relay.
-  - Validate schedules and the time zone against the pinned IANA tzdata of the build.
-  - Produce the signed mirror statement classrup.notify.quiet_hours/v1 and accept it at relays that hold the user's push or email consent.
-  - Emit notify.quiet_hours.changed on every change so deferred items can be re-evaluated.
+  - Validate schedules and the time zone against the pinned IANA tzdata of the build, and map each zone to its canonical rule-equivalent zone before mirroring.
+  - Produce the signed mirror statement in the vault, accept it at relays that hold a registered push or email consent of the user, and emit relay-local notify.quiet_hours.changed when the effective mirror changes.
+  - Emit vault-local notify.quiet_hours.changed on every save so deferred items can be re-evaluated.
 non_responsibilities:
   - Deferring, queueing and releasing notifications and the urgent security bypass (F13.S02.M01).
   - Channel consent (F13.S02.M03) and category preferences (F13.S02.M04).
   - Detecting the user's time zone from location; the user or the browser time zone setting chooses it and no location is read.
+  - Synchronizing the schedule between the user's devices; each device keeps its own schedule and the UI shows which device's schedule a relay applies.
+  - Blocks (N7) do not apply because the schedule involves only the user and the selected relays.
   - "Future: per-category quiet windows, one-off do-not-disturb for N hours, calendar-aware focus modes."
-depends_on: [F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+depends_on: [F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
 user_stories:
   - As a member, I can set quiet hours from 22:00 to 07:00 on every day in my own time zone.
   - As a member who travels, I can change my time zone and see the schedule apply from that moment.
-  - As a member, I see when my quiet hours currently end.
+  - As a member, I see when my quiet hours currently end and which device's schedule each relay uses.
   - As a member, I am told that security alerts still arrive during quiet hours.
 edge_cases:
   - Window 22:00 to 07:00 on the night clocks go forward in America/New_York (2026-03-08); the window covers 8 real hours and the missing local hour does not shift the end.
@@ -30,14 +35,18 @@ edge_cases:
   - A window starts at 02:30 on the spring-forward day in a zone where 02:30 does not exist; the start moves forward by the gap to 03:30 and an empty window is treated as no quiet period for that day.
   - Time zone with a 30-minute DST change (Australia/Lord_Howe); evaluation uses real offsets and the window end is correct on 2026-04-05 and 2026-10-04.
   - Zone with no DST (Asia/Kolkata); the evaluation never shifts.
+  - The user picks Europe/Busingen; the mirror carries Europe/Zurich, which has identical rules for 2020 to 2100, and the relay's isQuiet results equal the vault's.
+  - Devices A and B of the same user save different schedules; the relay applies the one it accepted last, device A's settings show The relay uses the schedule saved on device B, and A can re-send its own.
+  - A vault restored from an old backup signs a mirror with a seq already used on that device chain and a different cid; the relay refuses with CONFLICT_STATE naming the current cid and the vault shows the conflict instead of peer accepted.
   - tzdata update changes a zone's rules; the pinned build data is used until the next release and the version is recorded in diagnostics.
   - Window equals 24 hours or has equal start and end; refused as invalid because it would silence everything and the user is directed to disable push instead.
 ux:
   screens:
     - "Quiet hours settings: toggle, time zone picker (searchable IANA list defaulting to the browser time zone), up to 4 windows each with days of week checkboxes, start time and end time, summary line such as Quiet until 07:00 local time."
     - "Security note: Security alerts are delivered during quiet hours."
+    - "Relay note: The relay learns the time zone region shown here (for example Europe/Zurich, shared by many places) and your quiet windows; per relay, whether it uses this device's schedule or another device's."
     - "Preview: next 7 days with quiet intervals drawn as text list."
-  states: [loading, disabled, enabled, currently-quiet, saving, saved-local, relay-pending, relay-confirmed, invalid, offline]
+  states: [loading, disabled, enabled, currently-quiet, saving, saved-local, relay-pending, relay-confirmed, relay-uses-other-device, conflict, invalid, offline]
   a11y:
     - Time inputs are native time controls with visible labels; days of week are a checkbox group with a legend.
     - Currently quiet status is conveyed by text and announced politely on change.
@@ -45,70 +54,102 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A QuietHoursSchedule stores the user DID, an IANA time zone, an enabled flag, up to 4 windows each with days of week 1 to 7 and local start and end as HH:mm, the tzdata version used, and a mirror sequence, with tenant and revision per CTR-ID-001.
-      - The schedule is P2, held in the vault and mirrored to relays only as time zone plus windows plus sequence; it contains no location and no content, but a time zone reveals a coarse region, which the UI states.
+      - A QuietHoursSchedule stores the user DID, an IANA time zone, an enabled flag, up to 4 windows each with days of week 1 to 7 and local start and end as HH:mm, the tzdata version used, and this device's mirror chain position (seq and head cid), with tenant and revision per CTR-ID-001.
+      - The schedule is P2, held in the vault and mirrored to relays only as a rule-equivalent canonical time zone plus windows; it contains no location and no content, the mirrored zone is a region shared by many places covering at least an L1 cell, and the UI states that the relay learns that region and the sleep rhythm.
       - Evaluation is a pure function of the instant, the schedule and the pinned tzdata; local wall-clock windows are mapped to instants with the rules in the invariants.
+      - Before mirroring, the time zone is replaced by the canonical zone of its rule-equivalence class in the pinned tzdata (identical UTC offsets and transitions from 2020 to 2100, for example Europe/Busingen to Europe/Zurich and America/Indiana/Tell_City to America/Chicago), chosen so that the class covers at least an L1 cell, and isQuiet results are identical for the original and the canonical zone.
+      - The mirror statement classrup.notify.quiet_hours_mirror/v1 has its own schema distinct from the vault record and from the relay copy classrup.notify.quiet_hours_relay/v1; it is a CTR-FED-001 envelope signed by a device key, addressed to one relay, and chained per (author, signing device key, stream notify.quiet_hours) with seq and prev.
     entities:
       - name: QuietHoursSchedule
         schema: classrup.notify.quiet_hours/v1
-        storage: relay+device
+        storage: device
         privacy: P2
         retention: RET-STANDARD
         fields:
           - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — tenant scope"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
           - "userDid: did:key — owner"
           - "enabled: boolean — false means never quiet"
           - "timeZone: string — IANA identifier present in the pinned tzdata, for example Europe/Berlin"
           - "windows: array — 0..4 items { days: int[1..7] (ISO, 1 Monday), start: HH:mm, end: HH:mm }"
           - "tzdataVersion: string — IANA tzdata release used when the schedule was saved, for example 2026b"
-          - "mirrorSeq: int — sequence of the last mirror statement sent"
+          - "mirrorSeq: int — seq of this device's last mirror statement (chain per signing device key)"
+          - "mirrorHeadCid?: string — cid of this device's last mirror statement"
+          - "mirrorStates: array — per relay { relayId, cid, syncState: prepared|transport_acknowledged|peer_accepted|stale|conflict, effectiveDeviceKeyId? }"
           - "updatedAtClaim: timestamp — user clock, a claim"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
           - A window whose end is not later than its start crosses midnight and belongs to the day of its start; its length is at least 15 minutes and at most 12 hours.
           - A local start time that does not exist (spring-forward gap) moves forward by the gap length; a local time that occurs twice is interpreted as the earlier occurrence for a start and the later occurrence for an end, so the whole repeated hour lies inside a window that spans it.
           - Windows of one schedule must not overlap in real time on any day and the union of windows must be shorter than 24 hours per day.
+      - name: QuietHoursSchedule
+        schema: classrup.notify.quiet_hours_relay/v1
+        storage: relay
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay tenant scope"
+          - "userDid: did:key — statement author"
+          - "deviceKeyId: string — signing device key of this chain"
+          - "headSeq: int — seq of the applied head statement of this chain"
+          - "headCid: string — cid of the applied head statement"
+          - "enabled: boolean — as stated"
+          - "timeZone: string — canonical zone from the pinned equivalence table"
+          - "windows: array — 0..4 windows as stated"
+          - "tzdataVersion: string — as stated"
+          - "acceptedAt: timestamp — relay clock when this head was accepted; the most recent across the user's active device chains is effective"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one row per (userDid, deviceKeyId); headSeq only increases and headCid is the cid of that seq.
+          - Rows exist only while the user holds a granted push or email consent registered at this relay.
+          - Rows of a device key revoked per F16.S02.M02 are never effective.
   validation_rules:
     requirements:
       - Schedules are validated for time zone, window shapes, overlap and size before they are stored or mirrored.
       - Evaluation inputs are validated so isQuiet is total and never throws for any instant in the supported range 2020 to 2100.
       - Every violation maps to one stable error code.
+      - Relay mirror statements are validated for signer key status, audience relay, canonical zone, chain position, forks and the registered channel consent, and a stale or forked statement is never applied.
     rules:
       - "V01 | timeZone is present in the pinned IANA tzdata list | NOTIFY_QUIET_TZ_UNKNOWN"
       - "V02 | windows has at most 4 entries, days are unique values 1 to 7, start and end match HH:mm 00:00 to 23:59 | VALIDATION_FAILED"
       - "V03 | each window length is between 15 minutes and 12 hours and start is not equal to end | NOTIFY_QUIET_WINDOW_INVALID"
       - "V04 | windows do not overlap and the daily union is less than 24 hours | NOTIFY_QUIET_WINDOW_INVALID"
-      - "V05 | mirror statement signature verifies, seq is greater than the stored seq and the relay holds a granted channel consent for the user | PRECONDITION_FAILED"
-      - "V06 | a user changes the schedule at most 30 times per day | RATE_LIMITED"
-      - "V07 | expectedRevision equals the stored revision | CONFLICT_REVISION"
+      - "V05 | the mirror statement signature verifies with a device key of userDid active per F16.S02.M02 at receipt time, payload relayId equals this relay's canonical relayId, and a granted push or email consent of the user is registered here | PRECONDITION_FAILED"
+      - "V06 | RateLimitPort.consume (F12.S03.M03) allows at most 30 schedule changes per day per vault and 30 mirror calls per hour per user at a relay | RATE_LIMITED"
+      - "V07 | expectedRevision equals the stored revision (tabs of one vault) | CONFLICT_REVISION"
+      - "V08 | a mirror whose seq equals the head seq of that device chain with a different cid, or whose prev is not the head cid, is a fork and is refused with params.currentCid | CONFLICT_STATE"
+      - "V09 | the mirrored timeZone is a canonical zone of the pinned rule-equivalence table | NOTIFY_QUIET_TZ_UNKNOWN"
+      - "V10 | mirror and get_mirror requests are signed (classrup/relay-request/v1) by an active device key of userDid | UNAUTHENTICATED"
   workflow_state_machine:
     requirements:
       - The schedule is a settings record without lifecycle states; it is replaced as a whole on each save with an incremented revision.
       - Enabled and disabled are a flag, not a state machine, and disabling never deletes the windows.
-      - Mirror progress to each relay moves forward through local committed, prepared, transport acknowledged and peer accepted and the UI shows only the reached stage.
+      - Mirror progress to each relay moves through local committed, prepared, transport acknowledged (HTTP 2xx) and peer accepted (relay acceptance signature over this statement's cid as the applied head), and a stale, forked or superseded statement never shows peer accepted.
     machines: []
-    note: "Settings record with no lifecycle states; enabled is a boolean flag and mirror progress is tracked by the sync outbox (CTR-IDM-001 IDM-7)."
+    note: "Settings record with no lifecycle states; enabled is a boolean flag and mirror progress per relay is tracked by the F15.S01.M01 sync outbox (CTR-IDM-001 IDM-7) and mirrorStates, where stale and conflict are outcomes below transport_acknowledged."
     timeouts: []
   commands_queries_events:
     requirements:
-      - Saving the schedule is a vault command that emits notify.quiet_hours.changed in the same IndexedDB transaction and produces a signed mirror statement when a relay holds push or email consent.
-      - The relay exposes a mirror command and both environments expose the same pure evaluate query.
-      - The module consumes channel consent events to mirror the current schedule to a newly consented relay.
+      - Saving the schedule is a vault command that emits vault-local notify.quiet_hours.changed in the same IndexedDB transaction and produces a signed mirror statement for each relay that holds a registered push or email consent.
+      - The relay exposes a mirror command that emits relay-local notify.quiet_hours.changed in the same SQLite transaction when the effective mirror changes, and a signed get_mirror query; both environments expose the same pure evaluate query.
+      - The vault instance consumes vault-local channel consent events to mirror the current schedule to a newly consented relay, and the relay instance consumes relay-local notify.channel.opted_out and security.key.revoked to delete or retire its mirror rows.
+      - classrup.notify.quiet_hours_mirror/v1 is registered with F11.S01.M01 (N2) with signer role principal (device key active in the author's portable document and in F16.S02.M02) and audience the relay named in payload relayId.
+      - The module registers ExportSectionPort (section notify.quiet_hours), DeletionPort (purge step) and RetentionPurgePort (kind notify.quiet_hours) with F10 (N6), classifies every field with F10.S02.M02, and routes limits through RateLimitPort of F12.S03.M03 (N18).
     commands:
       - name: notify.quiet_hours.set
         capability: notify.quiet_hours.set
-        input: "[vault command; produces signed statement classrup.notify.quiet_hours/v1 when a relay holds consent] { enabled, timeZone, windows[] (≤ 4), expectedRevision? }"
-        output: "{ scheduleId, revision, mirrorState: none|local_committed|prepared|transport_acknowledged|peer_accepted, currentlyQuiet, quietEndsAt? }"
+        input: "[vault command; produces classrup.notify.quiet_hours_mirror/v1 with the canonical zone for each relay holding a registered consent] { enabled, timeZone, windows[] (≤ 4), expectedRevision? }"
+        output: "{ scheduleId, revision, mirrorStates: [{ relayId, syncState }], currentlyQuiet, quietEndsAt? }"
         errors: [VALIDATION_FAILED, NOTIFY_QUIET_TZ_UNKNOWN, NOTIFY_QUIET_WINDOW_INVALID, CONFLICT_REVISION, RATE_LIMITED]
         emits: [notify.quiet_hours.changed]
         idempotent: true
       - name: notify.quiet_hours.mirror
         capability: notify.quiet_hours.mirror
-        input: "[relay command, relay access token] { statement: { userDid, seq, enabled, timeZone, windows[], sig } }"
-        output: "{ seq, relayReceiptAt, relayReceiptSig }"
+        input: "[relay command; request signed by an active device key of userDid; body is a sealed classrup.notify.quiet_hours_mirror/v1 envelope] { statement }"
+        output: "{ outcome: applied|stale, appliedCid, effectiveCid, effectiveDeviceKeyId, relayReceiptAt, acceptance?: { cid, sig } (applied only) }"
         errors: [VALIDATION_FAILED, NOTIFY_QUIET_TZ_UNKNOWN, NOTIFY_QUIET_WINDOW_INVALID, PRECONDITION_FAILED, UNAUTHENTICATED, CONFLICT_STATE, RATE_LIMITED]
-        emits: []
+        emits: [notify.quiet_hours.changed]
         idempotent: true
     queries:
       - name: notify.quiet_hours.get
@@ -116,62 +157,91 @@ processes:
         input: "[vault query] {}"
         output: "{ schedule: QuietHoursSchedule | null, currentlyQuiet, quietEndsAt? }"
         errors: []
+      - name: notify.quiet_hours.get_mirror
+        capability: notify.quiet_hours.read_mirror
+        input: "[relay query signed by an active device key of the user] {}"
+        output: "{ effectiveCid?, effectiveDeviceKeyId?, acceptedAt?, chains: [{ deviceKeyId, headSeq, headCid }] }"
+        errors: [UNAUTHENTICATED, RATE_LIMITED]
       - name: notify.quiet_hours.evaluate
         capability: notify.quiet_hours.evaluate
         input: "[pure function, vault and relay] { at: timestamp, schedule }"
         output: "{ quiet: boolean, quietEndsAt?: timestamp, nextQuietStartsAt?: timestamp }"
         errors: [VALIDATION_FAILED]
+    note: >-
+      Execution sites (ADR-0016): set and get run in the vault; mirror and get_mirror on the relay; evaluate in both.
+      Statement (N2, registered with F11.S01.M01): classrup.notify.quiet_hours_mirror/v1 - CTR-FED-001 envelope, author
+      the principal did:key, ext.signerKey the device key, ext.stream notify.quiet_hours, seq and prev per (author,
+      signerKey, stream) (FED-8); signer role principal; audience the relay named in payload relayId, sealed to that
+      relay's published key; payload exactly {relayId, enabled, timeZone (canonical), windows, tzdataVersion}; maxAge
+      400 d. The relay acceptance signature covers the applied cid; outcome stale (seq at or below the head with the
+      same cid) keeps the vault below transport_acknowledged in meaning and is shown as superseded; a fork is
+      CONFLICT_STATE. Effective mirror - the head accepted most recently across the user's chains whose device key is
+      active; no effective mirror means never quiet. The canonical-zone table is generated at build time from the pinned
+      tzdata by grouping zones with identical transitions and offsets from 2020 to 2100 and choosing the zone whose class
+      covers the largest area (at least an L1 cell). Privacy ports (N6): ExportSectionPort section notify.quiet_hours with
+      schema classrup.notify.quiet_hours/v1; DeletionPort plan {willDelete: the schedule, willPseudonymize: none,
+      blockers: none} and step purge (relay copies are deleted when the F13.S02.M03 sign-step withdrawals are registered);
+      RetentionPurgePort kind notify.quiet_hours, class RET-STANDARD, anchorField updatedAtClaim. Every field is
+      classified with F10.S02.M02.
     events_produced:
-      - {type: notify.quiet_hours.changed, privacy: P2, payload: "{ userDid, enabled, timeZone, windowCount, mirrorSeq?, revision }"}
+      - {type: notify.quiet_hours.changed, privacy: P2, payload: "{ userDid, enabled, windowCount, mirrorSeq?, revision?, side: vault|relay } — vault-local from set; relay-local from mirror and from key or consent changes that change the effective mirror; never the time zone or windows"}
     events_consumed:
-      - {type: notify.channel.opted_in, effect: "send the current schedule as a mirror statement to the relay that now holds the consent"}
-      - {type: notify.channel.opted_out, effect: "mark mirroring to that relay as ended and request deletion of the mirrored copy"}
+      - {type: notify.channel.opted_in, effect: "vault instance: queue the current schedule as a mirror statement to that relay after the consent registration in the same per-relay outbox, so the relay sees the consent first"}
+      - {type: notify.channel.opted_out, effect: "vault instance: stop mirroring to that relay when no granted push or email consent remains there; relay instance (relay-local event): delete the user's mirror rows at once when no granted consent of the user remains at this relay and emit relay-local notify.quiet_hours.changed"}
+      - {type: security.key.revoked, effect: "relay instance: rows of the revoked device key stop being effective and later mirrors signed by it are refused UNAUTHENTICATED; when the effective mirror changes, emit relay-local notify.quiet_hours.changed"}
+      - {type: privacy.deletion.completed, effect: "vault instance: notification only; confirm that the DeletionPort purge step removed the schedule; nothing is signed"}
     errors:
-      - "NOTIFY_QUIET_TZ_UNKNOWN | 422 | no | time zone is not in the pinned IANA tzdata"
+      - "NOTIFY_QUIET_TZ_UNKNOWN | 422 | no | time zone is not in the pinned IANA tzdata or is not a canonical zone in a mirror"
       - "NOTIFY_QUIET_WINDOW_INVALID | 422 | no | a window is shorter than 15 minutes, longer than 12 hours, equal start and end, or overlapping"
     example: |
       vault command notify.quiet_hours.set
-      { "enabled": true, "timeZone": "America/New_York", "windows": [ { "days": [1,2,3,4,5,6,7], "start": "22:00", "end": "07:00" } ] }
-      -> { "scheduleId": "0192f3b2-0000-7000-8000-000000000001", "revision": 1, "mirrorState": "local_committed", "currentlyQuiet": false }
-      evaluate { "at": "2026-03-08T06:30:00Z", "schedule": { … } }   // 01:30 EST on the spring-forward night
+      { "enabled": true, "timeZone": "Europe/Busingen", "windows": [ { "days": [1,2,3,4,5,6,7], "start": "22:00", "end": "07:00" } ] }
+      -> { "scheduleId": "0192f3b2-0000-7000-8000-000000000001", "revision": 1, "mirrorStates": [ { "relayId": "relay:k3n7v2…", "syncState": "prepared" } ], "currentlyQuiet": false }
+      relay command notify.quiet_hours.mirror { "statement": <sealed classrup.notify.quiet_hours_mirror/v1, seq 4, payload.timeZone "Europe/Zurich"> }
+      -> { "outcome": "applied", "appliedCid": "sha256-a1…", "effectiveCid": "sha256-a1…", "effectiveDeviceKeyId": "…#d1", "relayReceiptAt": "2026-11-04T10:00:01Z", "acceptance": { "cid": "sha256-a1…", "sig": "…" } }   vault syncState -> peer_accepted
+      evaluate { "at": "2026-03-08T06:30:00Z", "schedule": { "timeZone": "America/New_York", … } }   // 01:30 EST on the spring-forward night
       -> { "quiet": true, "quietEndsAt": "2026-03-08T11:00:00Z" }     // 07:00 EDT
   authorization_capabilities:
     requirements:
       - Vault policy lets only the local principal save its schedule; evaluation is a pure function usable by any local module.
-      - Relay policy lets a registered device key mirror its owner's schedule only where the relay holds a granted channel consent; the relay-side evaluate function is available to the dispatch gate.
+      - Relay policy lets an active device key mirror its owner's schedule only where the relay holds a registered granted channel consent; the relay-side evaluate function is available to the dispatch gate.
       - Other users and relay operators cannot edit a schedule; operators can read the mirrored copy of consenting users as part of operating the relay, which is disclosed.
     capabilities:
       - "notify.quiet_hours.set | local principal | vault policy; owner of the schedule"
       - "notify.quiet_hours.read_own | local principal | owner of the schedule"
-      - "notify.quiet_hours.mirror | registered relay device | relay policy; statement signed by a device key of the user; granted channel consent exists at this relay"
+      - "notify.quiet_hours.mirror | registered relay device | relay policy; statement and request signed by an active device key of the user; granted channel consent registered at this relay"
+      - "notify.quiet_hours.read_mirror | registered relay device | active device key of the user; that user's mirror state only"
       - "notify.quiet_hours.evaluate | local principal, relay service | pure function with no side effects; no personal data beyond the supplied schedule"
   failure_recovery_idempotency:
     requirements:
-      - Saving is idempotent on the resulting schedule content and expectedRevision, and mirroring is idempotent on seq.
+      - Saving is idempotent on the resulting schedule content and expectedRevision, and mirroring is idempotent on the statement cid.
       - Evaluation is deterministic and has no I/O, so it can be retried and cached freely.
-      - If the relay copy lags behind the vault, the relay applies the older schedule until the mirror arrives and the UI says so.
-    idempotency: "Vault set is idempotent on identical content; relay mirror is idempotent on (userDid, seq) with Idempotency-Key replay window 24 h; evaluate is a pure function."
-    concurrency: "expectedRevision on set; each command is one IndexedDB transaction; the relay accepts only strictly higher seq so out-of-order statements cannot restore an old schedule; two devices editing concurrently produce a CONFLICT_REVISION on the second and the UI shows the winner for explicit re-edit."
-    retries: "Outbox retries the mirror with backoff base 1 s, factor 2, cap 15 min for 14 days."
+      - Each device of the principal is a separate vault with its own mirror chain; the relay keeps the latest verified statement per device chain, the gate uses the one the relay accepted most recently across the user's active devices, and a device whose statement was superseded is shown which device's schedule the relay uses.
+    idempotency: "Vault set is idempotent on identical content; relay mirror is idempotent on statement cid with Idempotency-Key replay window 24 h; a repeated cid returns the stored outcome and acceptance; evaluate is a pure function."
+    concurrency: "expectedRevision on set protects tabs of one vault; each command is one IndexedDB transaction; the relay accepts only seq above the head of that device chain with prev equal to the head cid, so out-of-order statements cannot restore an old schedule and an equal seq with another cid is refused as a fork; there is no cross-device merge."
+    retries: "Outbox retries the mirror with backoff base 1 s, factor 2, cap 15 min for 14 days; a CONFLICT_STATE stops retries and asks the user to re-save."
     offline: "Saving works offline; local evaluation uses the saved schedule; the mirror is sent when online and the UI says the relay still uses the previous schedule until confirmed."
-    partial_failure: "If mirroring fails the local schedule is unaffected and in-app behavior is correct; an unconfirmed mirror means a relay may send a push at the old quiet boundary, which the UI discloses."
+    partial_failure: "If mirroring fails the local schedule is unaffected and in-app behavior is correct; an unconfirmed or superseded mirror means a relay may send a hook push at another quiet boundary, which the UI discloses."
   privacy_retention_abuse:
     requirements:
-      - The schedule reveals sleep rhythm and coarse region through the time zone, so it is P2, mirrored only to relays the user consented to for push or email, and deleted there when that consent ends.
+      - The schedule reveals sleep rhythm and a time zone region, so it is P2, mirrored only as the canonical zone to relays where the user holds a registered push or email consent, and deleted there as soon as the last such consent at that relay ends.
       - No location is read to choose the time zone; the default is the browser setting and the user can change it.
-      - The schedule is never part of notification payloads or events beyond the changed event with counts.
+      - The schedule is never part of notification payloads, and the changed event carries neither the time zone nor the windows.
     data:
-      - "QuietHoursSchedule: P2; vault authoritative, mirror at consented relays."
+      - "QuietHoursSchedule vault record: P2; vault authoritative."
+      - "Relay copy: P2 for the consented relay only; canonical zone, windows and tzdata version per device chain."
     retention:
       - "Vault: RET-STANDARD until deletion."
-      - "Relay mirror: deleted within 30 days after the push or email consent at that relay ends."
+      - "Relay copy: deleted at once when no granted push or email consent of the user remains at that relay."
     threats:
-      - "T01 | Relay operator infers sleep schedule and region | mirror only to consented relays, disclosed in the settings screen, deleted when consent ends, user can choose a self-hosted relay or disable the mirror and rely on in-app only"
-      - "T02 | Attacker sets quiet hours to mute victim's notifications | only the vault can edit; mirror needs a device-key signature; security alerts bypass quiet hours"
+      - "T01 | Relay operator infers sleep schedule and region | mirror only to consented relays with the canonical zone, disclosed in the settings screen, deleted when consent ends, user can choose a self-hosted relay or disable quiet hours and rely on in-app only"
+      - "T02 | Attacker sets quiet hours to mute victim's notifications | only the vault can edit; mirror needs an active device-key signature; security alerts bypass quiet hours"
       - "T03 | DST error causes alerts at night or missed alerts | boundary tests across 12 zones and 24 transitions with a reference implementation; tzdata version pinned and recorded"
-      - "T04 | Replay of an old mirror to change the schedule | strictly increasing seq at the relay"
+      - "T04 | Replay of an old mirror or a forked chain changes the schedule | seq and prev chain per device key, fork refused with CONFLICT_STATE"
+      - "T05 | A single-municipality zone locates the user more precisely than L2 | canonical rule-equivalent zone covering at least L1, verified over all pinned zones"
+      - "T06 | A stolen device key mirrors a schedule that silences push | revoked keys are refused and their rows stop being effective"
     abuse_controls:
-      - "Rate limit 30 changes per day per vault and 30 mirror calls per hour per user at the relay."
+      - "Rate limit 30 changes per day per vault and 30 mirror calls per hour per user at the relay through RateLimitPort (F12.S03.M03)."
       - "Relay operators can ignore mirrors from blocked device keys."
   observability_performance:
     requirements:
@@ -179,11 +249,11 @@ processes:
       - The evaluate function completes in under 1 ms and the relay can evaluate 100 000 users in under 5 s.
       - Mirror lag and evaluation errors are observable.
     metrics:
-      - "classrup_notify_quiet_mirror_total{outcome=ok|stale|rejected} (relay)"
+      - "classrup_notify_quiet_mirror_total{outcome=applied|stale|conflict|rejected} (relay)"
       - "classrup_notify_quiet_evaluate_ms (histogram)"
       - "classrup_notify_quiet_tzdata_version (info gauge)"
     logs:
-      - "relay info quiet_hours.mirrored {userHash, seq, correlationId} — no time zone and no windows."
+      - "relay info quiet_hours.mirrored {userHash, seq, outcome, correlationId} — no time zone and no windows."
     budgets:
       - "evaluate p99 ≤ 1 ms per call; 100 000 evaluations ≤ 5 s on a relay core."
       - "set p95 ≤ 50 ms in the vault; relay mirror p95 ≤ 300 ms at 50 req/s."
@@ -192,33 +262,36 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - DST behavior is verified against a reference implementation and golden fixtures for concrete 2026 transitions.
       - Property tests prove isQuiet and nextQuietEnd agree for all instants.
-    fixtures: "Golden transitions America/New_York 2026-03-08 and 2026-11-01, Europe/London 2026-03-29 and 2026-10-25, Australia/Lord_Howe 2026-04-05 and 2026-10-04, Asia/Kolkata (no DST), Pacific/Auckland 2026-04-05 and 2026-09-27, pinned tzdata 2026b."
+      - The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues and a keyboard and screen-reader walk-through.
+    fixtures: "Golden transitions America/New_York 2026-03-08 and 2026-11-01, Europe/London 2026-03-29 and 2026-10-25, Australia/Lord_Howe 2026-04-05 and 2026-10-04, Asia/Kolkata (no DST), Pacific/Auckland 2026-04-05 and 2026-09-27, pinned tzdata 2026b with its canonical-zone table, devices A and B of user U, relay R with a registered push consent, F16.S02.M02 registry double."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | save a valid New York schedule 22:00 to 07:00 daily | stored with tzdataVersion and mirrorSeq 0; mirror statement contains only timeZone, windows, enabled, seq"
-      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V07 violated in turn including Mars/Olympus, 24-hour window and overlapping windows | documented error code returned and nothing stored"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | save a valid New York schedule 22:00 to 07:00 daily | stored with tzdataVersion and mirrorSeq 0; mirror statement payload has exactly relayId, enabled, timeZone, windows, tzdataVersion"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V10 violated in turn including Mars/Olympus, a 24-hour window, overlapping windows and a non-canonical mirrored zone | documented error code returned and nothing stored"
       - "T03 | unit | 01.R03,02.R02 | evaluate New York on 2026-03-08 across the gap | window covers 8 real hours: quiet from 03:00 UTC to 11:00 UTC on 2026-03-08 inclusive of the start and exclusive of the end"
       - "T04 | unit | 01.R03 | evaluate New York on 2026-11-01 across the repeated hour | window covers 10 real hours from 02:00 UTC to 12:00 UTC; both 01:30 occurrences are quiet"
       - "T05 | unit | 01.R03,02.R02 | window starting 02:30 on 2026-03-08 New York, and Lord_Howe, London and Auckland transitions | start shifts forward by the gap, empty window yields not quiet, 30-minute shifts handled, results equal reference implementation"
-      - "T06 | property | 02.R02,03.R01 | random instants 2020 to 2100 for 12 zones and random valid schedules | isQuiet equals reference; quietEndsAt is the first instant where isQuiet is false; never throws"
-      - "T07 | contract | 04.R01,04.R02,09.R02 | set, mirror, get, evaluate execute | outputs, statements and event payloads validate against registry schemas"
-      - "T08 | integration | 04.R03,03.R02 | channel opted in and opted out events delivered | schedule mirrored to the consenting relay and deletion requested when consent ends"
-      - "T09 | abuse | 05.R01,05.R02,05.R03 | forged mirror; mirror without consent; another user edit | rejected in each case"
-      - "T10 | integration | 06.R01,06.R02,06.R03,03.R03 | replay seq 3 after seq 5; relay down during save | stale ignored; local evaluation unaffected; sync states advance prepared to transport acknowledged to peer accepted"
-      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect mirror payload, relay logs and notification payloads | no location, no content, schedule absent from payloads; 31st change in a day returns RATE_LIMITED"
+      - "T06 | property | 02.R02,03.R01,09.R03 | random instants 2020 to 2100 for 12 zones and random valid schedules | isQuiet equals reference; quietEndsAt equals nextQuietEnd and is the first instant where isQuiet is false; never throws"
+      - "T07 | contract | 04.R01,04.R02,09.R02,01.R05 | set, mirror, get, get_mirror, evaluate execute | outputs, the statement envelope and event payloads validate against registry schemas; statement schema differs from both record schemas; the changed event has no timeZone or windows"
+      - "T08 | integration | 04.R03,03.R02 | vault-local opted_in and opted_out; relay-local opted_out for the last consent at R; security.key.revoked for the effective device key | mirror queued after the registration; relay rows deleted at once and relay-local changed emitted; revoked chain no longer effective"
+      - "T09 | abuse | 05.R01,05.R02,05.R03,02.R04 | forged mirror; mirror without a registered consent; mirror signed by a revoked key; another user edit | rejected in each case"
+      - "T10 | integration | 06.R01,06.R02,06.R03,03.R03 | replay seq 3 after seq 5 on one chain; devices A and B each sign seq 1; a restored vault signs seq 5 again with another cid; relay down during save | stale outcome without peer_accepted; latest accepted of A and B is effective and the other device shows which device's schedule applies; fork refused CONFLICT_STATE with currentCid; local evaluation unaffected; sync states advance prepared to transport_acknowledged to peer_accepted only for applied"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect mirror payload, relay storage, relay logs, events and notification payloads | no location, no content, schedule absent from payloads and events; 31st change in a day returns RATE_LIMITED"
       - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 evaluations and 50 mirror calls per second for 2 minutes | budgets met"
-      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-105 requirement maps to a passing test"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-105 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup, and import with newer tzdata | schedule round trips; unknown time zone rejected with the user prompted"
-      - "T15 | a11y | 04.R01 | settings screen with screen reader and keyboard | inputs labelled, currently quiet announced, zero serious axe issues"
+      - "T15 | a11y | 09.R04 | settings screen with screen reader and keyboard | inputs labelled, currently quiet announced, relay note read, zero serious axe issues"
+      - "T16 | property | 01.R04 | every zone of the pinned tzdata mapped to its canonical zone; random schedules and instants 2020 to 2100 | isQuiet identical for the zone and its canonical zone; Europe/Busingen maps to Europe/Zurich and America/Indiana/Tell_City to America/Chicago; every canonical class covers at least an L1 cell"
+      - "T17 | integration | 04.R04,04.R05 | registry lookup of classrup.notify.quiet_hours_mirror/v1; DeletionPort plan and purge, export section and retention purge with F10 doubles | signer role principal and audience relayId present; purge removes the schedule; section notify.quiet_hours exported"
     acceptance:
-      - All tests T01 to T15 pass in CI.
+      - All tests T01 to T17 pass in CI.
       - Golden DST fixtures for the six listed transitions produce the documented durations in the vault and on the relay with identical results.
-      - No notification payload or event contains the schedule.
+      - No notification payload or event contains the schedule, and no mirror carries a non-canonical zone.
   import_export_backup_rollback:
     requirements:
       - A user's vault export contains their schedule including the tzdata version.
       - Import validates the time zone against the target build's tzdata and refuses unknown zones, asking the user to choose another.
       - Schema changes follow expand and contract; new window fields are additive and old windows keep their meaning.
-    export: "Section notify.quiet_hours in classrup-export/v1; one line per QuietHoursSchedule (schema classrup.notify.quiet_hours/v1)."
-    import: "Time zone and windows re-validated; unknown zones are rejected and the schedule imports disabled; the mirror is re-sent only after user confirmation."
-    backup: "The vault export is the backup (IOX-6); relay mirrors are operational data covered by relay SQLite backup (IOX-3, IOX-7)."
-    migration_rollback: "Additive fields only in v1; a tzdata release changes results only for future instants and is recorded; rollback to an older build keeps the stored tzdataVersion and re-evaluates with the older data."
+    export: "Section notify.quiet_hours in classrup-export/v1 through ExportSectionPort; one line per QuietHoursSchedule (schema classrup.notify.quiet_hours/v1); relay copies are not exported."
+    import: "Time zone and windows re-validated; unknown zones are rejected and the schedule imports disabled; the imported vault starts a new mirror chain for its own device key and mirrors only after user confirmation."
+    backup: "The vault export is the backup (IOX-6); relay copies are operational data covered by relay SQLite backup (IOX-3, IOX-7) and are deleted on restore when no consent of the user remains registered."
+    migration_rollback: "Additive fields only in v1; a tzdata release changes results only for future instants and is recorded; rollback to an older build keeps the stored tzdataVersion and re-evaluates with the older data and its canonical-zone table."

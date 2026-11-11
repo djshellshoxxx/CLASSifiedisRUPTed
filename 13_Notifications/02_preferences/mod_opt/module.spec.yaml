@@ -1,44 +1,55 @@
 id: F13.S02.M03
 scope: MVP
 summary: >-
-  Per-channel consent for push and email notifications. The user's vault records a signed channel consent
-  (granted or withdrawn) linked to the privacy consent of F10; when a user-selected relay is to send push or
-  email, the vault registers the signed consent with that relay, and the relay sends nothing on a channel
-  without a granted, unexpired consent. One-click unsubscribe tokens (RFC 8058 style) let a recipient of an
-  email withdraw without opening the app. In-app notifications need no consent because they never leave the
-  device. Category-level choices live in F13.S02.M04, schedules in F13.S02.M02, deferral in F13.S02.M01.
+  Per-channel consent for push and email notifications. The user's vault records a channel consent (granted, withdrawn
+  or expired) that is always linked to the F10 privacy consent of the matching purpose (push to notify_push, email to
+  notify_email) for the same relay. When a user-selected relay is to send push or email, the vault signs a channel
+  consent statement addressed to that relay's self-certifying key-derived relayId and registers it there; the relay
+  sends nothing on a channel without a registered, granted, unexpired consent and relies only on that registration,
+  because privacy.consent.check is vault in-process only. Registration, unsubscribe and the expiry sweep emit relay-local
+  events so the relay erases its copies. One-click unsubscribe tokens (RFC 8058) are derived per consent and verified
+  without storage; withdrawals made at the relay come back to the vault as relay-signed withdrawal receipts. In-app
+  notifications need no consent because they never leave the device. Category choices live in F13.S02.M04, schedules
+  in F13.S02.M02, deferral in F13.S02.M01.
 responsibilities:
-  - Own the ChannelConsent record per user, relay and channel (push, email) with granted, withdrawn and expired states.
-  - Produce the signed statement classrup.notify.channel_consent/v1 in the vault and accept it at the relay that will send, verifying signer and channel.
-  - Link each consent to the F10 privacy consent ID and withdraw it when privacy.consent.withdrawn arrives for the linked purpose.
-  - Mint, store as hashes, and redeem one-click unsubscribe tokens at the relay for email and for push-link footers.
-  - Expire each consent 365 days after grant and prompt the user to reconfirm.
+  - Own the vault ChannelConsent record (classrup.notify.channel_consent/v1) and the relay registration record (classrup.notify.channel_consent_registration/v1) per user, relay and channel with granted, withdrawn and expired states.
+  - Produce classrup.notify.channel_consent_statement/v1 and classrup.notify.channel_withdrawal/v1 in the vault and accept them at the relay named in them, verifying signer key status, audience key, chain position and channel.
+  - Require the F10 link - call privacy.consent.check at opt-in, match privacy.consent.withdrawn by purpose and scope.relayId, and re-link on privacy.consent.granted for the same purpose and scope.
+  - Derive and verify one-click unsubscribe tokens at the relay, serve UnsubscribeTokenPort and RelayWithdrawalPort to F13.S01.M02, and sign classrup.notify.channel_withdrawal_receipt/v1 with the relay key for every withdrawal made at the relay.
+  - Serve notify.channel.list_changes so vaults fetch relay receipts, and apply them in the vault with notify.channel.apply_relay_change.
+  - Expire each consent 365 days after grant at the relay and prompt the user to reconfirm.
 non_responsibilities:
-  - Browser permission prompts and subscription objects (F13.S01.M01) and verified email addresses (F13.S01.M02).
+  - Browser permission prompts and subscriptions (F13.S01.M01) and verified email addresses (F13.S01.M02).
   - Per-category preferences (F13.S02.M04) and quiet-hours schedules (F13.S02.M02, F13.S02.M01).
-  - Privacy consent records themselves (F10.S01.M01).
+  - Privacy consent records themselves (F10.S01.M01), which this module reads through privacy.consent.check and its events.
+  - Relay identity, key chain and key pinning (F15.S02.M01 relay identity, F11.S03.M01 pinned relay keys) and key status (F16.S02.M02).
   - Marketing messages; the platform sends transactional notifications only, and no promotional channel exists in the MVP.
+  - Blocks (N7) do not apply because consents involve only the user and the selected relay.
   - "Future: SMS and messaging-app channels, per-category consent granularity at the relay, consent receipts as W3C Verifiable Credentials."
-depends_on: [F10.S01.M01, F07.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F10.S01.M01, F07.S01.M01, F07.S02.M01, F11.S01.M01, F11.S03.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
   - As a member, I can switch on push notifications for my chosen relay and see which relay will send them.
   - As a member, I can opt in to email via a relay that offers email and withdraw with one click from any email.
-  - As a member, I can withdraw a channel in settings and know the relay will stop sending to it.
+  - As a member, I can withdraw a channel in settings and know the relay will stop sending to it and erase what it holds.
   - As a member, I am asked to reconfirm a channel once a year.
 edge_cases:
   - Relay does not offer email; the email opt-in control is disabled with an explanation and no consent record is created for that relay.
-  - Unsubscribe token used twice; the second call returns success without change (idempotent).
-  - Unsubscribe token for a withdrawn or unknown consent; the relay returns NOT_FOUND with no detail.
-  - User withdraws in the app while offline; the vault records withdrawn at once and the relay registration is queued, and the UI shows sending may continue until the relay confirms.
-  - The relay's unsubscribe withdrawal arrives while the vault shows granted; the vault applies the relay-signed withdrawal on next sync.
-  - privacy.consent.withdrawn arrives for a purpose linked to both channels; both channels become withdrawn.
-  - Consent expires while the app is closed; the relay stops sending on the expiry date even if the vault never prompted.
+  - Unsubscribe token used twice; the second call returns the same withdrawn result without change.
+  - Unsubscribe token that was never issued or is malformed; the relay returns NOTIFY_UNSUBSCRIBE_TOKEN_INVALID (404) with no detail.
+  - User withdraws in the app while offline; the vault records withdrawn at once, the withdrawal waits in the sync outbox, and the UI shows sending may continue until the relay registers it.
+  - The recipient clicks an unsubscribe link while the vault shows granted; on the next sync the vault fetches the relay-signed withdrawal receipt with notify.channel.list_changes and applies it with via unsubscribe_link, and F10 withdraws notify_email for that relay.
+  - A withdrawal receipt signed by relay B names a consent registered at relay A; it is refused with NOTIFY_CHANNEL_RECEIPT_INVALID and nothing changes.
+  - privacy.consent.withdrawn arrives for notify_email scoped to relay A; only the email channel consent at relay A becomes withdrawn with via privacy_withdrawal, and push at relay A and email at relay B stay granted.
+  - F10 supersedes the notify_push grant with a new policy version; the channel consent is re-linked to the new consent ID on privacy.consent.granted and a later withdrawal of the new grant still withdraws the channel.
+  - Consent expires while the app is closed; the relay stops sending on the expiry date, signs a receipt with via expired, and the vault applies it on next sync.
+  - The relay's hostname is transferred to a new operator with a different key; the vault refuses to register there because the relay key no longer matches the relayId of the consent.
+  - Deletion is requested; consents show paused during the 14-day grace and nothing is sent to relays; cancelling on day 13 restores the granted view; at execution the sign step queues withdrawals to every relay before the keys are destroyed.
 ux:
   screens:
-    - "Channels settings: rows for Push and Email each with relay name, status text (Not enabled, Enabled on relay X, Withdrawn, Needs reconfirmation), toggle, and last changed time."
+    - "Channels settings: rows for Push and Email each with relay name and key fingerprint, status text (Not enabled, Enabled on relay X, Withdrawn, Needs reconfirmation, Paused while deletion is pending), toggle, and last changed time."
     - "Opt-in sheet: what is sent (a content-free alert or a short generic email), which relay sends it and what that relay learns (browser push endpoint or email address), Enable and Cancel."
     - "Unsubscribe confirmation page served by the relay: Unsubscribed text, channel name, Undo link that opens the app."
-  states: [loading, not-enabled, granted, withdrawn, expired-reconfirm, relay-unavailable, offline-pending]
+  states: [loading, not-enabled, granted, withdrawn, expired-reconfirm, paused, relay-unavailable, offline-pending]
   a11y:
     - Toggles are native switches with labels that include the channel and relay name and status changes are announced politely.
     - Unsubscribe page works without JavaScript and without login, with heading structure and sufficient contrast.
@@ -46,158 +57,263 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A ChannelConsent stores user DID, relay, channel (push or email), status, the linked F10 privacy consent ID, the signed statement CID, grant and withdrawal claims and the expiry, with tenant and revision per CTR-ID-001.
-      - The consent is P2 evidence held in the vault and mirrored at the sending relay, retained under RET-EVIDENCE, and a new grant after withdrawal or expiry creates a new record instead of reviving the old one.
-      - Unsubscribe tokens are 256-bit random values stored only as SHA-256 hashes at the relay and are scoped to one user, relay and channel.
+      - A vault ChannelConsent stores user DID, relay (canonical self-certifying relayId with the hostname as display hint), channel (push or email), status, the required linked F10 privacy consent ID and purpose, the signed statement CID, grant and withdrawal claims, the withdrawal path and the expiry, with tenant and revision per CTR-ID-001.
+      - The consent is P2 evidence held in the vault and registered at the sending relay as a relay registration record, retained under RET-EVIDENCE, and a new grant after withdrawal or expiry creates a new record instead of reviving the old one.
+      - One-click unsubscribe tokens are derived as base64url(HMAC-SHA256(relayUnsubscribeKey, consentId || channel)), recomputed for each email and verified in constant time without being stored, and a redeemed marker is kept for 365 days after withdrawal.
+      - The statements have their own schemas distinct from the record schemas - classrup.notify.channel_consent_statement/v1 and classrup.notify.channel_withdrawal/v1 signed by a device key of the principal and addressed to one relay, and classrup.notify.channel_withdrawal_receipt/v1 signed by the relay key for withdrawals made at the relay (CTR-SCH-001 SCH-1).
     entities:
       - name: ChannelConsent
         schema: classrup.notify.channel_consent/v1
-        storage: relay+device
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — consentId, primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "userDid: did:key — principal who consents"
+          - "relayId: string — canonical self-certifying relayId (F15.S02.M01) derived from the relay's genesis key"
+          - "relayHost: string — hostname display hint, never used for matching"
+          - "relayKeyId: string — relay key ('<relayId>#k<seq>') pinned when the consent was granted"
+          - "channel: enum — push | email"
+          - "status: enum — granted | withdrawn | expired"
+          - "privacyConsentId: uuidv7 — F10.S01.M01 PrivacyConsent of the matching purpose for relayId; re-linked on supersession"
+          - "privacyPurpose: enum — notify_push | notify_email; push requires notify_push and email requires notify_email"
+          - "grantedAtClaim: timestamp — user clock, a claim"
+          - "withdrawnAtClaim?: timestamp — claim set on withdrawal"
+          - "via?: enum — settings | unsubscribe_link | privacy_withdrawal | account_deletion | relay_policy | expired"
+          - "expiresAt: timestamp — grantedAtClaim + 365 days"
+          - "statementCid: string — cid of the signed classrup.notify.channel_consent_statement/v1"
+          - "withdrawalCid?: string — cid of the signed classrup.notify.channel_withdrawal/v1"
+          - "receiptCid?: string — cid of an applied classrup.notify.channel_withdrawal_receipt/v1"
+          - "syncState: enum — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "acceptanceSig?: bytes — relay signature over statementCid after verification, evidence for peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one granted record per (userDid, relayId, channel).
+          - privacyPurpose matches channel and privacyConsentId refers to a consent of that purpose whose scope.relayId equals relayId.
+          - syncState peer_accepted implies acceptanceSig verifies against relayKeyId or its successor in the relay key chain.
+      - name: ChannelConsent
+        schema: classrup.notify.channel_consent_registration/v1
+        storage: relay
         privacy: P2
         retention: RET-EVIDENCE
         fields:
           - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — tenant scope"
-          - "userDid: did:key — principal who consents"
-          - "relayId: string — hostname identity of the relay that will send"
+          - "tenantId: uuidv7 — relay tenant scope"
+          - "consentId: uuidv7 — from the statement"
+          - "userDid: did:key — statement author"
+          - "signerKeyId: string — device key that signed the statement"
           - "channel: enum — push | email"
           - "status: enum — granted | withdrawn | expired"
-          - "privacyConsentId?: uuidv7 — ref F10.S01.M01 PrivacyConsent for the notifications purpose"
-          - "grantedAtClaim: timestamp — user clock, a claim"
-          - "relayRegisteredAt?: timestamp — relay clock when it accepted the statement, evidence of that relay clock only"
-          - "withdrawnAtClaim?: timestamp — claim set on withdrawal"
-          - "withdrawnVia?: enum — settings | unsubscribe_link | privacy_withdrawal | account_deletion | relay_policy"
-          - "expiresAt: timestamp — grantedAtClaim + 365 days"
-          - "statementCid: string — sha256 cid of the signed consent statement"
-          - "unsubscribeTokenHash?: bytes — relay only, SHA-256 of the 256-bit token"
+          - "privacyPurpose: enum — notify_push | notify_email, as stated"
+          - "statementCid: string — verified consent statement cid"
+          - "expiresAt: timestamp — from the statement, at most 365 days after grant"
+          - "relayRegisteredAt: timestamp — relay clock, evidence of that relay clock only"
+          - "withdrawalCid?: string — principal withdrawal statement cid"
+          - "receiptCid?: string — relay-signed withdrawal receipt cid"
+          - "via?: enum — settings | unsubscribe_link | privacy_withdrawal | account_deletion | relay_policy | expired"
+          - "changeSeq?: int — position of the receipt in the user's change feed at this relay"
+          - "unsubscribeRedeemedAt?: timestamp — marker kept 365 days after withdrawal"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - At most one granted record per (userDid, relayId, channel).
-          - status granted implies the statement signature verified against a device key of userDid and expiresAt is in the future.
-          - A relay never sends on a channel unless it holds a granted, unexpired record whose statementCid it verified.
+          - At most one granted registration per (userDid, channel) at this relay.
+          - status granted implies the statement verified against a device key of userDid active per F16.S02.M02 and expiresAt is in the future.
+          - A relay never sends on a channel unless it holds a granted, unexpired registration for that user and channel.
   validation_rules:
     requirements:
-      - Opt-in statements are validated for signer, channel, relay and expiry before the relay registers them.
-      - Unsubscribe tokens are validated by constant-time hash comparison and scope.
+      - Opt-in statements are validated for signer key status, channel, audience relay key, linked privacy consent and expiry before the relay registers them.
+      - Unsubscribe tokens are validated by recomputing the HMAC and comparing in constant time; an unknown token returns NOTIFY_UNSUBSCRIBE_TOKEN_INVALID and a reused token returns the unchanged result.
       - Every violation maps to one stable error code.
+      - The linked privacy consent is required - privacyPurpose must match the channel (push to notify_push, email to notify_email), relayId must equal the consent scope, and opt_in calls privacy.consent.check for that purpose and relay, while the relay relies only on the registered channel consent because privacy.consent.check is vault in-process only.
+      - The opt-in order is fixed as opt_in, then register at the relay with its acceptance, then notify.push.enable or notify.email.enable, which refuse without a registered granted consent.
     rules:
       - "V01 | channel is push or email and the relay advertises that channel in its capability list | NOTIFY_CHANNEL_UNSUPPORTED"
-      - "V02 | statement signature verifies against a registered device key of userDid and relayId equals the receiving relay | VALIDATION_FAILED"
-      - "V03 | for push, a F13.S01.M01 subscription flow is initiated by the same user; for email the consent is recorded before any address is accepted | FORBIDDEN"
-      - "V04 | privacyConsentId, when present, refers to a granted F10 consent for the notifications purpose | PRECONDITION_FAILED"
-      - "V05 | unsubscribe token hash matches a granted consent for the scoped channel | NOTIFY_UNSUBSCRIBE_TOKEN_INVALID"
-      - "V06 | a user changes consent at most 20 times per day per relay | RATE_LIMITED"
-      - "V07 | a relay accepts at most 10 unsubscribe calls per minute per IP | RATE_LIMITED"
+      - "V02 | the statement signature verifies against a device key of userDid that F16.S02.M02 reports active at receipt time, payload relayId equals the receiving relay's canonical relayId, the audience relay key is the relay's current key or its previous key within the 7-day rotation overlap, and seq and prev extend the author's chain at this relay | VALIDATION_FAILED"
+      - "V03 | notify.push.subscribe and notify.email.add are accepted only for a consent that this relay registered and accepted; the vault calls enable only after the acceptance | PRECONDITION_FAILED"
+      - "V04 | privacyConsentId and privacyPurpose are present, the purpose matches the channel, and in the vault privacy.consent.check {purpose, relayId} returns granted at opt_in | PRECONDITION_FAILED"
+      - "V05 | the unsubscribe token equals the HMAC recomputed for a consent registered at this relay under the current or a retained previous unsubscribe key, compared in constant time | NOTIFY_UNSUBSCRIBE_TOKEN_INVALID"
+      - "V06 | RateLimitPort.consume (F12.S03.M03) allows at most 20 grants per day per user and relay; withdrawals are never limited | RATE_LIMITED"
+      - "V07 | a relay accepts at most 10 unsubscribe calls per minute per IP prefix through RateLimitPort | RATE_LIMITED"
+      - "V08 | apply_relay_change accepts a receipt only when it is signed by the key chain of the relay where the named consent was registered (current key, or previous key within the 7-day overlap) and names that consent's statementCid | NOTIFY_CHANNEL_RECEIPT_INVALID"
+      - "V09 | register and list_changes requests are signed (classrup/relay-request/v1) by a device key of userDid active per F16.S02.M02 at receipt time | UNAUTHENTICATED"
   workflow_state_machine:
     requirements:
       - A ChannelConsent starts granted when created and ends withdrawn or expired; both are terminal and a new consent needs a new record.
-      - Withdrawal takes effect at the relay as soon as the relay processes it and in the vault immediately.
-      - Expiry happens 365 days after grant and is enforced by the relay independent of the app.
+      - Withdrawal takes effect in the vault immediately and at the relay as soon as the relay registers the withdrawal, which emits the relay-local notify.channel.opted_out that erases the relay copies of push and email.
+      - Expiry happens 365 days after grant and is enforced by the relay sweep independent of the app; the vault applies it from its own clock or from the relay-signed withdrawal receipt with via expired.
+      - Withdrawals made at the relay (unsubscribe link, verified complaint, relay policy, expiry) reach the vault as relay-signed withdrawal receipts fetched with notify.channel.list_changes and applied with notify.channel.apply_relay_change.
+      - During a pending deletion the consent shows paused, derived from privacy.deletion.assert_not_pending with nothing stored, and at execution the DeletionPort sign step signs withdrawals with via account_deletion for every granted consent and queues them to each relay before any key is revoked or destroyed.
     machines:
       - entity: ChannelConsent
         initial: granted
         terminal: [withdrawn, expired]
         transitions:
-          - "granted -> withdrawn | notify.channel.opt_out, unsubscribe link, privacy.consent.withdrawn, deletion request, or relay policy | relay stops sending; emits notify.channel.opted_out"
-          - "granted -> expired | expiresAt reached | relay stops sending; vault prompts reconfirmation; emits notify.channel.opted_out with reason expired"
+          - "granted -> withdrawn | notify.channel.opt_out (settings); notify.channel.apply_relay_change with via unsubscribe_link or relay_policy; privacy.consent.withdrawn for the matching purpose and relay (privacy_withdrawal); DeletionPort sign step (account_deletion) | withdrawal statement queued unless the change came from the relay; emits notify.channel.opted_out (vault-local) with via"
+          - "granted -> expired | expiresAt reached on the vault clock, or apply_relay_change with via expired | vault prompts reconfirmation; emits notify.channel.opted_out with via expired"
+      - entity: ChannelConsent relay registration
+        initial: granted
+        terminal: [withdrawn, expired]
+        transitions:
+          - "granted -> withdrawn | notify.channel.register of a principal withdrawal; notify.channel.unsubscribe; RelayWithdrawalPort.withdraw for a verified complaint or relay policy | relay stops sending; relay-signed receipt issued for relay-side withdrawals; emits notify.channel.opted_out (relay-local)"
+          - "granted -> expired | expiry sweep finds expiresAt reached | relay stops sending; receipt with via expired issued; emits notify.channel.opted_out (relay-local) with via expired"
     timeouts:
       - "Relay sweep every 5 minutes marks consents past expiresAt as expired."
       - "Vault prompts reconfirmation 14 days before expiry."
+      - "The vault calls notify.channel.list_changes at app open, every 15 minutes while open and on each service-worker wake."
   commands_queries_events:
     requirements:
-      - Opt-in and opt-out are vault commands that produce signed statements and register them at the relay through relay commands; unsubscribe is a public relay command that redeems a token.
-      - Each vault command emits its event in the same IndexedDB transaction as the state change, and relay-side changes are sent back to the vault as relay-signed statements.
-      - The module consumes privacy consent and deletion events from the vault to keep consent aligned with privacy choices.
+      - Opt-in, opt-out and apply_relay_change are vault commands; opt-in and opt-out produce signed statements registered at the relay with notify.channel.register; unsubscribe is a public relay command that redeems a token, the expiry sweep is a relay internal command, and list_changes is a signed relay query.
+      - Each vault command emits its event in the same IndexedDB transaction as the state change, and register, unsubscribe, RelayWithdrawalPort and the expiry sweep emit relay-local notify.channel.opted_in or notify.channel.opted_out in the same SQLite transaction (EVT-8 relay side), which the relay instances of push, email, quiet hours, preferences and the gate consume.
+      - The module consumes privacy consent events matched by purpose and scope.relayId, never by consent ID (which changes when F10 supersedes a grant), and privacy.deletion.requested (pause only) and privacy.deletion.completed.
+      - Statements are registered with F11.S01.M01 (N2) - channel_consent_statement and channel_withdrawal with signer role principal and audience the relay named in payload relayId, and channel_withdrawal_receipt with signer role relay (key chain pinned through F11.S03.M01), accepted only for consents registered at that same relay.
+      - The relay ports UnsubscribeTokenPort.urlFor(consentId) and RelayWithdrawalPort.withdraw(consentId, via) are provided in-process to F13.S01.M02 for List-Unsubscribe headers and verified complaints.
+      - The module registers ExportSectionPort (section notify.channel_consents), DeletionPort (sign, pseudonymize and purge steps) and RetentionPurgePort (kind notify.channel_consent) with F10 (N6), classifies every field with F10.S02.M02, calls privacy.consent.check, and routes limits through RateLimitPort of F12.S03.M03 (N18).
     commands:
       - name: notify.channel.opt_in
         capability: notify.channel.opt_in
-        input: "[vault command; produces signed statement classrup.notify.channel_consent/v1] { channel: push|email, relayId, privacyConsentId? }"
-        output: "{ consentId, status: granted, expiresAt, syncState: local_committed }"
-        errors: [VALIDATION_FAILED, NOTIFY_CHANNEL_UNSUPPORTED, PRECONDITION_FAILED, RATE_LIMITED, FORBIDDEN]
+        input: "[vault command; calls privacy.consent.check {purpose: notify_push|notify_email, relayId}; produces classrup.notify.channel_consent_statement/v1 sealed to the relay's published key and queues notify.channel.register] { channel: push|email, relayId, privacyConsentId, privacyPurpose }"
+        output: "{ consentId, status: granted, expiresAt, statementCid, syncState: prepared }"
+        errors: [VALIDATION_FAILED, NOTIFY_CHANNEL_UNSUPPORTED, PRECONDITION_FAILED, RATE_LIMITED]
         emits: [notify.channel.opted_in]
         idempotent: true
       - name: notify.channel.opt_out
         capability: notify.channel.opt_out
-        input: "[vault command; produces signed statement classrup.notify.channel_consent/v1 with status withdrawn] { consentId, expectedRevision }"
-        output: "{ consentId, status: withdrawn, revision }"
+        input: "[vault command; produces classrup.notify.channel_withdrawal/v1 naming the grant cid and queues notify.channel.register] { consentId, expectedRevision }"
+        output: "{ consentId, status: withdrawn, revision, withdrawalCid, syncState: prepared }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [notify.channel.opted_out]
+        idempotent: true
+      - name: notify.channel.apply_relay_change
+        capability: notify.channel.apply_relay_change
+        input: "[vault command; ingests one classrup.notify.channel_withdrawal_receipt/v1 fetched with notify.channel.list_changes] { relayId, receipt }"
+        output: "{ consentId, status: withdrawn|expired, via, applied: boolean }"
+        errors: [VALIDATION_FAILED, NOTIFY_CHANNEL_RECEIPT_INVALID, NOT_FOUND]
         emits: [notify.channel.opted_out]
         idempotent: true
       - name: notify.channel.register
         capability: notify.channel.register
-        input: "[relay command, relay access token] { statement (signed consent or withdrawal) }"
-        output: "{ consentId, status, relayRegisteredAt, relayReceiptSig }"
+        input: "[relay command; request signed by an active device key of userDid; body is a sealed classrup.notify.channel_consent_statement/v1 or classrup.notify.channel_withdrawal/v1 envelope] { statement }"
+        output: "{ consentId, status, relayRegisteredAt, acceptance: { cid, outcome: applied|duplicate, sig } }"
         errors: [VALIDATION_FAILED, NOTIFY_CHANNEL_UNSUPPORTED, UNAUTHENTICATED, RATE_LIMITED, FEATURE_DISABLED]
-        emits: []
+        emits: [notify.channel.opted_in, notify.channel.opted_out]
         idempotent: true
       - name: notify.channel.unsubscribe
         capability: notify.channel.unsubscribe
-        input: "[relay command, public by token; HTTP POST with List-Unsubscribe=One-Click per RFC 8058] { token }"
+        input: "[relay command, public by token; HTTP POST with List-Unsubscribe=One-Click per RFC 8058 to /u/<consentId>.<token>] { consentId, token }"
         output: "{ channel, status: withdrawn }"
-        errors: [NOTIFY_UNSUBSCRIBE_TOKEN_INVALID, NOT_FOUND, RATE_LIMITED]
-        emits: []
+        errors: [NOTIFY_UNSUBSCRIBE_TOKEN_INVALID, RATE_LIMITED]
+        emits: [notify.channel.opted_out]
+        idempotent: true
+      - name: notify.channel.expire_sweep
+        capability: notify.channel.expire
+        input: "[relay internal sweep every 5 minutes] { now, batchSize ≤ 1000 }"
+        output: "{ expired, receipts }"
+        errors: [DEPENDENCY_UNAVAILABLE]
+        emits: [notify.channel.opted_out]
         idempotent: true
     queries:
       - name: notify.channel.get_mine
         capability: notify.channel.read_own
         input: "[vault query] { channel? }"
-        output: "{ items: ChannelConsent[] }"
+        output: "{ items: ChannelConsent[] with paused derived from privacy.deletion.assert_not_pending }"
         errors: []
+      - name: notify.channel.list_changes
+        capability: notify.channel.read_changes
+        input: "[relay query signed by an active device key of the user] { sinceSeq }"
+        output: "{ items: classrup.notify.channel_withdrawal_receipt/v1[] (≤ 100), nextSeq }"
+        errors: [UNAUTHENTICATED, RATE_LIMITED]
+    note: >-
+      Execution sites (ADR-0016): opt_in, opt_out, apply_relay_change and get_mine run in the vault; register,
+      unsubscribe, expire_sweep and list_changes run on the relay. Statements (N2, registered with F11.S01.M01; CTR-FED-001
+      envelopes, per-author seq and prev, sealed to the relay's published key because they are P2 for that relay only):
+      classrup.notify.channel_consent_statement/v1 - signer role principal (ext.signerKey active in the author's portable
+      document, F07.S02.M01, and in F16.S02.M02 at receipt), audience the relay named in payload relayId, payload exactly
+      {consentId, channel, relayId, relayKeyId, privacyConsentId, privacyPurpose, grantedAt, expiresAt}, maxAge 400 d;
+      classrup.notify.channel_withdrawal/v1 - signer role principal, same audience, payload {consentId, targetCid,
+      channel, relayId, via: settings|privacy_withdrawal|account_deletion, withdrawnAt}, maxAge 400 d;
+      classrup.notify.channel_withdrawal_receipt/v1 - signer role relay (author is the relay key of relayId, pinned
+      through F11.S03.M01 and the F15.S02.M01 key chain), audience the consenting principal, payload {consentId, targetCid,
+      channel, relayId, via: unsubscribe_link|relay_policy|expired, effectiveAt, changeSeq}, accepted only for a consent
+      registered at that same relay, maxAge 400 d. The acceptance signature returned by register is the relay key over
+      the statement cid, issued only after signature, consent and chain checks; HTTP 2xx before it is transport_acknowledged.
+      Relay ports: UnsubscribeTokenPort.urlFor(consentId) -> {url, token} with token = base64url(HMAC-SHA256(
+      relayUnsubscribeKey, consentId || channel)), keys rotated yearly and retained 400 days; RelayWithdrawalPort.withdraw(
+      consentId, via: unsubscribe_link|relay_policy) -> {changeSeq}, used by F13.S01.M02 for verified complaints and by
+      operators. A verified complaint counts as a one-click unsubscribe (via unsubscribe_link). Privacy ports (N6):
+      ExportSectionPort section notify.channel_consents with schemas classrup.notify.channel_consent/v1 and the signed
+      statements and receipts; DeletionPort plan {willDelete: records when keepEvidence is false, willPseudonymize:
+      userDid in retained records, blockers: none} with step sign (sign classrup.notify.channel_withdrawal/v1 with via
+      account_deletion for every granted consent and queue it in the F15.S01.M01 sync outbox before revoke_keys and
+      destroy_keys), step pseudonymize and step purge; RetentionPurgePort kind notify.channel_consent, class RET-EVIDENCE,
+      anchorField withdrawnAtClaim. Every field is classified with F10.S02.M02.
     events_produced:
-      - {type: notify.channel.opted_in, privacy: P2, payload: "{ consentId, userDid, relayId, channel, expiresAt }"}
-      - {type: notify.channel.opted_out, privacy: P2, payload: "{ consentId, userDid, relayId, channel, via }"}
+      - {type: notify.channel.opted_in, privacy: P2, payload: "{ consentId, userDid, relayId, channel, privacyPurpose, expiresAt, side: vault|relay } — vault-local from opt_in; relay-local from register of a grant"}
+      - {type: notify.channel.opted_out, privacy: P2, payload: "{ consentId, userDid, relayId, channel, via: settings|unsubscribe_link|privacy_withdrawal|account_deletion|relay_policy|expired, side: vault|relay } — vault-local from opt_out and apply_relay_change; relay-local from register of a withdrawal, unsubscribe, RelayWithdrawalPort and expire_sweep"}
     events_consumed:
-      - {type: privacy.consent.withdrawn, effect: "withdraw granted channel consents linked to that privacy consent and queue relay withdrawals"}
-      - {type: privacy.consent.granted, effect: "enable the opt-in controls when the notifications purpose is granted"}
-      - {type: privacy.deletion.requested, effect: "withdraw all channel consents with via account_deletion and queue relay withdrawals"}
+      - {type: privacy.consent.withdrawn, effect: "vault instance: when purpose is notify_push or notify_email, withdraw the granted channel consent whose channel matches the purpose and whose relayId equals scope.relayId with via privacy_withdrawal and queue the relay withdrawal; matching uses purpose and scope, never consentId; an already withdrawn consent is a no-op"}
+      - {type: privacy.consent.granted, effect: "vault instance: when purpose is notify_push or notify_email, enable the opt-in control for scope.relayId and re-link a granted channel consent of the same purpose and relay to the new consentId when F10 superseded the previous grant; the registered statement is not re-sent because the relay never interprets the F10 consent ID"}
+      - {type: privacy.deletion.requested, effect: "vault instance: reversible pause only - consents show paused while privacy.deletion.assert_not_pending reports a pending deletion; nothing is withdrawn, signed or sent to relays, so a cancelled request restores the granted view without any undo; withdrawals are signed in the DeletionPort sign step at execution"}
+      - {type: privacy.deletion.completed, effect: "vault instance: notification only; confirm that the sign step queued withdrawals for every relay and the purge or pseudonymize step ran; nothing is signed on this event"}
     errors:
       - "NOTIFY_CHANNEL_UNSUPPORTED | 422 | no | channel is not push or email or the relay does not offer it"
-      - "NOTIFY_UNSUBSCRIBE_TOKEN_INVALID | 404 | no | unsubscribe token unknown, expired or already revoked"
+      - "NOTIFY_UNSUBSCRIBE_TOKEN_INVALID | 404 | no | unsubscribe token does not verify for any consent registered at this relay"
+      - "NOTIFY_CHANNEL_RECEIPT_INVALID | 422 | no | a withdrawal receipt is not signed by the key chain of the relay where the named consent was registered or names another statement"
     example: |
-      vault command notify.channel.opt_in  { "channel": "push", "relayId": "relay.example", "privacyConsentId": "0192f3b0-0000-7000-8000-000000000001" }
-      -> { "consentId": "0192f3b0-1111-7000-8000-000000000001", "status": "granted", "expiresAt": "2027-11-04T10:00:00.000Z", "syncState": "local_committed" }
-      POST https://relay.example/u/Zm9vYmFy…   (List-Unsubscribe=One-Click)
-      200 { "channel": "email", "status": "withdrawn" }
+      vault command notify.channel.opt_in  { "channel": "push", "relayId": "relay:k3n7v2q8…", "privacyConsentId": "0192f3b0-0000-7000-8000-000000000001", "privacyPurpose": "notify_push" }
+      -> privacy.consent.check { purpose: notify_push, relayId: relay:k3n7v2q8… } granted
+      -> { "consentId": "0192f3b0-1111-7000-8000-000000000001", "status": "granted", "expiresAt": "2027-11-04T10:00:00.000Z", "statementCid": "sha256-9f2c…", "syncState": "prepared" }
+      relay command notify.channel.register { "statement": <sealed classrup.notify.channel_consent_statement/v1> }
+      -> { "consentId": "0192f3b0-1111-…", "status": "granted", "relayRegisteredAt": "2026-11-04T10:00:01.200Z", "acceptance": { "cid": "sha256-9f2c…", "outcome": "applied", "sig": "…" } }   vault syncState -> peer_accepted; relay-local notify.channel.opted_in
+      POST https://relay.example/u/0192f3b0-2222-7000-8000-000000000001.mN3qTz…   (List-Unsubscribe=One-Click)
+      200 { "channel": "email", "status": "withdrawn" }   relay-local notify.channel.opted_out { via: unsubscribe_link }; receipt changeSeq 7
+      vault: notify.channel.list_changes { sinceSeq: 6 } -> [receipt 7] -> notify.channel.apply_relay_change -> vault-local notify.channel.opted_out { via: unsubscribe_link }
   authorization_capabilities:
     requirements:
-      - Vault policy lets only the local principal grant or withdraw its own channel consents.
-      - Relay policy lets a registered device key register its owner's consent statements; unsubscribe is open to a holder of the unguessable token and can only withdraw, never grant.
-      - Relay operators cannot create a consent for a user; they can only withdraw it under their hosting policy, recorded with via relay_policy.
+      - Vault policy lets only the local principal grant, withdraw or apply relay changes to its own channel consents.
+      - Relay policy lets an active device key of the user register its owner's statements and list its changes; unsubscribe is open to a holder of a valid token and can only withdraw, never grant.
+      - Relay operators cannot create a consent for a user; they can only withdraw it under their hosting policy through RelayWithdrawalPort, recorded with via relay_policy in a relay-signed receipt.
     capabilities:
-      - "notify.channel.opt_in | local principal | vault policy; privacy notifications purpose granted"
+      - "notify.channel.opt_in | local principal | vault policy; privacy.consent.check granted for the matching purpose and relay"
       - "notify.channel.opt_out | local principal | consent.userDid is the local principal"
-      - "notify.channel.register | registered relay device | relay policy; statement signed by a device key of the same user; relay offers the channel"
-      - "notify.channel.unsubscribe | anonymous | relay public by token; withdraw only; 10 calls per minute per IP"
+      - "notify.channel.apply_relay_change | local principal | vault sync routine of the local principal; receipt verified by V08"
+      - "notify.channel.register | registered relay device | relay policy; request and statement signed by an active device key of the same user; relay offers the channel"
+      - "notify.channel.unsubscribe | anonymous | relay public by token; withdraw only; 10 calls per minute per IP prefix"
+      - "notify.channel.expire | relay service | relay internal scheduler only"
+      - "notify.channel.read_changes | registered relay device | active device key of the consenting user; only that user's receipts"
       - "notify.channel.read_own | local principal | consent.userDid is the local principal"
   failure_recovery_idempotency:
     requirements:
-      - Vault commands commit locally first; relay registration is a retried outbox step with sync states prepared, transport acknowledged and peer accepted (relay receipt).
-      - Relay register is idempotent on the statement CID and unsubscribe is idempotent on the token.
+      - Vault commands commit locally first; relay registration is a retried outbox step whose sync state is transport_acknowledged on HTTP 2xx and peer_accepted only with the relay acceptance signature over the statement cid, issued after signature, consent and chain checks; a duplicate or refused statement never reaches peer_accepted.
+      - Relay register is idempotent on the statement cid, unsubscribe on the consent and token, and apply_relay_change on the receipt cid.
       - Conflicting states between vault and relay resolve toward withdrawn; a withdrawal is never undone by a late grant statement.
-    idempotency: "Vault commands idempotent on (userDid, relayId, channel, status); relay register idempotent on statementCid with Idempotency-Key replay window 24 h; unsubscribe naturally idempotent."
-    concurrency: "expectedRevision on opt_out; relay applies statements in order of arrival and a withdrawal always wins over a grant for the same record; no distributed lock."
-    retries: "Outbox retries register with backoff base 1 s, factor 2, cap 15 min for 14 days; unsubscribe is retried by the mail client."
-    offline: "Opt-out works offline and takes effect locally at once; the UI says sending may continue until the relay confirms; opt-in requires a relay connection to register."
-    partial_failure: "If registration fails the vault consent stays granted locally but the UI shows not yet active on relay; if the relay withdrew while the vault was offline the next sync applies the relay-signed withdrawal."
+    idempotency: "Vault commands idempotent on (userDid, relayId, channel, status); relay register idempotent on statementCid with Idempotency-Key replay window 24 h; unsubscribe naturally idempotent and a reuse within the 365-day redeemed-marker window returns 200 unchanged; apply_relay_change idempotent on receipt cid."
+    concurrency: "expectedRevision on opt_out; the relay applies statements in chain order and a withdrawal always wins over a grant for the same consent; a grant whose cid already has a withdrawal is refused; no distributed lock."
+    retries: "Outbox retries register with backoff base 1 s, factor 2, cap 15 min for 14 days; unsubscribe is retried by the mail client; list_changes runs again at the next sync."
+    offline: "Opt-out works offline and takes effect locally at once; the UI says sending may continue until the relay registers it; opt-in requires a relay connection to register before enable."
+    partial_failure: "If registration fails the vault consent stays granted locally but the UI shows not yet active on relay and enable stays disabled; if the relay withdrew while the vault was offline, the next list_changes returns the receipt and apply_relay_change withdraws the vault record."
   privacy_retention_abuse:
     requirements:
       - Consent records contain DID, relay and channel only; no address, endpoint or content is part of the consent.
-      - Consent evidence is retained under RET-EVIDENCE and unsubscribe tokens are stored only as hashes and never logged.
+      - Consent evidence is retained under RET-EVIDENCE, unsubscribe tokens are never stored or logged, and redeemed markers are kept 365 days after withdrawal.
       - Dark patterns are prevented by defaults of not enabled, plain wording, one-click withdrawal and no re-prompt for 30 days after a refusal.
+      - Consent statements name the relay by its self-certifying key-derived relayId and pinned key, so whoever controls the hostname later cannot inherit consents, and relay acceptances and withdrawal receipts are verified against that relay's key chain.
     data:
-      - "ChannelConsent: P2 evidence in the vault and at the sending relay."
-      - "Unsubscribe token: P3 secret, stored as SHA-256 hash at the relay."
+      - "ChannelConsent vault record: P2 evidence in the vault."
+      - "ChannelConsent relay registration: P2 for the named relay only (statements sealed to that relay); kept as evidence."
+      - "Unsubscribe token: derived on demand, never stored; redeemed marker only."
     retention:
-      - "Consent records: RET-EVIDENCE; withdrawn and expired records remain as evidence."
-      - "Unsubscribe token hashes: deleted when the consent ends."
+      - "Consent records and registrations: RET-EVIDENCE; withdrawn and expired records remain as evidence and are pseudonymized at deletion when kept."
+      - "Redeemed unsubscribe markers: 365 days after withdrawal."
     threats:
-      - "T01 | Third party unsubscribes someone by guessing tokens | 256-bit random tokens, constant-time compare, 10 calls per minute per IP, NOT_FOUND detail-free"
-      - "T02 | Relay sends without consent | the send path requires a verified granted statement; tests assert refusal and the relay operator is told by the specification that sending without consent breaches the hosting policy"
-      - "T03 | Forged opt-in for another user | statement signature must verify against that user's device keys"
+      - "T01 | Third party unsubscribes someone by guessing tokens | 256-bit HMAC tokens bound to consentId and channel, constant-time compare, 10 calls per minute per IP prefix, detail-free NOTIFY_UNSUBSCRIBE_TOKEN_INVALID"
+      - "T02 | Relay sends without consent | the send path requires a granted registered consent; tests assert refusal and the relay operator is told by the specification that sending without consent breaches the hosting policy"
+      - "T03 | Forged opt-in for another user or by a revoked key | statement signature must verify against an active device key of that user per F16.S02.M02"
       - "T04 | Consent fatigue and coercion | not enabled by default, 30-day quiet period after refusal, annual reconfirmation, no feature gated on consent"
       - "T05 | Unsubscribe link leaked in a forwarded email | token only withdraws, never grants; Undo requires the app"
+      - "T06 | Domain transfer lets a new operator inherit consents | relayId derived from the relay genesis key and audience key checked; a hostname match is never enough"
+      - "T07 | Signer-role confusion - relay B signs a withdrawal receipt for a consent at relay A, or a device key signs a receipt | V08 accepts receipts only from the key chain of the registering relay; F11.S01.M01 role check rejects user keys for relay roles"
     abuse_controls:
-      - "Rate limits of 20 changes per day per user and relay and 10 unsubscribe calls per minute per IP."
+      - "Through RateLimitPort (F12.S03.M03): 20 grants per day per user and relay, 10 unsubscribe calls per minute per IP prefix, 60 list_changes calls per hour per user; withdrawals are never limited."
       - "Relay operators can block abusive registrants on that relay only."
   observability_performance:
     requirements:
@@ -206,10 +322,10 @@ processes:
       - Expiry sweep lag is observable.
     metrics:
       - "classrup_notify_channel_consents_total{channel,status} (relay)"
-      - "classrup_notify_unsubscribe_total{outcome=ok|invalid|rate_limited} (relay)"
+      - "classrup_notify_unsubscribe_total{outcome=ok|invalid|rate_limited|reused} (relay)"
       - "classrup_notify_consent_sweep_lag_ms (gauge, relay)"
     logs:
-      - "relay info channel.registered {consentIdHash, channel, correlationId} — no token and no DID."
+      - "relay info channel.registered {consentIdHash, channel, outcome, correlationId} — no token and no DID."
     budgets:
       - "register and unsubscribe p95 ≤ 300 ms at 50 req/s; vault opt_in/opt_out p95 ≤ 50 ms."
       - "Sweep expires 100 000 consents in ≤ 30 s."
@@ -217,32 +333,38 @@ processes:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Contract tests check commands, statements and event payloads against the schema registry.
-      - Send-path tests assert that no push or email leaves without a granted consent.
-    fixtures: "Vault U with device key, relay R offering push and email, relay R2 offering push only, privacy consent PC1 granted, fixed clock 2026-11-04T10:00:00Z."
+      - Send-path tests assert that no push or email leaves without a granted registered consent.
+      - The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues, a keyboard and screen-reader walk-through and a no-JavaScript run of the unsubscribe page.
+    fixtures: "Vault U with devices A and B, relay R offering push and email with relay key chain k1 and k2, relay R2 offering push only, relay B with its own key, privacy consents PC1 (notify_push at R) and PC2 (notify_email at R) granted through a privacy.consent.check double, F16.S02.M02 registry double with an active and a revoked key, fake push and email modules on R, fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01 | opt in to push on R and withdraw then re-grant | first record withdrawn terminal; re-grant creates a new record; statement signed"
-      - "T02 | unit | 01.R03,02.R02,02.R03 | each rule V01 to V07 violated in turn including email on R2 and token reuse | documented error code returned and state unchanged"
-      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of opt in, opt out, expiry, unsubscribe and privacy withdrawal | terminal states never change; withdrawal always wins over grant"
-      - "T04 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs, statements and event payloads validate against registry schemas"
-      - "T05 | integration | 04.R03 | privacy.consent.withdrawn and privacy.deletion.requested delivered | linked channels withdrawn locally and relay withdrawal queued"
-      - "T06 | abuse | 05.R01,05.R02,05.R03 | forged opt-in from another key; unsubscribe attempting to grant; relay trying to create a consent | rejected in each case"
-      - "T07 | integration | 06.R01,06.R02,06.R03 | register twice, unsubscribe twice, vault offline during relay unsubscribe | single record, idempotent results, next sync applies relay withdrawal"
-      - "T08 | abuse | 07.R01,07.R03 | 11th unsubscribe in a minute; token guessing run of 10 000 attempts; inspect logs | RATE_LIMITED, no success, no tokens in logs"
-      - "T09 | integration | 07.R02,06.R01 | dispatch with no consent, with withdrawn consent and with expired consent | relay sends nothing in each case"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | opt in to push on R, withdraw, then re-grant | first record withdrawn terminal; re-grant creates a new record; statement signed and carries privacyConsentId, privacyPurpose and relayKeyId"
+      - "T02 | unit | 02.R03,02.R02,01.R03 | each rule V01 to V09 violated in turn including email on R2, a token that does not verify, and a reused valid token | documented error code returned; the reused token returns 200 withdrawn unchanged; state unchanged otherwise"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of opt in, opt out, expiry, unsubscribe and privacy withdrawal | terminal states never change; withdrawal always wins over grant; every relay-side withdrawal emits a relay-local opted_out"
+      - "T04 | contract | 04.R01,04.R02,09.R02,01.R04 | each command and query executes in its environment | outputs, statements, receipts and event payloads validate against registry schemas; statement schemas differ from the record schemas; relay events in the SQLite transaction of the change"
+      - "T05 | integration | 04.R03,02.R04 | privacy.consent.withdrawn for notify_email at R; privacy.consent.granted superseding PC1 then withdrawn | only email at R withdrawn with via privacy_withdrawal; push consent re-linked to the new F10 ID and withdrawn when the new grant is withdrawn"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | forged opt-in from another user's key; unsubscribe attempting to grant; operator trying to create a consent | rejected in each case; operator withdrawal produces a relay_policy receipt"
+      - "T07 | integration | 06.R01,06.R02,06.R03,03.R04 | register twice, unsubscribe twice, vault offline during a relay unsubscribe then list_changes | single registration and one receipt; peer_accepted only after the acceptance signature; apply_relay_change withdraws with via unsubscribe_link"
+      - "T08 | abuse | 07.R01,07.R02 | 11th unsubscribe in a minute; token guessing run of 10 000 attempts; inspect logs and the relay database | RATE_LIMITED, no success, no tokens stored or logged; only redeemed markers"
+      - "T09 | integration | 09.R03,04.R02 | dispatch with no consent, withdrawn consent and expired consent; then an email unsubscribe link at R | relay sends nothing in each case; after the link no address ciphertext remains at R within 24 h and no push subscription of U remains after a push withdrawal"
       - "T10 | load | 08.R01,08.R02,08.R03 | 50 register and unsubscribe per second for 2 minutes and sweep 100 000 | budgets met"
-      - "T11 | unit | 09.R01,09.R03 | traceability tool run | every PS-107 requirement maps to a passing test"
+      - "T11 | unit | 09.R01 | traceability tool run | every PS-107 requirement maps to a passing test"
       - "T12 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup | consents round trip; imported granted consents are re-registered only after user confirmation"
-      - "T13 | a11y | 04.R01 | settings and unsubscribe page with screen reader and keyboard | switches labelled, page works without JavaScript, zero serious axe issues"
+      - "T13 | a11y | 09.R04 | settings and unsubscribe page with screen reader, keyboard and without JavaScript | switches labelled, page works, zero serious axe issues"
+      - "T14 | abuse | 04.R04,02.R01,07.R04 | withdrawal receipt signed by relay B for a consent at R; receipt signed by a user device key; consent statement whose audience key is not R's key; R rotated to k2 and signs with k2 within 7 days and with k1 after 8 days | B's and the device-signed receipts refused NOTIFY_CHANNEL_RECEIPT_INVALID; wrong audience refused VALIDATION_FAILED; k2 accepted; stale k1 refused"
+      - "T15 | integration | 02.R05,04.R05 | enable push before the registration is accepted; then after acceptance; email module renders a List-Unsubscribe URL and a complaint arrives | push enable refused PRECONDITION_FAILED then accepted; UnsubscribeTokenPort URL verifies; complaint withdraws through RelayWithdrawalPort with via unsubscribe_link"
+      - "T16 | integration | 03.R05,04.R06 | deletion requested, cancel on day 13; a second request executed; DeletionPort plan, export section and retention purge with F10 doubles | during grace consents show paused and nothing reaches relays; cancel restores granted with no event; at execution withdrawals with via account_deletion are queued to every relay before destroy_keys; section exported; records pseudonymized when kept"
+      - "T17 | integration | 03.R03 | consent passes expiresAt while the app is closed | relay sweep expires it, issues a receipt with via expired and emits relay-local opted_out; vault applies it on next sync with via expired"
+      - "T18 | e2e | 07.R03,07.R01 | fresh vault opens Channels settings and the opt-in sheet, refuses, reopens after 1 and 31 days; inspect the consent record | both channels not enabled by default; sheet text names the relay and what it learns; no re-prompt before 30 days; record holds no address or endpoint"
     acceptance:
-      - All tests T01 to T13 pass in CI.
-      - No push or email is ever sent without a granted, unexpired, verified consent.
-      - Unsubscribe works with one click and no login and cannot grant consent.
+      - All tests T01 to T18 pass in CI.
+      - No push or email is ever sent without a granted, unexpired, registered consent.
+      - Unsubscribe works with one click and no login, cannot grant consent, and reaches the vault as a relay-signed receipt.
   import_export_backup_rollback:
     requirements:
-      - A user's vault export contains their channel consents and signed statements.
+      - A user's vault export contains their channel consents with the signed statements and applied receipts.
       - Import re-verifies statements and never re-registers a consent at a relay without a fresh user confirmation.
       - Schema changes follow expand and contract; new channels are additive enum values behind a relay capability flag.
-    export: "Section notify.channel_consents in classrup-export/v1; one line per ChannelConsent (schema classrup.notify.channel_consent/v1) without tokens."
+    export: "Section notify.channel_consents in classrup-export/v1 through ExportSectionPort; one line per ChannelConsent (schema classrup.notify.channel_consent/v1) plus its statements and receipts; no token is exported because none is stored."
     import: "Statements are re-verified; granted records import as withdrawn pending reconfirmation when older than 30 days; existing IDs are skipped."
-    backup: "The vault export is the primary backup (IOX-6); relay consent rows are covered by relay SQLite backup (IOX-3, IOX-7) and restored consents are checked against expiry."
-    migration_rollback: "Additive fields only in v1; rollback is safe because the relay treats unknown channels as unsupported and unknown fields are ignored."
+    backup: "The vault export is the primary backup (IOX-6); relay registrations are covered by relay SQLite backup (IOX-3, IOX-7) and restored registrations are checked against expiry and the change feed is resumed from the highest changeSeq."
+    migration_rollback: "Additive fields only in v1; rollback is safe because the relay treats unknown channels as unsupported and unknown fields are ignored; retained unsubscribe keys survive a rollback."

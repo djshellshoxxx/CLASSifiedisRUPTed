@@ -1,0 +1,321 @@
+id: F01.S01.M03
+scope: MVP
+summary: >-
+  Turns a local draft into a public offer to the world. Publishing runs local policy checks (prohibited-item rules
+  and jurisdiction notices from F18, local spam heuristics), then signs a public projection of the listing as a
+  classrup.bazaar.listing/v1 statement (CTR-FED-001 envelope, Ed25519 over JCS) and queues it to the relays the
+  user selected. Unpublishing signs a tombstone. Each destination relay applies its own hosting policy and may
+  refuse or remove the projection; the owner sees per-relay sync state (prepared, transport_acknowledged,
+  peer_accepted) and never more certainty than that. Copies already fetched by other vaults cannot be recalled.
+responsibilities:
+  - Own PublicationRecord: one record per publish attempt with verdict, signed statement digest, expiry (default 30 days, range 1 to 90) and per-relay delivery states.
+  - Evaluate prohibited-item rules (F18.S01.M02), jurisdiction notices (F18.S01.M01) and local spam heuristics before signing; block, hold for owner confirmation, or allow.
+  - Sign and queue the listing projection (maximum location L2, EXIF-free media, federation opt-in flag) and tombstones through the sync outbox.
+  - Renew a publication (last 7 days of life, +30 days, maximum 3 renewals and 120 days in total).
+  - Record optional per-relay promotion purchased by a payment claim (F09), active only after that relay's signed acknowledgement.
+  - React to relay hosting notices and policy pack changes without claiming any global takedown.
+non_responsibilities:
+  - Listing record and status field (F01.S01.M01); this module requests changes through apply_status.
+  - Expiry sweep, archive, restore and close (F01.S01.M04), which calls bazaar.publication.end here before closing or archiving.
+  - Relay-side indexing, ranking and hosting decisions (F06 and F12 on the relay); this module only submits and records outcomes.
+  - Payment handling (F09.S01.M01); promotion uses a payment claim between the user and the relay operator, never platform custody.
+  - Federation transport between relays (F11).
+  - "Future: scheduled publication at a chosen time; multi-author shop accounts."
+depends_on: [F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F09.S01.M01, F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001]
+user_stories:
+  - As a seller, I publish a listing to one or more relays I choose and see for each relay whether it was only sent, received by the relay, or accepted.
+  - As a seller, if a rule blocks my listing I see which policy reason applies and what to change.
+  - As a seller, I can unpublish and understand that people who already saw it may still have a copy.
+  - As a seller, I can pay a relay operator for a promoted slot and see it only after that relay confirms.
+edge_cases:
+  - Listing text matches a review-level rule; the owner sees the notice, must confirm explicitly, and the confirmation is recorded in the PublicationRecord.
+  - Listing has no region cell or no sell terms for its kind; publish is refused with a specific code before any signing.
+  - A relay rejects the projection under its own hosting policy; that delivery becomes relay_rejected with the relay's signed reason; other relays are unaffected and the local publication stays active.
+  - The policy pack is updated while publications are active and a new block rule matches; the publication is ended locally with reason policy_changed and a tombstone is queued.
+  - The same publish command is replayed after a crash; the original PublicationRecord is returned and exactly one statement exists in the outbox.
+  - The device clock is wrong by more than 24 h; publish refuses with PRECONDITION_FAILED because expiry and ordering would be misleading.
+  - Federation opt-in is set but the tenant federation flag is off; the statement is signed without federation export and the UI says so.
+  - Promotion claim is never acknowledged within 14 days; promotion state becomes expired and the listing stays published unpromoted.
+ux:
+  screens:
+    - "Publish review sheet: summary of what becomes public (title, text, photos, price, L2 area), expiry selector 1 to 90 days, relay chooser with each relay's hosting policy link, federation opt-in toggle, required notices checklist."
+    - "Policy result sheet: verdict (blocked, needs confirmation, allowed) with localized reason keys and a Fix action."
+    - "Publication status card: per-relay state chips (prepared, relay received, accepted, rejected by relay) and an honest note that copies already fetched cannot be recalled."
+    - "Promotion sheet: tiers boost_7d and boost_14d, price from the chosen relay, payment claim steps, status."
+  states: [loading, blocked, needs-confirmation, prepared, transport-acknowledged, peer-accepted, relay-rejected, unpublished, expired, offline-pending]
+  a11y:
+    - State chips use text plus icon and are announced in an aria-live polite region when they change.
+    - The review sheet is a dialog with focus trap and a visible heading; all actions are at least 44x44 px.
+    - Policy reasons are plain-language sentences, not codes.
+processes:
+  domain_schema:
+    requirements:
+      - "A PublicationRecord captures one publish attempt: listing revision, policy verdict and ruleset version, expiry, federation opt-in, signed statement digest and per-relay delivery states."
+      - "The signed projection contains only P0 fields, a region cell of at most L2 and the listing revision; it never contains drafts, exact address, contact data or offers."
+      - "PublicationRecords are retained as evidence of what was published and when; delivery state is local knowledge and is labelled as such."
+    entities:
+      - name: PublicationRecord
+        schema: classrup.bazaar.publication/v1
+        storage: device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing"
+          - "ownerId: did:key — local principal"
+          - "listingRevision: int — Listing.revision signed in the projection"
+          - "status: enum — submitted | held_for_confirmation | active | blocked | withdrawn | unpublished | ended"
+          - "verdict: enum — allow | allow_with_notice | review | block"
+          - "rulesetVersion: int — F18.S01.M02 ruleset version evaluated"
+          - "matchedRuleKeys?: string[] — <= 10 rule keys"
+          - "acknowledgedNoticeIds?: string[] — <= 10 notice ids from the jurisdiction profile"
+          - "ownerConfirmedAt?: timestamp — required when verdict is review"
+          - "expiresAt: timestamp — publishedAt + 1..90 days, default 30"
+          - "renewals: int — 0..3"
+          - "federationOptIn: boolean — default false"
+          - "statementCid?: string — sha256- over JCS of the signed envelope"
+          - "statementSeq?: int — per-author sequence (CTR-FED-001 FED-3)"
+          - "deliveries: object[] — <= 10 items {relayId, syncState: prepared|transport_acknowledged|peer_accepted|relay_rejected|relay_removed, receiptAt?, reasonKey?}"
+          - "promotion?: object — {relayId, tier: boost_7d|boost_14d, claimId, state: claimed|active|expired, activeUntil?}"
+          - "endReason?: enum — owner | policy_changed | expired | closed | archived | account_deleted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one PublicationRecord per listing has status active or held_for_confirmation.
+          - status active implies statementCid, statementSeq and at least one delivery are set.
+          - verdict review implies ownerConfirmedAt is set before status active; verdict block implies status blocked.
+          - receiptAt on a delivery is the relay clock and is never used to order events.
+    sql: |
+      CREATE TABLE bazaar_publication (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_publication_live ON bazaar_publication(tenant_id, listing_id)
+        WHERE status IN ('active','held_for_confirmation');
+  validation_rules:
+    requirements:
+      - "Publication is allowed only for a complete listing whose kind-specific terms exist and whose region is at least L1."
+      - "Policy checks run in the vault before signing and cannot be skipped by the caller."
+      - "Every violation maps to one stable error code with a localized message key."
+    rules:
+      - "V01 | listing status is draft, unpublished or expired and moderationLock is not set by a relay notice for the same relay | BAZAAR_PUBLISH_NOT_ALLOWED"
+      - "V02 | title >= 3 and description >= 10 code points; kind sell has SellTerms, wanted has WantSpec, giveaway has GiveawayTerms | BAZAAR_PUBLISH_INCOMPLETE"
+      - "V03 | regionCell present with length 4 or 5 and mediaRefs have no GPS tag | BAZAAR_PUBLISH_INCOMPLETE"
+      - "V04 | category is active and, if restricted for the chosen jurisdiction profile, notices are acknowledged | BAZAAR_PUBLISH_BLOCKED"
+      - "V05 | prohibited-item verdict is not block | BAZAAR_PUBLISH_BLOCKED"
+      - "V06 | verdict review requires ownerConfirmedAt | BAZAAR_PUBLISH_CONFIRMATION_REQUIRED"
+      - "V07 | expiresInDays between 1 and 90 | VALIDATION_FAILED"
+      - "V08 | 1 to 10 destination relays, each a user-selected relay known to the vault | VALIDATION_FAILED"
+      - "V09 | vault has fewer than 100 active publications | BAZAAR_PUBLISH_LIMIT"
+      - "V10 | device clock within 24 h of the newest relay receipt seen | PRECONDITION_FAILED"
+      - "V11 | renew only in the last 7 days of life, renewals < 3 and total life <= 120 days | BAZAAR_PUBLISH_RENEW_NOT_ALLOWED"
+  workflow_state_machine:
+    requirements:
+      - "A PublicationRecord follows the declared machine; every other transition is refused with CONFLICT_STATE."
+      - "Becoming active is atomic with Listing.apply_status to published and with queuing the signed statement."
+      - "Per-relay delivery state is tracked inside the record and never changes the record status; a relay rejection does not unpublish locally."
+    machines:
+      - entity: PublicationRecord
+        initial: submitted
+        terminal: [blocked, withdrawn, unpublished, ended]
+        transitions:
+          - "submitted -> active | verdict allow or allow_with_notice | sign statement, queue to relays, Listing draft/unpublished/expired -> published; emits bazaar.listing.published"
+          - "submitted -> held_for_confirmation | verdict review or local spam heuristic elevated | owner must read notice and confirm"
+          - "submitted -> blocked | verdict block | no statement signed"
+          - "held_for_confirmation -> active | bazaar.publication.confirm by owner | same effects as submitted -> active"
+          - "held_for_confirmation -> withdrawn | owner withdraws or 7 days pass | no statement signed"
+          - "active -> unpublished | bazaar.publication.unpublish, bazaar.publication.end, or policy pack block | sign tombstone, queue to relays, Listing -> unpublished; emits bazaar.listing.unpublished"
+          - "active -> ended | consumes bazaar.listing.expired | expiry already announced; tombstone queued"
+    timeouts:
+      - "held_for_confirmation expires to withdrawn after 7 days."
+      - "Delivery in prepared for more than 24 h without transport acknowledgement is flagged stale in the UI; it keeps retrying under CTR-IDM-001 backoff."
+      - "Promotion in claimed state for 14 days becomes expired."
+  commands_queries_events:
+    requirements:
+      - "publish, confirm, unpublish, renew and attach_promotion are vault commands; publish, unpublish and renew produce signed statements, confirm and attach_promotion produce them only as a consequence of publish or a payment claim."
+      - "Statements produced: classrup.bazaar.listing/v1 (projection, seq n) and classrup.federation.tombstone/v1; both go to the sync outbox with per-destination states."
+      - "No relay command is required: relays accept statements through their own index endpoints defined in F06 and F11."
+    commands:
+      - name: bazaar.publication.publish
+        capability: bazaar.publication.publish
+        input: "[vault-local + statement classrup.bazaar.listing/v1] { listingId, expectedRevision, relayIds[], expiresInDays? (default 30), federationOptIn?, acknowledgedNoticeIds?, jurisdictionProfileId? }"
+        output: "{ publicationId, status, verdict, matchedRuleKeys?, statementCid?, deliveries[] }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_PUBLISH_NOT_ALLOWED, BAZAAR_PUBLISH_INCOMPLETE, BAZAAR_PUBLISH_BLOCKED, BAZAAR_PUBLISH_LIMIT, PRECONDITION_FAILED, FEATURE_DISABLED]
+        emits: [bazaar.listing.published]
+        idempotent: true
+      - name: bazaar.publication.confirm
+        capability: bazaar.publication.confirm
+        input: "[vault-local + statement classrup.bazaar.listing/v1] { publicationId, expectedRevision, confirmedRuleKeys[] }"
+        output: "{ publicationId, status: active, statementCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_PUBLISH_CONFIRMATION_REQUIRED, EXPIRED]
+        emits: [bazaar.listing.published]
+        idempotent: true
+      - name: bazaar.publication.unpublish
+        capability: bazaar.publication.unpublish
+        input: "[vault-local + statement classrup.federation.tombstone/v1] { publicationId, expectedRevision }"
+        output: "{ publicationId, status: unpublished, tombstoneCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.listing.unpublished]
+        idempotent: true
+      - name: bazaar.publication.end
+        capability: bazaar.publication.end
+        input: "[vault-local, internal port + tombstone statement] { listingId, reason: closed|archived|account_deleted|policy_changed }"
+        output: "{ publicationId?, ended: boolean }"
+        errors: [NOT_FOUND, CONFLICT_STATE]
+        emits: [bazaar.listing.unpublished]
+        idempotent: true
+      - name: bazaar.publication.renew
+        capability: bazaar.publication.renew
+        input: "[vault-local + statement classrup.bazaar.listing/v1] { publicationId, expectedRevision }"
+        output: "{ publicationId, expiresAt, renewals }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_PUBLISH_RENEW_NOT_ALLOWED]
+        emits: [bazaar.publication.renewed]
+        idempotent: true
+      - name: bazaar.publication.attach_promotion
+        capability: bazaar.publication.promote
+        input: "[vault-local] { publicationId, relayId, tier: boost_7d|boost_14d, claimId (F09 PaymentClaim) }"
+        output: "{ publicationId, promotion: { state: claimed } }"
+        errors: [NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: bazaar.publication.get
+        capability: bazaar.publication.read
+        input: "{ publicationId }"
+        output: "{ publication: PublicationRecord }"
+        errors: [NOT_FOUND]
+      - name: bazaar.publication.list_mine
+        capability: bazaar.publication.read
+        input: "{ status?, cursor?, limit <= 50 }"
+        output: "{ items: PublicationRecord[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+      - name: bazaar.publication.preview_policy
+        capability: bazaar.publication.read
+        input: "{ listingId, jurisdictionProfileId? }"
+        output: "{ verdict, matchedRuleKeys, requiredNoticeIds, rulesetVersion }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: bazaar.listing.published, privacy: P0, payload: "{ listingId, publicationId, ownerId, kind, categoryId, regionCell, listingRevision, publishedAt, expiresAt, federationOptIn, statementCid }"}
+      - {type: bazaar.listing.unpublished, privacy: P0, payload: "{ listingId, publicationId, ownerId, reason: owner|policy_changed|closed|archived|account_deleted, tombstoneCid }"}
+      - {type: bazaar.publication.renewed, privacy: P1, payload: "{ listingId, publicationId, expiresAt, renewals }"}
+      - {type: bazaar.publication.promotion_activated, privacy: P1, payload: "{ listingId, publicationId, relayId, tier, activeUntil }"}
+    events_consumed:
+      - {type: bazaar.listing.expired, effect: "end the active PublicationRecord with endReason expired and queue a tombstone"}
+      - {type: governance.prohibited_rule.changed, effect: "re-evaluate active publications in batches of 200; a new block verdict ends the publication with reason policy_changed"}
+      - {type: governance.category.changed, effect: "re-evaluate active publications in the changed category when the category became restricted or retired"}
+      - {type: moderation.action.applied, effect: "when a relay hosting notice targets one of this vault's listings, set that delivery to relay_removed with the signed reason; the local publication stays active and other relays are unaffected"}
+      - {type: moderation.action.reverted, effect: "clear relay_removed on that delivery and allow resubmission to the relay"}
+      - {type: commerce.payment.acknowledged, effect: "when the claim belongs to a promotion and the relay operator signed the acknowledgement, set promotion.state active and emit bazaar.publication.promotion_activated"}
+    errors:
+      - "BAZAAR_PUBLISH_NOT_ALLOWED | 409 | no | listing status or a relay notice does not allow publication now"
+      - "BAZAAR_PUBLISH_INCOMPLETE | 422 | no | required fields, terms or region are missing; params.fields lists them"
+      - "BAZAAR_PUBLISH_BLOCKED | 422 | no | policy pack blocks this listing; params.ruleKeys and reasonKeys"
+      - "BAZAAR_PUBLISH_CONFIRMATION_REQUIRED | 409 | no | a review-level rule matched and the owner has not confirmed"
+      - "BAZAAR_PUBLISH_LIMIT | 409 | no | vault already has 100 active publications"
+      - "BAZAAR_PUBLISH_RENEW_NOT_ALLOWED | 409 | no | renewal window, count or total life limit not met"
+    example: |
+      vault.dispatch("bazaar.publication.publish", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 5,
+        "relayIds": ["relay:berlin.example"], "expiresInDays": 30 }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000031")
+      => { "publicationId": "0192f3a6-...", "status": "active", "verdict": "allow", "statementCid": "sha256-Zm9v...",
+           "deliveries": [ { "relayId": "relay:berlin.example", "syncState": "prepared" } ] }
+      later: delivery syncState transport_acknowledged (relay receipt), then peer_accepted (relay signed acceptance).
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the listing's author principal may publish, confirm, unpublish, renew or attach a promotion."
+      - "The signing key is an authorized device key of the principal (CTR-CAP-001 CAP-8); statements signed by any other key are never produced by this module."
+      - "Relay policy rows: each relay decides on its own index and promotion; a relay accepts index writes for requests signed by a registered device key, and a relay moderator or operator may remove from that relay only."
+    capabilities:
+      - "bazaar.publication.publish | owner | listing.ownerId = local principal; vault unlocked; signing key unrevoked"
+      - "bazaar.publication.confirm | owner | publication.ownerId = local principal and status held_for_confirmation"
+      - "bazaar.publication.unpublish | owner | publication.ownerId = local principal and status active"
+      - "bazaar.publication.end | system | caller is F01.S01.M04 or the policy-change consumer in this module"
+      - "bazaar.publication.renew | owner | publication.ownerId = local principal; renewal window met"
+      - "bazaar.publication.promote | owner | publication.ownerId = local principal; claim payer is the local principal"
+      - "bazaar.publication.read | owner | publication.ownerId = local principal"
+      - "bazaar.publication.relay_index_write | relay-member | relay policy: request signed by a registered device key, within the relay's published quota (default 100 projections per key)"
+      - "bazaar.publication.relay_remove | relay-moderator | relay policy: removal from that relay's index only, with a signed statement of reasons delivered to the author"
+  failure_recovery_idempotency:
+    requirements:
+      - "Publishing is idempotent per CTR-IDM-001; a replay returns the stored PublicationRecord and never signs a second statement."
+      - "Signing, PublicationRecord, Listing status change and outbox entry commit in one IndexedDB transaction; transport is a separate retried step."
+      - "Offline publish commits locally and shows prepared; the UI never reports relay receipt or acceptance before a signed receipt exists."
+    idempotency: "Idempotency-Key required on every command; keys and request hashes kept 24 h in the vault. Statements are additionally deduplicated by cid at relays and peers (CTR-FED-001 FED-3)."
+    concurrency: "expectedRevision on the listing and on the publication; one live publication per listing is enforced by a partial unique index. A forked statement chain (same seq, different prev from another device of the principal) is detected on sync, the publication is frozen and the owner chooses which chain to keep; no last-writer-wins."
+    retries: "Transport retries follow IDM-4: exponential backoff with full jitter, base 500 ms, cap 30 s, 6 attempts per burst, then waits for the next app start or network event; a relay_rejected result is never retried."
+    offline: "Everything except relay delivery works offline. The sync outbox entry stays prepared; entries older than 7 days prompt the user to resend or discard."
+    partial_failure: "Delivery to relay A may succeed while relay B fails; each destination has its own state. A local policy-change unpublish with some relays unreachable queues tombstones for them and shows tombstone pending."
+  privacy_retention_abuse:
+    requirements:
+      - "Only P0 fields leave the device in the projection; the UI shows exactly what becomes public and warns that copies already fetched by others cannot be recalled (PRV-6)."
+      - "Tombstones are honoured by relays that follow CTR-FED-001; retention of the PublicationRecord is RET-EVIDENCE."
+      - "Pseudonymity is not anonymity: the author did:key and relay metadata link all of a principal's publications, and the publish sheet says so."
+    data:
+      - "Projection statement: P0, signed, contains regionCell at most L2."
+      - "PublicationRecord: P1 in the vault, with receipt times that are relay claims."
+    retention:
+      - "PublicationRecord: RET-EVIDENCE (2 years after last related activity)."
+      - "Tombstones: kept 180 days by senders and receivers (CTR-PRV-001)."
+    threats:
+      - "T01 | Prohibited or illegal goods published | local rules before signing, relay hosting policy on receipt, relay-side removal with reasons; no claim of global enforcement"
+      - "T02 | Location leak in the projection | schema caps regionCell at 5 characters; media GPS check; projection builder test fails if any field outside the allowlist appears"
+      - "T03 | Impersonation by republishing another author's listing | receivers accept only statements whose author did:key matches the listing owner; duplicates by cid are ignored"
+      - "T04 | Spam flooding relays | local cap of 100 active publications, relay quotas, local spam heuristics from F12.S02.M02 before signing"
+      - "T05 | Stale offer terms after unpublish | tombstone queued to every relay that received the projection; UI states copies may persist"
+    abuse_controls:
+      - "At most 20 publish commands per hour per vault."
+      - "Relay hosting policies are shown before sending; the user can choose relays, and relays can refuse."
+  observability_performance:
+    requirements:
+      - "The PWA sends no telemetry (OBS-7); publication counters and sync states are local diagnostics, exportable by the user."
+      - "Local publish latency excludes network transport and is budgeted on Moto G-class hardware."
+      - "Relay-side behaviour of accepting index writes is measured by the relay under OBS-1 to OBS-4."
+    metrics:
+      - "classrup_bazaar_publications_total{outcome=active|blocked|held|unpublished|ended} (local)"
+      - "classrup_bazaar_publication_delivery_total{state} (local)"
+      - "classrup_bazaar_publication_policy_duration_ms (local histogram)"
+      - "classrup_bazaar_relay_index_writes_total{outcome} (relay, OBS-2 labels only)"
+    logs:
+      - "info publication.active {publicationId, listingId, correlationId} in local diagnostics; no titles or text."
+    budgets:
+      - "publish p95 <= 150 ms locally including policy evaluation (2 000 rules, 8 000 code points) and Ed25519 signing, excluding network."
+      - "Relay index write p95 <= 300 ms at 50 req/s (OBS-4)."
+      - "Policy re-evaluation sweep: 200 publications per batch in <= 2 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate the signed projection, tombstone and event payloads against the schema registry and verify signatures."
+      - "Honesty tests assert that the UI and API never report relay receipt or peer acceptance without a signed receipt."
+    fixtures: "Vault with principal P1 and key K1, complete sell listing L (EUR 50.00, region u33db), two relays R1 (accepting) and R2 (rejecting under its policy), policy pack with block rule b1 and review rule r1, clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,06.R03 | publish L offline | PublicationRecord active, delivery prepared, no receiptAt, no peer_accepted claim"
+      - "T02 | contract | 01.R02,04.R02,09.R02 | publish and unpublish | projection validates against classrup.bazaar.listing/v1, only P0 allowlisted fields, region <= 5 chars, signature verifies, tombstone validates"
+      - "T03 | unit | 02.R01,02.R02,02.R03 | violate each rule V01-V11 | documented error code returned, no statement signed"
+      - "T04 | property | 03.R01,03.R02 | random command sequences | only declared transitions succeed; active implies Listing published in same transaction"
+      - "T05 | integration | 03.R03,06.R02 | R1 accepts, R2 rejects | R1 peer_accepted after signed receipt, R2 relay_rejected, record stays active"
+      - "T06 | integration | 04.R01,04.R03 | publish with review verdict then confirm | held_for_confirmation first, active after confirm with ownerConfirmedAt"
+      - "T07 | contract | 04.R02 | each command runs | outputs and events validate against registry schemas"
+      - "T08 | abuse | 05.R01,05.R02 | another principal's key or revoked key signs publish | FORBIDDEN; no statement produced"
+      - "T09 | abuse | 05.R03,07.R03 | relay moderator removal for R2 and a foreign-author statement at a receiving vault | delivery relay_removed only for R2; foreign statement quarantined; wording says pseudonymous not anonymous"
+      - "T10 | integration | 06.R01,06.R02 | replay publish with same key; fork chain from second device | one statement; fork detected, publication frozen, user prompt shown"
+      - "T11 | chaos | 06.R03 | R1 unreachable for 2 h then returns | backoff schedule honoured, state moves prepared to transport_acknowledged without duplicate statements"
+      - "T12 | integration | 07.R01,07.R02 | unpublish after publish | tombstone queued to every relay with a received delivery; UI copy states fetched copies may persist"
+      - "T13 | integration | 03.R01 | governance.prohibited_rule.changed adds a block rule matching L | publication ends with policy_changed and tombstone queued"
+      - "T14 | integration | 04.R03 | moderation.action.applied then reverted for R2 | relay_removed set then cleared; local status unchanged"
+      - "T15 | integration | 04.R01 | promotion claim acknowledged by relay operator vs by a random key | active only for the operator signature"
+      - "T16 | load | 08.R01,08.R02,08.R03 | 200 publications re-evaluated on Moto G profile; relay at 50 req/s | publish p95 <= 150 ms, batch <= 2 s, relay p95 <= 300 ms, no telemetry requests"
+      - "T17 | unit | 09.R01,09.R03 | traceability and honesty test | every PS-004 requirement maps to a passing test; UI never shows accepted without receipt"
+      - "T18 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import with wrong owner | records round-trip; active publications import as unpublished-pending-resign; foreign owner read-only"
+    acceptance:
+      - All tests T01-T18 pass in CI.
+      - No projection contains data beyond the P0 allowlist or a region finer than L2.
+      - No UI or API reports transport_acknowledged or peer_accepted without a verified signed receipt, and no text claims global removal.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains all PublicationRecords and the signed statements they reference."
+      - "Import verifies statement signatures and owner; active publications are imported inactive and must be re-signed and re-sent explicitly."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Section bazaar.publications in classrup-export/v1, one line per PublicationRecord, followed by the referenced statements as separate lines of schema classrup.bazaar.listing/v1."
+    import: "Signature and cid verified; records with invalid signatures are quarantined; imported active records become status ended with endReason owner and the UI offers Publish again, so stale promises are never revived silently."
+    backup: "Vault export is the primary backup (IOX-6); relays hold only copies of public projections under their own policy (IOX-7)."
+    migration_rollback: "Additive fields only in v1; rollback is by reinstalling the previous release; statements already sent remain valid because their schema is unchanged."

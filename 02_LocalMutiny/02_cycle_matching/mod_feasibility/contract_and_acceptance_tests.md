@@ -1,35 +1,49 @@
-# PS-016-09 — contract and acceptance tests
+# PS-016-09 — Contract and acceptance tests: Cycle feasibility checks
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-016-09. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_feasibility](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M05 Cycle feasibility checks](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/feasibility` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for feasibility within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-016-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-016-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-016-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-016-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-016-09.R02** Each check C01..C13 has a positive and a negative unit test with fixed clock and fixtures for 2-, 3-, 4- and 6-party subjects.
+- **PS-016-09.R03** The MNY-5 tolerance arithmetic is tested at the exact boundary with bigint values.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Cycle values EUR minor 12000, 11800, 11500 (3-party within tolerance); 2-party 5000 vs 5600 (outside); 4-party with one expired quote; 6-party ring; fixed clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-016-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-016-09.T01 | unit | PS-016-01.R01, PS-016-01.R03, PS-016-02.R01, PS-016-09.R03 | each check C01..C13 failed in turn | corresponding error code returned and check marked fail |
+| TEST-PS-016-09.T02 | unit | PS-016-02.R02 | gap exactly at tolerance, one minor unit above, and absolute minimum case | pass at boundary, fail one unit above, absolute minimum 500 applies when 5 percent is smaller |
+| TEST-PS-016-09.T03 | property | PS-016-01.R02, PS-016-06.R01 | random subjects, same inputs twice | identical checks and inputHash |
+| TEST-PS-016-09.T04 | unit | PS-016-01.R01, PS-016-09.R02 | 3-party fixture 12000, 11800, 11500 | all three participants within tolerance, overall feasible only when all bases are local or signed_projection |
+| TEST-PS-016-09.T05 | unit | PS-016-02.R03, PS-016-07.R03 | peer item without local projection | check warn basis unverifiable, overall feasible_with_conditions |
+| TEST-PS-016-09.T06 | unit | PS-016-03.R01, PS-016-03.R02 | report older than 10 minutes used for consent | MUTINY_FEASIBILITY_STALE |
+| TEST-PS-016-09.T07 | contract | PS-016-04.R01, PS-016-04.R02, PS-016-09.R02 | check command and event | output and event validate against registry |
+| TEST-PS-016-09.T08 | integration | PS-016-04.R03, PS-016-06.R01 | replay check with same key, then new key within same minute | stored report replayed, then same report returned by inputHash |
+| TEST-PS-016-09.T09 | abuse | PS-016-05.R01, PS-016-05.R02, PS-016-05.R03, PS-016-07.R02 | other principal reads report; blocked pair and elsewhere-reserved item | NOT_FOUND; generic messages with no names or cycle ids |
+| TEST-PS-016-09.T10 | unit | PS-016-06.R02, PS-016-06.R03 | quote service port times out | affected check warn unverifiable, overall not feasible |
+| TEST-PS-016-09.T11 | unit | PS-016-07.R01 | participant list with excluded and blocked DIDs | no DID of the blocker in report; C12 blocks on disputed valuation |
+| TEST-PS-016-09.T12 | integration | PS-016-03.R03, PS-016-07.R03 | report cited by a signed revision, 30 days later | standalone report purged, cited hash retained in revision evidence |
+| TEST-PS-016-09.T13 | load | PS-016-08.R02, PS-016-08.R03 | 8-participant evaluation on emulated Moto G | p95 ≤ 20 ms |
+| TEST-PS-016-09.T14 | unit | PS-016-08.R01, PS-016-08.R02 | metric counters after runs | counters present locally, nothing transmitted |
+| TEST-PS-016-09.T15 | unit | PS-016-09.R01 | traceability tool run | every PS-016 requirement maps to a passing test |
+| TEST-PS-016-09.T16 | integration | PS-016-10.R01, PS-016-10.R02, PS-016-10.R03 | export and import | reports are not exported; imported subjects re-run checks on first open |
+| TEST-PS-016-09.T17 | a11y | PS-016-01.R01 | checklist screen | axe zero serious issues, basis chips announced |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01–T17 pass in CI.
+- No peer claim is ever presented as verified and overall feasible is impossible with any unverifiable or peer_claim basis.
+- MNY-5 tolerance is exact at the boundary for bigint amounts.
+
+## Dependencies
+
+Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,0 +1,291 @@
+id: F18.S01.M03
+scope: MVP
+summary: >-
+  The hierarchical goods taxonomy (maximum depth 4) with stable category ids, localized names and a restricted
+  flag. It is configuration, not law. A taxonomy is authored by a publisher (the project's bundled seed pack, or
+  a relay operator's own vault) and distributed as a signed taxonomy pack statement
+  (classrup.governance.taxonomy_pack/v1, Ed25519 over JCS). Each user vault verifies the pack against the
+  publishers the user trusts and keeps a read-only mirror of the Category records, so listing, search and
+  matching work offline. Category ids never change meaning; retiring a category requires a merge target.
+responsibilities:
+  - Own Category: stable id, key, parent, depth 1 to 4, localized names, restricted flag, status and merge target.
+  - Author and release signed taxonomy packs in a publisher vault (create, update, move, deprecate, retire, release_pack) with at most 2 000 categories and 50 children per node.
+  - Verify and apply packs in any vault (apply_pack): signature, trusted publisher, version monotonic, depth, cycle and id-stability checks.
+  - Serve read queries to other modules (get, list_children, tree, resolve alias) from the local mirror.
+  - Ship the bundled seed pack (12 top-level groups, about 300 categories) so a vault works with no relay.
+non_responsibilities:
+  - Prohibited-item rules (F18.S01.M02) and jurisdiction profiles (F18.S01.M01); this module only holds the restricted flag they reference.
+  - Listings that use categories (F01.S01.M01) and search facets (F06.S01.M03).
+  - Deciding policy changes (F18.S02.M01); restricted-flag changes require an approved proposal reference.
+  - Translating names into every language; locales beyond the shipped set are contributed by publishers.
+  - "Future: attribute schemas per category and cross-pack category mapping."
+depends_on: [F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001]
+user_stories:
+  - As a seller, I choose a category from a tree up to four levels deep, in my own language.
+  - As a relay operator, I publish a taxonomy with my own extra categories and the users who trust my relay get it.
+  - As a user, I can see who published the taxonomy I use and which version it is.
+edge_cases:
+  - A pack arrives signed by an untrusted key; it is stored as pending with the publisher fingerprint and not applied until the user trusts that publisher.
+  - A pack skips versions; it is accepted only if it is a full snapshot with a higher version, and the diff is shown before applying.
+  - A pack would move a category to depth 5 or create a parent cycle; the whole pack is rejected with GOVERNANCE_CATEGORY_TREE_INVALID.
+  - A pack retires a category in use by published listings; the category becomes retired with mergedInto set, and listings keep working through resolve alias.
+  - The restricted flag is switched on without an approved proposal reference; the author command fails with GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED.
+  - Two publishers use the same key string for different categories; ids, not keys, identify categories, and the second pack is namespaced by publisher id.
+  - The vault is offline for months; the last applied pack keeps working and the UI shows the pack age.
+ux:
+  screens:
+    - "Category picker: expandable tree with search, localized names, breadcrumb of the path, restricted badge with explanation, deprecated categories hidden for new listings."
+    - "Taxonomy settings: current pack, publisher fingerprint, version, age, pending packs with diff summary, Trust and Apply actions."
+    - "Publisher editor (operators): tree editor with add, rename, move and retire; release pack button with change summary."
+  states: [loading, empty, offline-cached, pack-pending, pack-applied, pack-rejected, restricted, deprecated]
+  a11y:
+    - Tree uses the ARIA tree pattern with keyboard navigation and announces level and position.
+    - Moving a category has a Move to button flow as the single-pointer alternative to drag (WCAG 2.5.7).
+    - Restricted status is shown with text and icon, not colour alone.
+processes:
+  domain_schema:
+    requirements:
+      - "A Category has a stable uuidv7 id, a key unique per publisher, a parent, a depth between 1 and 4, localized names and a status; ids are never reused."
+      - "Categories are P0 public configuration; a vault stores a verified mirror with provenance and only the publisher vault may change the origin copy."
+      - "A restricted flag marks categories that need extra notices or review under a jurisdiction profile; it does not itself prohibit anything."
+    entities:
+      - name: Category
+        schema: classrup.governance.category/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — stable primary key, never reused"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "publisherId: did:key — key that signed the pack in which the category was defined"
+          - "key: string — [a-z0-9_]{2,40}, unique per publisher"
+          - "parentId?: uuidv7 — ref Category; absent for depth 1"
+          - "depth: int — 1..4"
+          - "names: object — locale (BCP 47) to name, 1..30 locales, each name 1..60 code points, en required"
+          - "restricted: boolean — default false"
+          - "restrictedReasonKey?: string — i18n message key, required when restricted"
+          - "status: enum — active | deprecated | retired"
+          - "mergedInto?: uuidv7 — ref Category, required when status retired"
+          - "sortOrder: int — 0..999 among siblings"
+          - "packVersion: int — pack version in which this record last changed"
+          - "provenance: object — {originRelay?, receivedAt, verifiedAt, packCid}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - depth = parent depth + 1 and never exceeds 4; the parent chain has no cycles.
+          - At most 50 non-retired children per parent and at most 2 000 categories per pack.
+          - status retired implies mergedInto is set to a non-retired category in the same pack; restricted implies restrictedReasonKey is set.
+    sql: |
+      CREATE TABLE governance_category (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, publisher_id TEXT NOT NULL, key TEXT NOT NULL, parent_id TEXT,
+        depth INTEGER NOT NULL, status TEXT NOT NULL, pack_version INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX governance_category_key ON governance_category(tenant_id, publisher_id, key);
+      CREATE INDEX governance_category_parent ON governance_category(tenant_id, parent_id, status);
+  validation_rules:
+    requirements:
+      - "Authoring commands validate names, depth, uniqueness and limits before a change is staged."
+      - "Applying a pack validates the entire pack atomically; one invalid category rejects the whole pack."
+      - "Every violation maps to one stable error code."
+    rules:
+      - "V01 | key matches [a-z0-9_]{2,40} and is unique for the publisher | VALIDATION_FAILED"
+      - "V02 | names include en and every name is 1..60 code points without control characters | VALIDATION_FAILED"
+      - "V03 | depth <= 4, parent exists in the pack and the parent chain has no cycle | GOVERNANCE_CATEGORY_TREE_INVALID"
+      - "V04 | parent has fewer than 50 non-retired children; pack has at most 2000 categories | GOVERNANCE_CATEGORY_TREE_INVALID"
+      - "V05 | retire requires mergedInto to a non-retired category in the pack | GOVERNANCE_CATEGORY_TREE_INVALID"
+      - "V06 | changing restricted requires proposalId verified as approved for this category by F18.S02.M01 | GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED"
+      - "V07 | pack signature verifies and publisher is in the vault's trusted publishers | GOVERNANCE_CATEGORY_PACK_UNTRUSTED"
+      - "V08 | pack version is greater than the applied version and the pack is a full snapshot | GOVERNANCE_CATEGORY_PACK_STALE"
+      - "V09 | ids present in the applied pack keep their key and publisher in the new pack (no id reuse) | GOVERNANCE_CATEGORY_TREE_INVALID"
+      - "V10 | pack size <= 1 MiB and schema version supported | UNSUPPORTED_SCHEMA_VERSION"
+  workflow_state_machine:
+    requirements:
+      - "Category follows the declared machine in the publisher vault; user vaults mirror the status from verified packs only."
+      - "Retired is terminal and requires a merge target so listings referencing the category can be resolved."
+      - "Applying a pack is atomic: either all category changes of the pack are stored or none."
+    machines:
+      - entity: Category
+        initial: active
+        terminal: [retired]
+        transitions:
+          - "active -> deprecated | governance.category.set_status by publisher, or pack change | hidden from new listings; existing references keep working; emits governance.category.changed"
+          - "deprecated -> active | reactivate by publisher or pack change | emits governance.category.changed"
+          - "deprecated -> retired | retire with mergedInto by publisher or pack change | resolve alias returns mergedInto; emits governance.category.changed"
+          - "active -> retired | retire with mergedInto by publisher or pack change | emits governance.category.changed"
+    timeouts:
+      - "A pending untrusted pack is discarded after 30 days without a trust decision."
+      - "A deprecated category may be retired no earlier than 30 days after deprecation."
+  commands_queries_events:
+    requirements:
+      - "create, update, move and set_status are authoring commands that run in the publisher's vault and stage a change set; release_pack signs the full taxonomy as classrup.governance.taxonomy_pack/v1 and queues it to the publisher's relays."
+      - "apply_pack is a vault command available in every vault: it verifies and applies a pack and emits one governance.category.changed event per changed category."
+      - "A relay serves the latest pack publicly and read-only; relay commands do not mutate categories."
+    commands:
+      - name: governance.category.create
+        capability: governance.category.author
+        input: "[vault-local, publisher] { key, parentId?, names, restricted?, restrictedReasonKey?, proposalId?, sortOrder? }"
+        output: "{ categoryId, revision: 1, stagedInPack }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, GOVERNANCE_CATEGORY_TREE_INVALID, GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED]
+        emits: []
+        idempotent: true
+      - name: governance.category.update
+        capability: governance.category.author
+        input: "[vault-local, publisher] { categoryId, expectedRevision, names?, restricted?, restrictedReasonKey?, proposalId?, sortOrder? }"
+        output: "{ categoryId, revision }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED]
+        emits: []
+        idempotent: true
+      - name: governance.category.move
+        capability: governance.category.author
+        input: "[vault-local, publisher] { categoryId, expectedRevision, newParentId?, sortOrder? }"
+        output: "{ categoryId, revision, depth }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, GOVERNANCE_CATEGORY_TREE_INVALID]
+        emits: []
+        idempotent: true
+      - name: governance.category.set_status
+        capability: governance.category.author
+        input: "[vault-local, publisher] { categoryId, expectedRevision, to: deprecated|active|retired, mergedInto? }"
+        output: "{ categoryId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_CATEGORY_TREE_INVALID]
+        emits: []
+        idempotent: true
+      - name: governance.category.release_pack
+        capability: governance.category.release
+        input: "[vault-local, publisher + statement classrup.governance.taxonomy_pack/v1] { expectedPackVersion, changelogEntry, relayIds[] }"
+        output: "{ packVersion, packCid, categoryCount, syncState: prepared }"
+        errors: [CONFLICT_REVISION, GOVERNANCE_CATEGORY_TREE_INVALID, PRECONDITION_FAILED]
+        emits: [governance.category.changed]
+        idempotent: true
+      - name: governance.category.apply_pack
+        capability: governance.category.apply
+        input: "[vault-local, inbound statement] { envelope, provenance, trustPublisher?: boolean }"
+        output: "{ applied: boolean, packVersion, changedCategoryIds[], pendingReason? }"
+        errors: [VALIDATION_FAILED, GOVERNANCE_CATEGORY_PACK_UNTRUSTED, GOVERNANCE_CATEGORY_PACK_STALE, GOVERNANCE_CATEGORY_TREE_INVALID, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [governance.category.changed]
+        idempotent: true
+    queries:
+      - name: governance.category.get
+        capability: governance.category.read
+        input: "{ categoryId }"
+        output: "{ category: Category }"
+        errors: [NOT_FOUND]
+      - name: governance.category.list_children
+        capability: governance.category.read
+        input: "{ parentId?, includeDeprecated?: boolean, locale? }"
+        output: "{ items: Category[] }"
+        errors: [NOT_FOUND]
+      - name: governance.category.tree
+        capability: governance.category.read
+        input: "{ locale?, includeDeprecated? }"
+        output: "{ packVersion, packCid, items: Category[] }"
+        errors: [VALIDATION_FAILED]
+      - name: governance.category.resolve
+        capability: governance.category.read
+        input: "{ categoryId }"
+        output: "{ categoryId, resolvedId, path: uuidv7[], restricted }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: governance.category.changed, privacy: P0, payload: "{ categoryId, change: created|renamed|moved|restricted_changed|deprecated|reactivated|retired, restricted, mergedInto?, packVersion, publisherId }"}
+    events_consumed: []
+    errors:
+      - "GOVERNANCE_CATEGORY_TREE_INVALID | 422 | no | depth over 4, cycle, child limit, merge target or id reuse violation"
+      - "GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED | 412 | no | restricted-flag change needs an approved policy proposal reference"
+      - "GOVERNANCE_CATEGORY_PACK_UNTRUSTED | 403 | no | pack publisher is not among the vault's trusted publishers"
+      - "GOVERNANCE_CATEGORY_PACK_STALE | 409 | no | pack version is not newer than the applied version or is not a full snapshot"
+    example: |
+      publisher vault: dispatch("governance.category.create", { "key": "road_bikes", "parentId": "0192f3a4-1111-7000-8000-0000000000c1",
+        "names": { "en": "Road bikes", "de": "Rennraeder" } }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000091")
+      => { "categoryId": "0192f3b1-...", "revision": 1, "stagedInPack": 12 }
+      dispatch("governance.category.release_pack", { "expectedPackVersion": 11, "changelogEntry": "Add road bikes", "relayIds": ["relay:berlin.example"] })
+      => { "packVersion": 12, "packCid": "sha256-Zm9v...", "categoryCount": 301, "syncState": "prepared" }
+      user vault: apply_pack => { "applied": true, "packVersion": 12, "changedCategoryIds": ["0192f3b1-..."] } and event governance.category.changed (created)
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: authoring and release require the vault's principal to hold a publisher key; apply is available to every vault owner for packs from trusted publishers."
+      - "There is no global taxonomy role; relay operator and moderator roles apply only to what that relay hosts (CAP-9), and a relay cannot change a user's mirror."
+      - "Relay policy: a relay serves the pack read-only to anonymous clients and accepts a pack upload only from a registered operator device key."
+    capabilities:
+      - "governance.category.author | owner | local principal holds a publisher key for the pack; vault unlocked"
+      - "governance.category.release | owner | local principal is the publisher; staged changes exist; signing key unrevoked"
+      - "governance.category.apply | owner | vault unlocked; pack signature valid and publisher trusted by this vault (or user trusts it in the same action)"
+      - "governance.category.read | owner | vault unlocked; reads the local mirror"
+      - "governance.category.relay_read | relay-anonymous | relay policy: public read of latest pack, rate limit 60 requests per minute per IP prefix"
+      - "governance.category.relay_publish | relay-operator | relay policy: request signed by a registered operator device key; pack size <= 1 MiB"
+  failure_recovery_idempotency:
+    requirements:
+      - "Authoring commands and apply_pack are idempotent per CTR-IDM-001; packs are deduplicated by packCid."
+      - "apply_pack writes all category changes, the pack record and the outbox events in one IndexedDB transaction."
+      - "Offline vaults keep working on the last applied pack; release_pack shows prepared until a relay receipt exists."
+    idempotency: "Idempotency-Key required on authoring and release; keys and request hashes kept 24 h; apply_pack is naturally idempotent by packCid."
+    concurrency: "expectedRevision on update, move and set_status; expectedPackVersion on release; two operators staging in the same publisher vault is not supported and the second tab gets CONFLICT_REVISION; competing packs from different publishers coexist as separate namespaces and the user chooses which publisher is active."
+    retries: "Relay upload retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts); apply failures are not retried automatically because they are validation outcomes."
+    offline: "Apply, read and authoring work offline; release queues in the sync outbox with states prepared, transport_acknowledged and peer_accepted."
+    partial_failure: "A failing validation anywhere in a pack rejects the whole pack and leaves the previous version active; a failing relay upload leaves the local release in place and retries."
+  privacy_retention_abuse:
+    requirements:
+      - "Taxonomy data is P0 and contains no personal data; the only personal link is the publisher key fingerprint, which is public by design."
+      - "Packs are retained RET-STANDARD; the last 3 applied versions are kept locally for diff and rollback."
+      - "A relay or publisher cannot silently change a user's mirror: every change arrives as a signed pack that the user can inspect and refuse."
+    data:
+      - "Category and pack statements: P0, public, signed."
+    retention:
+      - "Category mirror and last 3 packs: RET-STANDARD."
+      - "Pending untrusted packs: 30 days."
+    threats:
+      - "T01 | Malicious publisher marks competitor categories restricted or retires them | trusted-publisher list, diff shown before applying, restricted changes need an approved proposal reference, user can pin a publisher"
+      - "T02 | Pack tampering in transit | Ed25519 signature over JCS and packCid check"
+      - "T03 | Category id reuse to reinterpret old listings | ids immutable; reuse rejected in validation"
+      - "T04 | Oversized or deep trees to exhaust a device | 2000 categories, depth 4, 1 MiB pack limit enforced before parsing into storage"
+    abuse_controls:
+      - "A vault trusts at most 10 publishers; pack applications limited to 20 per day."
+      - "Relay upload limited to 10 packs per day per operator key."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); pack outcomes are local diagnostics."
+      - "Tree queries and pack application meet local budgets on Moto G-class hardware."
+      - "The relay serving packs follows OBS-1 to OBS-4."
+    metrics:
+      - "classrup_governance_category_pack_applied_total{outcome} (local)"
+      - "classrup_governance_category_query_duration_ms (local histogram)"
+      - "classrup_governance_pack_downloads_total (relay)"
+    logs:
+      - "info category.pack_applied {packVersion, publisherFingerprint, correlationId} in local diagnostics."
+    budgets:
+      - "tree query for 2 000 categories p95 <= 60 ms; get/resolve p95 <= 10 ms on Moto G-class hardware."
+      - "apply_pack of a 2 000-category pack p95 <= 800 ms."
+      - "Relay pack download p95 <= 150 ms at 50 req/s."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate pack statements, commands and events against the registry and verify signatures."
+      - "Tree invariants are covered by property tests with at least 200 runs, 10 000 nightly."
+    fixtures: "Seed pack core-1 with 12 top-level groups and 300 categories, publisher keys PK1 (trusted) and PK2 (untrusted), user vault U, clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | create category with names and key | stable id, key unique for publisher, en name required"
+      - "T02 | unit | 02.R03 | violate each rule V01-V10 | documented error code returned and nothing staged or applied"
+      - "T03 | property | 01.R03,02.R02 | random trees and moves | depth <= 4, no cycles, child limit holds, restricted implies reason key"
+      - "T04 | property | 03.R01,03.R02 | random status changes | only declared transitions; retired requires mergedInto; terminal never reverts"
+      - "T05 | integration | 03.R03,06.R02 | pack with one invalid category | whole pack rejected, previous version still active"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | release and apply | pack validates against classrup.governance.taxonomy_pack/v1, signature verifies, changed events validate"
+      - "T07 | integration | 04.R03,05.R03 | relay serves and accepts pack | anonymous read allowed; upload only with operator device key; relay cannot alter user mirror"
+      - "T08 | abuse | 05.R01,05.R02 | non-publisher authors; untrusted publisher pack; tampered pack | FORBIDDEN, pack pending untrusted, signature failure rejects"
+      - "T09 | integration | 06.R01,06.R03 | replay release and apply same pack | one packCid, no duplicate events"
+      - "T10 | integration | 06.R03 | vault offline then reconnect; relay down for release | last pack in use; release prepared then transport_acknowledged only with receipt"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | scan stored data and logs; pack with 2 001 categories and 1.5 MiB | no personal data beyond fingerprint; oversized pack rejected before storage"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000-category tree on Moto G profile; relay at 50 req/s | tree p95 <= 60 ms, apply p95 <= 800 ms, relay p95 <= 150 ms, no telemetry"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run, seeded property replay | every PS-144 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import pack with id reuse | categories round-trip with provenance; id reuse rejected"
+      - "T15 | a11y | 01.R03 | axe run on picker and settings | zero serious or critical issues; keyboard tree navigation and Move to flow work"
+    acceptance:
+      - All tests T01-T15 pass in CI.
+      - A pack changes a vault only after signature, publisher trust and tree validation succeed, atomically.
+      - Category ids are never reused, depth never exceeds 4, and retired categories always resolve to a merge target.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains the applied Category mirror with provenance and the trusted publisher list; publisher vaults also export staged changes and their signing history."
+      - "Import re-verifies the pack signature and tree invariants; categories failing verification are not applied."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days; the last 3 packs allow reverting by applying an older signed snapshot re-released with a higher version."
+    export: "Sections governance.categories and governance.trusted_publishers in classrup-export/v1, one line per Category (schema classrup.governance.category/v1) and the latest pack statement."
+    import: "Pack signature and publisher are re-verified; untrusted publishers import as pending; id reuse or tree violations reject the pack; the dry-run lists changed categories."
+    backup: "Vault export is the primary backup (IOX-6); relays hold only signed public packs and are recoverable from the publisher's vault."
+    migration_rollback: "Additive optional fields only in v1; rollback to the previous app release is safe because the mirror is readable; to undo a taxonomy change the publisher re-releases the earlier content under a higher version."

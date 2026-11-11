@@ -1,0 +1,292 @@
+id: F13.S01.M03
+scope: MVP
+summary: >-
+  The in-app notification inbox. It runs in the user's vault while the app is open: local domain events derived
+  from the user's own commands and from verified signed statements of other parties are mapped by a routing table
+  to content-free Notifications (category, template key, reference), deduplicated and collapsed, filtered by the
+  in-app column of the preference matrix, and shown with read state. Texts are rendered on the device from the
+  template key and local data. Security notifications are always on. Nothing here needs a relay; push and email
+  are separate channels fed by relays.
+responsibilities:
+  - Own the Notification record (category, template key, reference, collapse key, count, read state) in the vault.
+  - Own the routing table that maps domain events to category, template key, recipient rule, urgency class and collapse key, listed in events_consumed below.
+  - Deduplicate by event ID, collapse repeated alerts with the same template and collapse key within 10 minutes, and cap the inbox at 500 items.
+  - Respect the in-app preference column of F13.S02.M04 for every category except security.
+  - Provide mark-read, mark-all-read, list and unread-count operations and emit notify.notification.created and notify.notification.read for the gate and badge consumers.
+non_responsibilities:
+  - Deciding whether an alert leaves the device as OS alert, push or email (F13.S02.M01).
+  - Preferences, consent and schedules (F13.S02.M04, F13.S02.M03, F13.S02.M02).
+  - Message content; the inbox shows only templates and references and the thread screens show content.
+  - Mute per thread (F08.S01.M02) beyond reading it as an input to the routing rule for comms.message.received.
+  - "Future: server-synchronized read state across devices, rich actions inside notifications, a discovery category for saved-search matches."
+depends_on: [F13.S02.M04, F08.S01.M01, F08.S01.M02, F08.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+user_stories:
+  - As a seller, I see in my inbox that a buyer made an offer and tapping opens that offer.
+  - As a member, I see one collapsed entry for ten new messages in one thread instead of ten entries.
+  - As a member, I always see security notices, for example a new device key was added.
+  - As a member, I can mark everything as read in one tap and the badge goes to zero.
+edge_cases:
+  - Event is delivered twice (at-least-once); the second delivery is skipped because the event ID is already in the consumer inbox.
+  - A verified statement from a blocked user arrives; no notification is created.
+  - A thread is muted; message alerts for that thread are created silently marked muted and never cause OS alerts, push or email.
+  - The inbox reaches 500 items; the oldest read items are removed first, then the oldest unread non-security items; security items are removed last and only after 30 days.
+  - Event concerns an actor other than the local principal (for example another participant's offer on a listing not owned); no notification is created because the recipient rule fails.
+  - The user's own action produces an event (they accepted the offer); no notification is created for the actor.
+  - Preference for a category is off for in-app; the notification is not created but a hidden counter increments for diagnostics, except security which ignores the preference.
+  - App starts after being closed for a week; events derived from statements received during fetch are routed in order and collapsed, and notifications older than 30 days are never created.
+ux:
+  screens:
+    - "Inbox: list newest first grouped by day, each item with category icon and label, rendered title and short line from the template, count badge when collapsed, unread dot, tap opens the referenced screen."
+    - "Badge on the app icon and nav item showing unread count capped at 99+."
+    - "Empty state: No notifications yet with a link to notification settings."
+  states: [loading, empty, unread, all-read, muted-item, offline, ref-unavailable]
+  a11y:
+    - Inbox is a list; each item has an accessible name composed of category, title and time, and unread state is text not only a dot.
+    - Mark all read is a button with a live region announcement of the new count.
+    - Items are reachable by keyboard, with targets of at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A Notification stores the recipient DID, category, template key, a content-free reference (type and opaque ID), collapse key, collapsed count, urgency class, read state, source event ID and times, with tenant and revision per CTR-ID-001.
+      - Notifications are P2 vault records that never contain message text, names or amounts; titles and lines are rendered at display time from the template key and data the vault already holds, and retention is RET-SHORT with a cap of 500 items.
+      - Urgency class is normal or urgent where urgent is allowed only for the security category.
+    entities:
+      - name: Notification
+        schema: classrup.notify.notification/v1
+        storage: device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "userDid: did:key — recipient, always the local principal"
+          - "category: enum — offers | cycles | messages | auctions | bookings | moderation | security"
+          - "templateKey: string — notify.tpl.<category>.<name>, ≤ 80 characters"
+          - "ref?: object — { type: enum listing|offer|proposal|cycle|thread|auction|booking|rental|deal|case|account, id: uuidv7 }"
+          - "collapseKey?: string — ≤ 64 characters from a-z A-Z 0-9 - _ ."
+          - "count: int — 1..9999, number of collapsed events"
+          - "urgency: enum — normal | urgent"
+          - "muted: boolean — true when the thread or category is muted so no OS alert is allowed"
+          - "sourceEventIds: array — last 20 source event IDs for dedupe, each uuidv7"
+          - "status: enum — unread | read"
+          - "createdAt: timestamp — local clock, RFC 3339 UTC"
+          - "updatedAt: timestamp — local clock, bumped on collapse"
+          - "readAt?: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one unread Notification per (userDid, templateKey, collapseKey) created within a 10-minute collapse window.
+          - urgency urgent implies category security.
+          - No field holds free text; ref.type and template key come from fixed registries.
+  validation_rules:
+    requirements:
+      - Routing validates event shape, recipient rule and registry membership before a notification is created.
+      - Read operations validate ownership and revision.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | event type has a routing table row and the payload contains the fields the row needs | VALIDATION_FAILED"
+      - "V02 | the recipient rule selects the local principal and the actor of the event is not the local principal | NOT_FOUND"
+      - "V03 | templateKey and ref.type are in the registries | VALIDATION_FAILED"
+      - "V04 | urgency urgent only for category security | VALIDATION_FAILED"
+      - "V05 | the sender or actor is not blocked in the local block list | BLOCKED_PARTY"
+      - "V06 | source event ID not yet seen in the consumer inbox | CONFLICT_STATE"
+      - "V07 | mark_read expectedRevision matches and notification belongs to the local principal | CONFLICT_REVISION"
+      - "V08 | event time is not older than 30 days at creation | EXPIRED"
+  workflow_state_machine:
+    requirements:
+      - A Notification starts unread and becomes read; collapsing keeps it unread and increments count, and a read notification is never reopened except by a new collapse window starting a new row.
+      - Deletion by cap or retention is not a state; rows are physically removed with a local tombstone count.
+      - Read is terminal for the row, and new matching events after the collapse window create a new unread row.
+    machines:
+      - entity: Notification
+        initial: unread
+        terminal: [read]
+        transitions:
+          - "unread -> unread | matching event within 10 minutes with the same collapse key | count + 1, updatedAt bumped; emits notify.notification.created with collapsed true"
+          - "unread -> read | notify.notification.mark_read, mark_all_read, or opening the referenced screen | readAt set; emits notify.notification.read"
+    timeouts:
+      - "Collapse window 10 minutes from createdAt of the unread row."
+      - "Rows older than 30 days are removed by a daily local sweep (security rows 30 days as well; counts kept)."
+  commands_queries_events:
+    requirements:
+      - Creation is a vault-internal command invoked by the routing consumers; mark-read and mark-all-read are vault commands; list and unread-count are vault queries.
+      - Creation and read emit their events in the same IndexedDB transaction as the row change (CTR-EVT-001 EVT-8).
+      - The routing table below is the complete set of routed events; every listed event exists in the module catalog emits.
+    commands:
+      - name: notify.notification.create
+        capability: notify.notification.create
+        input: "[vault internal command called by the routing consumers] { sourceEventId, category, templateKey, ref?, collapseKey?, urgency?, muted? }"
+        output: "{ notificationId, created: boolean, collapsed: boolean, count }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, BLOCKED_PARTY, CONFLICT_STATE, EXPIRED]
+        emits: [notify.notification.created]
+        idempotent: true
+      - name: notify.notification.mark_read
+        capability: notify.notification.mark_read
+        input: "[vault command] { notificationId, expectedRevision }"
+        output: "{ notificationId, status: read, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [notify.notification.read]
+        idempotent: true
+      - name: notify.notification.mark_all_read
+        capability: notify.notification.mark_read
+        input: "[vault command] { category?, beforeTimestamp }"
+        output: "{ marked, unreadCount }"
+        errors: [VALIDATION_FAILED]
+        emits: [notify.notification.read]
+        idempotent: true
+    queries:
+      - name: notify.notification.list_mine
+        capability: notify.notification.read_own
+        input: "[vault query] { status?: unread|all, category?, cursor?, limit ≤ 50 }"
+        output: "{ items: Notification[], nextCursor? }"
+        errors: []
+      - name: notify.notification.unread_count
+        capability: notify.notification.read_own
+        input: "[vault query] {}"
+        output: "{ total, byCategory: { offers, cycles, messages, auctions, bookings, moderation, security } }"
+        errors: []
+    events_produced:
+      - {type: notify.notification.created, privacy: P2, payload: "{ notificationId, category, templateKey, ref?, urgency, collapsed, count, muted }"}
+      - {type: notify.notification.read, privacy: P2, payload: "{ notificationId, category, readAt }"}
+    events_consumed:
+      - {type: bazaar.offer.made, effect: "category offers; template notify.tpl.offers.made; recipient the seller; collapse key offerListingId"}
+      - {type: bazaar.offer.accepted, effect: "category offers; template notify.tpl.offers.accepted; recipient the buyer; collapse key offerId"}
+      - {type: bazaar.offer.rejected, effect: "category offers; template notify.tpl.offers.rejected; recipient the buyer; collapse key offerId"}
+      - {type: bazaar.offer.expired, effect: "category offers; template notify.tpl.offers.expired; recipient buyer and seller; collapse key offerId"}
+      - {type: bazaar.negotiation.countered, effect: "category offers; template notify.tpl.offers.countered; recipient the other party; collapse key negotiationId"}
+      - {type: commerce.deal.opened, effect: "category offers; template notify.tpl.offers.deal_opened; recipient the counterparty; collapse key dealId"}
+      - {type: commerce.payment.claimed, effect: "category offers; template notify.tpl.offers.payment_claimed; recipient the payee; collapse key dealId"}
+      - {type: commerce.payment.acknowledged, effect: "category offers; template notify.tpl.offers.payment_acknowledged; recipient the payer; collapse key dealId"}
+      - {type: commerce.payment.disputed, effect: "category offers; template notify.tpl.offers.payment_disputed; recipient the other party; collapse key dealId"}
+      - {type: comms.message.received, effect: "category messages; template notify.tpl.messages.new; recipient the local principal; collapse key threadId; muted true when the thread is muted"}
+      - {type: mutiny.cycle.proposed, effect: "category cycles; template notify.tpl.cycles.proposed; recipient each participant except the proposer; collapse key cycleId"}
+      - {type: mutiny.cycle.committed, effect: "category cycles; template notify.tpl.cycles.committed; recipient each participant; collapse key cycleId"}
+      - {type: mutiny.cycle.declined, effect: "category cycles; template notify.tpl.cycles.declined; recipient each participant except the decliner; collapse key cycleId"}
+      - {type: mutiny.cycle.participant_dropped, effect: "category cycles; template notify.tpl.cycles.participant_dropped; recipient remaining participants; collapse key cycleId"}
+      - {type: mutiny.cycle.cancelled, effect: "category cycles; template notify.tpl.cycles.cancelled; recipient each participant; collapse key cycleId"}
+      - {type: mutiny.cycle.completed, effect: "category cycles; template notify.tpl.cycles.completed; recipient each participant; collapse key cycleId"}
+      - {type: mutiny.recovery.opened, effect: "category cycles; template notify.tpl.cycles.recovery_opened; recipient each participant; collapse key cycleId"}
+      - {type: mutiny.proposal.revised, effect: "category cycles; template notify.tpl.cycles.proposal_revised; recipient each other party; collapse key proposalId"}
+      - {type: auctions.bid.outbid, effect: "category auctions; template notify.tpl.auctions.outbid; recipient the outbid bidder; collapse key auctionId"}
+      - {type: auctions.auction.won, effect: "category auctions; template notify.tpl.auctions.won; recipient the winner; collapse key auctionId"}
+      - {type: auctions.auction.unsold, effect: "category auctions; template notify.tpl.auctions.unsold; recipient the seller; collapse key auctionId"}
+      - {type: auctions.auction.closed, effect: "category auctions; template notify.tpl.auctions.closed; recipient the seller; collapse key auctionId"}
+      - {type: auctions.result.voided, effect: "category auctions; template notify.tpl.auctions.voided; recipient seller and bidders of the auction; collapse key auctionId"}
+      - {type: services.quote.issued, effect: "category bookings; template notify.tpl.bookings.quote_issued; recipient the requester; collapse key quoteId"}
+      - {type: services.quote.accepted, effect: "category bookings; template notify.tpl.bookings.quote_accepted; recipient the provider; collapse key quoteId"}
+      - {type: services.booking.confirmed, effect: "category bookings; template notify.tpl.bookings.confirmed; recipient both parties; collapse key bookingId"}
+      - {type: services.booking.cancelled, effect: "category bookings; template notify.tpl.bookings.cancelled; recipient the other party; collapse key bookingId"}
+      - {type: services.milestone.submitted, effect: "category bookings; template notify.tpl.bookings.milestone_submitted; recipient the client; collapse key bookingId"}
+      - {type: services.milestone.approved, effect: "category bookings; template notify.tpl.bookings.milestone_approved; recipient the provider; collapse key bookingId"}
+      - {type: services.dispute.opened, effect: "category bookings; template notify.tpl.bookings.dispute_opened; recipient the other party; collapse key bookingId"}
+      - {type: rentals.reservation.requested, effect: "category bookings; template notify.tpl.bookings.rental_requested; recipient the owner; collapse key reservationId"}
+      - {type: rentals.reservation.confirmed, effect: "category bookings; template notify.tpl.bookings.rental_confirmed; recipient the renter; collapse key reservationId"}
+      - {type: rentals.reservation.cancelled, effect: "category bookings; template notify.tpl.bookings.rental_cancelled; recipient the other party; collapse key reservationId"}
+      - {type: rentals.rental.overdue, effect: "category bookings; template notify.tpl.bookings.rental_overdue; recipient owner and renter; collapse key rentalId"}
+      - {type: rentals.damage.claimed, effect: "category bookings; template notify.tpl.bookings.damage_claimed; recipient the renter; collapse key rentalId"}
+      - {type: comms.meetup.proposed, effect: "category bookings; template notify.tpl.bookings.meetup_proposed; recipient the other parties; collapse key meetupId"}
+      - {type: comms.meetup.agreed, effect: "category bookings; template notify.tpl.bookings.meetup_agreed; recipient each party; collapse key meetupId"}
+      - {type: comms.meetup.cancelled, effect: "category bookings; template notify.tpl.bookings.meetup_cancelled; recipient the other parties; collapse key meetupId"}
+      - {type: comms.meetup.no_show, effect: "category bookings; template notify.tpl.bookings.meetup_no_show_claim; recipient the accused party; collapse key meetupId"}
+      - {type: moderation.action.applied, effect: "category moderation; template notify.tpl.moderation.action_applied; recipient the affected user; collapse key actionId"}
+      - {type: moderation.appeal.decided, effect: "category moderation; template notify.tpl.moderation.appeal_decided; recipient the appellant; collapse key appealId"}
+      - {type: identity.device_key.added, effect: "category security; template notify.tpl.security.device_added; urgency urgent; recipient the local principal; collapse key keyId"}
+      - {type: identity.device_key.revoked, effect: "category security; template notify.tpl.security.device_revoked; urgency urgent; recipient the local principal; collapse key keyId"}
+      - {type: identity.session.revoked, effect: "category security; template notify.tpl.security.session_revoked; urgency normal; recipient the local principal; collapse key sessionId"}
+      - {type: identity.recovery.completed, effect: "category security; template notify.tpl.security.recovery_completed; urgency urgent; recipient the local principal; collapse key recoveryId"}
+      - {type: identity.recovery.kit_created, effect: "category security; template notify.tpl.security.recovery_kit_created; urgency normal; recipient the local principal; collapse key recoveryKitId"}
+      - {type: federation.account.moved, effect: "category security; template notify.tpl.security.account_moved; urgency normal; recipient the local principal; collapse key moveId"}
+      - {type: privacy.export.ready, effect: "category security; template notify.tpl.security.export_ready; urgency normal; recipient the local principal; collapse key exportId"}
+      - {type: notify.preference.changed, effect: "apply the in-app column to newly routed events and remove unread items of categories now off, except security"}
+    errors: []
+    example: |
+      vault event bazaar.offer.made (derived from a verified signed offer statement) -> routing row
+      notify.notification.create { "sourceEventId": "0192f3b7-0000-7000-8000-000000000001", "category": "offers", "templateKey": "notify.tpl.offers.made", "ref": { "type": "offer", "id": "0192f3a5-1111-7000-8000-000000000001" }, "collapseKey": "listing-0192f3a4" }
+      -> { "notificationId": "0192f3b7-1111-7000-8000-000000000001", "created": true, "collapsed": false, "count": 1 }
+      vault command notify.notification.mark_read { "notificationId": "0192f3b7-1111-7000-8000-000000000001", "expectedRevision": 1 }
+      -> { "notificationId": "0192f3b7-1111-7000-8000-000000000001", "status": "read", "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the local principal read and mark its own notifications; routing consumers act as the vault itself.
+      - Notifications are created only from events of statements already verified by their owning modules (signed by an authorized key for the role), never from raw relay data.
+      - No relay or other user can read or create inbox rows.
+    capabilities:
+      - "notify.notification.create | local principal | vault internal; invoked by routing consumers; event derived from locally verified data; recipient rule selects the local principal"
+      - "notify.notification.mark_read | local principal | notification.userDid is the local principal"
+      - "notify.notification.read_own | local principal | notification.userDid is the local principal"
+  failure_recovery_idempotency:
+    requirements:
+      - Routing consumers are idempotent on event ID through the consumer inbox (CTR-EVT-001 EVT-3), so redelivery never creates duplicates.
+      - Collapse and creation happen in one IndexedDB transaction so counts are exact under concurrent events.
+      - If rendering a template fails the row is still created with a generic fallback text, so no alert is lost.
+    idempotency: "Create is idempotent on sourceEventId through the inbox table; mark_read is idempotent on notificationId and returns the stored read state."
+    concurrency: "expectedRevision on mark_read; creation and collapse in one IndexedDB transaction with a compare on the open row; two tabs share the same IndexedDB so Web Locks serialize the consumer per vault."
+    retries: "Event consumers retry up to 8 times with backoff then dead-letter locally (EVT-6 adapted); the user can retry from diagnostics."
+    offline: "Everything works offline because the inbox is local; notifications are created as soon as events are derived, including during sync catch-up after being offline."
+    partial_failure: "If one routing row fails others continue; a failed event stays in the dead letter list with a diagnostics entry and does not block the inbox."
+  privacy_retention_abuse:
+    requirements:
+      - Notifications are vault-local, content-free and P2; they never leave the device except as the separate content-free push or email alerts decided by the gate.
+      - Retention is 30 days with a cap of 500 items, and security rows are the last to be dropped by the cap.
+      - Notification spam from hostile peers is limited by blocking, by collapsing, and by per-source caps.
+    data:
+      - "Notification: P2, vault only; contains template key and reference but no content."
+    retention:
+      - "Rows: RET-SHORT (30 days) and at most 500; counters of removed rows kept in diagnostics."
+    threats:
+      - "T01 | Peer floods the inbox with offers or messages | blocking, collapse within 10 minutes, cap of 500, per-source cap of 50 rows per day, hidden counter instead of rows beyond the cap"
+      - "T02 | Forged event creates a fake security notification | notifications are created only from events derived from verified statements; security templates only from local identity events"
+      - "T03 | Notification text leaks content on lock screen | OS alerts come from F13.S02.M01 with generic text from the template; in-app titles never contain amounts or names unless the user enabled previews (default off)"
+      - "T04 | Urgent class abused | urgent only for security templates in a fixed list of 3 templates"
+    abuse_controls:
+      - "Per-source cap of 50 rows per day per actor DID and local block list."
+      - "Users can mute categories and threads; the user can report a source from the notification screen."
+  observability_performance:
+    requirements:
+      - The PWA keeps local diagnostics only (OBS-7) with counters for created, collapsed, dropped and read notifications.
+      - Routing one event and creating a row meets p95 ≤ 30 ms and inbox list of 50 items p95 ≤ 100 ms on a mid-range phone.
+      - Catch-up routing of 1 000 events after being offline completes within 5 s.
+    metrics:
+      - "classrup_notify_inbox_created_total{category} (local diagnostics)"
+      - "classrup_notify_inbox_collapsed_total (local diagnostics)"
+      - "classrup_notify_inbox_unread (gauge, local diagnostics)"
+      - "classrup_notify_routing_dead_letter_total (local diagnostics)"
+    logs:
+      - "local info notification.created {category, templateKey} — no ref IDs in exported diagnostics."
+    budgets:
+      - "create p95 ≤ 30 ms; list_mine 50 items p95 ≤ 100 ms; unread_count p95 ≤ 20 ms."
+      - "Routing 1 000 events ≤ 5 s on a mid-range phone."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - A routing table test asserts every routed event type exists in the catalog emits and has category, template, recipient rule and collapse key.
+      - Contract tests check commands, queries and event payloads against the schema registry.
+    fixtures: "Vault U as seller of listing L and buyer elsewhere, routing table of 49 events, blocked user X, muted thread M, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | route bazaar.offer.made to seller U | Notification stored with category offers, template notify.tpl.offers.made, ref offer, no text fields"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V08 violated in turn | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of events within and beyond 10-minute windows, reads and sweeps | count equals collapsed events; read never reopens; new window creates new row"
+      - "T04 | contract | 04.R01,04.R02,09.R02 | create, mark_read, mark_all_read, list, unread_count execute | outputs and event payloads validate against registry schemas"
+      - "T05 | contract | 04.R03,09.R03 | iterate the routing table | every routed type is in modules.yaml emits, has recipient rule and collapse key, urgent only on 3 security templates"
+      - "T06 | integration | 04.R03,06.R01 | deliver each event type twice, shuffled | exactly one row per rule, duplicates skipped"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | event from blocked X; event with unverified statement; foreign actor tries to create or read rows | no row; no external access"
+      - "T08 | integration | 06.R02,06.R03 | 100 concurrent offer events for one listing; template render failure | one collapsed row count 100; fallback text on render failure"
+      - "T09 | integration | 06.R03,02.R03 | muted thread message; category with in-app off; security category with in-app preference attempt to disable | muted flag set, no row for off category except counters, security row always created"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | 51st event from one actor in a day; 501st row; inspect exported diagnostics | hidden counter increments, cap removes read rows first, no content in exports"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 1 000 events catch-up and list of 50 items | budgets met"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-103 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore from backup | rows round trip; imported rows older than 30 days dropped; unread counts equal"
+      - "T14 | a11y | 04.R01 | inbox with screen reader and keyboard | list semantics, unread state in text, mark all read announced, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T14 pass in CI.
+      - Every routed event exists in the catalog and the inbox never stores text content.
+      - Security notifications are created regardless of the in-app preference.
+      - Duplicate event delivery never creates a second row.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains unread notifications and the last 30 days of read ones as references and template keys only.
+      - Import drops rows older than 30 days and rows whose reference type is unknown, keeps counts, and never regenerates alerts for imported rows.
+      - Schema changes follow expand and contract; new templates and routing rows are additive and unknown templates render a generic fallback.
+    export: "Section notify.notifications in classrup-export/v1; one line per Notification (schema classrup.notify.notification/v1)."
+    import: "Rows validated against registries; existing IDs skipped; no OS alert, push or email is triggered by import."
+    backup: "The vault export is the backup (IOX-6); relays hold no inbox data."
+    migration_rollback: "Additive routing rows and templates only; rollback is safe because older apps render unknown templates with the generic fallback and ignore unknown categories."

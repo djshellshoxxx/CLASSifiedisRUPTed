@@ -1,0 +1,171 @@
+id: F17.S01.M01
+scope: MVP
+summary: 'Defines how unit tests are written and enforced in the pnpm workspace: one vitest 5.1.0 configuration shared by all packages, deterministic fixtures with an injected clock and ID generator, the TEST-PS-NNN-PP.Tnn title convention (CTR-TST-001) and coverage thresholds that fail the build when core packages drop below 85 % line coverage. It is the base layer; property, integration and e2e suites live in sibling modules.'
+responsibilities:
+- Provide the shared vitest 5.1.0 configuration (node environment, no network, 5 s default test timeout, parallel workers = CPU count) used by every package.
+- 'Enforce coverage thresholds: core packages (kernel, money, matching, mutiny, commerce, security) at least 85 % lines, 85 % functions, 80 % branches; other packages at least 70 % lines.'
+- 'Provide deterministic fixtures: FakeClock, SeqIdGenerator (UUIDv7-shaped, monotonic), seeded PRNG, factory builders for Listing, Offer, Proposal, Money and actors.'
+- 'Ban nondeterminism in unit scope: Math.random, Date.now, new Date() without arguments and global fetch throw inside tests unless a fixture is injected.'
+- 'Run isomorphic packages (kernel core, money, matching, mutiny, commerce) in two environments, Node 22 and a browser-like one (fake-indexeddb, WebCrypto, no node: modules), and provide MemoryVault, seeded Ed25519 key factories and signed-statement builders so vault logic is unit-tested without a relay.'
+non_responsibilities:
+- Randomised and generative testing (F17.S01.M02 property).
+- Relay plus SQLite flows (F17.S01.M03 integration) and browser tests (F17.S01.M04 e2e).
+- Mapping requirements to tests and failing releases on gaps (F17.S03.M02 gates; the tools/trace tool reads the titles this module standardises).
+- 'Future: mutation testing with Stryker as a nightly report.'
+depends_on:
+- CTR-TST-001
+- CTR-ID-001
+- CTR-MNY-001
+- CTR-OBS-001
+user_stories:
+- As a developer, I run pnpm test:unit and get a result in under 60 s on a 2 vCPU machine with the exact failing seed or fixture time printed on failure.
+- As a reviewer, I see a coverage delta per package and the build fails if a core package falls below 85 % lines.
+- As a QA lead, I can find any requirement's test by grepping its TEST-PS-NNN-PP.Tnn ID.
+edge_cases:
+- A test title without a valid TEST-PS-NNN-PP.Tnn prefix in a spec-covered package is rejected by the lint rule with QUALITY_UNIT_TITLE_INVALID.
+- A test calls Date.now directly; the setup file throws QUALITY_UNIT_NONDETERMINISTIC naming the file and line.
+- Coverage of a new package is 0 % because it has no tests yet; the check treats missing packages as below threshold, not as skipped.
+- Two tests share a module-level mutable fixture; vitest isolate mode is on, so state never leaks and a lint rule forbids top-level let in test files.
+- A flaky test passes on retry; retries are set to 0 locally and 0 in CI so flakes surface as failures.
+- Windows line endings or locale change numeric formatting; fixtures use fixed locale en-US and TZ=UTC set in the global setup.
+ux:
+  notes: Headless. Output is the vitest reporter (default locally, junit and json in CI) and an LCOV file; failure messages name the TEST ID, the seed and the file. No end-user screens.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; the only artifacts are vitest.config.ts, vitest.workspace.ts, shared setup files and generated coverage reports under coverage/ which are git-ignored.
+    - Fixtures define data shapes by importing the production schemas, so a schema change breaks fixtures at compile time rather than silently diverging.
+    - 'Fixture data is synthetic only: no real names, emails, phone numbers or coordinates; coordinates use fixed points in a test geohash at precision 5.'
+    - Fixtures include MemoryVault (the storage/memory adapter), a seeded Ed25519 keypair factory and builders for CTR-FED-001 signed envelopes, so vault commands and statement verification run with no relay and no network.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - A custom lint rule validates that every test title in packages with a module.spec.yaml starts with TEST-PS-NNN-PP.Tnn where NN is two digits.
+    - The global setup rejects nondeterminism sources (Math.random, Date.now, argument-less new Date, global fetch, process.env reads not on an allow list) with a typed error.
+    - Coverage thresholds are evaluated per package after the run and violations map to exactly one error code per package.
+    - 'Unit suites of isomorphic packages run twice, in Node 22 and in a browser-like environment with fake-indexeddb and WebCrypto, and fail with QUALITY_UNIT_NODE_IMPORT_IN_CORE when core code imports node: modules.'
+    rules:
+    - V01 | Test title in a spec-covered package matches TEST-PS-<3 digits>-<01 to 10>.T<2 digits> | QUALITY_UNIT_TITLE_INVALID
+    - V02 | Test code does not call Math.random, Date.now, new Date() without arguments or global fetch | QUALITY_UNIT_NONDETERMINISTIC
+    - V03 | Core package line coverage is at least 85 %, functions 85 %, branches 80 %; other packages lines 70 % | QUALITY_UNIT_COVERAGE_BELOW
+    - V04 | Every workspace package that has source files has at least one test file | QUALITY_UNIT_PACKAGE_UNTESTED
+    - V05 | Single test duration is at most 5 000 ms | QUALITY_UNIT_TEST_TIMEOUT
+    - 'V06 | Packages marked isomorphic import no node: module and not the Node-only subpath @classrup/kernel/node | QUALITY_UNIT_NODE_IMPORT_IN_CORE'
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle; a unit run is a stateless process with exit code 0 on pass and 1 on any failure.
+    - A run never mutates the working tree outside coverage/ and .vitest-cache/.
+    - 'Test isolation is per file (isolate: true, pool: forks) so no test observes state from another file.'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes the scripts pnpm test:unit, pnpm test:unit --coverage, and pnpm test:unit --changed for local use.
+    - The interface emits no relay events; run results are JUnit XML at reports/unit.xml and JSON at reports/unit.json.
+    - 'Exit codes are documented: 0 pass, 1 test failure, 2 coverage threshold failure, 3 configuration or lint failure.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_UNIT_TITLE_INVALID | 422 | no | test title does not start with a valid TEST-PS-NNN-PP.Tnn ID (lint exit 3)
+    - QUALITY_UNIT_NONDETERMINISTIC | 422 | no | test reached an uninjected clock, random source or network (run exit 1)
+    - QUALITY_UNIT_COVERAGE_BELOW | 422 | no | package coverage under its threshold (exit 2)
+    - QUALITY_UNIT_PACKAGE_UNTESTED | 422 | no | package with sources has no test files (exit 2)
+    - QUALITY_UNIT_TEST_TIMEOUT | 422 | no | a test exceeded the 5 s timeout (exit 1)
+    - QUALITY_UNIT_NODE_IMPORT_IN_CORE | 422 | no | isomorphic core code imports a Node-only module (exit 3)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:unit --coverage
+        packages/money            lines 96.2 %  branches 91.0 %  OK
+        packages/mutiny           lines 83.9 %  threshold 85 %  QUALITY_UNIT_COVERAGE_BELOW
+        exit 2
+      $ pnpm test:unit packages/money -t TEST-PS-137-09.T01
+  authorization_capabilities:
+    requirements:
+    - The module requires no capabilities and must not import relay session code, so unit tests cannot call authorize() against a live session.
+    - Unit tests of authorization logic use pure authorize() with constructed actors from fixtures (CTR-CAP-001 CAP-2).
+    - Test files and fixtures are excluded from production build outputs by the package files allow list.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Re-running a unit suite with the same seed and FakeClock start time produces byte-identical JSON reports apart from durations.
+    - Failures print the seed, fixed clock start time and sequence ID generator offset so any failure replays locally with one command.
+    - 'Retries are disabled (retry: 0) so intermittent failures are never masked; a test that fails once in 100 CI runs is quarantined within 24 h with an issue link.'
+    idempotency: A unit run has no side effects, so re-running is always safe; reports are overwritten atomically (write to temp file, rename).
+    concurrency: Workers run test files in parallel forks; fixtures never share mutable state across files and the shared FakeClock is created per test file.
+    retries: Test retries are disabled. CI re-runs a failed job once only for infrastructure failures (cache restore, runner loss), never for assertion failures.
+    offline: Unit tests need no network and pass on an air-gapped machine after pnpm install; the guard fails any test that tries to open a socket.
+    partial_failure: If a worker crashes, the run exits 1 with the crashed file named; partial coverage is discarded rather than merged so thresholds never pass on incomplete data.
+  privacy_retention_abuse:
+    requirements:
+    - Fixtures contain only synthetic data and the lint rule fails on strings matching real email or phone patterns outside the reserved example.com and 555-01xx ranges.
+    - Coverage and JUnit artifacts are retained 14 days in CI and contain no secrets because tests run without environment secrets.
+    - Tests run with an empty environment allow list so credentials in the developer shell never leak into snapshots.
+    data:
+    - 'Fixtures: synthetic P0 data only.'
+    - 'Reports: test names, durations, coverage percentages, no payloads.'
+    retention:
+    - CI artifacts (junit, lcov) 14 days; local coverage/ directory is git-ignored and deleted by pnpm clean.
+    threats:
+    - T01 | Real user data copied into a fixture | fixture lint blocks real-looking emails, phones and coordinates; code review checklist item
+    - T02 | Secret leaked through snapshot or log | tests run with an empty env allow list; secret scanning (F16.S01.M02) runs on repository and artifacts
+    - T03 | Test weakened to pass coverage gate | coverage counts only lines executed by assertions-bearing tests in a package; thresholds can be lowered only in a commit reviewed by a code owner of tests/unit-conventions
+    abuse_controls:
+    - Thresholds file is code-owned; pull requests that lower a threshold require a second reviewer.
+    - Skipped tests (it.skip and pending-test markers) in spec-covered packages fail the lint rule.
+  observability_performance:
+    requirements:
+    - The module records suite duration, test count and coverage per package as run metrics in the JSON report.
+    - Unit suite wall time on the 2 vCPU CI runner stays under 60 s for the whole workspace and under 5 s per package.
+    - Slowest 10 tests are listed in each CI summary and any test over 500 ms is flagged for review.
+    metrics:
+    - classrup_quality_unit_tests_total{outcome=pass|fail|skip} (CI summary)
+    - classrup_quality_unit_duration_ms (whole suite)
+    - classrup_quality_unit_coverage_ratio{module} (lines)
+    logs:
+    - JSON line per failed test {ts, level:error, msg, module, code, testId, seed} with no payload values (CTR-OBS-001 OBS-1).
+    budgets:
+    - Whole-workspace unit run at most 60 s on 2 vCPU; per package at most 5 s.
+    - Coverage report generation at most 10 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test, using the mapping in section 09.
+    - Tool self-tests run the lint rule and the nondeterminism guard against crafted fixtures to prove rejection.
+    - The coverage gate itself is tested with a synthetic package below and above threshold.
+    fixtures: FakeClock starting 2026-11-04T10:00:00Z, SeqIdGenerator seed 1, PRNG seed 20261104, TZ=UTC, locale en-US.
+    tests:
+    - T01 | unit | 01.R02,01.R03 | fixtures built from production schemas are inspected by a test that scans values | every fixture validates against its schema and matches no real email or phone pattern
+    - T02 | unit | 02.R01 | lint rule run on files with valid and 6 malformed titles | valid titles accepted; each malformed title reported with QUALITY_UNIT_TITLE_INVALID
+    - T03 | unit | 02.R02,03.R03 | test calls Math.random, Date.now, new Date(), fetch | each throws QUALITY_UNIT_NONDETERMINISTIC and the run exits 1
+    - T04 | unit | 02.R03,04.R03 | synthetic package at 84.9 % and 85.0 % lines | 84.9 % exits 2 with QUALITY_UNIT_COVERAGE_BELOW; 85.0 % passes
+    - T05 | integration | 01.R01,03.R02 | run suite and check git status afterwards | only coverage/ and .vitest-cache/ changed
+    - T06 | integration | 03.R01,06.R01 | run the suite twice with the same seed and clock | normalised JSON reports are byte-identical
+    - T07 | integration | 03.R03,06.R02 | two test files mutate the same module-level fixture | isolation keeps both green and the shared state is not visible across files
+    - T08 | integration | 04.R01,04.R02 | execute each documented script | reports/unit.xml and reports/unit.json exist and parse
+    - T09 | unit | 05.R01,05.R02 | import of relay session code from a unit test; pure authorize() with fixture actors | import rejected by dependency rule; authorize returns Allow and Deny for fixture roles
+    - T10 | integration | 05.R03 | build the production bundles and list their files | no test or fixture files present
+    - T11 | unit | 06.R03 | configure retry and run an intermittent test | retry is 0 and the intermittent test fails the run
+    - T12 | abuse | 07.R01,07.R03 | commit that lowers a threshold and a file with it.skip | code-owner check flags the threshold change; lint rejects it.skip
+    - T13 | abuse | 07.R02 | run with a canary secret in the shell environment | canary absent from every artifact and from test process env
+    - T14 | load | 08.R01,08.R02,08.R03 | run the full workspace unit suite on the 2 vCPU CI profile | wall time at most 60 s, per package at most 5 s, slowest list printed
+    - T15 | unit | 09.R01,09.R02,09.R03 | run the module's self-tests | all tool self-tests pass and every requirement ID maps to a test title
+    - T16 | integration | 10.R01,10.R02,10.R03 | upgrade vitest in a branch with a lockfile change, then revert it | suite results identical before and after revert; no stored data is involved
+    - T17 | unit | 01.R04,02.R04 | run an isomorphic package in both environments and add a node:fs import to core | both environments pass; the added import fails with QUALITY_UNIT_NODE_IMPORT_IN_CORE; a signed envelope built from fixtures verifies
+    acceptance:
+    - pnpm test:unit finishes under 60 s on the 2 vCPU reference runner with zero failures.
+    - Every core package reports at least 85 % line coverage and a lowered threshold cannot merge without a code-owner approval.
+    - A deliberately introduced Date.now call in a test is rejected with QUALITY_UNIT_NONDETERMINISTIC.
+    - Every test title in covered packages carries a valid TEST-PS-NNN-PP.Tnn ID.
+  import_export_backup_rollback:
+    requirements:
+    - Configuration is plain TypeScript in the repository; there is no user data to export or import.
+    - Fixture factories are versioned with the production schemas; upgrading vitest or fast-check versions is a reviewed change to the pinned lockfile.
+    - Rollback is a git revert of the configuration commit; thresholds are only ever raised in a separate commit from feature work.
+    export: Not applicable to user data. Test results are exported as reports/unit.xml (JUnit), reports/unit.json and coverage/lcov.info.
+    backup: Configuration lives in git; CI keeps artifacts 14 days.
+    migration_rollback: Revert the configuration commit; thresholds are only raised, never lowered, outside reviewed commits.
+    import: 'Not applicable: tests import no user data; fixtures are generated from code.'

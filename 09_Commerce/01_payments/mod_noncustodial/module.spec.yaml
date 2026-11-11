@@ -1,0 +1,375 @@
+# F09.S01.M01 Noncustodial payment claims (ADR-0015, ADR-0016). CTR-COM-001 and CTR-MNY-001 apply.
+id: F09.S01.M01
+scope: MVP
+summary: >-
+  A Deal records what two or more parties owe each other for something agreed elsewhere (an accepted offer, an auction win,
+  a barter compensation leg, a service milestone, a rental deposit, a listing fee). A PaymentClaim records that a payer says
+  they paid and what the payee says back. There is no paid flag and no custody: the platform never holds funds or keys
+  (COM-1). Deal and PaymentClaim are mirrored in every party's vault; claim, acknowledgement and dispute are Ed25519-signed
+  statements that evidence an assertion, not delivery. Only a payee acknowledgement (cash, external) or chain finality
+  (crypto) unlocks completed states, and the UI shows which.
+responsibilities:
+  - Provide the generic command commerce.deal.open that any context module calls with contextRef {type, id} and obligations; derive a deterministic dealId from the context so both vaults converge.
+  - Own Deal and PaymentClaim and the COM-3 status machine in each vault, including the 14-day no-progress expiry.
+  - Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1 and classrup.commerce.deal_cancel/v1.
+  - Ingest incoming statements, check signer role against the deal, store with provenance, quarantine invalid ones, and detect forks (two incompatible signed statements with the same prev) and freeze the affected claim.
+  - Expose the MethodRulePort so cash (F09.S01.M02), crypto (F09.S01.M03) and external methods plug in their rules, and track peer sync state without claiming more certainty than reached.
+  - Mark a Deal completed only when every obligation is covered by acknowledged or final claims, and emit commerce.deal.completed.
+non_responsibilities:
+  - Cash-specific rules and receipts guidance (F09.S01.M02) and on-chain verification (F09.S01.M03).
+  - Signed receipts (F09.S02.M01), dispute cases (F09.S02.M02) and reconciliation (F09.S02.M03).
+  - Deciding what is owed; context modules (bazaar offers, auctions, mutiny compensation, services milestones, rentals deposits) own their agreements and call commerce.deal.open.
+  - Moving, escrowing, converting or refunding money; refunds are new obligations the parties settle themselves.
+  - "Future: multi-currency obligations settled through a pinned FX quote, split payments across more than 10 claims per obligation, and a relay-side fee ledger for relays that charge for promotion (a relay acts as an ordinary payee party using these same statements)."
+depends_on: [F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a buyer, I mark that I paid and the seller sees a claim labelled claimed (unverified) until they acknowledge it.
+  - As a seller, I acknowledge a payment I received, or dispute a claim that I did not receive, and the buyer sees my signed answer.
+  - As a participant in a barter cycle with a compensation leg, I see the money obligation as a Deal and know the platform does not hold the money.
+  - As any party, I can see how far each statement has travelled (saved here, prepared, relay received, peer accepted) and never see more certainty than that.
+edge_cases:
+  - commerce.deal.open is called twice for the same contextRef from two tabs or devices; the deterministic dealId and unique index make the second call return the existing Deal.
+  - The peer receives a payment claim before the Deal statement; it is held in quarantine for up to 24 h and applied when the Deal arrives, then dropped with reason deal_unknown if it does not.
+  - A payer signs two different claims for the same obligation with the same prev (a forked vault); both are kept as evidence, the claim is frozen with COMMERCE_STATEMENT_FORK and the parties must renegotiate or open a dispute; nothing is auto-resolved.
+  - A payee acknowledgement signed before the 14-day expiry arrives after the local vault already expired the claim; it is stored as late evidence, the claim stays expired and the payee is offered to ask for a new claim.
+  - The payee marks a claim disputed, then acknowledges it after the payer shows proof; disputed to acknowledged is allowed and both signed statements stay in the history.
+  - Clock skew: the payer's claimedAt is ahead of the payee's clock by more than 10 minutes; the statement is accepted but displayed as the payer's claimed time with a skew note, and expiry is computed from local receivedAt.
+  - A context module calls open with an obligation in a disabled currency or with payer equal to payee; the call is refused before anything is stored.
+ux:
+  screens:
+    - "Deal card: parties by pseudonym, context link, obligations with amount and currency, status chip (Open, Disputed, Completed, Cancelled, Expired) and the sentence 'Payments happen directly between you; ClassRup never holds money.'"
+    - "Payer sheet: choose method (cash, crypto, external), enter note or txRef, confirm 'I say I paid'; status then reads 'claimed (unverified)'."
+    - "Payee sheet: Acknowledge received or Dispute; acknowledging shows the exact amount and currency being confirmed."
+    - "Sync strip under every statement: saved on this device, prepared, relay received, peer accepted; unknown when a relay is unreachable."
+  states: [loading, empty, open, claimed-unverified, acknowledged-by-payee, confirming-on-chain, final, disputed, frozen-conflict, expired, cancelled, pending-offline, quarantined]
+  a11y:
+    - Status chips use text plus icon and are announced through an aria-live polite region when they change.
+    - Acknowledge and Dispute are buttons of at least 44 by 44 px with accessible names that include the amount and currency.
+    - The honest-label sentence is plain text associated with the status chip through aria-describedby.
+processes:
+  domain_schema:
+    requirements:
+      - A Deal stores contextRef {type, id}, the context statement cid, parties with roles, 1 to 10 obligations (payer, payee, Money amount, purpose), status, expiry and revision, and its dealId is the first 16 bytes of sha256 of the string type:id formatted as a uuid so both vaults derive the same ID.
+      - A PaymentClaim stores exactly the COM-2 fields plus dealId, obligationId, verification per COM-4, statement cids and local receivedAt; there is no paid boolean anywhere in the schema.
+      - Deals and claims are P2 (parties only), kept in each party's vault as RET-EVIDENCE, and travel only as end-to-end encrypted signed envelopes between the parties (PRV-5).
+    entities:
+      - name: Deal
+        schema: classrup.commerce.deal/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuid — deterministic from contextRef type and id; primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "contextRef: object — {type: offer|auction_result|cycle_compensation|milestone|rental_deposit|listing_fee|other, id: uuid}"
+          - "contextCid: string — sha256 cid of the signed context statement (for example the accepted offer) both parties hold"
+          - "parties: array — 2..20 entries {did, role: payer|payee|both}"
+          - "obligations: array — 1..10 entries {obligationId, payerId, payeeId, amount: Money, purpose: goods|service|deposit|compensation|listing_fee|other, allowedMethods: cash|crypto|external subset}"
+          - "status: enum — open | disputed | completed | cancelled | expired"
+          - "expiresAt: timestamp — openedAt + 30 days by default, range 1..90 days"
+          - "dealCid: string — sha256 of JCS(deal statement), shared by all parties"
+          - "peerSync: object — per party sync state: local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "cancelSigners: array — parties whose deal_cancel statement is held"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - Every obligation amount is positive and its currency is active in the local registry (F09.S03.M01).
+          - payerId differs from payeeId in every obligation and both are parties.
+          - status completed implies every obligation has acknowledged or final claims summing to at least its amount.
+          - id equals the deterministic derivation of contextRef; one Deal per (vaultId, contextRef).
+      - name: PaymentClaim
+        schema: classrup.commerce.payment_claim/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, chosen by the payer vault"
+          - "vaultId: uuidv7 — local vault scope"
+          - "dealId: uuid — ref Deal"
+          - "obligationId: string — ref Deal.obligations"
+          - "contextRef: object — {type, id} copied from the Deal (COM-2)"
+          - "method: enum — cash | crypto | external"
+          - "amount: Money — CTR-MNY-001; > 0; same currency as the obligation"
+          - "payerId: did — signer of the claim"
+          - "payeeId: did — signer of acknowledgement or dispute"
+          - "claimedAt: timestamp — payer's claim of when they paid (a claim, not evidence)"
+          - "receivedAt: timestamp — local clock when this vault stored it"
+          - "txRef?: string — ≤ 140 chars for external; transaction id for crypto"
+          - "note?: string — ≤ 280 code points plain text"
+          - "status: enum — claimed | acknowledged | disputed | pending_confirmation | confirmed | final | reorged | failed | expired"
+          - "verification: object — {source: self|counterparty|chain|provider, chainId?, confirmations?, finalityPolicy?, checkedAt?, verifierVersion?} (COM-4)"
+          - "lastProgressAt: timestamp — local clock; basis of the 14-day expiry"
+          - "claimCid: string — sha256 of the signed claim statement"
+          - "ackCid?: string — cid of the payee acknowledgement or dispute statement"
+          - "prev?: string — cid of the previous statement in this claim's chain"
+          - "forkDetected: boolean — true when two statements share the same prev; claim is frozen"
+          - "peerSync: string — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - No field named paid exists; the only completion evidence is status acknowledged (cash, external) or final (crypto).
+          - A claim in status final has method crypto and verification.source chain.
+          - forkDetected true blocks all transitions except opening a dispute.
+          - At most 10 claims per obligation and at most 1 000 per vault per day.
+    sql: |
+      CREATE TABLE commerce_deal (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, context_type TEXT NOT NULL, context_id TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_deal_context ON commerce_deal(vault_id, context_type, context_id);
+      CREATE TABLE commerce_payment_claim (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, deal_id TEXT NOT NULL, obligation_id TEXT NOT NULL,
+        method TEXT NOT NULL, status TEXT NOT NULL, last_progress_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX commerce_claim_deal ON commerce_payment_claim(vault_id, deal_id, status);
+  validation_rules:
+    requirements:
+      - Every command input is validated strictly against the schema; unknown fields are rejected with VALIDATION_FAILED.
+      - Incoming signed statements are verified for envelope shape, Ed25519 signature over JCS bytes (FED-2), signer role and chain position before any state change.
+      - Every violation maps to exactly one stable error code with a localized message key.
+    rules:
+      - "V01 | contextRef.type is a registered context type and the context statement cid resolves in the local vault | COMMERCE_CONTEXT_UNKNOWN"
+      - "V02 | 1 to 10 obligations, each amount positive within 38 digits and currency active in the registry | VALIDATION_FAILED"
+      - "V03 | payerId differs from payeeId and both are listed parties | COMMERCE_DEAL_PARTY_INVALID"
+      - "V04 | a Deal for this contextRef with different terms does not already exist | COMMERCE_DEAL_CONTEXT_CONFLICT"
+      - "V05 | claim amount currency equals the obligation currency and the method is in allowedMethods | COMMERCE_CLAIM_METHOD_NOT_ALLOWED"
+      - "V06 | method rule from the MethodRulePort passes (cash, crypto or external) | COMMERCE_CLAIM_METHOD_RULE"
+      - "V07 | actor is the obligation payer for claim, the payee for acknowledge or dispute | FORBIDDEN"
+      - "V08 | statement signature is valid and signer is authorized for the role in the Deal | COMMERCE_STATEMENT_INVALID"
+      - "V09 | statement prev equals the current head of the claim chain | COMMERCE_STATEMENT_FORK"
+      - "V10 | neither party has blocked the other locally | BLOCKED_PARTY"
+      - "V11 | Deal is open and not expired when a claim is made | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Deal and PaymentClaim follow the declared machines; any other transition is refused with CONFLICT_STATE.
+      - Crypto statuses are set only by events from the crypto module (F09.S01.M03); no command can set confirmed or final directly (COM-5).
+      - Any non-final claim moves to expired after 14 days without progress, computed from local lastProgressAt.
+      - A Deal completes only when its obligations are covered, and a disputed Deal returns to open only when its dispute resolves.
+    machines:
+      - entity: PaymentClaim
+        initial: claimed
+        terminal: [acknowledged, final, failed, expired]
+        transitions:
+          - "claimed -> acknowledged | commerce.payment.acknowledge by payee (cash or external) | verification.source counterparty; emits commerce.payment.acknowledged"
+          - "claimed -> disputed | commerce.payment.dispute by payee | emits commerce.payment.disputed"
+          - "disputed -> acknowledged | commerce.payment.acknowledge by payee | emits commerce.payment.acknowledged"
+          - "claimed -> pending_confirmation | event commerce.payment.confirming (crypto) | verification.source chain"
+          - "pending_confirmation -> confirmed | event commerce.payment.confirmed | address and amount matched by verifier"
+          - "confirmed -> final | event commerce.payment.finalized | finality policy met (COM-5)"
+          - "pending_confirmation -> reorged | event commerce.payment.reorged | chain reorganized"
+          - "confirmed -> reorged | event commerce.payment.reorged | chain reorganized"
+          - "reorged -> pending_confirmation | event commerce.payment.confirming | transaction seen again"
+          - "reorged -> failed | event commerce.payment.failed | transaction absent past the reorg grace period"
+          - "claimed -> expired | expiry sweep | 14 days without progress; emits commerce.payment.expired"
+          - "disputed -> expired | expiry sweep | 14 days without progress; emits commerce.payment.expired"
+          - "pending_confirmation -> expired | expiry sweep | 14 days without progress; emits commerce.payment.expired"
+          - "confirmed -> expired | expiry sweep | 14 days without progress; emits commerce.payment.expired"
+          - "reorged -> expired | expiry sweep | 14 days without progress; emits commerce.payment.expired"
+      - entity: Deal
+        initial: open
+        terminal: [completed, cancelled, expired]
+        transitions:
+          - "open -> completed | claim reaches acknowledged or final | all obligations covered; emits commerce.deal.completed"
+          - "open -> disputed | event commerce.dispute.opened for this deal | claims remain but no further completion"
+          - "disputed -> open | event commerce.dispute.resolved | dispute outcome recorded"
+          - "open -> cancelled | commerce.deal.cancel signed by every party | no claim in claimed or later non-terminal state; emits commerce.deal.cancelled"
+          - "open -> expired | expiry sweep at expiresAt | no completed obligations; emits commerce.deal.cancelled with reason expired"
+    timeouts:
+      - "Claim expiry sweep every 5 min in the open vault and at vault unlock: non-final claims with lastProgressAt older than 14 days become expired."
+      - "Deal expiry sweep at the same cadence: open Deals past expiresAt (default 30 days) become expired."
+      - "Quarantined statements wait 24 h for their missing parent (Deal or claim) and are then dropped with reason parent_unknown."
+  commands_queries_events:
+    requirements:
+      - Commands are vault commands run locally with the unlocked principal as actor; those marked statement also produce a signed envelope for the other parties; no command of this module is a relay command.
+      - Every command emits its events into the vault outbox in the same IndexedDB transaction as the state change (EVT-8).
+      - The module consumes crypto, dispute and deletion events to drive claim and deal status and never accepts a crypto status from user input.
+    commands:
+      - name: commerce.deal.open
+        capability: commerce.deal.open
+        input: "[vault command, produces signed statement classrup.commerce.deal/v1] { contextRef: {type, id}, contextCid, parties[], obligations[], expiresInDays? (default 30, 1..90) }"
+        output: "{ dealId, revision, dealCid, peerSync }"
+        errors: [VALIDATION_FAILED, COMMERCE_CONTEXT_UNKNOWN, COMMERCE_DEAL_PARTY_INVALID, COMMERCE_DEAL_CONTEXT_CONFLICT, BLOCKED_PARTY]
+        emits: [commerce.deal.opened]
+        idempotent: true
+      - name: commerce.deal.cancel
+        capability: commerce.deal.cancel
+        input: "[vault command, produces signed statement classrup.commerce.deal_cancel/v1] { dealId, expectedRevision, reason? }"
+        output: "{ dealId, revision, status, cancelSigners }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [commerce.deal.cancelled]
+        idempotent: true
+      - name: commerce.payment.claim
+        capability: commerce.payment.claim
+        input: "[vault command, produces signed statement classrup.commerce.payment_claim/v1] { dealId, obligationId, method, amount: Money, txRef?, note?, cryptoRequestId? }"
+        output: "{ claimId, revision: 1, status: claimed, peerSync }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, CONFLICT_STATE, COMMERCE_CLAIM_METHOD_NOT_ALLOWED, COMMERCE_CLAIM_METHOD_RULE, BLOCKED_PARTY]
+        emits: [commerce.payment.claimed]
+        idempotent: true
+      - name: commerce.payment.acknowledge
+        capability: commerce.payment.acknowledge
+        input: "[vault command, produces signed statement classrup.commerce.payment_ack/v1] { claimId, expectedRevision, note? }"
+        output: "{ claimId, revision, status: acknowledged, dealStatus }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_STATEMENT_FORK]
+        emits: [commerce.payment.acknowledged, commerce.deal.completed]
+        idempotent: true
+      - name: commerce.payment.dispute
+        capability: commerce.payment.dispute
+        input: "[vault command, produces signed statement classrup.commerce.payment_dispute/v1] { claimId, expectedRevision, reason: not_received|amount_wrong|other, note? }"
+        output: "{ claimId, revision, status: disputed }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [commerce.payment.disputed]
+        idempotent: true
+      - name: commerce.statement.ingest
+        capability: commerce.statement.ingest
+        input: "[vault command, internal, consumes a signed statement received from a mailbox or direct channel] { envelope }"
+        output: "{ outcome: applied|quarantined|duplicate, reason? }"
+        errors: [VALIDATION_FAILED, COMMERCE_STATEMENT_INVALID, COMMERCE_STATEMENT_FORK, COMMERCE_CONTEXT_UNKNOWN, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [commerce.deal.opened, commerce.payment.claimed, commerce.payment.acknowledged, commerce.payment.disputed, commerce.deal.completed, commerce.deal.cancelled]
+        idempotent: true
+    queries:
+      - name: commerce.deal.get
+        capability: commerce.deal.read
+        input: "{ dealId }"
+        output: "{ deal: Deal, claims: PaymentClaim[], syncStates }"
+        errors: [NOT_FOUND]
+      - name: commerce.deal.list_mine
+        capability: commerce.deal.read
+        input: "{ status?: open|disputed|completed|cancelled|expired|all, contextType?, cursor?, limit ≤ 50 }"
+        output: "{ items: Deal[], nextCursor? }"
+        errors: []
+      - name: commerce.payment.list_for_deal
+        capability: commerce.deal.read
+        input: "{ dealId, status?, cursor?, limit ≤ 50 }"
+        output: "{ items: PaymentClaim[], nextCursor? }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: commerce.deal.opened, privacy: P2, payload: "{ dealId, contextRef, parties[], obligationCount, expiresAt }"}
+      - {type: commerce.payment.claimed, privacy: P2, payload: "{ claimId, dealId, obligationId, method, amount, payerId, payeeId, txRef?, cryptoRequestId? }"}
+      - {type: commerce.payment.acknowledged, privacy: P2, payload: "{ claimId, dealId, payeeId, method }"}
+      - {type: commerce.payment.disputed, privacy: P2, payload: "{ claimId, dealId, payeeId, reason }"}
+      - {type: commerce.payment.expired, privacy: P2, payload: "{ claimId, dealId, lastStatus }"}
+      - {type: commerce.deal.completed, privacy: P2, payload: "{ dealId, contextRef, completedAt }"}
+      - {type: commerce.deal.cancelled, privacy: P2, payload: "{ dealId, contextRef, reason: mutual|expired }"}
+    events_consumed:
+      - {type: commerce.payment.confirming, effect: "claimed or reorged claim moves to pending_confirmation and lastProgressAt is refreshed"}
+      - {type: commerce.payment.confirmed, effect: "pending_confirmation claim moves to confirmed with chain verification fields"}
+      - {type: commerce.payment.finalized, effect: "confirmed claim moves to final; Deal completion is re-evaluated"}
+      - {type: commerce.payment.reorged, effect: "pending_confirmation or confirmed claim moves to reorged and the UI shows the reorg"}
+      - {type: commerce.payment.failed, effect: "reorged claim moves to failed"}
+      - {type: commerce.dispute.opened, effect: "Deal referenced by the case moves to disputed"}
+      - {type: commerce.dispute.resolved, effect: "disputed Deal returns to open; the outcome never changes a claim status or moves money"}
+      - {type: privacy.deletion.completed, effect: "replace the deleted principal's did in retained Deals and claims with the per-deletion pseudonym; signatures are kept and marked unverifiable-after-pseudonymization"}
+    errors:
+      - "COMMERCE_CONTEXT_UNKNOWN | 422 | no | context type or context statement is not known to this vault"
+      - "COMMERCE_DEAL_PARTY_INVALID | 422 | no | payer and payee are equal or are not listed parties"
+      - "COMMERCE_DEAL_CONTEXT_CONFLICT | 409 | no | a Deal with different terms already exists for this contextRef"
+      - "COMMERCE_CLAIM_METHOD_NOT_ALLOWED | 422 | no | method or currency is not allowed by the obligation"
+      - "COMMERCE_CLAIM_METHOD_RULE | 422 | no | the method module rejected the claim input"
+      - "COMMERCE_STATEMENT_INVALID | 422 | no | signature, signer role or envelope is invalid; statement is quarantined"
+      - "COMMERCE_STATEMENT_FORK | 409 | no | two signed statements share the same prev; claim is frozen"
+    example: |
+      vault command commerce.deal.open (called by the offers module after the seller accepts)
+      { "contextRef": { "type": "offer", "id": "0192f3a5-1111-7000-8000-000000000001" }, "contextCid": "sha256-9f2c…",
+        "parties": [ { "did": "did:key:z6MkBuyer…", "role": "payer" }, { "did": "did:key:z6MkSeller…", "role": "payee" } ],
+        "obligations": [ { "obligationId": "o1", "payerId": "did:key:z6MkBuyer…", "payeeId": "did:key:z6MkSeller…",
+          "amount": { "amount": "4500", "currency": "EUR" }, "purpose": "goods", "allowedMethods": ["cash", "crypto"] } ] }
+      => { "dealId": "0192f3a6-…", "revision": 1, "dealCid": "sha256-c41e…", "peerSync": "prepared" }
+      vault command commerce.payment.claim { "dealId": "0192f3a6-…", "obligationId": "o1", "method": "cash", "amount": { "amount": "4500", "currency": "EUR" } }
+      => { "claimId": "0192f3a7-…", "revision": 1, "status": "claimed", "peerSync": "prepared" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked local principal mutates its vault; payer-only and payee-only commands also check the role recorded in the Deal.
+      - Incoming statements are accepted only if signed by the key of the party named in the Deal for that role; otherwise they are quarantined with a reason.
+      - No relay role grants any capability over Deals or claims; relays carry encrypted envelopes and see only routing metadata.
+    capabilities:
+      - "commerce.deal.open | local-principal | vault unlocked; principal is a party of the obligations; invoked by a context module on the principal's behalf"
+      - "commerce.deal.cancel | local-principal | principal is a party of the Deal; all parties' cancel statements needed to cancel"
+      - "commerce.payment.claim | local-principal | principal is the obligation payer; Deal open"
+      - "commerce.payment.acknowledge | local-principal | principal is the claim payee"
+      - "commerce.payment.dispute | local-principal | principal is the claim payee"
+      - "commerce.statement.ingest | local-principal | internal ingest pipeline of the unlocked vault; statement signer authorized by Deal role"
+      - "commerce.deal.read | local-principal | principal is a party of the Deal"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 using vault command IDs, and mutating commands require expectedRevision.
+      - Statement delivery uses the sync outbox with states prepared, transport_acknowledged and peer_accepted; the UI shows only the state reached (IDM-7).
+      - Conflicting signed statements are detected, frozen and surfaced; there is no last-writer-wins for money or consent.
+    idempotency: "Vault command ID recorded in the inbox for 24 h; replay returns the original result. Statements are deduplicated by cid, so redelivery is a no-op. dealId is deterministic from contextRef so repeated opens converge."
+    concurrency: "expectedRevision on acknowledge, dispute and cancel; unique index on (vault, context type, context id); multi-tab writers serialize through a Web Lock named commerce-deal. Cross-vault there is no lock: forks are detected by prev-hash and freeze the claim."
+    retries: "Sync outbox retries delivery with backoff 5 s, 30 s, 5 min, 1 h, then every 6 h until the claim expires; receivers dedupe by cid."
+    offline: "All commands commit locally while offline and show pending; statements wait in the sync outbox. Acknowledgement is allowed offline but the UI says the payer has not seen it until peer_accepted."
+    partial_failure: "Local commit and outbox insert are one IndexedDB transaction, so no statement is prepared without its state change. If transport fails the state stays prepared and is retried; no automatic rollback of a signed statement."
+  privacy_retention_abuse:
+    requirements:
+      - Deals and claims are P2 and are never in public projections, search, federation or notification payloads; notifications carry a reference and template key only.
+      - Evidence is retained for RET-EVIDENCE (2 years after last activity, jurisdiction override via F18) and pseudonymized on account deletion; signatures are retained as evidence and marked unverifiable-after-pseudonymization.
+      - Claim spam, false claims and acknowledgement pressure are limited by per-vault limits, local blocking and the dispute path; signatures evidence assertions only.
+    data:
+      - "Deal and PaymentClaim: P2 (parties). txRef and note: P2 free text; never federated."
+      - "The UI and exports state that a claim is an assertion by the payer and an acknowledgement is an assertion by the payee."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity); expired and cancelled Deals follow the same class."
+      - "On deletion: did replaced with a per-deletion pseudonym in retained records; counterparty copies in other vaults are not altered and cannot be recalled."
+    threats:
+      - "T01 | Payer claims payment never made to pressure the payee | claims display as claimed (unverified); only payee acknowledgement or chain finality unlocks completion; payee can dispute with one tap"
+      - "T02 | Payee acknowledges then denies receipt | acknowledgement is a signed statement kept by both parties as evidence; receipts (F09.S02.M01) and disputes (F09.S02.M02) use it"
+      - "T03 | Forged statement from a non-party | signature and role check at ingest; quarantine with reason and no state change"
+      - "T04 | Replay of an old statement | cid deduplication and prev-chain check; replays are no-ops"
+      - "T05 | Fork: payer vault signs two conflicting claims | detection by shared prev; claim frozen, both statements retained, user prompted to renegotiate or open a dispute"
+      - "T06 | Claim flooding to harass a payee | local block, per-peer limit of 20 statements per hour accepted at ingest, quarantine of excess"
+    abuse_controls:
+      - "Ingest limit 20 statements per hour per sender did and 200 per day; excess goes to quarantine with reason rate_limited."
+      - "Local block (F07.S02.M02) rejects statements from blocked parties with BLOCKED_PARTY and no signal to the sender."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and error logs stay in local diagnostics that the user can export.
+      - Local command latency meets the budgets below on a mid-range phone.
+      - Quarantine and fork counts are visible to the user in local diagnostics.
+    metrics:
+      - "Local diagnostics: classrup_commerce_deals_total{outcome=opened|completed|cancelled|expired}"
+      - "Local diagnostics: classrup_commerce_claims_total{method,status}"
+      - "Local diagnostics: classrup_commerce_statements_total{outcome=applied|quarantined|duplicate|fork}"
+    logs:
+      - "info claim.acknowledged {claimId, dealId, correlationId} — no amounts, notes or txRef."
+      - "warn statement.quarantined {cid, reason, correlationId}."
+    budgets:
+      - "open, claim, acknowledge p95 ≤ 120 ms local commit on a 2022 mid-range Android device."
+      - "Ingest of a statement batch of 100 ≤ 2 s including signature verification (Ed25519 verify ≤ 5 ms each)."
+      - "Expiry sweep over 10 000 claims ≤ 1 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command outputs, statement envelopes and event payloads against the schema registry.
+      - Fork, quarantine and idempotent open scenarios are covered by deterministic two-vault integration tests.
+    fixtures: "Two in-memory vaults A (buyer, payer) and B (seller, payee) with a test relay double; Deal for EUR 45.00 from an accepted offer; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R02 | open a Deal in vault A twice for the same contextRef | one Deal, same dealId derived deterministically, second call returns the existing Deal"
+      - "T02 | unit | 01.R02,02.R03 | schema inspection and attempts to set a paid field | no paid field exists; unknown field rejected with VALIDATION_FAILED"
+      - "T03 | unit | 02.R01,02.R03 | each rule V01 to V06 and V10 to V11 violated in turn | documented error code returned and nothing stored"
+      - "T04 | property | 03.R01 | random command and event sequences on a claim | only declared transitions succeed; others return CONFLICT_STATE"
+      - "T05 | unit | 03.R02 | try to move a claim to confirmed or final through user input | refused; only crypto events can set it"
+      - "T06 | integration | 03.R03 | clock advanced 14 days without progress | claimed, disputed, pending_confirmation, confirmed and reorged claims become expired and emit commerce.payment.expired"
+      - "T07 | integration | 03.R04 | dispute opened then resolved with a refund-claimed outcome | Deal goes disputed then open; no claim status changed; no money movement API invoked"
+      - "T08 | contract | 04.R01,04.R02,09.R02 | execute each command in vault A and ingest in vault B | outputs, envelopes and events validate against registry schemas"
+      - "T09 | integration | 04.R03 | deliver crypto and dispute events | claim and Deal statuses follow the machine"
+      - "T10 | abuse | 05.R01,05.R02,07.R01 | forged statement, wrong-role signer, third party reading | statement quarantined with reason, no state change, NOT_FOUND for non-parties, no deal data in public payloads"
+      - "T11 | contract | 05.R03,01.R03 | inspect relay double traffic | only ciphertext and routing metadata observed"
+      - "T12 | integration | 06.R01,06.R02 | same command ID replayed; delivery interrupted at each sync state | original result returned; UI state equals the highest sync state reached"
+      - "T13 | chaos | 06.R03,07.R03,09.R03 | vault B receives two claims with the same prev | claim frozen with COMMERCE_STATEMENT_FORK, both retained, no auto-resolution; flood of 21 statements in an hour quarantines the 21st"
+      - "T14 | integration | 07.R02 | principal deletion completes | retained records carry the pseudonym, signatures flagged unverifiable-after-pseudonymization, counterparty copy untouched"
+      - "T15 | load | 08.R02,08.R03 | 10 000 claims and a batch of 100 statements | p95 ≤ 120 ms commit; batch ≤ 2 s; sweep ≤ 1 s"
+      - "T16 | integration | 08.R01,09.R01 | local diagnostics and traceability run | no network telemetry sent; every PS-069 requirement maps to a passing test"
+      - "T17 | e2e | 01.R03,03.R03 | buyer claims cash payment, seller acknowledges on another device, both screens checked | labels read claimed (unverified) then acknowledged by payee; Deal completed; axe zero serious issues"
+      - "T18 | integration | 10.R01,10.R02,10.R03 | export vault A, import into fresh vault, roll back one release | Deals and claims round-trip identical; open Deals import as open with sync state local_committed; conflicting IDs rejected"
+    acceptance:
+      - All tests T01 to T18 pass in CI.
+      - No state or label ever shows a payment as completed on the strength of a payer claim alone.
+      - Two independent vaults converge on the same Deal and claim statuses after exchanging the same signed statements in any order.
+      - A forked claim is frozen and never silently resolved.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's Deals and claims with their signed statements and provenance, in the section commerce.deals.
+      - Import verifies signatures, schema versions and ID collisions; foreign statements are verified again and quarantined when the signer is not a party.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.deals in classrup-export/v1; one line per Deal and per PaymentClaim with the signed statement envelopes (schemas classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1)."
+    import: "Terminal records import as read-only evidence; open Deals import as open but sync state is reset to local_committed and statements are re-sent only if the user chooses; claims past 14 days of no progress import as expired."
+    backup: "The vault export is the primary backup (IOX-6); no relay holds plaintext Deals."
+    migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because new optional fields are ignored by older readers. Signed statement bytes are never rewritten by a migration."

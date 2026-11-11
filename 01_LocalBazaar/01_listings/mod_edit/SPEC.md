@@ -1,44 +1,88 @@
-# F01.S01.M02 — edit
+# F01.S01.M02 — Listing editing
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F01.S01.
+**Status:** SPECIFIED (Stage 3). **Scope:** MVP. **Parent:** [F01.S01](../SPEC.md). **Process IDs:** PS-003-01…PS-003-10. **Code:** `packages/bazaar/src/listings/edit`.
 
-## Purpose and business behavior
-Provide edit as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
+
+## Purpose
+
+Lets the owner revise a draft or published listing in the local vault with optimistic concurrency, records an immutable ListingRevision for every non-draft change, and detects material changes (price, condition, category). A material change on a published listing is announced by event so offers and negotiations can flag their assumptions, and the owner is offered a re-publish that sends a new signed projection (F01.S01.M03). The module never changes what other parties already hold; their copies change only when they accept the new statement.
+
+## Responsibilities
+
+- Apply owner edits to Listing through bazaar.listing.apply_edit with expectedRevision and no silent merging.
+- Own ListingRevision, an immutable snapshot of public fields per non-draft change, up to 100 per listing.
+- Detect material changes (price, condition, category) and set the material flag and changedFields on bazaar.listing.edited.
+- Provide the system command bazaar.listing_revision.record so F01.S02.M01 (price) and F01.S03.M02 (variant price) report their changes as listing revisions inside their own transaction.
+- Re-run local prohibited-item rules on edits of published listings.
+
+## Not responsible for
+
+- Creating listings and the Listing status field (F01.S01.M01).
+- Signing and sending the updated public projection (F01.S01.M03); this module only marks the listing as having unsent changes.
+- Notifying offerers; offers (F01.S04.M01) and negotiations (F01.S04.M02) consume bazaar.listing.edited and notify through F13.
+- Future: three-way merge of concurrent edits from two devices.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
-## Scope
-- Required process spec: `edit_domain_model.md` (not yet authored)
-- Required process spec: `edit_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `edit_validation_and_authorization.md` (not yet authored)
-- Required process spec: `edit_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `edit_interfaces_and_events.md` (not yet authored)
-- Required process spec: `edit_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `edit_acceptance_and_property_tests.md` (not yet authored)
+- As a seller, I can fix a typo in my published listing and see that it is not treated as a price change.
+- As a seller, I am told before I save that changing the price or condition will mark open offers as based on an older version.
+- As a seller, I can see the history of changes to my listing and which ones were material.
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Edge cases
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- Edit with a stale expectedRevision (second tab) returns CONFLICT_REVISION and the draft form keeps the user's text for manual resolution.
+- A price change is recorded by the sell-terms module and a title edit lands in the same second; both revisions are recorded in order and each emits its own event.
+- An edit to a published listing introduces a blocked keyword; it is refused with BAZAAR_EDIT_POLICY_BLOCKED and the listing keeps its last good revision.
+- Category changes to one that the active policy pack marks restricted; the edit is refused with BAZAAR_EDIT_POLICY_BLOCKED and params.verdict set.
+- The listing reaches 100 revisions; the next edit returns BAZAAR_EDIT_REVISION_LIMIT and suggests archiving and relisting.
+- An edit arrives for an expired, closed or archived listing; CONFLICT_STATE is returned.
+- The owner edits a published listing offline; the edit is committed locally and the UI shows that other parties still see the earlier version until the new projection is sent.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+## UX and accessibility
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Edit listing form: same fields as creation, diff summary before save with a Material change badge for price, condition and category.
+- History view: list of revisions with date, changed field names and material marker; tap shows the saved snapshot.
+- Unsent changes banner: Your edit is saved on this device. Others still see the previous version until you update the listing.
 
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+**States:** loading; saving-local; saved-local; unsent-changes; conflict; policy-blocked; revision-limit
 
-## Required process specification inventory
-- [ ] `edit_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `edit_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+**Accessibility:** Material change badges have text, not colour alone.; Diff summary is a table with row and column headers readable by screen readers.; Conflict dialog is announced assertively and focus moves to its first action.
+
+## Owned data
+
+- `ListingRevision` (classrup.bazaar.listing_revision/v1, P1, RET-EVIDENCE)
+
+## Interfaces
+
+- Commands: `bazaar.listing.edit`, `bazaar.listing_revision.record`
+- Queries: `bazaar.listing_revision.list`, `bazaar.listing_revision.get`
+- Emits: `bazaar.listing.edited`
+- Consumes: none
+
+## Dependencies
+
+F01.S01.M01, F18.S01.M02, F18.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001
+
+## Process specifications and aggregation
+
+| ID | Process | Requirements |
+|---|---|---|
+| PS-003-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-003-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-003-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-003-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-003-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
+| PS-003-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-003-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-003-08 | [Observability and performance](observability_performance.md) | 3 |
+| PS-003-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-003-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/bazaar/src/listings/edit/index.ts`.
+
+## Acceptance criteria
+
+- All tests T01-T14 pass in CI.
+- A material change always produces bazaar.listing.edited with material true and never carries field values.
+- No edit path changes Listing.status or bypasses expectedRevision.

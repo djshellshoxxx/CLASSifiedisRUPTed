@@ -1,35 +1,44 @@
-# PS-120-08 — observability performance
+# PS-120-08 — Observability and performance: Backups
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-08. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M02 Backups](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/backups` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the observability performance process for backups within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-120-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-120-08.R01** Backup health is exposed as metrics and events per CTR-OBS-001 with alerting thresholds that map to the RPO of 6 h.
+- **PS-120-08.R02** Backups must not degrade relay latency beyond the OBS-4 budget while running.
+- **PS-120-08.R03** Verification time and restore time are measured so that the RTO of 4 h is evidenced by drills.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_platform_backup_total{outcome=completed|failed|verified}
+- classrup_platform_backup_last_verified_age_seconds (alert at 25200)
+- classrup_platform_backup_duration_ms{kind=full|wal}
+- classrup_platform_backup_wal_lag_ms (alert at 900000)
+- classrup_platform_backup_bytes (encrypted bytes on disk)
+- classrup_platform_backup_last_restore_drill_age_days (alert at 100)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- info backup.completed {backupId, kind, sizeBytes, durationMs}; error backup.failed {backupId, errorCode}; never key material, paths outside RELAY_BACKUP_DIR or database content.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- Full snapshot of a 1 GiB database ≤ 120 s; write latency p95 during backup ≤ 300 ms at 50 req/s (OBS-4).
+- Verification of a 1 GiB snapshot ≤ 180 s; WAL archive run ≤ 2 s.
+- RPO: worst-case data loss ≤ 21600000 ms (6 h); typical ≤ 5 min with WAL segments.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-120-09.T08 | integration | PS-120-06.R02, PS-120-08.R03 | 50 req/s write load while a 1 GiB snapshot runs | writer stall ≤ 50 ms, write p95 ≤ 300 ms |
+| TEST-PS-120-09.T13 | integration | PS-120-08.R01, PS-120-08.R02 | scrape metrics after success and failure | metrics per CTR-OBS-001 present, alert thresholds fire on simulated 8 h without verified backup |
+| TEST-PS-120-09.T14 | load | PS-120-08.R03, PS-120-08.R02 | 1 GiB database snapshot and verify | snapshot ≤ 120 s, verify ≤ 180 s |
+| TEST-PS-120-09.T18 | manual | PS-120-06.R03, PS-120-08.R03 | quarterly restore drill by the operator on a clean machine | drill recorded with drillAt, elapsed time below 4 h, checklist signed off |
+
+## Dependencies
+
+Module depends on: F15.S02.M01, F15.S02.M03, F15.S03.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

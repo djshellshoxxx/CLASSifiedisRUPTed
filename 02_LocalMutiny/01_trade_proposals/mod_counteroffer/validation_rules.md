@@ -1,35 +1,38 @@
-# PS-012-02 — validation rules
+# PS-012-02 — Validation rules: Barter counteroffers
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-02. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S01.M04 Barter counteroffers](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/trade_proposals/counteroffer` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the validation rules process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-012-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-012-02.R01** A revision is accepted locally only if its number, chain, author role, turn, size, hash and signature all verify.
+- **PS-012-02.R02** Cycle revisions may change money terms, quotes and deadlines but never participants or items.
+- **PS-012-02.R03** Every violation maps to exactly one stable code and the offending statement is quarantined with that code rather than discarded.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | revisionNo equals head revisionNo + 1 and revisionNo ≤ 20, and prev equals head contentHash | MUTINY_REVISION_LIMIT |
+| V02 | authorId is a party of the subject in the roster (F02.S01.M02) | MUTINY_REVISION_AUTHOR_INVALID |
+| V03 | for trade_proposal the author differs from the author of the head revision (turn-taking); for cycle the author is the coordinator | MUTINY_REVISION_TURN |
+| V04 | snapshot size ≤ 65536 bytes and contentHash equals cid of JCS(snapshot) | MUTINY_REVISION_HASH_MISMATCH |
+| V05 | sig verifies Ed25519 over JCS of the envelope without sig against authorId's registered device key | MUTINY_STATEMENT_SIGNATURE_INVALID |
+| V06 | subject is open (trade_proposal draft or open; cycle proposed) | CONFLICT_STATE |
+| V07 | for subjectType cycle the party set and legIds equal the head revision's | MUTINY_REVISION_MATERIAL_FORBIDDEN |
+| V08 | every legId and compensationLegId exists, belongs to the subject and is not voided | MUTINY_REVISION_REFERENCE_INVALID |
+| V09 | consentDeadline between local now + 1 h and now + 7 d (trade_proposal up to 14 d) and executionWindowMs in range | MUTINY_DEADLINE_INVALID |
+| V10 | createdAtClaim is not more than 5 minutes after the local clock | MUTINY_STATEMENT_FROM_FUTURE |
+| V11 | no other non-forked revision with the same subject and revisionNo and a different contentHash exists | MUTINY_REVISION_FORK |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-012-09.T01 | unit | PS-012-01.R01, PS-012-01.R02, PS-012-02.R02 | create revision 1 then verify stored fields | snapshot, contentHash and sig immutable; hash equals independent JCS cid |
+| TEST-PS-012-09.T02 | unit | PS-012-02.R01, PS-012-02.R03 | each rule V01..V11 violated in turn | documented code returned and nothing stored |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

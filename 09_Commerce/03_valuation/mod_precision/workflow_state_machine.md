@@ -1,35 +1,33 @@
-# PS-074-03 — workflow state machine
+# PS-074-03 — Workflow state machine: Money precision
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-03. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S03.M03 Money precision](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/valuation/precision` · **Contracts:** [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-074-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-074-03.R01** The library is stateless and pure; every function returns the same output for the same input with no clock, random or I/O access.
+- **PS-074-03.R02** Rounding happens exactly once, at the end of a conversion or percentage computation, never between intermediate steps (MNY-3).
+- **PS-074-03.R03** Operations never mutate their inputs; Money values are immutable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Pure functions only; no lifecycle. Behavior is specified by the property tests in process 09.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-03`; scenarios and fixtures to be detailed in Prompt 3.
+_None._
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-074-09.T03 | property | PS-074-03.R02, PS-074-04.R02 | 10 000 random (amount, rate, exponents) conversions compared with an independent oracle using exact fractions | results identical and rounding applied exactly once |
+| TEST-PS-074-09.T04 | property | PS-074-03.R02 | conversion round trip A to B to A with the same quote | absolute error ≤ floor(1/(2r) + 1/2) minor units where r is the effective minor-unit rate |
+| TEST-PS-074-09.T05 | property | PS-074-03.R03 | 10 000 random allocations over random weights | parts sum exactly to total, each part within 1 minor unit of the ideal share, ties resolved to lowest index |
+| TEST-PS-074-09.T06 | property | PS-074-03.R02 | HALF_EVEN symmetry | round(-x) equals -round(x) and half-way values go to the even neighbour |
+| TEST-PS-074-09.T07 | unit | PS-074-03.R01, PS-074-06.R01, PS-074-06.R02 | same input executed twice, inputs frozen and compared after the call | identical outputs, inputs unmodified |
+
+## Dependencies
+
+Module depends on: CTR-MNY-001, CTR-ERR-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

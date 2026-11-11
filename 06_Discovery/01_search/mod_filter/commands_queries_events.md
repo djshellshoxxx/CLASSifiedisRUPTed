@@ -1,35 +1,60 @@
-# PS-044-04 — commands queries events
+# PS-044-04 — Commands, queries and events: Search filters
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-04. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S01.M03 Search filters](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/search/filter` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the commands queries events process for filter within 01_search. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-044-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-044-04.R01** The module exposes functions only; it has no commands, queries or events.
+- **PS-044-04.R02** Callers (F06.S01.M02, relay query handler) are responsible for capability checks and idempotency.
+- **PS-044-04.R03** Error codes defined here are returned inside Result values and mapped by callers to HTTP problems.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range, of the wrong type or unknown |
+| DISCOVERY_FILTER_CURRENCY_REQUIRED | 422 | no | price filter without a currency |
+| DISCOVERY_FILTER_CENTER_REQUIRED | 422 | no | distance filter without a search center |
+| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Library module - no commands or queries; callers expose them.
+
+### Example
+
+```
+compileFilter({ listingKinds: ["sell"], price: { currency: "EUR", max: 30000 }, distanceKm: 10, postedWithin: "7d" }, now)
+-> { sql: "d.listing_kind IN (?) AND d.currency = ? AND d.price_minor <= ? AND d.geo_cell5 IN (?,?,?) AND d.first_seen_at >= ?",
+     params: ["sell", "EUR", 30000, "u4pru", "u4prv", "u4prs", "2026-10-28T10:00:00.000Z"] }
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-044-09.T08 | unit | PS-044-04.R01, PS-044-04.R02, PS-044-04.R03 | inspect module exports and error mapping | no commands, queries or events exist and errors map to documented codes |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-PRV-001, CTR-MNY-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,0 +1,348 @@
+# F09.S02.M02 Disputes (ADR-0015, ADR-0016). Shared by deals, cycles, bookings and rentals. Outcomes cannot move money.
+id: F09.S02.M02
+scope: MVP
+summary: >-
+  A shared dispute case for any context that has parties and evidence: payment claims and deals, barter cycle legs, service
+  bookings and rentals. The parties exchange signed evidence references and responses directly or through their relays, and
+  may jointly choose an optional mediator (a moderator of a relay both of them select). Outcomes are signed statements:
+  no-fault close, refund claimed, return agreed, or enforcement referral. An outcome records what was decided or asserted; it
+  never moves, freezes or releases money, and the platform has no power to force a party.
+responsibilities:
+  - Own DisputeCase mirrored in each party's vault, opened by a signed statement classrup.commerce.dispute/v1 that references the context {type, id}.
+  - Collect evidence references (message cids, receipts, claims, attachment hashes) as signed statements classrup.commerce.dispute_evidence/v1, with per-party limits.
+  - Support an optional mediator selected by both parties through signed selection and acceptance statements, with evidence shared to the mediator only by explicit party action.
+  - Record outcomes as signed statements classrup.commerce.dispute_outcome/v1, requiring both parties' acceptance for refund_claimed and return_agreed and none for no_fault_close or enforcement_referral decided by a mediator.
+  - Run the case clock (7 days response, 14 days evidence, 7 days proposal validity, 30 days inactivity lapse) and emit dispute events.
+  - Provide the intake used by services disputes (F03.S02.M03) and by the payment-disputed prompt, without opening cases automatically.
+non_responsibilities:
+  - Moving, refunding, freezing or releasing money; a refund_claimed outcome is an advisory record and the respondent settles through a new Deal (F09.S01.M01).
+  - Global bans, takedowns or suspensions; an enforcement_referral is a referral to the mediator's relay, which acts only on what it hosts under its own policy.
+  - Moderation reports and appeals about content (F12), and service-specific intake forms (F03.S02.M03).
+  - "Future: multi-mediator panels, jury-style community review, and binding arbitration through third-party providers."
+depends_on: [F09.S01.M01, F09.S02.M01, F09.S03.M03, F07.S01.M01, F07.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a buyer who paid but did not receive the item, I open a case on the deal, attach my messages and receipt, and see the seller's signed response.
+  - As a seller, I respond with my own evidence and propose a no-fault close or a return.
+  - As either party, I can propose a mediator from a relay we both trust, and nothing is shared with the mediator until I choose to share it.
+  - As a participant in a barter cycle leg, I open a case referencing the cycle and the other legs' parties are respondents.
+edge_cases:
+  - The respondent never answers; after 7 days the case moves to evidence with respondentSilent true, and the opener may propose an outcome that the silent party can still accept later.
+  - Both parties propose different outcomes at the same time; both proposals are kept as evidence, the case needs one proposal accepted by all parties, and conflicting accepted outcomes freeze the case with COMMERCE_DISPUTE_FORK.
+  - The selected mediator's relay becomes unreachable; the case stays in mediation with the mediator marked unavailable after 7 days and the parties may select another or resolve between themselves.
+  - Evidence item larger than 10 MiB or the 21st item of a party is refused with COMMERCE_DISPUTE_EVIDENCE_LIMIT.
+  - The opener withdraws after the respondent already accepted a proposal; the accepted outcome stands only if all parties' acceptances are already held, otherwise the case is withdrawn.
+  - A party opens a second case on the same context while one is open; refused with COMMERCE_DISPUTE_DUPLICATE and the existing case is shown.
+  - A dispute statement arrives for a context the vault does not know; it is quarantined for 24 h pending the context statement, then dropped.
+ux:
+  screens:
+    - "Open dispute: pick reason (not_received, not_as_described, payment_not_acknowledged, no_show, damage, other), describe in up to 1 000 characters, attach evidence, choose respondents (prefilled from the context)."
+    - "Case timeline: signed statements in order of arrival with sync state per statement, evidence list, countdown to the next deadline, clear note 'ClassRup cannot move money or force anyone'."
+    - "Mediator picker: list from selected relays with their published mediation policy and a plain statement of what the relay can and cannot do."
+    - "Outcome screen: outcome type, optional advisory refund amount and note, Accept and Reject buttons for each party."
+  states: [loading, empty, opened, awaiting-response, evidence, mediation, outcome-proposed, resolved, withdrawn, frozen-conflict, pending-offline]
+  a11y:
+    - Timeline is an ordered list with each statement announced with its author and sync state.
+    - Deadlines are text dates, not only countdown graphics, and changes are announced politely.
+    - Accept and Reject buttons have names including the outcome type and are at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A DisputeCase stores contextRef {type, id}, opener, respondents, optional mediator, reason, evidence references, outcome, status, deadlines and revision, mirrored in each party's vault from signed statements.
+      - Cases are P2 (parties and an explicitly accepted mediator), retained as RET-EVIDENCE, and never public or federated.
+      - Outcome and money are decoupled by schema, because the outcome has no executable fields, only an optional advisory refund Money amount.
+    entities:
+      - name: DisputeCase
+        schema: classrup.commerce.dispute/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuid — deterministic from sha256 of contextRef plus opener did plus openedSeq so mirrors converge"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "contextRef: object — {type: deal|payment_claim|cycle|booking|rental, id: uuid}"
+          - "openerId: did — party who opened"
+          - "respondentIds: array — 1..19 dids"
+          - "reason: enum — not_received | not_as_described | payment_not_acknowledged | no_show | damage | other"
+          - "description: string — 1..1000 code points plain text"
+          - "evidence: array — up to 20 per party {id, authorId, kind: message|attachment|receipt|claim|statement|note, refCid, sha256?, sizeBytes ≤ 10485760, caption ≤ 280}"
+          - "mediator?: object — {did, relayId, acceptedBy: dids[], status: proposed|active|unavailable}"
+          - "outcome?: object — {type: no_fault_close|refund_claimed|return_agreed|enforcement_referral, proposedBy: did, advisoryRefund?: Money, note ≤ 500, acceptedBy: dids[], rejectedBy: dids[]}"
+          - "round: int — outcome proposal round, 1..3"
+          - "respondentSilent: boolean — set when the 7-day response window passes without response"
+          - "status: enum — opened | evidence | mediation | outcome_proposed | resolved | withdrawn"
+          - "resolution?: enum — no_fault_close | refund_claimed | return_agreed | enforcement_referral | lapsed"
+          - "deadlines: object — {responseBy, evidenceBy, proposalBy, lapseAt} local clock"
+          - "caseCid: string — sha256 of the opening statement"
+          - "forkDetected: boolean — conflicting accepted outcomes seen"
+          - "peerSync: object — per party sync state: local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+          - "updatedAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - openerId is a party of the context and is not in respondentIds.
+          - At most one non-terminal case per (contextRef, openerId).
+          - resolution refund_claimed or return_agreed implies every party appears in outcome.acceptedBy.
+          - No field or event of this module triggers a payment, refund, freeze or release; advisoryRefund is informational.
+    sql: |
+      CREATE TABLE commerce_dispute_case (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, context_type TEXT NOT NULL, context_id TEXT NOT NULL,
+        opener_id TEXT NOT NULL, status TEXT NOT NULL, lapse_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_dispute_open ON commerce_dispute_case(vault_id, context_type, context_id, opener_id)
+        WHERE status NOT IN ('resolved','withdrawn');
+  validation_rules:
+    requirements:
+      - Case and evidence input is validated strictly, including context resolution in the local vault and party membership.
+      - Incoming statements are verified for signature, signer role and chain position before any state change.
+      - Outcome rules enforce who must accept and that outcomes carry no executable money action.
+    rules:
+      - "V01 | contextRef resolves in the local vault and the actor is a party of the context | COMMERCE_DISPUTE_CONTEXT_INVALID"
+      - "V02 | respondents are the other parties of the context, between 1 and 19 | VALIDATION_FAILED"
+      - "V03 | no non-terminal case exists for the same context and opener | COMMERCE_DISPUTE_DUPLICATE"
+      - "V04 | description is 1 to 1000 code points plain text | VALIDATION_FAILED"
+      - "V05 | evidence per party at most 20 items, each at most 10 MiB, case total at most 50 MiB, caption at most 280 code points | COMMERCE_DISPUTE_EVIDENCE_LIMIT"
+      - "V06 | evidence refCid resolves to a record the author holds or is an attachment hash the author supplies | VALIDATION_FAILED"
+      - "V07 | mediator selection names a relay and moderator did and both parties accept before any evidence is shared | COMMERCE_DISPUTE_MEDIATOR_UNAVAILABLE"
+      - "V08 | outcome type is one of the four types; advisoryRefund only with refund_claimed and in a registry currency | COMMERCE_DISPUTE_OUTCOME_INVALID"
+      - "V09 | no_fault_close and enforcement_referral by a mediator need no acceptance; refund_claimed and return_agreed need acceptance by every party | COMMERCE_DISPUTE_OUTCOME_INVALID"
+      - "V10 | statement signature valid and signer authorized for the role in the case | COMMERCE_DISPUTE_STATEMENT_INVALID"
+      - "V11 | outcome proposal round is at most 3 | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Cases follow the declared lifecycle; any transition not listed is refused with CONFLICT_STATE.
+      - Terminal states have no exits and no state change executes any money movement.
+      - Conflicting signed outcomes freeze the case for renegotiation instead of choosing a winner.
+      - The case clock is evaluated locally and every deadline is shown as a date.
+    machines:
+      - entity: DisputeCase
+        initial: opened
+        terminal: [resolved, withdrawn]
+        transitions:
+          - "opened -> evidence | respondent response statement, or response window of 7 days elapsed | respondentSilent set when elapsed"
+          - "opened -> mediation | both parties accepted a mediator | mediator status active"
+          - "evidence -> mediation | both parties accepted a mediator | evidence shared with the mediator only by explicit party action"
+          - "evidence -> outcome_proposed | any party proposes an outcome, round 1 to 3 | proposal valid for 7 days; emits commerce.dispute.outcome_proposed"
+          - "mediation -> outcome_proposed | mediator or a party proposes an outcome | proposal valid for 7 days; emits commerce.dispute.outcome_proposed"
+          - "mediation -> resolved | mediator decides no_fault_close or enforcement_referral | signed outcome statement; emits commerce.dispute.resolved"
+          - "outcome_proposed -> resolved | all required parties accepted | emits commerce.dispute.resolved; no money moves"
+          - "outcome_proposed -> evidence | a party rejected or proposal expired | round incremented; case continues"
+          - "opened -> withdrawn | opener withdraws | signed statement; emits commerce.dispute.withdrawn"
+          - "evidence -> withdrawn | opener withdraws | signed statement; emits commerce.dispute.withdrawn"
+          - "mediation -> withdrawn | opener withdraws | signed statement; emits commerce.dispute.withdrawn"
+          - "outcome_proposed -> withdrawn | opener withdraws before all acceptances are held | signed statement; emits commerce.dispute.withdrawn"
+          - "opened -> resolved | inactivity sweep at 30 days | resolution lapsed; emits commerce.dispute.resolved"
+          - "evidence -> resolved | inactivity sweep at 30 days | resolution lapsed; emits commerce.dispute.resolved"
+          - "mediation -> resolved | inactivity sweep at 30 days | resolution lapsed; emits commerce.dispute.resolved"
+    timeouts:
+      - "Response window 7 days from opening; evidence window 14 days from the first response; proposal validity 7 days; inactivity lapse 30 days."
+      - "Sweep every 5 min in the open vault and at unlock."
+      - "Statements waiting for their context are quarantined for 24 h then dropped with reason context_unknown."
+  commands_queries_events:
+    requirements:
+      - Open, add_evidence, respond, select_mediator, accept_mediator, propose_outcome, accept_outcome, reject_outcome and withdraw are vault commands that each produce a signed statement; ingest is an internal vault command; no command is a relay command.
+      - Mediator actions run in the mediator's own vault as the same commands under role-in-statement authorization; a relay only publishes a mediator directory under its hosting policy.
+      - The module consumes payment, services-dispute and deletion events to prefill drafts and pseudonymize retained records, and never opens a case automatically.
+    commands:
+      - name: commerce.dispute.open
+        capability: commerce.dispute.open
+        input: "[vault command, produces signed statement classrup.commerce.dispute/v1] { contextRef: {type, id}, reason, description, respondentIds?, evidence? }"
+        output: "{ caseId, revision: 1, caseCid, deadlines, peerSync }"
+        errors: [VALIDATION_FAILED, COMMERCE_DISPUTE_CONTEXT_INVALID, COMMERCE_DISPUTE_DUPLICATE, COMMERCE_DISPUTE_EVIDENCE_LIMIT, BLOCKED_PARTY]
+        emits: [commerce.dispute.opened]
+        idempotent: true
+      - name: commerce.dispute.add_evidence
+        capability: commerce.dispute.add_evidence
+        input: "[vault command, produces signed statement classrup.commerce.dispute_evidence/v1] { caseId, expectedRevision, kind, refCid, sha256?, sizeBytes?, caption? }"
+        output: "{ caseId, revision, evidenceId, peerSync }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_DISPUTE_EVIDENCE_LIMIT, VALIDATION_FAILED]
+        emits: [commerce.dispute.evidence_added]
+        idempotent: true
+      - name: commerce.dispute.respond
+        capability: commerce.dispute.respond
+        input: "[vault command, produces signed statement classrup.commerce.dispute_response/v1] { caseId, expectedRevision, response: accept_facts|contest|partial, description }"
+        output: "{ caseId, revision, status }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: commerce.dispute.select_mediator
+        capability: commerce.dispute.select_mediator
+        input: "[vault command, produces signed statement classrup.commerce.dispute_mediator/v1] { caseId, expectedRevision, mediatorDid, relayId }"
+        output: "{ caseId, revision, mediatorStatus }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_DISPUTE_MEDIATOR_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: commerce.dispute.accept_mediator
+        capability: commerce.dispute.accept_mediator
+        input: "[vault command, produces signed statement classrup.commerce.dispute_mediator_accept/v1] { caseId, expectedRevision }"
+        output: "{ caseId, revision, status }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: commerce.dispute.propose_outcome
+        capability: commerce.dispute.propose_outcome
+        input: "[vault command, produces signed statement classrup.commerce.dispute_outcome/v1] { caseId, expectedRevision, type, advisoryRefund?: Money, note? }"
+        output: "{ caseId, revision, status, round, proposalBy }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_DISPUTE_OUTCOME_INVALID]
+        emits: [commerce.dispute.outcome_proposed, commerce.dispute.resolved]
+        idempotent: true
+      - name: commerce.dispute.accept_outcome
+        capability: commerce.dispute.accept_outcome
+        input: "[vault command, produces signed statement classrup.commerce.dispute_outcome_accept/v1] { caseId, expectedRevision, accept: boolean }"
+        output: "{ caseId, revision, status, resolution? }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_DISPUTE_FORK]
+        emits: [commerce.dispute.resolved]
+        idempotent: true
+      - name: commerce.dispute.withdraw
+        capability: commerce.dispute.withdraw
+        input: "[vault command, produces signed statement classrup.commerce.dispute_withdraw/v1] { caseId, expectedRevision }"
+        output: "{ caseId, revision, status: withdrawn }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [commerce.dispute.withdrawn]
+        idempotent: true
+      - name: commerce.dispute.ingest
+        capability: commerce.dispute.ingest
+        input: "[vault command, internal] { envelope: any commerce.dispute statement }"
+        output: "{ outcome: applied|quarantined|duplicate, reason? }"
+        errors: [VALIDATION_FAILED, COMMERCE_DISPUTE_STATEMENT_INVALID, COMMERCE_DISPUTE_FORK, COMMERCE_DISPUTE_CONTEXT_INVALID, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [commerce.dispute.opened, commerce.dispute.evidence_added, commerce.dispute.outcome_proposed, commerce.dispute.resolved, commerce.dispute.withdrawn]
+        idempotent: true
+    queries:
+      - name: commerce.dispute.get
+        capability: commerce.dispute.read
+        input: "{ caseId }"
+        output: "{ case: DisputeCase, statements: [{cid, type, signer, receivedAt, syncState}] }"
+        errors: [NOT_FOUND]
+      - name: commerce.dispute.list_mine
+        capability: commerce.dispute.read
+        input: "{ status?: open|resolved|withdrawn|all, cursor?, limit ≤ 50 }"
+        output: "{ items: DisputeCase[], nextCursor? }"
+        errors: []
+      - name: commerce.dispute.list_mediators
+        capability: commerce.dispute.mediator_list
+        input: "{ relayId }"
+        output: "{ items: [{did, displayName, languages[], policyUrl}] } published by the relay under its hosting policy"
+        errors: [DEPENDENCY_UNAVAILABLE]
+    events_produced:
+      - {type: commerce.dispute.opened, privacy: P2, payload: "{ caseId, contextRef, openerId, respondentIds, reason }"}
+      - {type: commerce.dispute.evidence_added, privacy: P2, payload: "{ caseId, evidenceId, authorId, kind }"}
+      - {type: commerce.dispute.resolved, privacy: P2, payload: "{ caseId, contextRef, resolution, outcomeType?, advisoryRefund? }"}
+      - {type: commerce.dispute.outcome_proposed, privacy: P2, payload: "{ caseId, outcomeType, proposedBy, round, proposalBy }"}
+      - {type: commerce.dispute.withdrawn, privacy: P2, payload: "{ caseId, contextRef, openerId }"}
+    events_consumed:
+      - {type: commerce.payment.disputed, effect: "create a prefilled draft case for the claim's payer and prompt them; never opens a case automatically"}
+      - {type: services.dispute.opened, effect: "link the service dispute intake to the case it creates through commerce.dispute.open and prefill milestones as evidence references"}
+      - {type: privacy.deletion.completed, effect: "replace the deleted principal's did in retained cases with the per-deletion pseudonym; signatures kept and flagged unverifiable-after-pseudonymization"}
+    errors:
+      - "COMMERCE_DISPUTE_CONTEXT_INVALID | 422 | no | context does not resolve locally or actor is not a party"
+      - "COMMERCE_DISPUTE_DUPLICATE | 409 | no | an open case already exists for this context and opener"
+      - "COMMERCE_DISPUTE_EVIDENCE_LIMIT | 413 | no | evidence count or size exceeds the limits"
+      - "COMMERCE_DISPUTE_MEDIATOR_UNAVAILABLE | 409 | no | mediator or relay is not accepted by both parties or is unreachable"
+      - "COMMERCE_DISPUTE_OUTCOME_INVALID | 422 | no | outcome type, acceptance rule or advisory refund is invalid"
+      - "COMMERCE_DISPUTE_FORK | 409 | no | conflicting accepted outcomes; case is frozen for renegotiation"
+      - "COMMERCE_DISPUTE_STATEMENT_INVALID | 422 | no | signature, signer role or envelope is invalid; statement is quarantined"
+    example: |
+      vault command commerce.dispute.open
+      { "contextRef": { "type": "deal", "id": "0192f3a6-…" }, "reason": "not_received",
+        "description": "Paid cash at the agreed spot but the bike was never handed over." }
+      => { "caseId": "0192f3ab-…", "revision": 1, "caseCid": "sha256-5a10…", "deadlines": { "responseBy": "2026-11-11T10:00:00.000Z" }, "peerSync": "prepared" }
+      later: commerce.dispute.propose_outcome { "type": "refund_claimed", "advisoryRefund": { "amount": "4500", "currency": "EUR" } }
+      => both parties accept; resolution refund_claimed; no payment is created, the respondent opens a new Deal if they agree to refund
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal acts in its vault; party-only commands check membership in the case, and mediator commands check that the mediator did was accepted by both parties in signed statements.
+      - Incoming statements are accepted only when signed by a party or the accepted mediator for that statement type; otherwise they are quarantined.
+      - Relay policy only governs the mediator directory a relay publishes; relay moderators have no authority over a case unless both parties selected them, and then only the power to sign statements.
+    capabilities:
+      - "commerce.dispute.open | local-principal | principal is a party of the context; vault unlocked"
+      - "commerce.dispute.add_evidence | local-principal | principal is a party of the case; case not terminal"
+      - "commerce.dispute.respond | local-principal | principal is a respondent of the case"
+      - "commerce.dispute.select_mediator | local-principal | principal is a party of the case; no active mediator"
+      - "commerce.dispute.accept_mediator | local-principal | principal is a respondent or the opener who did not select the mediator"
+      - "commerce.dispute.propose_outcome | local-principal | principal is a party, or the accepted mediator with mediator status active"
+      - "commerce.dispute.accept_outcome | local-principal | principal is a party of the case and a proposal is pending"
+      - "commerce.dispute.withdraw | local-principal | principal is the opener"
+      - "commerce.dispute.ingest | local-principal | internal ingest pipeline; signer authorized for the statement type"
+      - "commerce.dispute.read | local-principal | principal is a party of the case or the accepted mediator with evidence shared"
+      - "commerce.dispute.mediator_list | anonymous, relay-device-key | relay policy row mediation_directory enabled; read-only"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 using vault command IDs and expectedRevision on mutations.
+      - Statement delivery uses the sync outbox states and the UI shows only the state reached.
+      - Forked or conflicting signed outcomes are detected, frozen and surfaced; there is no last-writer-wins.
+    idempotency: "Vault command ID recorded for 24 h; statements deduplicated by cid; caseId is deterministic so repeated opens converge."
+    concurrency: "expectedRevision on every mutation; unique partial index for one open case per context and opener; Web Lock commerce-dispute per case; across vaults conflicts are detected by statement chain and acceptance sets and freeze the case."
+    retries: "Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h until the case is terminal plus 7 days."
+    offline: "All commands commit locally and show pending; evidence blobs upload to the selected mailbox when online; deadlines still run on the local clock."
+    partial_failure: "Statement and local state commit in one IndexedDB transaction. If evidence blob upload fails the statement stays prepared and the evidence item shows upload pending; the case is never partially opened."
+  privacy_retention_abuse:
+    requirements:
+      - Cases and evidence are P2, travel only as end-to-end encrypted envelopes to parties and, after both accept, to the mediator; relays see ciphertext and routing metadata only.
+      - Evidence shared with a mediator is shared per item by explicit party action, and the UI says the mediator's relay operator cannot read it but the mediator can keep a copy.
+      - Dispute abuse such as harassment, evidence flooding and mediator shopping is limited by quotas, duplicate rules and mutual mediator acceptance.
+    data:
+      - "DisputeCase and evidence references: P2. Evidence blobs are encrypted attachments with per-object keys held by parties."
+      - "Evidence may contain third parties' personal data; the UI warns before attaching and excludes P3 data such as exact addresses unless the user adds it deliberately."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity, jurisdiction override via F18)."
+      - "On deletion: did pseudonymized in retained records; evidence blobs of the deleted user are crypto-shredded at completion unless a legal hold applies on a relay; counterparties' copies cannot be recalled."
+    threats:
+      - "T01 | Harassment by repeated disputes | one open case per context and opener, 5 new cases per day per vault, local block of the sender"
+      - "T02 | Evidence flooding or oversized evidence | 20 items per party, 10 MiB each, 50 MiB per case; excess refused"
+      - "T03 | Forged statement from a non-party | signature and role check; quarantine"
+      - "T04 | Mediator leaks or keeps evidence | mediator chosen by both, per-item sharing, UI states the mediator can retain copies; pseudonymity is not anonymity"
+      - "T05 | Mediator relay pressures a party | outcomes are statements with no power over money; refusing an outcome has no automatic consequence beyond what that relay hosts under its published policy"
+      - "T06 | Conflicting outcomes from forked vaults | detection and freeze with COMMERCE_DISPUTE_FORK; renegotiation or a new case"
+    abuse_controls:
+      - "New cases limited to 5 per day per vault and 20 evidence statements per hour; ingest limit 20 statements per hour per sender."
+      - "Relays may rate-limit mediator directory reads to 60 per hour per device key."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); case counters, deadlines and errors stay in local diagnostics.
+      - Relays that publish a mediator directory follow CTR-OBS-001 for that endpoint.
+      - Local commit and ingest meet the stated budgets.
+    metrics:
+      - "Local diagnostics: classrup_commerce_disputes_total{status}"
+      - "Local diagnostics: classrup_commerce_dispute_deadline_overdue (gauge)"
+      - "Relay only: classrup_commerce_mediator_directory_requests_total"
+    logs:
+      - "info dispute.status {caseId, from, to, correlationId} — no descriptions, notes or evidence content."
+    budgets:
+      - "open, propose, accept p95 ≤ 120 ms local commit; evidence statement commit p95 ≤ 100 ms excluding blob upload."
+      - "Case timeline render for 200 statements ≤ 200 ms; sweep over 1 000 cases ≤ 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command outputs, statements and event payloads against the schema registry.
+      - Mediation and fork scenarios are covered by deterministic multi-vault integration tests.
+    fixtures: "Three in-memory vaults A (opener), B (respondent) and M (mediator) with a test relay double; a Deal context with an acknowledged cash claim; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | open a case on a deal | case stored with deadlines, signed statement created, caseId deterministic"
+      - "T02 | unit | 01.R03,02.R03 | inspect schema and propose refund_claimed with advisoryRefund | no executable field exists; advisory refund stored; no payment API called"
+      - "T03 | unit | 02.R02,02.R03 | rules V01 to V11 violated in turn | documented error code and nothing stored"
+      - "T04 | property | 03.R01,03.R02 | random command sequences | only declared transitions succeed; terminal states have no exits"
+      - "T05 | integration | 03.R04 | clock advanced 7, 14 and 30 days at the corresponding states | respondentSilent set, proposal expires back to evidence, case lapses with resolution lapsed"
+      - "T06 | integration | 03.R03,06.R03 | two conflicting accepted outcomes delivered to vault B | case frozen with COMMERCE_DISPUTE_FORK, both retained, no auto-resolution"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | execute each command and ingest in the other vaults | outputs, envelopes and events validate against registry schemas"
+      - "T08 | integration | 04.R03,02.R01 | commerce.payment.disputed delivered | draft prefilled, no case opened automatically"
+      - "T09 | integration | 04.R02,05.R01 | both parties select mediator M; M proposes no_fault_close | evidence shared only for items the parties chose; case resolved without acceptance"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | non-party signer, mediator not accepted by both, relay moderator without selection | quarantined or FORBIDDEN; relay sees only ciphertext"
+      - "T11 | integration | 06.R01,06.R02 | replay of command ID; delivery interrupted at each sync state | original result; UI shows only the highest reached sync state"
+      - "T12 | abuse | 07.R03,07.R01 | 6 cases in one day; 21 evidence statements in an hour; oversized evidence | 6th case, 21st statement and oversized item refused or rate limited"
+      - "T13 | integration | 07.R02,01.R02 | principal deletion completes during an open case | did pseudonymized, signatures flagged, evidence blobs crypto-shredded, counterparty copy untouched"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 1 000 cases and a 200-statement timeline | commit p95 ≤ 120 ms, render ≤ 200 ms, sweep ≤ 500 ms, no telemetry"
+      - "T15 | e2e | 03.R04,09.R03 | opener and respondent complete a return_agreed outcome on two devices | both screens show resolved with the no-money-movement note; axe zero serious issues"
+      - "T16 | unit | 09.R01 | traceability tool run | every PS-070 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault with one forged statement, roll back one release | valid cases round-trip, forged statement quarantined, open cases import with sync state reset"
+    acceptance:
+      - All tests T01 to T17 pass in CI.
+      - No dispute state, event or outcome invokes any payment, refund, freeze or release operation.
+      - A mediator sees only evidence the parties chose to share and only after both accepted the mediator.
+      - Conflicting accepted outcomes always freeze the case.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's cases with all signed statements and evidence references in the section commerce.disputes, and evidence blobs the user holds in the export blob list.
+      - Import re-verifies every statement and quarantines those whose signer is not a party or the accepted mediator.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.disputes in classrup-export/v1; one line per DisputeCase and per statement (schema classrup.commerce.dispute/v1) with evidence blob hashes; the other parties' evidence is included only as the principal's own received copies."
+    import: "Terminal cases import as read-only evidence; open cases import as open with sync state reset to local_committed and deadlines recomputed from the original signed times as claims."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext of statements in transit."
+    migration_rollback: "Additive fields only in v1; signed statement bytes are never rewritten by a migration; rollback is safe because older readers ignore new optional fields."

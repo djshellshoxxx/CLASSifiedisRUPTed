@@ -1,35 +1,35 @@
-# PS-148-05 — authorization capabilities
+# PS-148-05 — Authorization and capabilities: Transparency reports
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-148-05. **Owner:** [18_Governance/02_community/mod_transparency](SPEC.md). **Implementing module:** 18_Governance/02_community/mod_transparency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S02.M02 Transparency reports](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/community/transparency` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for transparency within 02_community. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-148-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-148-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-148-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-148-05.R01** Vault policy: compiling, recording and discarding require the operator key; publishing requires a different registered operator key; applying a received report is open to the vault owner for trusted publishers.
+- **PS-148-05.R02** Relay policy (CAP-9): the relay serves published reports to anonymous readers and accepts uploads only from its operator keys; a relay role has no power over other relays.
+- **PS-148-05.R03** Counter data is operator-private and is not readable by members or by other relays.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| governance.transparency.record | owner | local principal holds the operator key; period not frozen |
+| governance.transparency.compile | owner | local principal holds the operator key; period ended |
+| governance.transparency.review | owner | local key is a registered operator key different from the compiler key; report status computed |
+| governance.transparency.apply | owner | vault unlocked; statement signature valid and publisher trusted |
+| governance.transparency.read_public | relay-anonymous | public signed reports; relay policy rate limit 60 requests per minute per IP prefix |
+| governance.transparency.relay_publish | relay-operator | relay policy: request signed by a registered operator device key; report <= 64 KiB |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-148-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-148-09.T05 | integration | PS-148-03.R02, PS-148-05.R02 | same key publishes; reviewer different key publishes | GOVERNANCE_TRANSPARENCY_SELF_REVIEW for the same key; success for O2 |
+| TEST-PS-148-09.T08 | abuse | PS-148-05.R01, PS-148-05.R03 | member reads counters; non-operator computes; relay upload with unknown key | FORBIDDEN or NOT_FOUND; relay refuses upload |
+
+## Dependencies
+
+Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

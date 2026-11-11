@@ -1,35 +1,33 @@
-# PS-125-06 — failure recovery idempotency
+# PS-125-06 — Failure recovery and idempotency: Tenants
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-06. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M03 Tenants](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/tenants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-125-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-125-06.R01** All relay commands are idempotent per CTR-IDM-001 and use expectedRevision, so concurrent operator edits never overwrite each other.
+- **PS-125-06.R02** Bootstrap is safe to run repeatedly and never creates duplicate tenants.
+- **PS-125-06.R03** Vault-local settings changes work offline and have no distributed effect.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Relay commands require Idempotency-Key with 24 h replay. platform.tenant.create with an existing slug and identical content returns the existing tenant (idempotent), with different content PLATFORM_TENANT_SLUG_TAKEN. platform.local_settings.update with the same patch returns the current revision.
+- **concurrency:** expectedRevision on configure, assign_operator and change_status; the unique slug index serializes concurrent creates; all writes run in one BEGIN IMMEDIATE transaction together with the outbox event row.
+- **retries:** Clients retry network errors and RATE_LIMITED with IDM-4 backoff; conflicts and validation errors are not retried automatically.
+- **offline:** Tenant commands need the relay and are not queued because they are operator decisions needing live feedback; clients cache platform.tenant.get for 30 s and show last-known configuration marked as possibly stale when the relay is unreachable. LocalSettings work fully offline.
+- **partial failure:** If publishing the event row fails the transaction rolls back and no change is visible. If a consumer fails on platform.tenant.configured it retries and dead-letters per CTR-EVT-001 EVT-6 without affecting the tenant record.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-125-09.T04 | integration | PS-125-03.R03, PS-125-04.R02, PS-125-06.R03 | status change with injected event-insert failure | transaction rolled back, no status change visible, no event |
+| TEST-PS-125-09.T07 | integration | PS-125-06.R01, PS-125-06.R02 | replay same Idempotency-Key with same and different body; run bootstrap twice; stale expectedRevision | original response replayed; IDEMPOTENCY_KEY_REUSED; second bootstrap returns existing tenant; CONFLICT_REVISION |
+| TEST-PS-125-09.T08 | integration | PS-125-06.R03, PS-125-05.R03 | vault offline, change language and currencies; relay offline, read tenant | LocalSettings update works; tenant read shows cached configuration marked stale |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S04.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

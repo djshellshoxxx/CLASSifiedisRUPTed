@@ -1,35 +1,52 @@
-# PS-067-01 — domain schema
+# PS-067-01 — Domain schema: Cash payments
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-01. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M02 Cash payments](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/cash` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the domain schema process for cash within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-067-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-067-01.R01** CashTerms stores dealId, obligationId, receiptRequired, handoverHint, proposer, status and signed statement cids per CTR-ID-001, in both parties' vaults.
+- **PS-067-01.R02** CashTerms are P2 and retained as RET-EVIDENCE because they bound what each party agreed when the claim was made.
+- **PS-067-01.R03** acknowledgementRequired is a constant true; the schema has no field that could mark cash as verified.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### CashTerms
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.commerce.cash_terms/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot) |
+| dealId | uuid — ref F09.S01.M01 Deal |
+| obligationId | string — ref Deal.obligations; cash must be in allowedMethods |
+| acknowledgementRequired | boolean — always true |
+| receiptRequired | boolean — payee asks for a bilateral signed receipt (F09.S02.M01) |
+| handoverHint? | string — ≤ 120 code points, public place suggestion only |
+| safetyLevel | enum — standard \| elevated; elevated when amount ≥ 100 000 minor units of a 2-decimal currency equivalent (scaled by decimals) |
+| proposerId | did — payee of the obligation |
+| status | enum — proposed \| accepted \| superseded \| expired |
+| termsCid | string — sha256 of the signed cash_terms statement |
+| acceptCid? | string — cid of the payer acceptance statement |
+| expiresAt | timestamp — proposedAt + 7 days |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC, local clock |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most one CashTerms with status accepted per (dealId, obligationId).
+- acknowledgementRequired is true in every row.
+- proposerId is the payee of the obligation.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-067-09.T01 | unit | PS-067-01.R01, PS-067-01.R03, PS-067-02.R01 | propose valid terms | row stored with acknowledgementRequired true, status proposed, signed statement created |
+| TEST-PS-067-09.T06 | integration | PS-067-04.R03, PS-067-01.R02 | commerce.deal.opened delivered twice | exactly one default terms row per cash obligation |
+| TEST-PS-067-09.T11 | e2e | PS-067-01.R03, PS-067-09.R03 | claim cash then acknowledge on second device | labels read claimed (unverified) then acknowledged by payee; never confirmed; axe zero serious issues |
+
+## Dependencies
+
+Module depends on: F09.S01.M01, F09.S03.M03, F18.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

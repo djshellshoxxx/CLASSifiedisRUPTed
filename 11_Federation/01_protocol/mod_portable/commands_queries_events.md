@@ -1,35 +1,59 @@
-# PS-083-04 — commands queries events
+# PS-083-04 — Commands, queries and events: Portable record packaging
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-04. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M01 Portable record packaging](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/portable` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the commands queries events process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-083-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-083-04.R01** The module exposes TypeScript functions only and no network commands or queries.
+- **PS-083-04.R02** Functions return Result<T, AppError> and never include rejected field values in error params.
+- **PS-083-04.R03** The module emits no events; draft building is a local pure step.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| FEDERATION_NOT_OPTED_IN | 403 | no | the owner has not enabled federation for this record |
+| FEDERATION_EXPORT_FORBIDDEN_FIELD | 422 | no | the record contains a field or precision that must not be exported |
+| FEDERATION_PAYLOAD_INVALID | 422 | no | inbound payload has unknown members, wrong types or exceeds string limits |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** API: buildDraft(record, head{seq,prev}, now) -> UnsignedEnvelope; previewDraft(record) -> {fields[], excluded[]}; toMirrorView(verifiedEnvelope) -> MirrorView; allowlistFor(type) -> string[]; roleFor(type, context) -> RoleRule (signer role resolver used by F11.S01.M02 V14). Participant-audience statements are encrypted by their source modules and only wrapped, never mapped, here.
+
+### Example
+
+```
+buildDraft({ type: "classrup.bazaar.listing/v1", id: "0192f3a4-...", title: "Road bike", geohash: "u33db", federate: true }, { seq: 4, prev: "sha256-9fQ..." }, now)
+-> { v: 1, type: "classrup.bazaar.listing/v1", author: "did:key:z6Mk...", createdAt: "2026-11-04T10:00:00.000Z", seq: 5, prev: "sha256-9fQ...", payload: { id: "0192f3a4-...", title: "Road bike", region: { geohash: "u33db", level: "L2" } }, ext: {} }
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-083-09.T07 | contract | PS-083-03.R01, PS-083-03.R02, PS-083-04.R01, PS-083-04.R02 | exercise each exported function | signatures and Result shapes match the schema registry; error params contain no values |
+| TEST-PS-083-09.T08 | unit | PS-083-04.R03, PS-083-05.R01 | inspect module for event emission and authorization calls | none present; opt-in read happens at build time |
+
+## Dependencies
+
+Module depends on: F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,44 +1,86 @@
-# F06.S03.M01 — relevance
+# F06.S03.M01 — Relevance ranking
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.S03.
+**Status:** SPECIFIED (Stage 3). **Scope:** MVP. **Parent:** [F06.S03](../SPEC.md). **Process IDs:** PS-051-01…PS-051-10. **Code:** `packages/discovery/src/ranking/relevance`.
 
-## Purpose and business behavior
-Provide relevance as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
+
+## Purpose
+
+Deterministic relevance scoring for search results. The score combines BM25 text relevance, a recency decay anchored on local first-seen time, and a distance-bucket weight, with an optional paid-promotion multiplier capped at 1.25 that exists only on a relay that chose to sell promotion and is always labelled 'Promoted'. The vault uses the bundled default RankingConfig; a relay operator may publish its own versioned RankingConfig as a signed statement so clients can read how that relay ranks. Same inputs and same config always give the same order.
+
+## Responsibilities
+
+- Define and own RankingConfig - weights, half-life, BM25 field weights, distance bucket weights and the promotion cap - with strict bounds and immutable versions.
+- Provide pure score() and explainComponents() functions used identically by the vault and the relay, with fixed tie-breaking.
+- Let a relay operator publish and roll back RankingConfig versions, emitting a signed statement and the event discovery.ranking_config.published.
+- Anchor recency on the index's local firstSeenAt clamped by the author's claim, never on claims alone.
+
+## Not responsible for
+
+- Diversity, new-author exposure and explanation strings for the user interface (F06.S03.M02).
+- Text index and query parsing (F06.S01.M01, F06.S01.M02).
+- Selling promotion, billing and promotion claims (a relay-local policy; payment evidence is F09 claims, never custody).
+- Future: learned ranking, per-user personalization, click feedback; none is allowed without a new decision record because they would profile users.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
-## Scope
-- Required process spec: `relevance_domain_model.md` (not yet authored)
-- Required process spec: `relevance_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `relevance_validation_and_authorization.md` (not yet authored)
-- Required process spec: `relevance_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `relevance_interfaces_and_events.md` (not yet authored)
-- Required process spec: `relevance_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `relevance_acceptance_and_property_tests.md` (not yet authored)
+- As a buyer, I see the best text match first, with newer and closer items ranked a bit higher, and I can see why each result is ranked where it is.
+- As a buyer, promoted results are clearly labelled 'Promoted' and cannot jump more than a capped amount.
+- As a relay operator, I can publish a ranking configuration and roll it back, and my users can read it.
+- As a developer, the same query on the same data gives the same order on every device.
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Edge cases
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- A query has no text terms (browse by filters); the text term is dropped and the remaining weights are renormalized.
+- Two results have equal scores to six decimals; the newer firstSeenAt wins, then the smaller documentId.
+- A document's claimedPublishedAt is in the future; recency uses min(claim, firstSeenAt), so it gains nothing.
+- A promotion has expired (promotedUntil in the past) but the flag was not cleared; the multiplier is not applied and the label is not shown.
+- An operator publishes weights that do not sum to 1.0 or a boost above 0.25; rejected with RANKING_CONFIG_INVALID.
+- A vault has no relay config; it uses the bundled default config and states 'default ranking' in the explanation.
+- A rollback is requested to a version that never existed; NOT_FOUND.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+## UX and accessibility
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Relay ranking page: shows the active RankingConfig version, weights, half-life, promotion cap and the signed statement fingerprint; operator console adds Publish and Roll back with a diff preview.
 
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+**States:** loading; active; publishing; error
 
-## Required process specification inventory
-- [ ] `relevance_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+**Accessibility:** Weights are shown as a table with headers; Publish and Roll back buttons are at least 44 by 44 px with confirmation dialogs.; Result 'Promoted' labels are text, not colour only.
+
+## Owned data
+
+- `RankingConfig` (classrup.discovery.ranking_config/v1, P0, RET-STANDARD)
+
+## Interfaces
+
+- Commands: `discovery.ranking_config.publish`, `discovery.ranking_config.rollback`
+- Queries: `discovery.ranking_config.get_active`
+- Emits: `discovery.ranking_config.published`
+- Consumes: none
+
+## Dependencies
+
+F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001
+
+## Process specifications and aggregation
+
+| ID | Process | Requirements |
+|---|---|---|
+| PS-051-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-051-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-051-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-051-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-051-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
+| PS-051-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-051-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-051-08 | [Observability and performance](observability_performance.md) | 3 |
+| PS-051-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-051-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/discovery/src/ranking/relevance/index.ts`.
+
+## Acceptance criteria
+
+- All tests T01-T14 pass in CI.
+- Golden score vectors match on Node and in the browser test runner.
+- No configuration can produce a promotion multiplier above 1.25 or an unlabelled promoted result.

@@ -1,0 +1,246 @@
+id: F11.S02.M03
+scope: MVP
+summary: >-
+  Detects forked or equivocating signed statements, quarantines them and drives review. A fork is two valid
+  envelopes by the same author with the same seq but different cids, a prev that does not match the stored
+  chain, or two conflicting signed promises (consent, money, inventory, reservation, identity revocation)
+  about the same subject. Public projections follow an origin-wins policy after a 7-day review window.
+  Commitments are never auto-resolved: dependent coordination is frozen and the parties must renegotiate,
+  with no last-writer-wins. In a vault the local principal reviews; on a relay the relay operator reviews.
+responsibilities:
+  - Own ConflictRecord and open one when F11.S02.M02 returns fork or when a commitment conflict is detected against the vault's signed promise index.
+  - Classify each conflict as public_projection or commitment from the statement type registry in F11.S01.M01.
+  - Freeze commitment conflicts by emitting federation.conflict.detected with the frozen subject IDs so domain modules (proposals, reservations, consents) stop acting until renegotiation.
+  - Apply the origin-wins policy to public projections after 7 days without review, keeping the version first received from the relay bound to the author, and record that this is a policy choice, not proof.
+  - Record resolution (keep one cid, drop all, or superseded by a renegotiated statement) and emit federation.conflict.resolved.
+non_responsibilities:
+  - Fork arithmetic on seq and prev (F11.S02.M02 decides; this module records and drives review).
+  - Storing or purging envelopes (F11.S01.M02 consumes the conflict events and changes record status).
+  - Negotiating the new terms of a frozen commitment (the owning domain module, for example F02 mutiny, F09 deals).
+  - Peer suspension for equivocating relays (F11.S03.M01 consumes the detected event as a health signal).
+  - "Future: automated gossip of equivocation proofs between relays and cryptographic fork proofs published as signed statements."
+depends_on: [F11.S02.M02, F11.S01.M03, F11.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001]
+user_stories:
+  - As a user, when two conflicting signed acceptances arrive for the same offer, I see the dependent trade frozen with both statements side by side and I am asked to renegotiate.
+  - As a relay operator, I can review a forked author's two listing versions, keep one and see that both signatures verify.
+  - As a reader of a public listing, I see a notice that the author published conflicting versions and that none is shown until review or the 7-day policy applies.
+edge_cases:
+  - Both fork candidates arrive in one batch; one ConflictRecord is opened containing both cids, not two.
+  - A third candidate for the same author and seq arrives later; it is appended to the same open record (maximum 5 candidates).
+  - Author legitimately re-signs a corrected record with a new seq that supersedes both and names their cids in ext.supersedes; the conflict becomes superseded.
+  - Commitment conflict where a consent was signed twice with different proposal digests; frozen, never auto-resolved even after 30 days.
+  - Operator resolves a conflict while the relay's bound origin for the author changes by a move record; the resolution is recorded with the binding at decision time.
+  - Both candidates contain identical payload bytes but different createdAt claims; still treated as a fork because the cids differ.
+ux:
+  screens:
+    - "Conflict review: two columns with each candidate's cid prefix, claimed time (labelled claim), relay receipt time if any (labelled evidence of that relay's clock), signer role verified and a diff of payload fields."
+    - "Frozen coordination banner on the affected proposal or deal: 'Conflicting signed statements received; actions paused. Renegotiate or ask the counterparty to resend.'"
+    - "Relay operator queue: open conflicts by age with 7-day auto-resolution countdown for public projections."
+  states: [loading, empty, open, frozen, resolved, auto-resolved, superseded]
+  a11y:
+    - Candidate columns are a table with row and column headers and the diff is not conveyed by colour alone.
+    - Keep and drop buttons are ≥ 44×44 px, name the cid prefix in their accessible names and ask for confirmation in a focus-trapping dialog.
+    - Status changes announced through an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A ConflictRecord stores the author, subject, conflict kind, class (public_projection or commitment), up to 5 candidate cids with provenance, status, resolution and freeze scope.
+      - ConflictRecords are P1-visible only to the vault owner or the operator of the relay that holds them and never leave the device or relay by themselves.
+      - Candidate claimed times are stored as claims and relay receipt times as evidence of that relay's clock only.
+    entities:
+      - name: ConflictRecord
+        schema: classrup.federation.conflict/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
+          - "kind: enum — fork_seq | prev_mismatch | commitment_conflict"
+          - "statementClass: enum — public_projection | commitment"
+          - "author: string — did:key whose statements conflict"
+          - "seq?: int — conflicting sequence number for fork kinds"
+          - "subjectRef?: string — aggregate the commitment concerns, e.g. proposal digest or reservation id"
+          - "candidates: json — 2..5 entries {cid, claimedAt, receivedAt, originRelay, relayReceipt?}"
+          - "freezeScope: string[] — aggregate IDs whose coordination is frozen; empty for public_projection"
+          - "status: enum — open | resolved | auto_resolved | superseded"
+          - "resolution?: json — {decision: keep|drop_all|origin_wins|superseded, keptCid?, decidedBy: principal|operator|policy, decidedAt, originAtDecision?}"
+          - "supersededByCid?: string — renegotiated or corrected statement that closed the conflict"
+          - "detectedAt: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one open ConflictRecord per (tenantId, author, seq) for fork kinds and per (tenantId, subjectRef) for commitment conflicts.
+          - A commitment ConflictRecord never reaches auto_resolved.
+          - status resolved with decision keep implies keptCid is one of the candidate cids.
+          - candidates always has at least 2 distinct cids.
+    sql: |
+      CREATE TABLE fed_conflict (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, kind TEXT NOT NULL, statement_class TEXT NOT NULL,
+        author TEXT NOT NULL, seq INTEGER, subject_ref TEXT, status TEXT NOT NULL, detected_at TEXT NOT NULL,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_conflict_open_fork ON fed_conflict(tenant_id, author, seq) WHERE status = 'open' AND seq IS NOT NULL;
+      CREATE UNIQUE INDEX fed_conflict_open_subject ON fed_conflict(tenant_id, subject_ref) WHERE status = 'open' AND subject_ref IS NOT NULL;
+  validation_rules:
+    requirements:
+      - A conflict is opened only from verified envelopes, so unsigned or invalid statements can never freeze a trade.
+      - Resolution input is validated against the candidate set and the caller's authority.
+      - Each violation maps to one stable error code.
+    rules:
+      - "V01 | every candidate envelope has a verified signature by the same author (or by the roles named in a commitment) | FED_SIGNATURE_INVALID"
+      - "V02 | candidates contain ≥ 2 distinct cids and ≤ 5 entries | VALIDATION_FAILED"
+      - "V03 | resolve decision is keep with keptCid in candidates, drop_all, or superseded with a verified superseding envelope naming all candidate cids | FEDERATION_CONFLICT_INVALID_RESOLUTION"
+      - "V04 | commitment conflicts reject decision origin_wins | FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE"
+      - "V05 | expectedRevision equals current revision | CONFLICT_REVISION"
+      - "V06 | conflict is open when resolving | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Conflicts move only along the declared transitions and any other transition is refused with CONFLICT_STATE.
+      - Public projections may auto-resolve by origin-wins after 7 days; commitments may only be resolved by a person or superseded by a renegotiated signed statement.
+      - Resolution is recorded permanently and never rewrites the signed candidates.
+    machines:
+      - entity: ConflictRecord
+        initial: open
+        terminal: [resolved, auto_resolved, superseded]
+        transitions:
+          - "open -> resolved | federation.conflict.resolve by local principal (vault) or relay operator | records decision keep or drop_all, emits federation.conflict.resolved"
+          - "open -> auto_resolved | review window of 7 days elapsed and statementClass = public_projection | keeps the candidate first received from the relay bound to the author (origin_wins), emits federation.conflict.resolved"
+          - "open -> superseded | verified statement with higher seq or renegotiated digest naming all candidate cids arrives | records supersededByCid, emits federation.conflict.resolved"
+    timeouts:
+      - "Auto-resolution sweep every 15 min applies origin-wins to public_projection conflicts open longer than 7 days."
+      - "Reminder after 24 h and again after 7 days for open commitment conflicts; no automatic resolution at any age."
+  commands_queries_events:
+    requirements:
+      - The module exposes detect, resolve and read operations; detect is an internal vault or relay command and resolve is a review action.
+      - Each command emits its events in the same local transaction as the state change.
+      - The module consumes account move events to re-evaluate origin-wins bindings.
+    commands:
+      - name: federation.conflict.detect
+        capability: federation.conflict.detect
+        input: "[vault-local or relay-local command, called by F11.S01.M02] { kind, author, seq?, subjectRef?, candidates: Envelope[2..5], statementClass }"
+        output: "{ conflictId, status: open, freezeScope }"
+        errors: [FED_SIGNATURE_INVALID, VALIDATION_FAILED, CONFLICT_STATE]
+        emits: [federation.conflict.detected]
+        idempotent: true
+      - name: federation.conflict.resolve
+        capability: federation.conflict.resolve
+        input: "[vault-local command in the vault; relay command under relay policy] { conflictId, expectedRevision, decision: keep|drop_all|superseded, keptCid?, supersededByCid?, note? ≤ 280 }"
+        output: "{ conflictId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_CONFLICT_INVALID_RESOLUTION, FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE]
+        emits: [federation.conflict.resolved]
+        idempotent: true
+    queries:
+      - name: federation.conflict.list
+        capability: federation.conflict.read
+        input: "{ status?: open|all, statementClass?, cursor?, limit ≤ 50 }"
+        output: "{ items: ConflictRecord[], nextCursor? }"
+        errors: []
+      - name: federation.conflict.get
+        capability: federation.conflict.read
+        input: "{ conflictId }"
+        output: "{ conflict: ConflictRecord, diff: FieldDiff[] }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: federation.conflict.detected, privacy: P1, payload: "{ conflictId, kind, statementClass, author, seq?, candidateCids, freezeScope }"}
+      - {type: federation.conflict.resolved, privacy: P1, payload: "{ conflictId, decision, keptCid?, decidedBy, supersededByCid? }"}
+    events_consumed:
+      - {type: federation.account.moved, effect: "recompute the bound origin for open public_projection conflicts of that author before auto-resolution"}
+      - {type: federation.peer.suspended, effect: "extend the 7-day review window of public_projection conflicts whose candidates came from that peer by 7 days"}
+    errors:
+      - "FEDERATION_CONFLICT_INVALID_RESOLUTION | 422 | no | decision does not match the candidates or lacks a verified superseding statement"
+      - "FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE | 409 | no | commitments need a person or a renegotiated signed statement"
+      - "FED_SIGNATURE_INVALID | 400 | no | a candidate signature failed verification"
+    example: |
+      federation.conflict.detect { kind: "fork_seq", author: "did:key:z6Mk...", seq: 7, statementClass: "public_projection", candidates: [env1, env2] }
+      -> { conflictId: "0192f3b0-...", status: "open", freezeScope: [] }   emits federation.conflict.detected
+      federation.conflict.resolve { conflictId: "0192f3b0-...", expectedRevision: 1, decision: "keep", keptCid: "sha256-Qm..." }
+      -> { conflictId: "0192f3b0-...", revision: 2, status: "resolved" }   emits federation.conflict.resolved
+  authorization_capabilities:
+    requirements:
+      - In the vault only the unlocked local principal may resolve conflicts; on a relay only that relay's operator may.
+      - Detection is an internal capability granted only to F11.S01.M02 code paths, never to external requests.
+      - Conflict records are visible only to the owner of the vault or the operator of the hosting relay; others receive NOT_FOUND.
+    capabilities:
+      - "federation.conflict.detect | local principal, system | vault policy: called from the verified receive pipeline; relay policy: called from the verified inbox pipeline"
+      - "federation.conflict.resolve | local principal, operator | vault policy: unlocked vault owner; relay policy: operator role of that relay with an audit entry"
+      - "federation.conflict.read | local principal, operator | vault: own vault; relay: operator of that relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Detect is idempotent per (author, seq) or subject so repeated arrivals append at most new candidates and never open duplicates.
+      - Resolve requires expectedRevision and is idempotent on identical replay.
+      - A crash between opening a conflict and writing the event cannot lose the freeze because both are in one local transaction.
+    idempotency: "Detect replay with the same candidates returns the existing conflictId; resolve replay with the same Idempotency-Key and body returns the stored response for 24 h."
+    concurrency: "Unique partial indexes enforce one open conflict per subject; resolve uses expectedRevision; two concurrent resolves produce one success and one CONFLICT_REVISION."
+    retries: "Callers retry only on DEPENDENCY_UNAVAILABLE; resolution is never auto-retried with a different decision."
+    offline: "Fully offline in the vault; relay-to-vault notification of a peer's later signed statements arrives through normal sync, and the UI shows the freeze as local committed state."
+    partial_failure: "If the freeze event cannot be delivered to a domain consumer it is retried from the outbox (CTR-EVT-001 EVT-6); the conflict stays open and the consumer treats missing delivery as not yet frozen, so the UI shows a warning when the outbox lag exceeds 60 s."
+  privacy_retention_abuse:
+    requirements:
+      - Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference encrypted statements by cid and never store plaintext on a relay.
+      - A relay operator sees only public projections and ciphertext metadata and therefore resolves only public_projection conflicts on that relay.
+      - Attackers must not be able to freeze someone else's trade with unsigned or role-less statements.
+    data:
+      - "ConflictRecord: P1; candidate cids, claimed and receipt times, author did."
+      - "Candidate payloads stay in F11.S01.M02 under their own class."
+    retention:
+      - "RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized on account deletion."
+    threats:
+      - "T01 | Griefing: attacker injects a second statement to freeze a victim's trade | detect requires a verified signature by the victim's authorized key or a listed participant; role-less statements are quarantined by F11.S01.M02 and never open a conflict"
+      - "T02 | Equivocating author or relay shows different histories to different peers | both versions retained as evidence; author's chain marked forked; peers receive health signal via federation.conflict.detected"
+      - "T03 | Operator abuse: resolving in favor of a friendly author | resolution recorded with decidedBy and note; both signed candidates remain; audit entry under RET-AUDIT"
+      - "T04 | Clock-claim manipulation to look earlier | claimed times labelled claims; only relay receipts count as evidence and only of that relay's clock; origin-wins uses arrival from the bound relay, not claimed time"
+    abuse_controls:
+      - "At most 20 open conflicts per author per relay; the 21st quarantines the author's further envelopes with a health signal to F11.S03.M01."
+      - "Commitment freezes can always be lifted by the local principal choosing drop_all, so no counterparty can lock a vault indefinitely."
+  observability_performance:
+    requirements:
+      - Open conflicts, age and resolution decisions are measured on relays and kept as local diagnostics in the vault.
+      - Detect and resolve meet write budget p95 ≤ 300 ms.
+      - An alert fires on a relay when any public_projection conflict is open longer than 8 days or more than 50 are open.
+    metrics:
+      - "classrup_federation_conflicts_total{outcome=detected|resolved|auto_resolved|superseded}"
+      - "classrup_federation_conflicts_open (gauge)"
+      - "classrup_federation_conflict_age_ms (gauge: oldest open)"
+    logs:
+      - "warn federation.conflict.detected {conflictId, kind, authorPrefix(16), correlationId} — no payload."
+    budgets:
+      - "detect and resolve p95 ≤ 300 ms; list p95 ≤ 150 ms for ≤ 50 items."
+      - "Auto-resolution sweep of 1000 expired conflicts ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - A two-vault and two-relay harness reproduces fork, prev mismatch and commitment conflicts.
+      - Contract tests validate commands, events and ConflictRecord against the registry schemas.
+    fixtures: "Author X with chain seq 1..6; two seq-7 envelopes E7a and E7b; two consents C1 and C2 on proposal digest D; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R02 | detect with E7a and E7b | one open ConflictRecord with 2 candidates, claimed and receipt times stored separately"
+      - "T02 | unit | 02.R01,02.R03 | detect with an unsigned or role-less candidate; with 1 candidate | FED_SIGNATURE_INVALID or VALIDATION_FAILED; nothing opened"
+      - "T03 | property | 03.R01,03.R03 | random command sequences on one conflict | only declared transitions succeed; terminal states never change; candidates never altered"
+      - "T04 | integration | 03.R02,04.R03,07.R02 | public conflict untouched for 7 days with a bound origin | auto_resolved origin_wins keeps the first-received-from-origin cid; event emitted"
+      - "T05 | integration | 03.R02,01.R03 | commitment conflict C1 vs C2 for 30 days | still open; freezeScope contains the proposal; resolve with origin_wins returns FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE"
+      - "T06 | integration | 03.R03,04.R01 | author publishes E8 with ext.supersedes naming both cids | conflict superseded with supersededByCid; resolved event emitted"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | detect and resolve | outputs and events validate against registry schemas"
+      - "T08 | integration | 04.R03 | account moved event for the author while a conflict is open | origin binding recomputed before the 7-day decision"
+      - "T09 | abuse | 05.R01,05.R02,05.R03,07.R03 | non-operator resolves on relay; external request calls detect; third party reads conflict | FORBIDDEN or NOT_FOUND; operator resolution logged with decidedBy"
+      - "T10 | abuse | 07.R01,07.R03 | attacker signs a statement as a non-participant for a victim's proposal | quarantined, no conflict opened, trade not frozen"
+      - "T11 | integration | 06.R01,06.R02,02.R02 | replay detect with same candidates; two concurrent resolves | same conflictId; one success and one CONFLICT_REVISION"
+      - "T12 | chaos | 06.R03,08.R03 | kill process between conflict write and event; consumer unavailable for 90 s | freeze event delivered after restart; UI warning shown above 60 s lag"
+      - "T13 | integration | 07.R02,03.R03 | relay with ciphertext commitment statements | relay stores no plaintext and refuses to resolve commitment conflicts"
+      - "T14 | load | 08.R01,08.R02 | 1000 conflicts detected and resolved in a minute | p95 ≤ 300 ms and gauges exported"
+      - "T15 | e2e | 01.R03,03.R02 | two vaults receive conflicting acceptances; user opens review screen | trade paused banner visible, labels claim vs evidence, axe zero serious issues"
+      - "T16 | unit | 09.R01,09.R03 | traceability tool run | every PS-086 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault and relay restore | conflicts round trip with open ones still freezing; imported candidates re-verified"
+    acceptance:
+      - All tests T01–T17 pass in CI.
+      - No commitment (consent, money, inventory) conflict is ever resolved by last-writer-wins or by timeout.
+      - Forged role-less statements cannot freeze a trade (abuse test).
+  import_export_backup_rollback:
+    requirements:
+      - A vault export contains conflict records with candidate cids and decisions; the candidate envelopes themselves are exported by F11.S01.M02.
+      - Import re-verifies every candidate signature and keeps open conflicts open, restoring their freeze events.
+      - Schema changes follow expand/contract and v1 stays readable for 180 days.
+    export: "Section federation.conflicts in classrup-export/v1, one line per ConflictRecord (schema classrup.federation.conflict/v1)."
+    import: "Candidates are re-verified; conflicts whose candidates fail verification import as resolved with decision drop_all and a warning in the import report; open conflicts re-emit federation.conflict.detected."
+    backup: "Vault export is the primary backup (IOX-6); relay conflicts are covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because new optional fields are ignored and open conflicts stay open."

@@ -1,0 +1,402 @@
+id: F11.S01.M02
+scope: MVP
+summary: >-
+  Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope format. The envelope is the
+  universal sharing format for every cross-party statement (vault to relay, vault to vault, relay to relay)
+  under ADR-0016. The same module runs in the user's browser vault (IndexedDB) and in an optional relay
+  (SQLite). A vault verifies the signature and that the signer holds the role the statement type requires,
+  stores it with provenance, or quarantines it. A relay verifies signature, size and hosting policy and
+  stores signed public projections and encrypted mailbox envelopes without ever being authoritative.
+  Relay-to-relay federation (POST /fed/v1/inbox batches of at most 100 envelopes between allowlisted peers,
+  only owner-opted-in P0 data at L2 or coarser) stays behind a flag that is off by default; vault to relay
+  sharing is active whenever the user selects a relay. A signature proves the key holder asserted the content,
+  not that it is true or was delivered, and timestamps from other parties are claims.
+responsibilities:
+  - Own FederatedRecord (statement or mirror plus provenance originRelay, receivedAt, via, verifiedAt, optional relay receipt) and Tombstone, in the vault and in the relay, with the vault receive and publish commands and the relay inbox endpoint.
+  - Run the verification pipeline in fixed order: flag or hosting policy, peer allowlist and quota, request signature, size limits, blocklists before storage, signature and cid, tombstone check, signer-role check, origin binding, dedup and chain placement, payload allowlist, store; a vault quarantines a statement whose signer lacks the required role instead of acting on it.
+  - Apply tombstones signed by the author or the origin relay, remove mirrored content within 1 h of receipt (deadline 24 h) and keep the tombstone 180 days to stop resurrection.
+  - Reject envelopes with createdAt older than 180 days or more than 10 minutes in the future so a replayed old record can never outlive its tombstone.
+  - Emit one record.accepted, record.rejected or tombstone.applied event per envelope outcome in the same local transaction as the state change; events stay on the device or relay (EVT-8) and only signed statements leave it (EVT-9).
+  - Never claim more than was reached: a locally published statement is local committed until F11.S02.M01 reports transport_acknowledged or peer_accepted.
+non_responsibilities:
+  - Canonicalization, signing and did:key handling (F11.S01.M03).
+  - Field allowlists and record mapping (F11.S01.M01).
+  - Cid dedup rules and gap-buffer decisions (F11.S02.M02 supplies pure decision functions; this module stores the buffered rows).
+  - Fork detection and operator conflict review (F11.S02.M03).
+  - Peer allowlist, quotas and block rules (F11.S03.M01, F11.S03.M02).
+  - Outbound delivery and retries (F11.S02.M01).
+  - "Future: multi-hop relay forwarding (via longer than 1) and ActivityPub or AT Protocol inbound adapters."
+  - "Future: federating anything above P0, including reviews, offers and proposals."
+depends_on: [F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S04.M02, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001]
+user_stories:
+  - As a buyer on relay A, I can browse a listing mirrored from relay B, see its origin relay and verified time, and I cannot edit it.
+  - As a seller, when I unpublish a federated listing, the mirrors on peer relays disappear within 24 h and a tombstone proves it was withdrawn.
+  - As a user, I can see that a statement from another party was quarantined because its signer was not authorized for that role, and I can choose to discard it.
+  - As a relay operator, I can see why an inbound envelope was rejected and which peer or device sent it without seeing any private data.
+edge_cases:
+  - A peer sends the same envelope twice or two peers send it; the second arrival is acknowledged as duplicate, via is not extended in MVP and no event is emitted.
+  - Envelope seq 7 arrives before seq 6; it is stored as buffered for up to 24 h, then fetched from the origin or dropped with reason gap_timeout.
+  - Tombstone arrives before the record it targets; it is kept pending for 24 h and then stored as applied so the later record is rejected with FEDERATION_TOMBSTONED.
+  - Two different envelopes from one author with the same seq arrive; both go to quarantine via F11.S02.M03 and neither is visible until operator review.
+  - A batch has 101 envelopes or 4 MiB plus one byte; the whole request is refused with FEDERATION_BATCH_TOO_LARGE and nothing is stored.
+  - Relay B forwards a record whose author is homed at relay C; rejected with FEDERATION_ORIGIN_MISMATCH.
+  - Federation flag F11 is switched off while a batch is processing; the batch finishes its current transaction and later relay-to-relay requests return FEATURE_DISABLED while vault to relay sharing continues.
+  - A statement signed by a valid key that is not the listing author claims to accept an offer; the vault quarantines it with reason signer_role_invalid and does not act on it.
+  - Relay stops responding after a statement was published; the statement stays local committed and the UI shows delivery unknown.
+  - Envelope createdAt is 181 days old or 11 minutes in the future; rejected with FEDERATION_RECORD_TIME_INVALID.
+ux:
+  screens:
+    - "Mirrored record view: origin relay name, verified-at time, banner 'Remote copy, read-only', link to origin; no edit controls."
+    - "Relay operator federation inbox: counts per peer and reason, rejected list with cid prefix and code, quarantine queue link (F11.S02.M03)."
+    - "Owner federation panel in listing and profile settings: per-record opt-in toggle, sync state (local committed, prepared, transport acknowledged, peer accepted, withdrawn) and button 'Withdraw from federation' that issues a signed tombstone with a notice that copies already fetched cannot be recalled (PRV-6)."
+  states: [loading, empty, local-committed, buffered, accepted, quarantined, tombstoned, rejected, flag-off]
+  a11y:
+    - Remote-copy banner is a role=note region read before the content and is not conveyed by colour alone.
+    - Withdraw button is ≥ 44×44 px, has the accessible name 'Withdraw this listing from federation' and confirms in a dialog that traps and restores focus.
+    - Operator tables have header cells with scope attributes and sortable columns announced via aria-sort.
+processes:
+  domain_schema:
+    requirements:
+      - A FederatedRecord stores the full verified envelope, its cid, author, seq, prev, type and the local provenance object originRelay, receivedAt, via and verifiedAt, with tenant and revision per CTR-ID-001.
+      - A Tombstone stores target (cid or record id), issuer kind, reason, the signed tombstone envelope, appliedAt and expiresAt equal to appliedAt plus 180 days.
+      - Public records are P0 read-only mirrors and participant records are ciphertext statements; the record class is P2 because it can hold ciphertext addressed to participants.
+      - Mirrored records are read-only; purged content leaves only a stub with cid, author, type and purgedAt until the tombstone expires.
+    entities:
+      - name: FederatedRecord
+        schema: classrup.federation.record/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
+          - "cid: string — sha256-base64url of JCS(envelope without sig); unique per tenant"
+          - "audience: enum — public | participants; participants envelopes carry ciphertext in payload and are never sent relay to relay"
+          - "type: string — envelope type, e.g. classrup.bazaar.listing/v1"
+          - "author: string — did:key of the signer; Ed25519 only"
+          - "seq: int — per-author sequence, ≥ 1"
+          - "prev?: string — cid of seq-1 record of the same author; absent only when seq = 1"
+          - "recordKey?: string — payload id used to supersede older versions of the same item"
+          - "envelope?: json — verified envelope ≤ 262144 bytes; null after purge"
+          - "originRelay: string — relay id that sent it, bound to the author's home relay"
+          - "receivedAt: timestamp — RFC 3339 UTC"
+          - "via: string[] — relays that forwarded it; MVP length ≤ 1"
+          - "verifiedAt: timestamp — local clock when signature and cid verification succeeded"
+          - "claimedAt: timestamp — createdAt from the envelope; a claim of the signer, not evidence"
+          - "relayReceipt?: json — {relayId, at, sig}; relay-signed receipt time, evidence only of that relay's clock"
+          - "signerRole?: string — role the signer was verified to hold for this type, e.g. listing_author"
+          - "status: enum — received | buffered | accepted | quarantined | rejected | dropped | tombstoned"
+          - "statusReason?: enum — gap_timeout | fork | signer_role_invalid | blocked | peer_suspended | tombstoned | superseded | operator_dropped"
+          - "bufferedUntil?: timestamp — receivedAt + 24 h while status buffered"
+          - "supersededBy?: uuidv7 — newer FederatedRecord of the same recordKey"
+          - "purgedAt?: timestamp — content removed after tombstone, block rule or flag-off purge"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - cid is unique per tenant and an envelope is verified before any FederatedRecord row exists in status accepted.
+          - At most one record per (tenantId, author, seq) has status accepted; a second candidate is quarantined.
+          - status accepted implies prev refers to an accepted record of the same author or seq is 1.
+          - status tombstoned implies envelope is null and purgedAt is set.
+          - A public-audience FederatedRecord is P0 and never contains location finer than geohash 5; a participants-audience record holds only ciphertext and routing metadata and a relay never stores its plaintext.
+          - A statement is acted on by domain modules only when status is accepted and signerRole is set.
+      - name: Tombstone
+        schema: classrup.federation.tombstone/v1
+        storage: relay
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "cid: string — cid of the tombstone envelope itself; unique per tenant"
+          - "targetCid?: string — cid of the record removed"
+          - "targetRecordKey?: string — record id; removes all versions by the same author"
+          - "author: string — did:key that signed the tombstone or the origin relay did"
+          - "issuerKind: enum — author | origin_relay"
+          - "reason: enum — owner_withdrawn | account_deleted | listing_expired | moderation_removed | legal"
+          - "envelope: json — signed tombstone envelope, classrup.federation.tombstone/v1"
+          - "status: enum — received | pending_target | applied | rejected | expired"
+          - "appliedAt?: timestamp — when content was purged"
+          - "expiresAt?: timestamp — appliedAt + 180 days"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Exactly one of targetCid and targetRecordKey is set.
+          - status applied implies appliedAt and expiresAt are set and expiresAt = appliedAt + 180 days.
+          - A tombstone issuer is the target's author or the target's origin relay; any other issuer is rejected.
+    sql: |
+      -- relay SQLite shown; the vault uses the same fields in an IndexedDB store fed_record with the same unique indexes
+      CREATE TABLE fed_record (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, cid TEXT NOT NULL, type TEXT NOT NULL, author TEXT NOT NULL,
+        seq INTEGER NOT NULL, prev TEXT, record_key TEXT, origin_relay TEXT NOT NULL, received_at TEXT NOT NULL,
+        status TEXT NOT NULL, buffered_until TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_record_cid ON fed_record(tenant_id, cid);
+      CREATE UNIQUE INDEX fed_record_chain ON fed_record(tenant_id, author, seq) WHERE status = 'accepted';
+      CREATE INDEX fed_record_key ON fed_record(tenant_id, author, record_key, status);
+      CREATE INDEX fed_record_buffer ON fed_record(status, buffered_until) WHERE status = 'buffered';
+      CREATE TABLE fed_tombstone (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, cid TEXT NOT NULL, target_cid TEXT, target_record_key TEXT,
+        author TEXT NOT NULL, status TEXT NOT NULL, expires_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_tombstone_cid ON fed_tombstone(tenant_id, cid);
+      CREATE INDEX fed_tombstone_target ON fed_tombstone(tenant_id, target_cid);
+  validation_rules:
+    requirements:
+      - Checks run cheapest first and blocklists run before anything is persisted, so a blocked peer, author or cid never reaches storage.
+      - Inbound responses to peers never reveal which block rule matched; every blocklist hit returns the generic FEDERATION_NOT_ACCEPTED while the internal reason is logged and evented.
+      - Every rule violation maps to exactly one stable code and the per-envelope outcome is returned in a results array in request order.
+    rules:
+      - "V01 | relay-to-relay requests: federation flag F11 is on (off by default); vault to relay requests: the relay hosting policy accepts the signing device key | FEATURE_DISABLED"
+      - "V02 | sender is an active allowlisted peer relay or a device key registered with this relay, and the request signature verifies (F11.S03.M01, F11.S01.M03) | FEDERATION_PEER_NOT_ALLOWED"
+      - "V03 | batch has 1..100 envelopes and body ≤ 4194304 bytes; each envelope ≤ 262144 bytes | FEDERATION_BATCH_TOO_LARGE"
+      - "V04 | peer quota available: 6000 envelopes/hour and 10 batches/minute (F11.S03.M01) | FEDERATION_QUOTA_EXCEEDED"
+      - "V05 | envelope has v = 1, a registered type, author did:key, seq ≥ 1, prev present iff seq > 1 | VALIDATION_FAILED"
+      - "V06 | peer, author did, cid and content hash are not matched by an active block rule (F11.S03.M02) | FEDERATION_NOT_ACCEPTED"
+      - "V07 | Ed25519 signature over JCS bytes verifies and claimed cid matches | FED_SIGNATURE_INVALID"
+      - "V08 | createdAt is no older than 180 days and no more than 10 minutes in the future | FEDERATION_RECORD_TIME_INVALID"
+      - "V09 | no applied tombstone targets this cid or this author and recordKey | FEDERATION_TOMBSTONED"
+      - "V10 | sender peer equals the originRelay bound to the author; first accepted record binds the author to the sender and F11.S03.M03 move records rebind | FEDERATION_ORIGIN_MISMATCH"
+      - "V11 | payload passes the F11.S01.M01 inbound allowlist, serialized ≤ 65536 bytes | FEDERATION_PAYLOAD_INVALID"
+      - "V14 | vault only: signer key holds the role required by the statement type (author of the listing, listed proposal participant, owner of the offer) according to the registry in F11.S01.M01 | FEDERATION_SIGNER_ROLE_INVALID"
+      - "V12 | tombstone issuer is the target's author or origin relay and reason is in the enum | FEDERATION_TOMBSTONE_UNAUTHORIZED"
+      - "V13 | local publish: envelope author is a device key listed in the local principal's portable identity document (F07.S02.M01) and the source record is opted in | FEDERATION_AUTHOR_NOT_OWNED"
+  workflow_state_machine:
+    requirements:
+      - Envelopes move only along the declared FederatedRecord and Tombstone transitions; any other transition is refused with CONFLICT_STATE.
+      - A record becomes visible to readers only in status accepted; buffered and quarantined records are never served.
+      - Tombstoned and rejected are terminal, so a rejected envelope can only be reconsidered by a new submission and a purged record cannot be restored.
+    machines:
+      - entity: FederatedRecord
+        initial: received
+        terminal: [rejected, dropped, tombstoned]
+        transitions:
+          - "received -> accepted | all validation passes and chain position is next (seq = head+1, prev = head cid) | stores row, emits federation.record.accepted"
+          - "received -> buffered | seq > head+1 (gap) per F11.S02.M02 | sets bufferedUntil = receivedAt + 24 h"
+          - "received -> quarantined | signer role invalid (V14) in a vault | stored with statusReason signer_role_invalid, not acted on, user may discard"
+          - "received -> quarantined | fork detected (same author and seq, different cid) per F11.S02.M03 | both candidates quarantined and dependent coordination frozen for explicit renegotiation (no last-writer-wins); emits via federation.conflict.detected"
+          - "received -> rejected | any validation rule fails | no row content stored beyond cid stub; emits federation.record.rejected"
+          - "buffered -> accepted | missing predecessors arrive and chain closes | emits federation.record.accepted for each released record in seq order"
+          - "buffered -> dropped | bufferedUntil passed and fetch from origin failed | emits federation.record.rejected reason gap_timeout"
+          - "accepted -> quarantined | federation.conflict.detected names this cid or a late fork appears | hides from readers"
+          - "quarantined -> accepted | federation.conflict.resolved keeps this cid | emits federation.record.accepted"
+          - "quarantined -> dropped | federation.conflict.resolved discards this cid or operator drops it | purges content"
+          - "accepted -> tombstoned | valid tombstone applied, block rule matched, or peer suspended with purge | content purged within 1 h of trigger (deadline 24 h); emits federation.tombstone.applied for tombstones"
+      - entity: Tombstone
+        initial: received
+        terminal: [rejected, expired]
+        transitions:
+          - "received -> applied | issuer valid and target found | purges target content, sets expiresAt = now + 180 days, emits federation.tombstone.applied"
+          - "received -> pending_target | issuer cannot be checked because target unseen | waits up to 24 h for the target or its author binding"
+          - "pending_target -> applied | target arrives or 24 h pass | stored as applied so a later arrival of the target is rejected as FEDERATION_TOMBSTONED; emits federation.tombstone.applied"
+          - "received -> rejected | signature invalid or issuer unauthorized | emits federation.record.rejected"
+          - "applied -> expired | expiresAt reached | tombstone row deleted by retention sweep"
+    timeouts:
+      - "Gap-buffer sweep every 5 min moves buffered records with bufferedUntil ≤ now to dropped (reason gap_timeout) after one fetch attempt from the origin."
+      - "Pending tombstone sweep every 5 min applies pending_target tombstones older than 24 h."
+      - "Purge sweep every 5 min removes content for records whose tombstone, block rule or suspension is older than 1 h; any item older than 24 h raises alert classrup_federation_purge_overdue_total."
+      - "Tombstone retention sweep daily deletes tombstones with expiresAt ≤ now."
+  commands_queries_events:
+    requirements:
+      - The module exposes inbox ingest, local submit and tombstone issue commands plus read queries with the signatures below.
+      - Each command emits exactly the listed events in the same transaction as the state change, one event per envelope outcome.
+      - The module consumes block, peer, conflict, migration, deletion and listing lifecycle events to keep mirrors consistent with policy.
+    commands:
+      - name: federation.record.ingest
+        capability: federation.record.ingest
+        input: "[relay command, relay policy] { batchId: uuidv7, envelopes: Envelope[1..100] } over POST /fed/v1/inbox with request signature headers from an allowlisted peer relay or a registered vault device key"
+        output: "{ batchId, results: [ { cid, outcome: accepted|duplicate|buffered|quarantined|rejected, code?, relayReceipt? } ] }"
+        errors: [FEATURE_DISABLED, FEDERATION_PEER_NOT_ALLOWED, FEDERATION_REQUEST_SIGNATURE_INVALID, FEDERATION_BATCH_TOO_LARGE, FEDERATION_QUOTA_EXCEEDED, RATE_LIMITED]
+        emits: [federation.record.accepted, federation.record.rejected, federation.tombstone.applied]
+        idempotent: true
+      - name: federation.record.receive
+        capability: federation.record.receive
+        input: "[vault-local command] { envelopes: Envelope[1..100], source: relayId|direct|mailbox } fetched by the sync engine; the vault verifies and decides, the source is never trusted"
+        output: "{ results: [ { cid, outcome: accepted|duplicate|buffered|quarantined|rejected, code? } ] }"
+        errors: [FED_SIGNATURE_INVALID, FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_PAYLOAD_INVALID, FEDERATION_NOT_ACCEPTED, FEDERATION_RECORD_TIME_INVALID, FEDERATION_TOMBSTONED, FEDERATION_ORIGIN_MISMATCH, FEDERATION_BATCH_TOO_LARGE]
+        emits: [federation.record.accepted, federation.record.rejected, federation.tombstone.applied]
+        idempotent: true
+      - name: federation.record.publish
+        capability: federation.record.publish
+        input: "[vault-local command; produces a signed statement of the envelope type chosen by the source module, e.g. classrup.bazaar.listing/v1] { sourceRecordId, type, audience: public|participants, recipients? }"
+        output: "{ cid, seq, syncState: local_committed, outboxId }"
+        errors: [FEDERATION_AUTHOR_NOT_OWNED, FEDERATION_NOT_OPTED_IN, FED_SIGNATURE_INVALID, FEDERATION_PAYLOAD_INVALID, CONFLICT_STATE, VALIDATION_FAILED, RATE_LIMITED]
+        emits: [federation.record.accepted]
+        idempotent: true
+      - name: federation.tombstone.issue
+        capability: federation.tombstone.issue
+        input: "[vault-local command; produces signed statement classrup.federation.tombstone/v1; relays may also issue origin_relay tombstones for content they host] { targetCid?, targetRecordKey?, reason: owner_withdrawn|account_deleted|listing_expired|moderation_removed|legal }"
+        output: "{ tombstoneCid, appliedAt, expiresAt, syncState: local_committed }"
+        errors: [NOT_FOUND, FEDERATION_TOMBSTONE_UNAUTHORIZED, VALIDATION_FAILED]
+        emits: [federation.tombstone.applied]
+        idempotent: true
+    queries:
+      - name: federation.record.get
+        capability: federation.record.read_public
+        input: "{ cid } or { author, recordKey }"
+        output: "{ record: MirrorView with provenance { originRelay, receivedAt, via, verifiedAt, claimedAt, relayReceipt? } }"
+        errors: [NOT_FOUND, FEATURE_DISABLED]
+      - name: federation.record.list_by_author
+        capability: federation.record.read_public
+        input: "{ author, type?, cursor?, limit ≤ 50 }"
+        output: "{ items: MirrorView[], nextCursor? }"
+        errors: [FEATURE_DISABLED]
+      - name: federation.record.head
+        capability: federation.record.read_head
+        input: "{ author }"
+        output: "{ seq, cid } for the latest accepted record, or { seq: 0 }"
+        errors: [FEDERATION_AUTHOR_NOT_OWNED]
+      - name: federation.record.list_rejections
+        capability: federation.record.read_provenance
+        input: "{ peerId?, code?, since?, cursor?, limit ≤ 100 }"
+        output: "{ items: [ { cidPrefix, peerId, code, at } ], nextCursor? }"
+        errors: [FORBIDDEN]
+    events_produced:
+      - {type: federation.record.accepted, privacy: P0, payload: "{ recordId, cid, type, author, seq, originRelay, local: boolean }"}
+      - {type: federation.record.rejected, privacy: P0, payload: "{ cidPrefix, peerId, code, reason, suppressedCount? }"}
+      - {type: federation.tombstone.applied, privacy: P0, payload: "{ tombstoneId, tombstoneCid, targetCid?, targetRecordKey?, author, reason, expiresAt }"}
+    events_consumed:
+      - {type: federation.block_rule.changed, effect: "purge accepted mirrors matching a new author, cid or hash rule within 1 h and set status tombstoned with reason blocked"}
+      - {type: federation.peer.suspended, effect: "relay only: stop accepting from the peer immediately; quarantine its records received in the last 24 h when the suspension reason is compromise"}
+      - {type: federation.conflict.detected, effect: "set both candidate records to quarantined and hide them from readers"}
+      - {type: federation.conflict.resolved, effect: "release the kept record to accepted and drop the others"}
+      - {type: federation.account.moved, effect: "rebind the author's originRelay to the new home relay after verifying the signed move record"}
+      - {type: privacy.deletion.requested, effect: "issue an owner tombstone with reason account_deleted for every federated record of the user's did keys"}
+      - {type: bazaar.listing.unpublished, effect: "issue tombstone reason owner_withdrawn when the listing was federated"}
+      - {type: bazaar.listing.expired, effect: "issue tombstone reason listing_expired when the listing was federated"}
+      - {type: services.offering.withdrawn, effect: "issue tombstone reason owner_withdrawn when the offering was federated"}
+      - {type: platform.flag.changed, effect: "when F11 turns off, relay-to-relay ingest stops and federated mirrors are hidden; vault to relay sharing and local statements continue; data is retained per CTR-FLG-001 FLG-3"}
+    errors:
+      - "FED_SIGNATURE_INVALID | 400 | no | envelope signature or cid check failed (CTR-FED-001 FED-2)"
+      - "FEDERATION_REQUEST_SIGNATURE_INVALID | 401 | no | relay request signature, digest or date check failed"
+      - "FEDERATION_PAYLOAD_INVALID | 422 | no | payload has members outside the allowlist or exceeds size limits"
+      - "FEDERATION_NOT_OPTED_IN | 403 | no | the owner has not enabled federation for this record"
+      - "FEDERATION_SIGNER_ROLE_INVALID | 422 | no | signer key does not hold the role this statement type requires; statement quarantined"
+      - "FEDERATION_PEER_NOT_ALLOWED | 403 | no | sender is not an active allowlisted peer relay or registered device key"
+      - "FEDERATION_BATCH_TOO_LARGE | 413 | no | more than 100 envelopes, body over 4194304 bytes or envelope over 262144 bytes"
+      - "FEDERATION_QUOTA_EXCEEDED | 429 | yes | peer exceeded its envelope or batch quota; retryAfterMs set"
+      - "FEDERATION_NOT_ACCEPTED | 422 | no | envelope refused by local policy; reason intentionally generic"
+      - "FEDERATION_RECORD_TIME_INVALID | 422 | no | createdAt older than 180 days or more than 10 minutes in the future"
+      - "FEDERATION_TOMBSTONED | 410 | no | the record was withdrawn by a tombstone"
+      - "FEDERATION_ORIGIN_MISMATCH | 403 | no | sender is not the relay bound to the author"
+      - "FEDERATION_TOMBSTONE_UNAUTHORIZED | 403 | no | tombstone not signed by the author or origin relay"
+      - "FEDERATION_AUTHOR_NOT_OWNED | 403 | no | the envelope author key does not belong to the local principal"
+    example: |
+      POST /fed/v1/inbox
+      X-Relay-Key-Id: relay:b.example#k1   Date: Wed, 04 Nov 2026 10:00:00 GMT   Digest: sha-256=:Zm9v...:
+      Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000aa
+      { "batchId": "0192f3a4-0000-7000-8000-0000000000aa", "envelopes": [ { "v": 1, "type": "classrup.bazaar.listing/v1", "cid": "sha256-Qm...", "author": "did:key:z6Mk...", "createdAt": "2026-11-04T09:58:00.000Z", "seq": 5, "prev": "sha256-9f...", "payload": { "id": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "title": "Road bike" }, "ext": {}, "sig": "..." } ] }
+      200 { "batchId": "0192f3a4-0000-7000-8000-0000000000aa", "results": [ { "cid": "sha256-Qm...", "outcome": "accepted" } ] }
+  authorization_capabilities:
+    requirements:
+      - Vault policy applies in the browser vault where only the unlocked local principal may publish statements or issue tombstones, and received statements are accepted only when signed by a key authorized for the role.
+      - Relay policy applies to the inbox where access requires a registered device key or an allowlisted peer relay; relay roles moderator and operator govern only what that relay hosts (CAP-9).
+      - Public mirror reads are open to anyone the relay or vault serves; provenance diagnostics are local-principal or relay-operator reads.
+    capabilities:
+      - "federation.record.ingest | relay peer, vault device | relay policy: request signed by an active allowlisted peer relay (flag F11 on) or by a device key registered with this relay; quota not exceeded"
+      - "federation.record.receive | local principal | vault policy: unlocked vault; signer role verified per V14, otherwise quarantine"
+      - "federation.record.publish | local principal | vault policy: envelope author is a device key of the principal; record opted in by its owner"
+      - "federation.tombstone.issue | local principal, operator | vault policy: principal authored the target; relay operator may issue origin_relay tombstones for content that relay hosts, with an audit entry"
+      - "federation.record.read_public | local principal, anonymous | vault: any local read; relay: public projections with status accepted only"
+      - "federation.record.read_head | local principal | author is a did of the principal"
+      - "federation.record.read_provenance | local principal, operator | vault: own vault; relay: operator of that relay or moderator with an open local case referencing the cid"
+  failure_recovery_idempotency:
+    requirements:
+      - Ingest and receive are idempotent per envelope by cid, and relay requests also by batchId and Idempotency-Key, so senders may retry whole batches safely.
+      - Each envelope is committed in its own transaction so one bad envelope never rolls back its valid neighbours, and results report each outcome.
+      - A crash between storing a record and writing its local event cannot occur because both are written in one IndexedDB or SQLite transaction (EVT-8).
+    idempotency: "Batch replay with the same Idempotency-Key within 24 h returns the stored results array; re-sent envelopes with known cid return outcome duplicate and emit no event."
+    concurrency: "Per-author ordering is serialized by a unique partial index on (tenant, author, seq) for accepted rows and by a single read-write transaction around placement; two relays delivering the same seq race to one accepted and one quarantined row."
+    retries: "Peers retry on 429 and 5xx with CTR-IDM-001 backoff; this module never retries inbound work except the single origin fetch for a gap, which is tried once at buffer expiry."
+    offline: "Publish and tombstone commit locally first (state local committed) and are queued in the sync outbox of F11.S02.M01 with states prepared, transport_acknowledged and peer_accepted (IDM-7); the vault verifies received statements fully offline once fetched; the UI never shows a state beyond the one reached."
+    partial_failure: "If the blocklist service is unavailable the batch returns DEPENDENCY_UNAVAILABLE and stores nothing (fail closed); if the chosen relay is down the statement stays local committed and delivery shows unknown; if media fetch fails the record is accepted with mediaStatus pending and retried 3 times over 1 h."
+  privacy_retention_abuse:
+    requirements:
+      - Only P0 data at L2 or coarser is ever federated relay to relay, and participant statements travel only as end-to-end encrypted envelopes (PRV-5) whose plaintext a relay never sees; anything else fails V11 and the envelope is rejected, and exact home addresses never exist in this module.
+      - Provenance must not leak user metadata, so peers receive neither reader identity nor IP addresses, and media is fetched by the relay and served locally rather than hot-linked.
+      - Tombstones remove content within 24 h of receipt and are kept 180 days; this is deletion propagation, not recall (PRV-6), and the UI states that peers who copied content earlier may keep it.
+    data:
+      - "FederatedRecord: P0 for public audience mirrors, ciphertext only for participants audience, plus provenance (peer relay id, claimed and local timestamps)."
+      - "Tombstone: P0 (target cid or record id, reason enum)."
+      - "Rejection log rows: cidPrefix (12 chars), peer id, code; no payload."
+    retention:
+      - "Accepted mirrors: RET-STANDARD; mirrors of listings are also purged 35 days after the payload expiresAt."
+      - "Tombstones: 180 days from appliedAt, then deleted; rejected-envelope log rows 30 days."
+      - "Quarantined records: held until operator decision, auto-dropped after 30 days."
+    threats:
+      - "T01 | Forged provenance: relay B claims records of an author homed at relay C | V10 origin binding, signature check, FEDERATION_ORIGIN_MISMATCH, rebind only via signed move record"
+      - "T02 | Replay of an old valid envelope to resurrect deleted content | cid dedup, tombstones kept 180 days, V08 rejects envelopes older than 180 days so replay can never outlive the tombstone"
+      - "T03 | Flood of valid-looking envelopes from a peer | per-peer 6000 envelopes/hour and 10 batches/minute quota, 100-envelope batches, 4 MiB body cap, cheap checks before signature verification"
+      - "T04 | Fork or equivocation: author or relay shows different histories to different peers | same author and seq with different cid is quarantined and reported by F11.S02.M03; neither version is shown"
+      - "T05 | Metadata leakage: reader IP revealed to origin relay through hot-linked images | receiving relay fetches media server-side (https only, ≤ 5 MiB, ≤ 8 per record, SSRF-guarded) and serves it locally"
+      - "T06 | Probing the blocklist by sending candidate cids | every block-rule hit returns the same generic FEDERATION_NOT_ACCEPTED with identical timing class"
+      - "T07 | Malicious payload content (scripts, links, oversized strings) | inbound payload allowlist, plain-text only, strings ≤ 10000 code points, escaped at render"
+      - "T08 | Tombstone forged by a third party to censor content | V12 issuer must be the target's author or origin relay and the signature is verified"
+    abuse_controls:
+      - "Repeated invalid signatures from one peer (20 in 10 minutes) are reported to F11.S03.M01 which suspends the peer."
+      - "Rejected-event emission is coalesced: at most 20 record.rejected events per batch with suppressedCount on the last."
+      - "Relay operators can set a kill switch by turning off flag F11, which stops ingest and hides mirrors without deleting data (F16.S03.M03 runbook)."
+  observability_performance:
+    requirements:
+      - On relays, every ingest outcome is counted; the PWA sends no telemetry (OBS-7) and keeps the same counters in local diagnostics that the user may export.
+      - Every ingest outcome is counted by outcome and code, and purge timeliness is measured against the 24 h tombstone deadline.
+      - A batch of 100 envelopes is processed with p95 ≤ 800 ms at 10 batches per second on the reference relay.
+      - Alerts fire when purge lag exceeds 1 h, when buffered records exceed 5000, or when a peer's rejection ratio exceeds 20 percent over 15 minutes.
+    metrics:
+      - "classrup_federation_records_total{outcome=accepted|duplicate|buffered|quarantined|rejected, code}"
+      - "classrup_federation_tombstones_total{outcome=applied|pending|rejected}"
+      - "classrup_federation_purge_lag_ms (gauge: now - oldest unpurged tombstoned item)"
+      - "classrup_federation_buffered_records (gauge)"
+      - "classrup_federation_inbox_batch_duration_ms (histogram)"
+    logs:
+      - "info federation.record.accepted {recordId, cidPrefix, peerId, correlationId} — no payload."
+      - "warn federation.record.rejected {cidPrefix, peerId, code, internalReason, correlationId} — no payload or signature."
+    budgets:
+      - "Inbox batch of 100 envelopes p95 ≤ 800 ms; single local submit p95 ≤ 300 ms."
+      - "Mirror read queries p95 ≤ 150 ms for ≤ 50 items."
+      - "Purge sweep removes 10 000 tombstoned mirrors in ≤ 10 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - An adversarial suite covers forged provenance, replay, flood, fork and metadata leakage against a two-relay test harness.
+      - Contract tests validate envelopes, results, events and mirror views against the schema registry and the CTR-FED-001 vectors.
+    fixtures: "Two in-memory relays A and B with allowlist A<->B, authors X (homed at B) and Y (homed at C), device keys from fixed seeds, fixed clock 2026-11-04T10:00:00Z, blocklist empty unless stated."
+    tests:
+      - "T01 | contract | 01.R01,01.R03,04.R01 | ingest valid listing envelope from B | FederatedRecord accepted with provenance originRelay B, via [], verifiedAt set, status readable, schema valid"
+      - "T02 | unit | 02.R03,02.R01,09.R01 | each rule V01–V13 violated in turn | documented code per rule and nothing beyond a stub stored"
+      - "T03 | integration | 02.R01,02.R02 | blocked author, blocked cid and blocked peer envelopes | stored count unchanged, response is FEDERATION_NOT_ACCEPTED for all three with the same shape"
+      - "T04 | property | 03.R01,03.R03 | random sequences of arrivals, gaps, tombstones and conflicts | only declared transitions occur; terminal states never change; only accepted records are readable"
+      - "T05 | integration | 03.R02,01.R02 | seq 7 before seq 6, then seq 6 | seq 7 buffered then both accepted in order; events emitted in seq order"
+      - "T06 | integration | 03.R01,07.R01 | seq 7 buffered and 24 h pass | record dropped with reason gap_timeout and one origin fetch attempted"
+      - "T07 | integration | 01.R02,03.R03,07.R02 | valid owner tombstone for accepted record | content purged within 1 h, tombstone applied with expiresAt = appliedAt + 180 days, event emitted"
+      - "T08 | abuse | 03.R03,07.R01 | resend the tombstoned envelope, and an envelope dated 181 days ago | FEDERATION_TOMBSTONED and FEDERATION_RECORD_TIME_INVALID; no resurrection"
+      - "T09 | integration | 03.R01,07.R02 | tombstone arrives before target | pending_target then applied after 24 h; later target rejected FEDERATION_TOMBSTONED"
+      - "T10 | abuse | 05.R02,07.R01 | third party signs tombstone for X's record | FEDERATION_TOMBSTONE_UNAUTHORIZED and record remains accepted"
+      - "T11 | abuse | 02.R01,07.R01 | relay B sends record by author Y homed at C; then valid signed move record | FEDERATION_ORIGIN_MISMATCH; after federation.account.moved rebind the same sender is accepted"
+      - "T12 | abuse | 02.R01,07.R01 | 7000 valid envelopes from one peer within an hour and 11 batches in a minute | FEDERATION_QUOTA_EXCEEDED with retryAfterMs; stored count capped at 6000"
+      - "T13 | integration | 03.R01,07.R01,08.R02 | two envelopes same author and seq with different cids | both quarantined, hidden from reads, federation.conflict.detected consumed"
+      - "T14 | abuse | 02.R01,07.R02,07.R03 | payload with homeAddress, lat/lon, geohash 7 and a script tag | FEDERATION_PAYLOAD_INVALID; nothing stored; escaped render for allowed text"
+      - "T15 | integration | 04.R01,04.R02,06.R02 | batch of 100 with 3 invalid envelopes | 97 accepted, 3 rejected with codes, results in request order, 97 accepted events and 3 rejected events"
+      - "T16 | contract | 04.R02,04.R03,09.R02,09.R03 | each command and event | payload and results validate against registry schemas; consumed events handled per effect table"
+      - "T17 | abuse | 05.R01,05.R02,05.R03 | unsigned and unknown-peer requests to the relay inbox; relay reads provenance without operator role; vault publish with a key not in the principal's document | FEDERATION_PEER_NOT_ALLOWED or FEDERATION_REQUEST_SIGNATURE_INVALID, FORBIDDEN, FEDERATION_AUTHOR_NOT_OWNED"
+      - "T25 | integration | 01.R04,02.R01,03.R01 | vault receives accept-offer statement signed by a key that is not the listing author | quarantined with statusReason signer_role_invalid, no domain event, user can discard"
+      - "T26 | integration | 06.R01,01.R04 | publish while relay is down, then relay returns receipt, then peer acknowledgement | UI states local committed, transport_acknowledged, peer_accepted in order and never more than reached"
+      - "T18 | integration | 05.R02,06.R01 | local publish with own key, then with another principal's did; relay ingest batch replayed with the same Idempotency-Key | first accepted, second FEDERATION_AUTHOR_NOT_OWNED, replay returns original response"
+      - "T19 | chaos | 06.R02,06.R03 | kill relay mid-batch; blocklist service down; media fetch fails | restart leaves each envelope committed or absent; DEPENDENCY_UNAVAILABLE stores nothing; record accepted with mediaStatus pending"
+      - "T20 | integration | 07.R03,01.R03 | media from origin with hot-link URL and 6 MiB image | fetched by relay only, oversize skipped, no client request reaches origin"
+      - "T21 | load | 08.R01,08.R02 | 10 batches/s of 100 envelopes for 5 minutes | batch p95 ≤ 800 ms, metrics exported"
+      - "T22 | integration | 08.R03,08.R04,03.R03 | 10 000 tombstoned mirrors and delayed purge | sweep ≤ 10 s; purge_lag alert fires when lag exceeds 1 h"
+      - "T23 | unit | 09.R01 | traceability tool run | every PS-084 requirement maps to a passing test"
+      - "T24 | integration | 10.R01,10.R02,10.R03 | export, import to fresh relay, restore backup | records and tombstones round trip; imported records are re-verified; tombstones remain effective"
+    acceptance:
+      - All tests T01–T24 pass in CI.
+      - Adversarial suite shows forged provenance, replay, flood, fork and metadata leakage are each blocked.
+      - No record above P0 or finer than L2 is ever stored or served (privacy suite).
+      - Tombstoned content is gone from reads within 1 h and from storage within 24 h in the chaos test.
+  import_export_backup_rollback:
+    requirements:
+      - A user's export contains the user's own federation settings and tombstones they issued; mirrored third-party records are not part of a personal export.
+      - Operator export and relay import re-verify every envelope signature and re-apply tombstones before records become readable.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section federation.records (own authored envelopes with seq and cid) and federation.tombstones in classrup-export/v1; operator export adds mirrors as JSON lines with provenance."
+    import: "Each envelope is re-verified (signature, cid, chain); tombstones are applied before records so purged content cannot return; failed items are listed in the import report and skipped."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); tombstone rows must be in every backup so restore cannot resurrect content; restore replays tombstones before enabling ingest."
+    migration_rollback: "Additive columns only in v1; rollback to the previous release is safe because new optional columns are ignored; restore from backup triggers a tombstone replay sweep before the flag may be turned on."

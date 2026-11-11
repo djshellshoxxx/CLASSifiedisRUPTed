@@ -1,0 +1,271 @@
+id: F05.S02.M01
+scope: MVP
+summary: >-
+  At pickup the parties record the item's condition as a handoff report - a checklist, optional meter readings, notes and up to 20
+  photo references with hashes. One party signs a report revision, the other either attests that exact revision or asks for changes
+  (up to 5 rounds). When both signatures cover the same report cid, the handoff is attested and the rental period starts. The attestation evidences that both
+  parties asserted this report at the claimed times; it does not prove the item's real condition, the parties' identities beyond
+  their keys, or that the item changed hands. Times from the other party are claims.
+responsibilities:
+  - Own RentalHandoff in both vaults and the statements handoff_report, handoff_changes_request and handoff_attestation (classrup.rentals.*/v1), each bound to a reservation cid and a report revision cid.
+  - Build the report from the item's checklist template and capture photo references re-encoded with metadata stripped (PRV-4) and SHA-256 hashes.
+  - Attest only an exact report revision cid; any change creates a new revision and clears prior attestations.
+  - Emit rentals.handoff.attested once, locally in each vault, when both signatures on the same cid are held.
+non_responsibilities:
+  - Reservation calendar and rent (F05.S01.M01), deposit terms and funding (F05.S01.M02), return report (F05.S02.M02) and damage claims (F05.S02.M03).
+  - Meetup scheduling and check-in (F08.S03.M02, F08.S03.M03).
+  - Identity verification of the parties; keys identify them, not legal persons.
+  - "Future: tamper-evident capture of photos with device attestation, and NFC tag scans."
+depends_on: [F05.S01.M01, F05.S01.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As an owner at pickup, I go through a checklist with the renter, take photos, sign the report and see when the renter attests it.
+  - As a renter, I check each item and photo, ask for changes if something is missing, and attest the exact version I agree with.
+  - As either party, I can see who signed which revision and at which claimed time.
+edge_cases:
+  - Counterparty attests revision 2 after the author already published revision 3; the attestation names the old cid and is refused with RENTALS_REPORT_STALE.
+  - Photos include GPS metadata; the vault re-encodes to strip it before hashing, and a relay rejects images with GPS tags (PRV-4).
+  - One party is offline at the meeting; both can sign locally and exchange signatures later; the handoff is attested only when both signatures are held, and the rental period is the reservation interval anyway.
+  - Renter never attests within 24 h after startsAt; the handoff expires and the reservation is cancelled with no_handoff.
+  - Reservation is cancelled while a report is in progress; the handoff moves to cancelled and keeps its drafts as history.
+  - Both parties author different reports at the same time; the owner's report is canonical, the renter's draft is converted to a changes request.
+  - A signature arrives from a key that is neither owner nor renter; quarantined, never counted.
+  - Report exceeds 30 checklist items or 20 photos; refused with VALIDATION_FAILED.
+ux:
+  screens:
+    - "Handoff checklist: items from the template with condition chips (ok, worn, damaged, missing, not applicable), note field (≤ 200 characters), up to 3 photos per item and 20 per report."
+    - "Review and attest sheet: report revision fingerprint, list of changes since the last revision, Attest this revision and Request changes buttons."
+    - "Status card: who signed which revision, claimed times, sync line, and the sentence that this records what both parties said, not proof of condition."
+  states: [loading, drafting, awaiting-counterparty, changes-requested, attested, expired, cancelled, pending-offline]
+  a11y:
+    - Condition chips are a radio group per item with text labels; photo thumbnails have alt text fields required before submit.
+    - Attest and Request changes buttons are at least 44x44 px with accessible names that include the revision number.
+    - Status changes are announced in an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A RentalHandoff stores reservation, parties, checklist items, readings, photo references with hashes, notes, revision, signatures and state, with revision per CTR-ID-001.
+      - Handoffs are P2 and kept under RET-EVIDENCE; photos are encrypted attachments referenced by id and SHA-256 and never embedded.
+      - A report revision is immutable once signed; any change is a new revision with a new cid, and attestations bind to one cid.
+    entities:
+      - name: RentalHandoff
+        schema: classrup.rentals.handoff/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "reservationId: uuidv7 — ref F05.S01.M01 RentalReservation; unique"
+          - "ownerId: actorId — owner key"
+          - "renterId: actorId — renter key"
+          - "reportRevision: int — 1..6; increments on each new signed report"
+          - "checklist: ChecklistItem[] — 1..30 items {id, label ≤ 80, condition: ok | worn | damaged | missing | na, note? ≤ 200, photoIds? ≤ 3}"
+          - "readings: Reading[] — 0..5 items {label ≤ 40, value: number, unit ≤ 10}"
+          - "photos: PhotoRef[] — 0..20 items {attachmentId, sha256, takenAtClaim?}"
+          - "notes?: string — ≤ 1000 code points, plain text"
+          - "reportCid?: string — sha256- cid of the latest signed report statement"
+          - "authorId?: actorId — signer of the latest report"
+          - "attestations: Attestation[] — 0..2 items {signerId, reportCid, attestationCid, claimedAt, receivedAt}"
+          - "changeRounds: int — 0..5"
+          - "attestedAt?: timestamp — local time when both signatures were first held"
+          - "state: enum — drafting | awaiting_counterparty | attested | expired | cancelled"
+          - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - state attested implies two attestations by owner and renter on the same reportCid.
+          - Every photo reference has a 64-hex SHA-256 and no embedded bytes.
+          - A new reportRevision clears attestations that name an earlier cid.
+    sql: |
+      CREATE TABLE rentals_handoff (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reservation_id TEXT NOT NULL, state TEXT NOT NULL,
+        report_revision INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX rentals_handoff_reservation ON rentals_handoff(tenant_id, reservation_id);
+  validation_rules:
+    requirements:
+      - Statements are validated in the order schema, signature, signer role, referenced reservation and report cids, state, business rules.
+      - Report content limits are enforced before signing in the vault and again on receipt.
+      - Every violation maps to one stable error code; quarantined statements store the code.
+    rules:
+      - "V01 | statement signature verifies and signer is the owner or renter of the reservation | RENTALS_STATEMENT_INVALID"
+      - "V02 | reservation is confirmed, and now is between startsAt minus 2 hours and startsAt plus 24 hours | RENTALS_HANDOFF_WINDOW"
+      - "V03 | checklist has 1..30 items, photos at most 20, each photo has a SHA-256 and metadata-stripped flag, notes at most 1000 code points | VALIDATION_FAILED"
+      - "V04 | attestation or changes request names the cid of the latest report and comes from the party that did not author it | RENTALS_REPORT_STALE"
+      - "V05 | changeRounds is below 5 | RENTALS_CHANGE_LIMIT"
+      - "V06 | readings have at most 5 entries with finite numbers | VALIDATION_FAILED"
+      - "V07 | an attestation by the same signer for the same cid does not already exist | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Handoffs move drafting, awaiting_counterparty, attested; expired and cancelled are terminal exits.
+      - The author's report signature counts as the author's attestation; the counterparty's attestation of the same cid completes the handoff.
+      - Attested starts the rental period for this module's purposes; the due time still comes from the reservation endsAt and is never shifted by a late pickup.
+    machines:
+      - entity: RentalHandoff
+        initial: drafting
+        terminal: [attested, expired, cancelled]
+        transitions:
+          - "drafting -> awaiting_counterparty | rentals.handoff.submit by either party | report statement signed with a new cid; previous attestations cleared"
+          - "awaiting_counterparty -> drafting | rentals.handoff.request_changes by the counterparty | changeRounds incremented, below 5"
+          - "awaiting_counterparty -> attested | rentals.handoff.attest by the counterparty over the exact cid | emits rentals.handoff.attested"
+          - "drafting -> expired | 24 h after the reservation startsAt without attestation | reservation cancelled by F05.S01.M01 with no_handoff"
+          - "awaiting_counterparty -> expired | 24 h after the reservation startsAt without attestation | same"
+          - "drafting -> cancelled | rentals.reservation.cancelled consumed | drafts kept as history"
+          - "awaiting_counterparty -> cancelled | rentals.reservation.cancelled consumed | reports kept as history"
+    timeouts:
+      - "Expiry is evaluated on the local clock 24 h after the reservation startsAt by a sweep at app start, on every command and every 60 s while the PWA is open; every read applies expiry on the fly."
+  commands_queries_events:
+    requirements:
+      - Vault commands draft, submit, request_changes and attest build local state; submit, request_changes and attest each produce a named signed statement and a sync outbox entry in the same vault transaction.
+      - One ingestion command applies inbound statements, deduplicates by cid, derives local events with actor.kind federated and quarantines failures.
+      - Events are local (EVT-8); rentals.handoff.attested is derived in each vault only when both signatures on the same cid are held.
+    commands:
+      - name: rentals.handoff.draft
+        capability: rentals.handoff.edit
+        input: "[vault-local] { reservationId, checklist, readings?, photos?, notes?, expectedRevision? }"
+        output: "{ handoffId, revision, reportRevision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, RENTALS_HANDOFF_WINDOW]
+        emits: []
+        idempotent: true
+      - name: rentals.handoff.submit
+        capability: rentals.handoff.edit
+        input: "[statement classrup.rentals.handoff_report/v1 signed by the author, E2E encrypted to the other party] { handoffId, expectedRevision }"
+        output: "{ handoffId, revision, reportCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, RENTALS_HANDOFF_WINDOW]
+        emits: []
+        idempotent: true
+      - name: rentals.handoff.request_changes
+        capability: rentals.handoff.attest
+        input: "[statement classrup.rentals.handoff_changes_request/v1 signed by the counterparty over the report cid] { handoffId, expectedRevision, reportCid, reason }"
+        output: "{ handoffId, revision, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_REPORT_STALE, RENTALS_CHANGE_LIMIT, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: rentals.handoff.attest
+        capability: rentals.handoff.attest
+        input: "[statement classrup.rentals.handoff_attestation/v1 signed by the counterparty over the exact report cid] { handoffId, expectedRevision, reportCid }"
+        output: "{ handoffId, revision, attestationCid, state, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RENTALS_REPORT_STALE, RENTALS_HANDOFF_WINDOW]
+        emits: [rentals.handoff.attested]
+        idempotent: true
+      - name: rentals.handoff.receive
+        capability: rentals.handoff.receive
+        input: "[vault-local ingestion of an inbound envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code?, appliedIds[] }"
+        errors: [RENTALS_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, RENTALS_REPORT_STALE, CONFLICT_STATE]
+        emits: [rentals.handoff.attested]
+        idempotent: true
+    queries:
+      - name: rentals.handoff.get
+        capability: rentals.handoff.read_own
+        input: "[vault-local] { handoffId }"
+        output: "{ handoff: RentalHandoff, diffFromPrevious?: ChecklistDiff }"
+        errors: [NOT_FOUND]
+      - name: rentals.handoff.get_for_reservation
+        capability: rentals.handoff.read_own
+        input: "[vault-local] { reservationId }"
+        output: "{ handoff?: RentalHandoff }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: rentals.handoff.attested, privacy: P2, payload: "{ handoffId, reservationId, ownerId, renterId, reportCid, reportRevision, attestedAt }"}
+    events_consumed:
+      - {type: rentals.reservation.confirmed, effect: "create an empty handoff in drafting for the reservation with the item checklist template"}
+      - {type: rentals.reservation.cancelled, effect: "cancel an unattested handoff and keep its drafts as history"}
+      - {type: rentals.deposit.funded, effect: "show deposit funded on the handoff screen"}
+      - {type: rentals.deposit.agreed, effect: "show deposit agreed but not yet funded warning until funded is received"}
+    errors:
+      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
+      - "RENTALS_HANDOFF_WINDOW | 409 | no | outside 2 hours before to 24 hours after the reservation start"
+      - "RENTALS_REPORT_STALE | 409 | no | statement names a report cid that is not the latest or comes from the author"
+      - "RENTALS_CHANGE_LIMIT | 409 | no | five change rounds already used"
+    example: |
+      owner vault: rentals.handoff.draft { "reservationId": "0192f500-0002-…", "checklist": [{ "id": "tent-body", "label": "Tent body", "condition": "ok" }], "photos": [{ "attachmentId": "0192f520-00a1-…", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }] }
+      owner: rentals.handoff.submit -> { "reportCid": "sha256-Rp…", "syncState": "prepared" }
+      renter vault: rentals.handoff.attest { "reportCid": "sha256-Rp…" } -> state attested, rentals.handoff.attested emitted in both vaults once both signatures are held
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the local principal who is owner or renter of the reservation can draft, submit, request changes or attest; the counterparty of the author attests.
+      - Inbound statements are accepted only when the signer's key matches a party of the reservation and the role rule for that statement; otherwise they are quarantined.
+      - No relay role is involved; relays carry ciphertext only.
+    capabilities:
+      - "rentals.handoff.edit | principal | local principal is owner or renter of the reservation; handoff not attested"
+      - "rentals.handoff.attest | principal | local principal is a party and not the author of the latest report"
+      - "rentals.handoff.receive | principal | any envelope; acceptance depends on signature and signer role"
+      - "rentals.handoff.read_own | principal | local principal is owner or renter of the reservation"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and statements through cid, so repeated delivery never adds a second attestation.
+      - Contradictory signed reports (two authors for the same revision, or attestations on different cids from forked devices) freeze the handoff for explicit renegotiation, never last-writer-wins.
+      - Each state change, event and sync outbox entry commit in one IndexedDB transaction.
+    idempotency: "Local command id stored 24 h; statements deduplicated by cid in the inbox table; a second attest by the same signer on the same cid returns the original attestation."
+    concurrency: "Web Locks lock rentals-handoff-<reservationId> around commands; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the handoff."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; attachment upload retries use the F08.S01.M03 resumable upload rules."
+    offline: "All commands work offline and both parties can sign at the meeting and sync later; the UI shows prepared, transport_acknowledged or peer_accepted and shows attested only when both signatures are held locally."
+    partial_failure: "If a photo cannot be re-encoded the report is not signed and the item shows an error; if relay delivery fails the local signature stands and the sync state shows the failure."
+  privacy_retention_abuse:
+    requirements:
+      - Reports and photos are P2, travel only as end-to-end encrypted envelopes and attachments to the two parties, and never appear in logs, notifications or public projections.
+      - Photos are re-encoded with all metadata stripped before hashing; GPS tags are never stored (PRV-4); faces and plates are not detected or processed.
+      - Fake or doctored photos and one-sided reports are limited by hashes, explicit exact-cid attestation and the dispute path; no condition truth is claimed.
+    data:
+      - "RentalHandoff: P2 in both vaults."
+      - "Photos: P2 encrypted attachments; hashes in the signed report."
+    retention:
+      - "Terminal handoffs and statements: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT (30 days)."
+    threats:
+      - "T01 | Owner edits the report after the renter attested | attestation binds the exact cid; any edit is a new revision and clears attestations"
+      - "T02 | Renter attests without inspecting | the UI shows a diff and per-item review but cannot force inspection; attestation is evidence of assertion only, stated in the UI"
+      - "T03 | Doctored or reused photos | hashes recorded at signing, takenAt is a claim, metadata stripped; disputes can compare against both parties' copies"
+      - "T04 | Forged attestation | signature over JCS bytes and signer role check; non-party keys quarantined"
+      - "T05 | Location leak through photos or readings | metadata stripped; no GPS fields exist; exact address is never in the report"
+    abuse_controls:
+      - "Local quarantine and a per-sender quota of 100 inbound handoff statements per day per counterparty."
+      - "Attachment size limit 10 MB per photo and 50 MB per report (PAYLOAD_TOO_LARGE)."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters and the diagnostics log stay in the vault and are exportable by the user.
+      - Signing and verification of a report with 20 photo hashes meet p95 ≤ 120 ms on a mid-range phone, excluding image re-encoding.
+      - Re-encoding and hashing a 5 MB photo runs in a worker and completes in ≤ 800 ms without blocking the UI longer than 50 ms per slice.
+    metrics:
+      - "classrup_rentals_handoffs_total{state} (local counter)"
+      - "classrup_rentals_handoff_change_rounds (local histogram)"
+      - "classrup_rentals_statements_quarantined_total{code} (local counter)"
+    logs:
+      - "info handoff.attested {handoffId, correlationId} in the local diagnostics log - no item names, notes or photo names."
+    budgets:
+      - "sign or verify report p95 ≤ 120 ms; get p95 ≤ 50 ms; photo re-encode and hash 5 MB ≤ 800 ms in a worker."
+      - "Sweep over 2 000 handoffs ≤ 100 ms in slices of at most 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Signature and cid binding is covered by unit and property tests including revision clearing.
+      - Two-vault tests with a hostile in-memory relay cover duplicate, dropped, reordered and contradictory statements.
+    fixtures: "Two vaults - owner O and renter R - with confirmed reservation B starting 2026-12-05T09:00:00Z; hostile in-memory relay; photo fixtures with and without GPS EXIF; fixed clock 2026-12-05T08:30:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R03 | build a report with 20 photos, strip EXIF, sign it | hashes computed after stripping; no GPS in stored bytes; cid stable"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01–V07 violated in turn | documented code returned and nothing stored; bad statements quarantined"
+      - "T03 | property | 03.R01 | random statement and event sequences | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,01.R03 | attest revision 2 after revision 3 exists; request changes then re-attest | RENTALS_REPORT_STALE; new revision clears attestations; attested only on the exact cid"
+      - "T05 | integration | 03.R03,04.R03 | both parties sign offline at the meeting and sync later | attested when both signatures held; reservation endsAt unchanged; event emitted once per vault"
+      - "T06 | integration | 04.R01,04.R02,06.R01,09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on attested with identical cids; duplicates skipped"
+      - "T07 | contract | 04.R01,04.R03,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | attestation by a non-party key; author attests own report; photo with GPS to relay | quarantined or FORBIDDEN; relay rejects GPS photo; no state change"
+      - "T09 | integration | 06.R02,06.R03 | two authors submit revision 1 on forked devices; photo re-encode fails | handoff frozen for renegotiation; report not signed on failure"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | inspect logs, notifications, relay payloads; 101 inbound statements in a day | no item text or photos outside encrypted envelopes; 101st dropped and counted"
+      - "T11 | integration | 03.R01,04.R03 | reservation cancelled mid-report; 24 h after start without attestation | handoff cancelled with drafts kept; handoff expired and reservation cancelled no_handoff"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 handoffs; 20-photo report; throttled mobile profile | sign/verify p95 ≤ 120 ms, 5 MB photo ≤ 800 ms in worker, no telemetry request"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-042 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore | reports, attestations and photo references round-trip; missing attachments shown as missing"
+      - "T15 | e2e | 01.R01,02.R01 | mobile owner and renter complete a handoff in two browsers | both show attested with the same fingerprint; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - A handoff is attested only when both signatures cover the same report cid, and any edit clears attestations.
+      - No stored or sent photo contains GPS or other metadata and the UI states that the attestation is not proof of condition.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains handoffs, report revisions, attestations and photo references with hashes; photo bytes are exported by user choice as encrypted attachments.
+      - Import verifies every signature and cid before restoring; unverifiable items stay read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section rentals.handoffs in classrup-export/v1; one line per RentalHandoff with the signed envelopes of each report revision and attestation."
+    import: "Attested handoffs import as history; drafting and awaiting_counterparty handoffs import as is if the reservation is confirmed, otherwise as cancelled."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields."

@@ -1,35 +1,38 @@
-# PS-144-02 — validation rules
+# PS-144-02 — Validation rules: Goods taxonomy
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-144-02. **Owner:** [18_Governance/01_policy/mod_goods](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_goods. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S01.M03 Goods taxonomy](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/policy/goods` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the validation rules process for goods within 01_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-144-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-144-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-144-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-144-02.R01** Authoring commands validate names, depth, uniqueness and limits before a change is staged.
+- **PS-144-02.R02** Applying a pack validates the entire pack atomically; one invalid category rejects the whole pack.
+- **PS-144-02.R03** Every violation maps to one stable error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | key matches [a-z0-9_]{2,40} and is unique for the publisher | VALIDATION_FAILED |
+| V02 | names include en and every name is 1..60 code points without control characters | VALIDATION_FAILED |
+| V03 | depth <= 4, parent exists in the pack and the parent chain has no cycle | GOVERNANCE_CATEGORY_TREE_INVALID |
+| V04 | parent has fewer than 50 non-retired children; pack has at most 2000 categories | GOVERNANCE_CATEGORY_TREE_INVALID |
+| V05 | retire requires mergedInto to a non-retired category in the pack | GOVERNANCE_CATEGORY_TREE_INVALID |
+| V06 | changing restricted requires proposalId verified as approved for this category by F18.S02.M01 | GOVERNANCE_CATEGORY_PROPOSAL_REQUIRED |
+| V07 | pack signature verifies and publisher is in the vault's trusted publishers | GOVERNANCE_CATEGORY_PACK_UNTRUSTED |
+| V08 | pack version is greater than the applied version and the pack is a full snapshot | GOVERNANCE_CATEGORY_PACK_STALE |
+| V09 | ids present in the applied pack keep their key and publisher in the new pack (no id reuse) | GOVERNANCE_CATEGORY_TREE_INVALID |
+| V10 | pack size <= 1 MiB and schema version supported | UNSUPPORTED_SCHEMA_VERSION |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-144-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-144-09.T01 | unit | PS-144-01.R01, PS-144-01.R02, PS-144-02.R01, PS-144-02.R02 | create category with names and key | stable id, key unique for publisher, en name required |
+| TEST-PS-144-09.T02 | unit | PS-144-02.R03 | violate each rule V01-V10 | documented error code returned and nothing staged or applied |
+| TEST-PS-144-09.T03 | property | PS-144-01.R03, PS-144-02.R02 | random trees and moves | depth <= 4, no cycles, child limit holds, restricted implies reason key |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

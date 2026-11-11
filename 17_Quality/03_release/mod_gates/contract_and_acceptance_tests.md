@@ -1,35 +1,47 @@
-# PS-143-09 — contract and acceptance tests
+# PS-143-09 — Contract and acceptance tests: Release gates
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-09. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for gates within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-143-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-143-09.R01** Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+- **PS-143-09.R02** Gate logic is tested with synthetic repositories: full coverage, one missing test, one skipped test, a duplicate ID, an expired waiver.
+- **PS-143-09.R03** The audit gate is tested with recorded audit JSON for critical, high, moderate and unavailable cases.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver; recorded audit JSON (critical, high, moderate, unavailable); fixed commit SHA a1b2c3d.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-143-09.T01 | unit | PS-143-01.R01, PS-143-01.R03, PS-143-06.R01 | generate gates.json on the full-coverage repo | schema valid; no user data fields; verdict GO |
+| TEST-PS-143-09.T02 | unit | PS-143-01.R02, PS-143-02.R01, PS-143-09.R02 | synthetic repos: gap, skipped test, duplicate ID | QUALITY_GATE_TRACE_GAP and QUALITY_GATE_TRACE_DUPLICATE; skipped test not counted |
+| TEST-PS-143-09.T03 | unit | PS-143-02.R02, PS-143-09.R03 | recorded audit JSON: critical, high, moderate, unavailable | critical and high fail; moderate passes; unavailable fails closed |
+| TEST-PS-143-09.T04 | unit | PS-143-02.R03, PS-143-06.R02 | a11y and load reports: missing, 25 h old, other commit SHA, with violations | each fails with its code |
+| TEST-PS-143-09.T05 | unit | PS-143-03.R01, PS-143-03.R02 | run all gates on a repo with two failures | all gates run; verdict fails; both failures listed |
+| TEST-PS-143-09.T06 | unit | PS-143-03.R03, PS-143-05.R02 | waiver 15 days long, expired, valid | long and expired fail QUALITY_GATE_WAIVER_EXPIRED; valid passes and is reported as waived |
+| TEST-PS-143-09.T07 | integration | PS-143-04.R01, PS-143-04.R02, PS-143-04.R03 | run each script and the release workflow dry-run | documented exit codes; gates.md attached |
+| TEST-PS-143-09.T08 | abuse | PS-143-05.R01, PS-143-05.R03 | attempt to disable a gate by env var and inspect network calls | gate still runs; only registry audit endpoint is called |
+| TEST-PS-143-09.T09 | integration | PS-143-06.R03 | crash one gate by injecting an exception | reported failed; others complete |
+| TEST-PS-143-09.T10 | integration | PS-143-07.R01, PS-143-07.R02, PS-143-07.R03 | inspect reports for data and retention config | only package, advisory, test IDs; handles only in waivers; retention 1 year |
+| TEST-PS-143-09.T11 | load | PS-143-08.R01, PS-143-08.R02, PS-143-08.R03 | trace 148 modules with 5 000 requirements | at most 10 s; whole run at most 60 s; coverage ratio per module printed |
+| TEST-PS-143-09.T12 | integration | PS-143-09.R01 | traceability tool run on this module | every requirement of this module maps to a passing test |
+| TEST-PS-143-09.T13 | unit | PS-143-10.R01, PS-143-10.R02, PS-143-10.R03 | feed unknown fields and unknown major versions; remove tools/gates in a branch | unknown fields ignored; unknown major rejected; release workflow fails closed |
+| TEST-PS-143-09.T14 | unit | PS-143-06.R01 | same inputs run twice with a different clock | identical verdict and report body |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- The release gate fails when any requirement lacks a passing test and passes at 100 percent traceability.
+- A critical or high production vulnerability or an unavailable audit blocks the release.
+- Any serious accessibility violation or exceeded budget blocks the release.
+- The gate report is attached to every release and waivers expire within 14 days.
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

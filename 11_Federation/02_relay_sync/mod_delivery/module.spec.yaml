@@ -1,0 +1,293 @@
+id: F11.S02.M01
+scope: MVP
+summary: >-
+  Delivers signed statements (CTR-FED-001 envelopes) from a sender to chosen destinations and tells the truth
+  about how far each one got. In the browser vault it is the sync outbox toward the user-selected relays and
+  directly addressed recipient mailboxes; on a relay it is the relay-to-relay push to allowlisted peers. Each
+  entry moves local committed (the record exists) to prepared, transport_acknowledged (a relay receipt) and
+  peer_accepted (a signed peer acknowledgement). Batches hold at most 100 envelopes and 4 MiB, retries use
+  exponential backoff with full jitter, and pull catch-up uses a cursor. Relay-to-relay delivery stays off
+  unless flag F11 is on. Delivery is never claimed beyond the state actually reached.
+responsibilities:
+  - Own PeerOutbox entries, one per (envelope cid, destination), created when a locally authored statement is committed or a relay holds a public record to forward.
+  - Send batches via POST /fed/v1/inbox signed by the vault device key or relay key, honoring per-destination quotas from F11.S03.M01 and block rules from F11.S03.M02.
+  - Retry with CTR-IDM-001 IDM-4 backoff and then scheduled rounds, and emit federation.delivery.failed when an entry is abandoned.
+  - Record relay receipts (transport_acknowledged) and signed peer acknowledgements (peer_accepted) and expose the highest reached state to the UI.
+  - Provide cursor-based pull catch-up so a vault or relay that was offline fetches envelopes it missed.
+non_responsibilities:
+  - Envelope verification and storage on receipt (F11.S01.M02).
+  - Peer allowlist, keys and quota values (F11.S03.M01).
+  - Block rules (F11.S03.M02).
+  - End-to-end encryption of participant statements (the source domain module encrypts; this module moves ciphertext).
+  - Content-free Web Push to wake a device (F13 notifications).
+  - "Future: peer-to-peer WebRTC direct delivery between vaults and gossip fan-out beyond one hop."
+depends_on: [F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S01.M01, F15.S04.M02, CTR-FED-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001]
+user_stories:
+  - As a seller on a train, I publish a listing offline and later see it move from saved on this device to delivered to my relay and then accepted by the buyer's vault.
+  - As a user whose relay is down, I see delivery unknown rather than delivered, and I can retry or choose another relay.
+  - As a relay operator, I can see per-peer queue depth, failures and quota use.
+edge_cases:
+  - Relay returns a receipt but the buyer's vault never sends an acknowledgement; the entry stays transport_acknowledged and the UI says relay received, recipient not confirmed.
+  - Destination relay returns 429; the entry waits for retryAfterMs and does not burn an attempt.
+  - Peer is suspended while 500 entries are queued; those entries are paused and resume or fail by peer decision, none are sent.
+  - A tombstone is queued behind its target record for the same destination; the tombstone is sent after the record unless the record is still prepared, in which case both are cancelled and the tombstone is sent only if the record had already reached any destination.
+  - Recipient moved to a new relay (federation.account.moved); queued entries are redirected to the new relay once the signed move record verifies.
+  - Batch of 101 pending entries; split into batches of 100 and 1 with separate batchIds.
+  - User deletes the account while entries are queued; pending entries are cancelled and replaced by tombstone delivery.
+ux:
+  screens:
+    - "Per-statement delivery chip: 'Saved on this device', 'Queued', 'Relay received', 'Recipient confirmed', 'Failed - retry' with timestamps labelled as relay time or your device time."
+    - "Sync settings: selected relays with health, queue depth, last success, buttons 'Retry now' and 'Remove relay'."
+    - "Relay operator peers view: queue depth, failure ratio and quota use per peer."
+  states: [loading, empty, local-committed, prepared, transport-acknowledged, peer-accepted, paused, failed, cancelled]
+  a11y:
+    - Delivery chips use text plus icon and an accessible name such as 'Relay received, recipient not yet confirmed'.
+    - State changes are announced through an aria-live polite region, at most one announcement per 5 s.
+    - Retry and remove buttons are ≥ 44×44 px with names that include the relay name.
+processes:
+  domain_schema:
+    requirements:
+      - A PeerOutbox entry stores the envelope cid, destination, state, attempt counters, next attempt time, last error code, relay receipt and peer acknowledgement, with tenant and revision per CTR-ID-001.
+      - Entries hold references to envelopes stored by F11.S01.M02 and never copies of payloads, so deleting a record purges its queued delivery content.
+      - Receipt times are stored as evidence of the issuing relay's clock only and are labelled so in the UI.
+    entities:
+      - name: PeerOutbox
+        schema: classrup.federation.peer_outbox/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
+          - "cid: string — cid of the envelope to deliver; ref F11.S01.M02 FederatedRecord"
+          - "destinationKind: enum — selected_relay | recipient_mailbox | peer_relay"
+          - "destinationId: string — relay id or mailbox id; the HTTPS origin is looked up from the Peer or relay selection"
+          - "audience: enum — public | participants"
+          - "state: enum — prepared | transport_acknowledged | peer_accepted | paused | failed | cancelled"
+          - "attempts: int — total attempts so far, ≥ 0"
+          - "roundsCompleted: int — scheduled retry rounds finished, 0..5"
+          - "nextAttemptAt?: timestamp — when the next attempt is due"
+          - "lastErrorCode?: string — error code of the last failed attempt"
+          - "transportReceipt?: json — {relayId, at, sig}; relay clock evidence only"
+          - "peerAck?: json — {cid, signer, at, sig} signed acknowledgement statement classrup.federation.ack/v1 from the recipient"
+          - "expiresAt: timestamp — createdAt + 7 days"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one non-terminal entry per (tenantId, cid, destinationKind, destinationId).
+          - State transport_acknowledged or peer_accepted implies transportReceipt is set; peer_accepted implies peerAck is set and its signer is the recipient named by the statement.
+          - audience participants entries never have destinationKind peer_relay, so participant statements are never relayed relay to relay.
+    sql: |
+      CREATE TABLE fed_outbox (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, cid TEXT NOT NULL, destination_kind TEXT NOT NULL,
+        destination_id TEXT NOT NULL, audience TEXT NOT NULL, state TEXT NOT NULL, next_attempt_at TEXT,
+        expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_outbox_active ON fed_outbox(tenant_id, cid, destination_kind, destination_id)
+        WHERE state IN ('prepared','transport_acknowledged','paused');
+      CREATE INDEX fed_outbox_due ON fed_outbox(state, next_attempt_at);
+  validation_rules:
+    requirements:
+      - An entry is created only for an envelope that exists locally with a valid signature and an audience matching the destination kind.
+      - Receipts and acknowledgements are verified before they change state, so a relay cannot claim peer acceptance.
+      - Each rule violation maps to one stable error code.
+    rules:
+      - "V01 | cid exists in F11.S01.M02 with status accepted and a verified signature | NOT_FOUND"
+      - "V02 | destination is a selected relay, a recipient mailbox listed in the recipient's portable document, or an active allowlisted peer relay | FEDERATION_PEER_NOT_ALLOWED"
+      - "V03 | audience participants is never queued for a peer_relay destination; audience public queued for peer_relay only when flag F11 is on | FEDERATION_DESTINATION_INVALID"
+      - "V04 | batch has ≤ 100 envelopes and body ≤ 4194304 bytes | FEDERATION_BATCH_TOO_LARGE"
+      - "V05 | transport receipt signature verifies against the relay key and cid matches | FEDERATION_RECEIPT_INVALID"
+      - "V06 | peer acknowledgement is signed by the recipient did named in the statement and references the cid | FEDERATION_RECEIPT_INVALID"
+      - "V07 | destination quota available (6000 envelopes/hour, 10 batches/minute default) | FEDERATION_QUOTA_EXCEEDED"
+      - "V08 | destination is not blocked by an active block rule | FEDERATION_NOT_ACCEPTED"
+  workflow_state_machine:
+    requirements:
+      - Entries advance only along prepared, transport_acknowledged and peer_accepted, and never move backward or skip a state they did not reach.
+      - Failed, cancelled and peer_accepted are terminal; failed entries can be re-queued only by creating a new entry through a user retry.
+      - The UI maps each state to wording that claims no more than the state proves.
+    machines:
+      - entity: PeerOutbox
+        initial: prepared
+        terminal: [peer_accepted, failed, cancelled]
+        transitions:
+          - "prepared -> transport_acknowledged | destination returned a verified receipt for the cid | stores transportReceipt"
+          - "prepared -> paused | destination peer suspended or flag F11 turned off for peer_relay | no attempts while paused"
+          - "paused -> prepared | peer reinstated or flag turned on | nextAttemptAt = now"
+          - "prepared -> failed | 6 attempts per round times 5 rounds exhausted or expiresAt reached | emits federation.delivery.failed"
+          - "prepared -> cancelled | owner withdrew before first send, record deleted or destination removed | no event"
+          - "transport_acknowledged -> peer_accepted | verified signed acknowledgement from the recipient | stores peerAck"
+          - "transport_acknowledged -> failed | expiresAt reached without acknowledgement for audience participants | emits federation.delivery.failed with reason no_peer_ack"
+          - "paused -> cancelled | owner removes destination or expiresAt reached | no event"
+    timeouts:
+      - "Per-round retry uses IDM-4 backoff (base 500 ms, cap 30 s, full jitter, 6 attempts); rounds are scheduled at 1 min, 15 min, 1 h, 6 h and 24 h after the previous round."
+      - "Entries expire 7 days after creation; public entries in transport_acknowledged are treated as complete at expiry and move to peer_accepted only with a signed acknowledgement."
+      - "Pull catch-up runs every 5 min while the app is open and on relay reconnect."
+  commands_queries_events:
+    requirements:
+      - The module exposes vault-local enqueue, retry and cancel commands, a relay pull query, and send and acknowledge handlers with the signatures below.
+      - Commands that send data produce no new signed statement except the signed request itself and the acknowledgement statement; the statements delivered were signed earlier by their authors.
+      - The module consumes record, tombstone, peer, migration and consent events to keep the queue consistent with policy.
+    commands:
+      - name: federation.outbox.enqueue
+        capability: federation.outbox.enqueue
+        input: "[vault-local or relay-local command, driven by federation.record.accepted and federation.tombstone.applied events] { cid, destinations: Destination[1..10] }"
+        output: "{ entries: [ { id, destinationId, state: prepared } ] }"
+        errors: [NOT_FOUND, FEDERATION_PEER_NOT_ALLOWED, FEDERATION_DESTINATION_INVALID, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: federation.outbox.retry
+        capability: federation.outbox.retry
+        input: "[vault-local command] { entryId, expectedRevision }"
+        output: "{ entryId, revision, newEntryId }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_QUOTA_EXCEEDED]
+        emits: []
+        idempotent: true
+      - name: federation.outbox.cancel
+        capability: federation.outbox.cancel
+        input: "[vault-local command] { entryId, expectedRevision }"
+        output: "{ entryId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: federation.outbox.acknowledge
+        capability: federation.outbox.acknowledge
+        input: "[vault-local command; consumes a signed acknowledgement statement classrup.federation.ack/v1] { cid, ack: Envelope }"
+        output: "{ entryId, state: peer_accepted }"
+        errors: [NOT_FOUND, FEDERATION_RECEIPT_INVALID, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: federation.outbox.dispatch
+        capability: federation.outbox.dispatch
+        input: "[vault-local and relay-local worker command] { destinationId, limit ≤ 100 }"
+        output: "{ sent, receipts, failed }"
+        errors: [FEDERATION_QUOTA_EXCEEDED, FEDERATION_BATCH_TOO_LARGE, DEPENDENCY_UNAVAILABLE, FEATURE_DISABLED]
+        emits: [federation.delivery.failed]
+        idempotent: true
+    queries:
+      - name: federation.outbox.list
+        capability: federation.outbox.read
+        input: "{ state?, destinationId?, cid?, cursor?, limit ≤ 50 }"
+        output: "{ items: PeerOutbox[], nextCursor? }"
+        errors: []
+      - name: federation.outbox.pull
+        capability: federation.outbox.pull
+        input: "[relay query under relay policy, GET /fed/v1/outbox] { since: cursor, limit ≤ 100 }"
+        output: "{ envelopes: Envelope[≤100], nextCursor }"
+        errors: [FEDERATION_PEER_NOT_ALLOWED, RATE_LIMITED, FEATURE_DISABLED]
+    events_produced:
+      - {type: federation.delivery.failed, privacy: P2, payload: "{ entryId, cid, destinationKind, destinationId, reason, attempts }"}
+    events_consumed:
+      - {type: federation.record.accepted, effect: "when local is true, enqueue entries for the selected relays and, for participants audience, the recipients' mailboxes"}
+      - {type: federation.tombstone.applied, effect: "enqueue the tombstone to every destination that received the target; cancel still-prepared entries for the target"}
+      - {type: federation.peer.added, effect: "start pull catch-up from the new peer relay and enable queued public entries for it"}
+      - {type: federation.peer.suspended, effect: "pause entries to the peer"}
+      - {type: federation.account.moved, effect: "redirect queued entries for the old relay to the new relay after verification"}
+      - {type: privacy.consent.withdrawn, effect: "cancel prepared federation entries for the withdrawn purpose and request tombstones for delivered ones"}
+      - {type: platform.flag.changed, effect: "pause peer_relay entries when F11 turns off; vault to relay entries are unaffected"}
+    errors:
+      - "FEDERATION_PEER_NOT_ALLOWED | 403 | no | destination or sender is not a selected relay, listed mailbox or active allowlisted peer"
+      - "FEDERATION_BATCH_TOO_LARGE | 413 | no | more than 100 envelopes or body over 4194304 bytes"
+      - "FEDERATION_QUOTA_EXCEEDED | 429 | yes | destination quota exceeded; retryAfterMs set"
+      - "FEDERATION_NOT_ACCEPTED | 422 | no | destination refused by local policy; reason intentionally generic"
+      - "FEDERATION_DESTINATION_INVALID | 422 | no | destination kind does not match the statement audience or flag state"
+      - "FEDERATION_RECEIPT_INVALID | 422 | no | receipt or acknowledgement signature or cid check failed"
+    example: |
+      federation.outbox.enqueue { cid: "sha256-Qm...", destinations: [ { kind: "selected_relay", id: "relay:home.example" } ] }
+      -> { entries: [ { id: "0192f3c0-...", destinationId: "relay:home.example", state: "prepared" } ] }
+      dispatch -> POST https://home.example/fed/v1/inbox (batch of 1) -> receipt -> state transport_acknowledged ("Relay received")
+      recipient vault later sends classrup.federation.ack/v1 -> federation.outbox.acknowledge -> state peer_accepted ("Recipient confirmed")
+  authorization_capabilities:
+    requirements:
+      - In the vault only the unlocked local principal may enqueue, retry, cancel or acknowledge entries.
+      - On a relay, dispatch and pull are authorized by relay policy for allowlisted peers and registered device keys, and the relay operator may read queue statistics.
+      - Queue contents of one vault are never visible to other vaults or to relay operators beyond cid prefix and destination.
+    capabilities:
+      - "federation.outbox.enqueue | local principal, system | vault policy: statement authored by the principal or accepted into the vault; relay policy: relay-hosted public record"
+      - "federation.outbox.retry | local principal | vault policy: entry belongs to the vault"
+      - "federation.outbox.cancel | local principal | vault policy: entry belongs to the vault and is not terminal"
+      - "federation.outbox.acknowledge | local principal | vault policy: acknowledgement signer is the statement's recipient"
+      - "federation.outbox.dispatch | local principal, system | worker only; relay peers require flag F11 on"
+      - "federation.outbox.read | local principal, operator | vault: own entries; relay: operator of that relay sees counts per peer only"
+      - "federation.outbox.pull | relay peer, vault device | relay policy: signed request by an allowlisted peer or a registered device key; a device pulls only its own mailbox and public projections"
+  failure_recovery_idempotency:
+    requirements:
+      - Sending is at least once and receivers deduplicate by cid, so a repeated batch is harmless.
+      - Every batch carries a batchId used as the Idempotency-Key, so a retried request returns the original results.
+      - Local commit comes first; a failed or unreachable destination never rolls back the local record.
+    idempotency: "batchId is also the Idempotency-Key (24 h replay window at the receiver); entries are unique per (cid, destination) while active."
+    concurrency: "One dispatcher per destination (a lock inside the vault or relay process); entries are leased for 60 s while a batch is in flight and the lease expires automatically if the tab closes."
+    retries: "IDM-4 backoff within a round, then rounds at 1 min, 15 min, 1 h, 6 h and 24 h; 429 uses retryAfterMs without counting an attempt."
+    offline: "Statements commit locally and enter prepared; the outbox drains on reconnect in creation order; the UI shows Saved on this device or Queued until a receipt arrives."
+    partial_failure: "A batch response lists per-envelope outcomes; accepted ones advance, buffered ones stay prepared with a 30 min recheck, rejected ones fail with the receiver's code; a batch timeout leaves all entries prepared with attempts incremented."
+  privacy_retention_abuse:
+    requirements:
+      - Only the audience declared by the owner is delivered; participant statements travel as ciphertext to listed mailboxes and public statements only if the owner opted in at L2 or coarser.
+      - Delivery metadata leaks as little as possible, so batches contain no reader or device identifiers, relay-to-relay pushes add 0 to 5 s random delay, and logs hold cid prefixes only.
+      - The UI states that delivering a statement and later tombstoning it cannot recall copies already fetched (PRV-6).
+    data:
+      - "PeerOutbox: P2 (who sent which statement to which destination)."
+      - "Receipts and acknowledgements: P2 signed evidence."
+    retention:
+      - "Entries RET-SHORT (30 days after reaching a terminal state); receipts and acks are kept with the statement under its own retention."
+    threats:
+      - "T01 | Flood a peer with traffic through delivery | per-destination quota 6000 envelopes/hour and 10 batches/minute; batch ≤ 100; backoff with full jitter"
+      - "T02 | Relay lies that a recipient accepted | peer_accepted requires a signature by the recipient's key; a relay receipt only yields transport_acknowledged"
+      - "T03 | Replay of captured batches | cid dedup at receiver, request Date window 300 s, Idempotency-Key"
+      - "T04 | Metadata leakage to destination (timing correlation, IP of user) | random 0-5 s delay on relay pushes, no client IP forwarded by relays, vault connects only to user-selected relays"
+      - "T05 | Participant statement pushed to a public peer by mistake | V03 refuses participants audience for peer_relay destinations; contract test enforces it"
+    abuse_controls:
+      - "A vault queues at most 1000 active entries per destination; the 1001st returns RATE_LIMITED."
+      - "Relays cap queued public entries per hosted vault at 5000."
+  observability_performance:
+    requirements:
+      - On relays, queue depth, age, outcome and latency per destination are exported as metrics; the PWA sends no telemetry and shows the same numbers in local diagnostics.
+      - Dispatching a batch of 100 envelopes costs p95 ≤ 500 ms of local work excluding network time.
+      - Alerts fire when the oldest prepared entry is older than 15 min or the failure ratio per peer exceeds 20 percent over 15 minutes.
+    metrics:
+      - "classrup_federation_outbox_entries{state}"
+      - "classrup_federation_delivery_total{outcome=receipt|peer_accepted|failed|retry}"
+      - "classrup_federation_outbox_oldest_age_ms (gauge)"
+      - "classrup_federation_delivery_duration_ms (histogram)"
+    logs:
+      - "info federation.delivery.receipt {entryId, cidPrefix, destinationId, correlationId} — no payloads or user identifiers."
+    budgets:
+      - "Batch build and sign p95 ≤ 500 ms for 100 envelopes."
+      - "Enqueue p95 ≤ 50 ms; list p95 ≤ 150 ms for ≤ 50 items."
+      - "Pull of 100 envelopes p95 ≤ 400 ms server time."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Chaos tests simulate relay outages, duplicated batches and partial batch failure.
+      - Contract tests validate request, response, receipt and acknowledgement shapes against the registry schemas.
+    fixtures: "Vault V1 (author), vault V2 (recipient), relays R1 and R2 (allowlisted peers), fake clock 2026-11-04T10:00:00Z, fixed seeds for all keys."
+    tests:
+      - "T01 | integration | 01.R01,01.R02,04.R01 | enqueue a committed listing statement for R1 and dispatch | entry prepared then transport_acknowledged with verified receipt; payload not copied into the entry"
+      - "T02 | unit | 02.R01,02.R03 | enqueue with unknown cid, invalid destination, participants audience to peer_relay | NOT_FOUND, FEDERATION_PEER_NOT_ALLOWED, FEDERATION_DESTINATION_INVALID"
+      - "T03 | abuse | 02.R02,03.R01,07.R01 | relay returns a forged receipt and a forged peer ack | FEDERATION_RECEIPT_INVALID; state does not advance"
+      - "T04 | property | 03.R01,03.R02 | random event sequences (receipt, ack, failure, pause, cancel) | states only advance along declared transitions; terminal states fixed; peer_accepted always has peerAck"
+      - "T05 | e2e | 03.R03,01.R03 | publish offline, reconnect, receipt, recipient ack | UI wording progresses Saved on this device, Queued, Relay received, Recipient confirmed and never skips ahead"
+      - "T06 | integration | 04.R02,04.R03 | tombstone for a delivered record; account moved; consent withdrawn | tombstone queued to every destination that received the record; entries redirected; prepared entries cancelled"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | each command and the pull query | inputs, outputs and the delivery.failed event validate against registry schemas"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | other vault reads queue; peer without allowlist pulls; non-operator reads relay stats | NOT_FOUND or FEDERATION_PEER_NOT_ALLOWED or FORBIDDEN"
+      - "T09 | integration | 06.R01,06.R02 | send the same batch twice with the same batchId; receiver replays | one set of results; no duplicate records"
+      - "T10 | chaos | 06.R03,08.R03 | relay down for 2 h then back; kill app mid-batch | local record unchanged; entries retry with IDM-4 backoff; lease expires after 60 s; no loss"
+      - "T11 | integration | 06.R03,03.R01 | batch of 100 with 3 rejected and 2 buffered | 95 advance, 3 failed with receiver codes, 2 stay prepared with 30 min recheck"
+      - "T12 | integration | 03.R01,06.R03 | 6 attempts x 5 rounds exhausted | entry failed and federation.delivery.failed emitted once"
+      - "T13 | abuse | 07.R01,07.R02 | inspect outgoing request and logs for IP, reader or device identifiers; participants audience to public peer | none present; refused by V03; relay push delay within 0-5 s"
+      - "T14 | abuse | 07.R03,07.R01 | 1001 queued entries to one destination | 1001st RATE_LIMITED"
+      - "T15 | load | 08.R01,08.R02 | 10 000 entries dispatched in batches of 100 across 5 destinations | batch build p95 ≤ 500 ms, metrics exported, alert at 15 min age"
+      - "T16 | unit | 09.R01,09.R03 | traceability tool run | every PS-088 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export vault with 20 queued entries, import into fresh vault | non-terminal entries restored as prepared and re-sent; terminal ones kept as history"
+    acceptance:
+      - All tests T01–T17 pass in CI.
+      - The UI never shows a delivery state beyond the one recorded (e2e and unit tests).
+      - A relay cannot cause peer_accepted without the recipient's signature (abuse test).
+  import_export_backup_rollback:
+    requirements:
+      - Vault export includes queued and recent terminal entries so that a restore on another device continues delivery.
+      - Import restores non-terminal entries as prepared and relies on receiver dedup for any envelope that was already delivered.
+      - Schema changes follow expand/contract and v1 stays readable for 180 days.
+    export: "Section federation.outbox in classrup-export/v1, one line per PeerOutbox (schema classrup.federation.peer_outbox/v1), excluding payloads."
+    import: "Non-terminal entries import as prepared with nextAttemptAt = now; entries whose envelope is missing import as cancelled with a warning in the import report."
+    backup: "Vault export is the primary backup (IOX-6); relay queues are covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because unknown optional fields are ignored and in-flight leases expire within 60 s."

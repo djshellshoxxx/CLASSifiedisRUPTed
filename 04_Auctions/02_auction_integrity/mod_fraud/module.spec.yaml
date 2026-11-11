@@ -1,0 +1,294 @@
+id: F04.S02.M03
+scope: MVP
+summary: >-
+  Moderators of the host relay review auctions flagged for fraud - shill suspicion from F04.S02.M01, user reports, repeated
+  winner non-payment, or a manual decision. A review gathers a frozen evidence snapshot (ledger, extensions, checks, result), lets
+  a moderator dismiss it, cancel a still-open auction, or void a result. Voiding needs two different moderators (propose and
+  confirm) and produces a host-signed void statement sent to the seller and all bidders. Voiding applies only to results without an
+  acknowledged payment, because the platform holds no funds and cannot reverse payments. A void is the host's finding under its own hosting policy,
+  not a global ruling; enforcement against the seller or bidder is a hosting-policy action on that host through F12.
+responsibilities:
+  - Own AuctionReview on the host - its queue, priority, evidence snapshot reference, findings and decision.
+  - Open reviews from consumed triggers (shill score 85 or more, reports on an auction, 2 or more winner non-payments in 30 days) or by a moderator, at most one open review per auction and trigger kind.
+  - Execute decisions - dismiss, cancel an open auction through F04.S01.M01 with reason host_policy, or void a result with a reason from shill_bidding, seller_fraud, bidder_collusion, listing_prohibited, technical_error.
+  - Distribute the host-signed void statement and deliver it to participant vaults, and hand a recommendation to F12.S02.M01 for hosting-policy enforcement.
+non_responsibilities:
+  - Detection and scoring (F04.S02.M01), result creation and settlement states (F04.S01.M03 applies the voided state).
+  - Account-wide or network-wide sanctions; none exist, a host can only restrict its own hosting (ADR-0016 section 8).
+  - Refunding or recovering money; the platform holds none, parties settle directly and may open F09.S02.M02 disputes.
+  - Appeals handling (F12.S01.M03); this module only consumes the appeal outcome.
+  - "Future: community juries and cross-host sharing of signed findings between peers."
+depends_on: [F04.S01.M01, F04.S01.M03, F04.S02.M01, F12.S01.M01, F12.S01.M02, F12.S01.M03, F12.S02.M01, F11.S01.M03, F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a host moderator, I open a review from a flagged bidder, see a frozen evidence snapshot and decide within the review window.
+  - As a second moderator, I confirm or reject a proposed void so no single moderator can void a sale alone.
+  - As a bidder, I am told when a result I took part in was voided, with the reason category and no accusation of a named person.
+  - As a seller, I can appeal a void through the host's appeal process.
+edge_cases:
+  - The result already has an acknowledged payment; the void is refused with AUCTIONS_RESULT_NOT_VOIDABLE and the review can only recommend hosting-policy action or point the parties to F09 disputes.
+  - The moderator who proposed a void tries to confirm it; refused with FORBIDDEN, a second moderator is required.
+  - Two triggers (a report and a shill flag) arrive for the same auction at once; the review is opened once and both triggers are attached.
+  - The auction is still open; the moderator may cancel it with reason host_policy, which voids live bids; the seller and bidders get the cancelled notice.
+  - A void is confirmed while a second-chance offer is outstanding; the offer is withdrawn when the void statement is received.
+  - Void statement is lost in transit; mailboxes retry for 30 days and the public result projection shows voided so bidders see it on next fetch.
+  - A moderator dismisses a review after a successful appeal elsewhere; the dismissal does not undo a void already issued.
+  - A host moderator is also a bidder in the auction; conflict check refuses assignment (FORBIDDEN) and the review goes to another moderator.
+ux:
+  screens:
+    - "Review queue for moderators: priority, trigger, age, auction link, score; filters by status; keyboard-sortable table."
+    - "Review detail: frozen evidence snapshot (ledger summary, extension history, check reasons, result), findings editor (up to 2000 characters), decision buttons with confirmation dialog naming the consequence."
+    - "Participant notice: This result was voided by the host (reason category). No funds were held by the platform; settle any payments you made directly, or open a dispute. Appeal link."
+  states: [loading, empty, opened, in-review, void-proposed, voided, dismissed, forbidden, pending-offline]
+  a11y:
+    - Queue and detail are fully keyboard operable; decision buttons are at least 44x44 px with accessible names that include the consequence.
+    - Void confirmation dialog traps focus, names the auction and the reason, and announces the result through a polite live region.
+    - Priority is a text label plus icon, never colour alone.
+processes:
+  domain_schema:
+    requirements:
+      - An AuctionReview stores auction, optional result, triggers, priority, assignee, evidence snapshot reference, findings, decision and void statement reference, with revision per CTR-ID-001.
+      - Reviews are P3 host records visible only to host moderators and operators; participants receive only the void statement with a reason category and never the evidence or other parties' keys.
+      - The evidence snapshot is frozen at open time through F12.S01.M02 so later bids or edits cannot change what the decision rested on.
+    entities:
+      - name: AuctionReview
+        schema: classrup.auctions.review/v1
+        storage: relay
+        privacy: P3
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — host relay tenant scope"
+          - "auctionId: uuidv7 — ref F04.S01.M01 Auction"
+          - "resultId?: uuidv7 — ref F04.S01.M03 AuctionResult once closed"
+          - "triggers: Trigger[] — 1..10 items {kind: shill_suspected | report | winner_defaults | manual, ref, at}"
+          - "priority: enum — normal | high; high for shill score ≥ 85 or a sold result"
+          - "status: enum — opened | in_review | void_proposed | voided | dismissed"
+          - "assigneeId?: actorId — host moderator; must not be a party or bidder of the auction"
+          - "evidenceSnapshotId?: uuidv7 — ref F12.S01.M02 EvidenceSnapshot"
+          - "findings?: string — ≤ 2000 code points, plain text"
+          - "decision?: enum — dismiss | cancel_auction | void_result"
+          - "voidReason?: enum — shill_bidding | seller_fraud | bidder_collusion | listing_prohibited | technical_error"
+          - "proposedBy?: actorId — moderator who proposed the void"
+          - "confirmedBy?: actorId — second moderator, different from proposedBy"
+          - "voidCid?: string — cid of the host-signed void statement"
+          - "moderationCaseId?: uuidv7 — ref F12.S02.M01 ModerationCase when escalated"
+          - "openedAt: timestamp — host clock, RFC 3339 UTC"
+          - "decidedAt?: timestamp — host clock, RFC 3339 UTC"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - status voided implies voidReason, proposedBy, confirmedBy and voidCid are set and proposedBy differs from confirmedBy.
+          - At most one review per auction is in status opened, in_review or void_proposed for the same trigger kind.
+          - assigneeId is never a seller or bidder key of the auction.
+          - A void is never recorded for a result whose payment is acknowledged or final.
+    sql: |
+      CREATE TABLE auctions_review (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, auction_id TEXT NOT NULL, result_id TEXT, priority TEXT NOT NULL,
+        status TEXT NOT NULL, opened_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX auctions_review_open ON auctions_review(tenant_id, auction_id) WHERE status IN ('opened','in_review','void_proposed');
+      CREATE INDEX auctions_review_queue ON auctions_review(tenant_id, status, priority, opened_at);
+  validation_rules:
+    requirements:
+      - Review commands check the actor's host role, conflict of interest and the review state before any effect.
+      - Void decisions check result eligibility, the two-moderator rule and the reason enum before signing.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | actor holds the moderator role on this host and is not the seller or a bidder of the auction | FORBIDDEN"
+      - "V02 | review exists in the status required by the command | CONFLICT_STATE"
+      - "V03 | void reason is one of the five enum values and findings has 20..2000 code points | VALIDATION_FAILED"
+      - "V04 | confirming moderator differs from the proposing moderator | FORBIDDEN"
+      - "V05 | result state is pending_deal, awaiting_payment, non_payment or second_chance_offered and no payment is acknowledged or final | AUCTIONS_RESULT_NOT_VOIDABLE"
+      - "V06 | cancel_auction applies only when the auction status is scheduled or open | CONFLICT_STATE"
+      - "V07 | an open review for the same auction and trigger kind does not already exist | AUCTIONS_REVIEW_DUPLICATE"
+  workflow_state_machine:
+    requirements:
+      - Reviews move opened, in_review, optionally void_proposed, and end voided or dismissed; both are terminal.
+      - Voiding requires propose and confirm by two different moderators within 72 hours of the proposal, otherwise the proposal lapses back to in_review.
+      - Every terminal transition emits auctions.review.closed, and a void additionally emits auctions.result.voided, in the same host transaction.
+    machines:
+      - entity: AuctionReview
+        initial: opened
+        terminal: [voided, dismissed]
+        transitions:
+          - "opened -> in_review | auctions.review.assign by moderator | conflict check passed; evidence snapshot captured"
+          - "opened -> dismissed | auctions.review.dismiss or 30 days without assignment | emits auctions.review.closed"
+          - "in_review -> dismissed | auctions.review.dismiss by moderator | findings stored; emits auctions.review.closed"
+          - "in_review -> in_review | auctions.review.cancel_auction by moderator | open auction cancelled with reason host_policy; review continues for enforcement recommendation"
+          - "in_review -> void_proposed | auctions.review.propose_void by moderator | result eligible, reason and findings stored"
+          - "void_proposed -> voided | auctions.review.confirm_void by a second moderator | signs void statement; emits auctions.result.voided and auctions.review.closed"
+          - "void_proposed -> in_review | second moderator rejects or 72 h lapse | proposal cleared"
+    timeouts:
+      - "Unassigned reviews are dismissed with reason expired after 30 days; void proposals lapse after 72 hours; a high-priority review with no assignment after 24 hours raises an operator alert. The host sweep runs every 5 minutes."
+  commands_queries_events:
+    requirements:
+      - Reviews are host relay commands authorized by host moderator roles; vaults only ingest the signed void statement.
+      - Decisions are atomic with their events, statements and the call into F04.S01.M03 or F04.S01.M01 on the host.
+      - Reviews are opened by consumed events or manually; no participant can open or read a review.
+    commands:
+      - name: auctions.review.open
+        capability: auctions.review.open
+        input: "[relay command, moderator signed request or system trigger] { auctionId, trigger: { kind, ref }, priority? }"
+        output: "{ reviewId, revision, status: opened, merged: boolean }"
+        errors: [NOT_FOUND, FORBIDDEN, AUCTIONS_REVIEW_DUPLICATE, VALIDATION_FAILED]
+        emits: [auctions.review.opened]
+        idempotent: true
+      - name: auctions.review.assign
+        capability: auctions.review.decide
+        input: "[relay command] { reviewId, expectedRevision }"
+        output: "{ reviewId, revision, evidenceSnapshotId }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: auctions.review.dismiss
+        capability: auctions.review.decide
+        input: "[relay command] { reviewId, expectedRevision, findings }"
+        output: "{ reviewId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN, VALIDATION_FAILED]
+        emits: [auctions.review.closed]
+        idempotent: true
+      - name: auctions.review.cancel_auction
+        capability: auctions.review.decide
+        input: "[relay command, calls F04.S01.M01 cancel with reason host_policy] { reviewId, expectedRevision, findings }"
+        output: "{ reviewId, revision, auctionStatus }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: auctions.review.propose_void
+        capability: auctions.review.decide
+        input: "[relay command] { reviewId, expectedRevision, voidReason, findings }"
+        output: "{ reviewId, revision, expiresAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN, VALIDATION_FAILED, AUCTIONS_RESULT_NOT_VOIDABLE]
+        emits: []
+        idempotent: true
+      - name: auctions.review.confirm_void
+        capability: auctions.review.confirm
+        input: "[relay command by a second moderator; produces statement classrup.auctions.void/v1 signed by the host key] { reviewId, expectedRevision, confirm: boolean }"
+        output: "{ reviewId, revision, voidCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN, AUCTIONS_RESULT_NOT_VOIDABLE]
+        emits: [auctions.result.voided, auctions.review.closed]
+        idempotent: true
+      - name: auctions.review.receive_void
+        capability: auctions.review.receive
+        input: "[vault-local ingestion of the host-signed void envelope per CTR-FED-001] { envelope, via? }"
+        output: "{ accepted: boolean, quarantined?: boolean, code? }"
+        errors: [AUCTIONS_RESULT_INVALID, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [auctions.result.voided]
+        idempotent: true
+    queries:
+      - name: auctions.review.list
+        capability: auctions.review.read
+        input: "[relay query] { status?, priority?, cursor?, limit ≤ 50 }"
+        output: "{ items: AuctionReview[], nextCursor? }"
+        errors: []
+      - name: auctions.review.get
+        capability: auctions.review.read
+        input: "[relay query] { reviewId }"
+        output: "{ review: AuctionReview, evidenceSummary }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: auctions.review.opened, privacy: P3, payload: "{ reviewId, auctionId, triggerKind, priority }"}
+      - {type: auctions.result.voided, privacy: P2, payload: "{ auctionId, resultId, reason, voidCid, decidedAt }"}
+      - {type: auctions.review.closed, privacy: P3, payload: "{ reviewId, auctionId, decision, voided: boolean }"}
+    events_consumed:
+      - {type: auctions.shill.suspected, effect: "open a high-priority review when score is 85 or more; scores 60 to 84 stay in the anti-shill queue for a manual open"}
+      - {type: moderation.report.filed, effect: "open a review when the report targets an auction on this host"}
+      - {type: auctions.result.non_payment, effect: "open a review when the winner key has 2 or more non-payment reports in 30 days"}
+      - {type: auctions.auction.closed, effect: "attach the result id to an open review of the auction"}
+      - {type: moderation.appeal.decided, effect: "record the appeal outcome on the review; a void already issued is not reversed"}
+    errors:
+      - "AUCTIONS_RESULT_NOT_VOIDABLE | 409 | no | result has an acknowledged or final payment, is completed, or is not in a voidable state"
+      - "AUCTIONS_REVIEW_DUPLICATE | 409 | no | an open review for this auction and trigger kind already exists"
+      - "AUCTIONS_RESULT_INVALID | 422 | no | void statement signature or host key check failed; quarantined"
+    example: |
+      shill flag score 90 -> auctions.review.open { "auctionId": "0192f400-0002-…", "trigger": { "kind": "shill_suspected", "ref": "0192f420-0001-…" } }
+      -> { "reviewId": "0192f430-0001-…", "status": "opened", "merged": false }
+      moderator A: assign, then propose_void { "voidReason": "shill_bidding", "findings": "Alternating bids from linked registrations ..." }
+      moderator B: confirm_void -> { "voidCid": "sha256-Vd…" } and event auctions.result.voided; participants' vaults ingest the host-signed statement
+  authorization_capabilities:
+    requirements:
+      - Relay policy - only host moderators (and operators) of the hosting relay can read, assign, dismiss, cancel, propose or confirm; roles are per host (CAP-9) and every allow or deny is audited (CAP-7).
+      - Conflict of interest is enforced - a seller, a bidder, or a key linked to either cannot be assigned.
+      - Vault policy - vaults only ingest void statements signed by the host key named in the auction terms; no vault role can change a review.
+    capabilities:
+      - "auctions.review.open | moderator, operator, system | host role or trigger event on this host"
+      - "auctions.review.decide | moderator | moderator of the hosting relay; no conflict of interest; for propose_void the proposer differs from the confirmer"
+      - "auctions.review.confirm | moderator | moderator of the hosting relay different from the proposer; proposal not older than 72 hours"
+      - "auctions.review.read | moderator, operator | moderator or operator of the hosting relay"
+      - "auctions.review.receive | principal | any envelope; acceptance depends on host signature and key from the auction terms"
+  failure_recovery_idempotency:
+    requirements:
+      - Review commands are idempotent per review and expectedRevision; a repeated confirm returns the stored void statement.
+      - Confirm, the void statement, the event, and the call that moves the result to voided commit in one host transaction; a failure leaves the review in void_proposed.
+      - Delivery of the void statement to participants is at least once through mailboxes and idempotent by cid in vaults.
+    idempotency: "Unique open review per auction and trigger kind; command ids stored 24 h on the host; confirm repeated with the same expectedRevision returns the same voidCid; vault dedup by void cid."
+    concurrency: "expectedRevision on every command; confirm runs under the auction lease (IDM-8) so no payment or second-chance event interleaves; two moderators confirming at once are serialized and the second gets CONFLICT_REVISION."
+    retries: "Void delivery retries 1 s, 2 s, 4 s, 8 s up to 8 attempts then hourly for 30 days; host triggers are consumed with EVT-6 retries."
+    offline: "Moderator commands need the host and are not queued; participant vaults show the last known state and the void arrives when the vault next connects."
+    partial_failure: "If F04.S01.M03 refuses the void because a payment was acknowledged meanwhile, the confirm fails with AUCTIONS_RESULT_NOT_VOIDABLE and the review returns to in_review with a note; no partial void exists."
+  privacy_retention_abuse:
+    requirements:
+      - Evidence, findings and keys of suspected parties remain P3 on the host; participants receive only the reason category and the signed void statement.
+      - The void statement is the host's finding under its policy; it names no individual, and the UI says it is not a court ruling.
+      - Abuse of the review process by moderators is limited by the two-moderator rule, conflict checks, audit entries and the participants' ability to choose another host.
+    data:
+      - "AuctionReview: P3 host-only; evidence snapshot per F12.S01.M02."
+      - "Void statement: P2 to participants, signed by the host."
+    retention:
+      - "Reviews and evidence snapshots: RET-EVIDENCE per host policy (default 2 years); void statements kept 2 years in participant vaults."
+    threats:
+      - "T01 | Rogue moderator voids a competitor's sale | two different moderators required, conflict-of-interest block, audit entry for every allow and deny, void only before acknowledged payment"
+      - "T02 | Mass false reports to trigger reviews | reports alone open at normal priority only, reviewers see reporter reputation, one open review per auction and kind, report abuse limits in F12"
+      - "T03 | Void statement forged to cancel a legitimate sale | signature check against the host key in the auction terms, wrong key is quarantined, cid binds auction and result"
+      - "T04 | Disclosure of suspected party's linked keys | evidence stays on the host, participants get only a reason category"
+      - "T05 | Retaliatory voiding after a bad review of the host | host operator is not a party; participants can leave the host; voiding needs evidence snapshot and findings visible to a second moderator"
+    abuse_controls:
+      - "Host operator alert when a moderator proposes more than 5 voids in 24 hours."
+      - "Appeals via F12.S01.M03 are linked to the review and the outcome is recorded."
+  observability_performance:
+    requirements:
+      - The host exports metrics and logs per OBS-1 to OBS-6 without evidence content or keys; the PWA sends no telemetry (OBS-7).
+      - Review open and decision commands meet p95 ≤ 300 ms excluding the evidence snapshot, which completes within 5 s for ledgers of 5 000 entries.
+      - The queue query meets p95 ≤ 150 ms for 50 items.
+    metrics:
+      - "classrup_auctions_reviews_total{status,trigger}"
+      - "classrup_auctions_review_age_seconds (gauge: oldest unassigned review)"
+      - "classrup_auctions_voids_total{reason}"
+    logs:
+      - "info review.closed {reviewId, auctionId, decision, correlationId} - no findings text and no keys."
+    budgets:
+      - "decision commands p95 ≤ 300 ms; evidence snapshot ≤ 5 s for 5 000 ledger entries; queue p95 ≤ 150 ms."
+      - "Void statement fan-out to 500 participants queued within 2 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The two-moderator rule, conflict checks and voidability are covered by deterministic unit and integration tests.
+      - Contract tests validate review events, the void statement and its signature checks in vaults.
+    fixtures: "Host H; auction A sold to B1 with Deal awaiting payment; moderators M1, M2, M3 on H; seller S; bidders B1, B2; shill flag score 90; fixed clock 2026-11-13T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R01,01.R02,04.R01,02.R02 | shill score 90 event and a report event for the same auction | one review opened with both triggers attached at high priority"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01–V07 violated | documented code returned and nothing stored; assignee conflict refused"
+      - "T03 | unit | 03.R01,03.R02 | propose by M1, confirm by M1, confirm by M2 after 73 hours, confirm by M2 within 72 hours | second and third refused or lapsed; fourth voids and signs"
+      - "T04 | integration | 03.R03,04.R02,06.R02 | confirm void while a payment is acknowledged concurrently | one wins by lease order; void refused AUCTIONS_RESULT_NOT_VOIDABLE if payment first; no partial void"
+      - "T05 | property | 03.R01 | random command sequences on one review | only declared transitions succeed; voided and dismissed never change"
+      - "T06 | contract | 04.R01,04.R03,09.R02 | each command, event and the void statement | payloads and signatures validate against registry schemas; vault rejects wrong host key"
+      - "T07 | integration | 04.R02,06.R01 | open auction cancel_auction then dismiss | auction cancelled with host_policy, bids void, review closed once"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | seller, bidder and non-moderator call decisions; moderator who is a bidder is assigned | FORBIDDEN or NOT_FOUND; no state change"
+      - "T09 | integration | 06.R03,09.R03 | void delivery dropped, duplicated and reordered by hostile relay | vaults converge on voided; duplicates skipped; second-chance offer withdrawn"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | inspect participant notices, logs, public projection | only reason category in notices; no evidence or keys elsewhere; statement says host finding, not a ruling"
+      - "T11 | abuse | 07.R03 | moderator proposes 6 voids in 24 hours | operator alert fired on the 6th"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 5 000 entry ledger snapshot and fan-out to 500 participants | snapshot ≤ 5 s, decision p95 ≤ 300 ms, fan-out ≤ 2 s"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-037 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | operator export, restore host backup | reviews round-trip; unique open-review index preserved; user exports contain no review data"
+      - "T15 | e2e | 03.R03,01.R03 | two moderators in two browsers void a sale; bidder and seller vaults open notice | statuses correct on all four; notice has no names; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No result is voided without two different moderators, and no result with an acknowledged payment is ever voided.
+      - Participants only ever see a reason category and a host-signed statement, never evidence or other parties' keys.
+  import_export_backup_rollback:
+    requirements:
+      - Reviews and evidence are host operator data exported only in the operator audit export; user vault exports contain only the void statements they received.
+      - Import of an operator audit export validates ids, schema version and statement signatures and restores reviews as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section auctions.reviews in the host operator export (classrup-export/v1, operator scope); user exports carry only received void statements under auctions.voids."
+    import: "Reviews import as read-only history; reviews that were open import as opened and must be re-assigned; void statements import after signature verification."
+    backup: "Host relay SQLite backup (IOX-3, IOX-7); vault export covers the received void statements."
+    migration_rollback: "Additive optional fields only in v1; void reason enum values are append-only so rollback never loses a recorded reason."

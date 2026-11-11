@@ -1,0 +1,321 @@
+# F10.S01.M02 Retention and legal hold (ADR-0015, ADR-0016). Sweeps run in the vault and on each relay; legal holds exist only on relays.
+id: F10.S01.M02
+scope: MVP
+summary: >-
+  Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, standard, evidence 2 years, audit 1 year) by
+  scheduled sweeps that purge expired records through per-module purge ports. A sweep runs in the user's vault for the user's
+  own records and on each relay for the data that relay holds, under that relay's published policy and optional jurisdiction
+  override. A legal hold is a relay-side action: two different relay operators must request and approve it, and it keeps
+  relay-held sealed data from being purged. A hold can never reach into a user's vault or force a user to keep data.
+responsibilities:
+  - Own RetentionPolicy rows per scope (vault or relay) and class with bounded durations and a recorded source (default, jurisdiction, user or relay operator).
+  - Run retention sweeps in batches through the RetentionPurgePort that each module registers, emitting privacy.retention.purged with counts only.
+  - Own LegalHold on relays with two-person approval (requester differs from approver), 72 h approval deadline, 180-day review and two-person release.
+  - Exclude held subjects from sweeps and from relay-side purge triggered by tombstones, keeping them sealed (no public serving) until release.
+  - Provide a dry-run preview of what a sweep would purge and a record of every run.
+non_responsibilities:
+  - Account and data deletion flows, grace period and crypto-shred (F10.S01.M04); deletion asks this module whether a relay-held subject is under hold.
+  - Export (F10.S01.M03) and consent (F10.S01.M01).
+  - Jurisdiction profiles content (F18.S01.M01), which this module reads for overrides.
+  - "Future: automated legal-request intake, notice templates for affected users, and hold reporting to regulators; MVP leaves these to relay operators."
+depends_on: [F18.S01.M01, F16.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001]
+user_stories:
+  - As a user, I see how long each kind of my data is kept in my vault and what was purged last night, and I can shorten some classes within allowed bounds.
+  - As a relay operator, I publish my retention policy and my relay purges expired data on schedule with a run record.
+  - As a relay operator under a lawful request, I and a second operator approve a hold on specific relay-held data, and the hold is reviewed every 180 days.
+  - As a user, I am told that a relay's legal hold can keep relay-held copies but cannot touch my vault.
+edge_cases:
+  - A record kind has no registered purge port; the sweep skips it, records skipped_unregistered in the run and the CI check fails the build for new record kinds without a port.
+  - The same operator tries to request and approve a hold; refused with PRIVACY_HOLD_SELF_APPROVAL and the failed attempt is audited.
+  - A requested hold is not approved within 72 h; it lapses and nothing is held.
+  - A record under hold is also tombstoned by its author; the relay stops serving it publicly but keeps the sealed copy until release, then purges within 24 h.
+  - A jurisdiction override sets evidence retention to 5 years; the sweep uses 1825 days for that scope and logs the source.
+  - A sweep is interrupted halfway; it resumes from the last committed batch cursor and never double-counts.
+  - Clock skew after a device clock change; the sweep never purges records whose anchor time is in the future of the local clock.
+ux:
+  screens:
+    - "Vault data retention screen: table of classes with duration, source and next sweep time; edit control for classes the user may shorten; last run summary with counts."
+    - "Relay operator console: policy editor with bounds, run history, and Legal holds list with Request, Approve, Reject and Release request actions, showing requester and approver."
+  states: [loading, default-policy, overridden, sweeping, hold-requested, hold-active, hold-release-requested, error]
+  a11y:
+    - Durations are text with units (days) and forms use labelled inputs with bounds in helper text.
+    - Hold status is shown as text plus icon with a polite live region on change.
+    - Approve and Reject buttons are at least 44 px high with names including the hold reference.
+processes:
+  domain_schema:
+    requirements:
+      - A RetentionPolicy stores scope (vault or relay), retention class, duration in days, source and bounds, and is unique per scope and class.
+      - A LegalHold stores relay, subject, reason code, a non-personal reference, requester, approver, status and review dates, and exists only on the relay that placed it.
+      - Policies are P1 configuration and holds are P3 operator records retained as RET-AUDIT for 1 year after release.
+    entities:
+      - name: RetentionPolicy
+        schema: classrup.privacy.retention_policy/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-AUDIT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "scopeKind: enum — vault | relay"
+          - "scopeId: string — vault id or relay id"
+          - "class: enum — RET-EPHEMERAL | RET-SHORT | RET-STANDARD | RET-EVIDENCE | RET-AUDIT"
+          - "durationDays: int — within bounds: EPHEMERAL 1 fixed, SHORT 7..90, STANDARD purge delay 7..90, EVIDENCE 365..3650, AUDIT 180..2555"
+          - "source: enum — default | jurisdiction | user | relay_operator"
+          - "jurisdictionCode?: string — profile code from F18.S01.M01, e.g. DE or US-CA"
+          - "effectiveFrom: timestamp — RFC 3339 UTC"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - Unique per (scopeKind, scopeId, class).
+          - durationDays is inside the bounds of its class; RET-LEGAL-HOLD cannot be configured as a policy.
+          - Defaults are EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365.
+      - name: LegalHold
+        schema: classrup.privacy.legal_hold/v1
+        storage: relay
+        privacy: P3
+        retention: RET-AUDIT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "relayId: string — relay that holds the data"
+          - "subject: object — {kind: record|author|mailbox, ref: cid or did or mailbox id}"
+          - "reasonCode: enum — court_order | regulatory_request | abuse_investigation | safety_emergency"
+          - "reference: string — ≤ 100 code points, case or ticket number, no personal data"
+          - "requestedBy: did — relay operator who requested"
+          - "approvedBy?: did — second relay operator; differs from requestedBy"
+          - "releaseRequestedBy?: did — operator who asked to release"
+          - "releasedBy?: did — second operator; differs from releaseRequestedBy"
+          - "status: enum — requested | active | release_requested | released | rejected | lapsed"
+          - "requestedAt: timestamp — relay clock"
+          - "approvalDeadline: timestamp — requestedAt + 72 h"
+          - "activeSince?: timestamp — relay clock"
+          - "reviewDueAt?: timestamp — activeSince + 180 days"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - approvedBy differs from requestedBy and releasedBy differs from releaseRequestedBy.
+          - Both approvers hold the operator or admin role on that relay at the time of approval.
+          - A hold applies only to data stored on its own relay; it has no field referencing a vault.
+    sql: |
+      CREATE TABLE privacy_retention_policy (
+        id TEXT PRIMARY KEY, scope_kind TEXT NOT NULL, scope_id TEXT NOT NULL, class TEXT NOT NULL,
+        duration_days INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX privacy_retention_scope_class ON privacy_retention_policy(scope_kind, scope_id, class);
+      CREATE TABLE privacy_legal_hold (
+        id TEXT PRIMARY KEY, relay_id TEXT NOT NULL, subject_kind TEXT NOT NULL, subject_ref TEXT NOT NULL,
+        status TEXT NOT NULL, approval_deadline TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX privacy_legal_hold_subject ON privacy_legal_hold(relay_id, subject_kind, subject_ref, status);
+  validation_rules:
+    requirements:
+      - Policy and hold input is validated strictly against schema and class bounds.
+      - Hold approval enforces separation of duties and current relay roles.
+      - Sweeps validate that every record kind has a registered purge port and that anchor times are not in the future.
+    rules:
+      - "V01 | durationDays is inside the bounds of the class | VALIDATION_FAILED"
+      - "V02 | user override in a vault only shortens SHORT, STANDARD or EVIDENCE within bounds and never changes AUDIT | FORBIDDEN"
+      - "V03 | jurisdictionCode refers to a profile known to F18.S01.M01 | VALIDATION_FAILED"
+      - "V04 | hold requester holds the operator or admin role on the relay | FORBIDDEN"
+      - "V05 | hold approver differs from the requester and holds operator or admin on the relay | PRIVACY_HOLD_SELF_APPROVAL"
+      - "V06 | hold approved before approvalDeadline | EXPIRED"
+      - "V07 | hold reference at most 100 code points and contains no email or phone pattern | VALIDATION_FAILED"
+      - "V08 | at most one active or requested hold per subject on a relay | PRIVACY_HOLD_EXISTS"
+      - "V09 | sweep cursor and batch size are at most 1000 rows per transaction and 50 000 per run | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Legal holds follow the declared machine and every activation and release needs two different operators.
+      - An active hold excludes its subject from every sweep and relay purge until released.
+      - Retention policy rows have no lifecycle; a change creates a new revision effective from the next sweep.
+    machines:
+      - entity: LegalHold
+        initial: requested
+        terminal: [released, rejected, lapsed]
+        transitions:
+          - "requested -> active | privacy.legal_hold.approve by a second operator | approver differs from requester; emits privacy.legal_hold.placed"
+          - "requested -> rejected | privacy.legal_hold.reject by a second operator | no data is held"
+          - "requested -> lapsed | approval deadline of 72 h passes | no data is held"
+          - "active -> release_requested | privacy.legal_hold.release_request by an operator | audited"
+          - "release_requested -> released | privacy.legal_hold.release_approve by a second operator | approver differs from release requester; emits privacy.legal_hold.released"
+          - "release_requested -> active | privacy.legal_hold.release_reject by a second operator | hold continues"
+    timeouts:
+      - "Approval deadline 72 h from request; review reminder to operators at activeSince + 180 days, repeated every 30 days."
+      - "Sweep schedule: relay daily at 02:30 relay time; vault at the first unlock after 24 h; run timeout 20 min."
+  commands_queries_events:
+    requirements:
+      - Retention policy and sweep commands exist in two forms, vault commands for the user's vault and relay commands for operators, with identical rules and different authorization.
+      - Hold commands are relay commands authorized by relay policy for operator and admin roles; they produce no statement to users and never touch vaults.
+      - Sweeps emit privacy.retention.purged with counts only, and holds emit placed and released events on the relay.
+    commands:
+      - name: privacy.retention_policy.set
+        capability: privacy.retention_policy.set
+        input: "[vault command or relay command by scope] { scopeKind, scopeId, class, durationDays, source, jurisdictionCode?, expectedRevision? }"
+        output: "{ policyId, revision, effectiveFrom }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, CONFLICT_REVISION]
+        emits: []
+        idempotent: true
+      - name: privacy.retention.run
+        capability: privacy.retention.run
+        input: "[vault command or relay command by scope] { scopeKind, scopeId, dryRun?: boolean, kinds?: string[] }"
+        output: "{ runId, dryRun, perKind: [{kind, class, eligible, purged, skipped}], startedAt, completedAt }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+        emits: [privacy.retention.purged]
+        idempotent: true
+      - name: privacy.legal_hold.request
+        capability: privacy.legal_hold.request
+        input: "[relay command] { subject: {kind, ref}, reasonCode, reference }"
+        output: "{ holdId, status: requested, approvalDeadline }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, PRIVACY_HOLD_EXISTS]
+        emits: []
+        idempotent: true
+      - name: privacy.legal_hold.approve
+        capability: privacy.legal_hold.approve
+        input: "[relay command] { holdId, expectedRevision }"
+        output: "{ holdId, revision, status: active, reviewDueAt }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, PRIVACY_HOLD_SELF_APPROVAL]
+        emits: [privacy.legal_hold.placed]
+        idempotent: true
+      - name: privacy.legal_hold.reject
+        capability: privacy.legal_hold.approve
+        input: "[relay command] { holdId, expectedRevision, note? }"
+        output: "{ holdId, revision, status: rejected }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: privacy.legal_hold.release_request
+        capability: privacy.legal_hold.release_request
+        input: "[relay command] { holdId, expectedRevision }"
+        output: "{ holdId, revision, status: release_requested }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: privacy.legal_hold.release_approve
+        capability: privacy.legal_hold.release_approve
+        input: "[relay command] { holdId, expectedRevision, approve: boolean }"
+        output: "{ holdId, revision, status }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, PRIVACY_HOLD_SELF_APPROVAL]
+        emits: [privacy.legal_hold.released]
+        idempotent: true
+    queries:
+      - name: privacy.retention_policy.list
+        capability: privacy.retention_policy.read
+        input: "{ scopeKind, scopeId }"
+        output: "{ items: RetentionPolicy[], nextSweepAt }"
+        errors: []
+      - name: privacy.legal_hold.check
+        capability: privacy.legal_hold.check
+        input: "{ subject: {kind, ref} }"
+        output: "{ held: boolean, holdId? }"
+        errors: []
+      - name: privacy.legal_hold.list
+        capability: privacy.legal_hold.read
+        input: "{ status?, cursor?, limit ≤ 50 }"
+        output: "{ items: LegalHold[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: privacy.retention.purged, privacy: P1, payload: "{ runId, scopeKind, recordKind, class, count }"}
+      - {type: privacy.legal_hold.placed, privacy: P3, payload: "{ holdId, relayId, subjectKind, reasonCode }"}
+      - {type: privacy.legal_hold.released, privacy: P3, payload: "{ holdId, relayId, subjectKind }"}
+    events_consumed:
+      - {type: security.role.revoked, effect: "requested holds whose requester lost the operator role lapse; approvals already given stay valid"}
+      - {type: platform.tenant.configured, effect: "apply the relay's configured jurisdiction profile as retention policy rows with source jurisdiction"}
+      - {type: federation.tombstone.applied, effect: "relay purges the tombstoned content within 24 h unless privacy.legal_hold.check says held, in which case it is sealed and withdrawn from public serving"}
+      - {type: privacy.deletion.completed, effect: "relay purges data it holds for the deleted principal unless held; vault data is handled by the vault deletion flow"}
+    errors:
+      - "PRIVACY_HOLD_SELF_APPROVAL | 403 | no | the approver must differ from the requester"
+      - "PRIVACY_HOLD_EXISTS | 409 | no | an active or requested hold already covers this subject"
+    example: |
+      relay command privacy.legal_hold.request (operator A)
+      { "subject": { "kind": "record", "ref": "sha256-77de…" }, "reasonCode": "court_order", "reference": "CASE-2026-0417" }
+      => { "holdId": "0192f3c1-…", "status": "requested", "approvalDeadline": "2026-11-07T10:00:00.000Z" }
+      relay command privacy.legal_hold.approve (operator B) { "holdId": "0192f3c1-…", "expectedRevision": 1 }
+      => { "holdId": "0192f3c1-…", "revision": 2, "status": "active", "reviewDueAt": "2027-05-03T10:00:00.000Z" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal changes policy or runs sweeps for its own vault; legal hold commands do not exist there.
+      - Under relay policy (CAP-9) only operators and admins of that relay request, approve, reject and release holds, with different people required for each pair of steps.
+      - Hold records are visible to relay operators and admins only; hold status is never exposed to users beyond a generic retained-under-legal-obligation notice without case details.
+    capabilities:
+      - "privacy.retention_policy.set | local-principal, operator, admin | vault owner for vault scope within user bounds; relay operator or admin for relay scope"
+      - "privacy.retention_policy.read | local-principal, anonymous | vault owner for vault scope; relay policy is public read-only"
+      - "privacy.retention.run | local-principal, operator, admin | vault owner for vault scope; relay operator or admin for relay scope; at most 6 runs per day"
+      - "privacy.legal_hold.request | operator, admin | relay role; reason code and reference supplied"
+      - "privacy.legal_hold.approve | operator, admin | relay role; actor differs from requester"
+      - "privacy.legal_hold.release_request | operator, admin | relay role; hold active"
+      - "privacy.legal_hold.release_approve | operator, admin | relay role; actor differs from release requester"
+      - "privacy.legal_hold.check | operator, admin | internal relay call from purge and tombstone handlers"
+      - "privacy.legal_hold.read | operator, admin | relay role"
+  failure_recovery_idempotency:
+    requirements:
+      - Policy changes and hold steps are idempotent with Idempotency-Key on the relay and vault command IDs in the vault, and use expectedRevision.
+      - Sweeps commit in batches with a persisted cursor and resume after interruption without double counting.
+      - Hold checks fail closed, so if the hold table cannot be read, relay purges of that subject are skipped.
+    idempotency: "Relay commands require Idempotency-Key with replay for 24 h; vault commands record a command ID for 24 h; purge batches are keyed by (runId, kind, cursor)."
+    concurrency: "expectedRevision on hold transitions; unique constraint prevents two active holds per subject; a sweep takes a single-flight lock (Web Lock in the vault, SQLite advisory row on the relay); purge re-checks hold state inside the same transaction that deletes."
+    retries: "A failed sweep batch is retried 3 times with 1 s, 5 s and 30 s backoff, then the run is marked partial and resumes at the next schedule."
+    offline: "Vault sweeps run offline. Relay holds require the relay; the console shows relay unreachable."
+    partial_failure: "A partial run records which kinds completed; unfinished kinds are retried next run. Records are never half-purged because each batch is one transaction."
+  privacy_retention_abuse:
+    requirements:
+      - Run records contain counts and kinds only, never record contents or identifiers of users.
+      - Holds are the only way to keep relay-held data past policy, require two operators, are audited under RET-AUDIT and reviewed every 180 days.
+      - Abuse of holds by a rogue operator is limited by separation of duties, mandatory reference, review reminders and visibility to all relay operators.
+    data:
+      - "RetentionPolicy: P1. LegalHold: P3 operator record; the reference must not contain personal data."
+      - "Run records: counts per kind and class."
+    retention:
+      - "Run records RET-AUDIT (1 year); LegalHold RET-AUDIT for 1 year after release; policies retained while effective plus 1 year."
+    threats:
+      - "T01 | Rogue operator places a hold to retain a user's data | two different operators required, reason code, reference, audit trail visible to all operators, 180-day review, user data in vaults unaffected"
+      - "T02 | Hold used to resurrect tombstoned content | held content is sealed and withdrawn from public serving; only operators can access it"
+      - "T03 | Sweep deletes records under dispute or hold | purge re-checks hold inside the deleting transaction; disputes are protected by RET-EVIDENCE duration"
+      - "T04 | Policy manipulation to shorten audit retention | AUDIT bounds 180 to 2555 days enforced in code; changes audited"
+    abuse_controls:
+      - "Hold requests limited to 10 per operator per day; sweep runs limited to 6 per day per scope."
+  observability_performance:
+    requirements:
+      - Relay sweeps and holds are measured per CTR-OBS-001; the PWA sends no telemetry (OBS-7) and keeps vault sweep records locally.
+      - Sweep throughput meets the budget so a night run completes inside its window.
+      - Overdue sweeps and overdue hold reviews raise alerts on the relay.
+    metrics:
+      - "classrup_privacy_retention_purged_total{scope,class} (relay) and the same counter in local diagnostics"
+      - "classrup_privacy_retention_run_duration_s{scope}"
+      - "classrup_privacy_legal_holds{status} (relay gauge)"
+      - "classrup_privacy_retention_overdue_s (gauge: time since last successful sweep)"
+    logs:
+      - "info retention.purged {runId, kind, class, count, correlationId} — counts only."
+      - "audit legal_hold.transition {holdId, from, to, actorDid} — no subject contents."
+    budgets:
+      - "Relay sweep purges 50 000 rows in ≤ 60 s; vault sweep of 20 000 rows ≤ 10 s in chunks that never block the main thread over 50 ms."
+      - "Hold check p95 ≤ 5 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Sweeps are tested with a controllable clock and stub purge ports for every record kind.
+      - Separation of duties and fail-closed hold checks are tested with adversarial scenarios.
+    fixtures: "Vault and relay with records in each class aged 0, 1, 31, 731 and 366 days; stub purge ports; operators A, B and C; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,01.R03 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365"
+      - "T02 | unit | 01.R02,02.R02 | hold requested with personal data in reference; user tries to change AUDIT | VALIDATION_FAILED and FORBIDDEN"
+      - "T03 | unit | 02.R02,03.R01 | A requests, A approves; B approves; B then requests release and B approves it | self approvals refused with PRIVACY_HOLD_SELF_APPROVAL; second operator approvals succeed"
+      - "T04 | integration | 03.R03,03.R02 | 72 h without approval; policy change | hold lapses; policy revision effective at next sweep"
+      - "T05 | integration | 02.R03,03.R02 | sweep with records at each age and one under active hold; one record kind without port | expired records purged, held record untouched, missing port reported skipped_unregistered"
+      - "T06 | property | 03.R01 | random hold command sequences | only declared transitions succeed; terminal states have no exits"
+      - "T07 | contract | 04.R01,04.R02,04.R03,09.R02 | execute each command and query in vault and relay forms | outputs and events validate against registry schemas; purged events contain counts only"
+      - "T08 | integration | 04.R03,02.R03 | federation.tombstone.applied for a held and a non-held record | held sealed and not served; non-held purged within 24 h"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | member calls relay hold commands; vault called with hold command; user asks for hold status | FORBIDDEN or not exposed; generic notice only"
+      - "T10 | chaos | 06.R02,06.R03 | kill sweep mid-run and corrupt the hold table read | resume from cursor without double count; purge of affected subjects skipped"
+      - "T11 | integration | 06.R01 | replay of Idempotency-Key and vault command ID; vault offline sweep | original results; offline sweep completes"
+      - "T12 | abuse | 07.R02,07.R03 | 11 hold requests in a day by one operator; check audit entries | 11th RATE_LIMITED; every step audited with actor"
+      - "T13 | integration | 07.R01,07.R03 | inspect run records and logs | counts and kinds only; no record contents"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 50 000 relay rows and 20 000 vault rows | relay ≤ 60 s, vault ≤ 10 s with no main-thread block over 50 ms; overdue alert fires when last sweep is 26 h old"
+      - "T15 | unit | 09.R01,09.R03 | traceability tool run | every PS-079 requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export vault policies, import into fresh vault, restore relay from backup, roll back one release | policies round-trip; holds restore with status; unknown hold subjects stay sealed"
+    acceptance:
+      - All tests T01 to T16 pass in CI.
+      - No hold can be activated or released by one person alone.
+      - Active holds are never violated by any sweep or tombstone handler, and holds never alter a vault.
+      - Every record kind has a registered purge port or the build fails.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export includes the principal's retention policy rows in the section privacy.retention; legal holds are never exported to users.
+      - Relay backups include holds and policies (IOX-3); after restore, holds are re-evaluated before any sweep runs.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section privacy.retention in classrup-export/v1: the vault's RetentionPolicy rows (schema classrup.privacy.retention_policy/v1). Legal holds are operator records and are excluded from user exports."
+    import: "Policies import as user-source rows clamped to bounds; foreign hold records are never imported."
+    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3) covers holds and policies; after a restore the relay refuses to sweep until hold records are loaded and verified, and purge jobs missed during downtime are not replayed for held subjects."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields; class bounds are never widened by a migration."

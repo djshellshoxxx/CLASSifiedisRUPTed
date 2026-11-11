@@ -1,0 +1,159 @@
+id: F06.S03.M02
+scope: MVP
+summary: >-
+  Pure re-ranking library applied after relevance scoring, identically in the vault and on a relay. It limits any one
+  author to 3 results per page, reserves exposure slots for newly seen authors, caps promoted results at 20 percent of
+  a page, and attaches to every result an explanation made of localizable message keys. It is deterministic and uses
+  only public document fields and local first-seen times; it cannot see user identity, history or protected attributes.
+responsibilities:
+  - Re-rank a scored candidate window of the top 200 results into pages of 20 (limit 1..50) with a maximum of 3 results per author per page.
+  - Reserve 2 exposure slots per 20-result page for new authors (first seen locally less than 30 days ago) when candidates with a score of at least 50 percent of the page's top score exist.
+  - Enforce that promoted results are at most floor(20 percent of page size), each labelled 'Promoted', and demote excess promoted results to the next page.
+  - Produce an explanation per result - ordered message keys with parameters such as text match, posted age, distance bucket, promoted, new author slot - never free text.
+non_responsibilities:
+  - Scoring and configuration (F06.S03.M01).
+  - Persisting any state; cursors carry the window position (F06.S01.M02).
+  - Judging author trustworthiness or reputation; reputation is not an input in MVP.
+  - "Future: seller-size neutral exposure experiments, category-level diversity, reputation-aware exposure with Sybil dampening."
+depends_on: [F06.S03.M01, F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-UX-001, CTR-TST-001]
+user_stories:
+  - As a buyer, my first page is not filled by one prolific seller's items.
+  - As a new seller, my good listing gets a fair chance to appear on a results page.
+  - As a buyer, I can see why a result is shown, including whether it is promoted or a new-author slot.
+  - As a relay operator, I know paid promotion can never exceed one fifth of a page.
+edge_cases:
+  - Only one author has matching items; the 3 per page cap would leave pages short, so the cap relaxes only when fewer than 20 items from other authors remain, and the explanation states 'only seller available'.
+  - Candidate window has fewer than 20 items; the page is returned as is, no filler.
+  - There are no qualifying new-author candidates; reserved slots are released to normal ranking, never filled with low-score items.
+  - A promoted item is also a new-author item; it counts once for the promoted cap and the slot is not consumed.
+  - Many accounts are created by one person to game the new-author slots; the library cannot detect it and the spec states the limit; slots are 2 per page and bounded by the 50 percent score threshold.
+  - Page size 7; promoted cap is floor(1.4) = 1 and new-author slots are 1 (at least 1 for pages of 5 or more).
+  - Two results tie on score and author; order falls back to firstSeenAt then documentId, never random.
+ux:
+  notes: Library module. The search screen (F06.S01.M02) renders the explanation keys as localized text and shows a 'Promoted' label and a 'New seller' label as text badges.
+processes:
+  domain_schema:
+    requirements:
+      - Input is a list of scored candidates with documentId, authorDid, score, promoted flag, authorFirstSeenAt and a score component breakdown; output is a re-ordered page list with explanation keys.
+      - The library has no persisted state; the only parameters are constants per CTR-UX-001 and this spec.
+      - Explanation entries are message keys with parameters so every locale can render them.
+    entities: []
+    note: >-
+      Library module with no persisted entity. Constants - windowSize 200, defaultPageSize 20, maxPerAuthorPerPage 3,
+      newAuthorWindowDays 30, newAuthorSlotsPer20 2, newAuthorMinScoreRatio 0.5, promotedMaxShare 0.20. Explanation keys -
+      discovery.explain.text_match, discovery.explain.recent, discovery.explain.distance_bucket, discovery.explain.promoted,
+      discovery.explain.new_author_slot, discovery.explain.only_seller, discovery.explain.default_ranking.
+  validation_rules:
+    requirements:
+      - Inputs are validated for finite scores, unique document ids and consistent page parameters before any re-ranking.
+      - Violations return typed errors instead of producing a partial or reordered page.
+      - Parameters outside documented bounds are rejected, never clamped.
+    rules:
+      - "V01 | every candidate has a finite non-negative score and a unique documentId | VALIDATION_FAILED"
+      - "V02 | page limit is 1..50 and the window start is within the 200 candidate window | VALIDATION_FAILED"
+      - "V03 | promoted candidates come only from an index that has promotion enabled, otherwise the flag is ignored and recorded | FAIRNESS_PROMOTION_NOT_ALLOWED"
+      - "V04 | candidate list is already sorted by descending score with the documented tie-break | FAIRNESS_INPUT_UNSORTED"
+  workflow_state_machine:
+    requirements:
+      - The library is a pure function over its input; there is no lifecycle.
+      - The same input always yields the same output order and explanations.
+      - Paging over the same snapshot never repeats or drops a result.
+    machines: []
+    note: Pure function, no entity lifecycle. rerank(candidates, pageParams, constants) returns { items, nextWindowPosition }.
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - The module exposes functions only and defines no commands, queries or events.
+      - Callers apply capability checks and pagination, and call rerank exactly once per snapshot window.
+      - Typed errors returned by rerank are mapped by callers to HTTP problems.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    note: Library module - no commands or queries.
+    errors:
+      - "FAIRNESS_PROMOTION_NOT_ALLOWED | 422 | no | a promoted flag was supplied where promotion is not enabled"
+      - "FAIRNESS_INPUT_UNSORTED | 422 | no | candidates are not sorted by descending score with the documented tie-break"
+    example: |
+      rerank(candidates[200], { pageSize: 20, windowPosition: 0 })
+      -> items[20]: at most 3 per author, at most 4 promoted (each flagged promoted: true), 2 reserved new-author slots at positions 5 and 12 when qualifying
+      -> items[0].explain = [{ key: "discovery.explain.text_match", params: { field: "title" } }, { key: "discovery.explain.distance_bucket", params: { bucket: "5_10" } }]
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization and reads only public document fields.
+      - It has no access to user identity, block lists, history or reputation.
+      - No capability is defined by this module.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - rerank is deterministic and side-effect free, so retries are safe.
+      - Windowed paging is stable for the lifetime of a query snapshot (15 minutes).
+      - A failure returns an error and never a partially re-ranked page.
+    idempotency: "Pure function; identical input yields identical output."
+    concurrency: "No shared state; safe for concurrent calls."
+    retries: "Not applicable; there is no I/O."
+    offline: "Works offline in the vault with the same code as on a relay."
+    partial_failure: "A call returns a complete page or an error; there is no partial output."
+  privacy_retention_abuse:
+    requirements:
+      - Inputs are public fields only; outputs reveal no private information and no user-specific signals.
+      - Exposure rules do not use protected characteristics, pseudonym text or reputation.
+      - The fairness rules are published in the product's help page and in this spec, and limits against Sybil gaming are stated.
+    data:
+      - "Candidates: P0 document fields and score components; explanation keys: no personal data."
+    retention:
+      - "None; no state is kept."
+    threats:
+      - "T01 | One author floods a page | max 3 results per author per page, 200-document relay cap per author in the index"
+      - "T02 | Many throwaway authors capture new-author slots (Sybil, Douceur 2002) | only 2 slots per 20-result page, 50 percent minimum score ratio, 30 day window by local first-seen; honest limit - without a trusted identity authority the library cannot prove the authors are distinct people"
+      - "T03 | Promotion crowds out organic results | promoted share at most 20 percent of a page, multiplier cap 1.25 in F06.S03.M01, mandatory label"
+      - "T04 | Explanation used to deceive | explanation is generated from the same score components used for ranking, never free text from authors"
+    abuse_controls:
+      - "Constants are code-level and need a decision record to change; relays cannot raise the promoted share above 20 percent."
+  observability_performance:
+    requirements:
+      - Re-ranking cost is measured inside query latency on relays and in vault diagnostics.
+      - rerank over 200 candidates takes at most 5 ms p95 on a Moto G-class device.
+      - Constraint outcomes are counted for monitoring fairness effects.
+    metrics:
+      - "classrup_discovery_fairness_author_capped_total"
+      - "classrup_discovery_fairness_new_author_slots_filled_total"
+      - "classrup_discovery_fairness_promoted_demoted_total"
+    logs:
+      - "debug fairness.applied {capped, newSlots, promotedDemoted} - counts only."
+    budgets:
+      - "rerank(200 candidates, page 20) p95 <= 5 ms on a Moto G-class device and <= 2 ms on the relay reference host."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test, including property tests for the constraints.
+      - Golden fixtures pin exact output orders for small candidate sets.
+      - A fairness regression test checks constraints on a 10 000-candidate synthetic corpus.
+    fixtures: "Synthetic corpora - 200 candidates from 12 authors (3 prolific, 4 new), 30 promoted, deterministic scores; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | property | 01.R01,02.R01 | 200 random corpora | no page has more than 3 results from one author; no duplicates; no result dropped across pages"
+      - "T02 | property | 01.R03,03.R01 | random promoted flags | promoted count per page at most floor(0.2 times page size); every promoted item has a promoted explanation key"
+      - "T03 | unit | 01.R02,02.R02 | corpus with qualifying new authors and corpus without | 2 slots filled with qualifying items at positions 5 and 12; none filled when no candidate reaches 50 percent of the top score"
+      - "T04 | unit | 02.R03,03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, unsorted, promoted flag where not enabled | VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED or FAIRNESS_PROMOTION_NOT_ALLOWED"
+      - "T05 | property | 03.R01,03.R02,03.R03 | 200 runs of same input and paging through all pages | identical output, same order on repeated runs, windowed paging never repeats or drops"
+      - "T06 | unit | 01.R01,04.R01 | page with a single author and page size 7 | cap relaxed with only_seller explanation; promoted cap 1 and new-author slots 1"
+      - "T07 | unit | 04.R01,04.R02,04.R03 | inspect exports | no commands, queries or events; typed errors only"
+      - "T08 | abuse | 05.R01,05.R02,05.R03,07.R01 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema; ranking identical with and without them"
+      - "T09 | abuse | 07.R02,07.R03 | 50 new authors created in a burst with equal scores | only 2 slots per page are filled and the 50 percent ratio is enforced"
+      - "T10 | unit | 06.R01,06.R02,06.R03 | repeat call after thrown error and during concurrent calls | no shared state; same result"
+      - "T11 | load | 08.R01,08.R02,08.R03 | rerank 200 candidates 10 000 times on emulated device | p95 <= 5 ms"
+      - "T12 | unit | 09.R01,09.R02,09.R03 | traceability run over PS-050 | every requirement maps to a passing test"
+      - "T13 | unit | 10.R01,10.R02,10.R03 | check package exports persistence | none; constants version file hashed in the golden test"
+      - "T14 | a11y | 04.R03,01.R03 | render explanation keys in the search screen with axe-core | labels are text, localized and announced; zero serious or critical issues"
+    acceptance:
+      - All tests T01-T14 pass in CI.
+      - Constraint properties hold on 10 000 random corpora (nightly).
+      - Explanation keys exist in every shipped locale catalog (i18n coverage test).
+  import_export_backup_rollback:
+    requirements:
+      - The library owns no data; nothing is exported, imported or backed up.
+      - Changing a constant (page cap, promoted share, slot count) is a breaking behavioral change and needs a new decision record and a version bump of the library.
+      - Rollback is redeploying the previous release; no data migration exists.
+    export: "Not applicable; no data is owned."
+    import: "Not applicable; no data is owned."
+    backup: "Not applicable; no data is owned."
+    migration_rollback: "Constants are versioned in code with a golden test; rollback is redeploying the previous release."

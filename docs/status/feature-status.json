@@ -1,0 +1,2823 @@
+{
+  "totals": {
+    "modules": 148,
+    "withRuntime": 14,
+    "withPassingTests": 3,
+    "declared": 688,
+    "implemented": 5,
+    "requirements": 4510,
+    "covered": 99
+  },
+  "features": [
+    {
+      "id": "F01",
+      "slug": "bazaar",
+      "title": "LocalBazaar classifieds",
+      "modules": 11,
+      "withRuntime": 5,
+      "withPassingTests": 0,
+      "declared": 73,
+      "implemented": 5,
+      "requirements": 330,
+      "covered": 0
+    },
+    {
+      "id": "F02",
+      "slug": "mutiny",
+      "title": "LocalMutiny barter and cyclic exchange",
+      "modules": 16,
+      "withRuntime": 2,
+      "withPassingTests": 0,
+      "declared": 85,
+      "implemented": 0,
+      "requirements": 517,
+      "covered": 0
+    },
+    {
+      "id": "F03",
+      "slug": "services",
+      "title": "Services marketplace",
+      "modules": 5,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 36,
+      "implemented": 0,
+      "requirements": 150,
+      "covered": 0
+    },
+    {
+      "id": "F04",
+      "slug": "auctions",
+      "title": "Auctions",
+      "modules": 6,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 40,
+      "implemented": 0,
+      "requirements": 180,
+      "covered": 0
+    },
+    {
+      "id": "F05",
+      "slug": "rentals",
+      "title": "Rentals",
+      "modules": 5,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 44,
+      "implemented": 0,
+      "requirements": 150,
+      "covered": 0
+    },
+    {
+      "id": "F06",
+      "slug": "discovery",
+      "title": "Local discovery",
+      "modules": 8,
+      "withRuntime": 2,
+      "withPassingTests": 0,
+      "declared": 18,
+      "implemented": 0,
+      "requirements": 240,
+      "covered": 0
+    },
+    {
+      "id": "F07",
+      "slug": "identity",
+      "title": "Identity and reputation",
+      "modules": 7,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 47,
+      "implemented": 0,
+      "requirements": 210,
+      "covered": 0
+    },
+    {
+      "id": "F08",
+      "slug": "comms",
+      "title": "Communications",
+      "modules": 8,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 42,
+      "implemented": 0,
+      "requirements": 242,
+      "covered": 0
+    },
+    {
+      "id": "F09",
+      "slug": "commerce",
+      "title": "Commerce and evidence",
+      "modules": 9,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 49,
+      "implemented": 0,
+      "requirements": 273,
+      "covered": 0
+    },
+    {
+      "id": "F10",
+      "slug": "privacy",
+      "title": "Privacy and data rights",
+      "modules": 7,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 24,
+      "implemented": 0,
+      "requirements": 210,
+      "covered": 0
+    },
+    {
+      "id": "F11",
+      "slug": "federation",
+      "title": "Federation and portability",
+      "modules": 9,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 44,
+      "implemented": 0,
+      "requirements": 274,
+      "covered": 0
+    },
+    {
+      "id": "F12",
+      "slug": "moderation",
+      "title": "Moderation and safety",
+      "modules": 10,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 46,
+      "implemented": 0,
+      "requirements": 301,
+      "covered": 0
+    },
+    {
+      "id": "F13",
+      "slug": "notify",
+      "title": "Notifications",
+      "modules": 7,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 34,
+      "implemented": 0,
+      "requirements": 210,
+      "covered": 0
+    },
+    {
+      "id": "F14",
+      "slug": "i18n",
+      "title": "Accessibility and localization",
+      "modules": 5,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 0,
+      "implemented": 0,
+      "requirements": 150,
+      "covered": 0
+    },
+    {
+      "id": "F15",
+      "slug": "platform",
+      "title": "Platform operations",
+      "modules": 12,
+      "withRuntime": 3,
+      "withPassingTests": 3,
+      "declared": 40,
+      "implemented": 0,
+      "requirements": 369,
+      "covered": 99
+    },
+    {
+      "id": "F16",
+      "slug": "security",
+      "title": "Security architecture",
+      "modules": 8,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 20,
+      "implemented": 0,
+      "requirements": 244,
+      "covered": 0
+    },
+    {
+      "id": "F17",
+      "slug": "quality",
+      "title": "Quality engineering",
+      "modules": 10,
+      "withRuntime": 2,
+      "withPassingTests": 0,
+      "declared": 0,
+      "implemented": 0,
+      "requirements": 310,
+      "covered": 0
+    },
+    {
+      "id": "F18",
+      "slug": "governance",
+      "title": "Governance and compliance",
+      "modules": 5,
+      "withRuntime": 0,
+      "withPassingTests": 0,
+      "declared": 46,
+      "implemented": 0,
+      "requirements": 150,
+      "covered": 0
+    }
+  ],
+  "modules": [
+    {
+      "id": "F01.S01.M01",
+      "title": "Listing creation",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 6,
+      "implemented": 2,
+      "missing": [
+        "bazaar.listing.delete",
+        "bazaar.listing.apply_status",
+        "bazaar.listing.apply_edit",
+        "bazaar.listing.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/bazaar/src/listings/index.ts"
+      ]
+    },
+    {
+      "id": "F01.S01.M02",
+      "title": "Listing editing",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 4,
+      "implemented": 1,
+      "missing": [
+        "bazaar.listing_revision.record",
+        "bazaar.listing_revision.list",
+        "bazaar.listing_revision.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/bazaar/src/listings/index.ts"
+      ]
+    },
+    {
+      "id": "F01.S01.M03",
+      "title": "Listing publication",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "bazaar.publication.publish",
+        "bazaar.publication.confirm",
+        "bazaar.publication.unpublish",
+        "bazaar.publication.end",
+        "bazaar.publication.renew",
+        "bazaar.publication.attach_promotion",
+        "bazaar.publication.get",
+        "bazaar.publication.list_mine",
+        "bazaar.publication.preview_policy"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/bazaar/src/listings/index.ts"
+      ]
+    },
+    {
+      "id": "F01.S01.M04",
+      "title": "Listing archive and expiry",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 6,
+      "implemented": 1,
+      "missing": [
+        "bazaar.listing.close",
+        "bazaar.listing.restore",
+        "bazaar.listing.expire",
+        "bazaar.archive_record.list_mine",
+        "bazaar.archive_record.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/bazaar/src/listings/index.ts"
+      ]
+    },
+    {
+      "id": "F01.S02.M01",
+      "title": "Sell listing type",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "bazaar.sell_terms.define",
+        "bazaar.sell_terms.get",
+        "bazaar.sell_terms.accepts"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F01.S02.M02",
+      "title": "Wanted listing type",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "bazaar.want.define",
+        "bazaar.want.mark_fulfilled",
+        "bazaar.want.withdraw",
+        "bazaar.want.get",
+        "bazaar.want.list_open"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F01.S02.M03",
+      "title": "Giveaway listing type",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "bazaar.giveaway_terms.define",
+        "bazaar.giveaway_request.request",
+        "bazaar.giveaway_request.receive",
+        "bazaar.giveaway_request.select",
+        "bazaar.giveaway_request.decline",
+        "bazaar.giveaway_request.withdraw",
+        "bazaar.giveaway_request.confirm_collected",
+        "bazaar.giveaway_request.list_for_listing",
+        "bazaar.giveaway_request.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F01.S03.M01",
+      "title": "Inventory availability",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 10,
+      "implemented": 1,
+      "missing": [
+        "bazaar.inventory.hold",
+        "bazaar.inventory.renew",
+        "bazaar.inventory.convert",
+        "bazaar.inventory.set_quantity",
+        "bazaar.inventory.issue_reservation",
+        "bazaar.inventory.record_peer_reservation",
+        "bazaar.inventory.check",
+        "bazaar.inventory.get_item",
+        "bazaar.inventory.list_holds"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/bazaar/src/listings/index.ts"
+      ]
+    },
+    {
+      "id": "F01.S03.M02",
+      "title": "Listing variants",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "bazaar.variant.add",
+        "bazaar.variant.update",
+        "bazaar.variant.retire",
+        "bazaar.variant.reactivate",
+        "bazaar.variant.remove",
+        "bazaar.variant.list",
+        "bazaar.variant.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F01.S04.M01",
+      "title": "Purchase offers",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "bazaar.offer.make",
+        "bazaar.offer.accept",
+        "bazaar.offer.reject",
+        "bazaar.offer.withdraw",
+        "bazaar.offer.list_for_listing",
+        "bazaar.offer.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F01.S04.M02",
+      "title": "Price negotiation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "bazaar.negotiation.counter",
+        "bazaar.negotiation.accept",
+        "bazaar.negotiation.reject",
+        "bazaar.negotiation.withdraw",
+        "bazaar.negotiation.discard_frozen",
+        "bazaar.negotiation.receive",
+        "bazaar.negotiation.get",
+        "bazaar.negotiation.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S01.M01",
+      "title": "Two-party barter",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "mutiny.proposal.create",
+        "mutiny.proposal.accept",
+        "mutiny.proposal.counter",
+        "mutiny.proposal.reject",
+        "mutiny.proposal.withdraw",
+        "mutiny.proposal.ingest",
+        "mutiny.proposal.get",
+        "mutiny.proposal.list_mine"
+      ],
+      "requirements": 34,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S01.M02",
+      "title": "Proposal party roster",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "mutiny.party.join",
+        "mutiny.party.leave",
+        "mutiny.party.list_for_subject",
+        "mutiny.party.check_roster"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S01.M03",
+      "title": "Barter offer items",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "mutiny.leg.define",
+        "mutiny.leg.void",
+        "mutiny.leg.get",
+        "mutiny.leg.list_for_subject"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S01.M04",
+      "title": "Barter counteroffers",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "mutiny.revision.create",
+        "mutiny.revision.ingest",
+        "mutiny.revision.report_fork",
+        "mutiny.revision.get",
+        "mutiny.revision.list_for_subject",
+        "mutiny.revision.diff"
+      ],
+      "requirements": 35,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S02.M01",
+      "title": "Three-party cycles",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 2,
+      "implemented": 0,
+      "missing": [
+        "mutiny.cycle3.get_profile",
+        "mutiny.cycle3.explain"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S02.M02",
+      "title": "Four-party cycles",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 2,
+      "implemented": 0,
+      "missing": [
+        "mutiny.cycle4.get_profile",
+        "mutiny.cycle4.explain"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S02.M03",
+      "title": "N-party cycle engine",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "mutiny.suggestion.generate",
+        "mutiny.suggestion.import",
+        "mutiny.suggestion.dismiss",
+        "mutiny.suggestion.compute_public",
+        "mutiny.suggestion.list_mine",
+        "mutiny.suggestion.get",
+        "mutiny.graph.get_stats"
+      ],
+      "requirements": 36,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S02.M04",
+      "title": "Matching participant eligibility",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "mutiny.matching_profile.update",
+        "mutiny.matching_profile.ingest",
+        "mutiny.matching_profile.get_mine",
+        "mutiny.matching_profile.list_known",
+        "mutiny.matching_profile.check_eligible"
+      ],
+      "requirements": 32,
+      "covered": 0,
+      "sources": [
+        "apps/pwa/src/barter-runtime.ts",
+        "packages/mutiny/src/trade_proposals/repository.ts"
+      ]
+    },
+    {
+      "id": "F02.S02.M05",
+      "title": "Cycle feasibility checks",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "mutiny.feasibility.check",
+        "mutiny.feasibility.get",
+        "mutiny.feasibility.latest_for_subject"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S03.M01",
+      "title": "Cycle consent",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "mutiny.cycle.propose",
+        "mutiny.cycle.consent",
+        "mutiny.cycle.decline",
+        "mutiny.cycle.ingest",
+        "mutiny.cycle.get",
+        "mutiny.cycle.list_mine",
+        "mutiny.cycle.explain_verdict"
+      ],
+      "requirements": 36,
+      "covered": 0,
+      "sources": [
+        "apps/pwa/src/barter-runtime.ts",
+        "packages/mutiny/src/trade_proposals/repository.ts"
+      ]
+    },
+    {
+      "id": "F02.S03.M02",
+      "title": "Cycle locks",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "mutiny.lock.reserve",
+        "mutiny.lock.release",
+        "mutiny.lock.ingest",
+        "mutiny.lock.release_for_subject",
+        "mutiny.lock.get_for_subject",
+        "mutiny.lock.list_active_own"
+      ],
+      "requirements": 34,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S03.M03",
+      "title": "Cycle dropouts",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "mutiny.dropout.withdraw",
+        "mutiny.dropout.ingest",
+        "mutiny.dropout.evaluate",
+        "mutiny.dropout.list_for_cycle",
+        "mutiny.dropout.get"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S03.M04",
+      "title": "Cycle execution and recovery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "mutiny.attestation.attest",
+        "mutiny.attestation.ingest",
+        "mutiny.recovery.propose_option",
+        "mutiny.recovery.respond",
+        "mutiny.recovery.escalate",
+        "mutiny.recovery.ingest",
+        "mutiny.attestation.list_for_cycle",
+        "mutiny.recovery.get",
+        "mutiny.recovery.list_mine"
+      ],
+      "requirements": 34,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S04.M01",
+      "title": "Mixed-value compensation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "mutiny.compensation.propose",
+        "mutiny.compensation.withdraw",
+        "mutiny.compensation.claim",
+        "mutiny.compensation.suggest_plan",
+        "mutiny.compensation.get",
+        "mutiny.compensation.list_for_subject"
+      ],
+      "requirements": 32,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S04.M02",
+      "title": "Barter currency normalization",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "mutiny.normalization.compute",
+        "mutiny.normalization.verify",
+        "mutiny.normalization.get",
+        "mutiny.normalization.current_for_subject"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F02.S04.M03",
+      "title": "Participant valuation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "mutiny.valuation.declare",
+        "mutiny.valuation.flag",
+        "mutiny.valuation.acknowledge",
+        "mutiny.valuation.ingest",
+        "mutiny.valuation.get",
+        "mutiny.valuation.list_mine",
+        "mutiny.valuation.list_for_items"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F03.S01.M01",
+      "title": "Service skills catalog",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "services.offering.create",
+        "services.offering.revise",
+        "services.offering.publish",
+        "services.offering.withdraw",
+        "services.offering.get",
+        "services.offering.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F03.S01.M02",
+      "title": "Service availability",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "services.calendar.set_rules",
+        "services.calendar.add_exception",
+        "services.calendar.remove_exception",
+        "services.calendar.publish_summary",
+        "services.slot.hold",
+        "services.slot.release",
+        "services.slot.commit",
+        "services.calendar.list_slots",
+        "services.calendar.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F03.S02.M01",
+      "title": "Service quotes and booking",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 10,
+      "implemented": 0,
+      "missing": [
+        "services.quote.request",
+        "services.quote.issue",
+        "services.quote.accept",
+        "services.quote.decline",
+        "services.booking.confirm",
+        "services.booking.cancel",
+        "services.statement.receive",
+        "services.quote.get",
+        "services.quote.list_mine",
+        "services.booking.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F03.S02.M02",
+      "title": "Service milestones",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "services.milestone.submit",
+        "services.milestone.approve",
+        "services.milestone.request_changes",
+        "services.milestone.receive",
+        "services.milestone.list_for_booking",
+        "services.milestone.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F03.S02.M03",
+      "title": "Service disputes",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "services.dispute.open",
+        "services.dispute.withdraw",
+        "services.dispute.receive",
+        "services.dispute.get",
+        "services.dispute.preview_evidence"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S01.M01",
+      "title": "Auction setup and reserve",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "auctions.auction.create",
+        "auctions.auction.schedule",
+        "auctions.auction.accept_hosting",
+        "auctions.auction.open",
+        "auctions.auction.cancel",
+        "auctions.auction.adjust_end",
+        "auctions.auction.mark_closed",
+        "auctions.auction.get_public",
+        "auctions.auction.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S01.M02",
+      "title": "Bidding",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "auctions.bid.submit",
+        "auctions.bid.place",
+        "auctions.bid.retract",
+        "auctions.bid.list_for_auction",
+        "auctions.bid.list_mine",
+        "auctions.bid.verify_ledger"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S01.M03",
+      "title": "Auction close",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "auctions.result.determine",
+        "auctions.result.receive",
+        "auctions.result.report_non_payment",
+        "auctions.result.nominate_second_chance",
+        "auctions.result.offer_second_chance",
+        "auctions.result.respond_second_chance",
+        "auctions.result.get",
+        "auctions.result.verify"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S02.M01",
+      "title": "Anti-shill controls",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "auctions.shill.check",
+        "auctions.shill.score",
+        "auctions.shill.allow_pair",
+        "auctions.shill.list_for_review",
+        "auctions.shill.get_policy"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S02.M02",
+      "title": "Anti-sniping soft close",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "auctions.extension.apply",
+        "auctions.extension.list",
+        "auctions.extension.preview"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F04.S02.M03",
+      "title": "Auction fraud review",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "auctions.review.open",
+        "auctions.review.assign",
+        "auctions.review.dismiss",
+        "auctions.review.cancel_auction",
+        "auctions.review.propose_void",
+        "auctions.review.confirm_void",
+        "auctions.review.receive_void",
+        "auctions.review.list",
+        "auctions.review.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F05.S01.M01",
+      "title": "Rental availability",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 11,
+      "implemented": 0,
+      "missing": [
+        "rentals.offering.create",
+        "rentals.offering.revise",
+        "rentals.offering.publish",
+        "rentals.availability.publish_busy",
+        "rentals.reservation.request",
+        "rentals.reservation.confirm",
+        "rentals.reservation.cancel",
+        "rentals.reservation.receive",
+        "rentals.offering.get",
+        "rentals.availability.list_busy",
+        "rentals.reservation.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F05.S01.M02",
+      "title": "Rental deposits (noncustodial)",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 10,
+      "implemented": 0,
+      "missing": [
+        "rentals.deposit.propose",
+        "rentals.deposit.agree",
+        "rentals.deposit.withdraw",
+        "rentals.deposit.attest_release",
+        "rentals.deposit.claim_forfeit",
+        "rentals.deposit.respond_forfeit",
+        "rentals.deposit.dispute",
+        "rentals.deposit.receive",
+        "rentals.deposit.get",
+        "rentals.deposit.get_for_reservation"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F05.S02.M01",
+      "title": "Rental handoff",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "rentals.handoff.draft",
+        "rentals.handoff.submit",
+        "rentals.handoff.request_changes",
+        "rentals.handoff.attest",
+        "rentals.handoff.receive",
+        "rentals.handoff.get",
+        "rentals.handoff.get_for_reservation"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F05.S02.M02",
+      "title": "Rental return",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "rentals.return.report",
+        "rentals.return.attest",
+        "rentals.return.record_received",
+        "rentals.return.adjust_late_fee",
+        "rentals.return.waive_damage",
+        "rentals.return.receive",
+        "rentals.return.get",
+        "rentals.return.get_for_reservation"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F05.S02.M03",
+      "title": "Rental damage claims",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "rentals.damage.claim",
+        "rentals.damage.respond",
+        "rentals.damage.accept_counter",
+        "rentals.damage.withdraw",
+        "rentals.damage.escalate",
+        "rentals.damage.receive",
+        "rentals.damage.compare_reports",
+        "rentals.damage.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S01.M01",
+      "title": "Search index",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 2,
+      "implemented": 0,
+      "missing": [
+        "discovery.index.rebuild",
+        "discovery.index.stats"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/discovery/src/search/index.ts"
+      ]
+    },
+    {
+      "id": "F06.S01.M02",
+      "title": "Search query",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "discovery.saved_search.create",
+        "discovery.saved_search.update",
+        "discovery.saved_search.delete",
+        "discovery.search.query",
+        "discovery.saved_search.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": [
+        "packages/discovery/src/search/index.ts"
+      ]
+    },
+    {
+      "id": "F06.S01.M03",
+      "title": "Search filters",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S02.M01",
+      "title": "Coarse location regions",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S02.M02",
+      "title": "User location settings",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "discovery.location.set_home",
+        "discovery.location.clear_home",
+        "discovery.location_share.grant",
+        "discovery.location_share.revoke",
+        "discovery.location_share.receive",
+        "discovery.location.get_own",
+        "discovery.location_share.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S02.M03",
+      "title": "Proximity queries",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 1,
+      "implemented": 0,
+      "missing": [
+        "discovery.proximity.search"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S03.M01",
+      "title": "Relevance ranking",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "discovery.ranking_config.publish",
+        "discovery.ranking_config.rollback",
+        "discovery.ranking_config.get_active"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F06.S03.M02",
+      "title": "Ranking fairness",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S01.M01",
+      "title": "Pseudonymous accounts",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "identity.account.create",
+        "identity.pseudonym.change",
+        "identity.device_key.add",
+        "identity.device_key.revoke",
+        "identity.handle.claim",
+        "identity.handle.release",
+        "identity.pseudonym.check",
+        "identity.account.get_own"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S01.M02",
+      "title": "Sessions",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "identity.session.unlock",
+        "identity.session.lock",
+        "identity.login_challenge.issue",
+        "identity.session.start",
+        "identity.session.rotate",
+        "identity.session.revoke",
+        "identity.session.list_own"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S01.M03",
+      "title": "Account recovery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "identity.recovery.create_kit",
+        "identity.recovery.verify_kit",
+        "identity.recovery.begin",
+        "identity.recovery.complete",
+        "identity.recovery.cancel",
+        "identity.recovery.get_status"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S02.M01",
+      "title": "Portable identity",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "identity.portable_doc.issue",
+        "identity.portable_doc.receive",
+        "identity.portable_doc.publish",
+        "identity.portable_doc.get",
+        "identity.portable_doc.list_contested"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S02.M02",
+      "title": "Profiles",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "identity.profile.update",
+        "identity.profile.publish",
+        "identity.profile.receive",
+        "identity.block.add",
+        "identity.block.remove",
+        "identity.profile.get",
+        "identity.block.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S03.M01",
+      "title": "Reputation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "identity.review.post",
+        "identity.review.receive",
+        "identity.review.withdraw",
+        "identity.review.hide",
+        "identity.reputation.get",
+        "identity.review.list_for_subject",
+        "identity.review.list_eligible"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F07.S03.M02",
+      "title": "Trust evidence",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "identity.attestation.issue",
+        "identity.attestation.receive",
+        "identity.attestation.revoke",
+        "identity.attestation.set_visibility",
+        "identity.attestation.issue_relay",
+        "identity.attestation.list_for_subject",
+        "identity.attestation.list_issued"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S01.M01",
+      "title": "Private messages",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "comms.message.send",
+        "comms.message.delete",
+        "comms.message.acknowledge",
+        "comms.mailbox.put",
+        "comms.mailbox.fetch",
+        "comms.mailbox.ack",
+        "comms.message.list_thread"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S01.M02",
+      "title": "Conversation threads",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "comms.thread.create",
+        "comms.thread.archive",
+        "comms.thread.mute",
+        "comms.thread.list_mine",
+        "comms.thread.get"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S01.M03",
+      "title": "Message attachments",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "comms.attachment.attach",
+        "comms.attachment.create_slot",
+        "comms.attachment.put_chunk",
+        "comms.attachment.finalize",
+        "comms.attachment.delete",
+        "comms.attachment.download"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S02.M01",
+      "title": "In-thread structured offers",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 2,
+      "implemented": 0,
+      "missing": [
+        "comms.offer_card.post",
+        "comms.offer_card.list_thread"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S02.M02",
+      "title": "Explicit consent capture",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "comms.consent.sign",
+        "comms.consent.revoke",
+        "comms.consent.accept",
+        "comms.consent.verify",
+        "comms.consent.list_for_subject"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S03.M01",
+      "title": "Safe meetup guidance",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "comms.safe_spot.publish",
+        "comms.safe_spot.retire",
+        "comms.safe_spot.suggest",
+        "comms.safe_spot.list_for_cell",
+        "comms.safe_spot.checklist"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S03.M02",
+      "title": "Meetup handoff check-in",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "comms.meetup.check_in",
+        "comms.meetup.report_no_show",
+        "comms.meetup_share.create",
+        "comms.meetup_share.put",
+        "comms.meetup_share.revoke",
+        "comms.meetup_share.view",
+        "comms.meetup.list_checkins"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F08.S03.M03",
+      "title": "Meetup coordination",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "comms.meetup.propose",
+        "comms.meetup.agree",
+        "comms.meetup.reschedule",
+        "comms.meetup.cancel",
+        "comms.meetup.list_for_thread"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S01.M01",
+      "title": "Noncustodial payment claims",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "commerce.deal.open",
+        "commerce.deal.cancel",
+        "commerce.payment.claim",
+        "commerce.payment.acknowledge",
+        "commerce.payment.dispute",
+        "commerce.statement.ingest",
+        "commerce.deal.get",
+        "commerce.deal.list_mine",
+        "commerce.payment.list_for_deal"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S01.M02",
+      "title": "Cash payments",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "commerce.cash_terms.set",
+        "commerce.cash_terms.accept",
+        "commerce.cash_terms.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S01.M03",
+      "title": "Crypto payments",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "commerce.crypto_request.create",
+        "commerce.crypto_request.cancel",
+        "commerce.crypto_verifier.configure",
+        "commerce.crypto_observation.refresh",
+        "commerce.crypto_request.get",
+        "commerce.crypto_observation.get_for_claim"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S02.M01",
+      "title": "Receipts",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "commerce.receipt.issue",
+        "commerce.receipt.ingest",
+        "commerce.receipt.verify",
+        "commerce.receipt.export",
+        "commerce.receipt.list_for_claim"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S02.M02",
+      "title": "Disputes",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 12,
+      "implemented": 0,
+      "missing": [
+        "commerce.dispute.open",
+        "commerce.dispute.add_evidence",
+        "commerce.dispute.respond",
+        "commerce.dispute.select_mediator",
+        "commerce.dispute.accept_mediator",
+        "commerce.dispute.propose_outcome",
+        "commerce.dispute.accept_outcome",
+        "commerce.dispute.withdraw",
+        "commerce.dispute.ingest",
+        "commerce.dispute.get",
+        "commerce.dispute.list_mine",
+        "commerce.dispute.list_mediators"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S02.M03",
+      "title": "Settlement reconciliation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "commerce.reconciliation.run",
+        "commerce.reconciliation.dismiss",
+        "commerce.reconciliation.latest",
+        "commerce.reconciliation.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S03.M01",
+      "title": "Currency registry",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "commerce.currency.register",
+        "commerce.currency.set_status",
+        "commerce.currency.list",
+        "commerce.currency.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S03.M02",
+      "title": "FX rates and quotes",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "commerce.fx_quote.request",
+        "commerce.fx_quote.issue_manual",
+        "commerce.fx_quote.relay_issue",
+        "commerce.fx_quote.revoke",
+        "commerce.fx_quote.check",
+        "commerce.fx_quote.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F09.S03.M03",
+      "title": "Money precision",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S01.M01",
+      "title": "Privacy consent",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "privacy.consent.grant",
+        "privacy.consent.withdraw",
+        "privacy.consent.check",
+        "privacy.consent.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S01.M02",
+      "title": "Retention and legal hold",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 10,
+      "implemented": 0,
+      "missing": [
+        "privacy.retention_policy.set",
+        "privacy.retention.run",
+        "privacy.legal_hold.request",
+        "privacy.legal_hold.approve",
+        "privacy.legal_hold.reject",
+        "privacy.legal_hold.release_request",
+        "privacy.legal_hold.release_approve",
+        "privacy.retention_policy.list",
+        "privacy.legal_hold.check",
+        "privacy.legal_hold.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S01.M03",
+      "title": "Data export",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "privacy.export.request",
+        "privacy.export.cancel",
+        "privacy.export.open_download",
+        "privacy.export.get",
+        "privacy.export.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S01.M04",
+      "title": "Account and data deletion",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "privacy.deletion.request",
+        "privacy.deletion.cancel",
+        "privacy.deletion.relay_apply",
+        "privacy.deletion.get",
+        "privacy.deletion.preview"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S02.M01",
+      "title": "Privacy threat model",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S02.M02",
+      "title": "Data classification model",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F10.S02.M03",
+      "title": "Metadata minimization",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S01.M01",
+      "title": "Portable record packaging",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S01.M02",
+      "title": "Federated records",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "federation.record.ingest",
+        "federation.record.receive",
+        "federation.record.publish",
+        "federation.tombstone.issue",
+        "federation.record.get",
+        "federation.record.list_by_author",
+        "federation.record.head",
+        "federation.record.list_rejections"
+      ],
+      "requirements": 32,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S01.M03",
+      "title": "Envelope signatures",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S02.M01",
+      "title": "Relay delivery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "federation.outbox.enqueue",
+        "federation.outbox.retry",
+        "federation.outbox.cancel",
+        "federation.outbox.acknowledge",
+        "federation.outbox.dispatch",
+        "federation.outbox.list",
+        "federation.outbox.pull"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S02.M02",
+      "title": "Federated dedup",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S02.M03",
+      "title": "Federated conflicts",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "federation.conflict.detect",
+        "federation.conflict.resolve",
+        "federation.conflict.list",
+        "federation.conflict.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S03.M01",
+      "title": "Peer trust",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "federation.peer.propose",
+        "federation.peer.accept",
+        "federation.peer.suspend",
+        "federation.peer.reinstate",
+        "federation.peer.remove",
+        "federation.peer.update",
+        "federation.peer.list",
+        "federation.peer.get",
+        "federation.peer.resolve_key"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S03.M02",
+      "title": "Federation blocklists",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "federation.block_rule.add",
+        "federation.block_rule.import_list",
+        "federation.block_rule.review",
+        "federation.block_rule.disable",
+        "federation.block_rule.enable",
+        "federation.block_rule.remove",
+        "federation.block_rule.publish_list",
+        "federation.block_rule.list",
+        "federation.block_rule.evaluate"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F11.S03.M03",
+      "title": "Account and relay migration",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "federation.migration.prepare",
+        "federation.migration.copy",
+        "federation.migration.announce",
+        "federation.migration.cancel",
+        "federation.migration.receive_move",
+        "federation.migration.get",
+        "federation.migration.redirect"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S01.M01",
+      "title": "Content flags",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "moderation.report.file",
+        "moderation.report.withdraw",
+        "moderation.report.receive",
+        "moderation.advisorysubscription.set",
+        "moderation.report.list_mine",
+        "moderation.report.list_for_target",
+        "moderation.advisorysubscription.list"
+      ],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S01.M02",
+      "title": "Moderation evidence",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "moderation.evidence.capture",
+        "moderation.evidence.verify",
+        "moderation.evidence.read",
+        "moderation.evidence.read_own",
+        "moderation.evidence.list_access"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S01.M03",
+      "title": "Appeals",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "moderation.appeal.file",
+        "moderation.appeal.receive",
+        "moderation.appeal.decide",
+        "moderation.appeal.withdraw",
+        "moderation.appeal.get_mine",
+        "moderation.appeal.list_queue"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S02.M01",
+      "title": "Enforcement actions",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "moderation.case.assign",
+        "moderation.case.close",
+        "moderation.action.apply",
+        "moderation.action.revert",
+        "moderation.case.list",
+        "moderation.action.get_mine",
+        "moderation.action.list_active_for_key"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S02.M02",
+      "title": "Spam detection",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S02.M03",
+      "title": "Abuse policy",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "moderation.policyrule.draft",
+        "moderation.policyrule.publish",
+        "moderation.policyrule.retire",
+        "moderation.policyrule.list_public",
+        "moderation.policyrule.get_version"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S03.M01",
+      "title": "Risk scoring",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "moderation.riskassessment.recompute",
+        "moderation.riskassessment.get",
+        "moderation.riskassessment.get_mine",
+        "moderation.riskassessment.assess_transaction"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S03.M02",
+      "title": "Fraud signals",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "moderation.signal.record_manual",
+        "moderation.signal.list_for_subject",
+        "moderation.signal.summarize",
+        "moderation.signal.categories_own"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S03.M03",
+      "title": "Rate limiting",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "moderation.ratepolicy.set",
+        "moderation.ratebucket.reset",
+        "moderation.ratepolicy.list",
+        "moderation.ratebucket.get_status_own"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F12.S03.M04",
+      "title": "Account limits",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "moderation.accountlimit.override",
+        "moderation.accountlimit.clear_override",
+        "moderation.accountlimit.check",
+        "moderation.accountlimit.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S01.M01",
+      "title": "Web push delivery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "notify.push.enable",
+        "notify.push.subscribe",
+        "notify.push.unsubscribe",
+        "notify.push.send",
+        "notify.push.get_key",
+        "notify.push.list_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S01.M02",
+      "title": "Email delivery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "notify.email.add",
+        "notify.email.verify",
+        "notify.email.remove",
+        "notify.email.send",
+        "notify.email.report_bounce",
+        "notify.email.get_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S01.M03",
+      "title": "In-app notifications",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "notify.notification.create",
+        "notify.notification.mark_read",
+        "notify.notification.mark_all_read",
+        "notify.notification.list_mine",
+        "notify.notification.unread_count"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S02.M01",
+      "title": "Quiet-hours enforcement",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "notify.notification.dispatch",
+        "notify.notification.release",
+        "notify.notification.list_deferred"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S02.M02",
+      "title": "Quiet-hours schedule",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "notify.quiet_hours.set",
+        "notify.quiet_hours.mirror",
+        "notify.quiet_hours.get",
+        "notify.quiet_hours.evaluate"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S02.M03",
+      "title": "Channel opt-in/opt-out",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "notify.channel.opt_in",
+        "notify.channel.opt_out",
+        "notify.channel.register",
+        "notify.channel.unsubscribe",
+        "notify.channel.get_mine"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F13.S02.M04",
+      "title": "In-app notification preferences",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "notify.preference.set",
+        "notify.preference.reset",
+        "notify.preference.mirror",
+        "notify.preference.get_matrix",
+        "notify.preference.resolve"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F14.S01.M01",
+      "title": "Keyboard operability",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F14.S01.M02",
+      "title": "Screen reader support",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F14.S01.M03",
+      "title": "WCAG 2.2 AA conformance",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F14.S02.M01",
+      "title": "Languages",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F14.S02.M02",
+      "title": "Currency display",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S01.M01",
+      "title": "Offline outbox",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 10,
+      "implemented": 0,
+      "missing": [
+        "platform.outbox.enqueue",
+        "platform.outbox.deliver",
+        "platform.outbox.record_peer_ack",
+        "platform.outbox.resolve",
+        "platform.outbox.discard",
+        "platform.storage.request_persistence",
+        "platform.storage.record_export",
+        "platform.outbox.list",
+        "platform.outbox.count_by_state",
+        "platform.storage.get_status"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S01.M02",
+      "title": "PWA caching",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S01.M03",
+      "title": "PWA install",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S02.M01",
+      "title": "Relay service",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "platform.relay_identity.rotate",
+        "platform.relay_identity.get",
+        "platform.relay.get_status"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S02.M02",
+      "title": "API and command bus",
+      "scope": "MVP",
+      "runtime": "partial",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "platform.access_token.challenge",
+        "platform.access_token.login",
+        "platform.access_token.revoke"
+      ],
+      "requirements": 34,
+      "covered": 34,
+      "sources": []
+    },
+    {
+      "id": "F15.S02.M03",
+      "title": "Storage",
+      "scope": "MVP",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 35,
+      "covered": 35,
+      "sources": []
+    },
+    {
+      "id": "F15.S03.M01",
+      "title": "Observability",
+      "scope": "MVP",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 30,
+      "sources": []
+    },
+    {
+      "id": "F15.S03.M02",
+      "title": "Backups",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "platform.backup.run",
+        "platform.backup.verify",
+        "platform.backup.list",
+        "platform.backup.get_status"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S03.M03",
+      "title": "Disaster recovery",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 3,
+      "implemented": 0,
+      "missing": [
+        "platform.deadletter.replay",
+        "platform.deadletter.list",
+        "platform.recovery.get_plan"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S04.M01",
+      "title": "Feature registry",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 4,
+      "implemented": 0,
+      "missing": [
+        "platform.feature.list_features",
+        "platform.feature.get_dependencies",
+        "platform.feature.get_order",
+        "platform.feature.verify_hash"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S04.M02",
+      "title": "Feature flags",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "platform.flag.set",
+        "platform.flag.set_relay",
+        "platform.flag.reset",
+        "platform.flag.evaluate",
+        "platform.flag.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F15.S04.M03",
+      "title": "Tenants",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "platform.tenant.create",
+        "platform.tenant.configure",
+        "platform.tenant.assign_operator",
+        "platform.tenant.change_status",
+        "platform.local_settings.update",
+        "platform.tenant.get",
+        "platform.tenant.list",
+        "platform.local_settings.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S01.M01",
+      "title": "Authorization policy",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 5,
+      "implemented": 0,
+      "missing": [
+        "security.roleassignment.assign",
+        "security.roleassignment.revoke",
+        "security.roleassignment.list",
+        "security.auditentry.list",
+        "security.auditentry.verify_chain"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S01.M02",
+      "title": "Secrets handling",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S02.M01",
+      "title": "Key lifecycle",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S02.M02",
+      "title": "Key registry and revocation",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 6,
+      "implemented": 0,
+      "missing": [
+        "security.keyrecord.register",
+        "security.keyrecord.revoke",
+        "security.keyrecord.record_revocation",
+        "security.keyrecord.get_status",
+        "security.keyrecord.list_revocations",
+        "security.keyrecord.list_own"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S02.M03",
+      "title": "Signatures",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S03.M01",
+      "title": "Security threat model",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S03.M02",
+      "title": "Incident records",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 9,
+      "implemented": 0,
+      "missing": [
+        "security.incident.open",
+        "security.incident.triage",
+        "security.incident.annotate",
+        "security.incident.contain",
+        "security.incident.resolve",
+        "security.incident.notify",
+        "security.incident.close",
+        "security.incident.list",
+        "security.incident.get"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F16.S03.M03",
+      "title": "Incident response",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 34,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S01.M01",
+      "title": "Unit testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 32,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S01.M02",
+      "title": "Property testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S01.M03",
+      "title": "Integration testing",
+      "scope": "MVP",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 32,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S01.M04",
+      "title": "E2E testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S02.M01",
+      "title": "Load testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S02.M02",
+      "title": "Chaos testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 31,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S02.M03",
+      "title": "Offline testing",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 32,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S03.M01",
+      "title": "Continuous integration",
+      "scope": "MVP",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S03.M02",
+      "title": "Release gates",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F17.S03.M03",
+      "title": "Compatibility",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F18.S01.M01",
+      "title": "Jurisdiction profiles",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "governance.jurisdiction_profile.draft",
+        "governance.jurisdiction_profile.release",
+        "governance.jurisdiction_profile.retire",
+        "governance.jurisdiction_profile.receive",
+        "governance.jurisdiction_profile.select",
+        "governance.jurisdiction_profile.get",
+        "governance.jurisdiction_profile.list",
+        "governance.jurisdiction_profile.resolve"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F18.S01.M02",
+      "title": "Prohibited items",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 7,
+      "implemented": 0,
+      "missing": [
+        "governance.prohibited_rule.draft",
+        "governance.prohibited_rule.retire",
+        "governance.prohibited_rule.release_pack",
+        "governance.prohibited_rule.apply_pack",
+        "governance.prohibited_rule.evaluate",
+        "governance.prohibited_rule.get",
+        "governance.prohibited_rule.list_active"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F18.S01.M03",
+      "title": "Goods taxonomy",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 10,
+      "implemented": 0,
+      "missing": [
+        "governance.category.create",
+        "governance.category.update",
+        "governance.category.move",
+        "governance.category.set_status",
+        "governance.category.release_pack",
+        "governance.category.apply_pack",
+        "governance.category.get",
+        "governance.category.list_children",
+        "governance.category.tree",
+        "governance.category.resolve"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F18.S02.M01",
+      "title": "Community governance",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 13,
+      "implemented": 0,
+      "missing": [
+        "governance.policy_proposal.draft",
+        "governance.policy_proposal.open",
+        "governance.policy_proposal.decide",
+        "governance.policy_proposal.withdraw",
+        "governance.policy_proposal.receive",
+        "governance.policy_comment.post",
+        "governance.policy_comment.accept",
+        "governance.policy_comment.hide",
+        "governance.policy_proposal.get",
+        "governance.policy_proposal.list",
+        "governance.policy_proposal.changelog",
+        "governance.policy_proposal.verify",
+        "governance.policy_comment.list"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F18.S02.M02",
+      "title": "Transparency reports",
+      "scope": "MVP",
+      "runtime": "none",
+      "declared": 8,
+      "implemented": 0,
+      "missing": [
+        "governance.transparency.record_legal_request",
+        "governance.transparency.compute",
+        "governance.transparency.publish",
+        "governance.transparency.discard",
+        "governance.transparency.receive",
+        "governance.transparency.get_published",
+        "governance.transparency.list_published",
+        "governance.transparency.preview"
+      ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    }
+  ]
+}

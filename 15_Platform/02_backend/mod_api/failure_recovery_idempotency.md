@@ -1,35 +1,35 @@
-# PS-117-06 — failure recovery idempotency
+# PS-117-06 — Failure recovery and idempotency: API and command bus
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-06. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M02 API and command bus](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/bus` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for api within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-117-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-117-06.R01** The same key with the same request hash within 24 h replays the stored status and body (Idempotent-Replay true over HTTP); the same key with a different hash returns IDEMPOTENCY_KEY_REUSED; failed commands store nothing.
+- **PS-117-06.R02** A handler error result or exception rolls back records, outbox events, sync-outbox entries and the idempotency record together; exceptions map to INTERNAL and are logged with the correlation ID.
+- **PS-117-06.R03** Concurrent dispatches with the same key are serialized by the storage transaction so the handler runs at most once.
+- **PS-117-06.R04** Only RATE_LIMITED, DEPENDENCY_UNAVAILABLE and INTERNAL are retryable; RATE_LIMITED carries retryAfterMs and the HTTP Retry-After header.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Idempotency-Key (UUIDv7) required on idempotent commands; record keyed (tenantId, actor, command, key) with the request hash; 24 h validity; replay returns the stored status and normalized JSON body.
+- **concurrency:** All transactions of one vault or relay are serialized (single writer); the lookup, handler and record write happen in one transaction so a racing duplicate sees the stored record.
+- **retries:** Clients retry only retryable codes and network failures with full-jitter backoff (base 500 ms, cap 30 s, 6 attempts, IDM-4), honouring retryAfterMs; replays are safe because of the idempotency record.
+- **offline:** In the vault the bus needs no network: commands commit locally and statements wait in the F15.S02.M03 sync outbox; the PWA outbox replays relay commands with their original keys after reconnect.
+- **partial failure:** No step outside the transaction can leave partial state: events are written to the outbox in the same transaction and published to the EventSink only after commit; a failed audit write is logged and does not change the command result.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-117-09.T10 | integration | PS-117-01.R01, PS-117-06.R01 | same key and body twice, then changed body, then other actor | replay with original 201 and body; IDEMPOTENCY_KEY_REUSED; other actor executes |
+| TEST-PS-117-09.T11 | integration | PS-117-06.R02 | handler returns err, then throws after writes | no records, outbox rows or idempotency record; INTERNAL with no message; error log with correlationId |
+| TEST-PS-117-09.T12 | integration | PS-117-06.R03 | five concurrent dispatches with one key | handler runs once; one fresh result and four replays |
+| TEST-PS-117-09.T17 | unit | PS-117-06.R04 | fixed-window limit exceeded; busy dependency | RATE_LIMITED with retryAfterMs 45 000; only three common codes retryable; DEPENDENCY_UNAVAILABLE retryable |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

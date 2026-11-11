@@ -1,35 +1,39 @@
-# PS-069-02 — validation rules
+# PS-069-02 — Validation rules: Noncustodial payment claims
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-02. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M01 Noncustodial payment claims](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/noncustodial` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-069-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-069-02.R01** Every command input is validated strictly against the schema; unknown fields are rejected with VALIDATION_FAILED.
+- **PS-069-02.R02** Incoming signed statements are verified for envelope shape, Ed25519 signature over JCS bytes (FED-2), signer role and chain position before any state change.
+- **PS-069-02.R03** Every violation maps to exactly one stable error code with a localized message key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | contextRef.type is a registered context type and the context statement cid resolves in the local vault | COMMERCE_CONTEXT_UNKNOWN |
+| V02 | 1 to 10 obligations, each amount positive within 38 digits and currency active in the registry | VALIDATION_FAILED |
+| V03 | payerId differs from payeeId and both are listed parties | COMMERCE_DEAL_PARTY_INVALID |
+| V04 | a Deal for this contextRef with different terms does not already exist | COMMERCE_DEAL_CONTEXT_CONFLICT |
+| V05 | claim amount currency equals the obligation currency and the method is in allowedMethods | COMMERCE_CLAIM_METHOD_NOT_ALLOWED |
+| V06 | method rule from the MethodRulePort passes (cash, crypto or external) | COMMERCE_CLAIM_METHOD_RULE |
+| V07 | actor is the obligation payer for claim, the payee for acknowledge or dispute | FORBIDDEN |
+| V08 | statement signature is valid and signer is authorized for the role in the Deal | COMMERCE_STATEMENT_INVALID |
+| V09 | statement prev equals the current head of the claim chain | COMMERCE_STATEMENT_FORK |
+| V10 | neither party has blocked the other locally | BLOCKED_PARTY |
+| V11 | Deal is open and not expired when a claim is made | CONFLICT_STATE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-069-09.T01 | unit | PS-069-01.R01, PS-069-01.R02, PS-069-02.R02 | open a Deal in vault A twice for the same contextRef | one Deal, same dealId derived deterministically, second call returns the existing Deal |
+| TEST-PS-069-09.T02 | unit | PS-069-01.R02, PS-069-02.R03 | schema inspection and attempts to set a paid field | no paid field exists; unknown field rejected with VALIDATION_FAILED |
+| TEST-PS-069-09.T03 | unit | PS-069-02.R01, PS-069-02.R03 | each rule V01 to V06 and V10 to V11 violated in turn | documented error code returned and nothing stored |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

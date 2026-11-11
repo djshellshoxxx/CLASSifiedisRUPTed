@@ -1,35 +1,37 @@
-# PS-085-02 — validation rules
+# PS-085-02 — Validation rules: Envelope signatures
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-02. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M03 Envelope signatures](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/signatures` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the validation rules process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-085-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-085-02.R01** Every input is validated before cryptographic work to keep verification cost bounded and failure codes stable.
+- **PS-085-02.R02** Envelope size is capped at 262144 bytes of canonical JSON and nesting depth at 32 to bound CPU use.
+- **PS-085-02.R03** Each rule violation maps to one stable error code so callers can count and rate-limit by cause.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | envelope is a JSON object, canonical size ≤ 262144 bytes, nesting depth ≤ 32, contains no non-finite numbers or lone surrogates | FEDERATION_ENVELOPE_NOT_CANONICALIZABLE |
+| V02 | sig is unpadded base64url decoding to exactly 64 bytes | FED_SIGNATURE_INVALID |
+| V03 | author is did:key with multibase prefix z, multicodec bytes 0xed 0x01 and a 32-byte key | FEDERATION_DID_UNSUPPORTED |
+| V04 | Ed25519 verification succeeds and S < group order L (RFC 8032 section 5.1.7) | FED_SIGNATURE_INVALID |
+| V05 | cid claimed in the envelope equals sha256 of the JCS bytes without sig and cid | FEDERATION_CID_MISMATCH |
+| V06 | relay request has Date within ±300 s, Digest header equals SHA-256 of the body and keyId resolves to a peer key | FEDERATION_REQUEST_SIGNATURE_INVALID |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-085-09.T04 | unit | PS-085-01.R03, PS-085-02.R02, PS-085-02.R03 | sig of 63 and 65 bytes, padded base64, key of 31 bytes | FED_SIGNATURE_INVALID or FEDERATION_DID_UNSUPPORTED as listed |
+| TEST-PS-085-09.T05 | unit | PS-085-02.R01, PS-085-02.R03 | envelope of 262145 bytes, depth 33, lone surrogate, 1e400 | FEDERATION_ENVELOPE_NOT_CANONICALIZABLE for each |
+| TEST-PS-085-09.T06 | unit | PS-085-02.R03, PS-085-04.R02 | did:key with multicodec 0xe7 and with 31-byte key; valid did round trip | FEDERATION_DID_UNSUPPORTED; valid did encodes and decodes identically |
+| TEST-PS-085-09.T07 | unit | PS-085-02.R03 | signature with S replaced by S plus L | rejected FED_SIGNATURE_INVALID (malleability) |
+| TEST-PS-085-09.T08 | unit | PS-085-02.R03, PS-085-01.R01 | claimed cid altered by one character | FEDERATION_CID_MISMATCH |
+| TEST-PS-085-09.T09 | unit | PS-085-02.R03, PS-085-06.R03 | request with Date 301 s old, wrong Digest, unknown keyId | FEDERATION_REQUEST_SIGNATURE_INVALID for each; 299 s old accepted |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-FED-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

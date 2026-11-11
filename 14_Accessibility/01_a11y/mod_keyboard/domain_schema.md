@@ -1,35 +1,30 @@
-# PS-109-01 — domain schema
+# PS-109-01 — Domain schema: Keyboard operability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-01. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M01 Keyboard operability](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/keyboard` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the domain schema process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-109-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-109-01.R01** The module owns no stored entity; its artifacts are CSS tokens, TypeScript primitives and lint rules versioned with the PWA.
+- **PS-109-01.R02** Design tokens define --focus-ring-width 2px, --focus-ring-offset 2px, --target-min 44px and --scroll-pad-top and --scroll-pad-bottom computed from the heights of sticky bars.
+- **PS-109-01.R03** Primitive components expose a documented keyboard contract (keys and expected behaviour) that tests assert.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** UI library and tooling; it stores no data and owns no catalog entity.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-109-09.T01 | unit | PS-109-01.R01, PS-109-01.R02, PS-109-02.R01 | compute tokens and lint templates with tabindex 3, div onclick, button 40 px high | V01, V02, V03 codes raised; compliant fixtures pass |
+| TEST-PS-109-09.T02 | e2e | PS-109-01.R03, PS-109-03.R01 | keyboard-only: tab through the listing form, open and close dialogs, change route | all controls reachable, focus order logical, focus on heading after route change within 100 ms |
+| TEST-PS-109-09.T03 | e2e | PS-109-01.R03, PS-109-03.R02, PS-109-06.R03 | nested dialogs close in sequence; trigger removed while dialog open | focus restored to triggers in order; fallback to nearest focusable ancestor |
+| TEST-PS-109-09.T04 | e2e | PS-109-01.R03, PS-109-02.R02 | reorder 5 photos using only buttons and then with pointer drag | identical results; V04 fixture without buttons fails |
+| TEST-PS-109-09.T05 | e2e | PS-109-01.R01, PS-109-01.R02, PS-109-02.R03 | focus each control with sticky header and bottom nav at 320 px width and 200 percent zoom | element never fully covered (V06); target sizes ≥ 44 px |
+| TEST-PS-109-09.T11 | a11y | PS-109-01.R03, PS-109-07.R03 | axe on pages using each primitive in light, dark and forced colors | zero serious or critical findings |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [module SPEC](SPEC.md).

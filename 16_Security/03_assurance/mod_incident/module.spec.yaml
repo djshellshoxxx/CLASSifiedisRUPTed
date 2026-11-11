@@ -1,0 +1,309 @@
+id: F16.S03.M02
+scope: MVP
+summary: >-
+  Incident records for a relay operator. Detection hooks watch security-relevant events on that relay (key
+  compromise revocations, authentication anomalies, signature-failure spikes from a peer, mass session
+  revocation) and open an Incident with a severity from a fixed matrix; operators can also open one by hand.
+  The record keeps a timeline, containment and resolution times, whether personal-data breach notification may
+  be required, and the postmortem link. Incident records are relay-local operational data and contain no user
+  secrets or content. Vaults get only a signed incident notice when the operator decides users must be told.
+  Incident handling on one relay never claims authority over other relays or users' vaults.
+responsibilities:
+  - Own the Incident record and its lifecycle from detected to closed with an append-only timeline of at most 500 entries.
+  - Run detection hooks as event consumers with fixed thresholds and open incidents at the matrix severity, de-duplicating repeated triggers into one open incident per category and scope.
+  - Apply the severity matrix (SEV1 to SEV4) with acknowledgement and containment targets, and track SLA breaches.
+  - Compute the breach-notification due time from the jurisdiction profile (F18.S01.M01) with a default target of 72 hours after awareness, and record notification decisions.
+  - Publish a signed incident notice statement (classrup.security.incidentnotice/v1) to affected users' mailboxes when the operator decides to notify.
+non_responsibilities:
+  - Runbook procedures and containment switches (F16.S03.M03).
+  - Key revocation mechanics (F16.S02.M02) and moderation cases (F12.S02.M01).
+  - Legal advice or regulator filings; the module records the decision and dates, operators file with authorities.
+  - "Future: integration with external paging services; shared incident feeds between cooperating relays; automatic user-side key rotation advice."
+depends_on: [F16.S01.M01, F16.S02.M02, F16.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a relay operator, I see an incident opened automatically when 100 invalid peer signatures arrive in 10 minutes, with severity, timeline and next steps.
+  - As an incident commander, I record containment and resolution and see how long each took against targets.
+  - As a user of an affected relay, I receive a clear signed notice saying what happened, what data classes were involved, and what I should do, without alarmist wording or false assurances.
+edge_cases:
+  - The same trigger fires every minute; detection de-duplicates into one open incident per (category, scope) and appends timeline entries with counts.
+  - A key compromise report arrives for a user key; severity is SEV3 unless relay-held data is involved, and the incident links the revocation record without copying key material.
+  - The relay's own signing key is suspected compromised; severity SEV1, and the runbook in F16.S03.M03 requires key rotation and a signed notice using the new key plus out-of-band confirmation.
+  - Incident opened as false positive; it moves to closed with reason false_positive and keeps its timeline.
+  - Timeline entry accidentally contains a secret; entries are append-only, so the correction is a new entry and the original is redacted by an operator command that replaces content with a hash and writes an audit entry.
+  - Breach notification due time passes with no decision recorded; the SLA sweep raises an alert and the incident cannot be closed until a decision (notify, not required with reason) exists.
+  - Postmortem not completed by the due date; the incident closes only after the postmortem link is present for SEV1 and SEV2.
+ux:
+  screens:
+    - "Incident list for operators: severity, category, status, age, SLA badges, filters."
+    - "Incident detail: summary, timeline (append-only), severity changes with reasons, containment and resolution times, notification decision with due time, postmortem link, related keys and events by ID."
+    - "Notice composer: template with data classes involved, actions for users, preview of the signed statement."
+  states: [loading, empty, detected, triaged, contained, resolved, closed, sla-breached]
+  a11y:
+    - Severity and SLA status are text labels with icons, not color alone.
+    - Timeline is an ordered list with timestamps in text and each entry reachable by keyboard.
+    - Forms have labels and errors linked by aria-describedby; destructive actions need confirmation dialogs with focus trap.
+processes:
+  domain_schema:
+    requirements:
+      - An Incident stores category, severity with its history, status, scope, timeline, key milestone times, notification decision, postmortem link and linked reference IDs, with tenant and revision per CTR-ID-001.
+      - Incident records are P3 relay-operational data readable by operators and admins of that relay, retained under RET-EVIDENCE (2 years), and contain no secrets, tokens, keys or user content.
+      - Severity follows the matrix SEV1 critical, SEV2 high, SEV3 medium and SEV4 low, and changes are recorded with reason and actor.
+    entities:
+      - name: Incident
+        schema: classrup.security.incident/v1
+        storage: relay
+        privacy: P3
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "title: string — 5..140 code points, no secrets"
+          - "category: enum — key_compromise | relay_breach | data_leak | auth_anomaly | federation_abuse | availability | supply_chain | other"
+          - "severity: enum — SEV1 | SEV2 | SEV3 | SEV4"
+          - "severityHistory: object[] — { severity, reason, actorKeyHash, at }, max 20"
+          - "status: enum — detected | triaged | contained | resolved | closed"
+          - "closeReason?: enum — resolved | false_positive | duplicate"
+          - "scope: string — affected component or peer ID, no user content"
+          - "affectedDataClasses: string[] — subset of P0..P4 involved, empty when none"
+          - "affectedUsersEstimate?: enum — none | under_10 | under_100 | under_1000 | over_1000"
+          - "commanderKeyHash?: string — operator in charge"
+          - "timeline: object[] — append-only { at, actorKeyHash, kind, text ≤ 1000 code points }, max 500 entries"
+          - "detectedAt: timestamp — RFC 3339 UTC, relay clock"
+          - "triagedAt?: timestamp — RFC 3339 UTC"
+          - "containedAt?: timestamp — RFC 3339 UTC"
+          - "resolvedAt?: timestamp — RFC 3339 UTC"
+          - "closedAt?: timestamp — RFC 3339 UTC"
+          - "notificationDecision?: enum — notify_users | not_required | pending"
+          - "notificationDueAt?: timestamp — detectedAt + 72 h by default or per jurisdiction profile"
+          - "noticeStatementCid?: string — content id of the signed incident notice"
+          - "postmortemRef?: string — link or document ID of the postmortem"
+          - "relatedRefs: string[] — key record IDs, event IDs, case IDs, max 50"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - closed incidents of severity SEV1 or SEV2 have a postmortemRef and a notificationDecision other than pending.
+          - timeline entries are never edited or removed; redaction replaces text with a hash and appends an audit note.
+          - Only one non-closed incident exists per (tenantId, category, scope) for automatic triggers.
+    sql: |
+      CREATE TABLE security_incident (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, category TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL,
+        scope TEXT NOT NULL, detected_at TEXT NOT NULL, notification_due_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX security_incident_open ON security_incident(tenant_id, category, scope) WHERE status != 'closed';
+      CREATE INDEX security_incident_status ON security_incident(tenant_id, status, severity);
+  validation_rules:
+    requirements:
+      - Incident input is validated strictly, and text fields are scanned for secret patterns with the library of F16.S01.M02 before storage.
+      - Severity, category and status transitions are validated against the matrix and lifecycle.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | title 5..140 and timeline text up to 1000 code points, and no secret-like pattern per F16.S01.M02 rules | SECURITY_INCIDENT_SECRET_IN_TEXT"
+      - "V02 | category and severity are in their enums and scope is a component or peer ID | VALIDATION_FAILED"
+      - "V03 | SEV1 or SEV2 incidents have a commander before moving to contained | VALIDATION_FAILED"
+      - "V04 | closing SEV1 or SEV2 requires postmortemRef and a notification decision | SECURITY_INCIDENT_CLOSE_BLOCKED"
+      - "V05 | timeline has fewer than 500 entries and relatedRefs fewer than 50 | PAYLOAD_TOO_LARGE"
+      - "V06 | expectedRevision matches the incident revision | CONFLICT_REVISION"
+      - "V07 | notice statement lists data classes and actions and no unverified claims such as no data was accessed unless evidence refs support it | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Incidents follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
+      - A resolved incident can return to triaged when a regression is found, and closing is final.
+      - SLA targets are tracked per severity and breaches are recorded as timeline entries and metrics without changing status.
+    machines:
+      - entity: Incident
+        initial: detected
+        terminal: [closed]
+        transitions:
+          - "detected -> triaged | security.incident.triage by operator | severity confirmed, commander set; emits no event"
+          - "detected -> closed | security.incident.close with reason false_positive or duplicate | emits security.incident.closed"
+          - "triaged -> contained | security.incident.contain by operator | containedAt set, containment steps in timeline"
+          - "triaged -> resolved | security.incident.resolve when no containment is needed | resolvedAt set"
+          - "contained -> resolved | security.incident.resolve | resolvedAt set"
+          - "resolved -> triaged | security.incident.triage regression | reason required"
+          - "resolved -> closed | security.incident.close with postmortem and notification decision | emits security.incident.closed"
+    timeouts:
+      - "SLA sweep every 60 s: SEV1 acknowledgement 15 minutes and containment 60 minutes; SEV2 acknowledgement 1 hour and containment 4 hours; SEV3 acknowledgement 1 working day; SEV4 acknowledgement 5 working days."
+      - "Notification decision due 24 hours after detection for incidents with affected data classes above P1, and notification due time 72 hours after detection by default."
+      - "Postmortem due 7 days after resolution for SEV1 and SEV2."
+  commands_queries_events:
+    requirements:
+      - Commands are relay commands; detection hooks call open internally as actor kind system.
+      - Open and close emit security.incident.opened and security.incident.closed in the same transaction as the record.
+      - The module consumes security, moderation, identity and federation events as detection hooks with fixed thresholds.
+    commands:
+      - name: security.incident.open
+        mode: "relay command (operator) or internal detection hook (system)"
+        capability: security.incident.open
+        input: "{ title, category, severity, scope, affectedDataClasses?, source: manual|hook, relatedRefs? }"
+        output: "{ incidentId, severity, status: detected, notificationDueAt, revision: 1 }"
+        errors: [VALIDATION_FAILED, SECURITY_INCIDENT_SECRET_IN_TEXT, PAYLOAD_TOO_LARGE]
+        emits: [security.incident.opened]
+        idempotent: true
+      - name: security.incident.triage
+        mode: "relay command"
+        capability: security.incident.triage
+        input: "{ incidentId, expectedRevision, severity, commanderKeyHash?, reason }"
+        output: "{ incidentId, revision, severity, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: security.incident.annotate
+        mode: "relay command; appends to the timeline"
+        capability: security.incident.annotate
+        input: "{ incidentId, expectedRevision, kind: note|containment|evidence|decision, text }"
+        output: "{ incidentId, revision, timelineLength }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, SECURITY_INCIDENT_SECRET_IN_TEXT, PAYLOAD_TOO_LARGE]
+        emits: []
+        idempotent: true
+      - name: security.incident.contain
+        mode: "relay command"
+        capability: security.incident.contain
+        input: "{ incidentId, expectedRevision, steps }"
+        output: "{ incidentId, revision, containedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: security.incident.resolve
+        mode: "relay command"
+        capability: security.incident.resolve
+        input: "{ incidentId, expectedRevision, summary }"
+        output: "{ incidentId, revision, resolvedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: security.incident.notify
+        mode: "statement classrup.security.incidentnotice/v1 signed by the relay key, sent to affected mailboxes"
+        capability: security.incident.notify
+        input: "{ incidentId, expectedRevision, decision: notify_users|not_required, reason, noticeText?, audience? }"
+        output: "{ incidentId, revision, noticeStatementCid? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: security.incident.close
+        mode: "relay command"
+        capability: security.incident.close
+        input: "{ incidentId, expectedRevision, closeReason, postmortemRef? }"
+        output: "{ incidentId, revision, closedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, SECURITY_INCIDENT_CLOSE_BLOCKED]
+        emits: [security.incident.closed]
+        idempotent: true
+    queries:
+      - name: security.incident.list
+        capability: security.incident.read
+        input: "{ status?, severity?, category?, cursor?, limit ≤ 50 }"
+        output: "{ items: Incident (without timeline), nextCursor? }"
+        errors: []
+      - name: security.incident.get
+        capability: security.incident.read
+        input: "{ incidentId }"
+        output: "{ incident: Incident with timeline }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: security.incident.opened, privacy: P2, payload: "{ incidentId, category, severity, scope, source, notificationDueAt }"}
+      - {type: security.incident.closed, privacy: P2, payload: "{ incidentId, category, severity, closeReason, durations: { acknowledgeMs, containMs, resolveMs } }"}
+    events_consumed:
+      - {type: security.key.revoked, effect: "reason compromised for a relay-registered or peer relay key opens SEV2 key_compromise; user device key compromise opens SEV3 only if five or more occur within 1 hour"}
+      - {type: moderation.rate.exceeded, effect: "50 or more events for class relay.access from 20 or more distinct prefix hashes within 10 minutes opens SEV3 auth_anomaly"}
+      - {type: federation.record.rejected, effect: "100 or more signature rejections from one peer within 10 minutes opens SEV3 federation_abuse for that peer scope"}
+      - {type: federation.peer.suspended, effect: "append a timeline entry to the matching federation_abuse incident or open SEV4 if none exists"}
+      - {type: identity.session.revoked, effect: "100 or more revocations within 10 minutes opens SEV3 auth_anomaly"}
+      - {type: security.role.assigned, effect: "an admin assignment outside business-hours policy, or three admin changes within 24 hours, opens SEV3 other with reason privilege_change"}
+    errors:
+      - "SECURITY_INCIDENT_SECRET_IN_TEXT | 422 | no | text contains a secret-like pattern and was not stored"
+      - "SECURITY_INCIDENT_CLOSE_BLOCKED | 409 | no | SEV1 and SEV2 need a postmortem reference and a notification decision before closing"
+    example: |
+      detection hook (system): federation.record.rejected x100 from peer did:key:z6MkPeer… within 10 minutes
+      -> security.incident.open { "title": "Signature rejection spike from peer", "category": "federation_abuse", "severity": "SEV3", "scope": "peer:z6MkPeer", "source": "hook" }
+      -> { "incidentId": "0192f440-cccc-7000-8000-00000000000c", "severity": "SEV3", "status": "detected", "notificationDueAt": null, "revision": 1 }
+      operator: security.incident.triage { "severity": "SEV3", "commanderKeyHash": "k_3d1…", "reason": "spike persists" } -> { "status": "triaged", "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: operators and admins of the relay open, triage, contain, resolve, notify and close incidents; moderators have no access; members never read incident records."
+      - "Vault policy: a vault accepts an incident notice only when signed by the relay key it uses, shows it with the relay name, and never changes local data because of it."
+      - Detection hooks run as actor kind system with a restricted capability to open incidents only.
+    capabilities:
+      - "security.incident.open | operator, admin | relay role; hooks run as system with open only"
+      - "security.incident.triage | operator, admin | relay role"
+      - "security.incident.annotate | operator, admin | relay role"
+      - "security.incident.contain | operator, admin | relay role"
+      - "security.incident.resolve | operator, admin | relay role"
+      - "security.incident.notify | admin | relay role admin; notification decision recorded with reason"
+      - "security.incident.close | operator, admin | relay role; SEV1 and SEV2 need postmortem and notification decision"
+      - "security.incident.read | operator, admin | relay role"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+      - Detection hooks are idempotent through the inbox table and the open-incident unique index, so duplicate events never create a second incident.
+      - A timeline append and its revision bump are one transaction and the timeline never loses entries.
+    idempotency: "Idempotency-Key required on commands; hook-opened incidents dedupe on (category, scope) for open incidents; notify replays return the stored notice CID."
+    concurrency: "expectedRevision on every mutation; partial unique index on open incidents; timeline append uses BEGIN IMMEDIATE so two operators' entries both persist with increasing order."
+    retries: "Event consumers retry per EVT-6; notice delivery uses the mailbox outbox with CTR-IDM-001 backoff for 7 days."
+    offline: "Operators need the relay online; users receive notices when they next sync, and the notice carries the relay-signed issue time."
+    partial_failure: "If notice delivery partially fails, the incident records delivered count and pending count, the notify command can be repeated for the remaining audience, and the incident cannot be closed with pending delivery above 0 unless a reason is recorded."
+  privacy_retention_abuse:
+    requirements:
+      - Incident records contain IDs, counts and data classes only, never user content, tokens or keys, and text is scanned for secret patterns before storage.
+      - Records are retained under RET-EVIDENCE (2 years), with legal hold override, and are readable only by operators and admins.
+      - Misuse (incident records used to profile users, forged incidents to trigger panic, concealment of breaches) is limited by content rules, hook thresholds, audit logging and the mandatory notification decision.
+    data:
+      - "Incident: P3 relay operational data."
+      - "Incident notice statement: P0 content addressed to affected users, free of secrets and unverified claims."
+    retention:
+      - "Incidents: RET-EVIDENCE (2 years after closure)."
+      - "Timeline redactions keep a hash for integrity."
+    threats:
+      - "T01 | Breach concealment | notification decision mandatory before closing SEV1 and SEV2, due times tracked, decisions and reasons stored and exportable to auditors"
+      - "T02 | Secrets or personal data pasted into timeline | pattern scan on every text, operator guidance, redaction command replacing text with a hash"
+      - "T03 | Forged or flooded detection events cause alert fatigue | thresholds on rolling windows, de-duplication per category and scope, system-only hook capability, sources are the relay's own verified events"
+      - "T04 | Incident notice used for phishing | notices are relay-signed statements shown with relay name inside the app only; they never contain links requesting credentials; email variants are not used in MVP"
+      - "T05 | Rewriting incident history | timeline append-only, severity history retained, operator actions audit-logged (F16.S01.M01), closed incidents immutable"
+    abuse_controls:
+      - "Operator commands limited to 200 per hour per key; hook-opened incidents limited to 20 per hour per relay."
+      - "Notice sends limited to 1 per incident per audience per 24 hours unless the operator records a reason."
+  observability_performance:
+    requirements:
+      - Incident counts, durations and SLA breaches are measured per CTR-OBS-001 with labels limited to category and severity.
+      - Open and annotate meet the write budget (p95 ≤ 300 ms) at 50 req/s.
+      - SLA sweep lag is observable and alerting.
+    metrics:
+      - "classrup_security_incidents_total{category,severity,outcome=opened|closed}"
+      - "classrup_security_incident_ack_ms{severity} (histogram)"
+      - "classrup_security_incident_contain_ms{severity} (histogram)"
+      - "classrup_security_incident_sla_breach_total{severity,stage}"
+    logs:
+      - "relay info incident.opened {incidentId, category, severity, correlationId} — no timeline text."
+    budgets:
+      - "open, annotate and triage p95 ≤ 300 ms; list p95 ≤ 150 ms for 50 items."
+      - "SLA sweep over 10 000 incidents completes in ≤ 2 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Detection hook thresholds are covered by deterministic event-stream tests with an injected clock.
+      - Notification and closure gates are covered by integration tests.
+    fixtures: "Relay X, operator O, admin A, peer P, injected event streams, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | open SEV2 key_compromise with valid input | Incident stored detected, severity history has one entry, notificationDueAt = detectedAt + 72 h when data classes above P1"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V07 violated | documented error code and nothing stored; secret-like text rejected"
+      - "T03 | property | 03.R01,03.R02 | random command sequences on one incident | only declared transitions succeed; closed never changes; timeline length never decreases"
+      - "T04 | integration | 03.R03,08.R03 | injected clock past SEV1 15-minute acknowledgement and 60-minute containment targets | SLA breach timeline entries and metrics; status unchanged"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command, query and event | validate against registry schemas; notice statement verifies with relay key"
+      - "T06 | integration | 04.R03,06.R02 | event streams: 99 vs 100 rejections in 10 minutes; 49 vs 50 rate.exceeded from 19 vs 20 prefixes; duplicates | no incident below thresholds; one incident at thresholds; duplicates dedupe"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | moderator and member read incidents; vault accepts notice signed by another key | FORBIDDEN or NOT_FOUND; notice quarantined"
+      - "T08 | integration | 03.R01,07.R01 | close SEV1 without postmortem or notification decision; with both | SECURITY_INCIDENT_CLOSE_BLOCKED then success"
+      - "T09 | integration | 06.R01,06.R03 | same Idempotency-Key replayed; concurrent annotate; partial notice delivery | one effect; both entries stored; delivered/pending counts recorded"
+      - "T10 | abuse | 07.R02,07.R03 | 201 operator commands in an hour; 21 hook incidents; edit of a timeline entry | RATE_LIMITED; capped; append-only trigger aborts edit"
+      - "T11 | integration | 07.R01 | secret pasted into annotate | SECURITY_INCIDENT_SECRET_IN_TEXT; redaction command replaces existing text with hash and audit entry"
+      - "T12 | load | 08.R01,08.R02 | 50 req/s mixed open and annotate for 5 minutes; SLA sweep 10 000 incidents | p95 ≤ 300 ms; sweep ≤ 2 s"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-131 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export incidents, import to fresh relay, restore backup | records round-trip; imported open incidents become triaged history with a note"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - No SEV1 or SEV2 incident can be closed without a postmortem reference and a notification decision.
+      - Detection hooks open at most one incident per category and scope and respect their thresholds.
+  import_export_backup_rollback:
+    requirements:
+      - Operators can export incidents with timelines as JSON lines for auditors, excluding any redacted text.
+      - Import is allowed only for relay migration and re-validates all text for secrets and all references.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section security.incidents in the relay operator export: incident rows with timeline, severity history, notification decisions and postmortem links."
+    import: "Incidents import into a fresh relay as closed or triaged history; open automatic incidents are not re-armed; text is re-scanned and flagged entries are rejected."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); losing a relay loses no user-owned private data (IOX-7)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown categories display as other."

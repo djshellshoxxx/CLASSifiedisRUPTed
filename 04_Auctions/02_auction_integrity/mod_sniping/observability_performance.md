@@ -16,6 +16,7 @@
 - classrup_auctions_extensions_total
 - classrup_auctions_extensions_per_auction (histogram at close)
 - classrup_auctions_extension_cap_reached_total
+- classrup_auctions_extension_quarantined_total (vault local counter)
 
 **Logs**
 - info auction.extended {auctionId, seq, correlationId} on the host - no bidder data.
@@ -30,8 +31,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-038-09.T12 | load | PS-038-08.R01, PS-038-08.R02, PS-038-08.R03 | 20 bids per second on one hot auction for 5 minutes | apply adds ≤ 5 ms p95; list p95 ≤ 50 ms |
+| TEST-PS-038-09.T12 | load | PS-038-08.R02, PS-038-08.R03 | 20 bids per second on one hot auction for 5 minutes | apply adds ≤ 5 ms p95; list p95 ≤ 50 ms |
+| TEST-PS-038-09.T18 | e2e | PS-038-08.R01 | network capture of the PWA watching the countdown through extensions | zero telemetry or analytics requests |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

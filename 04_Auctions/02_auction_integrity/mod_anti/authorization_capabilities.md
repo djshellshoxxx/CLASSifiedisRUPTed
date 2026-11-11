@@ -16,7 +16,7 @@
 |---|---|---|
 | auctions.shill.check | system | called inside a bid transaction holding the auction lease |
 | auctions.shill.score | system | host job runner |
-| auctions.shill.allow_pair | operator | host operator signed request; reason recorded; one auction and one pair |
+| auctions.shill.allow_pair | operator | host operator signed request; reason recorded; one auction and one pair; bidder key differs from the seller key; covers only linked_host_registration or linked_attestation |
 | auctions.shill.read_review | moderator, operator | moderator or operator of the hosting relay |
 | auctions.shill.read_public | anonymous, principal | policy text only |
 
@@ -30,4 +30,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F07.S01.M01, F07.S02.M01, F07.S03.M02, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

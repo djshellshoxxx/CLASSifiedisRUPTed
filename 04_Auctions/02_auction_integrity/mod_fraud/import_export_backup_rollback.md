@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-037-10.R01** Reviews and evidence are host operator data exported only in the operator audit export; user vault exports contain only the void statements they received.
+- **PS-037-10.R01** Reviews and evidence are host operator data exported only in the operator audit export; user vault exports contain only the void and rescission statements they received.
 - **PS-037-10.R02** Import of an operator audit export validates ids, schema version and statement signatures and restores reviews as read-only history.
 - **PS-037-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
 
-- **export:** Section auctions.reviews in the host operator export (classrup-export/v1, operator scope); user exports carry only received void statements under auctions.voids.
-- **import:** Reviews import as read-only history; reviews that were open import as opened and must be re-assigned; void statements import after signature verification.
-- **backup:** Host relay SQLite backup (IOX-3, IOX-7); vault export covers the received void statements.
-- **migration rollback:** Additive optional fields only in v1; void reason enum values are append-only so rollback never loses a recorded reason.
+- **export:** Section auctions.reviews in the host operator export (classrup-export/v1, operator scope); user exports carry only received void and rescission statements under auctions.voids.
+- **import:** Reviews import as read-only history; reviews that were open import as opened and must be re-assigned; void and rescission statements import after signature verification.
+- **backup:** Host relay SQLite backup (IOX-3, IOX-7); vault export covers the received void and rescission statements.
+- **migration rollback:** Additive optional fields only in v1; void reason and trigger kind enum values are append-only so rollback never loses a recorded reason.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S01.M03, F04.S02.M01, F12.S01.M01, F12.S01.M02, F12.S01.M03, F12.S02.M01, F11.S01.M03, F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S01.M02, F04.S01.M03, F04.S02.M01, F04.S02.M02, F12.S01.M01, F12.S01.M02, F12.S01.M03, F12.S02.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

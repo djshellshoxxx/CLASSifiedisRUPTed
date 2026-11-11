@@ -6,15 +6,16 @@
 
 ## Requirements
 
-- **PS-033-01.R01** A Bid stores auction, terms cid, bidder, alias, kind, visible amount, optional proxy maximum, host sequence and time, ledger hashes, receipt and status, with revision per CTR-ID-001.
-- **PS-033-01.R02** Bid records are P3 because the proxy maximum is secret; public projections show only alias, amount, kind and host time, and the maximum exists in plaintext only on the bidder vault and the host.
+- **PS-033-01.R01** A Bid stores auction, terms cid, bidder, alias, kind, visible amount, optional proxy maximum, signed validity window, host sequence and time, ledger hashes, receipt and status, with revision per CTR-ID-001.
+- **PS-033-01.R02** The proxy maximum, bidderId and clientNonce are P3 in the bidder vault and P2 to the host, the only listed participant - they travel only inside the bid envelope end-to-end encrypted to hostKeyId (PRV-5) and the host holds them under its published retention - while public projections show only alias, amount, kind and host time.
 - **PS-033-01.R03** The visible amount and sequence are immutable once the host has assigned them; a change is a new bid or a retraction entry.
+- **PS-033-01.R04** The ledger hash input includes bidCid, so each held receipt binds the bidder-signed bid it acknowledges.
 
 ## Specification
 
 ### Bid
 
-Schema `classrup.auctions.bid/v1` · storage **relay+device** · privacy **P3** · retention **RET-EVIDENCE**
+Schema `classrup.auctions.bid/v1` · storage **relay+device** · privacy **P2** · retention **RET-EVIDENCE**
 
 | Field | Type and constraints |
 |---|---|
@@ -22,35 +23,42 @@ Schema `classrup.auctions.bid/v1` · storage **relay+device** · privacy **P3** 
 | tenantId | uuidv7 — host relay tenant scope |
 | auctionId | uuidv7 — ref F04.S01.M01 Auction |
 | termsCid | string — sha256- cid of the auction terms the bid was made against |
-| bidderId | actorId — did:key of the bidder; host and bidder vault only |
+| bidderId | actorId — did:key of the bidder; P3 in the bidder vault, P2 to the host inside the envelope encrypted to hostKeyId |
 | alias | string — 6 characters base32, HMAC of bidderId under a per-auction host secret; stable within one auction |
-| kind | enum — manual \| proxy \| auto \| retraction |
-| amount | Money — visible amount; CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units |
-| maxAmount? | Money — P3 proxy maximum, >= amount, same currency; encrypted to the host key in transit |
+| kind | enum — manual \| proxy \| auto \| retraction; proxy with amount absent is a max-only update |
+| amount? | Money — visible amount; required except for a max-only update; CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units |
+| maxAmount? | Money — proxy maximum, >= amount when both are present, same currency; P3 in the bidder vault, P2 to the host only |
 | hostAck | object — {auctionTermsCid, hostKeyId, acceptedAtClaim}; signed inside the bid by the bidder |
-| clientNonce | string — 16 random bytes base64url; unique per bidder and auction |
-| seq? | int — host sequence >= 1, strictly increasing per auction |
+| clientNonce | string — 16 random bytes base64url; unique per bidder and auction; same classification as bidderId |
+| createdAtClaim | timestamp — bidder clock claim, RFC 3339 UTC |
+| notAfter | timestamp — signed; at most createdAtClaim plus 60 s; the host refuses the bid once its clock passes it |
+| mailboxHint | string — bidder mailbox for host statements (receipts, bid_outbid, result) |
+| pushOptIn | boolean — true only when privacy.consent.check(notify_push) for the host is granted |
+| bidCid | string — sha256- cid of the bidder-signed bid envelope; for auto and retraction entries the cid of the bid or retraction that caused them |
+| seq? | int — host ledger sequence >= 1, strictly increasing per auction; absent for a max-only update |
 | hostTime? | timestamp — host clock, non-decreasing, RFC 3339 UTC |
 | prevHash? | string — hash of the previous ledger entry |
-| hash? | string — sha256- over JCS of {seq, auctionId, alias, kind, amount, hostTime, prevHash} |
+| hash? | string — sha256- over JCS of {seq, auctionId, bidCid, alias, kind, amount, hostTime, prevHash} |
 | receiptCid? | string — cid of the host-signed bid receipt |
-| status | enum — submitted \| winning \| outbid \| retracted \| rejected \| won \| lost \| void |
-| rejectCode? | string — module error code when rejected |
+| extensionCid? | string — cid of the host-signed extension this bid triggered (F04.S02.M02) |
+| status | enum — submitted \| winning \| outbid \| retracted \| rejected \| won \| lost \| void \| not_placed \| host_silent |
+| rejectCode? | string — error code when rejected |
 | revision | int — CTR-ID-001 ID-4 |
 
 **Invariants**
-- seq values of one auction are consecutive starting at 1 with no gaps, and hashes form an unbroken chain.
+- seq values of the ledger entries of one auction are consecutive starting at 1 with no gaps, and hashes form an unbroken chain; max-only updates carry no seq.
 - At most one Bid per auction has status winning.
-- maxAmount is never present in any event, public projection, export of another user, log or error.
-- A bid with status winning has amount equal to the auction currentPrice.
+- maxAmount, bidderId and clientNonce never appear in any public projection, log, error or export of another user, and maxAmount never in any event.
+- The leader's latest ledger entry (its own bid or an auto entry) has amount equal to the auction currentPrice.
+- The hostTime of every ledger entry is at or before the notAfter of the bid that caused it.
 
 ### Storage DDL
 
 ```sql
 CREATE TABLE auctions_bid (
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, auction_id TEXT NOT NULL, bidder_id TEXT NOT NULL, kind TEXT NOT NULL,
-  amount_minor TEXT NOT NULL, seq INTEGER NOT NULL, host_time TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
-CREATE UNIQUE INDEX auctions_bid_seq ON auctions_bid(tenant_id, auction_id, seq);
+  amount_minor TEXT, seq INTEGER, host_time TEXT, not_after TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX auctions_bid_seq ON auctions_bid(tenant_id, auction_id, seq) WHERE seq IS NOT NULL;
 CREATE UNIQUE INDEX auctions_bid_nonce ON auctions_bid(tenant_id, auction_id, bidder_id, json_extract(data,'$.clientNonce'));
 CREATE TABLE auctions_lease (auction_id TEXT PRIMARY KEY, holder TEXT NOT NULL, fence INTEGER NOT NULL, expires_at TEXT NOT NULL);
 ```
@@ -59,10 +67,10 @@ CREATE TABLE auctions_lease (auction_id TEXT PRIMARY KEY, holder TEXT NOT NULL, 
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-033-09.T01 | unit | PS-033-01.R01, PS-033-01.R03, PS-033-02.R01, PS-033-02.R03 | place valid bid and read ledger entry | seq 1, hash chain starts with genesis, amount immutable, receipt signature verifies |
-| TEST-PS-033-09.T12 | integration | PS-033-01.R02, PS-033-07.R01 | inspect events, logs, errors, exports of other users | no maximum and no bidder key anywhere outside bidder vault and host |
-| TEST-PS-033-09.T16 | e2e | PS-033-01.R02 | mobile bidder accepts host, bids with max, is outbid by proxy, retracts a leading bid on another auction | UI statuses correct; axe zero serious issues; offline shows bidding disabled |
+| TEST-PS-033-09.T01 | unit | PS-033-01.R01, PS-033-01.R03, PS-033-01.R04, PS-033-02.R01, PS-033-02.R03 | place valid bid and read ledger entry | seq 1, hash chain starts with genesis and covers bidCid, amount immutable, receipt signature verifies |
+| TEST-PS-033-09.T12 | integration | PS-033-01.R02, PS-033-07.R01 | inspect events, logs, errors, exports of other users and the F10.S02.M02 classification map | no maximum, bidder key or nonce anywhere outside the bidder vault and the host; the three fields annotated P3 in the vault and P2 with the host as only participant; the bid envelope part is encrypted to hostKeyId |
+| TEST-PS-033-09.T16 | e2e | PS-033-01.R02, PS-033-04.R03 | mobile bidder accepts host, bids with max, is outbid by proxy, retracts a leading bid on another auction, goes offline | UI statuses correct; trust panel states key visibility to the host, receipt limits and possible second-chance key disclosure; offline shows bidding disabled with no queue; axe zero serious issues |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

@@ -13,10 +13,10 @@
 ## Specification
 
 **Metrics**
-- classrup_auctions_bids_total{outcome=placed|rejected|retracted,code} (host)
+- classrup_auctions_bids_total{outcome=placed|rejected|retracted|expired,code} (host)
 - classrup_auctions_bid_lease_wait_ms (host histogram)
 - classrup_auctions_bid_lease_expired_total (host)
-- classrup_auctions_ledger_verify_failures_total (vault local counter)
+- classrup_auctions_ledger_verify_failures_total and classrup_auctions_bids_not_placed_total (vault local counters)
 
 **Logs**
 - info bid.placed {auctionId, seq, correlationId} on the host - no bidder key, no amount, no maximum.
@@ -31,8 +31,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-033-09.T13 | load | PS-033-08.R01, PS-033-08.R02, PS-033-08.R03 | 500 auctions at 50 bids per second and one hot auction at 20 per second for 5 minutes | p95 ≤ 150 ms, hot p99 ≤ 400 ms, ledger verify 5 000 entries ≤ 500 ms |
+| TEST-PS-033-09.T13 | load | PS-033-08.R02, PS-033-08.R03 | 500 auctions at 50 bids per second and one hot auction at 20 per second for 5 minutes | p95 ≤ 150 ms, hot p99 ≤ 400 ms, ledger verify 5 000 entries ≤ 500 ms |
+| TEST-PS-033-09.T20 | e2e | PS-033-08.R01 | network capture of the PWA while bidding, retracting and checking receipts | requests go only to the auction host; zero telemetry or analytics requests |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

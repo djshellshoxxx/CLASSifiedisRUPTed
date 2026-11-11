@@ -9,6 +9,7 @@
 - **PS-037-03.R01** Reviews move opened, in_review, optionally void_proposed, and end voided or dismissed; both are terminal.
 - **PS-037-03.R02** Voiding requires propose and confirm by two different moderators within 72 hours of the proposal, otherwise the proposal lapses back to in_review.
 - **PS-037-03.R03** Every terminal transition emits auctions.review.closed, and a void additionally emits auctions.result.voided, in the same host transaction.
+- **PS-037-03.R04** A successful appeal never changes the terminal review status; it adds an advisory host-signed rescission, and vaults show that statement without reopening the sale.
 
 ## Specification
 
@@ -18,12 +19,12 @@ Initial **opened**; terminal **voided**, **dismissed**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| opened -> in_review | auctions.review.assign by moderator | conflict check passed; evidence snapshot captured |
-| opened -> dismissed | auctions.review.dismiss or 30 days without assignment | emits auctions.review.closed |
-| in_review -> dismissed | auctions.review.dismiss by moderator | findings stored; emits auctions.review.closed |
-| in_review -> in_review | auctions.review.cancel_auction by moderator | open auction cancelled with reason host_policy; review continues for enforcement recommendation |
-| in_review -> void_proposed | auctions.review.propose_void by moderator | result eligible, reason and findings stored |
-| void_proposed -> voided | auctions.review.confirm_void by a second moderator | signs void statement; emits auctions.result.voided and auctions.review.closed |
+| opened -> in_review | auctions.review.assign by moderator | conflict check passed (V01); evidence snapshots captured and refs frozen |
+| opened -> dismissed | auctions.review.dismiss or 30 days without assignment | emits auctions.review.closed with empty confirmedCheckIds |
+| in_review -> dismissed | auctions.review.dismiss by moderator | findings stored; emits auctions.review.closed with empty confirmedCheckIds |
+| in_review -> in_review | auctions.review.cancel_auction by moderator | open auction cancelled through apply_cancel with reason host_policy; review continues for the enforcement recommendation |
+| in_review -> void_proposed | auctions.review.propose_void by moderator | result eligible (V05), reason, findings and confirmedCheckIds stored |
+| void_proposed -> voided | auctions.review.confirm_void by a second moderator | signs the void statement, records the EnforcementAction, moves the host's result row to voided; emits auctions.result.voided and auctions.review.closed |
 | void_proposed -> in_review | second moderator rejects or 72 h lapse | proposal cleared |
 
 ```mermaid
@@ -48,11 +49,11 @@ stateDiagram-v2
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-037-09.T03 | unit | PS-037-03.R01, PS-037-03.R02 | propose by M1, confirm by M1, confirm by M2 after 73 hours, confirm by M2 within 72 hours | second and third refused or lapsed; fourth voids and signs |
-| TEST-PS-037-09.T04 | integration | PS-037-03.R03, PS-037-04.R02, PS-037-06.R02 | confirm void while a payment is acknowledged concurrently | one wins by lease order; void refused AUCTIONS_RESULT_NOT_VOIDABLE if payment first; no partial void |
+| TEST-PS-037-09.T03 | unit | PS-037-03.R01, PS-037-03.R02, PS-037-02.R02 | propose by M1, confirm by M1, confirm by M2 after 73 hours, confirm by M2 within 72 hours | second and third refused or lapsed; fourth voids and signs |
 | TEST-PS-037-09.T05 | property | PS-037-03.R01 | random command sequences on one review | only declared transitions succeed; voided and dismissed never change |
-| TEST-PS-037-09.T15 | e2e | PS-037-03.R03, PS-037-01.R03 | two moderators in two browsers void a sale; bidder and seller vaults open notice | statuses correct on all four; notice has no names; axe zero serious issues |
+| TEST-PS-037-09.T15 | e2e | PS-037-03.R03 | two moderators in two browsers void a sale; bidder and seller vaults open the notice | statuses correct on all four; auctions.review.closed and auctions.result.voided in one host transaction; notice has no names and says the Deal stays until both cancel; axe zero serious issues |
+| TEST-PS-037-09.T19 | integration | PS-037-04.R05, PS-037-03.R04 | void confirmed; seller appeals; appeal overturned | EnforcementAction recorded and actionId stored; moderation.appeal.decided matched on actionId; rescission statement issued; vaults show it as advisory and the review stays voided |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S01.M03, F04.S02.M01, F12.S01.M01, F12.S01.M02, F12.S01.M03, F12.S02.M01, F11.S01.M03, F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S01.M02, F04.S01.M03, F04.S02.M01, F04.S02.M02, F12.S01.M01, F12.S01.M02, F12.S01.M03, F12.S02.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

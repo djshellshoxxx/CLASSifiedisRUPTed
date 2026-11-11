@@ -4,40 +4,50 @@ summary: >-
   Tracks how many units of a listing or variant the principal has on hand and which units are reserved. Holds
   are local reservations (leases, CTR-IDM-001 IDM-3 and IDM-8) inside the owner's vault; they stop the same
   unit being promised twice by this vault, whether to a buyer (offers, negotiation), a giveaway recipient or a
-  barter cycle. Other parties rely on a signed reservation statement with an expiry, not on any distributed
-  lock. This module defines the InventoryPort used by F01.S04.M01, F01.S04.M02, F01.S02.M03 and LocalMutiny
-  cycle locks: hold, release, convert, renew and check.
+  barter cycle. Other parties rely on the single signed reservation statement classrup.bazaar.reservation/v1
+  (N14) with an absolute expiry and on a signed release when the promise ends early, not on any distributed lock.
+  Their vaults keep such statements as PeerReservation evidence, which never needs a local item. This module
+  defines the InventoryPort used by F01.S04.M01, F01.S04.M02, F01.S02.M03 and F02.S03.M02 (the only driver of
+  cycle holds): hold, release, convert, renew, check and a synchronous set_quantity upsert. Deal-linked holds live
+  as long as their Deal is open, up to 30 days.
 responsibilities:
-  - Own InventoryItem (on-hand quantity per listing or variant) and InventoryHold (lease with holder, quantity, expiry).
-  - Provide the InventoryPort commands bazaar.inventory.hold (all-or-nothing for up to 20 lines), release, renew, convert and the queries check and get.
-  - Issue a signed reservation statement (classrup.bazaar.reservation/v1) for a hold on request, with expiry, and store verified peer reservation statements as read-only evidence.
-  - Emit held, released, depleted events and keep available = onHand - sum of active local holds never negative.
+  - Own InventoryItem (on-hand quantity per listing or variant), InventoryHold (local lease with holder, quantity, expiry) and PeerReservation (verified reservation statement of another principal).
+  - Provide the InventoryPort commands bazaar.inventory.hold (all-or-nothing for up to 20 lines, by listing and variant or by inventoryItemId), release, renew, convert, the synchronous upsert set_quantity and the queries check and get.
+  - Issue the signed reservation statement classrup.bazaar.reservation/v1 for one or all holds of a holder on request, with an absolute expiry, and the signed release classrup.bazaar.reservation_release/v1 when such a hold ends before its expiry.
+  - Store verified peer reservation statements and releases as read-only PeerReservation evidence.
+  - Emit held, released, depleted, restocked, converted and conflict events and keep available = onHand - sum of active local holds never negative.
+  - Renew Deal-linked holds while their Deal is open and release or convert them on Deal cancellation or completion (N5).
   - Detect conflicting signed reservations from a forked second device of the same principal, freeze the affected holds and require an explicit owner decision.
+  - Register the F10 privacy ports and pseudonymize retained evidence after principal deletion (N6).
 non_responsibilities:
-  - Variants, their attributes and prices (F01.S03.M02); this module only receives a quantity per variant id.
+  - Variants, their attributes and prices (F01.S03.M02); this module only receives a quantity per variant id through set_quantity.
   - Offers, negotiation and cycle consent (F01.S04.M01, F01.S04.M02, F02.S03.M01); they request holds, they do not own them.
+  - Driving cycle holds from cycle events; F02.S03.M02 is the single caller of the port for holderType cycle and this module does not act on mutiny events.
   - Payment and Deal creation (F09.S01.M01).
   - Any claim about items in other principals' vaults; their availability is known only through their signed reservation or listing statements.
   - "Future: multi-location stock and serial-numbered units."
-depends_on: [F01.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
+depends_on: [F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
 user_stories:
-  - As a seller with one bike, accepting one buyer's offer reserves the bike so I cannot accidentally accept a second buyer in this app.
+  - As a seller with one bike, accepting one buyer's offer reserves the bike so I cannot accidentally accept a second buyer in this vault.
   - As a participant in a barter cycle, my item is reserved for the cycle for a stated time, and I can see when the reservation expires.
-  - As a buyer, I receive a signed reservation from the seller with an expiry, and the app tells me it is the seller's promise, not a guarantee.
+  - As a buyer, I receive a signed reservation from the seller with an expiry, the app tells me it is the seller's promise, not a guarantee, and it tells me when the seller released it early.
 edge_cases:
   - Two accept clicks race in two tabs on the last unit; the vault serializes them in one IndexedDB transaction and the second gets BAZAAR_INVENTORY_INSUFFICIENT.
   - A hold expires during an app restart; at start the sweep releases it and emits released with reason expired before any new hold is accepted.
   - The same holder repeats hold with the same Idempotency-Key; the original hold is returned without taking more units.
   - The owner lowers on-hand below the reserved quantity; BAZAAR_INVENTORY_BELOW_RESERVED is returned and the UI lists the holds to release.
   - A cycle needs 3 items across 3 vaults; each vault holds only its own item and issues its own statement; if one vault cannot hold, the cycle coordinator receives no reservation from it and must not treat the item as reserved.
-  - Two devices of the same principal each reserved the last unit while offline; on sync both holds become frozen, bazaar.inventory.conflict_detected is emitted, and no hold converts until the owner releases one.
+  - Two devices of the same principal each reserved the last unit while offline; on sync both holds become frozen, bazaar.inventory.conflict_detected is emitted with the linked Deals, a signed release with reason frozen goes to each audience, and no hold converts until the owner releases one.
   - Peer reservation statement arrives signed by a key that is not the listing owner's; it is quarantined and not shown as a reservation.
   - Hold renewal requested after total lifetime of 30 days; BAZAAR_INVENTORY_HOLD_LIFETIME is returned.
+  - The Deal of an accepted offer is cancelled; the hold is released with reason deal_cancelled and the buyer receives a signed release.
+  - A frozen hold is never decided by the owner; it expires at its expiresAt and the frozen state does not last forever.
+  - The variants module adds the first variant; set_quantity creates the variant item and supersedes the listing-level item in the same transaction.
 ux:
   screens:
     - "Stock editor on the listing: quantity stepper (0 to 100000), reserved count and available count, with the list of holds (holder type, quantity, expires)."
-    - "Holds list: active, frozen and ended holds, release button with confirm dialog, conflict banner for frozen holds."
-    - "Reservation detail for a buyer or cycle participant: signed reservation card with seller identity, quantity, expiry and the text This is the seller's signed promise; it does not guarantee delivery."
+    - "Holds list: active, frozen and ended holds, release button with confirm dialog stating that the counterparty is told, conflict banner for frozen holds."
+    - "Reservation detail for a buyer or cycle participant: signed reservation card with seller identity, quantity, expiry, released or frozen notice when received, and the text This is the seller's signed promise; it does not guarantee delivery."
   states: [loading, in-stock, low-stock, held-out, depleted, conflict-frozen, pending-offline]
   a11y:
     - Stock changes and hold expiry warnings are announced in an aria-live polite region.
@@ -47,8 +57,9 @@ processes:
   domain_schema:
     requirements:
       - "InventoryItem stores on-hand quantity per listing or variant; reserved and available are derived from active local holds and never stored independently."
-      - "InventoryHold is a lease with holder type, holder id, quantity, expiry, renewals and an origin of local or peer_statement; only local holds change availability."
+      - "InventoryHold is a local lease in the owner's vault with holder type, holder id, quantity, expiry, maximum lifetime and renewals; verified reservation statements of other principals are stored separately as PeerReservation evidence and never change availability."
       - "Inventory is P2 data in the owner's vault; the public sees only a coarse in-stock indicator inside the signed listing projection."
+      - "PeerReservation records a verified classrup.bazaar.reservation/v1 of another principal keyed by (issuerDid, listingId, variantId, reservationCid) with holder, quantity, absolute expiresAt, status and provenance; it needs no local InventoryItem."
     entities:
       - name: InventoryItem
         schema: classrup.bazaar.inventory_item/v1
@@ -63,6 +74,7 @@ processes:
           - "ownerId: did:key — local principal"
           - "onHand: int — 0..100000"
           - "supersededAt?: timestamp — set when the listing gains variants and this listing-level item is retired"
+          - "retiredAt?: timestamp — set while the variant is retired; retired items accept no new holds"
           - "depletedSince?: timestamp — set when available becomes 0"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
@@ -79,26 +91,53 @@ processes:
         fields:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
-          - "itemId: uuidv7 — ref InventoryItem"
+          - "itemId: uuidv7 — ref InventoryItem in this vault"
           - "listingId: uuidv7 — denormalized for queries"
           - "variantId?: uuidv7 — denormalized"
           - "quantity: int — 1..onHand"
-          - "holderType: enum — offer | negotiation | deal | cycle | giveaway"
-          - "holderId: uuidv7 — proposal, offer, cycle or request id; never a session (IDM-3)"
-          - "linkedDealId?: uuidv7 — ref F09.S01.M01 Deal once opened"
-          - "origin: enum — local | peer_statement"
+          - "holderType: enum — offer | negotiation | deal | cycle | giveaway; trade proposals use cycle with the proposal id (F02.S03.M02, N14)"
+          - "holderId: uuidv7 — offer, negotiation, deal, cycle or request id; never a session (IDM-3)"
+          - "linkedDealId?: uuidv7 — ref F09.S01.M01 Deal, set when the holder opened a Deal"
           - "status: enum — active | frozen | converted | released | expired"
           - "expiresAt: timestamp — now + ttl; ttl 60 s..14 d, default 15 min"
-          - "maxExpiresAt: timestamp — createdAt + 30 d"
+          - "maxExpiresAt: timestamp — <= createdAt + 30 d; for Deal-linked holds the Deal expiry capped at 30 d"
           - "renewals: int — 0..20"
-          - "reservationCid?: string — sha256- of the signed reservation statement issued or received"
+          - "reservationCids?: string[] — sha256- of reservation statements issued for this hold"
+          - "reservationAudience?: did:key[] — <= 10 principals the reservations were sent to"
+          - "releaseCid?: string — sha256- of the signed release sent when the hold ended early"
+          - "releaseReason?: enum — released | owner_override | listing_gone | deal_cancelled | frozen | expired"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
           - At most one active or frozen hold per (itemId, holderType, holderId).
-          - Only holds with origin local and status active count against availability; peer_statement holds never do.
+          - Only holds with status active count against availability.
           - expiresAt <= maxExpiresAt; status converted holds reduced onHand by quantity exactly once.
+          - A hold released or frozen before expiresAt with reservationCids has a releaseCid, unless holderType is cycle (F02.S03.M02 sends the cycle release notice).
+      - name: PeerReservation
+        schema: classrup.bazaar.peer_reservation/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "reservationCid: string — sha256- of the verified classrup.bazaar.reservation/v1 envelope"
+          - "issuerDid: did:key — signer, the listing author of the verified projection (F11.S01.M02)"
+          - "listingId: uuidv7 — listing of the issuer, as in the statement"
+          - "variantId?: uuidv7 — as in the statement"
+          - "holder: object — {type, id} as in the statement"
+          - "quantity: int — 1..100000"
+          - "expiresAt: timestamp — absolute expiry in the statement; evaluated on this vault's clock"
+          - "status: enum — valid | frozen | released | expired | superseded"
+          - "releaseCid?: string — sha256- of the verified release statement"
+          - "provenance: object — {receivedVia: relay|direct|import, relayId?, receivedAt, verifiedAt}"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Unique (issuerDid, listingId, variantId, reservationCid).
+          - A PeerReservation never counts against any local availability and never references a local InventoryItem.
+          - status released or frozen implies releaseCid names a verified release signed by issuerDid that binds reservationCid.
     sql: |
       CREATE TABLE bazaar_inventory_item (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, variant_id TEXT,
@@ -111,59 +150,86 @@ processes:
       CREATE UNIQUE INDEX bazaar_inventory_hold_holder ON bazaar_inventory_hold(tenant_id, item_id, holder_type, holder_id)
         WHERE status IN ('active','frozen');
       CREATE INDEX bazaar_inventory_hold_expiry ON bazaar_inventory_hold(tenant_id, status, expires_at);
+      CREATE TABLE bazaar_peer_reservation (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, issuer_did TEXT NOT NULL, listing_id TEXT NOT NULL, variant_id TEXT,
+        reservation_cid TEXT NOT NULL, status TEXT NOT NULL, expires_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_peer_reservation_key ON bazaar_peer_reservation(tenant_id, issuer_did, listing_id, ifnull(variant_id,''), reservation_cid);
   validation_rules:
     requirements:
       - "Quantities, lease times and line counts are bounded and validated before any change."
       - "A hold is accepted only when enough local availability exists for every line; otherwise nothing is held."
       - "Every violation maps to one stable error code."
+      - "Hold lines accept {listingId, variantId?} or {inventoryItemId}; holderType cycle is accepted only from F02.S03.M02, the single driver of cycle holds, with holder {type, id} taken from the lock subject (N14)."
     rules:
       - "V01 | quantity is an integer 1..100000 for hold lines and 0..100000 for set_quantity | VALIDATION_FAILED"
-      - "V02 | 1 to 20 lines per hold call; no duplicate (listingId, variantId) | VALIDATION_FAILED"
+      - "V02 | 1 to 20 lines per hold call; no duplicate item after resolving inventoryItemId lines | VALIDATION_FAILED"
       - "V03 | ttlMs between 60000 and 1209600000 | VALIDATION_FAILED"
-      - "V04 | every line's item exists, is owned by the local principal and is not superseded | BAZAAR_INVENTORY_NOT_HOLDABLE"
-      - "V05 | listing status is published, or unpublished when holderType is deal or cycle with an existing signed commitment | BAZAAR_INVENTORY_NOT_HOLDABLE"
+      - "V04 | every line's item exists, is owned by the local principal and is neither superseded nor retired | BAZAAR_INVENTORY_NOT_HOLDABLE"
+      - "V05 | listing status is published, or unpublished when holderType is deal or cycle with an existing signed commitment or the hold has linkedDealId | BAZAAR_INVENTORY_NOT_HOLDABLE"
       - "V06 | available >= quantity for every line | BAZAAR_INVENTORY_INSUFFICIENT"
       - "V07 | the vault has fewer than 500 active holds | BAZAAR_INVENTORY_HOLD_LIMIT"
       - "V08 | renewal keeps expiresAt <= maxExpiresAt and renewals < 20 | BAZAAR_INVENTORY_HOLD_LIFETIME"
       - "V09 | set_quantity does not drop onHand below reserved quantity | BAZAAR_INVENTORY_BELOW_RESERVED"
       - "V10 | hold is not frozen when converting or renewing | BAZAAR_INVENTORY_FROZEN"
-      - "V11 | peer reservation statement signature verifies and signer is the listing owner of the referenced listing | VALIDATION_FAILED"
+      - "V11 | peer reservation or release statement: signature verifies Ed25519 over JCS and the signer is the author of the verified listing projection (F11.S01.M02) of the referenced listing; a release binds the reservationCid of a stored PeerReservation of the same issuer | VALIDATION_FAILED"
+      - "V12 | an inventoryItemId line resolves to an item of this vault owned by the local principal | BAZAAR_INVENTORY_NOT_HOLDABLE"
+      - "V13 | holder.type is offer, negotiation, deal, cycle or giveaway and the caller owns that type (cycle only from F02.S03.M02) | FORBIDDEN"
+      - "V14 | maxExpiresAt, when given, is >= the first expiresAt and <= now + 30 d | VALIDATION_FAILED"
+      - "V15 | set_quantity creating the first variant item of a listing supersedes the listing-level item only when it has no active or frozen hold | CONFLICT_STATE"
   workflow_state_machine:
     requirements:
       - "InventoryHold follows the declared machine; converted, released and expired are terminal and a new hold must be requested for new needs."
       - "Hold, release, convert and renew each run in one IndexedDB transaction with the availability check, so concurrent callers in this vault are serialized."
-      - "A frozen hold stays frozen until the owner decides; conflicting signed reservations are never resolved by timestamp or last writer."
+      - "A frozen hold stays frozen until the owner decides or it expires; conflicting signed reservations are never resolved by timestamp or last writer."
+      - "Frozen holds expire at expiresAt or maxExpiresAt exactly like active ones, so no hold or reservation stays frozen forever."
+      - "A hold with linkedDealId is renewed by the lease sweep in steps of at most 7 days up to maxExpiresAt (the Deal expiry, at most 30 days) while the Deal is open, is released with reason deal_cancelled on commerce.deal.cancelled and converted on commerce.deal.completed (N5)."
     machines:
       - entity: InventoryHold
         initial: active
         terminal: [converted, released, expired]
         transitions:
-          - "active -> converted | bazaar.inventory.convert by holder, or deal completion | onHand reduced by quantity; emits bazaar.inventory.converted; emits depleted if available becomes 0"
-          - "active -> released | bazaar.inventory.release by holder or owner | quantity returns to availability; emits bazaar.inventory.released"
+          - "active -> active | lease sweep renews a hold with linkedDealId whose Deal is still open, or bazaar.inventory.renew by the holder | expiresAt extended by at most 7 d (renew: ttl) up to maxExpiresAt; renewals + 1"
+          - "active -> converted | bazaar.inventory.convert by holder, or commerce.deal.completed for linkedDealId | onHand reduced by quantity; emits bazaar.inventory.converted; emits depleted if available becomes 0"
+          - "active -> released | bazaar.inventory.release by holder or owner, or commerce.deal.cancelled for linkedDealId | quantity returns to availability; signed release queued to the reservation audience (not for cycle); emits bazaar.inventory.released"
           - "active -> expired | lease sweep when expiresAt <= now | emits bazaar.inventory.released with reason expired"
-          - "active -> frozen | conflicting signed reservation detected from the same principal's other device | emits bazaar.inventory.conflict_detected"
-          - "frozen -> released | owner chooses to drop this hold | emits bazaar.inventory.released"
-          - "frozen -> active | owner chooses to keep this hold and the conflicting one is released | availability rechecked"
+          - "active -> frozen | conflicting signed reservation detected from the same principal's other device | signed release with reason frozen queued to the reservation audience (not for cycle); emits bazaar.inventory.conflict_detected"
+          - "frozen -> released | owner chooses to drop this hold (release owner_override), or commerce.deal.cancelled for linkedDealId | emits bazaar.inventory.released"
+          - "frozen -> active | owner chooses to keep this hold and the conflicting one is released | availability rechecked; a new reservation may be issued with supersedesCid"
+          - "frozen -> expired | expiresAt or maxExpiresAt reached | emits bazaar.inventory.released with reason expired"
+      - entity: PeerReservation
+        initial: valid
+        terminal: [released, expired, superseded]
+        transitions:
+          - "valid -> released | verified classrup.bazaar.reservation_release/v1 from the issuer binding reservationCid | shown as released by the issuer"
+          - "valid -> frozen | verified release from the issuer with reason frozen | shown as under conflict; not relied on"
+          - "valid -> expired | expiresAt passed on this vault's clock | shown as expired"
+          - "valid -> superseded | verified newer reservation from the same issuer naming this cid in supersedesCid | the newer one is shown"
+          - "frozen -> released | verified release from the issuer with any reason other than frozen | shown as released"
+          - "frozen -> superseded | verified newer reservation from the issuer naming this cid in supersedesCid | conflict resolved by the issuer"
+          - "frozen -> expired | expiresAt passed on this vault's clock | shown as expired"
     timeouts:
-      - "Lease sweep every 30 s while the app is open and at app start: active holds with expiresAt <= now become expired."
-      - "Default hold ttl 15 minutes (IDM-3); offers use 7 days; cycle locks use their consent deadline up to 14 days; maximum total life 30 days."
+      - "Lease sweep every 30 s while the app is open and at app start: active and frozen holds with expiresAt <= now become expired; Deal-linked active holds with less than 24 h left are renewed first while their Deal is open."
+      - "Default hold ttl 15 minutes (IDM-3); accepted offers and negotiations use 7 days with linkedDealId and maxExpiresAt = Deal expiry; giveaway selections 72 h; cycle locks up to 14 days per renewal; maximum total life 30 days."
+      - "PeerReservation expiry is evaluated on vault open and every 60 s while open."
   commands_queries_events:
     requirements:
       - "hold, release, renew, convert and set_quantity are vault-local commands; issue_reservation is vault-local and produces the signed statement classrup.bazaar.reservation/v1; record_peer_reservation stores a verified incoming statement."
-      - "The InventoryPort for other modules consists of bazaar.inventory.hold, release, renew, convert, bazaar.inventory.check and bazaar.inventory.get_item, called inside the caller's own transaction when it runs in the same vault."
+      - "The InventoryPort for other modules consists of bazaar.inventory.hold, release, renew, convert, set_quantity, bazaar.inventory.check and bazaar.inventory.get_item, called inside the caller's own transaction when it runs in the same vault."
       - "No command contacts a relay; relays only carry reservation statements as end-to-end encrypted envelopes when a counterparty needs them."
+      - "Releasing or freezing a hold before its expiresAt queues the signed classrup.bazaar.reservation_release/v1 {releasesCid, holder, reason} to the audience of every reservation issued for it (for holderType cycle F02.S03.M02 sends its own notice); receiving vaults mark their PeerReservation released or frozen."
+      - "set_quantity is a synchronous upsert inside the caller's transaction: it creates the per-variant InventoryItem when missing and supersedes the listing-level item when the first variant item is created; bazaar.variant.changed never creates items."
     commands:
       - name: bazaar.inventory.hold
         capability: bazaar.inventory.hold
-        input: "[vault-local, port] { holder: { type, id }, ttlMs? (default 900000), linkedDealId?, lines: [{ listingId, variantId?, quantity }] (1..20) }"
-        output: "{ holds: [{ holdId, listingId, variantId?, quantity, expiresAt }] }"
-        errors: [VALIDATION_FAILED, BAZAAR_INVENTORY_NOT_HOLDABLE, BAZAAR_INVENTORY_INSUFFICIENT, BAZAAR_INVENTORY_HOLD_LIMIT]
+        input: "[vault-local, port] { holder: { type, id }, ttlMs? (default 900000), maxExpiresAt? (<= now + 30 d), linkedDealId?, lines: [{ listingId, variantId?, quantity } | { inventoryItemId, quantity }] (1..20) }"
+        output: "{ holds: [{ holdId, inventoryItemId, listingId, variantId?, quantity, expiresAt, maxExpiresAt }] }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, BAZAAR_INVENTORY_NOT_HOLDABLE, BAZAAR_INVENTORY_INSUFFICIENT, BAZAAR_INVENTORY_HOLD_LIMIT]
         emits: [bazaar.inventory.held, bazaar.inventory.depleted]
         idempotent: true
       - name: bazaar.inventory.release
         capability: bazaar.inventory.release
-        input: "[vault-local, port] { holder: { type, id } | holdIds[], reason: released|owner_override }"
-        output: "{ released: int }"
+        input: "[vault-local, port + statement classrup.bazaar.reservation_release/v1 when reservations were issued] { holder: { type, id } | holdIds[], reason: released|owner_override|deal_cancelled|listing_gone }"
+        output: "{ released: int, releaseCids[] }"
         errors: [NOT_FOUND, CONFLICT_STATE]
         emits: [bazaar.inventory.released, bazaar.inventory.restocked]
         idempotent: true
@@ -183,110 +249,133 @@ processes:
         idempotent: true
       - name: bazaar.inventory.set_quantity
         capability: bazaar.inventory.adjust
-        input: "[vault-local] { listingId, variantId?, onHand, expectedRevision? }"
-        output: "{ itemId, onHand, available, revision }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, VALIDATION_FAILED, BAZAAR_INVENTORY_BELOW_RESERVED]
+        input: "[vault-local, port, synchronous upsert] { listingId, variantId?, onHand, expectedRevision? }"
+        output: "{ itemId, created: boolean, supersededItemId?, onHand, available, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_INVENTORY_BELOW_RESERVED]
         emits: [bazaar.inventory.depleted, bazaar.inventory.restocked]
         idempotent: true
       - name: bazaar.inventory.issue_reservation
         capability: bazaar.inventory.issue_reservation
-        input: "[vault-local + statement classrup.bazaar.reservation/v1] { holdId, audience: did:key[] }"
+        input: "[vault-local + statement classrup.bazaar.reservation/v1] { holdId | holdIds[1..20] | holder: { type, id } (all its active holds), audience: did:key[] (1..10), expiresAt? (default the holds' maxExpiresAt for Deal-linked holds, else their expiresAt; never above maxExpiresAt), ext? { subjectType?, revisionHash?, supersedesCid? } }"
         output: "{ reservationCid, expiresAt }"
-        errors: [NOT_FOUND, CONFLICT_STATE, BAZAAR_INVENTORY_FROZEN]
+        errors: [NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_INVENTORY_FROZEN]
         emits: []
         idempotent: true
       - name: bazaar.inventory.record_peer_reservation
         capability: bazaar.inventory.record_peer
-        input: "[vault-local] { statement: classrup.bazaar.reservation/v1 envelope, provenance }"
-        output: "{ holdId, accepted: boolean, quarantineReason? }"
+        input: "[vault-local] { statement: classrup.bazaar.reservation/v1 | classrup.bazaar.reservation_release/v1 envelope, provenance }"
+        output: "{ peerReservationId?, accepted: boolean, status?, quarantineReason?: signature_invalid|signer_not_listing_author|unknown_reservation|duplicate }"
         errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION]
         emits: []
         idempotent: true
+    note: >-
+      Statements (N2, N14, registered with F11.S01.M01): classrup.bazaar.reservation/v1 {holder {type, id}, items
+      [{listingId, listingCid?, variantId?, quantity}] (1..20), expiresAt (absolute), ext? {subjectType, revisionHash,
+      supersedesCid}}, signer role listing author (owner of the listed items; for holderType cycle also a giver in the
+      head revision, checked by F02.S03.M02); classrup.bazaar.reservation_release/v1 {releasesCid, holder, reason:
+      released|owner_override|listing_gone|deal_cancelled|frozen|conflict_resolved}, signer role signer of the released
+      reservation. classrup.mutiny.cycle_lock/v1 is not a statement and classrup.mutiny.reservation_release/v1 is the
+      cycle release notice sent by F02.S03.M02. Statements from blocked DIDs are dropped silently (N7). Privacy ports
+      (N6): the module registers ExportSectionPort (sections bazaar.inventory_items, bazaar.inventory_holds and
+      bazaar.peer_reservations), DeletionPort (plan: release own non-evidence holds, pseudonymize counterparty DIDs in
+      retained evidence) and RetentionPurgePort with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
     queries:
       - name: bazaar.inventory.check
         capability: bazaar.inventory.read
-        input: "{ lines: [{ listingId, variantId?, quantity }] (1..20) }"
+        input: "{ lines: [{ listingId, variantId?, quantity } | { inventoryItemId, quantity }] (1..20) }"
         output: "{ ok: boolean, lines: [{ listingId, variantId?, available, ok }] }"
         errors: [VALIDATION_FAILED]
       - name: bazaar.inventory.get_item
         capability: bazaar.inventory.read
-        input: "{ listingId, variantId? }"
+        input: "{ listingId, variantId? } | { inventoryItemId }"
         output: "{ item: InventoryItem, reserved, available }"
         errors: [NOT_FOUND]
       - name: bazaar.inventory.list_holds
         capability: bazaar.inventory.read
-        input: "{ listingId?, status?, cursor?, limit <= 50 }"
+        input: "{ listingId?, status?, holderType?, linkedDealId?, cursor?, limit <= 50 }"
         output: "{ items: InventoryHold[], nextCursor? }"
         errors: [VALIDATION_FAILED]
+      - name: bazaar.inventory.list_peer_reservations
+        capability: bazaar.inventory.read_peer
+        input: "{ issuerDid?, listingId?, holder?, status?, cursor?, limit <= 50 }"
+        output: "{ items: PeerReservation[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
     events_produced:
-      - {type: bazaar.inventory.held, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, expiresAt }"}
-      - {type: bazaar.inventory.released, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, reason: released|expired|owner_override|listing_gone }"}
+      - {type: bazaar.inventory.held, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, linkedDealId?, expiresAt }"}
+      - {type: bazaar.inventory.released, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, linkedDealId?, reason: released|expired|owner_override|listing_gone|deal_cancelled, releaseCid? }"}
       - {type: bazaar.inventory.depleted, privacy: P2, payload: "{ listingId, variantId?, reason: held|sold }"}
       - {type: bazaar.inventory.restocked, privacy: P2, payload: "{ listingId, variantId?, available }"}
-      - {type: bazaar.inventory.converted, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, onHand }"}
-      - {type: bazaar.inventory.conflict_detected, privacy: P2, payload: "{ listingId, variantId?, holdIds[], reason: forked_reservation }"}
+      - {type: bazaar.inventory.converted, privacy: P2, payload: "{ holdId, listingId, variantId?, quantity, holderType, holderId, linkedDealId?, onHand }"}
+      - {type: bazaar.inventory.conflict_detected, privacy: P2, payload: "{ listingId, variantId?, holdIds[], holders[{type, id}], linkedDealIds[], reason: forked_reservation }"}
     events_consumed:
       - {type: bazaar.listing.created, effect: "create the listing-level InventoryItem with onHand 1 for kinds sell, giveaway and rental; none for wanted, service and auction"}
-      - {type: bazaar.listing.archived, effect: "release active local holds with reason listing_gone unless a Deal is linked"}
-      - {type: bazaar.listing.deleted, effect: "delete InventoryItem and non-converted holds of the listing"}
-      - {type: bazaar.variant.changed, effect: "create, retire or reactivate the variant InventoryItem and supersede the listing-level item when the first variant is added"}
+      - {type: bazaar.listing.archived, effect: "release active local holds with reason listing_gone and queue signed releases, unless a Deal is linked or holderType is cycle"}
+      - {type: bazaar.listing.deleted, effect: "delete InventoryItem and non-converted holds of the listing; evidence holds stay under RET-EVIDENCE"}
+      - {type: bazaar.variant.changed, effect: "retired: set retiredAt on the variant item; reactivated: clear retiredAt; removed: delete the item when it has no active or frozen hold; no item is created here (creation is synchronous through set_quantity)"}
       - {type: commerce.deal.completed, effect: "convert the hold whose linkedDealId equals the event dealId"}
-      - {type: mutiny.cycle.completed, effect: "convert holds with holderType cycle and holderId equal to cycleId"}
-      - {type: mutiny.cycle.cancelled, effect: "release holds with holderType cycle and holderId equal to cycleId"}
-      - {type: mutiny.cycle.unlocked, effect: "release holds with holderType cycle and holderId equal to cycleId when still active"}
+      - {type: commerce.deal.cancelled, effect: "release active or frozen holds whose linkedDealId equals the event dealId with reason deal_cancelled and queue the signed release to their reservation audience"}
+      - {type: privacy.deletion.completed, effect: "replace the deleted principal's DID with the payload pseudonym in RET-EVIDENCE holds (reservation audience) and in PeerReservation records"}
     errors:
-      - "BAZAAR_INVENTORY_NOT_HOLDABLE | 409 | no | item missing, superseded, not owned locally, or listing not in a holdable state"
+      - "BAZAAR_INVENTORY_NOT_HOLDABLE | 409 | no | item missing, superseded, retired, not owned locally, or listing not in a holdable state"
       - "BAZAAR_INVENTORY_INSUFFICIENT | 409 | no | fewer units available than requested for at least one line; nothing was held"
       - "BAZAAR_INVENTORY_HOLD_LIMIT | 409 | no | vault already has 500 active holds"
-      - "BAZAAR_INVENTORY_HOLD_LIFETIME | 409 | no | renewal would exceed 30 days total life or 20 renewals"
+      - "BAZAAR_INVENTORY_HOLD_LIFETIME | 409 | no | renewal would exceed 30 days total life, maxExpiresAt or 20 renewals"
       - "BAZAAR_INVENTORY_BELOW_RESERVED | 409 | no | on-hand cannot go below the reserved quantity"
       - "BAZAAR_INVENTORY_FROZEN | 409 | no | hold is frozen by a detected conflict and needs an owner decision"
     example: |
       vault.dispatch("bazaar.inventory.hold", { "holder": { "type": "offer", "id": "0192f3a5-..." }, "ttlMs": 604800000,
+        "maxExpiresAt": "2026-12-04T10:00:00.000Z", "linkedDealId": "0192f3a6-dddd-...",
         "lines": [ { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "quantity": 1 } ] }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000051")
-      => { "holds": [ { "holdId": "0192f3a6-...", "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "quantity": 1, "expiresAt": "2026-11-11T10:00:00.000Z" } ] }
-      vault.dispatch("bazaar.inventory.issue_reservation", { "holdId": "0192f3a6-...", "audience": ["did:key:z6Mk..."] })
-      => { "reservationCid": "sha256-Zm9v...", "expiresAt": "2026-11-11T10:00:00.000Z" }
+      => { "holds": [ { "holdId": "0192f3a6-...", "inventoryItemId": "0192f3a4-aaaa-...", "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "quantity": 1,
+           "expiresAt": "2026-11-11T10:00:00.000Z", "maxExpiresAt": "2026-12-04T10:00:00.000Z" } ] }
+      vault.dispatch("bazaar.inventory.issue_reservation", { "holder": { "type": "offer", "id": "0192f3a5-..." }, "audience": ["did:key:z6MkBuyer..."] })
+      => { "reservationCid": "sha256-Zm9v...", "expiresAt": "2026-12-04T10:00:00.000Z" }
+      later commerce.deal.cancelled { dealId: "0192f3a6-dddd-..." } => hold released (deal_cancelled), classrup.bazaar.reservation_release/v1 queued to the buyer
   authorization_capabilities:
     requirements:
       - "Vault policy: hold, release, renew and convert are internal ports callable only by the named modules (offers, negotiation, giveaway, cycle lock, deal completion) on behalf of the local principal; the UI uses adjust and release with owner override."
       - "A peer reservation statement is accepted only if signed by an authorized key of the listing owner for that listing; otherwise it is quarantined with a reason (CAP-8)."
       - "No relay policy row exists because this module never calls a relay; relays carry encrypted reservation envelopes without reading them."
     capabilities:
-      - "bazaar.inventory.hold | system | caller is F01.S04.M01, F01.S04.M02, F01.S02.M03 or F02.S03.M02 in the vault that owns the item"
-      - "bazaar.inventory.release | system | caller is the holder module, the lease sweep, or the owner via override"
-      - "bazaar.inventory.renew | system | caller is the holder module; hold not frozen"
-      - "bazaar.inventory.convert | system | caller is the holder module or the deal/cycle completion consumer"
-      - "bazaar.inventory.adjust | owner | item.ownerId = local principal"
-      - "bazaar.inventory.issue_reservation | owner | hold.origin local and active; audience at most 10 principals"
-      - "bazaar.inventory.record_peer | peer | statement signed by listing owner key; signature, schema and expiry verified"
+      - "bazaar.inventory.hold | system | caller is F01.S04.M01, F01.S04.M02, F01.S02.M03 or F02.S03.M02 in the vault that owns the item; holderType cycle only from F02.S03.M02"
+      - "bazaar.inventory.release | system | caller is the holder module, the lease sweep, the Deal consumer, F01.S01.M04 close or archive, or the owner via override"
+      - "bazaar.inventory.renew | system | caller is the holder module or the lease sweep for Deal-linked holds; hold not frozen"
+      - "bazaar.inventory.convert | system | caller is the holder module, F01.S01.M04 close for the closing Deal, or the deal completion consumer"
+      - "bazaar.inventory.adjust | owner | item.ownerId = local principal; also callable by F01.S03.M02 inside its own transaction"
+      - "bazaar.inventory.issue_reservation | owner | hold active and owned locally; audience at most 10 principals"
+      - "bazaar.inventory.record_peer | peer | statement signed by the author key of the verified listing projection; signature, schema and expiry verified"
       - "bazaar.inventory.read | owner | item.ownerId = local principal or caller module on its behalf"
+      - "bazaar.inventory.read_peer | owner | local principal is in the statement audience or the caller module acts on its behalf"
   failure_recovery_idempotency:
     requirements:
       - "All commands are idempotent per CTR-IDM-001; holds are idempotent per holder, so a retry never takes units twice."
       - "A multi-line hold is all-or-nothing in one IndexedDB transaction; there is no partial hold."
       - "A local reservation protects only this vault; cross-vault consistency is provided by signed statements with expiry and by explicit conflict detection, never by a lock."
-    idempotency: "Idempotency-Key required on every command; the vault keeps key and request hash 24 h. A hold call with an existing active (item, holderType, holderId) returns the existing hold unchanged."
+    idempotency: "Idempotency-Key required on every command; the vault keeps key and request hash 24 h. A hold call with an existing active (item, holderType, holderId) returns the existing hold unchanged. Peer statements are deduplicated by cid."
     concurrency: "BEGIN-equivalent IndexedDB readwrite transaction per command re-reads availability; expectedRevision on set_quantity. Forks from a second device of the same principal are detected by reservation statements with the same item and overlapping quantity that exceed onHand; affected holds freeze and neither is converted automatically."
     retries: "Port callers do not retry BAZAAR_INVENTORY_INSUFFICIENT; transaction aborts are retried up to 3 times 50 ms apart; statement transport follows IDM-4."
-    offline: "All commands work offline. Reservation statements wait in the sync outbox as prepared; the UI states that the buyer has not yet received the promise until transport_acknowledged and shows peer_accepted only after the buyer's signed acknowledgement."
-    partial_failure: "If signing the reservation fails after a hold was taken, the hold remains valid locally and the statement is retried; if the caller's transaction aborts, the hold in the same transaction is rolled back with it."
+    offline: "All commands work offline. Reservation and release statements wait in the sync outbox as prepared; the UI states that the buyer has not yet received the promise until transport_acknowledged and shows peer_accepted only after the buyer's signed acknowledgement."
+    partial_failure: "If signing the reservation or release fails after a hold change, the hold change remains valid locally and the statement is retried; if the caller's transaction aborts, the hold in the same transaction is rolled back with it."
   privacy_retention_abuse:
     requirements:
       - "Quantities and holders are P2 and never appear in public projections, relay indexes or notification payloads; the public sees only in stock or out of stock."
       - "Reservation statements travel only as end-to-end encrypted envelopes to the listed audience (PRV-5)."
       - "Holds are retained RET-EVIDENCE when linked to a deal or cycle; other holds follow RET-STANDARD purge with the listing."
+      - "The module registers ExportSectionPort, DeletionPort and RetentionPurgePort with F10 (N6), annotates every InventoryItem, InventoryHold and PeerReservation field with its F10.S02.M02 class, and pseudonymizes the deleted principal in retained evidence on privacy.deletion.completed."
     data:
-      - "InventoryItem and InventoryHold: P2 in the owner's vault."
-      - "Reservation statement: P2, encrypted to audience, signed by the owner key."
+      - "InventoryItem and InventoryHold: P2 in the owner's vault; field classes annotated per F10.S02.M02."
+      - "Reservation and release statements: P2, encrypted to audience, signed by the owner key."
+      - "PeerReservation: P2 evidence in the audience member's vault."
     retention:
-      - "Holds with linkedDealId or holderType cycle: RET-EVIDENCE (2 years after last related activity)."
+      - "Holds with linkedDealId or holderType cycle: RET-EVIDENCE (2 years after last related activity), DIDs pseudonymized after principal deletion."
       - "Other terminal holds: RET-STANDARD, purged 30 days after the listing is deleted."
+      - "PeerReservation: RET-EVIDENCE; quarantined statements RET-SHORT 30 days."
     threats:
       - "T01 | Hold hoarding to block a seller (denial of stock) | holds are created only by the seller's vault on its own decisions; buyers cannot create holds; limits of 500 active holds and 30 days life"
-      - "T02 | Double promise of the last unit across two devices | frozen state and conflict event; no automatic conversion; signed statements make the conflict provable"
-      - "T03 | Forged reservation statement shown to a buyer | verification of the listing owner's key; unverified statements are quarantined and never rendered as reservations"
+      - "T02 | Double promise of the last unit across two devices | frozen state, conflict event and signed frozen release to each audience; no automatic conversion; signed statements make the conflict provable"
+      - "T03 | Forged reservation or release statement shown to a buyer | verification against the author of the verified listing projection; releases must bind a stored reservationCid; unverified statements are quarantined and never rendered"
       - "T04 | Stock probing to infer sales volume | quantities are not published; check results to peers are boolean only via signed statements"
+      - "T05 | Stale promise after the seller released early | signed release queued to the audience on every early release or freeze; the peer marks its copy released or frozen"
     abuse_controls:
       - "At most 200 hold commands per hour per vault."
       - "Cycle holds beyond 14 days ttl are refused; maximum lifetime 30 days."
@@ -309,35 +398,42 @@ processes:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate port inputs, outputs, events and the reservation statement against the schema registry."
       - "The race and fork scenarios are covered by deterministic tests with injected clock and ids."
-    fixtures: "Vault of seller S with listing L (quantity 1) and listing M with variants V1 (quantity 3) and V2 (quantity 0), second device D2 of S, buyers B1 and B2, clock 2026-11-04T10:00:00Z."
+    fixtures: "Vault of seller S with listing L (quantity 1) and listing M with variants V1 (quantity 3) and V2 (quantity 0), second device D2 of S, buyer vaults B1 and B2 with the verified projection of L, a key K that is not S, open Deal D for an offer on L, clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | hold 1 of L; hold 1 more | first held with expiry, second BAZAAR_INVENTORY_INSUFFICIENT; available never negative"
       - "T02 | unit | 01.R03,07.R01 | read public projection and event payloads | no quantities or holder ids outside P2 events; projection has only in-stock boolean"
-      - "T03 | unit | 02.R03 | violate each rule V01-V11 | documented error code returned and no state change"
+      - "T03 | unit | 02.R03 | violate each rule V01-V15 | documented error code returned and no state change"
       - "T04 | property | 03.R01,03.R02 | random hold/release/renew/convert/clock sequences | only declared transitions; onHand >= reserved; converted exactly once"
       - "T05 | integration | 03.R02,06.R02 | two tabs hold the last unit concurrently | exactly one hold succeeds, other gets INSUFFICIENT"
-      - "T06 | integration | 03.R03,06.R02 | D2 holds the same last unit offline then syncs | both holds frozen, conflict event emitted, convert refused with FROZEN until owner releases one"
-      - "T07 | contract | 04.R01,04.R02,09.R02 | each command and the reservation statement | outputs, events and statement validate; signature verifies with owner key"
-      - "T08 | integration | 04.R03,07.R03 | reservation travels via relay mailbox | relay sees ciphertext and routing metadata only; no network call from hold/release/convert"
+      - "T06 | integration | 03.R03,06.R02 | D2 holds the same last unit offline then syncs | both holds frozen, conflict event with linkedDealIds emitted, convert refused with FROZEN until owner releases one"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | each command and the reservation and release statements | outputs, events and statements validate; signature verifies with owner key"
+      - "T08 | integration | 04.R03,07.R02 | reservation travels via relay mailbox | relay sees ciphertext and routing metadata only; no network call from hold/release/convert"
       - "T09 | abuse | 05.R01,05.R02,05.R03 | UI-context dispatch of hold; peer statement signed by non-owner | FORBIDDEN; statement quarantined; relay has no policy row"
       - "T10 | integration | 06.R01 | replay hold with same key and same holder with new key | same hold returned, units taken once"
       - "T11 | chaos | 06.R03 | abort caller transaction after hold | hold rolled back with it; signing failure leaves valid hold and queued retry"
       - "T12 | integration | 06.R01,06.R03 | offline reservation issued | outbox prepared, UI text says not yet received; peer_accepted only after signed ack"
-      - "T13 | integration | 07.R02 | deal completed event then listing deleted | hold converted once; evidence kept per class; non-converted holds removed"
+      - "T13 | integration | 07.R03 | deal completed event then listing deleted | hold converted once; evidence kept per class; non-converted holds removed"
       - "T14 | abuse | 07.R01,07.R03 | 201 hold commands in one hour | 201st returns RATE_LIMITED; holds above 14 d ttl refused"
       - "T15 | load | 08.R01,08.R02,08.R03 | 500 active holds on Moto G profile | hold p95 <= 60 ms, sweep <= 100 ms, no telemetry requests"
       - "T16 | unit | 09.R01,09.R03 | traceability tool run, race test seed replay | every PS-008 requirement maps to a passing test; seeds printed on failure"
-      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault with expired and frozen holds | items round-trip; expired imported as expired; frozen imported frozen; peer holds read-only"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault with expired and frozen holds and peer reservations | items round-trip; expired imported as expired; frozen imported frozen; peer reservations read-only"
+      - "T18 | integration | 01.R04 | B1 records S's reservation for L although B1 has no InventoryItem for L, then a release signed by K, then a valid release | PeerReservation stored valid with provenance and no itemId; K's release quarantined; valid release marks it released"
+      - "T19 | contract | 02.R04 | F02.S03.M02 holds by inventoryItemId with holder {type: cycle, id: subjectId}; F01.S04.M01 requests holderType cycle | first succeeds with lines resolved; second FORBIDDEN"
+      - "T20 | property | 03.R04 | frozen holds under clock advance without owner decision | every frozen hold reaches expired at expiresAt or maxExpiresAt and emits released with reason expired"
+      - "T21 | integration | 03.R05 | hold for Deal D with ttl 7 d and maxExpiresAt 30 d; advance to day 6; then commerce.deal.cancelled for D | hold renewed by the sweep before lapsing; on cancellation released with reason deal_cancelled and a signed release queued to the buyer"
+      - "T22 | integration | 04.R04 | release with owner_override and listing archive before expiresAt for a hold with an issued reservation; B1 receives the release | releaseCid set and statement queued to the audience; B1's PeerReservation becomes released; cycle holds queue no bazaar release"
+      - "T23 | integration | 04.R05 | F01.S03.M02 adds the first variant of L inside its transaction via set_quantity, then a second variant | variant item created synchronously and the listing-level item superseded in the same transaction; with an active listing-level hold CONFLICT_STATE; bazaar.variant.changed creates nothing"
+      - "T24 | integration | 07.R04 | export sections, deletion plan, retention purge, then privacy.deletion.completed | sections present with field classes; buyer DID pseudonymized in retained evidence holds and peer reservations"
     acceptance:
-      - All tests T01-T17 pass in CI.
+      - All tests T01-T24 pass in CI.
       - available never goes negative and a unit is never converted twice, including under concurrent tabs and forked devices.
-      - The UI and APIs never describe a reservation as guaranteed or as accepted by the peer without the signed acknowledgement.
+      - The UI and APIs never describe a reservation as guaranteed or as accepted by the peer without the signed acknowledgement, and every early release or freeze of an issued reservation reaches its audience as a signed release.
   import_export_backup_rollback:
     requirements:
       - "The user export contains InventoryItem and InventoryHold rows, including peer reservation statements, in section bazaar.inventory."
       - "Import imports active holds as expired when their expiresAt has passed and never revives a lease; frozen holds stay frozen."
       - "Schema changes follow expand/contract and keep v1 readable for 180 days."
-    export: "Sections bazaar.inventory_items and bazaar.inventory_holds in classrup-export/v1, one line per record, with reservation statements as separate lines."
-    import: "Items imported if the listing exists; holds whose holder module is absent are kept read-only; conflicting ids are rejected with a dry-run report."
+    export: "Sections bazaar.inventory_items, bazaar.inventory_holds and bazaar.peer_reservations in classrup-export/v1, one line per record, with reservation and release statements as separate lines."
+    import: "Items imported if the listing exists; holds whose holder module is absent are kept read-only; peer reservations re-verified; conflicting ids are rejected with a dry-run report."
     backup: "Vault export is the primary backup (IOX-6); no relay holds inventory."
-    migration_rollback: "Additive optional fields only in v1; rollback to the previous release is safe because older readers ignore new fields and leases are recomputed from expiresAt."
+    migration_rollback: "Expand/contract: earlier InventoryHold rows with origin peer_statement are migrated into PeerReservation and kept readable for 180 days; rollback to the previous release is safe because older readers ignore new fields and leases are recomputed from expiresAt."

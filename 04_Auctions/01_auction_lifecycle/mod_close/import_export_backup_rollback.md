@@ -7,15 +7,15 @@
 ## Requirements
 
 - **PS-034-10.R01** The participant's vault export contains results, signed statements and Deal references so the outcome can be reconstructed without the host.
-- **PS-034-10.R02** Import verifies the host signature and ledger head; unverifiable results are kept as read-only history with a warning.
+- **PS-034-10.R02** Import verifies the host signature, the disclosure commitment and the ledger head; unverifiable results are kept as read-only history with a warning.
 - **PS-034-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
 
-- **export:** Section auctions.results in classrup-export/v1; one line per AuctionResult with the signed result, report, offer and response envelopes.
-- **import:** Terminal results import as history; awaiting_payment results import as is and resume timers from the stored closedAtHost; second_chance_offered offers whose expiry has passed import as failed.
+- **export:** Section auctions.results in classrup-export/v1; one line per AuctionResult with the signed result, disclosure, report, candidate list, offer and response envelopes.
+- **import:** Terminal results import as history; awaiting_payment and non_payment results import as is and resume timers from the stored closedAtHost; second_chance_offered offers whose expiry has passed import as failed in the seller vault and recorded in the candidate vault.
 - **backup:** The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and after restore re-checks the one-result-per-auction constraint.
-- **migration rollback:** Additive optional fields only in v1; the signed result payload is frozen per version so rollback never invalidates signatures.
+- **migration rollback:** Additive optional fields only in v1; the signed result and disclosure payloads are frozen per version so rollback never invalidates signatures.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -41,6 +41,8 @@
 | `commerce.payment.reorged` | schedule an incremental run for the claim's deal |
 | `commerce.receipt.issued` | schedule an incremental run for the claim's deal |
 | `commerce.payment.expired` | mark the matching stale-claim mismatch resolved on the next run |
+| `commerce.payment.failed` | schedule an incremental run for the claim's deal |
+| `privacy.deletion.completed` | through the DeletionPort plan, delete the deleted principal's reports and schedule a fresh run; reports are derived and hold no evidence |
 
 ### Module errors
 
@@ -68,4 +70,4 @@ completed report excerpt: { "counts": { "deals": 12, "claims": 15, "observations
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

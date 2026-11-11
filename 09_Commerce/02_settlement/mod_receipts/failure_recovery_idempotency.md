@@ -15,8 +15,8 @@
 - **idempotency:** Vault command ID recorded for 24 h; receipts deduplicated by receiptCid; unique index on (claim, signer, type).
 - **concurrency:** Unique index serializes two tabs signing the same receipt; one wins and the other gets CONFLICT_STATE. No cross-vault lock is needed because each party signs independently.
 - **retries:** Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h for 14 days.
-- **offline:** Signing works offline with the local key; delivery waits in the outbox and shows prepared.
-- **partial failure:** If delivery fails after signing, the receipt exists locally and the user can export it as a file and send it by any channel; nothing is rolled back.
+- **offline:** Signing works offline with the local key; delivery waits in the outbox and shows prepared. Offline verification of a file uses only its embedded key-link chain; without a trusted receipt time a revoked key reads 'key revoked; signing time unverifiable'.
+- **partial failure:** If delivery fails after signing, the receipt exists locally and the user can export it as a file and send it by any channel; nothing is rolled back. If the key registry snapshot is unavailable, keyStatus is unknown and never reported as active.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -28,4 +28,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

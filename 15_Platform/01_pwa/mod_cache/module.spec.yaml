@@ -1,186 +1,219 @@
-# F15.S01.M02 PWA caching (ADR-0015 format). Keep IDs stable once published.
+# F15.S01.M02 PWA caching (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
 id: F15.S01.M02
 scope: MVP
 summary: >-
   The service worker (Vite 8.3.5 with vite-plugin-pwa 2.0.0, injectManifest strategy, Workbox 7.4.1) makes the
-  app shell load offline after the first visit, caches public listing images with stale-while-revalidate,
-  and never caches authenticated API traffic or private media. Every cache name carries a version so old
-  caches are deleted when a release activates, and a waiting worker only takes over after the user consents
-  through F15.S01.M03. The static PWA host serves only these files; it is never the backend (ADR-0001).
+  app shell load offline after the first visit, caches public listing images and never caches vault data,
+  relay commands or private media. Public images are content-addressed media blobs (N9) fetched from the
+  user-selected relays' public media route (F15.S02.M01, GET /media/v1/sha256-<base64url>); the worker checks
+  that the bytes hash to the requested content address before it caches or shows them, and keys the cache by
+  content address in a per-principal partition, so no relay can swap a photo and no principal on a shared
+  browser profile sees what another viewed. Every cache name carries a version so old caches are deleted when
+  a release activates, a waiting worker only takes over after the user consents through F15.S01.M03, and a
+  kill file lets the static host replace a bad build with a known-good one. The static PWA host serves only
+  these files; it is never a relay and never authoritative (ADR-0016).
 responsibilities:
   - Precache the app shell (HTML entry, hashed JS and CSS, fonts, icons, locale catalogs for the default locale) within a 1.5 MiB budget and serve navigations from the precached index.html when offline.
-  - Serve public listing images with StaleWhileRevalidate from cache classrup-img-v1, limited to 200 entries and 30 days, and drop them first under storage pressure.
-  - Send every authenticated API request, private media request and non-GET request straight to the network (NetworkOnly) so no user data is ever written to a cache.
-  - Delete outdated precaches and runtime caches on activate using the cache-name allowlist, and clear user-visible runtime caches on sign-out.
+  - Serve public listing images cache-first from the per-principal cache classrup-img-v1-<partition>, keyed by content address and independent of the relay that served them, limited to 200 entries and 30 days per partition, after verifying SHA-256 of the body against the content address, and drop them first under storage pressure.
+  - Send every other request to a user-selected relay origin (relay commands and queries, mailbox, private or encrypted media) and every non-GET request straight to the network (NetworkOnly) so no user data is ever written to a cache.
+  - Delete outdated precaches and runtime caches on activate using the cache-name allowlist, unbind the principal's image partition on vault lock and principal switch, and delete it on Erase vault (CLEAR_USER_CACHES).
+  - Run the kill-switch check: a network-only, no-store fetch of /sw-kill.json that retires a named bad build by installing the known-good build in its place.
 non_responsibilities:
-  - Install prompt, manifest and the update-available UI (F15.S01.M03 mod_install); this module only exposes the SKIP_WAITING message handler.
-  - Queueing failed writes (F15.S01.M01 mod_offline); the service worker does not use Workbox background sync for authenticated commands.
-  - Server-side cache headers of an optional relay (F15.S02.M01 mod_relays sets Cache-Control on public media); the PWA works with no relay after install.
+  - Install prompt, manifest, release-manifest verification and the update-available UI (F15.S01.M03 mod_install); this module only exposes the nonce-guarded SKIP_WAITING message handler.
+  - Queueing failed writes (F15.S01.M01 mod_offline); the service worker does not use Workbox background sync for relay commands.
+  - The public media route and its headers (F15.S02.M01 serves GET /media/v1/sha256-<base64url> from F15.S02.M03 blobs) and metadata stripping before content addressing (F10.S02.M03 in the author's vault); the PWA works with no relay after install.
+  - The list of user-selected relays (relay selection in the vault); the worker receives the origins in memory with BIND_PARTITION.
   - "Future: offline read cache for the member's own listings and conversations encrypted at rest; Future: periodic background sync of saved searches."
-depends_on: [CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001]
+depends_on: [F15.S02.M01, F15.S02.M03, CTR-CAP-001, CTR-ID-001, CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001]
 user_stories:
   - As a member on a flaky connection, I can open the app after my first visit with no signal and see the shell, my pending actions and previously viewed public listing images.
-  - As a member, I never see another person's private data in an offline cache after signing out on a shared phone.
+  - As a member sharing a browser profile, another principal never sees which listing images I viewed, and locking my vault stops my image cache from being used.
+  - As a member, a relay cannot swap the photo of a listing I looked at, because the app shows only bytes that match the photo's content address.
   - As a member, when a new version is available I keep using the current one until I choose to update.
 edge_cases:
-  - A public image URL starts returning 404 or 410 after a listing is removed; the stale cached copy is served once, the revalidation response replaces nothing (non-200 is not cached) and the entry is evicted by the next cleanup.
-  - A response to an image request carries Cache-Control private or no-store, a Set-Cookie header or Vary Authorization; the worker refuses to store it and serves the network response.
-  - Storage quota is nearly full (navigator.storage.estimate usage over 80 percent); runtime image cache is purged and precache stays, and QuotaExceededError never breaks a fetch.
+  - A public image starts returning 404 or 410 after a listing is removed; a cached verified copy is served, the background check sees the non-200 status, nothing is stored and the entry is evicted.
+  - A relay returns bytes for /media/v1/sha256-X that do not hash to X; the response is discarded, counted as a digest mismatch, never cached or shown, and the next selected relay is tried.
+  - A response to an image request carries Cache-Control private or no-store, a Set-Cookie header or Vary Authorization; the worker refuses to store it.
+  - Storage quota is nearly full (navigator.storage.estimate usage over 80 percent); the image partitions are purged and precache stays, and QuotaExceededError never breaks a fetch.
   - A user opens an old tab after a release; the old worker still serves its own precache until the new one is activated by consent, and requests for hashed assets that no longer exist fall back to the network with a reload prompt.
-  - No relay is configured or the selected relay is unreachable and the user navigates to a deep link; the precached index.html loads, the router renders, and API calls fail with an offline state instead of a browser error page.
+  - No relay is configured or the selected relay is unreachable and the user navigates to a deep link; the precached index.html loads, the router renders, and relay calls fail with an offline state instead of a browser error page.
   - The static host returns its own 404 page for a missing asset; the worker does not cache non-200 or text/html responses for asset URLs.
+  - A page script posts SKIP_WAITING without the nonce of the waiting worker, or replays an old nonce; the worker ignores it.
+  - The kill file names the active build but the known-good build cannot be fetched; the worker deletes its caches and unregisters, and the spec states that the next start then needs the network once.
 ux:
-  notes: "Headless worker. User-visible effects: offline banner 'You are offline, showing saved content' (role=status) driven by F15.S01.M01 state, a stale image shows no extra chrome, and storage-pressure purge is silent. The update prompt belongs to F15.S01.M03."
+  notes: "Headless worker. User-visible effects: offline banner 'You are offline, showing saved content' (role=status) driven by F15.S01.M01 state, a cached image shows no extra chrome, an image that failed verification shows the neutral listing image frame with 'Image could not be verified', storage-pressure purge is silent, and after a kill-switch replacement the app shows 'A faulty version was replaced' once. The update prompt belongs to F15.S01.M03."
 processes:
   domain_schema:
     requirements:
       - The module owns no persisted entity; it defines cache namespaces, the build-time precache manifest and the routing table as configuration.
-      - Cache names follow classrup-precache-v{buildId} for the Workbox precache and classrup-img-v1 for runtime public images, where buildId is the 8-character content hash of the build.
+      - Cache names follow classrup-precache-v{buildId} for the Workbox precache and classrup-img-v1-<partition> for runtime public images, where buildId is the 8-character content hash of the build and partition is the first 16 hex characters of SHA-256 of the principal DID and a per-device random salt.
       - The routing table is data (an ordered list of rules) so it can be unit tested without a browser.
+      - Image cache entries are keyed by content address under the synthetic same-origin URL /__media/sha256-<base64url>, so the same blob fetched from any relay is one entry and the relay that served it is not recorded.
     entities: []
-    note: "Library and service worker module: no domain entities. Cache Storage entries are derived, disposable and fully reproducible from the network, so no schema or retention record is kept."
+    note: "Library and service worker module: no domain entities. Cache Storage entries are derived, disposable and reproducible from the network; image entries are keyed by content address (blob:sha256-<base64url> of F15.S02.M03) in per-principal partitions, so no schema or retention record is kept."
   validation_rules:
     requirements:
       - The build fails when the precache manifest exceeds 1.5 MiB uncompressed or contains a URL that is not same-origin, so that budgets and the trust boundary are enforced before release.
-      - A response is cached only when it passes the cacheability checks (status 200, content-type image for the image cache, no private directives, no cookies).
-      - Violations during build are reported with stable codes; at runtime a violation means the response is served but not stored.
+      - A response is cached or handed to the page only when it passes the cacheability checks (status 200, image content type, no private directives, no cookies, at most 5 MiB) and the SHA-256 of its body equals the requested content address.
+      - Violations during build are reported with stable codes; at runtime a cacheability violation means the response is not stored, and a digest mismatch means it is neither stored nor shown.
+      - Control messages are accepted only from controlled same-origin window clients, and SKIP_WAITING only with the one-time nonce that the waiting worker issued in its GET_VERSION reply.
     rules:
       - "V01 | precache manifest total size ≤ 1572864 bytes and entry count ≤ 120 | PLATFORM_CACHE_PRECACHE_BUDGET"
-      - "V02 | every precache URL is same-origin, versioned by content hash and not under /api/ or /media/private/ | PLATFORM_CACHE_PRIVATE_RESPONSE"
-      - "V03 | runtime image response has status 200 and content-type image/avif, image/webp, image/jpeg or image/png | PLATFORM_CACHE_UNCACHEABLE"
+      - "V02 | every precache URL is same-origin and versioned by content hash; no relay origin URL and no /__media/ URL is ever precached | PLATFORM_CACHE_PRIVATE_RESPONSE"
+      - "V03 | runtime image response has status 200, content-type image/avif, image/webp, image/jpeg or image/png, and a body ≤ 5242880 bytes | PLATFORM_CACHE_UNCACHEABLE"
       - "V04 | response has no Set-Cookie, no Cache-Control private or no-store and no Vary Authorization | PLATFORM_CACHE_UNCACHEABLE"
-      - "V05 | request is GET and carries no Authorization header and no credentials mode include for the image route | PLATFORM_CACHE_PRIVATE_RESPONSE"
-      - "V06 | cache name matches the allowlist for the build (current precache name, classrup-img-v1) or it is deleted on activate | PLATFORM_CACHE_VERSION_MISMATCH"
-      - "V07 | the SKIP_WAITING message origin is a controlled same-origin client | FORBIDDEN"
+      - "V05 | image request is a GET with credentials omit and no Authorization header, to /media/v1/sha256-<base64url> on an origin in the bound list of user-selected relays; every other relay-origin request is NetworkOnly | PLATFORM_CACHE_PRIVATE_RESPONSE"
+      - "V06 | cache name matches the allowlist for the build (current precache name, classrup-img-v1-<partition> for partitions of vaults present on this profile) or it is deleted on activate | PLATFORM_CACHE_VERSION_MISMATCH"
+      - "V07 | SKIP_WAITING comes from a controlled same-origin window client and carries the nonce this waiting worker issued in its GET_VERSION reply, unused and at most 60000 ms old | FORBIDDEN"
+      - "V08 | SHA-256 of the response body equals the content address in the request path, checked before the response is cached and before it is handed to the page | PLATFORM_CACHE_DIGEST_MISMATCH"
+      - "V09 | /sw-kill.json is fetched network-only with cache no-store and parses as { formatVersion: 1, minReleaseSeq: int, killedBuilds: buildId[], knownGood?: buildId }; anything else is ignored | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - The worker follows the browser lifecycle installing, installed (waiting), activating, activated, redundant, and does not skip waiting on its own.
-      - Activation only happens after the user consents (message SKIP_WAITING) or when no client of the previous worker is open.
+      - Activation only happens after the user consents (SKIP_WAITING with a valid nonce), when no client of the previous worker is open, or when the kill file retires the active build and the known-good build named there takes its place.
       - Activation deletes every classrup- cache not on the allowlist before the new worker handles fetches.
+      - When the kill file names the active build (buildId in killedBuilds or releaseSeq below minReleaseSeq), the worker deletes all classrup- caches of that build within one update check and is replaced by the knownGood build, or unregisters itself when none can be installed; IndexedDB is never touched.
     machines:
       - entity: ServiceWorkerVersion
         initial: installing
         terminal: [redundant]
         transitions:
           - "installing -> installed | precache of all manifest entries completes | all entries fetched and verified by revision hash; any failure aborts install and keeps the old worker"
-          - "installed -> activating | SKIP_WAITING message from a client after user consent, or no controlled clients | no automatic skipWaiting"
-          - "activating -> activated | outdated caches deleted and clients claimed | cleanupOutdatedCaches plus allowlist deletion; clientsClaim only after consent path"
-          - "activated -> redundant | a newer worker activates | old precache removed by the new worker"
+          - "installed -> activating | SKIP_WAITING with a valid nonce (V07) after user consent, no controlled clients, or this build is the knownGood build installed by the kill switch | no automatic skipWaiting otherwise"
+          - "activating -> activated | outdated caches deleted and clients claimed | cleanupOutdatedCaches plus allowlist deletion; clientsClaim only after the consent or kill-switch path"
+          - "activated -> redundant | a newer worker activates, including a knownGood build installed because the kill file retired this build, or the kill switch unregisters this worker | old precache removed; on kill all classrup- caches of this build deleted, IndexedDB untouched"
           - "installing -> redundant | install fails or is superseded | no state kept"
-          - "installed -> redundant | a newer worker installs and replaces the waiting one | waiting worker discarded"
+          - "installed -> redundant | a newer worker installs and replaces the waiting one | waiting worker discarded and its nonce invalid"
     timeouts:
       - "Install precache fetch times out after 60000 ms; the old worker keeps serving."
-      - "Update check: registration.update() on app start, on visibilitychange to visible, and every 3600000 ms."
-      - "Runtime image entries expire after 2592000000 ms (30 days) and entries beyond 200 are evicted least recently used."
+      - "Update and kill-file check: registration.update() and a no-store fetch of /sw-kill.json on app start, on visibilitychange to visible, and every 3600000 ms."
+      - "Runtime image entries expire after 2592000000 ms (30 days) and entries beyond 200 per partition are evicted least recently used."
+      - "A SKIP_WAITING nonce is valid for 60000 ms and for one use."
   commands_queries_events:
     requirements:
-      - The module exposes no relay commands or queries; its interface is the fetch event routing table and three postMessage messages (SKIP_WAITING, CLEAR_USER_CACHES, GET_VERSION).
-      - Messages are accepted only from same-origin window clients and unknown message types are ignored.
+      - The module exposes no vault commands, relay commands or queries; its interface is the fetch event routing table and the postMessage messages SKIP_WAITING {nonce}, GET_VERSION, BIND_PARTITION {partition, relayOrigins} and CLEAR_USER_CACHES {reason, partition}.
+      - Messages are accepted only from same-origin window clients, SKIP_WAITING only with a valid nonce, and unknown message types are ignored.
       - The module produces no domain events and consumes none; version and cache status are available to the page through GET_VERSION.
+      - Public media is read only from the F15.S02.M01 route GET /media/v1/sha256-<base64url>, which serves P0 F15.S02.M03 blobs with Cache-Control public, max-age=31536000, immutable, Access-Control-Allow-Origin for allowlisted PWA origins and no Set-Cookie, outside the command bus's no-store policy.
     commands: []
     queries: []
-    note: "Service worker module without relay commands or queries. Interface: fetch routing table plus postMessage messages SKIP_WAITING (activate waiting worker), CLEAR_USER_CACHES (delete classrup-img-v1), GET_VERSION (returns { buildId, precacheName, imgEntries })."
+    note: "Service worker module without vault commands, relay commands or queries. Interface: fetch routing table plus postMessage messages GET_VERSION (returns { buildId, releaseSeq, precacheName, imgEntries, nonce } where a waiting worker issues a one-time nonce), SKIP_WAITING { nonce } (activate this waiting worker), BIND_PARTITION { partition, relayOrigins } (sent after unlock; origins kept in memory only), CLEAR_USER_CACHES { reason: lock|principal_switch|erase, partition } (unbind, or delete on erase)."
     events_produced: []
     events_consumed: []
     errors:
       - "PLATFORM_CACHE_PRECACHE_BUDGET | 422 | no | build-time failure, precache manifest exceeds 1.5 MiB or 120 entries"
-      - "PLATFORM_CACHE_PRIVATE_RESPONSE | 422 | no | an authenticated or private URL would be cached"
-      - "PLATFORM_CACHE_UNCACHEABLE | 422 | no | response failed cacheability checks and is served without storing"
+      - "PLATFORM_CACHE_PRIVATE_RESPONSE | 422 | no | a relay command, private or vault response would be cached"
+      - "PLATFORM_CACHE_UNCACHEABLE | 422 | no | response failed cacheability checks and is not stored"
       - "PLATFORM_CACHE_VERSION_MISMATCH | 409 | no | cache name not on the allowlist for this build and deleted at activation"
+      - "PLATFORM_CACHE_DIGEST_MISMATCH | 502 | yes | media bytes do not hash to the requested content address; discarded, not shown, next relay tried"
     example: |
       // sw.ts routing table (order matters)
       1. precacheAndRoute(self.__WB_MANIFEST)                               // app shell, hashed assets
-      2. NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/api\//, /^\/media\/private\//, /^\/\.well-known\//] })
-      3. registerRoute(({url}) => url.pathname.startsWith('/media/public/') && request.destination === 'image',
-           new StaleWhileRevalidate({ cacheName: 'classrup-img-v1', plugins: [CacheableResponsePlugin({statuses:[200]}), ExpirationPlugin({maxEntries:200, maxAgeSeconds:2592000, purgeOnQuotaError:true}), privateResponseGuard] }))
-      4. registerRoute(({url}) => url.pathname.startsWith('/api/') || url.pathname.startsWith('/media/private/'), new NetworkOnly())
+      2. NavigationRoute(createHandlerBoundToURL('/index.html'), { denylist: [/^\/__media\//, /^\/\.well-known\//] })
+      3. registerRoute(({url}) => url.origin === self.location.origin && url.pathname.startsWith('/__media/sha256-'),
+           verifiedMediaHandler({ cacheName: () => `classrup-img-v1-${boundPartition}`, relayOrigins: () => boundRelayOrigins,
+             fetchInit: { mode: 'cors', credentials: 'omit' }, verify: sha256MatchesPath, plugins: [CacheableResponsePlugin({statuses:[200]}),
+             ExpirationPlugin({maxEntries:200, maxAgeSeconds:2592000, purgeOnQuotaError:true}), privateResponseGuard] }))
+           // miss: GET https://<relay>/media/v1/sha256-<b64> per bound origin; body hashed; mismatch -> discard, count, next relay
+      4. registerRoute(({url}) => boundRelayOrigins.includes(url.origin), new NetworkOnly())   // relay commands, mailbox, private media
       5. default: no handler (browser network)
-      client -> worker: postMessage({ type: 'SKIP_WAITING' }) after the user taps Update
+      page: <img src="/__media/sha256-Qm3...">; without a controlling worker the page fetches with mode cors, credentials omit, verifies and renders a blob: URL
+      CSP (page): img-src 'self' blob: data:; connect-src 'self' https:  (relay origins are user-selected; the allowlist is enforced in code)
+      client -> waiting worker: GET_VERSION -> { buildId, nonce }; after the user taps Update: postMessage({ type: 'SKIP_WAITING', nonce })
   authorization_capabilities:
     requirements:
-      - The worker holds no credentials and attaches none; authentication headers are added only by the page and are passed through untouched to the network.
-      - The module defines no capabilities because it performs no relay operations; access control for data remains in the relay.
-      - Only same-origin controlled windows may send control messages, and CLEAR_USER_CACHES is sent on sign-out before the session token is discarded.
+      - The worker holds no credentials and attaches none; relay access tokens are added only by page code to relay commands and pass through NetworkOnly untouched, and vault data never enters Cache Storage.
+      - The module defines no capabilities because it performs no vault commands or relay operations; access to user data is governed by vault policy (CTR-CAP-001 CAP-8), and relays authorize only their own resources using relay access tokens (CAP-8 to CAP-10).
+      - Only same-origin controlled windows may send control messages; vault lock, principal switch and Erase vault each send CLEAR_USER_CACHES, which unbinds the principal's image partition (lock, principal switch) or deletes it (Erase vault).
     capabilities: []
   failure_recovery_idempotency:
     requirements:
       - A failed install never replaces a working worker, and a failed runtime cache write never fails the response.
       - Fetch handlers are stateless; repeating a request has the same effect as a single request.
-      - Offline navigation always resolves to the precached shell, and API failures are surfaced as network errors to the page for the outbox and UI to handle.
-    idempotency: "Fetch handling is idempotent: caches are keyed by URL and revision, replays of install or activate produce the same cache contents. Non-GET requests are never handled."
-    concurrency: "Several tabs share one worker; cache writes are by key and last write wins for identical content. Update takes effect for all tabs at once after consent, and the page reloads each tab on controllerchange."
-    retries: "The worker does not retry fetches; page code retries per CTR-IDM-001 IDM-4. Install retries automatically by the browser's update check on the next trigger."
-    offline: "After first visit the shell, route chunks needed by the entry route, icons and the default locale load without network. Dynamic route chunks not yet visited need network; the router shows an offline page with Retry (precached offline.html, 4 KiB)."
-    partial_failure: "If precache of one entry fails the whole install is aborted and the previous version stays active. If activation cleanup fails midway, the next activation re-runs the allowlist deletion, which is safe to repeat."
+      - Offline navigation always resolves to the precached shell, and relay failures are surfaced as network errors to the page for the outbox and UI to handle.
+    idempotency: "Fetch handling is idempotent: caches are keyed by URL and revision for the shell and by content address for media, and replays of install or activate produce the same cache contents. Non-GET requests are never handled. A SKIP_WAITING nonce works once."
+    concurrency: "Several tabs share one worker; cache writes are by key and identical content by construction (content addressing). Update takes effect for all tabs at once after consent, and the page reloads each tab on controllerchange. Only the partition bound by the unlocked principal is read or written."
+    retries: "The worker does not retry fetches except trying the next bound relay origin after a digest mismatch or network error for media; page code retries relay commands per CTR-IDM-001 IDM-4. Install retries automatically by the browser's update check on the next trigger."
+    offline: "After first visit the shell, route chunks needed by the entry route, icons and the default locale load without network. Dynamic route chunks not yet visited need network; the router shows an offline page with Retry (precached offline.html, 4 KiB). After a kill-switch unregistration without a known-good build the next start needs the network once."
+    partial_failure: "If precache of one entry fails the whole install is aborted and the previous version stays active. If activation cleanup fails midway, the next activation re-runs the allowlist deletion, which is safe to repeat. If the known-good build fails to install after a kill, the worker unregisters itself so the bad build cannot keep running."
   privacy_retention_abuse:
     requirements:
-      - No personal data, session token, P2 or higher content, or exact location is ever stored in Cache Storage; only build assets and public images are cached.
-      - Cached public images are limited to 200 entries and 30 days and are deleted on sign-out and on version change of the cache name.
+      - No personal data, relay access token, vault record, P1 or higher content, or exact location is ever stored in Cache Storage; only build assets and verified public P0 images in per-principal partitions are cached.
+      - Cached public images are limited to 200 entries and 30 days per partition, are unbound on vault lock and principal switch, are deleted on Erase vault, and are deleted on version change of the cache name.
       - The worker scope is limited to the application path and refuses to cache cross-origin opaque responses.
+      - A relay cannot substitute or alter a cached or displayed image, because bytes are verified against the content address before caching and before display, and the cache is keyed by content address independent of the relay.
     data:
       - "classrup-precache-v{buildId}: P0 build assets."
-      - "classrup-img-v1: P0 public listing images (EXIF location stripped server side by the upload pipeline, so cached images carry no L3+ location)."
+      - "classrup-img-v1-<partition>: P0 public listing images verified against their content address; metadata (EXIF, GPS) is stripped in the author's vault by F10.S02.M03 before content addressing (N9), so a relay cannot add location data without breaking the hash. Which images a principal viewed is kept per partition and never shared across principals."
+      - "Bound relay origins and partition id: in worker memory only, dropped on lock, principal switch and worker restart."
     retention:
       - "Precache: replaced at each release; deleted by activation cleanup."
-      - "Public images: 30 days maximum or 200 entries; cleared by CLEAR_USER_CACHES on sign-out."
+      - "Public images: 30 days maximum or 200 entries per partition; unbound by CLEAR_USER_CACHES on vault lock and principal switch; partition deleted on Erase vault."
     threats:
-      - "T01 | Private response cached and later readable on a shared device | NetworkOnly for /api/ and /media/private/, private-response guard plugin, tests that no Cache Storage entry exists after authenticated flows"
-      - "T02 | Cache poisoning with attacker-controlled content on a public image URL | only same-origin or CORS 200 responses with image content types are stored; revalidation replaces content; CSP img-src restricts origins; response sizes ≤ 5 MiB"
-      - "T03 | Stale or malicious worker pinned after a bad release | hashed immutable assets, update check hourly, kill-switch file /sw-kill.json fetched network-first with 3 s timeout that makes the worker unregister itself, and F15.S01.M03 update prompt"
-      - "T04 | Worker scope hijack via path confusion | worker served from the app root with Service-Worker-Allowed unset, scope '/', denylist on /api/ and /media/private/"
+      - "T01 | Private or vault response cached and later readable on a shared device | NetworkOnly for every request to a user-selected relay origin except verified public media, private-response guard plugin, tests that no Cache Storage entry exists after relay command flows"
+      - "T02 | Cache poisoning with attacker-controlled content on a public image | only 200 CORS image responses whose SHA-256 equals the content address are stored or shown (V08); responses ≤ 5 MiB"
+      - "T03 | Stale or malicious worker pinned after a bad release | hashed immutable assets, hourly update check, kill file with release sequence and killed build ids fetched network-only with no-store, replacement by the known-good build, and the signed release manifest check of F15.S01.M03"
+      - "T04 | Worker scope hijack via path confusion | worker served from the app root with Service-Worker-Allowed unset, scope '/', navigation denylist on /__media/"
+      - "T05 | Principal B on a shared profile learns which listings principal A viewed | per-principal partitions; only the bound partition is readable; unbound on lock and switch, deleted on erase"
+      - "T06 | Malicious relay swaps a listing photo (bait-and-switch) or serves one with GPS data | content-address verification before caching and display; mismatches discarded and counted; cache keyed by content address, so revalidating against the same relay is never relied on"
     abuse_controls:
-      - "Cache limits (200 images, 30 days, 5 MiB per image) bound local storage use from a hostile feed of image URLs."
-      - "No background fetch loop; update check at most hourly so the worker cannot be used to amplify requests to the relay."
+      - "Cache limits (200 images per partition, 30 days, 5 MiB per image) bound local storage use from a hostile feed of image URLs."
+      - "No background fetch loop; update and kill-file checks at most hourly so the worker cannot be used to amplify requests to a relay; media fetched only from bound relay origins."
   observability_performance:
     requirements:
       - Cache effectiveness and update adoption are measured only locally in the vault diagnostics view (the PWA sends no telemetry, CTR-OBS-001 OBS-7) and in CI runs.
       - Cached shell navigation meets the PWA budgets of CTR-OBS-001 OBS-5 (LCP ≤ 2.5 s on Moto G-class with 4G profile).
       - Precache size and entry count are tracked in CI per commit and fail the build on budget violations.
     metrics:
-      - "classrup_platform_sw_cache_total{outcome=hit|miss|stale} (local diagnostics counter, route class image|shell only, never transmitted)"
-      - "classrup_platform_sw_update_total{outcome=prompted|accepted|deferred}"
+      - "classrup_platform_sw_cache_total{outcome=hit|miss|digest_mismatch} (local diagnostics counter, route class image|shell only, never transmitted)"
+      - "classrup_platform_sw_update_total{outcome=prompted|accepted|deferred|killed}"
       - "classrup_platform_sw_precache_bytes (CI gauge per build)"
     logs:
       - "console.debug only in development builds; production worker logs nothing. Errors are counted, not described."
     budgets:
       - "Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip."
-      - "Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms."
+      - "Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms; SHA-256 verification of a 1 MiB image ≤ 15 ms (SubtleCrypto)."
       - "Activation cleanup completes in ≤ 500 ms for 5 stale caches."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
-      - Routing and cacheability logic is unit tested as pure functions, and lifecycle and offline behavior is tested in real browsers with Playwright.
-      - Tests assert the negative property that no authenticated or private response ever reaches Cache Storage.
-    fixtures: "Built PWA served by a static server on :4173 plus stub relay on :8787 with endpoints /api/v1/q/bazaar.listing.get (Authorization required), /media/public/img1.webp, /media/private/doc1.pdf; two builds A and B with different buildId."
+      - Routing, cacheability and verification logic is unit tested as pure functions, and lifecycle and offline behavior is tested in real browsers with Playwright.
+      - Tests assert the negative property that no relay command, vault or private response ever reaches Cache Storage and no unverified image is ever shown.
+    fixtures: "Built PWA served by a static server on :4173 plus stub relays r1 on :8787 and r2 on :8788 with /api/v1/q/bazaar.listing.get (relay access token required), /media/v1/sha256-<b64> for img1.webp (r1 honest, r2 optionally lying), /mailbox/v1/m1; two builds A and B with different buildId and releaseSeq; principals P1 and P2 sharing one browser profile; fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03 | routing table evaluated for 30 sample URLs (shell, public image, api, private media, cross-origin) | each URL maps to the documented strategy and cache name"
-      - "T02 | unit | 02.R02,02.R03 | cacheability function over responses with private, no-store, Set-Cookie, Vary Authorization, 404, text/html | only 200 image responses without private markers return true; others yield PLATFORM_CACHE_UNCACHEABLE"
-      - "T03 | integration | 02.R01 | CI build with manifest enlarged to 1.6 MiB and a /api/ URL injected | build fails with PLATFORM_CACHE_PRECACHE_BUDGET and PLATFORM_CACHE_PRIVATE_RESPONSE"
-      - "T04 | e2e | 03.R01,03.R02,03.R03 | install build A, then deploy build B, tab remains open | B stays waiting until SKIP_WAITING after consent; after activation only B caches remain"
+      - "T01 | unit | 01.R01,01.R02,01.R03 | routing table evaluated for 30 sample URLs (shell, /__media/ path, relay media, relay command, mailbox, cross-origin) | each URL maps to the documented strategy and cache name"
+      - "T02 | unit | 02.R02,02.R03 | cacheability and verification over responses with private, no-store, Set-Cookie, Vary Authorization, 404, text/html, 6 MiB, wrong digest | only 200 image responses without private markers whose digest matches return true; others yield PLATFORM_CACHE_UNCACHEABLE or PLATFORM_CACHE_DIGEST_MISMATCH"
+      - "T03 | integration | 02.R01 | CI build with manifest enlarged to 1.6 MiB and a relay-origin URL injected | build fails with PLATFORM_CACHE_PRECACHE_BUDGET and PLATFORM_CACHE_PRIVATE_RESPONSE"
+      - "T04 | e2e | 03.R01,03.R02,03.R03 | install build A, then deploy build B, tab remains open | B stays waiting until SKIP_WAITING with B's nonce after consent; after activation only B caches remain"
       - "T05 | integration | 03.R02 | worker B installed with a failing precache entry | install aborted, A keeps serving, no partial cache of B remains"
-      - "T06 | unit | 04.R01,04.R02 | postMessage of SKIP_WAITING from a controlled client and of an unknown type and from a foreign origin | first accepted, others ignored"
-      - "T07 | contract | 04.R03 | GET_VERSION response | returns { buildId, precacheName, imgEntries } matching the build; no domain events exist for this module"
-      - "T08 | abuse | 05.R01,05.R02,07.R01 | sign in, fetch listing API with Authorization, view private media, then inspect all Cache Storage keys | no entry for /api/ or /media/private/ and no Authorization-bearing request cached"
-      - "T09 | abuse | 05.R03,07.R02 | sign out | CLEAR_USER_CACHES deletes classrup-img-v1 and the session token is discarded afterward"
+      - "T06 | unit | 04.R01,04.R02 | postMessage of each message type from a controlled client, an unknown type and from a foreign origin | documented effect for known types; others ignored"
+      - "T07 | contract | 04.R03 | GET_VERSION response from active and waiting workers | returns { buildId, releaseSeq, precacheName, imgEntries } and a nonce only from the waiting worker; no domain events exist for this module"
+      - "T08 | abuse | 05.R01,05.R02,07.R01 | unlock vault, call a relay query with a relay access token, open a mailbox and private media, then inspect all Cache Storage keys | no relay command, mailbox or private media entry and no Authorization-bearing request cached; no vault data in Cache Storage"
+      - "T09 | abuse | 05.R03,07.R02 | P1 views 5 images, vault locks; P2 unlocks and views 2; P1 unlocks and runs Erase vault | after lock P1's partition is not served; P2 sees only its own 2 entries; erase deletes P1's partition; P2's partition intact"
       - "T10 | e2e | 06.R01,06.R03 | first visit online then go offline and open a deep link /l/abc | shell renders, relay calls show offline state, no browser error page"
       - "T11 | integration | 06.R02,06.R01 | simulate QuotaExceededError on cache put and a slow image request | response still delivered; cache write error counted; no unhandled rejection"
-      - "T12 | integration | 07.R03,07.R02 | image route fed a cross-origin opaque response and a 6 MiB image | neither is stored"
+      - "T12 | integration | 07.R03,07.R02 | media route fed a cross-origin opaque response and a 6 MiB image | neither is stored"
       - "T13 | load | 08.R03,08.R02 | Lighthouse CI on Moto G-class 4G profile with warm and cold cache | LCP ≤ 2.5 s, precache within budget, initial JS ≤ 150 KiB gzip"
       - "T14 | integration | 08.R01 | run an offline session with 10 image hits and watch network traffic | local counters updated, no telemetry request is made, counters contain no URLs or identifiers"
       - "T15 | unit | 09.R01 | traceability tool run | every PS-114 requirement maps to a passing test"
       - "T16 | e2e | 09.R02,09.R03 | Playwright suite on Chromium, WebKit, Firefox | all service worker tests pass on each engine"
-      - "T17 | integration | 10.R01,10.R02,10.R03 | roll back to build A after B activated | cache cleanup removes B caches, app loads, no user data lost"
+      - "T17 | integration | 10.R01,10.R02 | roll back to build A after B activated | cache cleanup removes B caches, app loads, no user data lost"
+      - "T18 | abuse | 07.R04,02.R02,09.R03 | stub relay r2 returns different bytes for img1's content address, first with no worker and then with the worker | image neither cached nor displayed, neutral image frame shown, digest_mismatch counted; r1 then supplies the correct bytes which are cached once under the content-address key"
+      - "T19 | e2e | 10.R03,03.R04 | kill file names active build B with knownGood A; then a kill file names B with no knownGood | within one update check B's caches are deleted and A activates; in the second case the worker unregisters and all classrup- caches are deleted; IndexedDB vault untouched in both"
+      - "T20 | integration | 07.R02,03.R04 | 201 distinct images viewed, then clock advanced 31 days and 3 new images viewed | at most 200 entries after the first step; after the advance only the 3 fresh entries remain"
+      - "T21 | abuse | 04.R02,02.R04 | page script posts SKIP_WAITING with no nonce, an expired nonce, a used nonce and a nonce from another waiting worker | all ignored with FORBIDDEN counted; the waiting worker stays waiting"
+      - "T22 | integration | 01.R04,04.R04 | img1 fetched from r1, then the same content address requested while only r2 (honest) is bound and then offline | second and third requests served from the cache entry keyed by content address without contacting a relay; r1 response headers match the F15.S02.M01 media contract"
     acceptance:
-      - All tests T01-T17 pass in CI.
+      - All tests T01-T22 pass in CI.
       - After first visit the app shell opens offline in under 2.5 s LCP on a Moto G-class 4G profile.
-      - No authenticated response or private media is ever present in Cache Storage (abuse suite T08, T09).
-      - A new release never takes control without user consent while a client is open.
+      - No relay command response, vault data or private media is ever present in Cache Storage, and no image whose bytes fail content-address verification is ever cached or shown (abuse suite T08, T09, T18).
+      - A new release never takes control without user consent while a client is open, except a known-good replacement ordered by the kill file.
   import_export_backup_rollback:
     requirements:
       - Caches are derived data and are excluded from export, import and backup.
       - Rolling back a release deletes the cache versions of the newer release on the next activation and keeps users' data untouched.
-      - A kill switch file lets operators force every worker to unregister within one update check (at most 1 hour).
+      - A kill file lets the static host retire a bad build within one update check (at most 1 hour) by replacing it with a named known-good build, or by unregistering the worker when none can be installed, without touching IndexedDB.
     export: "No export section; Cache Storage contains no user records."
     import: "Not applicable."
-    backup: "Not backed up; caches can be rebuilt from the network at any time. The static host keeps the previous 3 builds so that rollback is a redeploy."
-    migration_rollback: "Rollback is redeploying the previous static build (CTR-IOX-001 IOX-4); the older worker installs, activates after consent, and the allowlist cleanup removes the newer precache. /sw-kill.json {\"unregister\": true, \"before\": \"<buildId>\"} makes workers of the named build unregister and clear all classrup- caches."
+    backup: "Not backed up; caches can be rebuilt from the network at any time. The static host keeps the previous 3 builds so that rollback and kill-switch replacement are redeploys."
+    migration_rollback: "Rollback is redeploying the previous static build (CTR-IOX-001 IOX-4); the older worker installs, activates after consent, and the allowlist cleanup removes the newer precache. /sw-kill.json { \"formatVersion\": 1, \"minReleaseSeq\": 42, \"killedBuilds\": [\"<buildId>\"], \"knownGood\": \"<buildId>\" } is fetched network-only with cache no-store; a worker whose buildId is listed or whose releaseSeq is below minReleaseSeq deletes its classrup- caches and is replaced by knownGood (installed and activated without waiting) or unregisters itself when knownGood is absent or fails to install."

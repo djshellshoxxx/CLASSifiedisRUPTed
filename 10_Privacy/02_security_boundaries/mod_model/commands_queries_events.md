@@ -32,20 +32,21 @@ _None._
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| PRIVACY_CLASSIFICATION_MISSING | 500 | no | a schema field or event payload lacks a classification; build fails and runtime treats the field as P3 |
+| PRIVACY_CLASSIFICATION_MISSING | 500 | no | a schema field or event payload lacks a classification; build fails and runtime treats the field as P4 |
 | PRIVACY_SINK_FORBIDDEN | 403 | no | the data class is not allowed to flow to this sink |
-| PRIVACY_LOCATION_TOO_PRECISE | 422 | no | location precision is finer than L2 for a public sink |
+| PRIVACY_LOCATION_TOO_PRECISE | 422 | no | location precision is finer than the sink allows (L2 for public sinks, L3 for events) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink), capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForExport(record, schema, ctx), labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). No relay or vault commands, no events.
+**Note:** Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink), capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForSearch / redactForExport(record, schema, ctx), redactForEnvelope(record, schema, ctx{encrypted: true, recipients: did[]}), labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). redactForExport returns a refusal with PRIVACY_CLASSIFICATION_MISSING when a schema has no map, so an export section fails loudly instead of shrinking silently. No relay or vault commands, no events.
 
 ### Example
 
 ```
 redactForLog({ id: "0192…", title: "Bike", address: "Main St 4", note: "mail me a@b.example" }, schema "classrup.bazaar.listing/v1", ctx)
 => { id: "0192…", title: "Bike", address: "[redacted:P3]", note: "mail me [email]" } with dropped ["address"]
-redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u336y" (L2) or refused if opt-in is missing
+redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u33dc" (L2) or refused if opt-in is missing
+redactForEnvelope(offer, "classrup.bazaar.offer/v1", { encrypted: false, recipients: [] }) => refused PRIVACY_SINK_FORBIDDEN
 ```
 
 ## Verification

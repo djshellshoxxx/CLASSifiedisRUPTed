@@ -13,9 +13,10 @@
 ## Specification
 
 **Metrics**
-- Local diagnostics: classrup_commerce_deals_total{outcome=opened|completed|cancelled|expired}
+- Local diagnostics: classrup_commerce_deals_total{outcome=opened|completed|cancelled|expired|expired_partial}
 - Local diagnostics: classrup_commerce_claims_total{method,status}
-- Local diagnostics: classrup_commerce_statements_total{outcome=applied|quarantined|duplicate|fork}
+- Local diagnostics: classrup_commerce_statements_total{outcome=applied|dispatched|buffered|quarantined|duplicate|dropped|fork}
+- Local diagnostics: classrup_commerce_quarantine_entries (gauge) and classrup_commerce_quarantine_bytes (gauge)
 
 **Logs**
 - info claim.acknowledged {claimId, dealId, correlationId} — no amounts, notes or txRef.
@@ -23,7 +24,7 @@
 
 **Budgets**
 - open, claim, acknowledge p95 ≤ 120 ms local commit on a 2022 mid-range Android device.
-- Ingest of a statement batch of 100 ≤ 2 s including signature verification (Ed25519 verify ≤ 5 ms each).
+- Ingest of a statement batch of 100 ≤ 2 s including signature verification (Ed25519 verify ≤ 5 ms each) and ContextTermsPort checks.
 - Expiry sweep over 10 000 claims ≤ 1 s.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -32,9 +33,10 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-069-09.T15 | load | PS-069-08.R02, PS-069-08.R03 | 10 000 claims and a batch of 100 statements | p95 ≤ 120 ms commit; batch ≤ 2 s; sweep ≤ 1 s |
+| TEST-PS-069-09.T15 | load | PS-069-08.R02 | 10 000 claims and a batch of 100 statements | p95 ≤ 120 ms commit; batch ≤ 2 s; sweep ≤ 1 s |
 | TEST-PS-069-09.T16 | integration | PS-069-08.R01, PS-069-09.R01 | local diagnostics and traceability run | no network telemetry sent; every PS-069 requirement maps to a passing test |
+| TEST-PS-069-09.T32 | integration | PS-069-08.R03 | quarantined, buffered and forked statements produced, then diagnostics opened | commerce.statement.diagnostics and the diagnostics screen show counts by reason |
 
 ## Dependencies
 
-Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

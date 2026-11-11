@@ -7,7 +7,7 @@ summary: >-
   crypto claim without an observation, a claim silent for 10 days, a statement that never left the device, an unresolved fork.
   The report is advice for the user; the module reads other modules through ports, changes nothing in them and never moves money.
 responsibilities:
-  - Own ReconciliationReport: a derived, recomputable snapshot with counts and a list of mismatches, produced daily, on demand and incrementally after key events.
+  - "Own ReconciliationReport: a derived, recomputable snapshot with counts and a list of mismatches, produced daily, on demand and incrementally after key events."
   - Detect ten mismatch kinds with severities and emit commerce.reconciliation.mismatch_found once per new mismatch.
   - Let the user dismiss a mismatch with a note so it is not re-announced, while it stays visible in the report.
   - Keep scanning cost bounded (500 records per tick, yielding to the UI) so large vaults stay responsive.
@@ -16,7 +16,7 @@ non_responsibilities:
   - Accounting, tax and bookkeeping reports.
   - Relay-side reconciliation of relay-held data (relay operators use their own tooling under F15).
   - "Future: scheduled export of reconciliation reports to a user-selected location and cross-vault comparison of signed state digests with a counterparty."
-depends_on: [F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+depends_on: [F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
 user_stories:
   - As a seller, I see a daily note that two claims have been waiting for my acknowledgement for 10 days before they expire.
   - As a buyer paying in BTC, I see that my claim has no verifier configured and what to do about it.
@@ -131,6 +131,8 @@ processes:
       - {type: commerce.payment.reorged, effect: "schedule an incremental run for the claim's deal"}
       - {type: commerce.receipt.issued, effect: "schedule an incremental run for the claim's deal"}
       - {type: commerce.payment.expired, effect: "mark the matching stale-claim mismatch resolved on the next run"}
+      - {type: commerce.payment.failed, effect: "schedule an incremental run for the claim's deal"}
+      - {type: privacy.deletion.completed, effect: "through the DeletionPort plan, delete the deleted principal's reports and schedule a fresh run; reports are derived and hold no evidence"}
     errors:
       - "COMMERCE_RECON_TRUNCATED | 200 | no | more than 500 mismatches were found and the report was truncated"
     example: |
@@ -162,10 +164,11 @@ processes:
       - Reports reference P2 records and stay in the vault; they contain IDs and kinds only, never amounts, notes or addresses.
       - Reports are kept 30 days and are regenerated on demand, so deletion of source data removes the underlying subject at the next run.
       - Alert fatigue and misleading alarms are limited by severity levels, dedupe by key and dismissal.
+      - The module registers ExportSectionPort (section commerce.reconciliation), DeletionPort (reports of a deleted principal are deleted, since they are derived) and RetentionPurgePort (RET-SHORT, 30 days) with F10 (N6), annotates every report field with its F10.S02.M02 class, and consumes privacy.deletion.completed.
     data:
-      - "ReconciliationReport: P2, IDs and kinds only."
+      - "ReconciliationReport: P2, IDs and kinds only; field classes annotated per F10.S02.M02."
     retention:
-      - "RET-SHORT (30 days); derived and recomputable."
+      - "RET-SHORT (30 days) through the RetentionPurgePort; derived and recomputable."
     threats:
       - "T01 | Report used to infer a counterparty's data | reports contain only the principal's own records and IDs, no cross-vault data"
       - "T02 | False reassurance from a clean report | UI states the check only compares local records and cannot see the counterparty or the money"
@@ -195,20 +198,21 @@ processes:
       - "T01 | unit | 01.R01,01.R02,02.R01 | run on the seeded vault | report has counts and keys for M01 to M10 as expected, scope validated"
       - "T02 | unit | 02.R02,03.R02 | each kind fixture and its clean twin | mismatch present only for the triggering fixture"
       - "T03 | unit | 02.R03,02.R01 | dismiss with valid and invalid key and over-long note | valid stored; invalid return NOT_FOUND or VALIDATION_FAILED"
-      - "T04 | unit | 01.R03,03.R01,03.R03 | interrupt a run at 40 percent and rerun | first report failed with no partial list; second identical to a fresh run"
-      - "T05 | integration | 03.R01 | complete a run twice with no changes | second run emits no new events; report keys identical"
+      - "T04 | unit | 03.R01,03.R03,06.R02 | interrupt a run at 40 percent and rerun | first report failed with no partial list; second identical to a fresh run"
+      - "T05 | integration | 03.R01,06.R01 | complete a run twice with no changes | second run emits no new events; report keys identical"
       - "T06 | contract | 04.R01,04.R02,09.R02 | execute commands and queries | outputs and event payloads validate against registry schemas"
       - "T07 | integration | 04.R03 | deliver deal completed and receipt issued events within 10 s | one coalesced incremental run starts after 30 s"
       - "T08 | abuse | 05.R01,05.R02,05.R03 | write-spy on Deal, PaymentClaim, ChainObservation and Receipt stores during a run; relay traffic check | zero writes; no network traffic"
-      - "T09 | integration | 06.R01,06.R02,06.R03 | two tabs run simultaneously | single report; second tab joins"
+      - "T09 | integration | 06.R03 | two tabs run simultaneously | single report; second tab joins"
       - "T10 | abuse | 07.R03,02.R02 | 2 manual runs within 5 minutes | second returns RATE_LIMITED"
-      - "T11 | integration | 07.R01,07.R02 | inspect report contents and age 31 days | IDs and kinds only; report purged after 30 days"
+      - "T11 | integration | 07.R01,07.R02,01.R03 | inspect report contents and age 31 days | IDs and kinds only; report purged after 30 days"
       - "T12 | load | 08.R01,08.R02,08.R03 | 20 000 claims | duration ≤ 10 s; longest main-thread block ≤ 50 ms; no telemetry"
       - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-072 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to a fresh vault, roll back one release | latest report exports; import marks it imported and triggers a fresh run"
-      - "T15 | e2e | 01.R03,09.R03 | open the Deals screen with issues | card lists action items with accessible severity text; axe zero serious issues"
+      - "T15 | e2e | 09.R03 | open the Deals screen with issues | card lists action items with accessible severity text; axe zero serious issues"
+      - "T16 | integration | 07.R04 | export, deletion and retention purge driven by F10 | section commerce.reconciliation exports the latest report; privacy.deletion.completed deletes the principal's reports; RetentionPurgePort purges reports older than 30 days; every field carries an F10.S02.M02 class"
     acceptance:
-      - All tests T01 to T15 pass in CI.
+      - All tests T01 to T16 pass in CI.
       - The module never writes to another module's records (write-spy test).
       - Each mismatch kind is detected exactly when its rule holds.
   import_export_backup_rollback:
@@ -216,7 +220,7 @@ processes:
       - The vault export includes only the latest completed report in the section commerce.reconciliation for reference.
       - Import never trusts an imported report; it is stored as imported and a fresh run is scheduled.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
-    export: "Section commerce.reconciliation in classrup-export/v1; one line with the latest completed ReconciliationReport (schema classrup.commerce.reconciliation_report/v1)."
+    export: "ExportSectionPort section commerce.reconciliation in classrup-export/v1; one line with the latest completed ReconciliationReport (schema classrup.commerce.reconciliation_report/v1)."
     import: "Imported report is stored with status completed and an imported flag, never merged; a new run is scheduled immediately after import."
     backup: "Derived data; recomputable from Deals, claims, observations and receipts, so the vault export of those is the backup."
     migration_rollback: "Additive fields only; reports older than 30 days are purged on rollback or upgrade because they are recomputable."

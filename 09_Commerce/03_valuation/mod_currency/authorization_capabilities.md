@@ -14,8 +14,8 @@
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| commerce.currency.read | local-principal, anonymous | local principal reads all vault rows; anonymous reads only a relay's published accepted list |
-| commerce.currency.register | local-principal | vault unlocked; feature flag commerce.crypto not disabled for crypto kind |
+| commerce.currency.read | local-principal, anonymous | local principal reads all vault rows and checks descriptors; anonymous reads only a relay's published accepted list |
+| commerce.currency.register | local-principal | vault unlocked; feature flag commerce.crypto not disabled for crypto kind; checksum review confirmed for a peer-statement registration |
 | commerce.currency.set_status | local-principal | vault unlocked |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).

@@ -3,43 +3,52 @@ scope: MVP
 summary: >-
   Two (or more) members agree a time window and a place for handing over goods. A proposal is a signed statement
   from the proposer's vault naming a window of 15 minutes to 4 hours and a place that is either a curated safe
-  spot or a coarse L3 area label; each party agrees by signing a consent statement (F08.S02.M02) on the exact
-  proposal revision. The meetup is agreed in a vault only when it holds valid agreement statements from every
-  party, so the UI says "you agreed, waiting for the other party" until the peer's signature arrives. Either
-  party can reschedule up to 5 times or cancel. No exact home address and no live location are ever part of a
-  meetup.
+  spot, matched to a curator-verified SafeSpot statement by its cid, or a coarse L3 area label. Every party,
+  including the proposer, agrees by a consent statement (F08.S02.M02, consent.comms.meetup.agree.v1) on the exact
+  proposal cid; propose and reschedule sign the proposer's own consent in the same transaction, so the evidence is
+  uniform. The meetup is agreed in a vault only when it holds valid agreements from every party, so the UI says
+  "you agreed, waiting for the other party" until the peer's signature arrives. Agreed is not a commit: consents may
+  be revoked until windowStart, which this module declares through the ConsentSubjectPort it registers for
+  comms_meetup. Any two different valid proposals with the same revision number, whoever sent them, freeze the
+  meetup for renegotiation. Either party can reschedule up to 5 times or cancel. No exact home address and no live
+  location are ever part of a meetup.
 responsibilities:
   - Own the Meetup record and its revisions (window, place, party list, reschedule count) inside each party's vault.
-  - Produce and verify signed proposal statements classrup.comms.meetup/v1 carried through encrypted messages of F08.S01.M01.
-  - Collect agreement from every party as comms.consent.sign statements on the exact revision hash and compute agreed only from verified statements.
-  - Enforce the reschedule limit of 5 per meetup, the window rules, and the place rules (safe spot or L3 area label).
-  - Cancel or expire meetups when their context closes, a party blocks another, or the window passes.
-  - Detect forked proposals (two different proposals with the same revision number from one proposer) and freeze the meetup for renegotiation instead of picking one.
+  - Produce and verify signed proposal statements classrup.comms.meetup/v1 carried through encrypted messages of F08.S01.M01, each accompanied by the proposer's own agreement consent.
+  - Collect agreement from every party, including the proposer, as comms.consent.sign statements on the exact proposal cid and compute agreed only from verified statements.
+  - Enforce the reschedule limit of 5 per meetup, the window rules, and the place rules (verified safe spot or L3 area label).
+  - Cancel or expire meetups when their context closes, the local principal blocks a party, or the window passes, including frozen meetups whose competing windows all passed.
+  - Detect conflicting proposals (any two different valid proposals with the same revision number, whoever proposed them) and freeze the meetup for renegotiation instead of picking one.
+  - Register the ConsentSubjectPort for subjectType comms_meetup (agreed is not committed until windowStart) and the F10 privacy ports, keeping signed proposals as evidence (N6).
 non_responsibilities:
   - Curating spots (F08.S03.M01) and check-in or no-show (F08.S03.M02).
-  - Consent signing primitives (F08.S02.M02).
+  - Consent signing primitives and verification (F08.S02.M02).
   - Transport and encryption (F08.S01.M01) and thread membership (F08.S01.M02).
+  - Cell geometry and validation (F06.S02.M01) and block lists (F07.S02.M02).
   - Deals, payment claims and receipts (F09); a meetup is not evidence that a trade was completed.
   - "Future: recurring meetups, multi-stop routes, calendar file export with reminders, shared live ETA."
-depends_on: [F08.S01.M01, F08.S01.M02, F08.S02.M02, F08.S03.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+depends_on: [F08.S01.M01, F08.S01.M02, F08.S02.M02, F08.S03.M01, F06.S02.M01, F07.S02.M02, F16.S02.M02, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001]
 user_stories:
   - As a seller, I propose a Saturday 14:00 to 15:00 window at a library lobby and see exactly which parties have agreed.
   - As a buyer, I can ask to move the meetup to Sunday and the earlier agreement stops counting for the new time.
   - As a cycle participant, I agree to a handover meetup with the next person in the cycle at a spot we both picked.
   - As a member, I can cancel with a short reason and the other party sees it as cancelled by me.
+  - As a member, I can withdraw my agreement before the meetup starts and the other party sees that the meetup is no longer agreed.
 edge_cases:
-  - Both parties reschedule at the same time with different windows; two proposals share a revision number, the meetup freezes as conflicted and both must re-propose, no last-writer-wins.
+  - Both parties reschedule at the same time with different windows; two different proposals share a revision number although they come from two proposers, the meetup freezes as conflicted and either party must propose a higher revision, no last-writer-wins.
   - The agreement of one party arrives after the window start; the meetup is not agreed because the window already began, and the proposer is asked to propose a new window.
   - A safe spot is retired after agreement; the meetup keeps the spot snapshot and shows a notice that the spot is no longer listed.
   - Reschedule number 6 is attempted; the command is refused with COMMS_MEETUP_RESCHEDULE_LIMIT and the parties must cancel and create a new meetup.
-  - Party is blocked by the other after proposing; the blocker's vault drops the meetup silently and the other side sees no state change.
+  - Party A blocks party B after B proposed; A's vault cancels the meetup silently and drops B's later statements; B's vault shows no state change and B's responses are identical to the unblocked case.
   - Clock of a party is off by 2 hours; window times are agreed in UTC with a zone label, the claimed times are shown as claims, and the local clock decides when a window has passed.
-  - Place given as an L3 area label that contains a street address; the validator rejects any label that matches a house-number pattern.
+  - Place given as an L3 area label that contains a street address; the validator rejects any area label that matches a house-number pattern, while a safe-spot snapshot is checked against the verified spot statement instead.
+  - A meetup is frozen as conflicted and nobody re-proposes; once the local clock passes the windowStart of every competing proposal the meetup expires.
+  - B revokes the agreement consent before windowStart; the meetup returns to proposed in both vaults; a revocation that arrives after windowStart makes verify return conflicted and the meetup freezes instead.
 ux:
   screens:
-    - "Propose meetup: date, start, end (15 minutes to 4 hours), place picker (suggested safe spots or L3 area with label up to 80 characters), review summary, Send proposal."
-    - "Meetup card in thread: window with time zone, place, party agreement list (You agreed, waiting for Alex), reschedule counter (2 of 5 used), Agree, Reschedule, Cancel."
-    - "Conflict view: two competing proposals side by side with Pick one to propose again."
+    - "Propose meetup: date, start, end (15 minutes to 4 hours), place picker (suggested safe spots with trust source, or L3 area with label up to 80 characters), review summary, the safety checklist of F08.S03.M01 before the first proposal or agreement, Send proposal (signs your agreement too)."
+    - "Meetup card in thread: window with time zone, place, party agreement list (You agreed, waiting for Alex), reschedule counter (2 of 5 used), Agree, Withdraw agreement, Reschedule, Cancel."
+    - "Conflict view: competing proposals with the same revision side by side with Pick one to propose again."
   states: [loading, proposed, waiting-for-others, agreed, conflicted, cancelled, expired, elapsed, offline-queued]
   a11y:
     - Date and time inputs are native controls with visible labels and time zone shown as text.
@@ -48,93 +57,110 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A Meetup stores the thread, context reference, parties, the current proposal revision (window start and end in UTC, venue snapshot), the reschedule count, the agreement statement IDs, and status, with tenant and revision per CTR-ID-001.
-      - Meetups are P2 and held only in participating vaults; the place is either a SafeSpot snapshot (public P0 data) or an L3 area label, and exact home addresses (P3) and live locations are never stored or accepted.
-      - The proposal revision hash is SHA-256 of the JCS bytes of the proposal payload, and agreement is a ConsentStatement with statement key consent.comms.meetup.agree.v1 and subjectType comms_meetup on that hash.
+      - A Meetup stores the thread, context reference, parties, the current proposal revision (window start and end in UTC, venue snapshot with the spot statement cid), the reschedule count, the agreement statement IDs, and status, with tenant and revision per CTR-ID-001.
+      - Meetups are P2 and held only in participating vaults; the place is either a SafeSpot snapshot matched to a curator-verified spot statement (public P0 data at L2) or an L3 area label, and exact home addresses (P3) and live locations are never stored or accepted.
+      - The proposal revision hash is the CTR-ID-001 ID-3 cid (sha256-<base64url> of the JCS bytes of the proposal payload), and agreement is a ConsentStatement with statement key consent.comms.meetup.agree.v1 and subjectType comms_meetup on that hash, signed by every party including the proposer.
+      - Signed proposal and cancellation statements are evidence under RET-EVIDENCE (2 years after last related activity), kept independently of the thread purge so the agreement consents can still be re-verified against the subject bytes, and pseudonymized on principal deletion.
+      - The module registers the F08.S02.M02 ConsentSubjectPort for subjectType comms_meetup - canonicalBytes(meetupId, rev) returns the JCS bytes of that proposal revision, currentRevision the proposalRevision, partyRole party for every partyDid, and isCommitted true only once the local clock passed windowStart of the agreed revision - so an agreed meetup is not committed and its consents may be revoked until windowStart.
     entities:
       - name: Meetup
         schema: classrup.comms.meetup/v1
         storage: device
         privacy: P2
-        retention: RET-STANDARD
+        retention: RET-EVIDENCE
         fields:
           - "id: uuidv7 — primary key, created by the first proposer"
           - "tenantId: uuidv7 — tenant scope"
-          - "threadId: uuidv7 — ref F08.S01.M02 Thread; must be active"
+          - "threadId: uuidv8 — ref F08.S01.M02 Thread; must be active"
           - "contextType?: enum — listing | proposal | cycle | booking | rental | direct"
           - "contextId?: uuidv7 — context record, copied from the thread"
           - "partyDids: array — 2..12 did:key items; each is a participant of the thread"
           - "proposalRevision: int — 1.. increments on each reschedule"
-          - "proposalHash: string — SHA-256 hex of JCS bytes of the current proposal payload"
+          - "proposalHash: string — sha256-<base64url> ID-3 cid of the JCS bytes of the current proposal payload"
+          - "proposalCids: array — cids of every signed proposal statement received for this meetup, kept as evidence"
           - "windowStart: timestamp — UTC, at least 15 minutes after proposal time claim and at most 30 days ahead"
           - "windowEnd: timestamp — UTC, 15 minutes to 4 hours after windowStart"
           - "venueTz: string — IANA time zone used to display the window"
           - "placeKind: enum — safe_spot | area"
           - "safeSpotId?: uuidv7 — ref F08.S03.M01 SafeSpot when placeKind is safe_spot"
-          - "spotSnapshot?: object — { name, publicAddress, venueCell } copied at proposal time"
-          - "areaCell?: string — L3 cell ID when placeKind is area"
+          - "spotSnapshot?: object — { spotId, spotCid, version, name, kind, l2Cell, accessNote? } copied from the verified spot statement at proposal time"
+          - "areaCell?: string — geohash of at most 6 characters (L3 or coarser) when placeKind is area"
           - "areaLabel?: string — 3..80 characters, no house numbers"
           - "proposerDid: did:key — signer of the current revision"
           - "rescheduleCount: int — 0..5"
-          - "agreements: array — items { partyDid, consentId, proposalHash }, only verified consents for the current hash"
+          - "agreements: array — items { partyDid, consentId, proposalHash }, only verified consents for the current hash, including the proposer's"
+          - "competingProposals?: array — while conflicted: { proposerDid, proposalHash, windowStart } of every valid proposal with the current proposalRevision"
           - "status: enum — proposed | agreed | conflicted | cancelled | expired | elapsed"
           - "cancelReason?: enum — changed_plans | unsafe | item_unavailable | no_response | other"
           - "createdAtClaim: timestamp — proposer clock, a claim"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - status agreed implies every partyDid has a verified agreement for the current proposalHash.
+          - status agreed implies every partyDid, the proposer included, has a verified agreement for the current proposalHash.
           - rescheduleCount never exceeds 5 and increases by exactly 1 per new proposalRevision.
-          - Two valid proposals by one proposer with the same proposalRevision and different proposalHash make status conflicted and are never merged.
+          - Any two valid proposals with the same proposalRevision and different proposalHash, whoever proposed them, make status conflicted and are never merged.
           - windowEnd minus windowStart is between 15 minutes and 4 hours.
+          - spotSnapshot always equals the fields of the verified spot statement named by spotCid.
+          - Field classes are annotated per F10.S02.M02 (window, place and party DIDs P2; areaCell P2 at L3).
   validation_rules:
     requirements:
       - Proposals are validated for time window, place and party rules before signing and again on receipt.
       - Agreement is accepted only through verified consent statements on the current proposal hash.
       - Every violation maps to one stable error code.
+      - The house-number check applies to the free-text areaLabel only; a safe-spot snapshot is validated by matching it to a curator-verified SafeSpot statement in the local cache (same spot id, version, statement cid and signature).
+      - Block checks use only the local principal's own blocks; statements from DIDs it blocked are dropped silently, and a party blocked by someone else sees no difference in its own vault.
     rules:
       - "V01 | windowEnd - windowStart is between 15 minutes and 4 hours, windowStart is at least 15 minutes and at most 30 days after the local clock | COMMS_MEETUP_WINDOW_INVALID"
-      - "V02 | placeKind safe_spot requires a safeSpotId held in the local cache and active, placeKind area requires areaCell at L3 or coarser and areaLabel 3..80 characters | COMMS_MEETUP_PLACE_INVALID"
-      - "V03 | areaLabel and spot snapshot contain no house-number address pattern, coordinates or P3 fields | COMMS_MEETUP_PLACE_INVALID"
+      - "V02 | placeKind safe_spot requires safeSpotId and spotCid of a SafeSpot statement held in the local cache, active and verified against the hosting relay's curator list (F08.S03.M01); placeKind area requires areaCell of at most 6 characters (L3 or coarser, F06.S02.M01) and areaLabel 3..80 characters | COMMS_MEETUP_PLACE_INVALID"
+      - "V03 | areaLabel contains no house-number address pattern, coordinates or P3 fields; spotSnapshot equals the name, kind, l2Cell and accessNote of the verified spot statement named by spotCid | COMMS_MEETUP_PLACE_INVALID"
       - "V04 | thread is active, the actor is a participant, and partyDids equals the thread participants involved in the context | VALIDATION_FAILED"
-      - "V05 | the actor is not blocked by any party in the local block list | BLOCKED_PARTY"
+      - "V05 | the local principal has not blocked any party in its own block list (F07.S02.M02 isBlockedEither over local data); BLOCKED_PARTY is returned only when the actor blocked the other party, and statements from DIDs the local principal blocked are dropped silently (N7) | BLOCKED_PARTY"
       - "V06 | rescheduleCount is below 5 when creating a new revision | COMMS_MEETUP_RESCHEDULE_LIMIT"
       - "V07 | expectedRevision equals the current proposalRevision | CONFLICT_REVISION"
-      - "V08 | agreeing consent verifies for the current proposalHash and signer is a party | COMMS_MEETUP_AGREEMENT_INVALID"
-      - "V09 | a vault creates at most 20 proposals per day | RATE_LIMITED"
+      - "V08 | an agreement counts only when comms.consent.verify (F08.S02.M02) returns valid for that party, statement key consent.comms.meetup.agree.v1 and the current proposalHash; a conflicted result freezes the meetup | COMMS_MEETUP_AGREEMENT_INVALID"
+      - "V09 | UX guard in the proposer vault: at most 20 proposals per day; receiving vaults keep at most 10 open meetups per thread and 5 new proposals per party per day and drop the rest silently | RATE_LIMITED"
+      - "V10 | an inbound proposal is accompanied by the proposer's own valid agreement consent for its proposalHash | COMMS_MEETUP_AGREEMENT_INVALID"
   workflow_state_machine:
     requirements:
       - A meetup starts proposed; reschedule creates a new proposal revision, clears prior agreements and stays proposed until every party agreed.
-      - Agreed is computed only from verified consent statements for the current hash; a reschedule from agreed moves back to proposed.
-      - Cancelled, expired and elapsed are terminal; conflicted ends only by a new proposal revision from either party.
+      - Agreed is computed only from verified consent statements of every party, the proposer included, for the current hash; a reschedule or a verified revocation of an agreement before windowStart moves an agreed meetup back to proposed.
+      - Cancelled, expired and elapsed are terminal; conflicted ends by a new proposal revision higher than every competing one, by a cancellation, or by expiry once the local clock passes the windowStart of every competing proposal.
+      - Propose and reschedule sign the proposer's own consent.comms.meetup.agree.v1 consent in the same transaction, so the agreement evidence is uniform for every party; agreed is not a commit, and consents may be revoked until windowStart (ConsentSubjectPort.isCommitted).
+      - A conflict is any two distinct valid proposals with the same proposalRevision and different proposalHash, whoever proposed them, and it freezes the meetup for explicit renegotiation.
     machines:
       - entity: Meetup
         initial: proposed
         terminal: [cancelled, expired, elapsed]
         transitions:
-          - "proposed -> proposed | comms.meetup.reschedule (new proposal revision) | rescheduleCount + 1, agreements cleared; emits comms.meetup.proposed"
-          - "proposed -> agreed | last verified agreement received or signed | all parties hold valid agreement for proposalHash; emits comms.meetup.agreed"
-          - "agreed -> proposed | comms.meetup.reschedule by any party | rescheduleCount + 1, agreements cleared; emits comms.meetup.proposed"
-          - "proposed -> conflicted | two valid proposals with the same revision from one proposer | meetup frozen, both proposals kept"
-          - "agreed -> conflicted | fork detected after agreement | meetup frozen"
-          - "conflicted -> proposed | a party posts a new proposal revision higher than both | agreements cleared; emits comms.meetup.proposed"
-          - "proposed -> cancelled | comms.meetup.cancel, thread archived, block, or context cancelled | emits comms.meetup.cancelled"
-          - "agreed -> cancelled | comms.meetup.cancel, block, or context cancelled | emits comms.meetup.cancelled"
+          - "proposed -> proposed | comms.meetup.reschedule (new proposal revision) | rescheduleCount + 1, agreements cleared, proposer consent signed; emits comms.meetup.proposed (reason reschedule)"
+          - "proposed -> agreed | last verified agreement received or signed | every party including the proposer holds a valid agreement for proposalHash; emits comms.meetup.agreed"
+          - "agreed -> proposed | comms.meetup.reschedule by any party | rescheduleCount + 1, agreements cleared; emits comms.meetup.proposed (reason reschedule)"
+          - "agreed -> proposed | verified revocation of an agreement before windowStart (comms.consent.revoked) | agreement removed; emits comms.meetup.proposed (reason agreement_revoked)"
+          - "proposed -> conflicted | two distinct valid proposals with the same proposalRevision, whoever proposed them | meetup frozen, competing proposals kept"
+          - "agreed -> conflicted | a competing proposal for the agreed revision, or comms.consent.verify returns conflicted | meetup frozen"
+          - "conflicted -> proposed | a party posts a proposal revision higher than every competing one | agreements cleared; emits comms.meetup.proposed (reason conflict_resolved)"
+          - "proposed -> cancelled | comms.meetup.cancel, thread archived, the local principal's block, or context cancelled | emits comms.meetup.cancelled"
+          - "agreed -> cancelled | comms.meetup.cancel, the local principal's block, or context cancelled | emits comms.meetup.cancelled"
           - "conflicted -> cancelled | comms.meetup.cancel | emits comms.meetup.cancelled"
           - "proposed -> expired | local clock passes windowStart without agreement | no event beyond local state"
+          - "conflicted -> expired | local clock passes the windowStart of every competing proposal | no event beyond local state"
           - "agreed -> elapsed | local clock passes windowEnd plus 24 hours | meetup closed for record keeping"
     timeouts:
       - "Local sweep every 60 s while the app runs and on app start moves proposed meetups past windowStart to expired."
+      - "Conflicted meetups expire when the local clock passes the windowStart of every competing proposal."
       - "Agreed meetups move to elapsed 24 hours after windowEnd."
   commands_queries_events:
     requirements:
-      - All commands are vault commands; propose and reschedule produce the signed proposal statement and agree uses comms.consent.sign, so nothing is a relay command.
+      - All commands are vault commands; propose and reschedule produce the signed proposal statement together with the proposer's agreement consent, and agree uses comms.consent.sign, so nothing is a relay command.
       - Each command emits its event in the same IndexedDB transaction as the state change, and inbound verified statements derive the same events with actor kind federated.
       - The module consumes thread, block, context and consent events to keep meetups consistent.
+      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.meetup/v1 { meetupId, threadId, proposalRevision, window, place with spotCid, partyDids } and classrup.comms.meetup_cancel/v1 { meetupId, reason }, each signed by a device key of a party; agreements are classrup.comms.consent/v1 statements of F08.S02.M02."
+      - Event payloads carry the party DIDs needed for notification routing (N4) - comms.meetup.proposed, comms.meetup.agreed and comms.meetup.cancelled all include partyDids.
+      - The module registers ExportSectionPort (section comms.meetups with the signed proposal statements), DeletionPort (plan, execute, pseudonymize - proposal and cancellation statements kept as evidence get the deleted party's DID replaced by the deletion pseudonym) and RetentionPurgePort (RET-EVIDENCE, independent of the thread purge) with F10 (N6).
     commands:
       - name: comms.meetup.propose
         capability: comms.meetup.propose
-        input: "[vault command; produces signed statement classrup.comms.meetup/v1] { threadId, windowStart, windowEnd, venueTz, placeKind, safeSpotId?, areaCell?, areaLabel? }"
-        output: "{ meetupId, proposalRevision: 1, proposalHash }"
+        input: "[vault command; produces signed statement classrup.comms.meetup/v1 and the proposer's consent.comms.meetup.agree.v1 consent] { threadId, windowStart, windowEnd, venueTz, placeKind, safeSpotId?, areaCell?, areaLabel? }"
+        output: "{ meetupId, proposalRevision: 1, proposalHash, proposerConsentId }"
         errors: [VALIDATION_FAILED, COMMS_MEETUP_WINDOW_INVALID, COMMS_MEETUP_PLACE_INVALID, BLOCKED_PARTY, NOT_FOUND, RATE_LIMITED]
         emits: [comms.meetup.proposed]
         idempotent: true
@@ -147,8 +173,8 @@ processes:
         idempotent: true
       - name: comms.meetup.reschedule
         capability: comms.meetup.reschedule
-        input: "[vault command; produces signed statement classrup.comms.meetup/v1 with higher revision] { meetupId, expectedRevision, windowStart, windowEnd, placeKind, safeSpotId?, areaCell?, areaLabel? }"
-        output: "{ meetupId, proposalRevision, proposalHash, rescheduleCount }"
+        input: "[vault command; produces signed statement classrup.comms.meetup/v1 with higher revision and the proposer's agreement consent] { meetupId, expectedRevision, windowStart, windowEnd, placeKind, safeSpotId?, areaCell?, areaLabel? }"
+        output: "{ meetupId, proposalRevision, proposalHash, rescheduleCount, proposerConsentId }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, COMMS_MEETUP_WINDOW_INVALID, COMMS_MEETUP_PLACE_INVALID, COMMS_MEETUP_RESCHEDULE_LIMIT, BLOCKED_PARTY]
         emits: [comms.meetup.proposed]
         idempotent: true
@@ -163,67 +189,71 @@ processes:
       - name: comms.meetup.list_for_thread
         capability: comms.meetup.read
         input: "[vault query] { threadId, status?, limit ≤ 50 }"
-        output: "{ items: Meetup[] with per-party agreement status }"
+        output: "{ items: Meetup[] with per-party agreement status and competing proposals when conflicted }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: comms.meetup.proposed, privacy: P2, payload: "{ meetupId, threadId, proposalRevision, proposalHash, windowStart, windowEnd, placeKind, proposerDid, origin: local|federated }"}
+      - {type: comms.meetup.proposed, privacy: P2, payload: "{ meetupId, threadId, proposalRevision, proposalHash, reason: new|reschedule|agreement_revoked|conflict_resolved, windowStart, windowEnd, placeKind, proposerDid, partyDids[], origin: local|federated }"}
       - {type: comms.meetup.agreed, privacy: P2, payload: "{ meetupId, threadId, proposalRevision, proposalHash, partyDids[], windowStart, windowEnd }"}
-      - {type: comms.meetup.cancelled, privacy: P2, payload: "{ meetupId, threadId, cancelledByDid, reason, origin: local|federated }"}
+      - {type: comms.meetup.cancelled, privacy: P2, payload: "{ meetupId, threadId, cancelledByDid, partyDids[], reason, origin: local|federated }"}
     events_consumed:
-      - {type: comms.consent.received, effect: "when the consent is an agreement on the current meetup proposalHash, record it and re-evaluate agreed"}
-      - {type: comms.consent.revoked, effect: "remove the agreement and move an agreed meetup back to proposed"}
+      - {type: comms.consent.received, effect: "when the consent is an agreement on the current meetup proposalHash, record it after comms.consent.verify and re-evaluate agreed"}
+      - {type: comms.consent.revoked, effect: "before windowStart remove the agreement and move an agreed meetup back to proposed (reason agreement_revoked); when verify reports conflicted (revocation after windowStart) freeze the meetup as conflicted"}
       - {type: comms.thread.archived, effect: "cancel open meetups of the thread with reason other"}
-      - {type: identity.block.added, effect: "cancel open meetups between the two parties silently on the blocker side"}
+      - {type: identity.block.added, effect: "in the blocker's vault only: cancel open meetups with the DID the local principal blocked, silently; nothing is sent and the blocked party's vault is unaffected"}
       - {type: mutiny.cycle.cancelled, effect: "cancel meetups whose context is the cycle"}
       - {type: services.booking.cancelled, effect: "cancel meetups whose context is the booking"}
       - {type: rentals.reservation.cancelled, effect: "cancel meetups whose context is the reservation"}
     errors:
       - "COMMS_MEETUP_WINDOW_INVALID | 422 | no | window length is outside 15 minutes to 4 hours, or starts too soon or too far ahead"
-      - "COMMS_MEETUP_PLACE_INVALID | 422 | no | place is not an active safe spot or a valid L3 area label without an address"
+      - "COMMS_MEETUP_PLACE_INVALID | 422 | no | place is not a verified active safe spot or a valid L3 area label without an address"
       - "COMMS_MEETUP_RESCHEDULE_LIMIT | 409 | no | the meetup already used 5 reschedules"
-      - "COMMS_MEETUP_AGREEMENT_INVALID | 422 | no | agreement consent does not verify for the current proposal hash or signer is not a party"
+      - "COMMS_MEETUP_AGREEMENT_INVALID | 422 | no | agreement consent does not verify for the current proposal hash, signer is not a party, or the proposer's own consent is missing"
     example: |
       vault command comms.meetup.propose
-      { "threadId": "0192f3a4-0000-7000-8000-0000000000aa", "windowStart": "2026-11-07T14:00:00Z", "windowEnd": "2026-11-07T15:00:00Z",
+      { "threadId": "5f3a9c1e-7b2d-8e4f-9a01-23456789abcd", "windowStart": "2026-11-07T14:00:00Z", "windowEnd": "2026-11-07T15:00:00Z",
         "venueTz": "Europe/Berlin", "placeKind": "safe_spot", "safeSpotId": "0192f3a4-7777-7000-8000-000000000001" }
-      -> { "meetupId": "0192f3a8-4444-7000-8000-000000000001", "proposalRevision": 1, "proposalHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" }
+      -> { "meetupId": "0192f3a8-4444-7000-8000-000000000001", "proposalRevision": 1, "proposalHash": "sha256-n4bQgYhMfWWaL-qgxVrQFaO_TxsrC4Is0V1sFbDwCgg", "proposerConsentId": "sha256-Lw2…" }
   authorization_capabilities:
     requirements:
       - Vault policy lets only the unlocked local principal propose, agree, reschedule or cancel, and only as a party of the meetup.
-      - Inbound proposals and cancellations are accepted only when signed by a key of a party of the meetup; others are quarantined.
+      - Inbound proposals and cancellations are accepted only when signed by an active key of a party of the meetup (F16.S02.M02); others are quarantined.
       - Relays hold no meetup data beyond encrypted envelopes; no relay or global role can change a meetup.
     capabilities:
-      - "comms.meetup.propose | local principal | vault policy; participant(thread); not blocked by any party"
-      - "comms.meetup.agree | local principal | party of the meetup; not the proposer for the proposer's own revision (proposer agreement is implied by the proposal signature)"
+      - "comms.meetup.propose | local principal | vault policy; participant(thread); the local principal has not blocked any party; signs the proposer's agreement consent in the same transaction"
+      - "comms.meetup.agree | local principal | party of the meetup; the proposer's own agreement is signed together with propose and reschedule"
       - "comms.meetup.reschedule | local principal | party of the meetup; meetup not cancelled, expired or elapsed"
       - "comms.meetup.cancel | local principal | party of the meetup; meetup not cancelled, expired or elapsed"
       - "comms.meetup.read | local principal | participant(thread)"
   failure_recovery_idempotency:
     requirements:
-      - All commands commit locally first; statements travel through the sync outbox with states prepared, transport acknowledged and peer accepted, and the UI shows only the reached state.
+      - All commands commit locally first; statements travel through F11.S02.M01 on the F15.S01.M01 outbox with states prepared, transport acknowledged and peer accepted, and the UI shows only the reached state.
       - Statement handling is idempotent on statement cid and agreements are idempotent on (partyDid, proposalHash).
       - Conflicting proposals are frozen for explicit renegotiation; no distributed lock and no last-writer-wins is used.
     idempotency: "Vault commands are idempotent on (meetupId, proposalRevision); inbound statements deduplicated by cid; agreement on (partyDid, proposalHash)."
-    concurrency: "expectedRevision on every mutating command; each command is one IndexedDB transaction; simultaneous reschedules from two parties produce two valid proposals with one revision number and the meetup becomes conflicted."
-    retries: "Outbox retries statements with backoff base 1 s, factor 2, cap 15 min for 14 days; after that the meetup shows delivery unknown and remains valid locally."
+    concurrency: "expectedRevision on every mutating command; each command is one IndexedDB transaction; simultaneous reschedules from two parties produce two valid proposals with one revision number from two proposers, and because a conflict is defined by revision and hash regardless of proposer, the meetup becomes conflicted in every vault that holds both."
+    retries: "Statements use the F15.S01.M01 outbox timers (CTR-IDM-001 IDM-4 backoff base 500 ms, cap 30 s, 6 attempts; unsent entries expire 7 days after creation after a day-6 prompt, transport_acknowledged entries 30 days after the relay receipt); an expired entry shows delivery failed with resend and the meetup stays valid locally."
     offline: "All commands work offline; the meetup shows saved on this device and agreed only after peer signatures verified; the expiry sweep runs on app start."
-    partial_failure: "If an agreement signature arrives for a stale hash it is stored but ignored for the current revision; if only some parties have agreed the meetup stays proposed with a per-party list."
+    partial_failure: "If an agreement signature arrives for a stale hash it is stored but ignored for the current revision; if only some parties have agreed the meetup stays proposed with a per-party list; a proposal arriving without the proposer's consent waits up to 7 days for it and is otherwise ignored."
   privacy_retention_abuse:
     requirements:
-      - Meetups carry only a time window and a public place or an L3 area label; exact home addresses and live locations are never accepted, and the label validator rejects address patterns.
+      - Meetups carry only a time window and a public place or an L3 area label; exact home addresses and live locations are never accepted, and the area-label validator rejects address patterns.
       - Meetup data travels only inside end-to-end encrypted messages to the listed parties; relays see routing metadata only.
-      - The module reduces risk but cannot guarantee safety; the UI repeats the checklist from F08.S03.M01 before first agreement.
+      - The module reduces risk but cannot guarantee safety; the UI repeats the checklist from F08.S03.M01 before the first proposal or agreement.
+      - "Signed proposal and cancellation statements are RET-EVIDENCE and survive the thread purge (CTR-PRV-001, FLOW-08), so agreement consents stay re-verifiable; privacy duties (N6) - field classification per F10.S02.M02, ExportSectionPort, DeletionPort, RetentionPurgePort and pseudonymization on deletion - apply."
     data:
-      - "Meetup: P2, parties only; place is a public spot snapshot or L3 label."
+      - "Meetup: P2, parties only; place is a verified public spot snapshot or L3 label."
+      - "Signed proposal and cancellation statements: P2 evidence held by the parties."
       - "Agreements: ConsentStatements (P2, RET-EVIDENCE) held by F08.S02.M02."
     retention:
-      - "Meetups: RET-STANDARD, purged locally with the thread; agreement statements keep their own RET-EVIDENCE retention."
+      - "Meetups and their signed proposal statements: RET-EVIDENCE (2 years after last related activity), independent of the thread purge; pseudonymized on principal deletion."
+      - "Agreement statements keep their own RET-EVIDENCE retention in F08.S02.M02."
     threats:
-      - "T01 | Pressure to meet at a private address | place model accepts only safe spots or L3 area labels; address-like labels are rejected; the checklist warns"
-      - "T02 | Forged cancellation or change by a stranger | statements need a party key signature; others are quarantined"
-      - "T03 | Tampering with the agreed window after agreement | agreement signs the proposal hash; any change is a new revision that clears agreements"
-      - "T04 | Fork to claim the other side agreed to a different time | conflicting proposals freeze the meetup; both are shown to the parties"
-      - "T05 | Proposal spam | 20 proposals per day per vault, blocks drop proposals silently, unknown senders in message requests"
+      - "T01 | Pressure to meet at a private address | place model accepts only verified safe spots or L3 area labels; address-like area labels are rejected; the checklist warns"
+      - "T02 | Forged cancellation or change by a stranger | statements need an active party key signature; others are quarantined"
+      - "T03 | Tampering with the agreed window after agreement | agreement signs the proposal cid; any change is a new revision that clears agreements"
+      - "T04 | Fork to claim the other side agreed to a different time | any two different proposals with one revision freeze the meetup whoever sent them; both are shown to the parties"
+      - "T05 | Proposal spam | receiving vaults keep at most 10 open meetups per thread and 5 new proposals per party per day, blocks drop proposals silently, unknown senders in message requests; the 20 per day proposer limit is a UX guard"
+      - "T06 | Fake safe-spot snapshot naming a venue that no curator listed | the snapshot must match a curator-verified spot statement by cid, version and signature"
     abuse_controls:
       - "Reports include the proposal statements and agreements (F12.S01.M01) at the reporter's discretion."
       - "Repeated cancellations are visible only to the vault owner as a personal count, with no global score created by this module."
@@ -238,39 +268,48 @@ processes:
     logs:
       - "local info meetup.agreed {meetupId, proposalRevision} — no place or window."
     budgets:
-      - "propose/agree/reschedule/cancel p95 ≤ 50 ms; list_for_thread p95 ≤ 100 ms with 20 meetups."
+      - "propose (including the proposer consent)/agree/reschedule/cancel p95 ≤ 50 ms; list_for_thread p95 ≤ 100 ms with 20 meetups."
       - "Expiry sweep for 1 000 meetups ≤ 1 s."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Contract tests check commands, signed statements and event payloads against the schema registry.
       - Fork and agreement logic is covered by deterministic multi-vault simulations.
-    fixtures: "Vaults A and B with thread TH, safe spot S1 active, fixed clock 2026-11-04T10:00:00Z, proposal window 2026-11-07T14:00Z to 15:00Z in Europe/Berlin."
+      - Screens meet CTR-UX-001 (WCAG 2.2 AA, 44 px targets, explicit async states, polite announcements) and the a11y items listed for this module.
+    fixtures: "Vaults A, B and C with two-party thread TH (A, B) and cycle thread TC (A, B, C), safe spot S1 active and curator-verified, fixed clock 2026-11-04T10:00:00Z, proposal window 2026-11-07T14:00Z to 15:00Z in Europe/Berlin."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | A proposes a 1-hour window at spot S1 | Meetup stored proposed with proposalHash equal to SHA-256 of JCS payload and spot snapshot copied"
-      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V09 violated in turn including areaLabel 12 Main Street | documented error code returned and nothing stored"
-      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of propose, agree, reschedule, cancel, clock jumps | agreed only with all verified agreements for current hash; rescheduleCount never above 5; terminal states never change"
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | A proposes a 1-hour window at spot S1 | Meetup stored proposed with proposalHash equal to the ID-3 cid of the JCS payload, spot snapshot and spotCid copied from the verified statement, and A's own agreement consent signed"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V10 violated in turn including areaLabel 12 Main Street | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of propose, agree, revoke, reschedule, cancel, clock jumps | agreed only with all verified agreements for current hash; rescheduleCount never above 5; terminal states never change"
       - "T04 | integration | 03.R01,03.R02 | B agrees; A reschedules; B agrees to the new hash | agreed only after the second agreement, earlier agreement ignored for the new hash"
       - "T05 | contract | 04.R01,04.R02,09.R02 | each command and the query execute | outputs, statements and event payloads validate against registry schemas"
-      - "T06 | integration | 04.R03 | thread archived, block added, cycle cancelled events | open meetups cancelled; blocker side silent"
+      - "T06 | integration | 04.R03 | thread archived, block added by the local principal, cycle cancelled events | open meetups cancelled; blocker side silent"
       - "T07 | abuse | 05.R01,05.R02,05.R03 | stranger-signed proposal; cancellation signed by non-party; relay operator inspects storage | quarantined; relay holds only ciphertext"
-      - "T08 | integration | 06.R01,06.R02,06.R03 | A and B reschedule concurrently while offline then sync | both proposals kept, meetup conflicted, neither overwrites; agreeing a stale hash stored but ignored"
-      - "T09 | abuse | 07.R01,07.R03 | label with house number, coordinates in area label, 21st proposal | COMMS_MEETUP_PLACE_INVALID and RATE_LIMITED; no P3 stored"
+      - "T08 | integration | 06.R01,06.R02,06.R03,03.R05,09.R03 | A and B reschedule concurrently while offline, then sync | two proposals with one revision from two proposers; meetup conflicted in both vaults, neither overwrites; agreeing a stale hash stored but ignored"
+      - "T09 | abuse | 07.R01 | area label with house number, coordinates in area label, 6th proposal from one party in a day at the receiver | COMMS_MEETUP_PLACE_INVALID and silent drop; no P3 stored"
       - "T10 | integration | 07.R02,06.R01 | sync states A to B with relay down then up | states prepared then transport acknowledged then peer accepted; UI text never ahead of state"
       - "T11 | load | 08.R01,08.R02,08.R03 | 1 000 meetups sweep and 20-meetup thread render | budgets met"
-      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-064 requirement maps to a passing test"
-      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore from backup | meetups and agreements round trip; invalid statements quarantined"
-      - "T14 | a11y | 04.R01 | propose and agree flow with screen reader and keyboard | statuses announced as text, zero serious axe issues"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-064 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore from backup | meetups, proposal statements and agreements round trip; invalid statements quarantined"
+      - "T14 | a11y | 09.R04 | propose and agree flow with screen reader and keyboard | statuses announced as text, targets ≥ 44 px, zero serious axe issues"
+      - "T15 | integration | 03.R04,01.R05,09.R03 | two vaults: A proposes (A's consent included), B agrees; B revokes before windowStart; repeat with B trying to revoke after windowStart | agreed in both vaults; then proposed again in both (reason agreement_revoked); after windowStart the local revoke is refused because isCommitted is true"
+      - "T16 | integration | 03.R03,09.R03 | conflicted meetup with two competing proposals; clock passes the first windowStart, then the second | still conflicted after the first, expired after the second"
+      - "T17 | integration | 02.R04 | propose at S1 with the verified snapshot; inbound proposal whose snapshot differs from the statement named by spotCid; area label with a house number | first accepted (a street-like accessNote in the verified statement is not checked by the house-number rule); second and third rejected with COMMS_MEETUP_PLACE_INVALID"
+      - "T18 | abuse | 02.R05 | A has blocked B; B proposes and later cancels | A's vault drops both silently; B's vault state and responses are identical to an unblocked control run"
+      - "T19 | unit | 07.R03 | open the propose and agree screens for the first time | the F08.S03.M01 checklist is shown before Send proposal and before the first Agree"
+      - "T20 | integration | 01.R04,07.R04 | archive and purge thread TH after an agreed meetup, then re-verify; delete B's account | meetup, proposal statements and consents remain and re-verify; B's own vault pseudonymizes B's DID in its kept evidence while A's copy is unchanged"
+      - "T21 | contract | 04.R04,04.R05 | registry entries for meetup and meetup_cancel; payloads of proposed, agreed and cancelled in TC | signer role party; every payload carries partyDids so notifications reach the other parties"
+      - "T22 | integration | 04.R06 | account deletion with open and elapsed meetups | DeletionPort plan pseudonymizes kept proposal statements and purges open meetups; export section comms.meetups present beforehand"
     acceptance:
-      - All tests T01 to T14 pass in CI.
-      - A meetup is shown as agreed only when every party's consent verifies for the current proposal hash.
+      - All tests T01 to T22 pass in CI.
+      - A meetup is shown as agreed only when every party's consent, the proposer's included, verifies for the current proposal hash.
       - No meetup field or event ever contains an exact address or live location.
   import_export_backup_rollback:
     requirements:
       - A user's vault export contains their meetups, proposal statements and the agreement references.
       - Import re-verifies proposal and consent signatures; failures are quarantined and meetups with passed windows import as elapsed.
       - Schema changes follow expand and contract and keep v1 readable for 180 days.
-    export: "Section comms.meetups in classrup-export/v1; one line per Meetup (schema classrup.comms.meetup/v1) with signed proposal statements."
+    export: "Section comms.meetups in classrup-export/v1, registered through ExportSectionPort; one line per Meetup (schema classrup.comms.meetup/v1) with signed proposal and cancellation statements."
     import: "Signatures are re-verified; existing IDs skipped; open meetups whose window has passed import as expired or elapsed; agreements link to imported consent statements."
     backup: "Vault export is the backup (IOX-6); relays hold no meetup data."
     migration_rollback: "Additive fields only in v1; rollback is safe because proposals are immutable statements and derived status is recomputed on load."

@@ -15,7 +15,7 @@
 - **idempotency:** Relay commands require Idempotency-Key with replay for 24 h; vault commands record a command ID for 24 h; purge batches are keyed by (runId, kind, cursor).
 - **concurrency:** expectedRevision on hold transitions; unique constraint prevents two active holds per subject; a sweep takes a single-flight lock (Web Lock in the vault, SQLite advisory row on the relay); purge re-checks hold state inside the same transaction that deletes.
 - **retries:** A failed sweep batch is retried 3 times with 1 s, 5 s and 30 s backoff, then the run is marked partial and resumes at the next schedule.
-- **offline:** Vault sweeps run offline. Relay holds require the relay; the console shows relay unreachable.
+- **offline:** Vault sweeps run offline; without a recent relay receipt only the high-water clock is used for jump detection. Relay holds require the relay; the console shows relay unreachable.
 - **partial failure:** A partial run records which kinds completed; unfinished kinds are retried next run. Records are never half-purged because each batch is one transaction.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
@@ -29,4 +29,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S01.M01, F16.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -18,16 +18,16 @@ Initial **active**; terminal **retired**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| active -> disabled | commerce.currency.set_status by operator | emits commerce.currency.status_changed |
-| disabled -> active | commerce.currency.set_status by operator | emits commerce.currency.status_changed |
-| disabled -> retired | commerce.currency.set_status by operator | CurrencyUsagePort reports zero open references; emits commerce.currency.status_changed |
+| active -> disabled | commerce.currency.set_status by the local principal | emits commerce.currency.status_changed |
+| disabled -> active | commerce.currency.set_status by the local principal | emits commerce.currency.status_changed |
+| disabled -> retired | commerce.currency.set_status by the local principal | CurrencyUsagePort reports zero open references; emits commerce.currency.status_changed |
 
 ```mermaid
 stateDiagram-v2
   [*] --> active
-  active --> disabled: commerce.currency.set_status by operator
-  disabled --> active: commerce.currency.set_status by operator
-  disabled --> retired: commerce.currency.set_status by operator
+  active --> disabled: commerce.currency.set_status by the local principal
+  disabled --> active: commerce.currency.set_status by the local principal
+  disabled --> retired: commerce.currency.set_status by the local principal
   retired --> [*]
 ```
 

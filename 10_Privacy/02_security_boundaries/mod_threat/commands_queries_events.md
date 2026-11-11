@@ -36,7 +36,7 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Documentation and CI-check module. Interface: docs/privacy/threat_model/threats.yaml, rendered THREAT_MODEL.md, and the CI command privacy-threat-check which returns exit code 0 or 1 and a JSON summary. No relay or vault commands, no events.
+**Note:** Documentation and CI-check module. Interface: docs/privacy/threat_model/threats.yaml, rendered THREAT_MODEL.md, and the CI command privacy-threat-check which returns exit code 0 or 1 and a JSON summary, and with --release-candidate generates the review task. No relay or vault commands, no events.
 
 ### Example
 
@@ -44,10 +44,11 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 threat entry excerpt:
 id: PT-01  title: Trilateration of a seller's location through repeated distance queries
 adversaries: [A2 curious member, A3 relay operator]  assets: [home area]
-controls: [F10.S02.M03 coarse cells, CTR-PRV-001 PRV-2 distance buckets and minimum radius 5 km, relay rate limits]
+controls: [{module: F06.S02.M01, requirement: PS-047-07.R01}, {module: F06.S02.M01, requirement: PS-047-02.R03},
+           {module: F06.S02.M03, requirement: PS-049-07.R02}, {module: F06.S02.M03, requirement: PS-049-07.R04}]
 residualRisk: A determined adversary with many queries over weeks may narrow a user to a 5 km cell, not to an address.
-tests: [PRIVT-GEO-01, PRIVT-GEO-02]
-CI: privacy-threat-check => 14 active threats, 0 violations
+tests: [PRIVT-GEO-01, PRIVT-GEO-02]  status: active  reviewedAt: 2026-11-04  reviewer: privacy reviewer on duty
+CI: privacy-threat-check => 17 active threats, 0 violations
 ```
 
 ## Verification

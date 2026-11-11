@@ -6,21 +6,23 @@
 
 ## Purpose
 
-Purpose-based, revocable consent kept in the user's vault. Five purposes exist: publishing to federation, notifications by email, notifications by Web Push, optional analytics sharing, and precise location sharing. Every purpose is off by default. A grant records the exact policy text version and its SHA-256 hash that the user saw. Other modules call a local check before processing for a purpose. When a purpose involves a relay, the grant also produces a signed consent statement for that relay, and withdrawal produces a signed withdrawal; copies already fetched by others cannot be recalled and the UI says so.
+Purpose-based, revocable consent kept in the user's vault. Five purposes exist: publishing to federation, notifications by email, notifications by Web Push, optional analytics sharing, and precise location sharing. Every purpose is off by default. A grant records the exact policy text version and its SHA-256 hash that the user saw. Other modules call a local check before processing for a purpose. Federation, email and push consents are each scoped to one user-selected relay. Exactly one relay-facing artifact exists per purpose: for federation_publish the vault signs classrup.privacy.consent_statement/v1 for that relay, which accepts and acknowledges it through the relay command privacy.consent.relay_register; for email and push the relay-facing artifact is the F13.S02.M03 channel consent statement, which carries this module's consent ID and purpose. A location_precise grant only enables the feature; every precise share is still a separate action in F06.S02.M02. Withdrawal always succeeds locally and, for federation, queues a signed withdrawal that names the grant it revokes; copies already fetched by others cannot be recalled and the UI says so.
 
 ## Responsibilities
 
 - Own PrivacyConsent records (append-only history per purpose and scope) with policy id, version and hash.
 - Provide privacy.consent.check, the single local decision function other modules call before processing for a purpose.
-- Produce signed statements classrup.privacy.consent/v1 and classrup.privacy.consent_withdrawal/v1 addressed to a named relay when the purpose is relay-scoped.
-- Lapse consents whose policy hash has a material change, requiring a fresh informed grant.
-- Withdraw consent immediately and locally, including when an unsubscribe happens elsewhere (notify.channel.opted_out) or a deletion is requested.
+- Produce the relay-facing statements for federation_publish only, classrup.privacy.consent_statement/v1 and classrup.privacy.consent_withdrawal/v1, signed by the principal and addressed to the named relay; notify_email and notify_push rely on the F13.S02.M03 classrup.notify.channel_consent/v1 statement, which references the consent ID and purpose.
+- Lapse consents whose policy hash has a material change, requiring a fresh informed grant, and queue the same signed withdrawal as an explicit withdrawal.
+- Withdraw consent immediately and locally on user request, on an F13 unsubscribe or settings opt-out for the same purpose and relay, and in this module's DeletionPort step when a deletion executes.
+- Serve the relay command privacy.consent.relay_register, which verifies a consent or withdrawal statement and returns a relay-signed acknowledgement, and the in-process relay query privacy.consent.relay_check that relay federation calls before indexing or forwarding an author's records.
+- Meet the N6 duties for its own data, namely ExportSectionPort section privacy.consents, a DeletionPort step and a RetentionPurgePort kind, with every field classified by F10.S02.M02.
 
 ## Not responsible for
 
-- Per-channel notification preferences, quiet hours and unsubscribe tokens (F13.S02), which read consent from this module.
-- Precise location storage and sharing mechanics (F06.S02.M02); this module only records consent for them.
-- Relay-side enforcement of consent statements (F11 federation and F13 push modules on the relay).
+- Per-channel notification preferences, quiet hours, unsubscribe tokens and the relay-facing statement for notify_email and notify_push (F13.S02.M03), which read consent from this module.
+- Precise location storage and sharing mechanics (F06.S02.M02); a location_precise grant only enables the feature, and every L4 share still needs an explicit per-counterparty action with a TTL of at most 24 h there.
+- Relay-side enforcement of federation scope by the relay federation modules (F11.S02.M01 calls privacy.consent.relay_check) and of notification channels (F13.S02.M03).
 - Future: age-based consent rules and guardian consent; MVP assumes users meet the minimum age of the community and records no age.
 
 ## User stories
@@ -31,18 +33,20 @@ Purpose-based, revocable consent kept in the user's vault. Five purposes exist: 
 
 ## Edge cases
 
-- Policy text changes materially after a grant; the consent lapses and processing stops until the user re-grants with the new hash.
-- The user grants federation consent for relay A, then withdraws; the signed withdrawal is queued for relay A while offline and shows prepared until peer_accepted.
+- Policy text changes materially after a grant; the consent lapses, processing stops until the user re-grants with the new hash, and for federation the same signed withdrawal as an explicit withdrawal is queued for the relay.
+- The user grants federation consent for relay A, then withdraws; the signed withdrawal is queued for relay A while offline and shows prepared until relay A returns its signed acknowledgement (peer_accepted).
 - A grant is attempted with an outdated policy hash from a cached screen; it is refused with PRIVACY_POLICY_STALE.
-- An unsubscribe link elsewhere withdraws email notification consent; the vault records withdrawal with source unsubscribe within the same session.
+- An unsubscribe link in an email from relay A withdraws the F13 email channel; on the next sync with relay A the vault receives notify.channel.opted_out with via unsubscribe_link and withdraws the notify_email consent for relay A with source unsubscribe. An opted_out with via expired, account_deletion, privacy_withdrawal or relay_policy leaves the purpose consent unchanged.
 - Two tabs grant and withdraw the same purpose at the same moment; the later revision wins locally in order of the vault transaction and both entries stay in history.
-- Deletion is requested; all active consents are withdrawn with reason account_deletion, and cancelling the deletion does not restore them.
+- Deletion is requested; consents stay unchanged during the 14-day grace because cancelling must restore normal operation (publishing is refused meanwhile by privacy.deletion.assert_not_pending of F10.S01.M04); at execution this module's DeletionPort step withdraws every consent with source deletion and signs the federation withdrawals before the keys are destroyed.
 - Import from an older export carries consents with an unknown policy hash; they import as lapsed.
+- A relay receives a replayed grant whose cid already has a withdrawal, a grant addressed to another relay, or a statement signed by a revoked key; privacy.consent.relay_register refuses each with PRIVACY_CONSENT_STATEMENT_INVALID.
+- A burst of 100 withdrawals in one hour from unsubscribes across several relays all succeed locally; the outgoing withdrawal statements are coalesced per relay in the sync outbox and none is dropped.
 
 ## UX and accessibility
 
-- Privacy settings: one row per purpose with plain-language description, current state, policy version and Read the text link, and a switch.
-- Grant sheet: shows the policy text for the purpose, the relay it applies to, what cannot be undone ('copies already fetched by others cannot be recalled'), and a Grant button.
+- Privacy settings: one row per purpose with plain-language description, current state, the relay it applies to (federation, email, push), policy version and Read the text link, and a switch.
+- Grant sheet: shows the policy text for the purpose, the relay it applies to, what cannot be undone ('copies already fetched by others cannot be recalled'), for precise location the sentence 'Turning this on shares nothing; each share is a separate choice', and a Grant button.
 - History: list of grants and withdrawals with dates and policy versions.
 
 **States:** loading; off-default; granted; withdrawn; lapsed-needs-regrant; pending-offline; error
@@ -55,23 +59,23 @@ Purpose-based, revocable consent kept in the user's vault. Five purposes exist: 
 
 ## Interfaces
 
-- Commands: `privacy.consent.grant`, `privacy.consent.withdraw`
-- Queries: `privacy.consent.check`, `privacy.consent.list_mine`
+- Commands: `privacy.consent.grant`, `privacy.consent.withdraw`, `privacy.consent.relay_register`
+- Queries: `privacy.consent.check`, `privacy.consent.list_mine`, `privacy.consent.relay_check`
 - Emits: `privacy.consent.granted`, `privacy.consent.withdrawn`
-- Consumes: `notify.channel.opted_out`, `privacy.deletion.requested`
+- Consumes: `notify.channel.opted_out`
 
 ## Dependencies
 
-F07.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001
+F07.S01.M01, F11.S01.M01, F15.S01.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-076-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-076-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-076-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-076-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-076-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-076-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-076-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-076-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-076-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-076-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -83,6 +87,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T16 pass in CI.
+- All tests T01 to T21 pass in CI.
 - On a fresh vault every purpose reports not granted and no consumer processes for any purpose.
-- Withdrawal stops in-vault processing within 1 second and the UI states that copies cannot be recalled.
+- Withdrawal stops in-vault processing within 1 second, is never refused, and the UI states that copies cannot be recalled.
+- Exactly one relay-facing statement exists per relay-scoped purpose, and relays refuse replayed, cross-relay or revoked-key statements.

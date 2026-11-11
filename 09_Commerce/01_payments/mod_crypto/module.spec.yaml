@@ -15,7 +15,7 @@ summary: >-
 responsibilities:
   - Own CryptoPaymentRequest (payee address, amount, asset, chain, validity, chain tip at creation) and its signed statement classrup.commerce.crypto_request/v1.
   - Own ChainObservation per claimed transaction and run the observation loop through ChainVerifierPort adapters, in the vault, while the PWA is running or when periodic background sync fires.
-  - Apply finality (COM-5): Bitcoin 6 confirmations, Ethereum-family block number at or below the finalized tag, other chains disabled; emit commerce.payment.confirming only for matching transactions, plus confirmed, finalized, reorged and failed with its reason.
+  - "Apply finality (COM-5): Bitcoin 6 confirmations, Ethereum-family block number at or below the finalized tag, other chains disabled; emit commerce.payment.confirming only for matching transactions, plus confirmed, finalized, reorged and failed with its reason."
   - Verify address, amount and asset (native or token contract from F09.S03.M01) before a transaction can count; underpayment or wrong destination never confirms.
   - Implement the crypto MethodRulePort for F09.S01.M01, refuse any input that looks like a private key, seed phrase or extended private key, and hold a claim local and unsent until its txid is found on chain or attested by the payer.
   - Let the user configure verifier endpoints per chain and show which endpoint and trust level produced each observation.

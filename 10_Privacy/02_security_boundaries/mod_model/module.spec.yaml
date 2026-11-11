@@ -3,33 +3,36 @@ id: F10.S02.M02
 scope: MVP
 summary: >-
   The shared vocabulary and enforcement helpers for data classification: privacy classes P0 to P4, location levels L0 to L4,
-  field-level classification annotations on schemas, and redaction helpers that every sink uses (logs, events, federation
-  envelopes, notifications, relay projections, exports). Unannotated fields are treated as P3 private and fail CI, so new data
-  is protected by default. The library is pure and runs in the browser vault and on relays; it never reads files, network or
-  clocks.
+  field-level classification annotations on schemas, an explicit class-by-sink matrix, and redaction helpers that every sink
+  uses (logs, events, federation envelopes, notifications, relay projections, search, end-to-end encrypted participant
+  envelopes and exports). Unannotated or unknown fields are treated as P4, which no sink accepts, and fail CI, so new data is
+  never emitted anywhere before it is classified. The library is pure and runs in the browser vault and on relays; it never
+  reads files, network or clocks.
 responsibilities:
   - Define the types PrivacyClass (P0 to P4) and LocationLevel (L0 to L4) with total ordering and helper functions maxClass, canFlow(class, sink) and capLocation(level, sink).
   - Provide the classification annotation format for module schemas (per-field class, location level where relevant, and redaction strategy) and read it from the schema registry.
-  - Provide redaction helpers redactForLog, redactForEvent, redactForFederation, redactForNotification, redactForProjection and redactForExport that take a record, its schema and the sink and return a safe copy or a refusal.
-  - Enforce the sink matrix of CTR-PRV-001 including location capped at L2 in any public, search or federated payload and the rule that P3 and P4 never reach logs or federation.
+  - Provide redaction helpers redactForLog, redactForEvent, redactForFederation, redactForNotification, redactForProjection, redactForSearch, redactForEnvelope and redactForExport that take a record, its schema and the sink context and return a safe copy or a refusal.
+  - Own and enforce the class-by-sink matrix written in this spec, which refines CTR-PRV-001, including location capped at L2 in any public, search or federated payload, P2 only inside encrypted participant envelopes, and P4 denied to every sink.
   - Provide a CI lint that fails when a schema field has no classification, an event payload is classified below its most sensitive field, or a public projection includes a P1 or higher field.
 non_responsibilities:
   - Deciding which fields a module defines or how they are stored (owning modules).
   - Consent decisions (F10.S01.M01) and retention (F10.S01.M02).
-  - Image and header metadata stripping (F10.S02.M03) and encryption of P2 envelopes (CTR-FED-001 transport).
+  - Image and header metadata stripping (F10.S02.M03) and the encryption of participant envelopes itself (CTR-FED-001 transport and the sending module); redactForEnvelope only checks that the caller declares the envelope encrypted to its listed recipients.
   - "Future: automatic data-flow tracing across modules at build time and differential-privacy aggregates."
 depends_on: [CTR-PRV-001, CTR-EVT-001, CTR-FED-001, CTR-ERR-001, CTR-IOX-001, CTR-OBS-001, CTR-TST-001]
 user_stories:
-  - As a developer, I annotate a new field once and every log, event, export and federation path handles it correctly.
+  - As a developer, I annotate a new field once and every log, event, export, envelope and federation path handles it correctly.
   - As a reviewer, CI tells me exactly which field is unclassified or flows to a sink it must not.
-  - As a user, I can trust that my exact address and keys never appear in logs, events, public listings or federation.
+  - As a user, I can trust that my exact address and keys never appear in logs, events, public listings, search or federation.
 edge_cases:
-  - A schema adds a field without annotation; the lint fails the build and at runtime the field is treated as P3 and redacted from every non-owner sink.
-  - An event payload mixes a P0 listing ID with a P3 address field; the event class becomes P3 and publishing it to a federation sink is refused.
-  - A location with L4 precision is passed to a public projection; it is snapped to the L2 geohash cell or refused when no cell can be derived.
+  - A schema adds a field without annotation; the lint fails the build and at runtime the field is treated as P4 and dropped from every sink, including export and owner views.
+  - An event payload mixes a P0 listing ID with a P3 address field; the event class becomes P3, which may stay in the vault outbox (EVT-8) but publishing it to a federation sink is refused.
+  - A location with L4 precision is passed to a public projection; it is snapped to the L2 geohash cell or refused when no cell can be derived; passed to the event sink it is refused (EVT-5).
   - A free-text field contains an email address; the redaction helper for logs replaces it with a typed token such as [email] before output, but the class of the field stays that of its annotation.
-  - Nested objects and arrays carry different classes per element; redaction applies per path and unknown paths default to P3.
+  - Nested objects and arrays carry different classes per element; redaction applies per path and unknown paths default to P4.
   - A sink asks for P1 data of a record the viewer does not own; the helper returns the record minus P1 fields, not an error, unless the sink is declared strict.
+  - A P2 offer is handed to redactForEnvelope without the encrypted flag or with an empty recipient list; it is refused with PRIVACY_SINK_FORBIDDEN.
+  - A record imported from a newer schema version carries a field the current map does not know; it is held as P4 and never exported, logged or shown until a map classifies it.
 ux:
   notes: "Headless library with no screens. UI badges that show a data class (for example Private, Shared with participants, Public) use helper labelKey(class) which returns i18n keys privacy.class.p0 to privacy.class.p4."
 processes:
@@ -37,20 +40,36 @@ processes:
     requirements:
       - The library defines the value types PrivacyClass, LocationLevel, Sink, ClassificationMap and RedactionStrategy and no persistent entities.
       - A ClassificationMap assigns a class to every field path of a schema, with optional location level, and is stored beside the schema in the registry as part of its version.
-      - The default class for any unannotated path is P3 and the default sink decision for P3 and P4 is deny.
+      - The default class for any unannotated or unknown path is P4, which is denied for every sink including export and ui_owner, so an unclassified field never appears in any output.
+      - The class-by-sink matrix in the note, covering 5 classes by 11 sinks plus a location cap per sink, is the normative oracle for canFlow and every redaction helper.
     entities: []
-    note: "Library module with no persistent entity. Value types are PrivacyClass P0..P4, LocationLevel L0..L4, Sink (log, event, federation, notification, projection, export, ui_public, ui_participant, ui_owner), ClassificationMap {schema, fields: path to {class, level?, redact?: drop|hash|truncate|snap}} and RedactionResult {value, dropped: path[], refused?: boolean}."
+    note: >-
+      Library module with no persistent entity. Value types - PrivacyClass P0..P4, LocationLevel L0..L4, Sink (log, event,
+      federation, notification, projection, search, participant_envelope, export, ui_public, ui_participant, ui_owner),
+      ClassificationMap {schema, fields: path to {class, level?, redact?: drop|hash|truncate|snap}} and RedactionResult
+      {value, dropped: path[], refused?: boolean}. Sink matrix (A allow, I IDs only, X allow with other users' data excluded,
+      E allow only when the envelope is encrypted to its listed recipients, D deny). P0 - log A, event A, federation A (only
+      when the owner opted in, FED-1), notification A, projection A, search A, participant_envelope A, export A, ui_public A,
+      ui_participant A, ui_owner A. P1 - log I, event A, federation D, notification D, projection D, search D,
+      participant_envelope E, export A, ui_public D, ui_participant A, ui_owner A. P2 - log I, event A (vault-local, EVT-8),
+      federation D, notification D, projection D, search D, participant_envelope E, export X, ui_public D, ui_participant A,
+      ui_owner A. P3 - log D, event A (vault-local only, EVT-8), federation D, notification D, projection D, search D,
+      participant_envelope D, export X, ui_public D, ui_participant D, ui_owner A. P4 and unclassified - D for every sink.
+      Location cap per sink - log L2, event L3 (L4 refused, EVT-5), federation L2, notification L2, projection L2, search L2,
+      participant_envelope L4 only for a user-initiated share (F06.S02.M02) and L3 otherwise, export L4 for the owner's own
+      records, ui_public L2, ui_participant L3, ui_owner L4.
   validation_rules:
     requirements:
       - Classification maps are validated against the schema's fields so every path is covered and no path refers to a missing field.
       - Redaction refuses outputs that would carry a class above what the sink allows.
       - Location handling validates the geohash cell precision and never accepts coordinates for public sinks.
+      - P4 fields are denied to every sink including event, export and ui_owner, and L4 locations are denied to the event sink (EVT-5).
     rules:
       - "V01 | every schema field path has an entry in the ClassificationMap | PRIVACY_CLASSIFICATION_MISSING"
       - "V02 | the class of an event payload is at least the maximum class of its fields | PRIVACY_CLASSIFICATION_MISSING"
-      - "V03 | a field with class P3 or P4 is never emitted to log, federation, notification or projection sinks | PRIVACY_SINK_FORBIDDEN"
-      - "V04 | locations in public, search, federation or notification payloads have level at most L2 | PRIVACY_LOCATION_TOO_PRECISE"
-      - "V05 | P2 fields are only emitted inside end-to-end encrypted participant envelopes or to the owner | PRIVACY_SINK_FORBIDDEN"
+      - "V03 | a P3 field is never emitted to log, federation, notification, projection, search, participant_envelope, ui_public or ui_participant sinks, and a P4 or unclassified field is never emitted to any sink, including event, export and ui_owner | PRIVACY_SINK_FORBIDDEN"
+      - "V04 | locations in public, search, federation or notification payloads have level at most L2, and the event sink never receives L4 | PRIVACY_LOCATION_TOO_PRECISE"
+      - "V05 | P1 and P2 fields reach participant_envelope only when ctx.encrypted is true and ctx.recipients is non-empty, and otherwise only ui_participant, ui_owner, event, export and log as IDs | PRIVACY_SINK_FORBIDDEN"
       - "V06 | a ClassificationMap contains no path that is absent from the schema | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
@@ -69,18 +88,22 @@ processes:
     queries: []
     note: >-
       Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink),
-      capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForExport(record, schema, ctx),
-      labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). No relay or vault commands, no events.
+      capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection /
+      redactForSearch / redactForExport(record, schema, ctx), redactForEnvelope(record, schema, ctx{encrypted: true, recipients: did[]}),
+      labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). redactForExport returns a refusal with
+      PRIVACY_CLASSIFICATION_MISSING when a schema has no map, so an export section fails loudly instead of shrinking silently. No relay or vault
+      commands, no events.
     events_produced: []
     events_consumed: []
     errors:
-      - "PRIVACY_CLASSIFICATION_MISSING | 500 | no | a schema field or event payload lacks a classification; build fails and runtime treats the field as P3"
+      - "PRIVACY_CLASSIFICATION_MISSING | 500 | no | a schema field or event payload lacks a classification; build fails and runtime treats the field as P4"
       - "PRIVACY_SINK_FORBIDDEN | 403 | no | the data class is not allowed to flow to this sink"
-      - "PRIVACY_LOCATION_TOO_PRECISE | 422 | no | location precision is finer than L2 for a public sink"
+      - "PRIVACY_LOCATION_TOO_PRECISE | 422 | no | location precision is finer than the sink allows (L2 for public sinks, L3 for events)"
     example: |
       redactForLog({ id: "0192…", title: "Bike", address: "Main St 4", note: "mail me a@b.example" }, schema "classrup.bazaar.listing/v1", ctx)
       => { id: "0192…", title: "Bike", address: "[redacted:P3]", note: "mail me [email]" } with dropped ["address"]
-      redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u336y" (L2) or refused if opt-in is missing
+      redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u33dc" (L2) or refused if opt-in is missing
+      redactForEnvelope(offer, "classrup.bazaar.offer/v1", { encrypted: false, recipients: [] }) => refused PRIVACY_SINK_FORBIDDEN
   authorization_capabilities:
     requirements:
       - The library performs no authorization; callers decide the sink and viewer context and the library applies class rules to that context.
@@ -90,7 +113,7 @@ processes:
   failure_recovery_idempotency:
     requirements:
       - Redaction is idempotent, so redacting an already redacted value returns the same value.
-      - A failure to find a classification map fails closed with PRIVACY_CLASSIFICATION_MISSING and treats all fields as P3.
+      - A failure to find a classification map fails closed with PRIVACY_CLASSIFICATION_MISSING and treats all fields as P4.
       - There is no shared mutable state, so concurrent calls cannot interfere.
     idempotency: "Pure functions; redact(redact(x)) equals redact(x)."
     concurrency: "No shared state; safe in workers and the UI thread."
@@ -107,11 +130,12 @@ processes:
     retention:
       - "None; maps are versioned with schemas."
     threats:
-      - "T01 | Developer forgets to classify a new field and it leaks to logs or federation | default P3 deny plus CI lint that fails on unannotated fields"
+      - "T01 | Developer forgets to classify a new field and it leaks to logs, federation or the export file | default P4 deny for every sink plus CI lint that fails on unannotated fields"
       - "T02 | Event payload class understated to allow federation | CI rule that event class is at least the max field class, contract tests per event"
-      - "T03 | Precise location leaks through a public projection | capLocation to L2 and tests that public sinks never carry coordinates"
-      - "T04 | Redaction bypass through nested or renamed fields | per-path classification with unknown paths defaulting to P3 and fuzz tests on nested structures"
+      - "T03 | Precise location leaks through a public projection or an event | capLocation to L2 for public sinks and L3 for events, and tests that public sinks never carry coordinates"
+      - "T04 | Redaction bypass through nested or renamed fields | per-path classification with unknown paths defaulting to P4 and fuzz tests on nested structures"
       - "T05 | Denial of service with deeply nested input | depth limit 32, size limit 1 MiB per record, checked before traversal"
+      - "T06 | P2 participant data sent in clear through a relay | participant_envelope sink accepts P1 and P2 only with the encrypted flag and recipients (PRV-5)"
     abuse_controls:
       - "Input bounds: depth 32, 1 MiB per record, 10 000 paths per map; callers apply request rate limits."
   observability_performance:
@@ -129,35 +153,37 @@ processes:
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test.
-      - The sink matrix of CTR-PRV-001 is tested exhaustively for all class and sink pairs.
+      - The sink matrix of this spec, which refines CTR-PRV-001, is tested exhaustively for all class and sink pairs.
       - Property and fuzz tests cover nesting, arrays and unknown paths.
-    fixtures: "Schemas with fields of every class P0 to P4, locations at L0 to L4, nested records, and a fake PII corpus of emails, phones and addresses."
+    fixtures: "Schemas with fields of every class P0 to P4 and one unannotated field, locations at L0 to L4, nested records, and a fake PII corpus of emails, phones and addresses."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01 | load a classification map for a schema and check every field | all paths classified; a missing path raises PRIVACY_CLASSIFICATION_MISSING"
-      - "T02 | unit | 01.R03,02.R02 | unannotated field in a record redacted for each sink | treated as P3 and dropped from every non-owner sink"
-      - "T03 | unit | 02.R02,03.R02 | full class by sink matrix (5 classes by 9 sinks) | result equals the PRV-001 table; P3 and P4 never allowed to log, federation, notification, projection"
-      - "T04 | unit | 02.R03,03.R03 | locations L0 to L4 for public sinks | L3 and L4 snapped to L2 cell or refused with PRIVACY_LOCATION_TOO_PRECISE; L0 to L2 pass"
-      - "T05 | property | 03.R01,03.R03,06.R01 | random records and schemas | redaction is idempotent and monotonic; class order is total"
-      - "T06 | property | 02.R01,06.R03 | random nested structures with unknown paths | unknown paths default to P3 and never appear in public sinks"
+      - "T02 | unit | 01.R03,02.R02 | unannotated field in a record redacted for each of the 11 sinks | treated as P4 and dropped from every sink, including export and ui_owner"
+      - "T03 | unit | 01.R04,02.R02,03.R02 | full class by sink matrix (5 classes by 11 sinks) and the location cap per sink | every result equals the matrix in the domain_schema note; P4 denied everywhere; P3 only to event, export and ui_owner"
+      - "T04 | unit | 02.R03 | locations L0 to L4 for public sinks | L3 and L4 snapped to L2 cell or refused with PRIVACY_LOCATION_TOO_PRECISE; L0 to L2 pass"
+      - "T05 | property | 03.R01,03.R02,06.R01 | random records and schemas | redaction is pure, idempotent and monotonic; class order is total"
+      - "T06 | property | 02.R01,06.R03 | random nested structures with unknown paths | unknown paths default to P4 and never appear in any sink output"
       - "T07 | contract | 04.R01,04.R02,09.R02 | run the public API surface through the contract checker | signatures and error codes match the errors table"
       - "T08 | unit | 04.R03,02.R02 | assertSinkSafe on a module test with an unsafe value | assertion fails with path list and no values in the message"
       - "T09 | unit | 05.R01,05.R02,05.R03 | static analysis of imports and call graph | no fetch, fs, Date or Math.random; default sink is public log"
       - "T10 | abuse | 07.R03,07.R01 | 40-level nesting and 5 MiB record | rejected within 1 ms; no values logged"
-      - "T11 | unit | 06.R02,07.R02 | classification map missing for a schema | fail closed with all fields P3"
-      - "T12 | integration | 07.R02,03.R03 | CI lint on the repository schemas | fails for an injected unannotated field and an event class below its max field class; passes otherwise"
+      - "T11 | unit | 06.R02,07.R02 | classification map missing for a schema | fail closed with all fields P4; redactForExport refuses with PRIVACY_CLASSIFICATION_MISSING"
+      - "T12 | integration | 07.R02 | CI lint on the repository schemas | fails for an injected unannotated field and an event class below its max field class; passes otherwise"
       - "T13 | load | 08.R01,08.R02,08.R03 | 10 000 redactions of 50-field records and bundle size check | p99 ≤ 0.2 ms and gzip ≤ 8 KiB"
       - "T14 | unit | 09.R01,09.R03 | traceability tool run | every PS-081 requirement maps to a passing test"
-      - "T15 | unit | 10.R01,10.R02,10.R03 | load v1 maps and a v2 candidate with an added class | v1 maps load; added class requires major version flag"
+      - "T15 | unit | 10.R01,10.R02,10.R03,03.R03 | load v1 maps and a v2 candidate with an added class or sink | v1 maps load; an added class or sink requires the major version flag"
+      - "T16 | unit | 01.R03 | redactForExport on records with an unannotated field, a field from a newer schema version and a P4 key field | none of those paths appears in any redactForExport result"
+      - "T17 | unit | 02.R04,02.R02 | redactForEnvelope with a P2 field and encrypted false, encrypted true with no recipients, encrypted true with recipients; a P3 field; redactForEvent with a P4 field and an L4 location; redactForSearch with an L3 location and a P1 field | refused, refused, allowed; P3 refused; P4 and L4 refused for events; search snaps to L2 and drops the P1 field"
     acceptance:
       - Every schema field in the repository has a classification and CI reports 0 unclassified fields.
-      - The full class by sink matrix test passes and matches CTR-PRV-001.
-      - No public, search, federation or notification payload in tests contains a location finer than L2 or any P3 or P4 field.
+      - The full class by sink matrix test passes and matches the matrix in this spec.
+      - No public, search, federation or notification payload in tests contains a location finer than L2 or any P3 or P4 field, and no event carries P4 or L4.
   import_export_backup_rollback:
     requirements:
       - Classification maps ship inside the schema registry and are part of each release; they hold no user data.
-      - The export helper redactForExport is used by the export orchestrator to exclude P4 and other users' P2 and higher content.
+      - The export helper redactForExport is used by the export orchestrator to exclude P4, unclassified paths and other users' P2 and higher content.
       - A change to a field's class is a schema version change and is reviewed as a privacy change.
-    export: "No user data. redactForExport(record, schema, ctx) is the library entry the export orchestrator (F10.S01.M03) calls per record."
-    import: "Imported records are re-classified by the current maps on arrival; fields without a current classification are held as P3."
+    export: "No user data. redactForExport(record, schema, ctx) is the library entry the export orchestrator (F10.S01.M03) calls per record; it drops P4 and unclassified paths and refuses records whose schema has no map."
+    import: "Imported records are re-classified by the current maps on arrival; fields without a current classification are held as P4 and never emitted to any sink until a map classifies them."
     backup: "Maps are versioned with the repository; no runtime storage."
     migration_rollback: "Lowering a field's class requires a major schema version and a privacy review; raising a class is allowed in a minor version. Rollback pins the previous library and map set together."

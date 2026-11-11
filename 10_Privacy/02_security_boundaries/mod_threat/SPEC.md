@@ -6,12 +6,12 @@
 
 ## Purpose
 
-The living privacy threat model for the local-first hybrid architecture. It catalogs how an adversary could learn who a user is, where they are, who they trade with or what they own: geolocation inference, metadata leakage, Sybil identities, social-graph and cycle-graph deanonymization, compromised or curious relays, malicious federated peers, local device compromise, and update-channel attacks. Each threat has an ID, assets, adversary, attack path, mapped controls (module and requirement IDs), residual risk stated in plain words, and privacy test IDs. A CI check keeps the catalog and the tests in sync. The model states limits honestly, namely that pseudonymity is not anonymity, relays see routing metadata, and copies others fetched cannot be recalled.
+The living privacy threat model for the local-first hybrid architecture. It catalogs how an adversary could learn who a user is, where they are, who they trade with or what they own: geolocation inference, metadata leakage, Sybil identities, social-graph and cycle-graph deanonymization, linking one user across relays, scraping of public indexes, compromised or curious relays, malicious federated peers, replayed or forged privacy statements, local device compromise, and update-channel attacks. Each threat has an ID, assets, adversary, attack path, mapped controls (module and requirement IDs), residual risk stated in plain words, and privacy test IDs. A CI check keeps the catalog and the tests in sync. The model states limits honestly, namely that pseudonymity is not anonymity, relays see routing metadata, and copies others fetched cannot be recalled.
 
 ## Responsibilities
 
 - Maintain docs/privacy/threat_model as the single catalog of privacy threats PT-01 onward with adversary classes A1 to A7, assets, controls, residual risk and test IDs.
-- Cover at least geolocation, metadata, Sybil, social-graph and cycle-graph deanonymization, relay compromise, malicious federated peers, device compromise, push and mailbox traffic analysis, counterparty disclosure, auction host abuse and update-channel compromise.
+- Cover at least geolocation, metadata, Sybil, social-graph and cycle-graph deanonymization, cross-relay linkability, enumeration and scraping, relay compromise, malicious federated peers, statement integrity, device compromise, push and mailbox traffic analysis, counterparty disclosure, auction host abuse and update-channel compromise.
 - Map every threat to controls by module ID and requirement ID and to automated privacy tests with IDs PRIVT-<area>-<nn>.
 - Run a review at every release candidate and at least every 90 days, recording reviewer, date and changes.
 - Provide a CI check that fails when a threat lacks a control, a test or a residual-risk statement, or when a referenced requirement or test ID does not exist.
@@ -37,6 +37,7 @@ The living privacy threat model for the local-first hybrid architecture. It cata
 - Two adversary classes combine, for example a relay operator who also runs Sybil accounts; the entry for combined attacks lists both and the strongest control gap.
 - A residual risk is accepted by a reviewer who then leaves; the acceptance remains with date and name, and the next review re-confirms it.
 - A test ID is renamed; the check reports the dangling reference with the file and line.
+- The last review is 95 days old; a feature-branch build passes with a warning while a release candidate build fails until the review is recorded.
 
 ## UX and accessibility
 
@@ -64,7 +65,7 @@ F10.S02.M02, F10.S02.M03, F10.S01.M01, CTR-PRV-001, CTR-FED-001, CTR-TST-001
 | ID | Process | Requirements |
 |---|---|---|
 | PS-082-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-082-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-082-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-082-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-082-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-082-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -79,5 +80,5 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 ## Acceptance criteria
 
 - privacy-threat-check passes on the real repository with 0 violations.
-- All twelve mandatory topics have an active or retired entry with controls, tests and residual risk.
+- All fifteen mandatory topics have an active or retired entry with controls, tests and residual risk.
 - The user-facing summary states the honesty constraints verbatim in plain language.

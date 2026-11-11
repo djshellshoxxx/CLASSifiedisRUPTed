@@ -74,7 +74,7 @@ processes:
         fields:
           - "id: uuid — UUIDv8 (RFC 9562 §5.8) from sha256(JCS {contextRef, contextCid}); explicit CTR-ID-001 ID-1 exception; primary key"
           - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot); the relay instance id for a relay-held listing_fee Deal"
-          - "contextRef: object — {type, id: uuid}; type is a registered context type: core N5 types offer | auction_result | cycle_compensation | service_milestone | rental_deposit | rental_damage | listing_fee, plus types a context module registers through ContextTermsPort (MVP rental_rent by F05.S01.M01 and rental_late_fee by F05.S02.M02)"
+          - "contextRef: object — {type, id: uuid}; type is a registered context type: core N5 types offer | auction_result | cycle_compensation | service_milestone | rental_deposit | rental_damage | listing_fee, plus types a context module registers through ContextTermsPort (MVP rental_reservation and rental_cancellation_fee by F05.S01.M01, rental_deposit_release by F05.S01.M02, rental_late_fee by F05.S02.M02)"
           - "contextCid: string — sha256 cid of the signed context statement (accepted offer, auction result or second-chance offer, committed cycle revision or accepting recovery action, milestone approval, reservation confirmation, deposit terms, damage acceptance, publication statement)"
           - "parties: array — 2..20 entries {did (principal DID), role: payer|payee|both}"
           - "openerRole: string — role in the context that signs the deal statement, resolved by ContextTermsPort.openerRole (for example listing author for offer)"
@@ -120,7 +120,7 @@ processes:
           - "status: enum — claimed | acknowledged | disputed | pending_confirmation | confirmed | final | reorged | failed | expired"
           - "failureReason?: enum — absent | reverted | underpaid | wrong_address | wrong_asset | before_request"
           - "verification: object — {source: self|counterparty|chain|provider, chainId?, confirmations?, requiredConfirmations?, finalityPolicy?, checkedAt?, verifierVersion?} (COM-4); this vault's own observation"
-          - "sendHold?: enum — txid_lookup_pending | txid_unattested; while set the claim is local only, unsigned and unsent"
+          - "sendHold?: enum — txid_lookup_pending (a crypto claim without a verifier and without txidAttested is refused instead); while set the claim is local only, unsigned and unsent"
           - "lastProgressAt: timestamp — local clock; basis of the 14-day expiry"
           - "claimCid?: string — sha256 of the signed claim statement; absent while sendHold is set"
           - "ackCid?: string — cid of the payee-signed payment_ack (verification.source counterparty for cash or external, chain for crypto)"
@@ -228,7 +228,7 @@ processes:
       - Every command emits its events into the vault outbox in the same IndexedDB transaction as the state change (EVT-8).
       - The module consumes crypto, dispute (opened, resolved, withdrawn) and deletion events to drive claim and deal status and never accepts a crypto status from user input.
       - "Event payloads carry contextRef and the party DIDs consumers route on (N3, N4, N5) - payment events contextRef, payerId, payeeId and parties, commerce.deal.opened and commerce.deal.cancelled parties, and commerce.deal.completed { dealId, contextRef, contextId, completionCid, parties, completedAt }."
-      - commerce.statement.ingest dispatches every commerce envelope type to the handler registered through StatementHandlerPort (this module's own types, F09.S01.M02 cash terms and F09.S01.M03 crypto requests), each with the signer role listed in the note, cid deduplication and quarantine reasons.
+      - commerce.statement.ingest dispatches every commerce envelope type to the handler registered through StatementHandlerPort (this module's own types, F09.S01.M02 cash terms, F09.S01.M03 crypto requests, F09.S02.M01 receipts and F09.S02.M02 dispute statements), each with the signer role listed in the note, cid deduplication and quarantine reasons.
       - Context modules use DealPort {open, cancel} in-process and implement ContextTermsPort {verify, openerRole, ownerRole}; a claim the method rule holds (txid not yet found or not attested) stays local, unsigned and unsent until the method module releases it.
     commands:
       - name: commerce.deal.open
@@ -248,7 +248,7 @@ processes:
       - name: commerce.payment.claim
         capability: commerce.payment.claim
         input: "[vault command, produces signed statement classrup.commerce.payment_claim/v1 unless the method rule holds it] { dealId, obligationId, method, amount: Money, txRef?, note?, cryptoRequestId?, txidAttested?: boolean (crypto without a verifier) }"
-        output: "{ claimId, revision: 1, status: claimed, peerSync, sendHold?: txid_lookup_pending|txid_unattested }"
+        output: "{ claimId, revision: 1, status: claimed, peerSync, sendHold?: txid_lookup_pending }"
         errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, CONFLICT_STATE, COMMERCE_CLAIM_METHOD_NOT_ALLOWED, COMMERCE_CLAIM_METHOD_RULE, COMMERCE_CURRENCY_MISMATCH, BLOCKED_PARTY]
         emits: [commerce.payment.claimed]
         idempotent: true
@@ -297,15 +297,19 @@ processes:
     note: >-
       Statement registry (N2, registered in F11.S01.M01): classrup.commerce.deal/v1 - the opener role of the context type
       (offer: listing author who accepted; auction_result: seller, also for a second-chance offer; cycle_compensation: payer or
-      payee of the compensation leg; service_milestone: client who approved; rental_rent, rental_deposit and rental_late_fee:
-      owner; rental_damage: the party that accepted the amount; listing_fee: listing author); classrup.commerce.deal_cancel/v1 -
+      payee of the compensation leg; service_milestone: client who approved; rental_reservation, rental_cancellation_fee, rental_deposit,
+      rental_deposit_release and rental_late_fee: owner; rental_damage: the party that accepted the amount; listing_fee: listing
+      author); classrup.commerce.deal_cancel/v1 -
       each party for mode mutual, the context owner role for mode unilateral; classrup.commerce.deal_completion/v1 - each party,
       all over the same completion body; classrup.commerce.payment_claim/v1 - obligation payer; classrup.commerce.payment_ack/v1
       - obligation payee (the relay operator DID for listing_fee; source chain only from the payee's own verifier);
       classrup.commerce.payment_dispute/v1 - obligation payee. Handlers registered through StatementHandlerPort:
       classrup.commerce.cash_terms/v1 payee, classrup.commerce.cash_terms_accept/v1 and classrup.commerce.cash_terms_decline/v1
       payer (F09.S01.M02); classrup.commerce.crypto_request/v1 and classrup.commerce.crypto_request_cancel/v1 payee
-      (F09.S01.M03); an unregistered commerce type is quarantined with reason type_unregistered. Ports - DealPort {open(input)
+      (F09.S01.M03); classrup.commerce.receipt/v1 claim payer or payee by statement type (F09.S02.M01 commerce.receipt.ingest);
+      classrup.commerce.dispute*/v1 case parties or the active mediator (F09.S02.M02 commerce.dispute.ingest); an unregistered
+      commerce type is quarantined with reason type_unregistered. classrup.commerce.fx_quote_revocation/v1 is not Deal-scoped and
+      is routed by the vault mailbox router to F09.S03.M02 commerce.fx_quote.ingest_revocation, never to this dispatcher. Ports - DealPort {open(input)
       -> {dealId, dealCid}, cancel(dealId, reason)}; ContextTermsPort {verify(contextRef, contextCid, parties, obligations) ->
       ok or conflict, openerRole(type), ownerRole(type)} implemented by every context module; MethodRulePort {check(claimInput)
       -> pass, fail(code) or hold(reason)} with the callbacks release(claimId) and discard(claimId) this module gives the method
@@ -399,10 +403,10 @@ processes:
       - "T05 | Fork - payer vault signs two different claims with the same prev or seq | detection by the per-author chain; claim frozen, both statements retained, user prompted to renegotiate or open a dispute"
       - "T06 | Claim flooding to harass a payee | local block, per-party limit of 20 statements per hour accepted at ingest, bounded quarantine of excess"
       - "T07 | Counterparty signs a Deal with inflated or redirected obligations | ContextTermsPort recomputes parties and obligations from the verified context statement; mismatch quarantined with COMMERCE_DEAL_CONTEXT_CONFLICT"
-      - "T08 | Sybil flood from freshly generated did:keys exhausts vault storage | global quarantine cap of 500 entries or 5 MiB with oldest-first eviction; non-party signers dropped once full; per-did buffering only for known parties"
+      - "T08 | Sybil flood from freshly generated did:keys exhausts vault storage | vault-wide quarantine cap of 500 entries or 5 MiB with oldest-first eviction; non-party signers dropped once full; per-did buffering only for known parties"
       - "T09 | Private key pasted as a crypto txid would be signed and sent | MethodRulePort hold keeps the claim unsigned and unsent until the verifier finds the transaction or the payer attests it is a public transaction ID"
     abuse_controls:
-      - "Ingest limit 20 statements per hour per known party did and 200 per day; statements from dids that are party to no known Deal or context share a global quarantine cap of 500 entries or 5 MiB (oldest-first eviction) and are dropped once it is full."
+      - "Ingest limit 20 statements per hour per known party did and 200 per day; statements from dids that are party to no known Deal or context share a vault-wide quarantine cap of 500 entries or 5 MiB (oldest-first eviction) and are dropped once it is full."
       - "Local block (F07.S02.M02) rejects commands with BLOCKED_PARTY and drops incoming statements from blocked parties silently with no signal to the sender, except evidence for a Deal with an open dispute case."
   observability_performance:
     requirements:
@@ -454,7 +458,7 @@ processes:
       - "T24 | integration | 03.R07 | Deal with two obligations, one acknowledged, passes expiresAt; disputed Deal 30 days past expiresAt; case opened on a completed Deal | first expires with reason expired_partial; disputed Deal expires then; completed Deal only gets disputeFlag"
       - "T25 | integration | 03.R08 | disputed crypto claim receives confirming; mismatched transaction reported as failed; finalized event for a failed claim | disputed to pending_confirmation with the dispute statement kept; claimed to failed with its reason; late event only updates verification fields and is acknowledged"
       - "T26 | unit | 02.R05 | dispute and acknowledgement delivered in reverse order; two sequential partial claims by the payer | reversed delivery buffered then applied in order; both partial claims applied; no fork reported"
-      - "T27 | integration | 04.R05 | ingest cash_terms, crypto_request and an unregistered commerce statement type | first two dispatched to the registered handlers with signer-role checks; unregistered type quarantined with reason type_unregistered"
+      - "T27 | integration | 04.R05 | ingest cash_terms, crypto_request, receipt and dispute statements, an fx_quote_revocation and an unregistered commerce statement type | the first four dispatched to their registered handlers with signer-role checks; the revocation is not handled here; unregistered type quarantined with reason type_unregistered"
       - "T28 | integration | 04.R06 | crypto claim whose txid the verifier has not found; crypto claim without a verifier and without txidAttested | first stays local with sendHold txid_lookup_pending, no claimCid and no outbox row until released; second refused with COMMERCE_CLAIM_METHOD_RULE"
       - "T29 | integration | 05.R03,04.R01 | listing_fee Deal on relay R - claim delivered to the operator mailbox, operator acknowledges through the relay command, then a moderator of R and the operator of another relay try | ack signed by the operator DID from R's signed policy document and applied in the seller vault; the other attempts FORBIDDEN"
       - "T30 | abuse | 07.R05 | 10 000 fresh dids each send one statement to vault B | quarantine never exceeds 500 entries or 5 MiB; oldest evicted first; once full, statements from non-parties are dropped; known parties' statements still applied"

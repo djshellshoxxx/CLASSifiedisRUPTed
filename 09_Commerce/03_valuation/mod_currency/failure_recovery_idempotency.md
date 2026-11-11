@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **idempotency:** Command ID recorded in the vault inbox; replay within 24 h returns the stored response.
-- **concurrency:** Unique index on (vault id, code) in IndexedDB; set_status uses expectedRevision; multi-tab writers serialize through a Web Lock named commerce-currency.
+- **idempotency:** Command ID recorded in the vault inbox; replay within 24 h returns the stored response. Seeding is keyed by the snapshot version, so reopening a seeded vault is a no-op.
+- **concurrency:** Unique index on (vault id, code) in IndexedDB; set_status uses expectedRevision; multi-tab writers serialize through a Web Lock named commerce-currency; cache invalidation is broadcast to other tabs on a BroadcastChannel.
 - **retries:** No network involved; cache refresh retries every 5 s up to 6 times, then reads through to IndexedDB.
-- **offline:** Fully offline; the registry is local.
+- **offline:** Fully offline; the registry and the descriptor check are local.
 - **partial failure:** Seeding a new vault runs in one IndexedDB transaction; failure rolls back to zero rows and is retried at next vault open.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
@@ -24,8 +24,9 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-073-09.T07 | integration | PS-073-04.R03, PS-073-06.R03 | vault seeding interrupted halfway and reopened twice | exactly one complete set of rows exists, second open is a no-op |
+| TEST-PS-073-09.T07 | integration | PS-073-06.R01 | vault seeding interrupted halfway and reopened twice | exactly one complete set of rows exists, second open is a no-op |
 | TEST-PS-073-09.T09 | integration | PS-073-06.R01, PS-073-06.R02 | two tabs concurrently registering the same code | one succeeds, one COMMERCE_CURRENCY_EXISTS |
+| TEST-PS-073-09.T16 | integration | PS-073-04.R03, PS-073-06.R03 | disable a currency in tab 1 and resolve it in tab 2 within 30 s; then drop the BroadcastChannel invalidation message | tab 2 sees disabled within 30 s; with the message lost the cache refresh retries and then reads through to IndexedDB and still returns disabled |
 
 ## Dependencies
 

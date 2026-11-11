@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section privacy.exports in classrup-export/v1: ExportJob metadata of the last 30 days (schema classrup.privacy.export_job/v1), no bundle content.
-- **import:** Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs.
+- **export:** Section privacy.exports in classrup-export/v1: ExportJob metadata of the last 30 days (schema classrup.privacy.export_job/v1), no bundle content. Manifest fields sectionExportedAt and part {setId, index, total, mediaFrom, mediaTo, part1ManifestSha256} are additive in v1.
+- **import:** Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs. A multi-part set is imported by the restore flow only when every part verifies and all share setId and the part-1 manifest hash (IOX-2).
 - **backup:** The export bundle is the user's primary backup (IOX-6); the PWA warns when the last export is older than 30 days. Backups of bundles are the user's responsibility.
-- **migration rollback:** Section list and manifest fields are additive in v1; older readers ignore unknown sections; a rollback never changes bundles already written.
+- **migration rollback:** Section list and manifest fields are additive in v1; older readers ignore unknown sections and fields; a rollback never changes bundles already written.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-078-09.T16 | e2e | PS-078-01.R03, PS-078-10.R01, PS-078-10.R02, PS-078-10.R03 | export, import into a fresh vault via IOX-2 dry-run and commit, roll back one release | all sections round-trip with identical counts; v1 bundle readable by the previous release; axe zero serious issues on export screens |
+| TEST-PS-078-09.T16 | e2e | PS-078-10.R01, PS-078-10.R02, PS-078-10.R03 | export, import into a fresh vault via IOX-2 dry-run and commit, roll back one release | all sections round-trip with identical counts; v1 bundle readable by the previous release; axe zero serious issues on export screens |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

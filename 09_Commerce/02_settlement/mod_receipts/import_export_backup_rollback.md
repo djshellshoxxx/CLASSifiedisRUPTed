@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section commerce.receipts in classrup-export/v1; one line per Receipt (schema classrup.commerce.receipt/v1); single receipts also export as classrup-receipt/v1 files.
-- **import:** Receipts import as read-only evidence after signature re-verification; failures go to quarantine with reason.
+- **export:** ExportSectionPort section commerce.receipts in classrup-export/v1; one line per Receipt (schema classrup.commerce.receipt/v1) with its keyLink chain; single receipts also export as classrup-receipt/v1 files.
+- **import:** Receipts import as read-only evidence after signature, party-binding and key-status re-verification; the import time is not a trusted receipt time for earlier revocations, so revoked keys without a stored receivedAt read revoked_receipt_time_unknown; failures go to quarantine with reason.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext envelopes of receipts in transit.
-- **migration rollback:** Signed bytes are never rewritten by a migration; additive fields only in v1; rollback is safe because older readers ignore unknown optional fields.
+- **migration rollback:** Signed bytes are never rewritten by a migration; signingKeyId and keyLink are additive, and v1 receipts signed before this change keep their stored device did as signingKeyId with partyBinding recomputed; rollback is safe because older readers ignore unknown optional fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

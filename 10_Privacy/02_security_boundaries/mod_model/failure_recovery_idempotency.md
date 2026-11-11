@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-081-06.R01** Redaction is idempotent, so redacting an already redacted value returns the same value.
-- **PS-081-06.R02** A failure to find a classification map fails closed with PRIVACY_CLASSIFICATION_MISSING and treats all fields as P3.
+- **PS-081-06.R02** A failure to find a classification map fails closed with PRIVACY_CLASSIFICATION_MISSING and treats all fields as P4.
 - **PS-081-06.R03** There is no shared mutable state, so concurrent calls cannot interfere.
 
 ## Specification
@@ -24,9 +24,9 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-081-09.T05 | property | PS-081-03.R01, PS-081-03.R03, PS-081-06.R01 | random records and schemas | redaction is idempotent and monotonic; class order is total |
-| TEST-PS-081-09.T06 | property | PS-081-02.R01, PS-081-06.R03 | random nested structures with unknown paths | unknown paths default to P3 and never appear in public sinks |
-| TEST-PS-081-09.T11 | unit | PS-081-06.R02, PS-081-07.R02 | classification map missing for a schema | fail closed with all fields P3 |
+| TEST-PS-081-09.T05 | property | PS-081-03.R01, PS-081-03.R02, PS-081-06.R01 | random records and schemas | redaction is pure, idempotent and monotonic; class order is total |
+| TEST-PS-081-09.T06 | property | PS-081-02.R01, PS-081-06.R03 | random nested structures with unknown paths | unknown paths default to P4 and never appear in any sink output |
+| TEST-PS-081-09.T11 | unit | PS-081-06.R02, PS-081-07.R02 | classification map missing for a schema | fail closed with all fields P4; redactForExport refuses with PRIVACY_CLASSIFICATION_MISSING |
 
 ## Dependencies
 

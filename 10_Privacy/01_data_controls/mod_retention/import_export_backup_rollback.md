@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section privacy.retention in classrup-export/v1: the vault's RetentionPolicy rows (schema classrup.privacy.retention_policy/v1). Legal holds are operator records and are excluded from user exports.
-- **import:** Policies import as user-source rows clamped to bounds; foreign hold records are never imported.
+- **import:** Policies import as user-source rows clamped to bounds; foreign hold records are never imported; the high-water clock is not imported, so the first sweep after an import takes the import time as its high-water clock.
 - **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3) covers holds and policies; after a restore the relay refuses to sweep until hold records are loaded and verified, and purge jobs missed during downtime are not replayed for held subjects.
 - **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; class bounds are never widened by a migration.
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S01.M01, F16.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

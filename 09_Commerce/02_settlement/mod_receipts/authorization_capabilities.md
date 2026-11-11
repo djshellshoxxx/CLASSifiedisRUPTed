@@ -15,7 +15,7 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | commerce.receipt.issue | local-principal | principal is payer or payee of the claim; role matches statement type; vault unlocked |
-| commerce.receipt.ingest | local-principal | internal ingest pipeline; signer is a party of the claim |
+| commerce.receipt.ingest | local-principal | internal ingest pipeline; signer is a party of the claim through a linked device key |
 | commerce.receipt.read | local-principal, anonymous | principal reads receipts of its own claims; verification of a supplied file is a pure local function available without a vault |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
@@ -28,4 +28,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

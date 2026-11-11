@@ -1,48 +1,55 @@
-# F10.S02.M03 Metadata minimization (ADR-0015, ADR-0016). Isomorphic library used by the PWA (before upload) and by relays (on receipt).
+# F10.S02.M03 Metadata minimization (ADR-0015, ADR-0016). Isomorphic library used by the PWA (strip before upload) and by relays (verify on receipt).
 id: F10.S02.M03
 scope: MVP
 summary: >-
-  Removes or reduces metadata that would identify a user or place without their intent. It strips EXIF, XMP, IPTC, GPS and
-  embedded thumbnails from images by re-encoding them in the browser before upload and again on any relay that accepts
-  images, truncates IP addresses to /24 for IPv4 and /48 for IPv6 wherever an address is retained, coarsens timestamps shown
-  in public views to the hour, reduces user-agent strings, and sets referrer and analytics policies that send nothing to third
-  parties. It also provides verification checks that tests and relays use to prove the output is clean. It is pure code with no
-  storage; where a retained value is needed, the owning module stores only the minimized form.
+  Removes or reduces metadata that would identify a user or place without their intent. In the browser it strips EXIF, XMP,
+  IPTC, GPS and embedded thumbnails from images by re-encoding them before upload and keeps the clean output within the 5 MiB
+  MediaBlob limit (N9). Relays never re-encode: blobs are content-addressed and referenced from signed listings, so a relay
+  only runs verifyImageClean on receipt and rejects an image that is not clean, storing exactly the bytes whose hash the listing
+  names. It keeps IP-derived data in memory only and lets other modules retain nothing but daily-salted rate-limit keys, floors
+  every timestamp in public projections to the UTC hour and mints public record IDs whose embedded time is floored too, reduces
+  user-agent strings, and sets referrer and analytics policies that send nothing to third parties. It also provides
+  verification checks that tests and relays use to prove the output is clean. It is pure code with no storage; where a
+  retained value is needed, the owning module stores only the minimized form.
 responsibilities:
-  - Re-encode JPEG, PNG and WebP images (and HEIC converted client-side) to remove all metadata including GPS, EXIF, XMP, IPTC, MakerNote, ICC profile text and embedded thumbnails, applying orientation first and limiting size to 4096 px and 10 MiB.
-  - Provide verifyImageClean(bytes) that detects any remaining metadata or GPS tags, used by clients before upload and by relays on receipt (PRV-4) to reject non-clean images.
-  - Provide truncateIp(ip) returning the /24 (IPv4) or /48 (IPv6) network, and rate-limit keys derived from it with a daily rotating salt, so raw addresses are never stored or logged.
-  - Provide publicTime(ts) which floors a timestamp to the UTC hour for public, search and federated views, and orderKey helpers so ordering inside an hour uses record IDs instead of timestamps.
+  - Re-encode JPEG, PNG and WebP images (and HEIC converted client-side) in the browser to remove all metadata including GPS, EXIF, XMP, IPTC, MakerNote, ICC profile text and embedded thumbnails, applying orientation first, limiting size to 4096 px, and stepping quality and then dimensions down until the output is at most 5 MiB.
+  - Provide verifyImageClean(bytes) that detects any remaining metadata or GPS tags, used by clients before upload and by relays on receipt to reject non-clean images with PRIVACY_METADATA_GPS_PRESENT; relays never re-encode or substitute bytes.
+  - Provide truncateIp(ip) returning the /24 (IPv4) or /48 (IPv6) network for in-memory use only, and rateLimitKey(ip, dailySalt), the only IP-derived value any module may retain or log.
+  - Provide publicTime(ts), which floors a timestamp to the UTC hour, publicRecordId(now), which mints a UUIDv7 whose embedded time is floored to the UTC hour with random remaining bits, and assertCoarseTime(payload), which fails when a public payload carries a finer time or a finer UUIDv7 time.
   - Provide userAgentFamily(ua) reducing a user agent to family and major version, and the standard header policy (Referrer-Policy no-referrer for outbound links, no third-party requests, no cookies for analytics).
 non_responsibilities:
   - Deciding which fields are public or private (F10.S02.M02 classification).
-  - Location snapping to geohash cells and distance buckets (F06.S02, CTR-PRV-001 PRV-1 and PRV-2); this module only guarantees image and header metadata hygiene.
-  - Image content moderation such as faces or landmarks (F12) and compression quality tuning (F01 media).
+  - Location snapping to geohash cells and distance buckets (F06.S02, CTR-PRV-001 PRV-1 and PRV-2); this module only guarantees image, time and header metadata hygiene.
+  - Image content moderation such as faces or landmarks (F12), compression quality tuning (F01 media) and MediaBlob storage (F15.S02.M03).
+  - Packaging public projections (F11.S01.M01), which must call publicTime and publicRecordId for every public record and timestamp.
   - "Future: face blurring, video metadata stripping and perceptual-hash based duplicate privacy checks; MVP covers still images only."
-depends_on: [F10.S02.M02, CTR-PRV-001, CTR-FED-001, CTR-ERR-001, CTR-OBS-001, CTR-TST-001]
+depends_on: [F10.S02.M02, CTR-PRV-001, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-OBS-001, CTR-TST-001]
 user_stories:
   - As a seller, I take a photo with my phone and the listing photo that goes online contains no GPS position or device identifiers.
-  - As a member, the timestamps I see on other people's public listings are rounded to the hour so activity patterns are harder to track.
-  - As a relay operator, my logs and rate limiters never hold complete IP addresses.
+  - As a member, the timestamps and record IDs in other people's public listings reveal at most the hour of activity, so activity patterns are harder to track.
+  - As a relay operator, my logs and rate limiters never hold IP addresses or networks, only keys that rotate daily.
 edge_cases:
   - A JPEG with GPS only in an XMP packet and a MakerNote thumbnail with a second copy of the GPS data; both are removed and verification passes.
   - A PNG with text chunks containing the author's name or location; chunks are dropped and only critical chunks remain.
   - An image claims to be JPEG but is a polyglot with an appended archive; re-encoding discards trailing bytes and the output is a plain JPEG.
   - An animated WebP or GIF is uploaded; MVP accepts first frame only for still images and rejects animated files with PRIVACY_METADATA_IMAGE_UNSUPPORTED.
   - A 40-megapixel image exceeds the limit; it is downscaled to 4096 px on the long side before encoding, and inputs above 10 MiB are rejected with PRIVACY_METADATA_IMAGE_TOO_LARGE.
+  - A 4096 px PNG photo re-encodes to 9 MiB; the pipeline steps the long side down to 3072 and then 2048 px until it is at most 5 MiB, and fails with PRIVACY_METADATA_IMAGE_TOO_LARGE only if 2048 px is still too large.
   - An IPv6 address with an embedded IPv4 mapped form; it is normalized to IPv4 and truncated to /24.
-  - A timestamp at 14:59:59.999Z becomes 14:00:00.000Z in public views while the owner still sees the exact time.
-  - A relay receives an image from an old client that did not strip metadata; the relay re-encodes it, or rejects it if re-encoding fails, but never stores the original bytes.
+  - A timestamp at 14:59:59.999Z becomes 14:00:00.000Z in the public projection while the owner still sees the exact time in the vault.
+  - A relay receives an image from an old client that did not strip metadata; the relay rejects it with PRIVACY_METADATA_GPS_PRESENT, never re-encodes it, and the client strips and uploads again.
 ux:
-  notes: "Headless library with small UI hooks. Upload flow shows a note 'Location and camera details are removed from your photos' with a link to what is removed. Public times render as 'about 14:00' in the user's locale using publicTime(ts) output and owner views show exact time."
+  notes: "Headless library with small UI hooks. Upload flow shows a note 'Location and camera details are removed from your photos' with a link to what is removed. Public times render as 'about 14:00' in the user's locale from the hour-floored createdAt of the projection, and owner views show exact time."
 processes:
   domain_schema:
     requirements:
       - The library defines the value types CleanImage {bytes, mime, width, height, sha256}, IpNetwork, PublicTimestamp and UaFamily and owns no persistent entity.
       - Output images carry only pixel data and the minimal container structure required by the format, with a fixed sRGB treatment and no embedded profiles beyond sRGB.
-      - Truncated IP values and coarsened times are the only forms that other modules may store or log.
+      - Coarsened times and daily-salted rate-limit keys are the only time- and IP-derived forms that other modules may store or log; truncated networks exist only in memory.
+      - CleanImage bytes are at most 5 MiB, the MediaBlob limit (N9), reached by stepping quality and then dimensions down; otherwise the call fails with PRIVACY_METADATA_IMAGE_TOO_LARGE.
+      - Public projections carry only hour-floored timestamps and record IDs minted by publicRecordId, and ordering inside an hour uses the per-author seq of the envelope (CTR-FED-001 FED-3), never a time value.
     entities: []
-    note: "Library module with no persistent entity. Value types CleanImage {bytes, mime: image/jpeg|image/png|image/webp, width, height, sha256}, IpNetwork {family, prefix, networkString}, PublicTimestamp {iso hour floor UTC}, UaFamily {family, major}."
+    note: "Library module with no persistent entity. Value types CleanImage {bytes ≤ 5 MiB, mime: image/jpeg|image/png|image/webp, width, height, sha256, pipelineVersion}, IpNetwork {family, prefix, networkString} (memory only), PublicTimestamp {iso hour floor UTC}, UaFamily {family, major}."
   validation_rules:
     requirements:
       - Inputs are validated for supported types, size, dimensions and decodability before processing.
@@ -56,10 +63,12 @@ processes:
       - "V05 | IP string parses as IPv4 or IPv6 and IPv4-mapped IPv6 is normalized | VALIDATION_FAILED"
       - "V06 | timestamp is a valid RFC 3339 UTC value within 1970 to 2100 | VALIDATION_FAILED"
       - "V07 | user agent string is at most 512 characters | VALIDATION_FAILED"
+      - "V08 | output CleanImage is at most 5 MiB after quality steps 0.85, 0.75 and 0.65 and long-side steps 4096, 3072 and 2048 px | PRIVACY_METADATA_IMAGE_TOO_LARGE"
+      - "V09 | assertCoarseTime - no timestamp in a public payload or envelope is finer than the UTC hour and no UUIDv7 in it embeds a time finer than the hour | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - All functions are pure and deterministic given the same input and, for rate-limit keys, the same daily salt.
-      - Image processing is a fixed pipeline of decode, orient, downscale, re-encode and verify, and any step failure aborts without output.
+      - Image processing is a fixed pipeline of decode, orient, downscale, re-encode, size step and verify, and any step failure aborts without output.
       - Output is never a partially cleaned image; the verification step must pass before bytes are returned.
     machines: []
     note: "Stateless pipeline functions with no lifecycle. Daily salt rotation for rate-limit keys is supplied by the caller (relay) and not held here."
@@ -72,103 +81,114 @@ processes:
     commands: []
     queries: []
     note: >-
-      Library module. Package surface (packages/privacy/src/security_boundaries/metadata): stripImage(bytes, opts) returns CleanImage,
-      verifyImageClean(bytes) returns {clean, findings[]}, truncateIp(ip) returns IpNetwork, rateLimitKey(ip, dailySalt) returns hex string,
-      publicTime(iso) returns PublicTimestamp, userAgentFamily(ua), outboundLinkPolicy() returns header and rel values. No vault or relay commands, no events.
+      Library module. Package surface (packages/privacy/src/security_boundaries/metadata): stripImage(bytes, opts) returns CleanImage
+      (browser only), verifyImageClean(bytes) returns {clean, findings[]} (browser and relay), truncateIp(ip) returns IpNetwork for
+      in-memory use, rateLimitKey(ip, dailySalt) returns hex HMAC-SHA256 of the truncated network, publicTime(iso) returns
+      PublicTimestamp, publicRecordId(now) returns a UUIDv7 with the hour-floored time, assertCoarseTime(payload) returns
+      {ok, findings[]}, userAgentFamily(ua), outboundLinkPolicy() returns header and rel values. Relays call verifyImageClean only and
+      store exactly the received bytes when clean (N9). CTR-PRV-001 PRV-4 still says images are re-encoded server-side; that sentence
+      is superseded by N9 and this spec and needs an ADR-0016 amendment of CTR-PRV-001. No vault or relay commands, no events.
     events_produced: []
     events_consumed: []
     errors:
       - "PRIVACY_METADATA_IMAGE_UNSUPPORTED | 415 | no | image type is unsupported, undecodable or animated"
-      - "PRIVACY_METADATA_IMAGE_TOO_LARGE | 413 | no | image exceeds 10 MiB or 16384 px per side"
+      - "PRIVACY_METADATA_IMAGE_TOO_LARGE | 413 | no | image exceeds 10 MiB or 16384 px per side on input, or cannot be brought to 5 MiB on output"
       - "PRIVACY_METADATA_GPS_PRESENT | 422 | no | image still contains GPS or other identifying metadata and was rejected"
     example: |
       stripImage(bytes of IMG_2041.jpg with GPS 52.5208,13.4095 and MakerNote thumbnail, { maxSide: 4096, quality: 0.85 })
-      => { bytes: <clean JPEG>, mime: "image/jpeg", width: 4096, height: 3072, sha256: "e3b0…" }
-      verifyImageClean(clean.bytes) => { clean: true, findings: [] }
-      truncateIp("203.0.113.57") => "203.0.113.0/24"   truncateIp("2001:db8:abcd:12::1") => "2001:db8:abcd::/48"
-      publicTime("2026-11-04T14:59:59.999Z") => "2026-11-04T14:00:00.000Z"
+      => { bytes: <clean JPEG, 3.1 MiB>, mime: "image/jpeg", width: 4096, height: 3072, sha256: "e3b0…" }
+      verifyImageClean(clean.bytes) => { clean: true, findings: [] }      relay receives an unstripped file => PRIVACY_METADATA_GPS_PRESENT
+      truncateIp("203.0.113.57") => "203.0.113.0/24" (memory only)   rateLimitKey("203.0.113.57", daySalt) => "9f2c…"
+      publicTime("2026-11-04T14:59:59.999Z") => "2026-11-04T14:00:00.000Z"   publicRecordId("2026-11-04T14:59:59.999Z") => UUIDv7 with time 14:00:00.000Z
   authorization_capabilities:
     requirements:
       - The library performs no authorization; callers decide who may upload and which view is public.
       - It has no network or storage access, so it cannot leak data.
-      - Callers must apply stripImage on the client before upload and on the relay on receipt; neither side may trust the other.
+      - Clients apply stripImage before upload and relays apply verifyImageClean on receipt and reject non-clean images; neither side trusts the other, and relays never re-encode or substitute bytes because blobs are content-addressed (N9).
     capabilities: []
   failure_recovery_idempotency:
     requirements:
       - Functions are deterministic; stripping an already clean image returns an equivalent clean image.
       - A failure at any pipeline step returns an error and no bytes, so there is no partial unsafe output.
       - Image work runs in a worker with a 10 s timeout; on timeout the upload is cancelled and can be retried by the user.
-    idempotency: "stripImage(stripImage(x)) is clean and equal in pixel content; truncateIp and publicTime are idempotent."
-    concurrency: "No shared state; at most 2 concurrent image jobs per client and 4 per relay worker pool."
+    idempotency: "stripImage(stripImage(x)) is clean and equal in pixel content; truncateIp, publicTime and publicRecordId's time floor are idempotent."
+    concurrency: "No shared state; at most 2 concurrent image jobs per client and 4 verifications per relay worker pool."
     retries: "Callers retry only after the user chooses another file; deterministic failures are not retried."
     offline: "Fully offline; works in the browser and in the service worker."
     partial_failure: "Verification must pass before output is returned; any failure discards intermediate buffers."
   privacy_retention_abuse:
     requirements:
-      - Original uploads are never persisted on the relay; only the clean re-encoded bytes are stored, and the client keeps the original only if the user keeps it in their own gallery.
-      - IP addresses are used only in memory for the current request or as a salted hash of the /24 or /48 for rate limiting with a daily rotating salt, and are never written to logs in full.
+      - Relays store exactly the client-cleaned bytes whose content address is referenced by the signed listing and reject anything else; original uploads never reach relay storage, and the client keeps the original only if the user keeps it in their own gallery.
+      - IP addresses and truncated networks are used only in memory for the current request; the only retained form is the daily-salted rateLimitKey (RET-EPHEMERAL, 24 h), and logs contain no address or network.
       - Public time coarsening and user-agent reduction are applied at the boundary where data becomes public or is logged.
+      - Outbound requests follow the header policy, namely Referrer-Policy no-referrer, no third-party requests, no analytics cookies, and a CSP whose connect-src lists only the relays the user chose.
     data:
       - "Images: P0 after stripping when the owner publishes them; before that P3 in the vault."
-      - "Truncated IP network: P3 operational data kept at most 24 h (RET-EPHEMERAL); coarsened times: P0."
+      - "Truncated IP network: P3, memory only, never stored or logged. rateLimitKey: P1 operational key kept at most 24 h (RET-EPHEMERAL). Coarsened times and hour-floored public IDs: P0."
     retention:
-      - "Rate-limit keys RET-EPHEMERAL (24 h); no IP data in logs beyond the truncated network; clean images follow their owning listing's retention."
+      - "Rate-limit keys RET-EPHEMERAL (24 h); no IP-derived value in logs except rateLimitKey; clean images follow their owning listing's retention."
     threats:
-      - "T01 | GPS or device identifiers remain in a published photo | re-encode pipeline, verifyImageClean on client and relay, relay rejects non-clean images, CI corpus of 40 tricky files scanned with an independent parser"
+      - "T01 | GPS or device identifiers remain in a published photo | browser re-encode pipeline, verifyImageClean on client and relay, relay rejects non-clean images and never stores substituted bytes, CI corpus of 40 tricky files scanned with an independent parser"
       - "T02 | Polyglot or malformed file exploits the decoder | decode in a sandboxed worker, size and dimension limits, trailing bytes discarded, fuzz corpus in CI"
-      - "T03 | IP address correlation through logs or rate-limit tables | /24 and /48 truncation, salted daily-rotating hashes, no full IP in logs, tests scan logs for full addresses"
-      - "T04 | Activity pattern inference from exact public timestamps | public times floored to the hour, ordering by record ID, owner and participants still see exact times"
+      - "T03 | IP address correlation through logs or rate-limit tables | networks only in memory, daily-salted HMAC keys rotated every 24 h as the only retained form, no address or network in logs; residual risk - an IPv6 /48 or IPv4 /24 still usually identifies one household or site, so within one day the key links that site's requests; tests scan logs for full addresses and truncated networks"
+      - "T04 | Activity pattern inference from exact public timestamps or time-ordered IDs | public projections sign hour-floored timestamps and publicRecordId IDs, ordering inside the hour by per-author seq, assertCoarseTime in tests; residual risk - relays and peers see the arrival time of each statement and can order an author's statements by seq, and the vault owner and participants still see exact times"
       - "T05 | Third-party requests leak the user to outside services | no third-party scripts, fonts or analytics, Referrer-Policy no-referrer for outbound links, CSP restricts connect-src to chosen relays"
     abuse_controls:
-      - "Upload size cap 10 MiB, 2 concurrent image jobs per client, relay image upload limit 60 per hour per truncated network."
+      - "Upload size cap 10 MiB input and 5 MiB output, 2 concurrent image jobs per client, relay image upload limit 60 per hour per rateLimitKey."
   observability_performance:
     requirements:
       - The PWA sends no telemetry (OBS-7); stripping timings and failures stay in local diagnostics and relays follow CTR-OBS-001 for upload outcomes.
-      - Image stripping meets the latency budget on a mid-range phone and on a relay worker.
+      - Image stripping meets the latency budget on a mid-range phone and verification meets it on a relay worker.
       - CI reports the corpus pass rate and findings by type.
     metrics:
-      - "Local diagnostics and relay: classrup_privacy_image_strip_total{outcome=ok|unsupported|too_large|gps_present}"
+      - "Local diagnostics: classrup_privacy_image_strip_total{outcome=ok|unsupported|too_large|gps_present}"
+      - "Relay: classrup_privacy_image_verify_total{outcome=clean|rejected}"
       - "classrup_privacy_image_strip_ms (histogram)"
       - "CI report: corpus_clean_rate (must be 100 percent)"
     logs:
-      - "info image.stripped {sha256Prefix8, widthxheight, durationMs, correlationId} — no filenames, no metadata values, no IP."
+      - "info image.stripped {sha256Prefix8, widthxheight, durationMs, correlationId} — no filenames, no metadata values, no IP or network."
     budgets:
-      - "stripImage for a 12 MP photo p95 ≤ 1.5 s on a 2022 mid-range Android device and ≤ 400 ms on a relay worker."
-      - "verifyImageClean p95 ≤ 50 ms; truncateIp and publicTime p99 ≤ 0.02 ms; package ≤ 40 KiB gzip excluding the codec."
+      - "stripImage for a 12 MP photo p95 ≤ 1.5 s on a 2022 mid-range Android device including size steps; verifyImageClean of a 5 MiB image p95 ≤ 50 ms on a relay worker."
+      - "truncateIp, publicTime and publicRecordId p99 ≤ 0.02 ms; package ≤ 40 KiB gzip excluding the codec."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test.
       - A corpus of 40 images with GPS, EXIF, XMP, IPTC, MakerNote, thumbnails and polyglots is processed and scanned by an independent parser (exiftool) in CI.
       - IP and time helpers are tested with exhaustive edge vectors including IPv6 forms and hour boundaries.
-    fixtures: "Image corpus corpus/privacy-images (40 files), IPv4 and IPv6 vectors (60), timestamp vectors (30), user-agent vectors (25)."
+    fixtures: "Image corpus corpus/privacy-images (40 files, including EXIF orientations 3, 6 and 8 and a 4096 px high-detail PNG), IPv4 and IPv6 vectors (60), timestamp vectors (30), user-agent vectors (25), a publishing double built on an F11.S01.M01 packaging double."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01 | strip each corpus image | output decodes, dimensions at most 4096, pixel content equal within quality tolerance"
       - "T02 | unit | 02.R02,03.R03 | scan every output with verifyImageClean and exiftool | zero metadata findings and zero GPS tags in all 40 outputs"
       - "T03 | unit | 02.R01,02.R03 | animated WebP, 12 MiB file, truncated file, polyglot | documented error codes or clean output with trailing bytes removed"
-      - "T04 | unit | 01.R03,03.R01 | IPv4, IPv6, IPv4-mapped and invalid inputs | /24 and /48 networks returned; invalid VALIDATION_FAILED; raw value never returned"
-      - "T05 | unit | 01.R03,02.R03 | hour-boundary timestamps and invalid timestamps | floor to hour UTC; owner view unchanged; invalid VALIDATION_FAILED"
+      - "T04 | unit | 02.R03,07.R02 | IPv4, IPv6, IPv4-mapped and invalid inputs | /24 and /48 networks returned in memory; invalid VALIDATION_FAILED; raw value never returned; no helper writes the network anywhere"
+      - "T05 | unit | 02.R03,07.R03 | hour-boundary timestamps and invalid timestamps | floor to hour UTC; owner view unchanged; invalid VALIDATION_FAILED"
       - "T06 | property | 03.R01,03.R03,06.R01 | random inputs through each helper twice | deterministic and idempotent; no partial output on forced failure"
       - "T07 | contract | 04.R01,04.R02,09.R02 | exercise the public API surface | signatures and error codes match the errors table"
-      - "T08 | integration | 04.R03,05.R03 | client strips then relay verifies; send an unstripped image from a stub old client | relay re-encodes or rejects with PRIVACY_METADATA_GPS_PRESENT and stores no original"
+      - "T08 | integration | 05.R03,07.R01 | client strips then relay verifies; send an unstripped image from a stub old client | clean upload stored with exactly the bytes whose hash is in the listing; the unstripped image is rejected with PRIVACY_METADATA_GPS_PRESENT, never re-encoded and never stored"
       - "T09 | unit | 05.R01,05.R02 | static analysis of imports | no network or storage access in the package"
-      - "T10 | abuse | 06.R02,07.R02 | decoder fuzz with 1 000 malformed files and a worker that hangs | no crash, rejected within 10 s timeout, no output bytes"
-      - "T11 | integration | 07.R01,07.R03 | upload through relay double and inspect storage and logs | only clean bytes stored; logs contain no full IP, filename or metadata values"
-      - "T12 | integration | 07.R02,06.R03 | rate-limit key construction across a salt rotation | same /24 maps to the same key within a day and to a different key after rotation"
-      - "T13 | abuse | 07.R03,06.R02 | 61 uploads in an hour from one /24 | 61st returns RATE_LIMITED from the caller's limiter using the key; 3 concurrent image jobs queued"
-      - "T14 | integration | 07.R03,03.R02 | browser test of outbound links and network log | no third-party requests; Referrer-Policy no-referrer present; CSP blocks unlisted hosts"
-      - "T15 | load | 08.R01,08.R02,08.R03 | 12 MP photos on a mid-range device profile and relay worker | p95 ≤ 1.5 s client and ≤ 400 ms relay; verify ≤ 50 ms; corpus clean rate 100 percent"
+      - "T10 | abuse | 06.R02,06.R03 | decoder fuzz with 1 000 malformed files and a worker that hangs | no crash, rejected within the 10 s timeout, no output bytes"
+      - "T11 | integration | 01.R03,07.R01 | upload through relay double and inspect storage and logs | only clean bytes stored; logs contain no full IP, no truncated network, no filename and no metadata values"
+      - "T12 | integration | 07.R02 | rate-limit key construction across a salt rotation | same /24 maps to the same key within a day and to a different key after rotation"
+      - "T13 | abuse | 07.R02 | 61 uploads in an hour from one /24 | 61st returns RATE_LIMITED from the caller's limiter using rateLimitKey; 3 concurrent image jobs queued"
+      - "T14 | integration | 07.R04 | browser test of outbound links and network log | no third-party requests; Referrer-Policy no-referrer present; no analytics cookies; CSP blocks unlisted hosts"
+      - "T15 | load | 08.R01,08.R02,08.R03 | 12 MP photos on a mid-range device profile and 5 MiB images on a relay worker | strip p95 ≤ 1.5 s client; verify p95 ≤ 50 ms relay; corpus clean rate 100 percent"
       - "T16 | unit | 09.R01,09.R03 | traceability tool run | every PS-080 requirement maps to a passing test"
       - "T17 | unit | 10.R01,10.R02,10.R03 | export of an image record and reimport of a pre-strip legacy image | export contains clean bytes only; legacy import is re-stripped or quarantined"
+      - "T18 | unit | 03.R02 | corpus images with EXIF orientation 3, 6 and 8 | orientation is applied to the pixels before stripping; output has no orientation tag and renders upright"
+      - "T19 | unit | 02.R03,07.R03 | the 25 user-agent vectors and a 513-character string | family and major version only, no minor version, platform build or device model; the 513-character input fails with VALIDATION_FAILED"
+      - "T20 | unit | 01.R04 | 4096 px high-detail PNG, 4096 px noisy JPEG and an image that cannot reach 5 MiB at 2048 px | outputs are at most 5 MiB through quality then dimension steps; the last fails with PRIVACY_METADATA_IMAGE_TOO_LARGE"
+      - "T21 | contract | 01.R05 | publishing double packages listings, profiles and offerings through the F11.S01.M01 packaging double; assertCoarseTime on every P0 payload and envelope | no timestamp finer than the hour and no UUIDv7 with a time finer than the hour; items within one hour are ordered by seq"
+      - "T22 | integration | 04.R03 | run the verifier CLI in CI on the sample upload folder with one dirty file | CLI exits non-zero naming the dirty file and its findings; exits 0 after it is removed"
     acceptance:
-      - All tests T01 to T17 pass in CI.
-      - 100 percent of the 40-image corpus outputs have zero metadata or GPS findings under an independent parser.
-      - No full IP address and no exact public timestamp appears in any log or public payload in tests.
+      - All tests T01 to T22 pass in CI.
+      - 100 percent of the 40-image corpus outputs have zero metadata or GPS findings under an independent parser, and every output is at most 5 MiB.
+      - No full IP address, truncated network or public timestamp finer than the hour appears in any log or public payload in tests, and relays never store bytes other than those the listing references.
   import_export_backup_rollback:
     requirements:
       - Images exported from a vault are the clean bytes the user published or kept; the export never adds metadata.
       - Images imported from older exports or other vaults pass through stripImage and verifyImageClean before they are accepted into listings.
       - Codec or pipeline changes are versioned, and previously stored clean images are never re-processed in place.
     export: "No module data. Export sections of owning modules embed clean image bytes; this module guarantees they pass verifyImageClean."
-    import: "Every imported image is stripped and verified; failures are quarantined with PRIVACY_METADATA_GPS_PRESENT or PRIVACY_METADATA_IMAGE_UNSUPPORTED."
+    import: "Every imported image is stripped in the browser and verified; failures are quarantined with PRIVACY_METADATA_GPS_PRESENT or PRIVACY_METADATA_IMAGE_UNSUPPORTED."
     backup: "Library only; images are backed up with their owning records through the vault export (IOX-6)."
     migration_rollback: "Pipeline version recorded in CleanImage metadata of owning modules; a rollback pins the previous library version, and the corpus test must pass on both before release."

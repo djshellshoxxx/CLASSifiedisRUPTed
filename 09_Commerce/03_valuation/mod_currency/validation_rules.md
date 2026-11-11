@@ -9,6 +9,7 @@
 - **PS-073-02.R01** Registration is validated against the schema and the configured chain list before persistence.
 - **PS-073-02.R02** Every lookup of an unknown code returns COMMERCE_CURRENCY_UNKNOWN with the offending code in params.
 - **PS-073-02.R03** Status changes check for dependent open records through the CurrencyUsagePort.
+- **PS-073-02.R04** An embedded asset descriptor is accepted only when its code, kind, chainId, contract and decimals equal the local CurrencyDef (and its digest matches); any difference returns COMMERCE_CURRENCY_MISMATCH, and the ingesting module quarantines the statement.
 
 ## Specification
 
@@ -22,6 +23,8 @@
 | V06 | decimals, kind and chain binding equal the stored values on update | COMMERCE_CURRENCY_IMMUTABLE |
 | V07 | currency used in a new Money value is active | COMMERCE_CURRENCY_DISABLED |
 | V08 | retirement only when no open deal, offer or quote references the code | PRECONDITION_FAILED |
+| V09 | an embedded asset descriptor equals the local CurrencyDef in code, kind, chainId, contract and decimals, and its digest is the digest of those fields | COMMERCE_CURRENCY_MISMATCH |
+| V10 | registration from a peer statement uses exactly that statement's descriptor fields and carries checksumConfirmed true | VALIDATION_FAILED |
 
 ## Verification
 
@@ -31,6 +34,7 @@
 | TEST-PS-073-09.T02 | unit | PS-073-02.R01, PS-073-02.R02 | lookup of XXX9 and of a withdrawn code | COMMERCE_CURRENCY_UNKNOWN with code in params |
 | TEST-PS-073-09.T03 | unit | PS-073-01.R03, PS-073-02.R03, PS-073-09.R03 | update attempt on decimals and chain binding | COMMERCE_CURRENCY_IMMUTABLE and nothing stored |
 | TEST-PS-073-09.T05 | integration | PS-073-03.R03, PS-073-02.R03 | retire a currency referenced by an open offer | PRECONDITION_FAILED until references are closed |
+| TEST-PS-073-09.T14 | unit | PS-073-01.R04, PS-073-02.R04, PS-073-07.R04 | check_descriptor with the matching USDC descriptor, with 18 decimals, with a look-alike contract and with a wrong digest | first matches; the others return COMMERCE_CURRENCY_MISMATCH naming the differing field; nothing is registered |
 
 ## Dependencies
 

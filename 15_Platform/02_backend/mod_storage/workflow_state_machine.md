@@ -7,24 +7,27 @@
 ## Requirements
 
 - **PS-119-03.R01** Outbox delivery per consumer follows the InboxEntry machine; a failure schedules a retry after random(0, min(30 s, 500 ms × 2^(attempt-1))) and the eighth failure moves the event to dead_letter.
-- **PS-119-03.R02** Sync-outbox entries follow prepared, transport_acknowledged and peer_accepted with failed reachable from prepared and user retry back to prepared (IDM-7); no state implies more than was observed.
+- **PS-119-03.R02** A dead letter requeued by the replay primitive goes from dead to retry with inbox attempts reset and its dead_letter row kept with replay_count + 1 and last_replayed_at = now, is delivered like any retry (its dead_letter row deleted in the transaction that marks it done), and returns to dead with replay_count and last_replayed_at kept after 8 more failures, when its consumer module is disabled (FEATURE_DISABLED) or 7 days after last_replayed_at without delivery (EXPIRED).
 - **PS-119-03.R03** Leases follow acquire by compare-and-set, renew by the holder, release by the holder and automatic expiry at expiresAt, with a fencing counter that increases on every new acquisition (IDM-3, IDM-8).
 
 ## Specification
 
 ### InboxEntry lifecycle
 
-Initial **pending**; terminal **done**.
+Initial **pending**; terminal **done**, **purged**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | pending -> done | consumer handler returned ok | inbox row written in the handler transaction |
 | pending -> retry | handler failed and attempts < 8 | nextAttemptAt = now + full-jitter backoff; later events of the aggregate wait |
-| pending -> dead | handler failed and attempts reached maxAttempts | event copied to dead_letter with its error code |
-| retry -> done | redelivery succeeded | inbox row marked done |
+| pending -> dead | handler failed and attempts reached maxAttempts | event copied to dead_letter with its error code, replay_count 0 |
+| retry -> done | redelivery succeeded | inbox row marked done; a requeued event's dead_letter row is deleted in the same transaction |
 | retry -> retry | handler failed again and attempts < 8 | backoff ceiling doubles up to 30 s |
-| retry -> dead | eighth failed attempt | event copied to dead_letter with its error code |
-| dead -> retry | dead letter requeued by the replay primitive | attempts reset to 0, due immediately |
+| retry -> dead | eighth failed attempt | event copied to dead_letter with its error code; a requeued event updates its existing row (attempts, error_code, dead_at) and keeps replay_count and last_replayed_at |
+| dead -> retry | dead letter requeued by the replay primitive | inbox attempts reset to 0, due immediately; dead_letter row kept with replay_count + 1 and last_replayed_at = now |
+| retry -> dead | requeued event whose consumer module is disabled (FLG-3) | dead_letter error_code FEATURE_DISABLED and dead_at = now; replay_count and last_replayed_at kept |
+| retry -> dead | requeued event not delivered within 7 days of last_replayed_at | dead_letter error_code EXPIRED and dead_at = now; replay_count and last_replayed_at kept |
+| dead -> purged | purge primitive called by F15.S03.M03 for dead_at older than 30 days | dead_letter and inbox rows deleted in one transaction |
 
 ```mermaid
 stateDiagram-v2
@@ -36,34 +39,11 @@ stateDiagram-v2
   retry --> retry: handler failed again and attempts < 8
   retry --> dead: eighth failed attempt
   dead --> retry: dead letter requeued by the replay primitive
+  retry --> dead: requeued event whose consumer module is disabled (FLG-3)
+  retry --> dead: requeued event not delivered within 7 days of last_replayed_at
+  dead --> purged: purge primitive called by F15.S03.M03 for dead_at older than 30 days
   done --> [*]
-```
-
-### SyncOutboxEntry lifecycle
-
-Initial **prepared**; terminal **peer_accepted**.
-
-| Transition | Trigger | Guard / effect |
-|---|---|---|
-| prepared -> transport_acknowledged | transport returned a relay receipt | receipt stored; relay time is evidence of that relay clock only |
-| prepared -> peer_accepted | verified signed peer acknowledgement recorded before any relay receipt | ack stored |
-| prepared -> prepared | retryable transport failure | attempts + 1; nextAttemptAt by full-jitter backoff |
-| prepared -> failed | non-retryable error or entry older than 7 days | lastError set to the code or EXPIRED |
-| transport_acknowledged -> peer_accepted | verified signed peer acknowledgement recorded | ack stored |
-| failed -> prepared | user retry | attempts reset, due immediately |
-| failed -> peer_accepted | peer acknowledgement arrives for a statement that was in fact delivered | ack stored |
-
-```mermaid
-stateDiagram-v2
-  [*] --> prepared
-  prepared --> transport_acknowledged: transport returned a relay receipt
-  prepared --> peer_accepted: verified signed peer acknowledgement recorded before any relay receipt
-  prepared --> prepared: retryable transport failure
-  prepared --> failed: non-retryable error or entry older than 7 days
-  transport_acknowledged --> peer_accepted: verified signed peer acknowledgement recorded
-  failed --> prepared: user retry
-  failed --> peer_accepted: peer acknowledgement arrives for a statement that was in fact delivered
-  peer_accepted --> [*]
+  purged --> [*]
 ```
 
 ### MediaBlob lifecycle
@@ -90,8 +70,8 @@ stateDiagram-v2
 ### Timeouts and scheduled transitions
 
 - Inbox retry: nextAttemptAt = now + random(0, min(30 s, 500 ms × 2^(attempt-1))); dead letter after 8 attempts.
-- Disabled consumer modules (FLG-3) are paused 60 s at a time without consuming attempts; events stay in the outbox.
-- Sync outbox: prepared entries older than 7 days become failed with EXPIRED (IDM-5); retryable failures back off with the same formula.
+- Disabled consumer modules (FLG-3) are paused 60 s at a time without consuming attempts and their events stay in the outbox; a requeued dead letter of a disabled consumer returns to dead with FEATURE_DISABLED instead.
+- Requeued dead letters return to dead with EXPIRED 604800000 ms (7 days) after last_replayed_at without delivery; dead letters are purged 2592000000 ms (30 days) after dead_at by the purge primitive that F15.S03.M03 schedules.
 - Leases expire at expiresAt (default TTL 15 min, maximum 24 h); expired leases are free without cleanup.
 - Orphan blob sweep deletes blobs without holders older than the cutoff chosen by the caller (default one day after upload).
 
@@ -101,8 +81,8 @@ stateDiagram-v2
 |---|---|---|---|---|
 | TEST-PS-119-09.T03 | contract | PS-119-02.R03, PS-119-03.R03, PS-119-05.R03 | acquire, competing acquire, non-holder release, renew, expiry, late renew, re-acquire | PRECONDITION_FAILED, EXPIRED, fence 1 then 2 then 3 |
 | TEST-PS-119-09.T04 | integration | PS-119-01.R02, PS-119-03.R01, PS-119-04.R03, PS-119-06.R03, PS-119-09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered |
-| TEST-PS-119-09.T05 | contract | PS-119-03.R02, PS-119-04.R04 | FIFO heads per destination, retry_later, transport ack, undeclared transition, peer ack twice, sender with fatal, retryable and 7-day failures | declared states only; CONFLICT_STATE; idempotent ack; failed with VALIDATION_FAILED and EXPIRED |
-| TEST-PS-119-09.T16 | unit | PS-119-03.R01, PS-119-03.R02 | compare inboxMachine and syncMachine with this file's InboxEntry and SyncOutboxEntry machines | identical initial, terminal and transition rows |
+| TEST-PS-119-09.T05 | contract | PS-119-01.R05, PS-119-03.R02, PS-119-04.R06, PS-119-07.R02 | dead-letter an event, requeue it, fail 8 more times, requeue again, requeue twice in a row, disable the consumer of a third requeued event, leave a fourth undelivered 7 days, deliver a fifth, purge at dead_at + 30 days | replay_count 1 then 2 with last_replayed_at kept on re-dead-lettering; second requeue CONFLICT_STATE; FEATURE_DISABLED and EXPIRED returns keep replay_count; delivered row deleted; purge removes only dead rows older than 30 days |
+| TEST-PS-119-09.T16 | unit | PS-119-03.R01, PS-119-03.R02 | compare inboxMachine and blobMachine with this file's InboxEntry and MediaBlob machines | identical initial, terminal and transition rows; no sync machine exported |
 
 ## Dependencies
 

@@ -5,7 +5,7 @@
 - [x] [PS-117-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
 - [x] [PS-117-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
 - [x] [PS-117-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
-- [x] [PS-117-04 Commands, queries and events](commands_queries_events.md) — 5 requirements, tests mapped
+- [x] [PS-117-04 Commands, queries and events](commands_queries_events.md) — 7 requirements, tests mapped
 - [x] [PS-117-05 Authorization and capabilities](authorization_capabilities.md) — 4 requirements, tests mapped
 - [x] [PS-117-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 4 requirements, tests mapped
 - [x] [PS-117-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 3 requirements, tests mapped

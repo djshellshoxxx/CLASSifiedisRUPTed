@@ -18,7 +18,7 @@ Schema `classrup.platform.idempotency_record/v1` · storage **relay+device** · 
 
 | Field | Type and constraints |
 |---|---|
-| tenantId | uuidv7 — vault ID in the vault, relay tenant on a relay |
+| tenantId | uuidv7 — LocalSettings.vaultId (F15.S04.M03) in the vault, relay tenant on a relay |
 | actor | string — local principal did:key, relay actor ID, or anonymous |
 | command | string — command name <slug>.<entity>.<verb> |
 | key | uuidv7 — client Idempotency-Key |

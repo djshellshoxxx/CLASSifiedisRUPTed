@@ -6,15 +6,15 @@
 
 ## Requirements
 
-- **PS-119-05.R01** Storage performs no authorization itself and is reached only through the bus, the dispatcher or the sync sender, which scope every repository, lease, blob and sync entry to the context tenantId.
-- **PS-119-05.R02** A repository, lease or sync scope bound to one tenant cannot read or write another tenant's rows.
+- **PS-119-05.R01** Storage performs no authorization itself and is reached only through the bus, the dispatcher or modules running inside a bus transaction, which scope every repository, lease, blob and dead letter to the context tenantId.
+- **PS-119-05.R02** A repository, lease, blob or dead-letter scope bound to one tenant cannot read or write another tenant's rows.
 - **PS-119-05.R03** Lease holders are proposal, cycle or auction IDs, never session tokens, and release or renewal by a non-holder returns PRECONDITION_FAILED.
 
 ## Specification
 
 _None._
 
-Vault policy: only the local principal's commands write the vault. Relay policy: relay commands are authorized by the bus before storage is touched; relay tenants isolate hosted data per relay tenant.
+Vault policy: only the local principal's commands write the vault. Relay policy: relay commands are authorized by the bus before storage is touched; relay tenants isolate hosted data per relay tenant. The checkpointer registration and writer connection are available only on the Node subpath to the relay process composition, never to feature modules.
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -23,7 +23,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-119-09.T03 | contract | PS-119-02.R03, PS-119-03.R03, PS-119-05.R03 | acquire, competing acquire, non-holder release, renew, expiry, late renew, re-acquire | PRECONDITION_FAILED, EXPIRED, fence 1 then 2 then 3 |
-| TEST-PS-119-09.T06 | unit | PS-119-05.R01, PS-119-05.R02 | tenant B reads, queries, updates and leases tenant A's rows | nothing visible; NOT_FOUND on update; independent leases and records |
+| TEST-PS-119-09.T06 | unit | PS-119-05.R01, PS-119-05.R02 | tenant B reads, queries, updates, leases, blob gets and dead-letter lists on tenant A's rows | nothing visible; NOT_FOUND on update; independent leases, records, blobs and dead letters |
 | TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
 
 ## Dependencies

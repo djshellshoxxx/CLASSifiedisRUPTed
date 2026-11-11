@@ -8,7 +8,7 @@
 
 - **PS-117-07.R01** Problem responses expose only type, title, status, code, retryable, messageKey, params, fields, correlationId and retryAfterMs; never stack traces, SQL, internal messages or another user's data.
 - **PS-117-07.R02** IdempotencyRecord rows are scoped to (tenantId, actor, command, key), may hold P2 response bodies, never leave the vault or relay that stored them and are purged after 24 h.
-- **PS-117-07.R03** The HTTP adapter enforces 256 KiB JSON bodies, sends Cache-Control no-store, X-Content-Type-Options nosniff and a deny-all CSP, and never logs the Authorization header, tokens or request bodies.
+- **PS-117-07.R03** The HTTP adapter enforces 256 KiB JSON bodies, sends Cache-Control no-store, X-Content-Type-Options nosniff and a deny-all CSP on every bus response (the public media route GET /media/v1/*, served by F15.S02.M01 before the bus with Cache-Control public, max-age=31536000, immutable, is exempt from no-store), and never logs the Authorization header, tokens or request bodies.
 
 ## Specification
 
@@ -45,6 +45,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-117-09.T13 | integration | PS-117-01.R03, PS-117-07.R02, PS-117-10.R01 | replay at 24 h - 1 ms and at 24 h, then purge | replay before expiry, execution after; purge removes one row |
 | TEST-PS-117-09.T18 | unit | PS-117-07.R01, PS-117-10.R02 | render problem JSON and snapshot the common code table | exact RFC 9457 fields; no stack; table equals CTR-ERR-001 plus ID_TIMESTAMP_SKEW; defineErrors rules |
 | TEST-PS-117-09.T19 | integration | PS-117-04.R04, PS-117-07.R03, PS-117-10.R03 | sample relay over node:http with replay, reuse, 300 KiB body, form body, GET, bad JSON, bad token, vault command, /api/v2 | 201, Idempotent-Replay, problem+json 422, 413, 415, 405, 422, 401, 404, 404; security headers; logs carry truncated IP only |
+| TEST-PS-117-09.T29 | integration | PS-117-07.R03 | GET /media/v1/sha256-X through the relay server with the F15.S02.M01 media route registered, then a bus command and a bus problem response | media response Cache-Control public, max-age=31536000, immutable and no no-store; every bus response Cache-Control no-store with nosniff and deny-all CSP |
 
 ## Dependencies
 

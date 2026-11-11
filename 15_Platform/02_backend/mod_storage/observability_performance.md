@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-119-08.R01** The dispatcher records classrup_outbox_lag_ms per consumer module and classrup_outbox_deliveries_total{module, outcome}, and the sync sender records classrup_sync_sends_total{outcome, code}.
+- **PS-119-08.R01** The dispatcher records classrup_outbox_lag_ms per consumer module and classrup_outbox_deliveries_total{module, outcome} including requeued and returned-to-dead outcomes, blob puts are counted in classrup_platform_blob_puts_total{outcome, code}, and storage records no sync metrics because the sync outbox belongs to F15.S01.M01.
 - **PS-119-08.R02** On SQLite with 5 000 records a get-and-put transaction has p95 at or below 5 ms and a 50-item index query has p95 at or below 20 ms.
 - **PS-119-08.R03** Dead-lettering logs one warn line with consumer, eventId, type and code and nothing from the payload.
 
@@ -14,13 +14,14 @@
 
 **Metrics**
 - classrup_outbox_lag_ms{module} gauge
-- classrup_outbox_deliveries_total{module, outcome=delivered|duplicate|retry|dead|paused}
-- classrup_sync_sends_total{outcome=sent|retried|failed, code}
+- classrup_outbox_deliveries_total{module, outcome=delivered|duplicate|retry|dead|paused|requeued}
+- classrup_platform_blob_puts_total{outcome=stored|duplicate|rejected, code}
 
 **Logs**
 - warn outbox.dead_lettered {module, consumer, eventId, type, code, correlationId}.
 - error outbox.consumer_threw {module, consumer, eventId, correlationId, error}.
-- warn sync.failed {code, entryId, ref}.
+- warn blob.rejected {code, size, contentType} — never bytes, refs of rejected uploads or tenant identifiers.
+- warn storage.idb_version_ahead {dbVersion, codeVersion, snapshotAvailable} in the vault ring buffer.
 
 **Budgets**
 - SQLite get+put transaction p95 ≤ 5 ms; 50-item index query p95 ≤ 20 ms with 5 000 records.
@@ -33,7 +34,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-119-09.T10 | integration | PS-119-07.R01, PS-119-07.R03, PS-119-08.R03 | consumer fails 8 times for an event with a private name | inbox dead with code only; one warn log with consumer, type and code; no payload text in outbox logs |
-| TEST-PS-119-09.T11 | unit | PS-119-08.R01 | delivery failure then success with the clock advanced 5 s | classrup_outbox_lag_ms 5000 then 0; deliveries counted by outcome |
+| TEST-PS-119-09.T11 | unit | PS-119-08.R01 | delivery failure then success with the clock advanced 5 s, then a requeue, an accepted and a rejected blob put | classrup_outbox_lag_ms 5000 then 0; deliveries counted by outcome including requeued; blob puts counted stored and rejected with code; no sync metric registered |
 | TEST-PS-119-09.T12 | load | PS-119-08.R02 | 5 000 records, 200 get+put transactions and 100 index queries on SQLite WAL | p95 ≤ 5 ms and ≤ 20 ms |
 
 ## Dependencies

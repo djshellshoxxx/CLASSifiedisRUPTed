@@ -127,7 +127,7 @@ processes:
           - "supersedes?: json — { entryId, cid } of the entry this one replaced by a rebase or reroute"
           - "discardReason?: enum — user | superseded | rerouted; rerouted also covers an F11.S02.M01 re-route after the recipient moved (platform.outbox.resolve with cause recipient_moved)"
           - "createdAt: timestamp — RFC 3339 UTC, local clock"
-          - "expiresAt: timestamp — createdAt + 604800000 ms while unsent; min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms) once transport_acknowledged; never later than createdAt + 30 days"
+          - "expiresAt: timestamp — createdAt + 604800000 ms while unsent; min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms) once transport_acknowledged; createdAt + 2592000000 ms once completed (when the retention purge deletes it); never later than createdAt + 30 days"
           - "updatedAt: timestamp — RFC 3339 UTC, local clock"
         invariants:
           - seq is unique per vault and strictly increasing; delivery never sends an entry before every lower-seq entry for the same destination and aggregateKey has reached transport_acknowledged, completed, peer_accepted, discarded or expired.
@@ -179,7 +179,7 @@ processes:
       - Conflict and failed entries block only later entries with the same destination and aggregateKey, are never auto-merged or auto-retried, and forked conflicting promises freeze the affected coordination instead of choosing a winner.
       - A rebase or reroute never edits an entry; the old entry moves to discarded with reason superseded or rerouted and supersededBy, and the replacement is a new entry with a new id and seq, re-validated by V04, V05, V10 and V11.
       - A verified restore announcement of the destination relay that covers an entry's receipt returns the entry from transport_acknowledged to prepared, and it is resent with the same cid or Idempotency-Key.
-      - An entry that needs no peer acknowledgement (a public statement on a selected relay or a relay command) moves to completed when its relay receipt verifies; completed is its final sync state, claims only relay receipt, is kept until createdAt + 30 days and is reopened to prepared only by a verified restore announcement covering its receipt.
+      - An entry that needs no peer acknowledgement (a public statement on a selected relay or a relay command) moves to completed when its relay receipt verifies; completed is its final sync state, claims only relay receipt (the transport acknowledged row of CONSISTENCY_STATES, never peer acceptance), is kept until createdAt + 30 days and is reopened to prepared only by a verified restore announcement covering its receipt.
       - A transport_acknowledged entry that reaches its expiry without a verified acknowledgement ends in expired with expiredOutcome unconfirmed, a terminal unconfirmed outcome shown with the transport_acknowledged text (delivered to the relay, peer has not confirmed), never as failed and never as not sent.
       - An entry for which the FederationTransportPort reports a hold (the retryable F11.S02.M01 FEDERATION_RECIPIENT_UNRESOLVED) stays prepared with heldReason recipient_unresolved, consumes no attempt and is not sent until F11.S02.M01 re-routes it, which discards it as rerouted and prepares a new entry with the same payload and cid for the recipient's new mailbox; the 7-day unsent expiry still applies.
     machines:
@@ -187,7 +187,7 @@ processes:
         initial: prepared
         terminal: [peer_accepted, discarded, expired]
         transitions:
-          - "prepared -> sending | delivery picks the lowest-seq eligible entry of a relay destination and holds the Web Lock | nextAttemptAt ≤ now, vault unlocked, relay not frozen (V15), V13 holds for relay commands, no lower-seq entry of same aggregateKey unresolved; attempts += 1; firstAttemptAt set on the first attempt; sentDigest recorded"
+          - "prepared -> sending | delivery picks the lowest-seq eligible entry of a relay destination and holds the Web Lock | nextAttemptAt ≤ now, heldReason unset, vault unlocked, relay not frozen (V15), V13 holds for relay commands, no lower-seq entry of same aggregateKey unresolved; attempts += 1; firstAttemptAt set on the first attempt; sentDigest recorded"
           - "sending -> transport_acknowledged | relay returns a receipt that passes V14 for an entry with acknowledger counterparty (needsPeerAck true) | store relayReceipt and transportAcknowledgedAt; expiresAt = min(transportAcknowledgedAt + 30 d, createdAt + 30 d); relay time kept as relay-clock evidence only; chip 'Delivered to relay <display name>, peer has not confirmed'"
           - "sending -> completed | relay returns a receipt that passes V14 for an entry with acknowledger none: a public statement on a selected relay (FederationTransportPort receipt outcome accepted, duplicate, hidden or quarantined) or a 2xx or Idempotent-Replay 2xx relay_command response | store relayReceipt and transportAcknowledgedAt; expiresAt = createdAt + 30 d; final sync state, chip 'Delivered to relay <display name>, no peer confirmation needed'; receipt copied into the domain record's provenance"
           - "completed -> prepared | the destination relay's verified restore announcement (V16) covers the receipt, by the same rule as for transport_acknowledged | relayReceipt moved to history, attempts reset to 0, resent with the same cid or Idempotency-Key; expiresAt unchanged"
@@ -213,7 +213,7 @@ processes:
           - "prepared -> prepared | direct destination: user taps Export (platform.outbox.export_direct) | QR or file bytes produced, exportedAt set, label Export prepared; never resent automatically"
     timeouts:
       - "Unsent entries expire 604800000 ms (7 days) after createdAt; the expiry prompt is shown from day 6 (518400000 ms)."
-      - "transport_acknowledged entries waiting for a counterparty or relay acknowledgement expire at min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms), never later than createdAt + 30 days."
+      - "transport_acknowledged entries waiting for a counterparty acknowledgement expire at min(transportAcknowledgedAt + 2592000000 ms, createdAt + 2592000000 ms), never later than createdAt + 30 days."
       - "completed entries (acknowledger none) are deleted with their receipt at createdAt + 2592000000 ms by the retention purge; the receipt is copied into the domain record's provenance when it is verified."
       - "A held entry (heldReason recipient_unresolved) is not sent while held and still expires 604800000 ms (7 days) after createdAt as unsent."
       - "A relay command whose firstAttemptAt is older than 82800000 ms (23 h) is sent only when V13 holds."
@@ -355,7 +355,7 @@ processes:
       - "platform.storage.read_status | local-principal | vault unlocked; also readable while locked for the data-loss and persistence banner (no vault content)"
   failure_recovery_idempotency:
     requirements:
-      - Every relay command is sent with its stored Idempotency-Key and every statement carries its cid, so deliveries inside the relay's 24 h idempotency window take effect at most once; after 23 h from firstAttemptAt a relay command is resent only with expectedRevision, a deterministic resourceId with create-if-absent semantics or a read-back showing no effect, and otherwise moves to conflict with "may already have been applied" (CTR-IDM-001 IDM-1, ID-3).
+      - Every relay command is sent with its stored Idempotency-Key and every statement carries its cid, so deliveries inside the relay's 24 h idempotency window take effect at most once; after 23 h from firstAttemptAt a relay command is resent only with expectedRevision, a deterministic resourceId with create-if-absent semantics or a read-back showing no effect, and otherwise moves to conflict with "may already have been applied" (CTR-IDM-001 IDM-1, CTR-FED-001 FED-7).
       - Retry timing follows IDM-4 exactly; only retryable errors and network failures are retried, at most 6 attempts per entry.
       - A crash between send and receipt leaves the entry recoverable, and a lost peer acknowledgement leaves it in transport_acknowledged rather than claiming acceptance.
       - Receipts that a verified restore announcement of the destination relay declares lost return the entry to prepared, and it is resent with the same cid or Idempotency-Key, so data a restored relay lost is delivered again.
@@ -426,7 +426,7 @@ processes:
       - "T11 | integration | 05.R02,05.R03 | relay revokes access then answers 401 and 403; token store inspected | delivery obtains a fresh token per send via challenge-response; FORBIDDEN marks entry failed with failureReason relay_rejected; no token or private key in IndexedDB"
       - "T12 | integration | 07.R02 | clock advanced 6 d, 7 d, then a transport_acknowledged entry advanced to createdAt + 30 d | day-6 prompt; unsent entry expired at 7 d and never sent; unconfirmed entry expired at createdAt + 30 d with its payload erased"
       - "T13 | abuse | 08.R01,07.R03 | inspect network traffic and script injection under CSP during a full session | no telemetry request; inline script blocked; diagnostics stay in the vault and are exportable"
-      - "T14 | e2e | 06.R03 | two tabs open, device offline, three actions queued, device reconnects, relay then stopped | exactly one tab delivers, order preserved, UI shows Reached relay for delivered entries and unknown for the rest, local data intact"
+      - "T14 | e2e | 06.R03 | two tabs open, device offline, three actions queued, device reconnects, relay then stopped | exactly one tab delivers, order preserved, UI shows the sync.state text 'Delivered to relay <display name>, ...' for delivered entries and 'Saved on this device only, waiting to send' with relay status unknown for the rest, local data intact"
       - "T15 | a11y | 03.R02 | outbox sheet, conflict dialog and storage panel scanned with axe | zero serious or critical issues; aria-live announces state changes with the documented accessible names; targets ≥ 44 px"
       - "T16 | integration | 04.R01,03.R03 | two vaults send conflicting acceptances for one reservation; receiving module reports the fork | entry becomes conflict, affected coordination frozen, no winner chosen"
       - "T17 | load | 08.R02,08.R03 | enqueue 200 entries then deliver against stub with 300 ms latency | enqueue p95 ≤ 30 ms, longest main-thread task ≤ 50 ms, total ≤ 60 s"

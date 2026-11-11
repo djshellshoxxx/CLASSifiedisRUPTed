@@ -26,8 +26,8 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | Replay of a consent on a modified subject | signature covers the exact ID-3 cid of the revision; a changed subject has a different hash so verify returns stale |
-| T02 | Cross-protocol signature reuse | F16.S02.M03 envelope with context classrup/consent/v1 and the signer key-ID digest inside the signed bytes; login and other signatures use different registered contexts |
-| T03 | Forged consent by non-party | role check through ConsentSubjectPort.partyRole and key status check through F16.S02.M02; failure quarantines |
+| T02 | Cross-protocol signature reuse | the F16.S02.M03 signed header covers ctx classrup/consent/v1, kid and payloadHash, verify requires the expected context and binding, and login and other signatures use different registered contexts and leading bytes |
+| T03 | Forged consent by non-party | role check through SubjectCanonicalizerPort.partyRole and key status check through F16.S02.M02; failure quarantines |
 | T04 | Backdated signing time to win an ordering dispute | signedAtClaim is only a claim; ordering between consent and revocation is never decided by it and relay receipt time is evidence of the relay clock only |
 | T05 | Coerced or accidental signature | explicit read confirmation, wording displayed with the exact revision, revocation available until commit, and the UI explains that consent is not delivery or payment |
 | T06 | Compromised device signs consents, possibly backdated | validity uses first-seen time recorded by the verifier, never signedAtClaim; statements first seen after revocationEffectiveFrom are rejected; consents first seen before revocation stay valid, which is disclosed |
@@ -51,4 +51,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

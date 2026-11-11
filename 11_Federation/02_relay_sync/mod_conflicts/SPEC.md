@@ -6,11 +6,11 @@
 
 ## Purpose
 
-Detects forked or equivocating signed statements, quarantines them and drives review. A fork is two valid envelopes with the same chain key (author, signer key, stream) and seq but different cids, or a prev that contradicts a stored neighbour; a commitment conflict is two verified statements whose registry subject key is the same and whose digests differ under the registry predicate (consent, money, inventory, reservation, identity move). F11.S01.M02 calls detect inside the receive transaction and quarantines every candidate there, and domain modules check is_frozen synchronously before acting, so the freeze never fails open. Public projections follow an origin-wins policy after a 7-day review window, based on the relays listed in the author's own portable identity document, never on a relay binding. Commitments are never resolved by keeping one side: the vault principal can only release the freeze locally (drop_all) or close it with a renegotiated statement every required signer signed, with no last-writer-wins. In a vault the local principal reviews; on a relay the operator reviews public projections only.
+Detects forked or equivocating signed statements, quarantines them and drives review. A fork is two valid envelopes with the same chain key (author, signer key, stream) and seq but different cids, or a prev that contradicts a stored neighbour; a commitment conflict is two verified statements whose registry subject key is the same and whose digests differ under the registry predicate (consent, money, inventory, reservation, identity move); a key-compromise conflict is one commitment statement that this vault first received inside the claimed compromise window of its later revoked signer key. F11.S01.M02 calls detect inside the receive transaction and quarantines every candidate there, and domain modules check is_frozen synchronously before acting, so the freeze never fails open. Public projections follow an origin-wins policy after a 7-day review window, based on the relays listed in the author's own portable identity document, never on a relay binding. Commitments are never resolved by keeping one side: the vault principal can only release the freeze locally (drop_all) or close it with a renegotiated statement every required signer signed, with no last-writer-wins. In a vault the local principal reviews; on a relay the operator reviews public projections only.
 
 ## Responsibilities
 
-- Own ConflictRecord and open one when F11.S02.M02 returns fork, when F11.S01.M02 finds a commitment conflict in its promise index, or when F11.S03.M03 receives conflicting move statements.
+- Own ConflictRecord and open one when F11.S02.M02 returns fork, when F11.S01.M02 finds a commitment conflict in its promise index or quarantines a commitment statement signed during a claimed key compromise, or when F11.S03.M03 receives conflicting move statements.
 - Classify each conflict as public_projection or commitment from the statement-type registry in F11.S01.M01 and take its subject key and predicate from there.
 - Freeze commitment conflicts in the detecting transaction, emit federation.conflict.detected with the frozen subject IDs, and answer the synchronous is_frozen check that domain modules call before acting (fail closed).
 - Apply the origin-wins policy to public projections after 7 days without review, keeping the candidate first received from a relay listed in the author's latest verified portable document, and record that this is a policy choice, not proof.
@@ -43,6 +43,7 @@ Detects forked or equivocating signed statements, quarantines them and drives re
 - A relay operator tries to resolve a commitment conflict; refused with FORBIDDEN (relays hold public projections only).
 - The author publishes a new portable document listing a different relay while a public conflict is open; the listed relays used by origin-wins are recomputed before the 7-day decision.
 - Both candidates contain identical payload bytes but different createdAt claims; still treated as a fork because the cids differ.
+- A device key is revoked with revocationEffectiveFrom 3 days back and this vault accepted a consent signed by it 2 days ago; F11.S01.M02 opens a key_compromise conflict with that single candidate, the proposal is frozen, and only drop_all or a consent re-signed with a current key by every required signer closes it.
 - An author forks 21 times through two honest relays; the 21st puts the author's further envelopes in author-level quarantine, and neither relay's health changes.
 
 ## UX and accessibility
@@ -74,7 +75,7 @@ F11.S02.M02, F11.S01.M03, F11.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-086-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-086-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-086-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-086-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-086-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
@@ -89,6 +90,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No commitment (consent, money, inventory, identity) conflict is ever resolved by keep, last-writer-wins, timeout or a unilateral supersede.
 - Forged role-less statements cannot freeze a trade, and is_frozen fails closed (abuse and integration tests).

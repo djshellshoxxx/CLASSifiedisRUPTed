@@ -6,19 +6,21 @@
 
 ## Purpose
 
-Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope format, and is the only path that signs statements of the vault principal or of a relay key. The envelope is the universal sharing format for every cross-party statement under ADR-0016. The same module runs in the user's browser vault (IndexedDB) and in an optional relay (SQLite). Authorship is proven only by the signature and the registry role (F11.S01.M01): a user statement is signed by a device key that the author's portable identity document lists as active, and no relay is ever bound to an author or authoritative for its records. Chains are scoped per (author, signer key, stream); a receiver anchors at the first verified envelope it sees, so the chain detects equivocation and orders delivery but never gates acceptance. A relay stores only public-audience records; participant statements travel as sealed mailbox envelopes through F08.S01.M01 and exist in plaintext only in the participants' vaults, which sign acknowledgements for statements addressed to them. Author tombstones are binding deletion statements; a relay operator's removal is a signed advisory that removes the item from that relay's index only. A signature proves the key holder asserted the content, not that it is true or was delivered, and timestamps from other parties are claims.
+Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope format, and is the only path that signs statements of the vault principal or of a relay key. The envelope is the universal sharing format for every cross-party statement under ADR-0016. The same module runs in the user's browser vault (IndexedDB) and in an optional relay (SQLite). Authorship is proven only by the signature and the registry role (F11.S01.M01): a user statement is signed by a device key that the author's portable identity document lists as active, and no relay is ever bound to an author or authoritative for its records. Chains are scoped per (author, signer key, stream); a receiver anchors at the first verified envelope it sees, so the chain detects equivocation and orders delivery but never gates acceptance. A relay stores only public-audience records; participant statements travel as sealed mailbox envelopes through F08.S01.M01 and exist in plaintext only in the participants' vaults, which sign acknowledgements for statements addressed to them. Author tombstones are binding deletion statements; a relay operator's removal is a signed advisory that removes the item from that relay's index only. A signature proves the key holder asserted the content, not that it is true or was delivered, and timestamps from other parties are claims. Whether a vault acts on an incoming statement is decided by the F16.S01.M01 authorizeStatement predicate; this module stays the only owner of quarantine storage, the quarantine view and its export.
 
 ## Responsibilities
 
 - Own FederatedRecord (statement or mirror plus provenance receivedFromRelay, receivedAt, via, verifiedAt, optional relay receipt) and Tombstone (author tombstones and relay_removal advisories), in the vault and in the relay, with the vault receive, publish, tombstone, discard and release commands and the relay inbox endpoint.
-- Run the verification pipeline in fixed order: flag or hosting policy, sender authentication and quota, request signature, size limits, block rules before storage, strict parse, signature and cid, registry role and device-key delegation, revoked-key check, record age per type, tombstone check, blocked-DID drop (vault), chain placement through F11.S02.M02, commitment conflict check through F11.S02.M03, payload check per audience, store.
+- Run the verification pipeline in fixed order: flag, containment sentinel or hosting policy, sender authentication and quota, request signature, size limits, block rules before storage, strict parse, signature and cid, F16.S01.M01 authorizeStatement (registry role through F11.S01.M01 roleFor and key status through F07.S02.M01, judged at this receiver's receipt time), record age per type, tombstone check, blocked-DID drop (vault), relay intake admission for hosted vault keys (consent relay_check, tenant currencies, account limit, spam evaluation), chain placement through F11.S02.M02, commitment conflict check through F11.S02.M03, payload check per audience, store.
 - Be the single signing path for the vault principal and the relay key; federation.record.publish and federation.tombstone.issue allocate seq and prev inside the transaction that stores the envelope, and producers (F01, F03, F07, F11.S03.*) call them through the StatementPublisherPort.
-- Apply author tombstones as binding deletion (purge within 1 h, deadline 24 h), keep tombstone stubs at least max(180 days, the target type's maxAge), and store relay_removal statements as advisories that remove the item only from the issuing relay's index.
+- Apply author tombstones as binding deletion (purge within 1 h, deadline 24 h) only when the target's author principal signed them, refuse any classrup.federation.tombstone/v1 signed by a relay key, keep tombstone stubs at least max(180 days, the target type's maxAge), and store relay_removal statements as advisories that remove the item only from the issuing relay's index.
 - Sign a classrup.federation.ack/v1 over the exact cid of every accepted participants statement addressed to the local principal and hand incoming acks to F11.S02.M01 through federation.record.accepted.
 - Maintain the promise index (subject key and digest of commitment statements) and call federation.conflict.detect inside the receive transaction when two verified commitment statements share a subject with different digests.
 - Emit one record.accepted, record.rejected or tombstone.applied event per envelope outcome in the same local transaction as the state change; events stay on the device or relay (EVT-8) and only signed statements leave it (EVT-9).
-- Register the N6 privacy ports, call privacy.consent.check(federation_publish) before publishing public statements and drop statements from blocked DIDs silently (N7).
+- Register the N6 privacy ports, sign account_deleted tombstones only in the DeletionPort sign step at deletion execution (N6a), call privacy.consent.check(federation_publish) before publishing public statements and drop statements from blocked DIDs silently (N7).
 - Never claim more than was reached; a locally published statement is local committed until F15.S01.M01 records a verified relay receipt or acknowledgement.
+- Return a classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue for every envelope the relay inbox accepts, and register a TombstoneSourcePort listSince(cursor) with the relay process for the F15.S03.M02 tombstone ledger.
+- Own quarantine storage, the quarantine list and its export; F16.S01.M01 authorizeStatement only returns Accept or Quarantine(reason) and stores nothing.
 
 ## Not responsible for
 
@@ -29,6 +31,9 @@ Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope f
 - Peer allowlist, quotas and block rules (F11.S03.M01, F11.S03.M02).
 - Routing to destinations, transport and retries (F11.S02.M01 with the F15.S01.M01 sync outbox).
 - Mailbox storage and sealing of participant traffic on relays (F08.S01.M01 MailboxEnvelope and comms.mailbox.put).
+- The statement authorization predicate (F16.S01.M01 authorizeStatement) and revocation effective-time clamping (F16.S02.M02 through F07.S02.M01 key status).
+- The containment sentinel contract (F16.S03.M03); the relay process supplies its state through an injected ContainmentPort, with no depends_on edge because F16.S03.M03 depends on F08.S01.M01, which depends on F11.S02.M01 and this module.
+- Tenant configuration (F15.S04.M03 TenantPort), spam heuristics (F12.S02.M02) and per-key limits (F12.S03.M04); this module only calls them at relay intake.
 - Future: multi-hop relay forwarding (more than one relay hop) and ActivityPub or AT Protocol inbound adapters.
 - Future: relay-to-relay federation of anything above P0, including reviews, offers and proposals.
 
@@ -53,18 +58,23 @@ Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope f
 - Relay R1's operator issues a relay_removal (moderation_removed) for a listing; R1 drops it from its own index, R2's mirror stays and is only queued for R2's operator review, reader vaults keep it with a notice and may hide it locally, and the author's own vault ignores it and may republish anywhere.
 - Federation flag F11 is switched off while a batch is processing; the batch finishes its current transaction and later relay-to-relay requests return FEATURE_DISABLED while vault to relay sharing continues.
 - A statement signed by a valid key that is not the listing author claims to accept an offer; the vault quarantines it with reason signer_role_invalid and does not act on it.
-- A statement is signed by a device key that the latest verified portable document marks revoked but claims a createdAt before the revocation; it is rejected with FEDERATION_SIGNER_ROLE_INVALID.
+- A statement is signed by a device key that the latest verified portable document marks revoked but claims a createdAt before the revocation, and this vault receives it after the revocation arrived; it is refused with FEDERATION_SIGNER_ROLE_INVALID and listed in the quarantine list with reason signer_key_revoked, judged by receipt time only.
 - Two offline devices of one principal each publish a public statement; they use different signer-key chains, so no self-fork occurs, and two producers in one vault get seq n+1 and n+2 from one transaction each.
 - A hide rule matches an accepted mirror and is undone an hour later; the record goes hidden and back to accepted with its envelope intact, while a reject rule purges it.
 - Envelope createdAt is older than its type's maxAge (a listing 121 days old) or 11 minutes in the future; rejected with FEDERATION_RECORD_TIME_INVALID, except for the owner's own vault import or restore, which is exempt from the age limit.
 - Relay stops responding after a statement was published; the statement stays local committed and the UI shows delivery unknown.
+- A revocation arrives with revocationEffectiveFrom three days back; a consent this vault first received two days ago is re-marked signed during claimed compromise, quarantined and its proposal frozen through F11.S02.M03, while a consent received four days ago stays accepted with the marker signer later revoked.
+- A hosted vault sends a listing priced in a currency its tenant removed from allowedCurrencies; that envelope is refused with FEDERATION_CURRENCY_NOT_ALLOWED and the rest of the batch is processed.
+- The containment sentinel federation_off exists; requests whose keyid resolves to a peer relay receive FEATURE_DISABLED with params.reason federation_killed, while requests from vaults hosted on the relay are accepted as usual.
+- A relay key signs a classrup.federation.tombstone/v1 for another author's listing; it is refused with FEDERATION_TOMBSTONE_UNAUTHORIZED and nothing is purged on any relay or in any vault.
+- The seller publishes listingRevision 4 from a second device whose chain seq is lower than the first device's; buyer vaults supersede revision 3 by listingRevision, never by seq across chains or by createdAt, and emit federation.record.accepted for revision 4.
 
 ## UX and accessibility
 
 - Mirrored record view: relays that delivered it (provenance, never ownership), verified-at time, banner 'Remote copy, read-only', link to the author's listed relays; no edit controls; when a relay_removal advisory exists, a notice 'Removed from relay R1's index' with the statement of reasons and a 'Hide in my vault' action.
 - Relay operator federation inbox: counts per peer and reason, rejected list with cid prefix and code, quarantine list with Discard and Release, removal advisories issued by this relay, conflict queue link (F11.S02.M03).
 - Owner federation panel in listing and profile settings: per-record opt-in toggle, sync state (local committed, prepared, relay received, peer accepted, withdrawn) and button 'Withdraw from federation' that issues a signed tombstone after a notice that copies already fetched cannot be recalled (PRV-6).
-- Vault quarantine list: statements not acted on, with reason (signer not authorized, signer key revoked, conflicting statement), Discard button and the 30-day automatic removal date.
+- Vault quarantine list: statements not acted on, with reason (signer not authorized, signer key revoked, signed during claimed compromise, conflicting statement), Discard button and the 30-day automatic removal date.
 
 **States:** loading; empty; local-committed; buffered; held-on-fork; accepted; hidden; quarantined; tombstoned; removal-advisory; rejected; flag-off
 
@@ -80,20 +90,20 @@ Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope f
 - Commands: `federation.record.ingest`, `federation.record.receive`, `federation.record.publish`, `federation.tombstone.issue`, `federation.record.discard`, `federation.record.release`
 - Queries: `federation.record.get`, `federation.record.list_by_author`, `federation.record.head`, `federation.record.list_rejections`, `federation.record.list_quarantined`
 - Emits: `federation.record.accepted`, `federation.record.rejected`, `federation.tombstone.applied`
-- Consumes: `federation.block_rule.changed`, `federation.peer.suspended`, `federation.conflict.detected`, `federation.conflict.resolved`, `federation.account.moved`, `identity.portable_doc.published`, `privacy.deletion.requested`, `privacy.deletion.completed`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `services.offering.withdrawn`, `platform.flag.changed`
+- Consumes: `federation.block_rule.changed`, `federation.peer.suspended`, `federation.conflict.detected`, `federation.conflict.resolved`, `federation.account.moved`, `identity.portable_doc.published`, `privacy.deletion.completed`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `services.offering.withdrawn`, `platform.flag.changed`
 
 ## Dependencies
 
-F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F15.S04.M02, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001
+F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F16.S01.M01, F15.S02.M01, F15.S04.M02, F15.S04.M03, F12.S02.M02, F12.S03.M03, F12.S03.M04, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-084-01 | [Domain schema](domain_schema.md) | 7 |
-| PS-084-02 | [Validation rules](validation_rules.md) | 6 |
-| PS-084-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-084-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-084-01 | [Domain schema](domain_schema.md) | 8 |
+| PS-084-02 | [Validation rules](validation_rules.md) | 8 |
+| PS-084-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
+| PS-084-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-084-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-084-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-084-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -105,7 +115,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T40 pass in CI.
+- All tests T01–T46 pass in CI.
 - The adversarial suite shows forged provenance, author capture, replay, flood, fork, pre-emptive tombstones, cross-relay takedown and participant metadata leakage are each blocked.
 - No record above P0 or finer than L2 is ever stored or served by a relay (privacy suite), and no relay stores author, type or seq of participant traffic.
 - Tombstoned content is gone from reads within 1 h and from storage within 24 h in the chaos test.

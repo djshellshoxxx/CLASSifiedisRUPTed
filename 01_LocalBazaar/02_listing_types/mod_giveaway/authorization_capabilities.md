@@ -8,7 +8,7 @@
 
 - **PS-005-05.R01** Vault policy: only the giver's principal defines terms, selects, declines and confirms; only the requester's principal creates or withdraws a request.
 - **PS-005-05.R02** Incoming statements are accepted only if signed by the stated requester or, for selection, by the listing owner key (CAP-8); otherwise quarantined with a reason.
-- **PS-005-05.R03** Relay policy: mailbox access for the encrypted envelopes is authorized by the relay for signed requests from the recipient's registered device key; the relay cannot read request contents.
+- **PS-005-05.R03** Relay policy for the sealed envelopes is F08.S01.M01's comms.mailbox.put, fetch and ack (put proof by the sender's device key, fetch and ack by the owner); this module declares no relay capability and the relay cannot read request contents.
 
 ## Specification
 
@@ -21,7 +21,6 @@
 | bazaar.giveaway_request.decide | owner | giver vault: request.giverId = local principal; requester vault: confirm_collected only, request.requesterId = local principal (mark received) |
 | bazaar.giveaway_request.read_as_giver | owner | listing.ownerId = local principal |
 | bazaar.giveaway_request.read_own | owner | request.requesterId = local principal |
-| bazaar.giveaway_request.relay_mailbox | relay-member | relay policy: request signed by the recipient device key; ciphertext only; mailbox quota default 10 MiB |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -30,8 +29,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-005-09.T08 | integration | PS-005-04.R02, PS-005-05.R02 | statement with wrong signer, tampered body, unknown schema | all quarantined with reasons; none queued |
-| TEST-PS-005-09.T09 | abuse | PS-005-05.R01, PS-005-05.R03 | non-giver selects; relay reads mailbox | FORBIDDEN; relay holds ciphertext only |
+| TEST-PS-005-09.T09 | abuse | PS-005-05.R01, PS-005-05.R03 | non-giver selects; relay reads the F08.S01.M01 mailbox; capability list inspected | FORBIDDEN; relay holds ciphertext only; no bazaar.giveaway_request.relay_mailbox capability exists and access is decided by comms.mailbox.put, fetch and ack |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -10,6 +10,7 @@
 - **PS-120-01.R02** A manifest JSON file next to every artifact holds the same facts so that restore works without a readable database, authenticated by an HMAC under a key derived from the backup key and chained to the previous manifest, so relabelled or out-of-chain manifests are refused.
 - **PS-120-01.R03** Records are relay-local operational data (P1) retained under RET-AUDIT rules for 1 year, longer than the artifacts they describe, except tombstone ledger records which live as long as their 546-day artifacts.
 - **PS-120-01.R04** A full BackupRecord records consistentAt and walPosition {salt1, salt2, mxFrame} at the true consistency point of the snapshot, and a WAL record the salts and frame range it covers, so the restore point and the data-loss window can be computed from records and manifests alone.
+- **PS-120-01.R05** A full snapshot covers schema main only and records excludedBlobs, the number of encrypted MediaBlobs left out, so backups hold the F08.S01.M03 attachment rows and blob metadata but never attachment ciphertext.
 
 ## Specification
 
@@ -34,6 +35,7 @@ Schema `classrup.platform.backup_record/v1` · storage **relay** · privacy **P1
 | plainSha256? | string — hex SHA-256 of the plaintext database snapshot (full only) |
 | schemaVersion | string — migration id of the database at snapshot time |
 | eventWatermark? | string — eventId of the newest outbox row included |
+| excludedBlobs? | int — full only: number of encrypted MediaBlobs (F08.S01.M03 attachment ciphertext in the attached store blobs_enc) left out of the snapshot; their attachment rows and blob metadata are included |
 | salt | string — base64url of the 32 random bytes used to derive this artifact's key |
 | keyFingerprint | string — first 16 hex of SHA-256 of the backup key; never the key |
 | prevManifestHash? | string — hex SHA-256 of the previous manifest in this relay's chain |
@@ -51,6 +53,7 @@ Schema `classrup.platform.backup_record/v1` · storage **relay** · privacy **P1
 - keyFingerprint is present on every record and the key itself is never stored in records, manifests, logs or events.
 - No two artifacts share a derived key, because every artifact has its own random salt and backupId, so a (key, nonce) pair is never reused.
 - Every manifest except the first carries prevManifestHash of the previous manifest, and its MAC verifies.
+- No artifact contains the ciphertext bytes of an encrypted MediaBlob.
 
 ### Storage DDL
 
@@ -70,6 +73,7 @@ CREATE INDEX platform_backup_kind ON platform_backup_record(kind, started_at);
 |---|---|---|---|---|
 | TEST-PS-120-09.T01 | integration | PS-120-01.R01, PS-120-01.R02, PS-120-01.R03 | run a full backup and read record plus manifest | record and manifest agree, contain keyFingerprint, salt, MAC and chain hash and no key bytes |
 | TEST-PS-120-09.T20 | integration | PS-120-01.R04, PS-120-04.R04 | full snapshot under write load, then WAL segments; restore snapshot plus frames after walPosition; inspect the platform.backup.completed payload | restored content equals the live database at the target; consistentAt equals completion of the final step; page numbers identical to the source (no VACUUM INTO); payload carries consistentAt and walPosition and no event exists for WAL segments |
+| TEST-PS-120-09.T26 | abuse | PS-120-01.R05, PS-120-02.R05, PS-120-07.R05 | full snapshot and 10 min of WAL segments while attachments are uploaded and one is deleted; restore; scan every artifact for the canary; then a run with an adapter that keeps encrypted bytes in main, and verify of a planted snapshot holding ciphertext | P0 blobs, attachment rows and blob metadata restored; no canary in any artifact; excludedBlobs 3 in the record and event; the misconfigured run refused with PLATFORM_BACKUP_CONFIG_INVALID; the planted snapshot fails with PLATFORM_BACKUP_VERIFY_FAILED |
 
 ## Dependencies
 

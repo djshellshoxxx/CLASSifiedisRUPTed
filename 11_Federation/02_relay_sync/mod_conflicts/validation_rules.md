@@ -16,8 +16,8 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | every candidate envelope has a verified signature (F11.S01.M03) and holds its registry role; fork candidates share one chain key and seq, commitment candidates share one subject key and conflict under the registry predicate | FED_SIGNATURE_INVALID |
-| V02 | candidates contain ≥ 2 distinct cids and ≤ 5 entries | VALIDATION_FAILED |
+| V01 | every candidate envelope has a verified signature (F11.S01.M03) and holds its registry role (for key_compromise: held it when accepted and its key was later revoked with this vault's first receipt inside the claimed compromise window); fork candidates share one chain key and seq, commitment candidates share one subject key and conflict under the registry predicate | FED_SIGNATURE_INVALID |
+| V02 | candidates contain ≥ 2 distinct cids and ≤ 5 entries, or exactly 1 entry for kind key_compromise | VALIDATION_FAILED |
 | V03 | public_projection resolve decision is keep with keptCid in candidates, drop_all, or superseded with a verified envelope of higher seq naming all candidate cids in ext.supersedes | FEDERATION_CONFLICT_INVALID_RESOLUTION |
 | V04 | statementClass commitment accepts only drop_all (local release of the freeze) or superseded with a renegotiated statement whose digest is signed by every required signer in the registry (all listed participants) | FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE |
 | V05 | expectedRevision equals current revision | CONFLICT_REVISION |
@@ -36,6 +36,7 @@
 | TEST-PS-086-09.T11 | integration | PS-086-06.R01, PS-086-06.R02, PS-086-02.R02 | replay detect with same candidates; two concurrent resolves | same conflictId; one success and one CONFLICT_REVISION |
 | TEST-PS-086-09.T13 | integration | PS-086-07.R02, PS-086-02.R05 | relay harness: operator calls resolve on a public conflict and on a commitment conflict id injected into the relay store; inspect relay storage | first succeeds with audit; second FORBIDDEN; relay holds no commitment record and no plaintext |
 | TEST-PS-086-09.T18 | unit | PS-086-02.R04 | commitment conflict on D: supersede with a renegotiated statement signed only by S; then signed by S and T; separately drop_all | first FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; second superseded; drop_all resolved and the freeze released locally only |
+| TEST-PS-086-09.T24 | integration | PS-086-01.R05, PS-086-02.R02 | F11.S01.M02 re-marks a consent signed during a claimed compromise and calls detect kind key_compromise with that one envelope; detect key_compromise with 2 envelopes; resolve keep; resolve with a consent re-signed by every required signer with current keys | record open with 1 candidate and freezeScope naming the proposal, is_frozen true; 2 envelopes VALIDATION_FAILED; keep FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; the re-signed consent supersedes it |
 
 ## Dependencies
 

@@ -10,6 +10,7 @@
 - **PS-086-01.R02** Commitment ConflictRecords are P2, visible only to the vault owner, never leave the vault by themselves and appear in logs as IDs only; public_projection ConflictRecords are the only kind a relay holds and are visible to that relay's operator.
 - **PS-086-01.R03** Candidate claimed times are stored as claims and relay receipt times as evidence of that relay's clock only.
 - **PS-086-01.R04** Commitment conflict predicates and subject keys come from the F11.S01.M01 registry, and the promise index they are evaluated against is the FederatedRecord subject index owned by F11.S01.M02.
+- **PS-086-01.R05** A key_compromise ConflictRecord holds exactly one candidate, a commitment statement this vault first received inside [revocationEffectiveFrom, arrival of the revocation] of its signer key, freezes that statement's subject like a commitment conflict and closes only by drop_all or superseded by a statement re-signed with a current key by every required signer.
 
 ## Specification
 
@@ -21,13 +22,13 @@ Schema `classrup.federation.conflict/v1` · storage **relay+device** · privacy 
 |---|---|
 | id | uuidv7 — primary key |
 | tenantId | uuidv7 — tenant scope (vault id in the browser vault) |
-| kind | enum — fork_seq \| prev_mismatch \| commitment_conflict |
+| kind | enum — fork_seq \| prev_mismatch \| commitment_conflict \| key_compromise (one commitment statement signed during the claimed compromise window of a later revoked key; statementClass commitment) |
 | statementClass | enum — public_projection \| commitment (relays hold public_projection only) |
 | author | string — did:key whose statements conflict |
 | chainKey? | json — {signerKey, stream} for fork kinds |
 | seq? | int — conflicting sequence number for fork kinds |
 | subjectRef? | string — registry subject key the commitment concerns, e.g. consent subject, reservation listing, move:subject |
-| candidates | json — 2..5 entries {cid, claimedAt, receivedAt, receivedFromRelay?, fromListedRelay: boolean, relayReceipt?} |
+| candidates | json — 2..5 entries (exactly 1 for key_compromise) {cid, claimedAt, receivedAt, receivedFromRelay?, fromListedRelay: boolean, relayReceipt?} |
 | freezeScope | string[] — subject keys and aggregate IDs whose coordination is frozen; empty for public_projection |
 | requiredSigners? | string[] — commitment only: every principal the registry requires to sign a superseding statement |
 | status | enum — open \| resolved \| auto_resolved \| superseded |
@@ -42,7 +43,7 @@ Schema `classrup.federation.conflict/v1` · storage **relay+device** · privacy 
 - At most one open ConflictRecord per (tenantId, author, chainKey, seq) for fork kinds and per (tenantId, subjectRef) for commitment conflicts.
 - A commitment ConflictRecord never reaches auto_resolved and never ends with decision keep.
 - status resolved with decision keep implies statementClass public_projection and keptCid is one of the candidate cids.
-- candidates always has at least 2 distinct cids.
+- candidates always has at least 2 distinct cids, except kind key_compromise, which has exactly 1.
 - A relay never stores a ConflictRecord with statementClass commitment.
 
 ### Storage DDL
@@ -65,6 +66,7 @@ CREATE INDEX fed_conflict_author_open ON fed_conflict(tenant_id, author) WHERE s
 | TEST-PS-086-09.T10 | abuse | PS-086-07.R03, PS-086-01.R04 | attacker signs a statement as a non-participant for a victim's proposal | quarantined by F11.S01.M02 V14, no conflict opened, trade not frozen |
 | TEST-PS-086-09.T15 | e2e | PS-086-01.R02, PS-086-03.R02 | two vaults receive conflicting acceptances; user opens review screen | trade paused banner visible, labels claim vs evidence, only the owner sees the record, axe zero serious issues |
 | TEST-PS-086-09.T19 | unit | PS-086-01.R04, PS-086-04.R04 | each registry predicate: consents on one subject with different digests, overlapping reservations to different holders, two deal obligation digests, two moves with different toRelay, plus non-conflicting pairs | detect is called exactly for the conflicting pairs and freezeScope names the subject |
+| TEST-PS-086-09.T24 | integration | PS-086-01.R05, PS-086-02.R02 | F11.S01.M02 re-marks a consent signed during a claimed compromise and calls detect kind key_compromise with that one envelope; detect key_compromise with 2 envelopes; resolve keep; resolve with a consent re-signed by every required signer with current keys | record open with 1 candidate and freezeScope naming the proposal, is_frozen true; 2 envelopes VALIDATION_FAILED; keep FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; the re-signed consent supersedes it |
 
 ## Dependencies
 

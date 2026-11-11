@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-086-09.T21 | integration | PS-086-08.R03 | relay with one public conflict open 8 days and 1 minute, then 51 open conflicts | both alerts fire |
 | TEST-PS-086-09.T22 | abuse | PS-086-07.R05 | malicious author forks 21 times, each fork delivered through two honest relays | the 21st returns FEDERATION_CONFLICT_AUTHOR_LIMIT and quarantines the author's later envelopes; detected events carry no peer blame and no peer health changes |
 | TEST-PS-086-09.T23 | unit | PS-086-07.R04, PS-086-07.R01 | export, deletion and retention ports called by F10; privacy.deletion.completed; log capture for a commitment conflict | sections and plans returned; author DID pseudonymized in retained records; logs hold IDs only |
+| TEST-PS-086-09.T24 | integration | PS-086-01.R05, PS-086-02.R02 | F11.S01.M02 re-marks a consent signed during a claimed compromise and calls detect kind key_compromise with that one envelope; detect key_compromise with 2 envelopes; resolve keep; resolve with a consent re-signed by every required signer with current keys | record open with 1 candidate and freezeScope naming the proposal, is_frozen true; 2 envelopes VALIDATION_FAILED; keep FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; the re-signed consent supersedes it |
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No commitment (consent, money, inventory, identity) conflict is ever resolved by keep, last-writer-wins, timeout or a unilateral supersede.
 - Forged role-less statements cannot freeze a trade, and is_frozen fails closed (abuse and integration tests).
 

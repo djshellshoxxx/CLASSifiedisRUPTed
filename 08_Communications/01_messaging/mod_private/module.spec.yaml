@@ -83,8 +83,8 @@ processes:
       - Messages are P2; the relay stores only a MailboxEnvelope (the sealed wrapper plus relay bookkeeping, no sender identifier) under RET-SHORT for at most 30 days, while vault Messages follow RET-STANDARD under the user's control.
       - Timestamps from other parties are claims; the vault stores the sender's createdAt as a claim, its own receivedAt, and the relay-signed receipt time as evidence of that relay's clock only.
       - "Delivery is tracked per recipient: each Message holds one delivery row {recipientDid, mailboxId, relayId, outboxEntryId, syncState, relayReceipt, receiptCid} per recipient mailbox; the message-level state is the minimum across rows shown with 'k of n acknowledged', and a row reaches peer_accepted only with a receipt whose messageCid equals the cid of the exact signed envelope."
-      - "A relay mailbox is a resource of this module: comms.mailbox.register creates it for an owner DID with the owner's registered device key IDs, an optional push target and an optional list of salted hashes of contacts' request keys, comms.mailbox.rotate replaces keys or the mailbox ID, and comms.mailbox.close ends it; the relay keeps these rows in its comms_mailbox table and accepts a put only with an RFC 9421 request signature by a request key, never learning the sender DID."
-      - "Sealed sender: every participant envelope put into a mailbox - this module's message, receipt and delete statements and every statement F11.S02.M01 hands to the MailboxPort, including F10.S01.M04 deletion notices - travels as the wrapper {v: 1, mailboxId, ciphertext, size, sentAt}, where ciphertext is XChaCha20-Poly1305 under a fresh wrapper key over {envelope, senderRequestKey} padded to 256-byte buckets, prefixed by that wrapper key wrapped for each recipient device by x25519 to the agreement key derived as in 01.R02 (these derived device keys are the only mailbox keys; a mailbox has no key of its own); the put is signed with the sender's request key for that relay - an Ed25519 key pair the vault generates per principal and relay, encoded as did:key in keyid, never listed in an identity document and used for nothing but puts to that relay - so the relay learns no author, type, seq, message ID or sender DID."
+      - "A relay mailbox is a resource of this module: comms.mailbox.register creates it for an owner DID with the owner's registered device key IDs, an optional push target and an optional list of salted hashes of contacts' request keys (learned from the senderRequestKey inside wrappers from accepted contacts), comms.mailbox.rotate replaces keys, contact hashes or the mailbox ID, and comms.mailbox.close ends it; the relay keeps these rows in its comms_mailbox table and accepts a put only with an RFC 9421 request signature by a request key, never learning the sender DID."
+      - "Sealed sender: every participant envelope put into a mailbox - this module's message, receipt and delete statements and every statement F11.S02.M01 hands to the MailboxPort, including F10.S01.M04 deletion notices - travels as the wrapper {v: 1, mailboxId, ciphertext, size, sentAt}, where ciphertext is XChaCha20-Poly1305 under a fresh wrapper key over {envelope, senderRequestKey} padded to 256-byte buckets, prefixed by that wrapper key wrapped for each recipient device by x25519 to the agreement key derived as in 01.R02 (these derived device keys are the only mailbox keys; a mailbox has no key of its own); the put is signed with the sender's request key for that relay - an Ed25519 key pair the vault generates per principal and relay, encoded as did:key in keyid, never listed in an identity document and used for nothing but puts to that relay - so the relay learns no author, type, seq, message ID or sender DID; a wrapper is sealed once per delivery row and its exact bytes are reused by every retry and resend of that row, so the relay deduplicates it on (mailboxId, digest)."
       - "The vault keeps one row per own mailbox {relayId, mailboxId, status: active|forwarding|closed, registeredAt, rotateAt, previousMailboxId?, forwardUntil?} plus its request key per relay; mailbox IDs differ at every relay and are rotated every 30 days per relay (comms.mailbox.rotate with newMailboxId and 14 forward days) to limit cross-relay and cross-period linkability (PT-15), and the in-process vault query comms.mailbox.list_own returns the current active pairs {relayId, mailboxId} that F01.S01.M03 puts into listing projections as mailboxHints 1..3 (N15)."
     entities:
       - name: Message
@@ -266,12 +266,14 @@ processes:
       - "Request-key first-put rows (comms_mailbox_writer) are deleted 30 days after the first put; pre-signed mailbox close statements are accepted for 30 days after signing."
   commands_queries_events:
     requirements:
-      - The vault exposes send, resend, delete and acknowledge commands that produce signed statements and a local read query; the relay exposes the mailbox commands register, rotate, close, put, fetch and ack, and this module is the single owner of recipient mailboxes that F11.S02.M01 delivery and other modules use.
+      - The vault exposes send, resend, delete and acknowledge commands that produce signed statements and the local read queries list_thread and list_own; the relay exposes the mailbox commands register, rotate, close, put, fetch and ack, and this module is the single owner of recipient mailboxes that F11.S02.M01 delivery and other modules use through the MailboxPort.
       - Each state-changing vault command emits its event in the same IndexedDB transaction as the state change (CTR-EVT-001 EVT-8) and each relay command is atomic in the relay SQLite store.
-      - The module consumes thread, counterparty key (security.key.*), own device key (identity.device_key.*), block and deletion events to keep recipient sets and inbound filtering correct.
-      - "Statement schemas and signer roles are registered with F11.S01.M01 (N2): classrup.comms.message/v1 (a device key of a thread participant), classrup.comms.message_delete/v1 (a device key of the message author), classrup.comms.message_receipt/v1 (a device key of the recipient, bound to messageCid); relay mailbox requests and put proofs are classrup/relay-request/v1 envelopes of F16.S02.M03."
-      - Every accepted mailbox put calls the relay hook notify.notification.dispatch (F13.S02.M01) for a content-free push to the mailbox owner when the owner registered a push target (N17); the hook carries only the owner DID, category messages and a template key, F13.S02.M01 checks privacy.consent.check for purpose notify_push before sending, and the hook is bound at relay composition through the MailboxArrivalHook port because F13.S01.M03 already depends on this module.
-      - The module registers ExportSectionPort (section comms.messages), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort with F10 (N6); DeletionPort.execute runs while the device keys still exist, signs delete requests for the user's sent messages, acknowledges and closes the user's mailboxes and tombstones local messages before F10.S01.M04 destroys the keys.
+      - The module consumes thread, counterparty key (identity.portable_doc.published with origin received), own device key (identity.device_key.*, the local principal only), block and deletion events to keep recipient sets and inbound filtering correct.
+      - "Statement schemas and signer roles are registered with F11.S01.M01 (N2): classrup.comms.message/v1 (a device key of a thread participant), classrup.comms.message_delete/v1 (a device key of the message author), classrup.comms.message_receipt/v1 (a device key of the recipient, bound to messageCid) and classrup.comms.mailbox_close/v1 { mailboxId, relayId, requestId, signedAt, nonce } (a device key registered for the mailbox; the pre-signed close of the deletion sign step); relay mailbox requests are RFC 9421 HTTP message signatures of F11.S01.M03 with the request-signature tag classrup/relay-request/v1, not F16.S02.M03 envelopes."
+      - Every accepted mailbox put calls the relay hook notify.notification.dispatch (F13.S02.M01) for a content-free wake of the mailbox owner when the owner registered a push target (N17); the hook carries only the owner DID, channel push, category activity, template notify.tpl.activity.wake and hookSource mailbox, the relay gate checks only the registered F13 channel consent because privacy.consent.check runs in the vault only, and the hook is bound at relay composition through the MailboxArrivalHook port because F13 modules already depend on this module.
+      - The module registers ExportSectionPort (section comms.messages), DeletionPort and RetentionPurgePort with F10 (N6a); in the F10.S01.M04 sign step, before revoke_keys and destroy_keys, DeletionPort signs delete requests for the user's sent messages and a classrup.comms.mailbox_close/v1 for every own mailbox and queues them, the purge step tombstones local messages, and privacy.deletion.completed is a notification only on which nothing is signed and no relay is called.
+      - "The module implements the F11.S02.M01 MailboxPort {put, fetch, ack}, bound at vault composition because F11.S02.M01 cannot depend on this module: MailboxPort.put({ relayId, mailboxId, recipientDid, envelope }) seals the envelope into the wrapper per 01.R07, signs the put with the request key for that relay and returns { envelopeId, receipt } after verifying the receipt; MailboxPort.fetch(mailboxId) returns the unsealed envelopes of the user's own mailbox and MailboxPort.ack acknowledges them only after F11.S01.M02 receive committed each one; F11.S01.M02 routes classrup.comms.message/v1, message_receipt/v1 and message_delete/v1 to this module as their ingest owner and every other statement, including classrup.privacy.deletion_notice/v1, to its own owner."
+      - "Every accepted put, a duplicate included, returns in its response field receipt a classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue with destination '<relayId>/mailbox/<mailboxId>', digest = sha256-<base64url> of the ciphertext bytes and no cid; the vault verifies it against the relay's published key set, retired keys included, before a delivery row reaches transport acknowledged."
     commands:
       - name: comms.message.send
         capability: comms.message.send
@@ -303,42 +305,42 @@ processes:
         idempotent: true
       - name: comms.mailbox.register
         capability: comms.mailbox.register
-        input: "[relay command, request signed by an owner device key (classrup/relay-request/v1)] { ownerDid, deviceKeyIds[] (1..10), pushTarget?, contactSalt?, contactHashes? (≤ 2 000 salted SHA-256 hashes) }"
-        output: "{ mailboxId, capacity: { envelopes: 1000, bytes: 20971520, unknownShare: 0.2 } }"
+        input: "[relay command, RFC 9421 request signature by an owner device key (F11.S01.M03 signRequest, tag classrup/relay-request/v1)] { ownerDid, deviceKeyIds[] (1..10), pushTarget?, contactSalt?, contactHashes? (≤ 2 000 salted SHA-256 hashes of contacts' request keys) }"
+        output: "{ mailboxId, capacity: { envelopes: 1000, bytes: maxMailboxBytesPerRecipient of the tenant, unknownShare: 0.2 } }"
         errors: [UNAUTHENTICATED, VALIDATION_FAILED, COMMS_MAILBOX_LIMIT, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: comms.mailbox.rotate
         capability: comms.mailbox.rotate
-        input: "[relay command, request signed by a device key registered for the mailbox] { mailboxId, deviceKeyIds?, pushTarget?, contactHashes?, newMailboxId?: boolean, forwardDays? (0..30) }"
+        input: "[relay command, RFC 9421 request signature by a device key registered for the mailbox] { mailboxId, deviceKeyIds?, pushTarget?, contactHashes?, newMailboxId?: boolean, forwardDays? (0..30) }"
         output: "{ mailboxId, previousMailboxId?, forwardUntil?, revision }"
         errors: [UNAUTHENTICATED, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION]
         emits: []
         idempotent: true
       - name: comms.mailbox.close
         capability: comms.mailbox.close
-        input: "[relay command, request signed by a device key registered for the mailbox] { mailboxId }"
+        input: "[relay command, RFC 9421 request signature by a device key registered for the mailbox, or the pre-signed statement classrup.comms.mailbox_close/v1 from the deletion sign step] { mailboxId, closeStatement? }"
         output: "{ mailboxId, closedAt, purgedEnvelopes }"
         errors: [UNAUTHENTICATED, NOT_FOUND]
         emits: []
         idempotent: true
       - name: comms.mailbox.put
         capability: comms.mailbox.put
-        input: "[relay command, put proof signed by a device key of senderDid] { mailboxId, messageId, senderDid, blob (≤ 16 384 bytes), putProof: { keyId, nonce, signedAt, sig } }"
-        output: "{ envelopeId, relayReceipt: { relayId, receivedAt, sig } }"
+        input: "[relay command and MailboxPort route; RFC 9421 request signature (F11.S01.M03 signRequest, tag classrup/relay-request/v1) by the sender's per-relay request key, covering @method, @target-uri, content-digest of this body, created, keyid and nonce; no sender identifier] { mailboxId, wrapper: { v: 1, mailboxId, ciphertext, size (≤ maxEnvelopeBytes), sentAt } }"
+        output: "{ envelopeId, receipt: classrup.platform.relay_receipt/v1 { relayId, keyId, destination: '<relayId>/mailbox/<mailboxId>', digest, receivedAt, epoch, seq, sig } }"
         errors: [VALIDATION_FAILED, UNAUTHENTICATED, PAYLOAD_TOO_LARGE, NOT_FOUND, RATE_LIMITED, COMMS_MAILBOX_FULL]
         emits: []
         idempotent: true
       - name: comms.mailbox.fetch
         capability: comms.mailbox.fetch
-        input: "[relay command, signed request] { mailboxId, afterEnvelopeId?, limit ≤ 100 }"
-        output: "{ items: [{ envelopeId, senderDid, senderClass, blob, receivedAt, relayReceipt }], next? }"
+        input: "[relay command, RFC 9421 request signature by a device key registered for the mailbox] { mailboxId, afterEnvelopeId?, limit ≤ 100 }"
+        output: "{ items: [{ envelopeId, wrapper: { v, mailboxId, ciphertext, size, sentAt }, senderClass, receivedAt, receipt }], next? }"
         errors: [UNAUTHENTICATED, NOT_FOUND, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: comms.mailbox.ack
         capability: comms.mailbox.ack
-        input: "[relay command, signed request] { mailboxId, envelopeIds[] (≤ 100) }"
+        input: "[relay command, RFC 9421 request signature by a device key registered for the mailbox] { mailboxId, envelopeIds[] (≤ 100) }"
         output: "{ deleted }"
         errors: [UNAUTHENTICATED, NOT_FOUND]
         emits: []
@@ -349,24 +351,28 @@ processes:
         input: "[vault query] { threadId, after?: { createdAtClaim, senderDeviceId, seq }, limit ≤ 100 }"
         output: "{ items: Message[] (plaintext, sync state, deliveries with k of n acknowledged, receipts), next? }"
         errors: [NOT_FOUND]
+      - name: comms.mailbox.list_own
+        capability: comms.mailbox.read_own
+        input: "[in-process vault query over the vault's own mailbox rows, no network; used by F01.S01.M03 for mailboxHints] { relayIds? }"
+        output: "{ items: [{ relayId, mailboxId, status: active, rotateAt }] } — the current active mailbox per relay only, never a forwarding or closed ID; at most 10 items"
+        errors: [VALIDATION_FAILED]
     events_produced:
       - {type: comms.message.sent, privacy: P2, payload: "{ messageId, messageCid, threadId, senderDeviceId, seq, recipientDid, mailboxId, relayId, relayReceivedAt } — one event per recipient delivery row when its relay receipt is verified"}
       - {type: comms.message.deleted, privacy: P2, payload: "{ messageId, messageCid, threadId, senderDid, senderDeviceId, seq, reason: author|recipient|purge|vault_wipe, syncStateAtDelete, attachmentIds[] } — emitted on every transition into deleted"}
       - {type: comms.message.received, privacy: P2, payload: "{ messageId, messageCid, threadId, senderDid, senderDeviceId, seq, receivedAt }"}
     events_consumed:
-      - {type: comms.thread.archived, effect: "for reason superseded keep accepting envelopes for the old threadId from its participants for 7 days and show them in the supersededBy thread; otherwise stop accepting inbound envelopes for the thread and schedule local purge 30 days after archive unless the user keeps it"}
-      - {type: security.key.registered, effect: "add the device key to the device list of ownerPrincipal (own or counterparty) so later sends wrap for it, and re-verify quarantined messages that waited for that key"}
-      - {type: security.key.revoked, effect: "mark the key of ownerPrincipal revoked from revocationEffectiveFrom; envelopes it signed that this vault first saw after that time are quarantined with reason key_revoked and later sends stop wrapping for it"}
-      - {type: identity.device_key.added, effect: "own account only: add the new own device to the self device list so later sends also wrap for the user's other devices"}
-      - {type: identity.device_key.revoked, effect: "own account only: stop wrapping for the revoked own device and rotate the user's mailboxes to drop it (comms.mailbox.rotate)"}
-      - {type: identity.block.added, effect: "silently drop future inbound envelopes from the DID the local principal blocked and hide existing messages in group threads; nothing is sent to the blocked party"}
-      - {type: privacy.deletion.completed, effect: "after F10.S01.M04 destroyed the keys: confirm that DeletionPort.execute left no message bodies, keys or open mailboxes; nothing is signed here and envelopes still arriving stay unfetched until the relay expires them"}
+      - {type: comms.thread.archived, effect: "for reason superseded keep accepting chat messages for the old threadId from its participants for 7 days and show them in the supersededBy thread; otherwise stop accepting inbound chat messages for the thread and schedule local purge 30 days after archive unless the user keeps it; sealed statements of other types are not bound to a thread and keep flowing to F11.S01.M02 ingestion (N7a)"}
+      - {type: identity.portable_doc.published, effect: "origin received only, the single source of counterparty key changes: add the addedKeys of that did to its device list so later sends wrap for them and re-verify quarantined messages that waited for a key; for revokedKeys[].revokesEffectiveAt quarantine envelopes that key signed and this vault first saw after that time with reason key_revoked and stop wrapping for it; origin own and relay_stored are ignored"}
+      - {type: identity.device_key.added, effect: "the local principal's own keys only (payload did is the local principal): add the new own device to the self device list so later sends also wrap for the user's other devices"}
+      - {type: identity.device_key.revoked, effect: "the local principal's own keys only (payload did is the local principal): stop wrapping for the revoked own device and rotate the user's mailboxes to drop it (comms.mailbox.rotate)"}
+      - {type: identity.block.added, effect: "silently drop future inbound chat messages (classrup.comms.message/v1) from the DID the local principal blocked and hide existing messages in group threads; sealed wrappers carrying other statements, such as lifecycle statements of a rental confirmed before the block, are still fetched, acknowledged and handed to F11.S01.M02 ingestion where only notifications are suppressed (N7a); nothing is sent to the blocked party"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): confirm locally that the DeletionPort steps left no message bodies, keys or open own mailbox rows; nothing is signed, no relay is called, and envelopes still arriving stay unfetched until the relay expires them"}
     errors:
       - "COMMS_MESSAGE_SIGNATURE_INVALID | 422 | no | sender signature does not verify or the signing device is revoked"
       - "COMMS_MESSAGE_NOT_FOR_DEVICE | 422 | no | no wrapped key addressed to a device of this vault"
       - "COMMS_MESSAGE_COMMITMENT_MISMATCH | 422 | no | key commitment does not match the unwrapped message key; message quarantined"
       - "COMMS_MESSAGE_RECEIPT_MISMATCH | 422 | no | receipt names another envelope cid or is not signed by the recipient of that delivery"
-      - "COMMS_MAILBOX_FULL | 429 | yes | mailbox holds 1 000 envelopes or 20 MiB, or the unknown-sender share is used up; retryAfterMs set"
+      - "COMMS_MAILBOX_FULL | 429 | yes | mailbox holds 1 000 envelopes or the tenant's maxMailboxBytesPerRecipient, or the unknown-key share is used up; retryAfterMs set"
       - "COMMS_MAILBOX_LIMIT | 409 | no | the principal already holds 3 active mailboxes at this relay or lists more than 10 device keys"
     example: |
       vault command comms.message.send
@@ -374,14 +380,17 @@ processes:
       -> { "messageId": "0192f3a4-1111-7000-8000-000000000001", "messageCid": "sha256-Hq1…", "senderDeviceId": "z6MkDevA1…", "seq": 42, "syncState": "local_committed", "revision": 1 }
       relay command POST /api/v1/relay/comms.mailbox.put
       Idempotency-Key: 0192f3a4-0000-7000-8000-000000000101
-      { "mailboxId": "q3F…", "messageId": "0192f3a4-1111-7000-8000-000000000001", "senderDid": "did:key:z6Mk…", "blob": "…",
-        "putProof": { "keyId": "z6MkDevA1…", "nonce": "Zt7…", "signedAt": "2026-11-04T10:00:00.900Z", "sig": "…" } }
-      201 { "envelopeId": "0192f3a4-3333-7000-8000-000000000001", "relayReceipt": { "relayId": "relay.example", "receivedAt": "2026-11-04T10:00:01.000Z", "sig": "…" } }
-      relay hook notify.notification.dispatch { "userDid": "did:key:z6MkOwner…", "channel": "push", "category": "messages", "templateKey": "notify.tpl.messages.new" }
+      Content-Digest: sha-256=:X48E9q…:
+      Signature-Input: sig1=("@method" "@target-uri" "content-digest");created=1793786400;keyid="did:key:z6MkReqA…";nonce="0192f3a4-0000-7000-8000-000000000101";alg="ed25519";tag="classrup/relay-request/v1"
+      Signature: sig1=:…:
+      { "mailboxId": "q3F…", "wrapper": { "v": 1, "mailboxId": "q3F…", "ciphertext": "…", "size": 2048, "sentAt": "2026-11-04T10:00:00.900Z" } }
+      201 { "envelopeId": "0192f3a4-3333-7000-8000-000000000001", "receipt": { "relayId": "relay.example", "keyId": "relay.example#k1", "destination": "relay.example/mailbox/q3F…", "digest": "sha256-Hc4…", "receivedAt": "2026-11-04T10:00:01.000Z", "epoch": 3, "seq": 9182, "sig": "…" } }
+      relay hook notify.notification.dispatch { "userDid": "did:key:z6MkOwner…", "channel": "push", "category": "activity", "templateKey": "notify.tpl.activity.wake", "hookSource": "mailbox" }
+      vault query comms.mailbox.list_own {} -> { "items": [{ "relayId": "relay.example", "mailboxId": "q3F…", "status": "active", "rotateAt": "2026-12-04T10:00:00.000Z" }] }
   authorization_capabilities:
     requirements:
       - Vault policy lets only the unlocked local principal send, resend, delete or acknowledge in threads where it is a participant; inbound statements are accepted only when signed by a key authorized for the sender role in the thread.
-      - Relay policy lets a sender put an envelope only with a put proof signed by a device key of the stated senderDid within per-mailbox quotas; only a device key registered for the mailbox can fetch, acknowledge, rotate or close it; moderators of a relay cannot read ciphertext and may only remove envelopes under that relay's hosting policy.
+      - Relay policy lets a sender put a sealed wrapper only with an RFC 9421 request signature by a request key within the per-mailbox, per-key, new-recipient and tenant limits, without learning the sender DID; only a device key registered for the mailbox, or its pre-signed close statement, can fetch, acknowledge, rotate or close it; moderators of a relay cannot read ciphertext and may only remove envelopes under that relay's hosting policy.
       - Non-participants and relay operators learn nothing beyond routing metadata; unknown mailbox IDs return NOT_FOUND to prevent enumeration.
     capabilities:
       - "comms.message.send | local principal | vault policy; participant(thread); the local principal has not blocked the recipient in its own block list; being blocked by someone else is never checked or revealed"
@@ -390,17 +399,19 @@ processes:
       - "comms.message.read_thread | local principal | participant(thread)"
       - "comms.mailbox.register | registered relay device | relay policy; request signed by an active device key of ownerDid; at most 3 active mailboxes per principal at this relay"
       - "comms.mailbox.rotate | mailbox owner | relay policy; request signed by a device key registered for the mailbox"
-      - "comms.mailbox.close | mailbox owner | relay policy; request signed by a device key registered for the mailbox"
-      - "comms.mailbox.put | proven sender | relay policy; mailbox exists and is open; put proof by a device key of senderDid with a fresh nonce; 120 puts per hour per mailbox and sender DID; 200 per day per mailbox for unknown senders; 80 % capacity reserved for contacts"
+      - "comms.mailbox.close | mailbox owner | relay policy; RFC 9421 request by a device key registered for the mailbox, or its classrup.comms.mailbox_close/v1 statement signed within the last 30 days with an unused nonce"
+      - "comms.mailbox.put | request key holder | relay policy; mailbox exists and is open; RFC 9421 signature by a request key with a fresh (keyid, nonce); 120 puts per hour per mailbox and request key; 200 per day per mailbox for unknown keys; new_mailbox_recipients_per_day per request key (F12.S03.M04); tenant maxEnvelopeBytes and maxMailboxBytesPerRecipient; 80 % capacity reserved for contacts"
       - "comms.mailbox.fetch | mailbox owner | relay policy; request signed by a device key registered for the mailbox"
       - "comms.mailbox.ack | mailbox owner | relay policy; request signed by a device key registered for the mailbox"
+      - "comms.mailbox.read_own | local principal | vault policy; in-process query over the local principal's own mailbox rows; no network"
   failure_recovery_idempotency:
     requirements:
-      - Vault commands commit locally first and relay delivery is a retried outbox step; mailbox put is idempotent on (mailboxId, messageId) so replays return the original receipt.
+      - Vault commands commit locally first and relay delivery is a retried outbox step; mailbox put is idempotent on (mailboxId, digest of the ciphertext) so replays return the original receipt.
       - Inbound processing is idempotent on messageId and fetch followed by acknowledge is at-least-once; a lost acknowledgement only causes a duplicate fetch.
       - Offline vaults queue sends and replay them in creation order; the author chain is per device, so devices of one principal sending offline never collide, no shared counter or distributed lock is used, and only one device signing two different envelopes for one seq is a fork that is frozen.
       - A resend reuses the identical signed envelope bytes and messageCid; only wrappedKeys, which lie outside the signature, may be rebuilt, so a resend after a lost relay receipt is deduplicated by every mailbox and every recipient vault.
-    idempotency: "Vault commands are idempotent on messageId and resend on (messageId, messageCid); relay commands require Idempotency-Key with a 24 h replay window, put is also naturally idempotent on (mailboxId, messageId) and register on (ownerDid, Idempotency-Key)."
+      - Deletion residue stays deliverable after the device keys are destroyed - every queued statement is already signed in the sign step, the per-relay request keys that authorize puts stay in the F10 residue store until residue delivery ends 30 days after signing, and each mailbox close is the pre-signed classrup.comms.mailbox_close/v1 that the relay accepts for 30 days.
+    idempotency: "Vault commands are idempotent on messageId and resend on (messageId, messageCid); relay commands require Idempotency-Key with a 24 h replay window, put is also naturally idempotent on (mailboxId, digest) and returns the stored receipt, register on (ownerDid, Idempotency-Key) and a pre-signed close on its nonce."
     concurrency: "Within a vault each command runs in one IndexedDB transaction; seq is allocated per (threadId, senderDeviceId) in that transaction, so two devices of one principal never share or synchronize a counter; a collision is possible only for one device signing two envelopes with one seq, which is a fork and is surfaced; on the relay put uses INSERT with the unique index and fetch is read-only."
     retries: "Delivery uses F11.S02.M01 on the F15.S01.M01 outbox with CTR-IDM-001 IDM-4 backoff (base 500 ms, cap 30 s, full jitter, 6 attempts); unsent entries expire 7 days after creation after a day-6 prompt and transport_acknowledged entries leave the outbox 30 days after the relay receipt; a row whose entry failed or expired shows failed with resend; this module adds no timers of its own."
     offline: "Compose and queue offline; the message shows saved on this device; fetch resumes from the last stored envelope ID; decrypted history exists only in the vault."
@@ -408,33 +419,39 @@ processes:
   privacy_retention_abuse:
     requirements:
       - The relay stores ciphertext and routing metadata only; plaintext, message keys and private keys never leave vaults, and relay logs never contain blobs or plaintext.
-      - Honest limits are shown to users and documented, namely no forward secrecy in the MVP, the relay sees sender DID, recipient mailbox, times and padded sizes, and a stolen unlocked device exposes its history.
-      - Abuse handling works without relay decryption through local blocking, receiver-side caps on message requests, relay-enforced put proofs and per-mailbox quotas, and user-initiated reports that carry plaintext and the message key from the reporter's vault so the reviewer can check the key commitment; limits enforced only in the sender's vault are UX guards.
-      - "Privacy duties (N6): fields are classified per F10.S02.M02, ExportSectionPort, DeletionPort and RetentionPurgePort are registered with F10, and deletion signs remote delete requests and closes the user's mailboxes before the keys are destroyed."
+      - Honest limits are shown to users and documented, namely no forward secrecy in the MVP, the relay sees recipient mailbox IDs, times, padded sizes and the per-relay request key of each put (which links puts by one sender on that relay, not to a DID), and a stolen unlocked device exposes its history.
+      - Abuse handling works without relay decryption through local blocking, receiver-side caps on message requests, relay-enforced request signatures with per-mailbox, per-key and new-recipient quotas, and user-initiated reports that carry plaintext and the message key from the reporter's vault so the reviewer can check the key commitment; limits enforced only in the sender's vault are UX guards.
+      - "Privacy duties (N6, N6a): fields are classified per F10.S02.M02, ExportSectionPort, DeletionPort and RetentionPurgePort are registered with F10, and the DeletionPort sign step signs remote delete requests and the closes of the user's mailboxes before any key is destroyed."
+      - "Sealed sender and linkability limits (PRV-5, PT-15): stored wrappers carry no sender identifier, the relay keeps request-key first-put rows for 30 days only for the new-recipient limit, request keys differ per relay, and own mailbox IDs differ per relay and rotate every 30 days; the residual linkability of one did:key per principal is disclosed."
     data:
       - "Message plaintext and keys: P2 plaintext and P4 keys, vault only."
-      - "MailboxEnvelope ciphertext: P2, opaque to the relay; routing metadata (senderDid, mailboxId, size, receivedAt, senderClass) visible to the relay operator."
-      - "Mailbox registration (owner DID, device key IDs, salted contact hashes, push target): P2 relay configuration visible to that relay's operator; the salt prevents reading the contact list without guessing DIDs."
+      - "MailboxEnvelope: sealed wrapper ciphertext P2, opaque to the relay; mailboxId, size, sentAt, receivedAt, digest and senderClass visible to the relay operator; no sender DID or request key is stored with it."
+      - "Mailbox registration (owner DID, device key IDs, salted hashes of contacts' request keys, push target): P2 relay configuration visible to that relay's operator; the salt prevents reading the contact list without guessing keys."
+      - "Request-key first-put rows (hash of the request key, mailboxId, first put time): P2 relay bookkeeping for the new-recipient limit, RET-SHORT 30 days."
+      - "Own mailbox rows in the vault (relayId, mailboxId, rotation times) and per-relay request keys: P2 rows and P4 private request keys; the current mailboxId is deliberately published as a listing hint."
       - "MessageReceipt: P2, visible to sender and recipient."
     retention:
       - "Relay mailbox envelopes: deleted on acknowledgement or 30 days after receipt (RET-SHORT); a closed mailbox purges its envelopes immediately."
       - "Vault messages: RET-STANDARD, local purge 30 days after thread archive unless kept; deletion tombstone retains id, device and seq."
       - "Receipts: RET-SHORT (30 days)."
-      - "Put nonces: RET-EPHEMERAL (24 h)."
+      - "Request (keyid, nonce) pairs: RET-EPHEMERAL (600 s)."
+      - "Request-key first-put rows: RET-SHORT (30 days)."
     threats:
       - "T01 | Relay operator or intruder reads message content | content is ciphertext with per-message keys wrapped to recipient devices; relay holds no private keys"
-      - "T02 | Relay operator maps social graph from metadata | not prevented in MVP and disclosed in the encryption info sheet; padding to 256-byte buckets hides exact lengths; users may choose a relay they self-host"
+      - "T02 | Relay operator maps social graph from metadata | sealed wrappers carry no sender identifier and request keys differ per relay; the relay can still link puts by one request key to mailboxes on that relay and see timing, which is disclosed in the encryption info sheet; padding to 256-byte buckets hides exact lengths; users may choose a relay they self-host"
       - "T03 | Compromised device key reveals past messages | no forward secrecy in MVP and disclosed; users can revoke a device and delete messages; Future double ratchet"
       - "T04 | Attacker injects messages impersonating a participant | inbound requires a valid Ed25519 envelope signature by an active device key of the participant (F16.S02.M02) and AEAD additional data binds thread, message and sender device"
-      - "T05 | Message flooding or harassment | vault block list drops envelopes, unknown senders land in message requests capped at 5 per DID and 100 in total, relay limits 120 puts per hour per mailbox and proven sender DID; the 60 per minute vault limit is only a UX guard"
-      - "T06 | Replay of an old envelope into another thread | additional data includes threadId and messageId so decryption fails elsewhere, deduplication on messageId drops replays, and put nonces are single use"
-      - "T07 | Mailbox ID harvested and used to fill the mailbox | puts need a proof by the sender's device key, unknown senders share 200 puts per day and 20 % of capacity per mailbox, the 1 000 envelope and 20 MiB cap holds, and the owner rotates the mailbox ID with comms.mailbox.rotate and publishes the new one in a signed profile statement"
+      - "T05 | Message flooding or harassment | vault block list drops chat envelopes, unknown senders land in message requests capped at 5 per DID and 100 in total, relay limits 120 puts per hour per mailbox and request key plus new_mailbox_recipients_per_day per request key; the 60 per minute vault limit is only a UX guard"
+      - "T06 | Replay of an old envelope into another thread | additional data includes threadId and messageId so decryption fails elsewhere, deduplication on messageId in the vault and on (mailboxId, digest) at the relay drops replays, and (keyid, nonce) pairs of put requests are single use within 600 s"
+      - "T07 | Mailbox ID harvested and used to fill the mailbox | puts need an RFC 9421 request signature, unknown request keys share 200 puts per day and 20 % of capacity per mailbox, the 1 000 envelope and tenant byte caps hold, own mailbox IDs rotate every 30 days, and the owner can rotate at once with comms.mailbox.rotate and publish the new ID in a signed profile statement"
       - "T08 | Multi-key ciphertext: a sender crafts one signed ciphertext that decrypts differently for different recipients, or an abuse report cannot be checked | the key commitment inside the signed statement is checked before acceptance; reports carry K so the reviewer confirms Dec(K, C) = P and the commitment"
-      - "T09 | Sybil senders: many fresh did:keys flood a publicly advertised mailbox | put proof per sender DID, aggregate unknown-sender quota per mailbox, 80 % of capacity reserved for contacts, receiver-side caps on message requests"
+      - "T09 | Sybil senders: many fresh request keys flood a publicly advertised mailbox | aggregate unknown-key quota per mailbox, new_mailbox_recipients_per_day per request key (F12.S03.M04), 80 % of capacity reserved for contacts, receiver-side caps on message requests"
+      - "T10 | A relay or mailbox hint substitutes an agreement key to read sealed wrappers or messages | agreement keys are derived only with F16.S02.M01 agreementPublicKeyOf from Ed25519 device keys listed active in the root-signed identity document; hint keys are refused with SECURITY_AGREEMENT_KEY_UNBOUND"
+      - "T11 | Cross-relay linking of one principal through mailbox IDs (PT-15) | distinct mailbox IDs and request keys per relay and mailbox IDs rotated every 30 days; residual linkability through the one did:key per principal is disclosed (F10.S02.M01)"
     abuse_controls:
       - "Report message action attaches the decrypted text, the message key K and the signed envelope to a report for the relay operator or local advisory feed only after the reporter confirms; the signature proves the sender key signed it and the commitment proves which plaintext, not that the content is true."
-      - "Relay-local hosting policy can refuse puts from a sender DID or remove envelopes; no global takedown is claimed."
-      - "Sender-side limits in the vault are labelled UX guards; enforcement relies on relay quotas (RateLimitPort, F12.S03.M03) and receiving-vault caps."
+      - "Relay-local hosting policy can refuse puts from a request key or remove envelopes; no global takedown is claimed, and a sender DID is never visible to the relay to refuse."
+      - "Sender-side limits in the vault are labelled UX guards; enforcement relies on relay quotas (RateLimitPort, F12.S03.M03), the new-recipient limit (F12.S03.M04) and receiving-vault caps."
   observability_performance:
     requirements:
       - Relay mailbox commands are measured per CTR-OBS-001 without logging beyond correlationId and sizes; the PWA records only local diagnostics (OBS-7).
@@ -447,12 +464,12 @@ processes:
       - "classrup_comms_mailbox_expiry_lag_ms (gauge, relay)"
       - "vault diagnostics counters: outbound_by_sync_state, inbound_quarantined_by_reason, decrypt_failures (local only)"
     logs:
-      - "relay info mailbox.put {mailboxIdHash, size, senderClass, correlationId} — no sender, blob or plaintext."
+      - "relay info mailbox.put {mailboxIdHash, size, senderClass, correlationId} — no request key, sender, ciphertext or plaintext."
       - "vault warn message.quarantined {messageId, reason} — local diagnostics only."
     budgets:
-      - "Relay put p95 ≤ 300 ms at 100 req/s including put proof verification; fetch 100 envelopes p95 ≤ 150 ms; sweep deletes 50 000 expired envelopes in ≤ 30 s."
+      - "Relay put p95 ≤ 300 ms at 100 req/s including RFC 9421 verification, limit checks and receipt signing; fetch 100 envelopes p95 ≤ 150 ms; sweep deletes 50 000 expired envelopes in ≤ 30 s."
       - "Vault compose, encrypt, commit, wrap for 12 devices and sign ≤ 150 ms on a mid-range phone (Moto G class)."
-      - "Each per-recipient blob ≤ 16 384 bytes including at most 5 wrapped keys for that recipient's devices."
+      - "Each chat message wrapper ≤ 16 384 bytes including at most 5 wrapped keys for that recipient's devices; other wrappers ≤ the tenant maxEnvelopeBytes."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
@@ -467,8 +484,8 @@ processes:
       - "T04 | unit | 02.R02,02.R03 | each rule V01 to V16 violated in turn | documented error code returned and nothing stored"
       - "T05 | property | 03.R01,03.R03 | random sequences of send, relay outcomes per recipient, receipts and delete | rows only move forward as declared; message state equals the minimum row state; deleted never returns; UI state equals the reached state"
       - "T06 | contract | 04.R01,04.R02,09.R02 | each vault command, relay command and query executes | outputs, statements and event payloads validate against registry schemas"
-      - "T07 | integration | 04.R03 | security.key.registered and security.key.revoked for B's devices and identity.device_key.added for A's own new device, then send | B's revoked key excluded and its later-seen envelopes quarantined; new keys wrapped for later sends only; own device list updated from identity.device_key.* only"
-      - "T08 | abuse | 05.R01,05.R02,05.R03 | fetch with unregistered key; put without proof; put to unknown mailbox; rotate by a non-owner key; statement signed by non-participant; relay operator tries to read blobs | UNAUTHENTICATED, NOT_FOUND or quarantine; operator sees only ciphertext"
+      - "T07 | integration | 04.R03 | B's portable identity document arrives with origin received adding device B2 and revoking B1, and identity.device_key.added carries A's own did for A's new device, then send | B1 excluded and its later-seen envelopes quarantined; B2 wrapped for later sends only; own device list updated from identity.device_key.* only; no security.key.* event is consumed"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | fetch with unregistered key; put without a request signature or with a reused (keyid, nonce); put to unknown mailbox; rotate by a non-owner key; statement signed by non-participant; relay operator tries to read blobs | UNAUTHENTICATED, NOT_FOUND or quarantine; operator sees only ciphertext"
       - "T09 | integration | 06.R01,06.R02 | 50 concurrent sends plus 10 replays of mailbox put and duplicate fetches | one envelope per messageId, contiguous seq per device, duplicates deduplicated"
       - "T10 | e2e | 06.R03,03.R01 | relay down for 4 days then restored; second run with relay down for 8 days | first: rows stay prepared then become transport acknowledged and the recipient receives 30 messages in sender order; second: day-6 prompt, entries expire at 7 days, message shows failed with resend; UI never shows delivered early"
       - "T11 | abuse | 07.R01,07.R03 | inspect relay database, logs and metrics after 1 000 messages; report a message | no plaintext or keys present; report contains plaintext and K only after confirmation"
@@ -481,14 +498,21 @@ processes:
       - "T18 | integration | 01.R05,03.R01,04.R01 | A sends in TG; B acknowledges, C does not; then C sends a receipt for a different messageCid | message shows transport acknowledged with 1 of 2 acknowledged; C's mismatched receipt rejected with COMMS_MESSAGE_RECEIPT_MISMATCH; peer accepted only after C's matching receipt"
       - "T19 | integration | 06.R03,06.R04,01.R01 | A1 and A2 both send three messages in TH while offline, then sync; A1 resends after a lost relay receipt | no fork and no freeze; per-device seq 1..3 each; resend has the identical messageCid and is deduplicated by R and B"
       - "T20 | abuse | 02.R04,07.R03 | A sends the crafted two-key ciphertext to B and C; C reports it | at least one recipient quarantines with commitment_mismatch; the report with K lets the reviewer verify Dec(K, C) and the commitment"
-      - "T21 | abuse | 01.R06,02.R05,05.R02 | 50 freshly generated DIDs with valid proofs flood B's mailbox while A (a contact) keeps sending | unknown senders capped at 200 per day and 20 % capacity; A's puts still succeed; B's vault keeps at most 5 requests per DID and 100 in total"
-      - "T22 | integration | 04.R05,01.R06 | register, rotate (new ID, 7 forward days) and close a mailbox; put to it | every put triggers one dispatch call with owner DID, category and template key only; rotated ID forwards then expires; close purges envelopes"
-      - "T23 | integration | 04.R06,07.R04 | account deletion of A with messages and two mailboxes | DeletionPort.execute signs delete requests and closes both mailboxes before keys are destroyed; privacy.deletion.completed finds nothing left to sign; export section comms.messages present before deletion"
-      - "T24 | unit | 07.R02 | render the encryption info sheet in en and de | text states no forward secrecy, relay-visible metadata (sender DID, mailbox, times, padded sizes), stolen device exposes history and deletion cannot recall copies"
-      - "T25 | unit | 03.R04,04.R04 | author deletes messages in local_committed, prepared, failed, transport_acknowledged and peer_accepted; inspect statement registry entries | comms.message.deleted with reason author in every case; registry lists message, delete and receipt statements with signer roles"
+      - "T21 | abuse | 01.R06,02.R05,05.R02,02.R07 | 50 freshly generated request keys with valid signatures flood B's mailbox while A (a contact) keeps sending | unknown keys capped at 200 per day and 20 % capacity and each new key counted once against new_mailbox_recipients_per_day; A's puts still succeed; B's vault keeps at most 5 requests per DID and 100 in total"
+      - "T22 | integration | 04.R05,01.R06 | register, rotate (new ID, 7 forward days) and close a mailbox; put to it | every put triggers one dispatch call with owner DID, channel push, category activity, template notify.tpl.activity.wake and hookSource mailbox only; the relay gate reads only the registered channel consent and never calls privacy.consent.check; rotated ID forwards then expires; close purges envelopes"
+      - "T23 | integration | 04.R06,07.R04,06.R05 | account deletion of A with messages and two mailboxes, once online and once with the device offline until after destroy_keys | the sign step signs the delete requests and two classrup.comms.mailbox_close/v1 before revoke_keys; offline, the residue outbox later delivers them with A's request keys and both relays close the mailboxes; privacy.deletion.completed signs nothing and calls no relay; export section comms.messages present before deletion"
+      - "T24 | unit | 07.R02 | render the encryption info sheet in en and de | text states no forward secrecy, relay-visible metadata (mailbox ID, times, padded sizes and the per-relay request key, but no sender DID), stolen device exposes history and deletion cannot recall copies"
+      - "T25 | unit | 03.R04,04.R04 | author deletes messages in local_committed, prepared, failed, transport_acknowledged and peer_accepted; inspect statement registry entries | comms.message.deleted with reason author in every case; registry lists message, delete, receipt and mailbox_close statements with signer roles and no F16.S02.M03 context for relay requests"
+      - "T26 | abuse | 01.R07,04.R07,07.R05 | A sends B a message and F11.S02.M01 routes a rental statement for B through the MailboxPort; inspect the put requests, the stored wrappers, relay tables and logs | each put carried an RFC 9421 signature by A's request key for that relay covering content-digest; each wrapper holds only {v, mailboxId, ciphertext, size, sentAt} plus bookkeeping with no sender DID, request key, type, seq or message ID; B's MailboxPort.fetch unseals both and F11.S01.M02 receive routes the message to this module and the rental statement to its F05 owner"
+      - "T27 | integration | 04.R08,03.R01 | put twice with identical ciphertext; a receipt with a wrong destination or digest; a receipt signed by a retired relay key | each put returns a classrup.platform.relay_receipt/v1 with destination <relayId>/mailbox/<mailboxId>, the ciphertext digest and no cid; the duplicate returns the stored receipt; the mismatched receipt leaves the row prepared; the retired-key receipt verifies against the published key set"
+      - "T28 | contract | 02.R07,02.R02 | tenant limits maxEnvelopeBytes 65 536 and maxMailboxBytesPerRecipient 1 MiB; a 70 KiB wrapper; a put that would pass 1 MiB stored; a request key's 21st new mailbox of the day in tier new; a malformed wrapper | PAYLOAD_TOO_LARGE; COMMS_MAILBOX_FULL; RATE_LIMITED after RateLimitPort class write.mailbox.new_recipient and the limitKey new_mailbox_recipients_per_day check, while puts to mailboxes the key already wrote to are not counted again; VALIDATION_FAILED"
+      - "T29 | abuse | 01.R02,02.R04 | a relay-served mailbox hint for B carries a substituted X25519 key; B's document lists B1 active and B2 revoked | the hint key is refused with SECURITY_AGREEMENT_KEY_UNBOUND and every wrap and seal targets agreementPublicKeyOf(B1) only"
+      - "T30 | integration | 01.R08,04.R01 | A registers mailboxes at R1 and R2, the clock advances 31 days, then F01.S01.M03 calls comms.mailbox.list_own | the two mailbox IDs differ; each was rotated once with 14 forward days; list_own returns one current active pair per relay and never a forwarding or closed ID; the query makes no network call"
+      - "T31 | integration | 02.R06,04.R03 | owner O blocks renter R after a confirmed rental and O's direct thread with R is archived with reason blocked; R sends a chat message and a signed return report | the chat message is dropped silently; the return report is fetched, acknowledged and handed to F11.S01.M02 ingestion and stored with the notification suppressed; R's vault state equals an unblocked control run"
+      - "T32 | integration | 06.R05,04.R07 | after A's keys are destroyed the residue outbox sends a classrup.privacy.deletion_notice/v1 to counterparty C | the notice is sealed to the agreement keys derived from C's listed device keys, put with A's request key, unsealed by C and handed to F11.S01.M02 ingestion"
     acceptance:
-      - All tests T01 to T25 pass in CI.
-      - A relay database and log dump after test traffic contains no plaintext, message keys or private keys.
+      - All tests T01 to T32 pass in CI.
+      - A relay database and log dump after test traffic contains no plaintext, message keys or private keys, and no sender DID or request key next to any stored wrapper.
       - The sender UI never shows delivered or accepted before the matching relay receipt or a signed peer acknowledgement of the exact envelope cid exists for every recipient counted.
       - Documentation shown in the encryption info sheet states no forward secrecy, relay-visible metadata and that deletion cannot recall copies.
   import_export_backup_rollback:
@@ -496,7 +520,7 @@ processes:
       - A user's vault export contains their messages with plaintext inside the export file protected by the user's chosen export encryption, and the matching signed envelopes.
       - Import validates envelope structure and signatures; messages whose signature fails are kept quarantined and messages not addressed to the importer's devices are kept as undecryptable history.
       - Schema changes follow expand and contract; the alg field allows adding algorithms without breaking v1 readers, and relays only ever hold 30 days of ciphertext so relay loss loses no user-owned records.
-    export: "Section comms.messages in classrup-export/v1, registered through ExportSectionPort; one line per Message (schema classrup.comms.message/v1) with body, signed envelope and delivery rows; export is the primary backup (IOX-6) and is encrypted with a user-chosen passphrase or the recovery kit key."
+    export: "Section comms.messages in classrup-export/v1, registered through ExportSectionPort; one line per Message (schema classrup.comms.message/v1) with body, signed envelope and delivery rows, plus the own mailbox rows; per-relay request keys are not exported, a restored vault generates new ones and its next sealed message carries the new key to each contact; export is the primary backup (IOX-6) and is encrypted with a user-chosen passphrase or the recovery kit key."
     import: "Envelopes are verified for schema, signature and key commitment; existing IDs are skipped; failed signatures are kept quarantined; messages are never re-wrapped or re-sent on import."
     backup: "The vault export is the backup; relay mailboxes are covered by the relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) and contain only ciphertext expiring in 30 days and mailbox registrations."
     migration_rollback: "Additive optional fields only in v1; a new alg value is introduced behind a tenant flag and older clients ignore messages with unknown alg and show an unsupported-message notice; rollback is safe because unknown algs remain stored."

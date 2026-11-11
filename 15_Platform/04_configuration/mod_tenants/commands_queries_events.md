@@ -9,7 +9,7 @@
 - **PS-125-04.R01** Tenant commands are relay commands with Idempotency-Key; LocalSettings commands are vault-local; every tenant revision produces one relay-signed classrup.platform.tenant_config/v1 statement, signed through F15.S02.M01 under context classrup-tenant-config:v1 with signer role relay_identity and registered with F11.S01.M01 (N2).
 - **PS-125-04.R02** Every tenant command emits its events in the same transaction as the state change, and platform.tenant.configured carries the full configuration snapshot (it is also emitted at creation and on operator changes), so consumers such as F10.S01.M02 never need to read the tenant.
 - **PS-125-04.R03** The module consumes security.role.assigned and security.role.revoked for tenant-scoped roles to re-issue the configuration with the derived operator keys, and privacy.deletion.completed for LocalSettings.
-- **PS-125-04.R04** TenantPort is registered with the F15.S02.M02 bus as a stage after authentication that returns PLATFORM_TENANT_SUSPENDED for writes to a suspended or archived tenant, and with the F15.S02.M01 relay process; it offers limits(tenantId) to the enforcers named per limit (F06.S01.M01, F11.S01.M02, F08.S01.M01, F02.S02.M03 depend on this module; the bus, the relay process and the vault blob store receive it by inverted registration because they are upstream of it).
+- **PS-125-04.R04** TenantPort is registered with the F15.S02.M02 bus as a stage after authentication that returns PLATFORM_TENANT_SUSPENDED for writes to a suspended or archived tenant, and with the F15.S02.M01 relay process; it offers limits(tenantId) to the enforcers named per limit (F06.S01.M01, F06.S02.M03, F11.S01.M02, F08.S01.M01, F02.S02.M03 depend on this module; the bus, the relay process and the vault blob store receive it by inverted registration because they are upstream of it).
 - **PS-125-04.R05** The vault keeps the last verified configuration statement per selected relay in LocalSettings.knownRelayConfigs and shows what changed; two different statements for one (tenantId, revision) are proof of equivocation and shown as a warning.
 
 ## Specification
@@ -18,11 +18,11 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `platform.tenant.create` | platform.tenant.create | { slug, displayName, allowedCurrencies, jurisdictionProfile?, defaultLocale?, limits?, operatorKeys (1..10), adminKey? } — relay command, admin or local CLI bootstrap; first operator and admin assignments created through F16 RoleBootstrapPort in the same transaction | { tenantId, revision: 1, status: active, configStatementCid, roleAssignmentIds } | FORBIDDEN, VALIDATION_FAILED, PLATFORM_TENANT_SLUG_TAKEN, PLATFORM_TENANT_LIMIT | platform.tenant.created, platform.tenant.configured | yes (Idempotency-Key) |
+| `platform.tenant.create` | platform.tenant.create | { slug, displayName, allowedCurrencies, jurisdictionProfile?, defaultLocale?, limits?, operatorKeys (1..10), adminKey? (local CLI bootstrap only), breakGlassReason? (local CLI only, 20..500 code points) } — relay command, admin over HTTP (no adminKey) or local CLI bootstrap; first assignments created through F16 RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys, tenantId, breakGlassReason?, osUser }) in the same transaction | { tenantId, revision: 1, status: active, configStatementCid, roleAssignmentIds } | FORBIDDEN, VALIDATION_FAILED, PLATFORM_TENANT_SLUG_TAKEN, PLATFORM_TENANT_LIMIT, SECURITY_BOOTSTRAP_REFUSED | platform.tenant.created, platform.tenant.configured | yes (Idempotency-Key) |
 | `platform.tenant.configure` | platform.tenant.configure | { tenantId, expectedRevision, patch: { displayName?, allowedCurrencies?, jurisdictionProfile?, defaultLocale?, limits? } } — relay command, tenant operator or admin | { tenantId, revision, changed: string[], configStatementCid } | FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_SUSPENDED | platform.tenant.configured | yes (Idempotency-Key) |
-| `platform.tenant.assign_operator` | platform.tenant.assign_operator | { tenantId, expectedRevision, add?: [{ key: did:key, expiresInMs ≤ 31536000000 }], remove?: roleAssignmentId[] } — relay command, admin only; calls security.roleassignment.assign and revoke (F16.S01.M01) with role operator and scope tenant:<tenantId> in the same transaction | { tenantId, revision, operatorKeys (derived), roleAssignmentIds, configStatementCid } | FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_LAST_OPERATOR, PLATFORM_TENANT_SUSPENDED | platform.tenant.configured | yes (Idempotency-Key) |
+| `platform.tenant.assign_operator` | platform.tenant.assign_operator | { tenantId, expectedRevision, add?: [{ key: did:key, expiresInMs ≤ 31536000000 }], remove?: roleAssignmentId[] } — relay command, admin only; calls security.roleassignment.assign and revoke (F16.S01.M01) with role operator and scope tenant:<tenantId> in the same transaction; never grants an admin role (admin grants are security.roleassignment.propose and approve) | { tenantId, revision, operatorKeys (derived), roleAssignmentIds, configStatementCid } | FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_LAST_OPERATOR, PLATFORM_TENANT_SUSPENDED | platform.tenant.configured | yes (Idempotency-Key) |
 | `platform.tenant.change_status` | platform.tenant.change_status | { tenantId, expectedRevision, status: active\|suspended\|archived, reason? } — relay command, tenant operator (suspend, resume) or admin (archive) | { tenantId, revision, status, configStatementCid } | FORBIDDEN, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED | platform.tenant.status_changed | yes (Idempotency-Key) |
-| `platform.local_settings.update` | platform.local_settings.update | { expectedRevision?, patch: { defaultLocale?, preferredCurrencies?, localLimits? } } — vault-local command, actor is the unlocked local principal | { revision } | VALIDATION_FAILED, CONFLICT_REVISION |  | yes (Idempotency-Key) |
+| `platform.local_settings.update` | platform.local_settings.update | { expectedRevision?, patch: { defaultLocale?, preferredCurrencies?, localLimits?, a11yMotion?: system\|reduced, moneyDisplay?: symbol\|code\|name } } — vault-local command, actor is the unlocked local principal | { revision } | VALIDATION_FAILED, CONFLICT_REVISION |  | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | `platform.tenant.get` | platform.tenant.read_public | { tenantId? \| slug?, revision? } — relay query, public; defaults to the relay's only tenant and the current revision | { statement: classrup.platform.tenant_config/v1 { relayId, tenantId, slug, displayName, revision, status, suspendedReason?, allowedCurrencies, jurisdictionProfile, defaultLocale, limits, operatorKeys, issuedAt, keyId, sig } } | NOT_FOUND |
 | `platform.tenant.list` | platform.tenant.list | { status?, cursor?, limit ≤ 50 } — relay query, admin | { items: Tenant[], nextCursor? } | FORBIDDEN |
-| `platform.local_settings.get` | platform.local_settings.read | { } (no input) — vault-local query | { vaultId, defaultLocale, preferredCurrencies, localLimits, knownRelayConfigs?, revision } |  |
+| `platform.local_settings.get` | platform.local_settings.read | { } (no input) — vault-local query | { vaultId, defaultLocale, preferredCurrencies, localLimits, a11yMotion (default system), moneyDisplay (default symbol), knownRelayConfigs?, revision } |  |
 
 ### Events produced
 
@@ -63,7 +63,11 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
 ```
 $ relay tenant bootstrap --slug oldtown --name "Old Town Swap" --currencies EUR --locale de --operator did:key:z6MkOp... --admin did:key:z6MkAd...
+-> RoleBootstrapPort.bootstrap({ adminKey: "did:key:z6MkAd...", operatorKeys: ["did:key:z6MkOp..."], tenantId: "0192f3a4-…", osUser: "classrup" })
 -> tenant created (revision 1), RoleAssignments operator scope tenant:0192f3a4-… and admin scope relay created in the same transaction
+$ relay tenant bootstrap --slug riverside ... --admin did:key:z6MkAd2...   (an admin already exists)
+-> SECURITY_BOOTSTRAP_REFUSED; nothing created (add --break-glass --reason "<20..500 code points>" only after a confirmed admin compromise)
+vault: platform.local_settings.update { "patch": { "a11yMotion": "reduced", "moneyDisplay": "code" } } -> { "revision": 4 }
 POST /api/v1/cmd/platform.tenant.configure
 Idempotency-Key: 0192f3a4-0000-7000-8000-000000000021
 { "tenantId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 1, "patch": { "allowedCurrencies": ["EUR", "CHF"], "limits": { "maxUploadBytes": 3145728 } } }
@@ -85,6 +89,7 @@ event platform.tenant.configured { "tenantId": "0192f3a4-…", "revision": 2, "c
 | TEST-PS-125-09.T22 | contract | PS-125-01.R04, PS-125-04.R04 | set maxUploadBytes 3145728, maxEnvelopeBytes 65536, maxIndexedListingsPerPublisher 2, maxCycleLength 3; then try maxUploadBytes 10485760 and maxEnvelopeBytes 1048576 | the media route refuses a 4 MiB upload, the mailbox stub a 70 KiB envelope, the index stub the third listing, the matching stub a 4-cycle; the oversized limits are refused with VALIDATION_FAILED |
 | TEST-PS-125-09.T24 | integration | PS-125-04.R03 | A1 grants O3 operator for T1 directly with security.roleassignment.assign, then revokes it | each change yields a new signed configuration and platform.tenant.configured with changed [operatorKeys] listing, then dropping, O3 |
 | TEST-PS-125-09.T27 | integration | PS-125-04.R02 | create a tenant with jurisdictionProfile de_eu while a stub F10.S01.M02 consumes only platform.tenant.configured | the stub applies de_eu from the revision 1 configured event without reading the tenant |
+| TEST-PS-125-09.T28 | contract | PS-125-01.R05, PS-125-04.R04 | default discovery settings; then anonymousAllowed false, anonymousMinRadiusKm 50 and maxDepth 200; then anonymousMinRadiusKm 10, anonymousCenterLevel L2 and maxDepth 501 | the signed configuration and limits(tenantId) give true, 25, L1, 500 and then the new values to an F06.S02.M03 stub, which refuses anonymous callers, a 25 km anonymous radius and depth 201; the three invalid values are refused with VALIDATION_FAILED |
 
 ## Dependencies
 

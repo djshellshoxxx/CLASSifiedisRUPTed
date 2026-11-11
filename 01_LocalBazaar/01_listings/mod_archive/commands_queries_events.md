@@ -9,6 +9,7 @@
 - **PS-001-04.R01** close, archive, restore and expire are vault commands; none produces a signed statement itself; the tombstone is produced by bazaar.publication.end in F01.S01.M03 when a publication is active, and a reservation release by F01.S03.M01 when a Deal-linked hold is released with its Deal.
 - **PS-001-04.R02** Events expired, archived, restored and closed are emitted in the same transaction as the status change.
 - **PS-001-04.R03** Expiry also depends on the owner's own clock; other vaults apply the expiresAt inside the signed projection and treat relay receipt times as claims.
+- **PS-001-04.R04** The expire command ends the active publication through bazaar.publication.end {reason expired} of F01.S01.M03 in its own transaction, which issues the tombstone through F11.S01.M02 federation.tombstone.issue (idempotent per target), and bazaar.listing.expired carries that tombstoneCid, so F11.S01.M02 links it instead of issuing a second tombstone; when no publication was active the field is absent.
 
 ## Specification
 
@@ -19,7 +20,7 @@
 | `bazaar.listing.close` | bazaar.listing.close | [vault-local] { listingId, expectedRevision, closeReason, closedWithRef?, releaseHolds?, cancelDeals? } | { archiveRecordId, listingStatus: closed, tombstoneQueued, convertedHoldIds[], cancelledDealIds[] } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_ARCHIVE_HOLD_ACTIVE, PRECONDITION_FAILED | bazaar.listing.closed | yes (Idempotency-Key) |
 | `bazaar.listing.archive` | bazaar.listing.archive | [vault-local] { listingId, expectedRevision, releaseHolds?, cancelDeals? } | { archiveRecordId, restoreUntil } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_ARCHIVE_HOLD_ACTIVE, PRECONDITION_FAILED | bazaar.listing.archived | yes (Idempotency-Key) |
 | `bazaar.listing.restore` | bazaar.listing.restore | [vault-local] { archiveRecordId, expectedRevision } | { listingId, listingStatus: unpublished } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_ARCHIVE_RESTORE_EXPIRED | bazaar.listing.restored | yes (Idempotency-Key) |
-| `bazaar.listing.expire` | bazaar.listing.expire | [vault-local, scheduler] { listingId } | { archiveRecordId?, outcome: expired\|renewed\|deferred, expiredAt? } | NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED | bazaar.listing.expired | yes (Idempotency-Key) |
+| `bazaar.listing.expire` | bazaar.listing.expire | [vault-local, scheduler] { listingId } | { archiveRecordId?, outcome: expired\|renewed\|deferred, expiredAt?, tombstoneCid? } | NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED | bazaar.listing.expired | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -32,7 +33,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `bazaar.listing.expired` | P0 | { listingId, ownerId, expiredAt } |
+| `bazaar.listing.expired` | P0 | { listingId, ownerId, expiredAt, tombstoneCid? (set when bazaar.publication.end issued the tombstone in the expiry transaction) } |
 | `bazaar.listing.archived` | P1 | { listingId, ownerId, archiveRecordId, restoreUntil } |
 | `bazaar.listing.restored` | P1 | { listingId, ownerId, archiveRecordId } |
 | `bazaar.listing.closed` | P0 | { listingId, ownerId, closeReason } |
@@ -74,6 +75,7 @@ event bazaar.listing.closed { listingId, ownerId, closeReason: "sold" }   (close
 | TEST-PS-001-09.T06 | contract | PS-001-04.R01, PS-001-04.R02, PS-001-09.R02 | each command runs | events expired, archived, restored, closed validate; consumers in F01.S04.M01 accept them |
 | TEST-PS-001-09.T07 | integration | PS-001-04.R03 | expiry sweep with clock advanced one week | all overdue listings expired in one batch, one event each, expiresAt from the statement honoured |
 | TEST-PS-001-09.T15 | integration | PS-001-04.R01 | stock zero for 7 days then restocked on day 6 in a second case | closed sold_out on day 7 in the first; timer cancelled in the second |
+| TEST-PS-001-09.T21 | integration | PS-001-04.R04 | A expires with an active publication, then a listing whose publication already ended expires | first: bazaar.publication.end {reason expired} runs in the expiry transaction and bazaar.listing.expired carries its tombstoneCid, and the F11.S01.M02 consumer issues no second tombstone; second: the event has no tombstoneCid |
 
 ## Dependencies
 

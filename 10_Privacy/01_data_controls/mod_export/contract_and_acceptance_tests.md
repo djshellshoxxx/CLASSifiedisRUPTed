@@ -36,16 +36,17 @@ See the module test table below (all processes).
 | TEST-PS-078-09.T14 | load | PS-078-08.R01, PS-078-08.R02, PS-078-08.R03 | 50 000 records and 200 MB media | ≤ 120 s, main-thread block ≤ 50 ms, manifest sign ≤ 300 ms, no telemetry |
 | TEST-PS-078-09.T15 | unit | PS-078-09.R01, PS-078-09.R03 | traceability tool run and tamper test of one byte | every PS-078 requirement maps to a passing test; tampered bundle fails import verification |
 | TEST-PS-078-09.T16 | e2e | PS-078-10.R01, PS-078-10.R02, PS-078-10.R03 | export, import into a fresh vault via IOX-2 dry-run and commit, roll back one release | all sections round-trip with identical counts; v1 bundle readable by the previous release; axe zero serious issues on export screens |
-| TEST-PS-078-09.T17 | unit | PS-078-04.R02, PS-078-04.R04 | CI conformance check over the module registry with a module lacking a section, a section whose schemas miss an owned entity, and a section whose lines differ between two runs | build fails in each case and passes for conforming modules |
+| TEST-PS-078-09.T17 | unit | PS-078-04.R02, PS-078-04.R04 | CI conformance check over the module registry with a module lacking a section, a section whose schemas miss an owned entity, a section whose lines differ between two runs, a section name without the module's slug, and a module with two sections whose schemas together cover its entities | build fails in the first four cases and passes for the two-section module and other conforming modules |
 | TEST-PS-078-09.T18 | integration | PS-078-01.R03 | ExportJob expired at day 0; retention sweep at day 29 and day 31 | record present on day 29 and purged by the RetentionPurgePort on day 31; it never held user content |
 | TEST-PS-078-09.T19 | chaos | PS-078-04.R03 | abort the IndexedDB transaction that moves a job to ready | neither the job update nor privacy.export.ready is visible afterwards; retry produces both once |
 | TEST-PS-078-09.T20 | e2e | PS-078-07.R03 | start an export and navigate across screens; reload the PWA | the in-app export notice is shown on every screen until dismissed and is announced politely; it survives reload |
 | TEST-PS-078-09.T21 | integration | PS-078-01.R04 | vault with 2.5 GiB of media; single request; then a two-part set by media date; restore double | single request PRIVACY_EXPORT_QUOTA with a suggested split; each part ≤ 2 GiB and verifies alone; parts share setId and part 2 carries the part-1 manifest hash; the restore double accepts the set only with both parts |
 | TEST-PS-078-09.T22 | integration | PS-078-03.R04 | job requested and never started for 24 h; job collecting with the PWA closed for 25 h; job with 31 min of active collection time | first two fail with errorCode EXPIRED; third fails with PRIVACY_EXPORT_TIMEOUT; each emits privacy.export.failed and leaves no files |
+| TEST-PS-078-09.T23 | integration | PS-078-04.R05 | vault composition with the kernel port registry and stub registrants for F07.S01.M01, F15.S01.M01, F15.S04.M03 and the seven F11 sections, then a second registrant for federation.records, then F15.S01.M01 missing | the manifest lists identity.account, identity.device_keys, platform.outbox, platform.local_settings and every federation section with counts and hashes, and none of these modules needs a depends_on edge; the duplicate fails composition naming both modules; the missing registrant fails the job with PRIVACY_EXPORT_SECTION_FAILED naming F15.S01.M01 |
 
 ## Acceptance criteria
 
-- All tests T01 to T22 pass in CI.
+- All tests T01 to T23 pass in CI.
 - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
 - No bundle contains P4 secrets, unclassified fields or other users' private content.
 - A ready bundle is unreachable after 7 days and its key is gone.

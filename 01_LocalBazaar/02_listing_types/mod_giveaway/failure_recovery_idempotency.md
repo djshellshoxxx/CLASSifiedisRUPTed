@@ -26,8 +26,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 |---|---|---|---|---|
 | TEST-PS-005-09.T05 | integration | PS-005-03.R02, PS-005-06.R02 | two tabs select different requests for last unit | one selected, other BAZAAR_GIVEAWAY_NOT_SELECTABLE |
 | TEST-PS-005-09.T10 | integration | PS-005-06.R01, PS-005-06.R03 | replay select with same key; fail signing | one selection; failure rolls back hold |
-| TEST-PS-005-09.T11 | chaos | PS-005-06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock with tie groups per sync batch; requester sees pending until signed receipt |
+| TEST-PS-005-09.T11 | chaos | PS-005-06.R03 | giver offline 3 days, the giver's F08.S01.M01 mailbox holds requests | fetched with comms.mailbox.fetch and processed in receipt order on unlock with tie groups per fetch batch; comms.mailbox.ack only after each receive commit; requester sees pending until signed receipt |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

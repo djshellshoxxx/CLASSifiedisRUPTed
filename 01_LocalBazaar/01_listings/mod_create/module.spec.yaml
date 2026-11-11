@@ -280,7 +280,7 @@ processes:
     fixtures: "Vault with principal P1 (did:key), fixed clock 2026-11-04T10:00:00Z, policy pack with 3 categories (one retired), blob store with one clean jpeg and one jpeg with GPS EXIF."
     tests:
       - "T01 | unit | 01.R01,02.R01 | create a valid sell draft | Listing stored with status draft, revision 1; unknown field rejected"
-      - "T02 | unit | 02.R02,02.R03 | violate each rule V01-V12 in turn | the documented error code is returned and nothing is stored"
+      - "T02 | unit | 02.R02,02.R03 | violate each rule V01-V14 in turn | the documented error code is returned and nothing is stored"
       - "T03 | property | 03.R01,03.R02 | random sequences of apply_status calls | only declared transitions succeed, including expired -> closed and published -> published on renew; others return CONFLICT_STATE"
       - "T04 | integration | 03.R03,07.R02 | delete draft | tombstone with id, type, deletedAt exists; content and blob keys purged after 30 days (clock advance)"
       - "T05 | contract | 04.R01,09.R02 | each command runs | outputs and bazaar.listing.created/deleted payloads validate against registry schemas; no command enqueues a statement"

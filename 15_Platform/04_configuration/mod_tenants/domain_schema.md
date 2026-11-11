@@ -10,6 +10,8 @@
 - **PS-125-01.R02** Tenant data is public hosting information (P0), including the derived operator public keys, and is retained as RET-STANDARD while the community exists.
 - **PS-125-01.R03** LocalSettings is the vault's own preference record (P3, stored only on the device and exported with the vault) and holds the vaultId, a UUIDv7 created once at vault initialisation that is the CTR-ID-001 ID-6 tenantId of every record in that vault; the vault has no relay tenant record.
 - **PS-125-01.R04** Every limit is capped by the platform maximums (maxUploadBytes and maxLocalAttachmentBytes ≤ 5242880 per N9, maxEnvelopeBytes ≤ 262144 per CTR-SCH-001 SCH-6) and names the module that enforces it; a limit without an enforcer is not part of the record.
+- **PS-125-01.R05** Tenant limits hold the relay discovery settings read by F06.S02.M03 - anonymousAllowed (default true), anonymousMinRadiusKm (25, 50 or 100, default 25), anonymousCenterLevel (L1, the only public level coarse enough for anonymous callers) and maxDepth (1..500, default 500) - and they appear in every signed configuration statement.
+- **PS-125-01.R06** LocalSettings holds the optional display preferences a11yMotion (system or reduced, default system) and moneyDisplay (symbol, code or name, default symbol), returned with their defaults by platform.local_settings.get and changed only through platform.local_settings.update.
 
 ## Specification
 
@@ -26,7 +28,7 @@ Schema `classrup.platform.tenant/v1` · storage **relay** · privacy **P0** · r
 | allowedCurrencies | string[] — 1..20 distinct codes matching ^[A-Z0-9]{2,12}$ (ISO 4217 alpha-3 or configured asset code); enforced by the relay index and publish intake (F06.S01.M01, F11.S01.M02) |
 | jurisdictionProfile | string — ^[a-z0-9_-]{2,40}$, default 'generic' |
 | defaultLocale | string — BCP 47 tag matching ^[a-z]{2,3}(-[A-Z]{2})?$, default 'en' |
-| limits | json — { maxIndexedListingsPerPublisher 1..1000 default 100 (F06.S01.M01 index write), maxUploadBytes 65536..5242880 default 5242880 (F15.S02.M01 media upload), maxMailboxBytesPerRecipient 1048576..1073741824 default 52428800 (F08.S01.M01), maxEnvelopeBytes 4096..262144 default 262144 (F08.S01.M01), maxCycleLength 3..6 default 5 (F02.S02.M03 relay matching) } |
+| limits | json — { maxIndexedListingsPerPublisher 1..1000 default 100 (F06.S01.M01 index write), maxUploadBytes 65536..5242880 default 5242880 (F15.S02.M01 media upload), maxMailboxBytesPerRecipient 1048576..1073741824 default 52428800 (F08.S01.M01), maxEnvelopeBytes 4096..262144 default 262144 (F08.S01.M01), maxCycleLength 3..6 default 5 (F02.S02.M03 relay matching), anonymousAllowed boolean default true, anonymousMinRadiusKm 25 \| 50 \| 100 default 25, anonymousCenterLevel L1 default L1, maxDepth 1..500 default 500 (the four relay discovery settings of F06.S02.M03 proximity queries) } |
 | operatorKeys | derived string[] — did:key subjects of active F16.S01.M01 RoleAssignments with role operator and scope tenant:<id>; read through F16, never stored here |
 | suspendedReason? | string — ≤ 200 characters, shown to clients |
 | suspendedAt? | timestamp — RFC 3339 UTC |
@@ -53,12 +55,15 @@ Schema `classrup.platform.local_settings/v1` · storage **device** · privacy **
 | defaultLocale | string — BCP 47 tag, default taken from the browser language, fallback 'en' |
 | preferredCurrencies | string[] — 0..20 codes matching ^[A-Z0-9]{2,12}$, used for display and defaults only |
 | localLimits | json — { maxLocalAttachmentBytes 65536..5242880 default 5242880 (vault blob store of F15.S02.M03 and F08.S01.M03), maxOutboxEntries 10..200 default 200 (F15.S01.M01) } |
+| a11yMotion? | enum — system \| reduced; default system; read by the PWA shell and passed to F14.S01.M01 setMotionPreference |
+| moneyDisplay? | enum — symbol \| code \| name; default symbol; read by the PWA shell and passed to F14.S02.M02 formatMoney as the display option |
 | knownRelayConfigs? | json — per relayId the last verified tenant_config statement { tenantId, revision, cid, statement } used to show what changed |
 | revision | int — CTR-ID-001 ID-4 |
 | updatedAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
-- Exactly one LocalSettings record exists per vault and it is never sent to a relay.
+- Exactly one LocalSettings record exists per vault and the record is never sent to a relay; the only value that leaves the device is a copy of defaultLocale in the F13.S01.M02 notify.email.add registration after notify_email consent, sealed to that one user-selected email relay.
+- a11yMotion and moneyDisplay, when present, hold one of their enum values; an invalid stored or imported value is replaced with the default.
 - Local limits can only be lower than or equal to the platform maximums (never raise a relay's limits).
 - vaultId never changes after vault initialisation.
 
@@ -79,12 +84,14 @@ CREATE TABLE platform_tenant_config (tenant_id TEXT NOT NULL, revision INTEGER N
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-125-09.T01 | unit | PS-125-01.R01, PS-125-01.R02, PS-125-02.R01 | create a tenant with valid input | stored with revision 1, status active, defaults applied, schema classrup.platform.tenant/v1, operatorKeys read from F16 |
-| TEST-PS-125-09.T10 | abuse | PS-125-07.R02, PS-125-07.R01, PS-125-01.R03 | capture network traffic during LocalSettings changes and publishing | zero requests contain locale, currency preferences or the vaultId |
+| TEST-PS-125-09.T10 | abuse | PS-125-07.R02, PS-125-07.R01, PS-125-01.R03 | capture network traffic during LocalSettings changes (including a11yMotion and moneyDisplay), publishing, and the email opt-in with and without notify_email consent | zero requests contain currency preferences, display preferences or the vaultId; the locale appears only in the consented notify.email.add registration, sealed to that one selected email relay, and not at all without consent |
 | TEST-PS-125-09.T15 | contract | PS-125-09.R02, PS-125-09.R03, PS-125-01.R03 | schema registry validation of Tenant, LocalSettings and events; privacy suite | all payloads valid; LocalSettings (with vaultId) classified P3 and absent from relay and federation payloads |
 | TEST-PS-125-09.T17 | integration | PS-125-10.R01, PS-125-10.R02, PS-125-10.R03, PS-125-01.R03 | export vault with LocalSettings, import into fresh vault; restore relay from backup; roll back one release | LocalSettings round-trip while the fresh vault keeps its own vaultId; tenants and statements restored with same IDs; old reader ignores new optional fields |
 | TEST-PS-125-09.T18 | integration | PS-125-04.R02, PS-125-01.R04 | shrink allowedCurrencies with existing records in a removed currency | change accepted, event carries removedCurrencies and the full snapshot, existing records untouched, the index intake stub refuses a new projection in the removed currency |
 | TEST-PS-125-09.T22 | contract | PS-125-01.R04, PS-125-04.R04 | set maxUploadBytes 3145728, maxEnvelopeBytes 65536, maxIndexedListingsPerPublisher 2, maxCycleLength 3; then try maxUploadBytes 10485760 and maxEnvelopeBytes 1048576 | the media route refuses a 4 MiB upload, the mailbox stub a 70 KiB envelope, the index stub the third listing, the matching stub a 4-cycle; the oversized limits are refused with VALIDATION_FAILED |
 | TEST-PS-125-09.T25 | unit | PS-125-01.R03 | initialise vaults V1 and V2, dispatch a vault command in each, try a LocalSettings patch with vaultId | each vault has one immutable UUIDv7 vaultId used as the dispatch context tenantId of its records; the two differ; the patch is refused with VALIDATION_FAILED |
+| TEST-PS-125-09.T28 | contract | PS-125-01.R05, PS-125-04.R04 | default discovery settings; then anonymousAllowed false, anonymousMinRadiusKm 50 and maxDepth 200; then anonymousMinRadiusKm 10, anonymousCenterLevel L2 and maxDepth 501 | the signed configuration and limits(tenantId) give true, 25, L1, 500 and then the new values to an F06.S02.M03 stub, which refuses anonymous callers, a 25 km anonymous radius and depth 201; the three invalid values are refused with VALIDATION_FAILED |
+| TEST-PS-125-09.T29 | unit | PS-125-01.R06, PS-125-02.R05, PS-125-10.R03 | get on a new vault; update with a11yMotion reduced and moneyDisplay code; update with a11yMotion fast; import a record with moneyDisplay emoji and a11yMotion reduced | defaults system and symbol; the values stored and returned; VALIDATION_FAILED for fast; the import keeps reduced and replaces emoji with symbol |
 
 ## Dependencies
 

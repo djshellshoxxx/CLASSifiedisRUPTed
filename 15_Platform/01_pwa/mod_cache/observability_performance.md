@@ -21,7 +21,7 @@
 - console.debug only in development builds; production worker logs nothing. Errors are counted, not described.
 
 **Budgets**
-- Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip.
+- Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip; the four production locale catalogs ≤ 120 KiB gzip together inside the precache.
 - Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms; SHA-256 verification of a 1 MiB image ≤ 15 ms (SubtleCrypto).
 - Activation cleanup completes in ≤ 500 ms for 5 stale caches.
 

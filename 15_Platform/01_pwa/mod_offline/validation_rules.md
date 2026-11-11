@@ -8,10 +8,11 @@
 
 - **PS-116-02.R01** Enqueue validates destination, delivery eligibility, size, quota, privacy class and signature presence before writing, inside the caller's storage.transaction(fn); on a violation nothing is stored and the domain record rolls back with it.
 - **PS-116-02.R02** Delivery classifies every relay response into receipt, retryable, conflict, relay rejection or failed using only the code, status and retryable flag from CTR-ERR-001, and accepts a receipt only after it verifies against the destination relay's published key set.
-- **PS-116-02.R03** A peer acknowledgement is accepted only when it is a verified signed statement over exactly this entry's cid, signed by the DID or relay that the statement registry names as acknowledger, with a key authorized for that DID or relay at verification time; otherwise it is refused with PLATFORM_OUTBOX_ACK_MISMATCH.
+- **PS-116-02.R03** A peer acknowledgement is accepted only when it is a verified signed statement over exactly this entry's cid, signed by the recipient DID that the statement registry names as acknowledger, with a key authorized for that DID at verification time; otherwise it is refused with PLATFORM_OUTBOX_ACK_MISMATCH.
 - **PS-116-02.R04** Statements registered at class P2 or higher are accepted for a relay destination only as end-to-end encrypted envelopes addressed to the recipients' mailbox keys, and schemas or fields classified P3 or P4 are never queued (CTR-PRV-001 PRV-5).
 - **PS-116-02.R05** Every deliveryEligible relay command declares its replay safety, and a relay command first attempted more than 23 h ago is resent only when that replay safety holds; otherwise it moves to conflict.
 - **PS-116-02.R06** Relay key revocations, rotations and restore announcements are used only after their signatures verify against the relay's key history, and a relay whose key history equivocates is frozen for delivery.
+- **PS-116-02.R07** A destination descriptor must match the registry audience of the statement (public to selected_relay, participants to recipient_mailbox), its canonical string must equal the entry destination and recipientDid, and a caller-supplied needsPeerAck that disagrees with the registry is refused.
 
 ## Specification
 
@@ -25,7 +26,7 @@
 | V06 | the vault is unlocked and entry principal equals the unlocked principal | UNAUTHENTICATED |
 | V07 | the F15.S02.M03 IndexedDB transaction opened and committed | PLATFORM_OUTBOX_STORAGE_UNAVAILABLE |
 | V08 | unsent entry is not older than 7 days at send time | EXPIRED |
-| V09 | the acknowledgement statement's payload.cid equals entry.cid; its signer equals entry.recipientDid (acknowledger counterparty) or the destination relayId (acknowledger destination_relay); and the signing key was active for that DID at verification time (the key_status fact of F07.S02.M01 that the ingest path supplies with the verified ack reference), or is an active or retired, non-revoked key in the relay's published key set | PLATFORM_OUTBOX_ACK_MISMATCH |
+| V09 | entry.acknowledger is counterparty; the acknowledgement statement's payload.cid equals entry.cid; its signer equals entry.recipientDid; and the signing key was active for that DID at verification time (the key_status fact of F07.S02.M01 that the ingest path supplies with the verified ack reference) | PLATFORM_OUTBOX_ACK_MISMATCH |
 | V10 | when privacyClass is P2 or higher and the destination is a relay destination, the payload is an end-to-end encrypted envelope whose recipient key set equals the mailbox keys of recipientDid and the destination is that recipient's mailbox; otherwise nothing is stored | PLATFORM_OUTBOX_NOT_DELIVERABLE |
 | V11 | neither the statement schema nor any payload field is classified P3 or P4 by F10.S02.M02 (unclassified fields count as P3) | PLATFORM_OUTBOX_CLASS_FORBIDDEN |
 | V12 | a relay_command registration declares replaySafety expected_revision (with expectedRevision), deterministic_id (with resourceId and create-if-absent semantics) or read_back (with a registered read query) | PLATFORM_OUTBOX_NOT_DELIVERABLE |
@@ -33,6 +34,7 @@
 | V14 | a relay receipt is a classrup.platform.relay_receipt/v1 whose signature under context classrup-relay-receipt:v1 verifies with keyId from the relay's published key set (active or retired; a revoked key only if the receipt was stored before the revocation's revokedAt), whose relayId and destination equal the entry's, and whose digest equals sentDigest | PLATFORM_OUTBOX_RECEIPT_INVALID |
 | V15 | the destination relay's key history has no two rotation statements with the same prevKeyId and no revocation of every published key; otherwise delivery to that relay is frozen | PLATFORM_OUTBOX_RELAY_FROZEN |
 | V16 | a restore announcement classrup.platform.relay_restore/v1 is applied only when signed under context classrup-relay-restore:v1 by a non-revoked key of the same relayId | PLATFORM_OUTBOX_RECEIPT_INVALID |
+| V17 | a statement entry for a relay destination (every locally authored statement is routed by F11.S02.M01) carries a destinationDescriptor; kind selected_relay for audience public and recipient_mailbox for audience participants; destination equals '<relayId>' or '<relayId>/mailbox/<mailboxId>' of the descriptor; recipientDid equals descriptor.recipientDid; an input needsPeerAck equals (audience participants) | VALIDATION_FAILED |
 
 ## Verification
 
@@ -50,7 +52,8 @@
 | TEST-PS-116-09.T30 | integration | PS-116-01.R04, PS-116-02.R01 | domain command whose enqueue fails V03 and one where IndexedDB aborts the transaction | neither the domain record nor the entry exists; PLATFORM_OUTBOX_FULL and PLATFORM_OUTBOX_STORAGE_UNAVAILABLE returned; no separate outbox database exists |
 | TEST-PS-116-09.T31 | contract | PS-116-02.R02, PS-116-02.R06, PS-116-04.R04 | receipt for mailbox A presented for an entry to mailbox B; receipt with a wrong digest; receipt by retired key k1; receipt by k3 stored before and after its revocation; key history with two rotations from the same prevKeyId | wrong mailbox and wrong digest rejected with PLATFORM_OUTBOX_RECEIPT_INVALID; k1 verifies; k3 accepted only when stored before revokedAt; equivocation freezes the relay with PLATFORM_OUTBOX_RELAY_FROZEN |
 | TEST-PS-116-09.T33 | unit | PS-116-02.R01, PS-116-04.R06 | LocalSettings.localLimits.maxOutboxEntries set to 50 and 50 entries queued | the 51st enqueue returns PLATFORM_OUTBOX_FULL and its domain record rolls back |
+| TEST-PS-116-09.T34 | integration | PS-116-01.R05, PS-116-02.R07, PS-116-04.R08 | F11.S02.M01 routes a public listing to selected relay r1 and an offer to C1's recipient mailbox; then enqueue with needsPeerAck true for the listing, a recipient_mailbox descriptor for a public statement and a descriptor whose mailbox differs from destination | descriptors stored and destinations derived ('relay:r1...', 'relay:r1.../mailbox/mbx_1'); acknowledger none for the listing and counterparty for the offer; deliver passes the descriptor and needsPeerAck false or true to the FederationTransportPort stub; the three bad inputs are refused with VALIDATION_FAILED and roll back |
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

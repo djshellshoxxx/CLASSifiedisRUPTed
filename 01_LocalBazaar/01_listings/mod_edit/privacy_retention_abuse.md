@@ -28,7 +28,7 @@
 | T01 | Bait-and-switch: seller changes price after buyers commit | material flag, event to offers, and explicit buyer re-confirmation in F01.S04.M01/M02; revision history is evidence |
 | T02 | Edit used to smuggle prohibited content past publication checks | rules re-evaluated on every edit of a published listing; relay hosting policy applies again when the new projection is sent |
 | T03 | History tampering | revisions are immutable and carry snapshotHash; the signed projection of F01.S01.M03 binds listingRevision and hash |
-| T04 | Auction bait-and-switch against bidders | V09 refuses condition, category and price changes while bids exist (N11) |
+| T04 | Auction bait-and-switch against bidders | V09 asks the F04.S01.M01 edit lock before every material change and refuses while it is locked, failing closed when it cannot answer (N11); a modified client that publishes anyway is seen by the host relay, which raises bazaar.listing.edited host-side with material true for F04.S02.M03 |
 | T05 | Evidence lost when the listing is purged | keepEvidence keeps cited revisions for the evidence window |
 
 **Abuse controls**
@@ -47,4 +47,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

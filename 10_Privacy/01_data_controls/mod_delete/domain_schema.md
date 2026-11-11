@@ -11,6 +11,7 @@
 - **PS-077-01.R03** A deletion ledger entry is kept for 180 days after completion in the residue store, keyed by HMAC-SHA256(ledgerSalt, did) with a separate, kept ledger salt and holding no requestId, pseudonym or plain did; the completed request record in residue form is P3 and retained as RET-EVIDENCE as proof of the deletion request.
 - **PS-077-01.R04** A per-origin residue store outside the erased principal vault holds only the completed DeletionRequest without did or salt, the ledger entries, outbox entries of statements already signed and still awaiting delivery (until peer_accepted, or 30 days after signing), and, when keepEvidence is true, a pseudonymized evidence-only vault retained per RET-EVIDENCE; nothing else of the principal survives on the device.
 - **PS-077-01.R05** The relay deletion statement classrup.privacy.deletion_statement/v1 and the counterparty notice classrup.privacy.deletion_notice/v1 have their own schemas with explicit field allowlists and signer role principal, are registered in the F11.S01.M01 statement registry, and are separate from the vault-only entity schema classrup.privacy.deletion_request/v1.
+- **PS-077-01.R06** The deletion notice has two kinds - a commitment notice per open commitment for its counterparties, and one departure notice signed once in the sign step and sealed separately to the mailbox key of every thread counterparty that the F08 DeletionPort plans list, so all thread counterparties receive the same cid; the deleted did is the envelope author and is never repeated in the payload.
 
 ## Specification
 
@@ -32,8 +33,8 @@ Schema `classrup.privacy.deletion_request/v1` · storage **device** · privacy *
 | pseudonym? | string — del- plus 16 base32 characters of HMAC-SHA256(salt, did); set at execution; the retained record keeps it but never the did |
 | steps | array — up to 128 {moduleId, step: sign\|revoke_keys\|pseudonymize\|shred\|purge\|destroy_keys, state: pending\|done\|failed, attempts: int ≤ 8} |
 | blockers | array — open commitments {kind, ref} found at the last check, up to 50 |
-| relays | array — up to 20 {relayId, statementCids: string[], syncState: prepared\|transport_acknowledged\|peer_accepted, someRetained?: boolean} |
-| counterparties | array — up to 50 {commitmentRef, noticeCid, syncState: prepared\|transport_acknowledged\|peer_accepted} |
+| relays | array — up to 20 {relayId (canonical relayId of F15.S02.M01), statementCids: string[], syncState: prepared\|transport_acknowledged\|peer_accepted, someRetained?: boolean} |
+| counterparties | array — up to 1000 {kind: commitment\|departure, commitmentRef? (commitment only), recipientDid, mailboxId, noticeCid, syncState: prepared\|transport_acknowledged\|peer_accepted} |
 | statementsSignedAt? | timestamp — local clock when the sign step produced the relay statements and notices; never re-signed |
 | tombstoneCount | int — ≥ 0 |
 | completedAt? | timestamp — local clock |
@@ -48,6 +49,7 @@ Schema `classrup.privacy.deletion_request/v1` · storage **device** · privacy *
 - status executing is never cancelled; cancel is allowed only in pending_grace and deferred.
 - No stored record or derivable key joins the did and the pseudonym after completion; ledger entries hold only ledgerKey and ledgerUntil.
 - Every statement is signed in the sign step before any revoke_keys or destroy_keys step, and nothing is signed afterwards.
+- All departure entries share one noticeCid, and each recipientDid appears at most once per notice kind and commitmentRef.
 
 ### Storage DDL
 
@@ -74,6 +76,7 @@ CREATE TABLE privacy_deletion_ledger (ledger_key TEXT PRIMARY KEY, ledger_until 
 | TEST-PS-077-09.T22 | e2e | PS-077-07.R02, PS-077-01.R04 | restore the pre-deletion export on a fresh device after completion | restore succeeds on that device, documenting the limit that the UI and completion summary stated |
 | TEST-PS-077-09.T23 | integration | PS-077-01.R04, PS-077-06.R01 | relay offline at execution returns on day 3, a second relay returns on day 29, a third never returns | residue outbox delivers on day 3 and day 29 and both relays accept; the third entry is dropped after 30 days and the summary shows it never acknowledged |
 | TEST-PS-077-09.T24 | contract | PS-077-01.R05 | deletion notice for an open cycle captured at a relay double and opened by counterparty doubles | relay sees only ciphertext, mailbox ID and size; counterparties decrypt, verify signer role principal and see exactly the allowlisted fields |
+| TEST-PS-077-09.T25 | integration | PS-077-01.R06, PS-077-02.R05, PS-077-04.R02 | deletion with 40 threads and 63 thread counterparties listed by an F08.S01.M02 plan double, one open cycle and a notice addressed to a did that no plan listed | one departure notice signed once and sealed to 63 mailboxes under one cid, payload {requestId, signedAt, kind, effectiveAt, recourse}; the cycle gets a commitment notice; the unlisted recipient is refused with VALIDATION_FAILED; the account_deleted revocation lists the departure cid |
 
 ## Dependencies
 

@@ -8,7 +8,7 @@
 
 - **PS-125-09.R01** Every requirement of this module is covered by at least one automated test.
 - **PS-125-09.R02** Contract tests check command inputs, outputs and event payloads against the schema registry for both relay and vault commands.
-- **PS-125-09.R03** A privacy test proves LocalSettings never leave the device.
+- **PS-125-09.R03** A privacy test proves LocalSettings never leave the device, except the consented defaultLocale copy in the F13.S01.M02 email registration.
 
 ## Specification
 
@@ -29,7 +29,7 @@ See the module test table below (all processes).
 | TEST-PS-125-09.T07 | integration | PS-125-06.R01, PS-125-06.R02 | replay same Idempotency-Key with same and different body; run bootstrap twice; stale expectedRevision | original response replayed; IDEMPOTENCY_KEY_REUSED; second bootstrap returns existing tenant and assignments; CONFLICT_REVISION |
 | TEST-PS-125-09.T08 | integration | PS-125-06.R03, PS-125-05.R03 | vault offline, change language and currencies; relay offline, read tenant | LocalSettings update works; tenant shown from the stored signed statement marked stale |
 | TEST-PS-125-09.T09 | integration | PS-125-07.R01, PS-125-07.R03 | archive tenant and advance 90 days | purged from relay; operator export exists; audit retained 1 year |
-| TEST-PS-125-09.T10 | abuse | PS-125-07.R02, PS-125-07.R01, PS-125-01.R03 | capture network traffic during LocalSettings changes and publishing | zero requests contain locale, currency preferences or the vaultId |
+| TEST-PS-125-09.T10 | abuse | PS-125-07.R02, PS-125-07.R01, PS-125-01.R03 | capture network traffic during LocalSettings changes (including a11yMotion and moneyDisplay), publishing, and the email opt-in with and without notify_email consent | zero requests contain currency preferences, display preferences or the vaultId; the locale appears only in the consented notify.email.add registration, sealed to that one selected email relay, and not at all without consent |
 | TEST-PS-125-09.T11 | abuse | PS-125-07.R01, PS-125-07.R02 | O1 adds a key through assign_operator; A1 removes the last operator of T1 | FORBIDDEN and PLATFORM_TENANT_LAST_OPERATOR; the client shows the signed configuration with unchanged operators |
 | TEST-PS-125-09.T12 | load | PS-125-08.R02, PS-125-08.R03 | 50 req/s tenant reads and 5 configure per second for 5 minutes | read p95 ≤ 20 ms cached, configure p95 ≤ 300 ms, consumers apply within 2 s |
 | TEST-PS-125-09.T13 | unit | PS-125-08.R01 | metrics scrape | counters per CTR-OBS-001 naming, tenant label hashed, no names |
@@ -47,13 +47,16 @@ See the module test table below (all processes).
 | TEST-PS-125-09.T25 | unit | PS-125-01.R03 | initialise vaults V1 and V2, dispatch a vault command in each, try a LocalSettings patch with vaultId | each vault has one immutable UUIDv7 vaultId used as the dispatch context tenantId of its records; the two differ; the patch is refused with VALIDATION_FAILED |
 | TEST-PS-125-09.T26 | integration | PS-125-07.R04 | export section, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for L1 | section platform.local_settings with P3 field classes; deletion removes LocalSettings; nothing purged early; no row remains |
 | TEST-PS-125-09.T27 | integration | PS-125-04.R02 | create a tenant with jurisdictionProfile de_eu while a stub F10.S01.M02 consumes only platform.tenant.configured | the stub applies de_eu from the revision 1 configured event without reading the tenant |
+| TEST-PS-125-09.T28 | contract | PS-125-01.R05, PS-125-04.R04 | default discovery settings; then anonymousAllowed false, anonymousMinRadiusKm 50 and maxDepth 200; then anonymousMinRadiusKm 10, anonymousCenterLevel L2 and maxDepth 501 | the signed configuration and limits(tenantId) give true, 25, L1, 500 and then the new values to an F06.S02.M03 stub, which refuses anonymous callers, a 25 km anonymous radius and depth 201; the three invalid values are refused with VALIDATION_FAILED |
+| TEST-PS-125-09.T29 | unit | PS-125-01.R06, PS-125-02.R05, PS-125-10.R03 | get on a new vault; update with a11yMotion reduced and moneyDisplay code; update with a11yMotion fast; import a record with moneyDisplay emoji and a11yMotion reduced | defaults system and symbol; the values stored and returned; VALIDATION_FAILED for fast; the import keeps reduced and replaces emoji with symbol |
+| TEST-PS-125-09.T30 | integration | PS-125-02.R04, PS-125-03.R01, PS-125-06.R02 | bootstrap a fresh relay with --admin and --operator; bootstrap a second tenant with --admin; again with --break-glass and a 10 code point reason, then a 30 code point reason; HTTP create by admin A1 with adminKey; assign_operator by A1 | first creates tenant, operator and admin in one transaction; second SECURITY_BOOTSTRAP_REFUSED with nothing created; 10 code points refused, 30 accepted as break_glass; HTTP create VALIDATION_FAILED; assign_operator calls security.roleassignment.assign with role operator and scope tenant:<id> and grants no admin |
 
 ## Acceptance criteria
 
-- All tests T01-T27 pass in CI.
+- All tests T01-T30 pass in CI.
 - A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits, and every limit is enforced by its named module.
 - Operator changes are made only through F16 role assignments by admins, are validated, audited and visible to clients as signed configuration; the last operator can never be removed.
-- LocalSettings never leave the device, no relay tenant record exists in the vault, and every vault record carries its vault's own vaultId as tenantId.
+- LocalSettings never leave the device except the consented defaultLocale copy in the F13.S01.M02 email registration, no relay tenant record exists in the vault, and every vault record carries its vault's own vaultId as tenantId.
 
 ## Dependencies
 

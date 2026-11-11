@@ -42,13 +42,19 @@ See the module test table below (all processes).
 | TEST-PS-083-09.T20 | property | PS-083-02.R02, PS-083-02.R04 | inbound payloads with geohash lengths 6-12 and with latitude or longitude members | every one rejected with FEDERATION_PAYLOAD_INVALID; assertPublicCell invoked on the inbound path |
 | TEST-PS-083-09.T21 | contract | PS-083-01.R07 | producer stubs (listing publication, profile, offering, peer, blocklist, migration) call StatementPublisherPort.publish and issueTombstone | every call reaches the F11.S01.M02 implementation, which allocates seq; no producer signs through another path |
 | TEST-PS-083-09.T22 | unit | PS-083-01.R06, PS-083-02.R03 | tombstone, ack, peer_offer and move payloads, and a participants ciphertext payload of 12288 and 12289 bytes | per-type schemas checked; portable allowlist (V08) and opt-in (V02) never applied to them; 12289 bytes rejected with FEDERATION_PAYLOAD_INVALID |
+| TEST-PS-083-09.T23 | unit | PS-083-01.R08, PS-083-02.R05 | listing published at 10:47:12.345 with expiresAt 2026-12-04T10:47:12.345Z; busy block 10:20-11:40; two listing revisions inside one hour; a draft with an undeclared fine timestamp member | createdAt and publishedAt 10:00:00.000Z, expiresAt 2026-12-04T10:00:00.000Z; busy block 10:00-12:00; assertCoarseTime passes; revisions ordered by listingRevision and seq; the undeclared member refused with FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| TEST-PS-083-09.T24 | unit | PS-083-01.R09, PS-083-04.R05 | entryFor and exportRegistry over every F11 and contributed row | every row has owner, audience, signerRole, roleResolution, payloadSchema, maxAge, acknowledger and privacyClass; participants rows give counterparty and P2, relay-audience rows destination_relay and P1, public rows none and P0 unless the row overrides; aliases carry aliasOf; the export validates against its JSON schema |
+| TEST-PS-083-09.T25 | contract | PS-083-01.R10, PS-083-04.R06 | F16.S01.M01 authorizeStatement stub with RoleResolverPort bound to roleFor at composition; module import scan | authorizeStatement receives the role only from roleFor; this module never calls authorizeStatement and F16.S01.M01 has no import of it |
+| TEST-PS-083-09.T26 | unit | PS-083-01.R02, PS-083-02.R01 | build drafts for a listing with every kind subset and variants, a service offering with credential evidence, a rental offering and a busy-blocks summary | payload keys equal the closed key sets of the note; offering keeps providerTimeZone, seq, prev and publishedAt and drops evidenceAttachmentId; maxBudget only when budgetVisible; busy blocks carry intervals and unit counts only |
+| TEST-PS-083-09.T27 | unit | PS-083-03.R01, PS-083-05.R03 | toMirrorView of a verified listing (sell with variants, and giveaway) and of a rental offering | mirror exposes author, recordKey, version, listingRevision, expiresAt, inStock, variants, acceptedCurrencies, mailboxHints and giveaway closesAt, labelled remote and read-only; no member outside the allowlist |
+| TEST-PS-083-09.T28 | unit | PS-083-01.R04, PS-083-01.R05, PS-083-04.R04 | roleFor for contributed rows: offer_decision by the buyer, bid_receipt by a relay key not named in the terms, tenant_config by a key outside the relay key history, an advisory by an unsubscribed publisher, negotiation_accept/v1 by the consenting party, reservation with holder cycle by an owner who is not a giver in the head revision | each wrong signer yields a quarantining rule, the correct signer resolves, the alias resolves through the consent entry |
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI, including the signer-role tests T16 and T19.
+- All tests T01–T28 pass in CI, including the signer-role tests T16, T19 and T28.
 - No P1-P4 field, exact coordinate or home address appears in any draft, and no inbound cell finer than L2 is accepted (privacy suite on fixtures).
 - A public record whose owner has not opted in can never produce a signed statement.
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).

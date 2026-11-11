@@ -29,7 +29,7 @@
 | T01 | Lowball offer flooding to harass a seller | per-buyer rate limit 20 offers/hour, per-listing 50 open cap, at most 20 offers per listing per hour from unseen keys, private minimum below which offers are stored rejected and hidden with no buyer-visible difference |
 | T02 | Offer note used for phishing links | link detection via F12.S02.M02; links rendered as plain text; report action on each offer |
 | T03 | Relay learns offer contents or who offered | envelopes end-to-end encrypted to the seller's key; relay sees mailbox ID, size and time only (PRV-5) |
-| T04 | Replay of an acceptance or decision onto another offer | the acceptance consent binds the SHA-256 of the offer statement and decisions bind offerCid; cid dedup; idempotency key and expectedRevision for local commands |
+| T04 | Replay of an acceptance or decision onto another offer | the acceptance consent binds subjectRevisionHash = offerCid (ID-3 cid of ConsentSubjectPort.canonicalBytes) and decisions bind offerCid; cid dedup; idempotency key and expectedRevision for local commands |
 | T05 | Forged acceptance or decision | signer must be the author of the verified listing projection (comms.consent.verify, V10); quarantine role_mismatch |
 | T06 | Bisecting the seller's private minOffer with probe offers | below-minimum offers get the same acknowledgement, no statement and timeout expiry, and receive the same listing_unavailable and superseded decisions as open offers before expiresAt |
 | T07 | Fresh did:keys to evade per-key limits | per-listing caps independent of keys, unseen-key cap per listing, and no information gained from probes |
@@ -52,4 +52,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

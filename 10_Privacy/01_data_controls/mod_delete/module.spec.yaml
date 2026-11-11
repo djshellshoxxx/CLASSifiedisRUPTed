@@ -2,13 +2,17 @@
 id: F10.S01.M04
 scope: MVP
 summary: >-
-  The user can delete their identity and data on this device. A request starts a 14-day grace period that the user can
+  The user can delete their identity and data on this device; the PWA's Erase vault action is this deletion flow and shows
+  the export prompt (IOX-6) before any vault data is deleted, while vault lock and principal switch never delete data. A
+  request starts a 14-day grace period that the user can
   cancel; during grace other modules may only take reversible actions (hide, pause), cancelling emits privacy.deletion.cancelled
   so they undo them, and publishing and new commitments are refused through the guard privacy.deletion.assert_not_pending. At
   the end of grace (deferred up to 30 more days while committed trades, deals, bookings, reservations or rentals are still open)
   the vault executes deletion as an ordered sequence of DeletionPort steps defined here. First every module signs what it must
-  send while the keys still exist - federation tombstones through F11.S01.M02, consent withdrawals, this module's signed
-  deletion statement for each relay and end-to-end encrypted deletion notices for counterparties - then F07.S01.M01 signs
+  send while the keys still exist - federation tombstones through F11.S01.M02, consent withdrawals, F07.S01.M01 handle
+  releases, identity document tombstone and relay session revocations, F08 message and attachment deletes and mailbox
+  closes, this module's signed deletion statement for each relay and end-to-end encrypted deletion notices for counterparties
+  of open commitments and for every thread counterparty - then F07.S01.M01 signs
   revocations of every registered device key, modules pseudonymize retained evidence with a per-deletion pseudonym,
   crypto-shred blobs and purge content, and the final step, owned by F07.S01.M01, destroys the keys. privacy.deletion.completed
   is then a notification only. What must outlive the erased vault (the deletion ledger, statements still awaiting delivery and,
@@ -18,13 +22,14 @@ summary: >-
   vaults or relays cannot be recalled, that exported files stay with the user, and that evidence is pseudonymized, not anonymized.
 responsibilities:
   - Own DeletionRequest with its states, grace and deferral deadlines, per-module step progress, per-relay and per-counterparty delivery state, and its residue form after completion.
-  - Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules through its registry, idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
-  - Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments, each signed once at execution and valid for the whole 30-day delivery window.
+  - Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules discovered through the kernel port registry at vault composition (by inverted registration for F07.S01.M01, F15.S01.M01 and F15.S04.M03, which cannot list this module in depends_on without closing a cycle), idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
+  - Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments and for every thread counterparty listed by the F08 DeletionPort plans, each signed once at execution and valid for the whole 30-day delivery window.
   - Orchestrate, not produce, federation tombstones by running the F11.S01.M02 DeletionPort sign step at execution, never during grace.
   - Pseudonymize the principal in retained RET-EVIDENCE records with a per-deletion pseudonym, destroy the pseudonymization salt at completion, and never keep the did and the pseudonym in the same retained record.
   - Keep a deletion ledger keyed by a salted hash of the did in the per-origin residue store for 180 days so restores into this browser profile never resurrect deleted data.
   - Handle relay-side application of a verified deletion statement as the relay command privacy.deletion.relay_apply, which calls privacy.legal_hold.check and the relay purge path of F10.S01.M02.
   - Expose the in-process guard privacy.deletion.assert_not_pending that every publishing and commitment module calls, and emit privacy.deletion.cancelled when a request is cancelled.
+  - Be the deletion flow behind the PWA's Erase vault action - it shows the export prompt (IOX-6) before any IndexedDB vault data is deleted, and vault lock and principal switch (F07.S01.M02, F15.S01.M02) never delete data.
 non_responsibilities:
   - Retention sweeps and legal holds (F10.S01.M02), export (F10.S01.M03) and consent (F10.S01.M01, which withdraws consents in its own DeletionPort step).
   - Federation tombstone format, issuance and peer application (F11.S01.M02, run through its DeletionPort step) and relay-to-relay transport (F11.S02.M01); this module's statements leave the device through the sync outbox (F15.S01.M01).
@@ -49,9 +54,12 @@ edge_cases:
   - The principal has a second device and a recovery kit; before the keys are destroyed every registered device key is revoked by signed revocation statements queued to the user's relays, and the summary warns that the recovery kit can still re-create the identity unless the user destroys it.
   - A relay receives the device-key revocation before the deletion statement; it still accepts the statement because the revocation, with reason account_deleted, lists the cids of the final statements signed just before it.
   - A replayed batch with changed content, a statement older than 30 days, or one signed by a key revoked for another reason reaches a relay; relay_apply refuses it with PRIVACY_DELETION_STATEMENT_INVALID, while a second delivery of the same valid batch is a no-op.
+  - The user has 40 threads with 63 distinct counterparties and no open commitment; the sign step signs one departure notice, the F08.S01.M02 plan lists the 63 counterparties with their mailboxes, the notice is sealed to each of them under the same cid, and the account_deleted revocation lists that single cid.
+  - The user taps Erase vault in the PWA; the export prompt opens first, and nothing in IndexedDB is deleted until the user has seen it and confirmed the deletion request; locking the vault or switching principal instead keeps every record.
+  - The F15.S01.M01 outbox purge step runs while deletion statements and notices signed in the sign step still await delivery; those entries move to the residue outbox instead of being deleted, and only the principal's other entries are purged.
 ux:
   screens:
-    - "Delete account screen: what will be deleted, what will be pseudonymized and kept (evidence for up to 2 years), what cannot be recalled, the notice 'This deletes your account on this device. Your recovery kit and your other devices can re-create it unless you destroy them', export-first link, checkbox Also remove my evidence copies on this device, typed confirmation of the pseudonym, fresh unlock required."
+    - "Delete account screen, reached from Settings and from the PWA's Erase vault action: the export prompt (IOX-6) with last-export age and an Export now button comes first, then what will be deleted, what will be pseudonymized and kept (evidence for up to 2 years), what cannot be recalled, that thread counterparties are told the account was deleted, the notice 'This deletes your account on this device. Your recovery kit and your other devices can re-create it unless you destroy them', checkbox Also remove my evidence copies on this device, typed confirmation of the pseudonym, fresh unlock required."
     - "Pending deletion banner on every screen with days left, Cancel deletion button, and blocking commitments list when deferred."
     - "Completion summary: counts per module, relays by delivery state (prepared, relay received, peer accepted), device keys revoked, pseudonym assigned to retained evidence, what the residue store keeps and for how long, the this-device-only notice, the recovery-kit warning and the cannot-recall notice."
   states: [idle, needs-unlock, pending-grace, deferred, executing, completed, failed-retrying, cancelled]
@@ -67,6 +75,7 @@ processes:
       - A deletion ledger entry is kept for 180 days after completion in the residue store, keyed by HMAC-SHA256(ledgerSalt, did) with a separate, kept ledger salt and holding no requestId, pseudonym or plain did; the completed request record in residue form is P3 and retained as RET-EVIDENCE as proof of the deletion request.
       - A per-origin residue store outside the erased principal vault holds only the completed DeletionRequest without did or salt, the ledger entries, outbox entries of statements already signed and still awaiting delivery (until peer_accepted, or 30 days after signing), and, when keepEvidence is true, a pseudonymized evidence-only vault retained per RET-EVIDENCE; nothing else of the principal survives on the device.
       - The relay deletion statement classrup.privacy.deletion_statement/v1 and the counterparty notice classrup.privacy.deletion_notice/v1 have their own schemas with explicit field allowlists and signer role principal, are registered in the F11.S01.M01 statement registry, and are separate from the vault-only entity schema classrup.privacy.deletion_request/v1.
+      - The deletion notice has two kinds - a commitment notice per open commitment for its counterparties, and one departure notice signed once in the sign step and sealed separately to the mailbox key of every thread counterparty that the F08 DeletionPort plans list, so all thread counterparties receive the same cid; the deleted did is the envelope author and is never repeated in the payload.
     entities:
       - name: DeletionRequest
         schema: classrup.privacy.deletion_request/v1
@@ -86,8 +95,8 @@ processes:
           - "pseudonym?: string — del- plus 16 base32 characters of HMAC-SHA256(salt, did); set at execution; the retained record keeps it but never the did"
           - "steps: array — up to 128 {moduleId, step: sign|revoke_keys|pseudonymize|shred|purge|destroy_keys, state: pending|done|failed, attempts: int ≤ 8}"
           - "blockers: array — open commitments {kind, ref} found at the last check, up to 50"
-          - "relays: array — up to 20 {relayId, statementCids: string[], syncState: prepared|transport_acknowledged|peer_accepted, someRetained?: boolean}"
-          - "counterparties: array — up to 50 {commitmentRef, noticeCid, syncState: prepared|transport_acknowledged|peer_accepted}"
+          - "relays: array — up to 20 {relayId (canonical relayId of F15.S02.M01), statementCids: string[], syncState: prepared|transport_acknowledged|peer_accepted, someRetained?: boolean}"
+          - "counterparties: array — up to 1000 {kind: commitment|departure, commitmentRef? (commitment only), recipientDid, mailboxId, noticeCid, syncState: prepared|transport_acknowledged|peer_accepted}"
           - "statementsSignedAt?: timestamp — local clock when the sign step produced the relay statements and notices; never re-signed"
           - "tombstoneCount: int — ≥ 0"
           - "completedAt?: timestamp — local clock"
@@ -101,6 +110,7 @@ processes:
           - status executing is never cancelled; cancel is allowed only in pending_grace and deferred.
           - No stored record or derivable key joins the did and the pseudonym after completion; ledger entries hold only ledgerKey and ledgerUntil.
           - Every statement is signed in the sign step before any revoke_keys or destroy_keys step, and nothing is signed afterwards.
+          - All departure entries share one noticeCid, and each recipientDid appears at most once per notice kind and commitmentRef.
     sql: |
       CREATE TABLE privacy_deletion_request (
         id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, status TEXT NOT NULL, grace_ends_at TEXT NOT NULL,
@@ -115,6 +125,7 @@ processes:
       - Execution validates that grace has ended, that deferral limits are respected and that every registered module has a plan.
       - "Incoming relay deletion statements are verified for signature by a registered, non-revoked key of the did (or one listed as final by its account_deleted revocation) and for replay rather than age: dedupe on (did, requestId, batch hash) and accept signedAt up to 30 days old plus 10 minutes of clock skew."
       - Publishing and new commitments are refused during an active request through the guard privacy.deletion.assert_not_pending, which every publishing and commitment module calls.
+      - Deletion notices are validated against the allowlist of their kind and sent only to recipients that a DeletionPort plan listed as commitment counterparties or thread counterparties.
     rules:
       - "V01 | vault unlocked within the last 5 minutes | UNAUTHENTICATED"
       - "V02 | typed confirmation equals the principal's pseudonym | VALIDATION_FAILED"
@@ -127,6 +138,8 @@ processes:
       - "V09 | privacy.deletion.assert_not_pending - no request is pending_grace, deferred, executing or failed in this vault | PRIVACY_DELETION_PENDING"
       - "V10 | a DeletionPort step starts only after every lower-order step of every module is done (sign, revoke_keys, pseudonymize, shred, purge, destroy_keys) | CONFLICT_STATE"
       - "V11 | a relay_apply batch has at most 100 tombstone cids and its batch index is within total | VALIDATION_FAILED"
+      - "V12 | a deletion_notice payload has exactly the allowlisted fields of its kind (commitment - requestId, signedAt, kind, commitmentRef, effectiveAt, recourse; departure - requestId, signedAt, kind, effectiveAt, recourse none) and every recipient is listed by a DeletionPort plan as a counterparty of that commitment or as a thread counterparty | VALIDATION_FAILED"
+      - "V13 | Erase vault and privacy.deletion.request delete no vault data before the export prompt was shown in this flow; vault lock and principal switch never call DeletionPort | PRECONDITION_FAILED"
   workflow_state_machine:
     requirements:
       - Deletion requests follow the declared machine; the point of no return is the transition to executing and the UI says so before the request.
@@ -152,10 +165,12 @@ processes:
   commands_queries_events:
     requirements:
       - Request and cancel are vault commands; execution is driven by an internal sweep and is not a user command; the relay command privacy.deletion.relay_apply serves relays that receive the signed deletion statement, and privacy.deletion.assert_not_pending and privacy.deletion.ledger_check are in-process guard queries.
-      - Execution produces the signed statements classrup.privacy.deletion_statement/v1 (to relays) and classrup.privacy.deletion_notice/v1 (end-to-end encrypted to counterparties) and orchestrates classrup.federation.tombstone/v1 per published record through the F11.S01.M02 DeletionPort step; all are signed before any key is revoked or destroyed.
+      - Execution produces the signed statements classrup.privacy.deletion_statement/v1 (to relays) and classrup.privacy.deletion_notice/v1 (end-to-end encrypted to the counterparties of open commitments and, as one departure notice, to every thread counterparty) and orchestrates classrup.federation.tombstone/v1 per published record through the F11.S01.M02 DeletionPort step; all are signed before any key is revoked or destroyed.
       - The module consumes commitment-closing and commitment-cancelling events to end deferral and never accepts a request to shorten the grace period.
       - DeletionPort is defined in the note with typed methods, step order, error semantics and a CI conformance check, and open commitments are reported as blockers by plan().
       - privacy.deletion.requested permits only reversible actions, privacy.deletion.cancelled tells consumers to undo them, and privacy.deletion.completed is a notification only on which consumers must not sign, pseudonymize or call relays.
+      - DeletionPort registrations are discovered through the kernel port registry at vault composition, by inverted registration for modules that cannot list this module in depends_on without closing a cycle (F07.S01.M01, F15.S01.M01 platform.outbox, F15.S04.M03 platform.local_settings); a module registered twice fails composition and every registrant takes part in the fixed step order.
+      - The sign step runs every registered sign implementation before revoke_keys and destroy_keys, including F07.S01.M01 signed handle releases, the tombstone of its own identity document and session revocations on relays, the F08 signed message and attachment deletes and mailbox closes, and this module's departure notice to the thread counterparties that the F08 plans list.
     commands:
       - name: privacy.deletion.request
         capability: privacy.deletion.request
@@ -202,13 +217,15 @@ processes:
     note: >-
       DeletionPort (N6; defined here, implemented by every module that owns user data and registered at vault composition):
       plan(ctx{requestId, did, keepEvidence}) -> {moduleId, willDelete: string[], willPseudonymize: string[], blockers:
-      [{kind: deal|cycle|booking|reservation|rental|auction|dispute, ref, counterparties: did[]}], steps: step[]};
+      [{kind: deal|cycle|booking|reservation|rental|auction|dispute, ref, counterparties: did[]}], noticeRecipients?:
+      [{did, mailboxId, relayId}] (thread counterparties, listed by F08.S01.M02), steps: step[]};
       execute(ctx{requestId, step, signer (available only in sign and revoke_keys), outbox}) -> {done: boolean, counts},
       idempotent per (requestId, moduleId, step); pseudonymize(ctx{requestId, pseudonym}) -> {count}, replacing the
       principal's did by the pseudonym in retained evidence. Steps run in this order across all modules - sign (each module
       signs the statements and signed relay requests it needs, for example F11.S01.M02 tombstones, F10.S01.M01 consent
-      withdrawals, F07.S01.M01 handle releases, mailbox deletes of the F08 modules, and this module's deletion statements
-      and notices), revoke_keys (F07.S01.M01 signs classrup.security.keyrevocation/v1 for every registered device key with
+      withdrawals, F07.S01.M01 handle releases, the tombstone of its own identity document and session revocations on
+      relays, the F08 signed message deletes (F08.S01.M01), attachment deletes (F08.S01.M03) and mailbox closes, and this
+      module's deletion statements and notices), revoke_keys (F07.S01.M01 signs classrup.security.keyrevocation/v1 for every registered device key with
       reason account_deleted and the list of final statement cids it still vouches for), pseudonymize, shred (F10.S01.M03
       export bundles, blob keys of every module), purge, destroy_keys (F07.S01.M01 only, last). A step error with
       DEPENDENCY_UNAVAILABLE or INTERNAL counts as one failed attempt; a missing or invalid plan is
@@ -217,13 +234,23 @@ processes:
       results and asserts that no consumer of privacy.deletion.requested purges or tombstones and no consumer of
       privacy.deletion.completed signs or pseudonymizes. F11.S01.M02 and the delivery modules are reached through their
       registered ports and the sync outbox (F15.S01.M01) rather than depends_on, because they already depend on this module
-      transitively through F07.S02.M01. Statements (N2, registered with F11.S01.M01 roleFor) -
+      transitively through F07.S02.M01. Registry - every DeletionPort is registered in the kernel port registry at vault
+      composition; F07.S01.M01, F15.S01.M01 (platform.outbox) and F15.S04.M03 (platform.local_settings) register by inverted
+      registration because this module already depends on them or on a module that depends on them, and the F15.S01.M01
+      purge step moves the entries that this deletion's sign step queued and that still await delivery to the residue
+      outbox instead of deleting them. Modules that keep RET-EVIDENCE, for example F11.S01.M02 provenance, F11.S02.M03
+      conflict records and F11.S03.M03 migration records, pseudonymize in the pseudonymize step, the only call that receives
+      the pseudonym; privacy.deletion.completed carries no pseudonym and is never a pseudonymization trigger (N6a). Statements (N2, registered with F11.S01.M01 roleFor) -
       classrup.privacy.deletion_statement/v1, signer role principal (a registered device key of the did, the envelope
       author), audience one relay (payload relayId), payload exactly {requestId, relayId, signedAt, batch {index, total},
-      tombstones: cid[] ≤ 100}, signed once in the sign step; classrup.privacy.deletion_notice/v1, signer role principal,
+      tombstones: cid[] ≤ 100}, signed once in the sign step; classrup.privacy.deletion_notice/v1, signer role principal
+      (the deleted did is the envelope author, FED-7, and is never repeated in the payload), in two kinds - commitment,
       receivers the counterparties of the listed commitment (the party DIDs carried by the commitment), payload exactly
-      {requestId, commitmentRef {type, id}, effectiveAt, recourse: dispute|recovery|none}, encrypted end-to-end to those
-      counterparties' mailbox keys (PRV-5). Residue outbox - at completion the sync outbox entries still awaiting delivery move
+      {requestId, signedAt, kind: commitment, commitmentRef {type, id}, effectiveAt, recourse: dispute|recovery|none}; and
+      departure, one notice signed once and sealed separately to the mailbox key of every thread counterparty in the
+      noticeRecipients of the F08 plans, payload exactly {requestId, signedAt, kind: departure, effectiveAt, recourse: none},
+      so the account_deleted revocation lists a single departure cid however many threads exist; both encrypted end-to-end
+      to the receivers' mailbox keys (PRV-5). Residue outbox - at completion the sync outbox entries still awaiting delivery move
       to the residue store and F15.S01.M01 keeps delivering them whenever the PWA is open on this origin, for 30 days after
       signing; no key is needed because every entry is already signed. relay_apply runs as the relay-system actor, calls
       privacy.legal_hold.check and the relay purge path of F10.S01.M02 (RetentionPurgePort purgeSubject) for the author and
@@ -253,9 +280,10 @@ processes:
     example: |
       vault command privacy.deletion.request { "confirmText": "quiet-otter-42", "keepEvidence": true }
       => { "requestId": "0192f3e0-…", "status": "pending_grace", "graceEndsAt": "2026-11-18T10:00:00.000Z",
-           "summaryPlan": { "pseudonymize": ["commerce.deals", "commerce.receipts"], "delete": ["bazaar.listings", "comms.messages"], "relays": ["relay.example.org"] } }
+           "summaryPlan": { "pseudonymize": ["commerce.deals", "commerce.receipts"], "delete": ["bazaar.listings", "comms.messages"], "relays": ["relay:3fz7hq2wkmpd5ra6t4ncxb7ygu"], "threadCounterparties": 63 } }
       query privacy.deletion.assert_not_pending { "capability": "bazaar.listing.publish" } => PRIVACY_DELETION_PENDING { "params": { "requestId": "0192f3e0-…" } }
-      day 14: executing -> sign (tombstones, consent withdrawals, deletion statements, notices; prepared) -> revoke_keys -> pseudonymize -> shred -> purge
+      day 14: executing -> sign (tombstones, consent withdrawals, handle releases, identity document tombstone, relay session revocations,
+        message and attachment deletes, mailbox closes, deletion statements, commitment notices, one departure notice; prepared) -> revoke_keys -> pseudonymize -> shred -> purge
         -> destroy_keys -> completed, pseudonym del-7q3k9m2x4t8w5r1c; residue keeps the ledger entry and the outbox entries until delivered
   authorization_capabilities:
     requirements:
@@ -286,7 +314,7 @@ processes:
       - Abusive or coerced deletion is limited by the fresh unlock, typed confirmation, 14-day grace with banners, and cancellation.
     data:
       - "DeletionRequest: P3; after completion residue form without did and salt. Salt: P4, destroyed at completion. Ledger salt: P4, kept in the residue store only for ledger lookups and deleted with the last ledger entry. Pseudonym: P1 identifier shown in retained evidence."
-      - "Ledger entries: ledgerKey (HMAC-SHA256 of the did) and ledgerUntil only, kept 180 days. deletion_statement: P2 for its relay. deletion_notice: P2, encrypted end-to-end to the counterparties."
+      - "Ledger entries: ledgerKey (HMAC-SHA256 of the did) and ledgerUntil only, kept 180 days. deletion_statement: P2 for its relay. deletion_notice: P2, encrypted end-to-end to the counterparties of the commitment or, for the departure notice, to each thread counterparty, who already know the did; it carries no content, thread ID or list of other recipients."
     retention:
       - "Deleted content purged at execution; pseudonymized evidence-only vault in the residue store per RET-EVIDENCE (2 years after last related activity) when keepEvidence is true; ledger 180 days; residue outbox entries until delivered or 30 days after signing; residue DeletionRequest RET-EVIDENCE."
       - "Crypto-shredding removes keys for encrypted blobs; relays that hold ciphertext keep unreadable bytes until their retention sweep."
@@ -297,6 +325,8 @@ processes:
       - "T04 | Relay ignores tombstones | signed tombstones are verifiable evidence; per-relay delivery state shown; clients can drop that relay"
       - "T05 | Counterparty harmed by sudden deletion mid-trade | deferral up to 30 days for open commitments and an encrypted signed deletion notice so counterparties can use recovery or disputes"
       - "T06 | Stale, replayed or forged deletion statement | dedupe on (did, requestId, batch hash), signer must be a registered key or listed as final by its account_deleted revocation, audience bound to relayId, 30-day acceptance window plus 10 minutes skew"
+      - "T07 | The departure notice reveals who else the user talked to, or reaches people outside the user's threads | one notice per deletion sealed separately per mailbox, no recipient list, thread ID or content in the payload, and recipients limited to the thread counterparties listed by the F08 plans (V12)"
+      - "T08 | Erase vault or a lock wipes the only copy of the user's data without warning | Erase vault runs this flow with the export prompt first and the 14-day grace; lock and principal switch never call DeletionPort (V13)"
     abuse_controls:
       - "One request at a time; relay_apply limited to 60 batches per hour per did by the relay command bus (F15.S02.M02) through RateLimitPort (N18); tombstone batches limited to 100 envelopes (FED-5)."
   observability_performance:
@@ -344,8 +374,11 @@ processes:
       - "T22 | e2e | 07.R02,01.R04 | restore the pre-deletion export on a fresh device after completion | restore succeeds on that device, documenting the limit that the UI and completion summary stated"
       - "T23 | integration | 01.R04,06.R01 | relay offline at execution returns on day 3, a second relay returns on day 29, a third never returns | residue outbox delivers on day 3 and day 29 and both relays accept; the third entry is dropped after 30 days and the summary shows it never acknowledged"
       - "T24 | contract | 01.R05 | deletion notice for an open cycle captured at a relay double and opened by counterparty doubles | relay sees only ciphertext, mailbox ID and size; counterparties decrypt, verify signer role principal and see exactly the allowlisted fields"
+      - "T25 | integration | 01.R06,02.R05,04.R02 | deletion with 40 threads and 63 thread counterparties listed by an F08.S01.M02 plan double, one open cycle and a notice addressed to a did that no plan listed | one departure notice signed once and sealed to 63 mailboxes under one cid, payload {requestId, signedAt, kind, effectiveAt, recourse}; the cycle gets a commitment notice; the unlisted recipient is refused with VALIDATION_FAILED; the account_deleted revocation lists the departure cid"
+      - "T26 | integration | 04.R06,04.R07,03.R03 | execution with stub registrants in the kernel port registry for F07.S01.M01, F08.S01.M01, F08.S01.M03, F15.S01.M01 and F15.S04.M03 and recording order | F07 handle releases, identity document tombstone and relay session revocations, F08 message and attachment deletes and mailbox closes all run in sign before revoke_keys and destroy_keys; F15.S01.M01 moves pending signed entries to the residue outbox; F15.S04.M03 local settings are purged; no registrant needs a depends_on edge to this module"
+      - "T27 | e2e | 02.R05,07.R02 | tap Erase vault in the PWA, then lock the vault and switch principal with queued entries | the export prompt is shown before anything is deleted and the deletion request starts grace only after confirmation; lock and switch keep every record and entry and never call DeletionPort"
     acceptance:
-      - All tests T01 to T24 pass in CI.
+      - All tests T01 to T27 pass in CI.
       - After completion no module on this device retains content or recoverable keys for the principal, retained evidence carries only the pseudonym, and no record joins the did and the pseudonym.
       - The grace period of 14 days cannot be shortened by any API.
       - The completion summary always states what cannot be recalled and that the guarantee covers this device only.

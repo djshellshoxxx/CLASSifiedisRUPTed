@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-091-09.T21 | integration | PS-091-06.R02 | crash injected after an envelope acceptance but before commit, and after commit | neither counter nor acceptance persisted in the first case, both in the second; counted envelopes equal accepted envelopes |
 | TEST-PS-091-09.T22 | unit | PS-091-07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed in a vault | selected-relay section exported without secrets; list deleted; relay peers untouched |
 | TEST-PS-091-09.T23 | integration | PS-091-04.R03 | flag F11 off then on | peer_relay health frozen and peers dormant; selected relays keep working; scores resume |
+| TEST-PS-091-09.T24 | contract | PS-091-04.R06 | activate a peer; apply a verified key_rotation; apply a rotation signed by a non-pinned key | federation.peer.added carries relayKey; federation.peer.key_rotated carries oldRelayKey, newRelayKey, effectiveAt and previousKeyUntil in the same transaction as the update; the invalid rotation FEDERATION_KEY_MISMATCH and no event |
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No peer becomes active without both sides' signed opt-in (or a selected relay's signed identity statement) and a recorded fingerprint confirmation.
 - SSRF, key substitution and unsolicited-offer tests pass, and no honest relay is penalized for an author's fork.
 

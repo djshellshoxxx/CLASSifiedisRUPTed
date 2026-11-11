@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-116-06.R01** Every relay command is sent with its stored Idempotency-Key and every statement carries its cid, so deliveries inside the relay's 24 h idempotency window take effect at most once; after 23 h from firstAttemptAt a relay command is resent only with expectedRevision, a deterministic resourceId with create-if-absent semantics or a read-back showing no effect, and otherwise moves to conflict with "may already have been applied" (CTR-IDM-001 IDM-1, ID-3).
+- **PS-116-06.R01** Every relay command is sent with its stored Idempotency-Key and every statement carries its cid, so deliveries inside the relay's 24 h idempotency window take effect at most once; after 23 h from firstAttemptAt a relay command is resent only with expectedRevision, a deterministic resourceId with create-if-absent semantics or a read-back showing no effect, and otherwise moves to conflict with "may already have been applied" (CTR-IDM-001 IDM-1, CTR-FED-001 FED-7).
 - **PS-116-06.R02** Retry timing follows IDM-4 exactly; only retryable errors and network failures are retried, at most 6 attempts per entry.
 - **PS-116-06.R03** A crash between send and receipt leaves the entry recoverable, and a lost peer acknowledgement leaves it in transport_acknowledged rather than claiming acceptance.
 - **PS-116-06.R04** Receipts that a verified restore announcement of the destination relay declares lost return the entry to prepared, and it is resent with the same cid or Idempotency-Key, so data a restored relay lost is delivered again.
@@ -27,11 +27,11 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 |---|---|---|---|---|
 | TEST-PS-116-09.T04 | integration | PS-116-03.R02, PS-116-06.R01, PS-116-06.R03 | kill the tab after send and before receipt, restart within 1 h | entry resent with same cid or Idempotency-Key, stub relay applies once, entry ends transport_acknowledged |
 | TEST-PS-116-09.T07 | integration | PS-116-06.R02, PS-116-02.R02 | stub relay returns network error, 429 retryAfterMs 3000, then 200 | delays follow full-jitter bounds, wait at least 3000 ms, delivered on third attempt; after 6 failures entry is failed with failureReason retry_exhausted |
-| TEST-PS-116-09.T14 | e2e | PS-116-06.R03 | two tabs open, device offline, three actions queued, device reconnects, relay then stopped | exactly one tab delivers, order preserved, UI shows Reached relay for delivered entries and unknown for the rest, local data intact |
+| TEST-PS-116-09.T14 | e2e | PS-116-06.R03 | two tabs open, device offline, three actions queued, device reconnects, relay then stopped | exactly one tab delivers, order preserved, UI shows the sync.state text 'Delivered to relay <display name>, ...' for delivered entries and 'Saved on this device only, waiting to send' with relay status unknown for the rest, local data intact |
 | TEST-PS-116-09.T19 | contract | PS-116-09.R03, PS-116-06.R02 | IDM-1/IDM-4/IDM-5/IDM-7 conformance suite against the stub relay | all assertions pass including resend inside the 24 h window and the 23 h replay-safety rule |
 | TEST-PS-116-09.T25 | integration | PS-116-02.R05, PS-116-06.R01 | relay command without expectedRevision first attempted, failed, retried by the user at 25 h; same with expectedRevision; same with deterministic resourceId; registration of a relay command without replay safety | first moves to conflict with unsafe_replay and the may-already-have-been-applied prompt; second and third are resent once; registration refused with PLATFORM_OUTBOX_NOT_DELIVERABLE |
 | TEST-PS-116-09.T29 | integration | PS-116-03.R05, PS-116-06.R04 | stub relay restores a backup and publishes a signed restore announcement covering receipt seq above 88000; another announcement is signed by an unknown key | covered transport_acknowledged entries return to prepared and are resent once with the same cid or Idempotency-Key; the unsigned announcement is ignored with PLATFORM_OUTBOX_RECEIPT_INVALID |
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

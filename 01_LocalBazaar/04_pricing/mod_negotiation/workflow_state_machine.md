@@ -29,11 +29,11 @@ Initial **open**; terminal **rejected**, **withdrawn**, **expired**.
 | open -> rejected | reject by the party whose turn it is, or block, or listing unavailable, or depletion | signed close queued; emits bazaar.negotiation.closed |
 | open -> withdrawn | either party withdraws, or the buyer vault receives round 1 for a root offer it already withdrew | signed close queued; emits bazaar.negotiation.closed (withdrawn) |
 | open -> expired | round expiresAt passes (the proposer waiting on its own round keeps it until graceUntil) or hardDeadline passes | emits bazaar.negotiation.closed (expired) |
-| open -> frozen | conflicting signed statements detected, or comms.consent.verify returns conflicted | frozenReason conflicting_rounds; no further commands except discard |
+| open -> frozen | conflicting signed statements detected, federation.conflict.detected whose freezeScope names consent:bazaar_negotiation:<negotiationId>, or comms.consent.verify returns conflicted | frozenReason conflicting_rounds; no further commands except discard |
 | accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this chain's hold (acceptance on a forked device) | frozenReason hold_fork; the Deal does not proceed |
 | accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | commerce.deal.cancel in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired) |
 | frozen -> accepted | bazaar.negotiation.keep_frozen by the seller for a hold_fork chain | the competing holder is dropped by its owner module; hold active again |
-| frozen -> rejected | either party discards the chain | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork commerce.deal.cancel and a signed close to the buyer; a new offer is needed |
+| frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork commerce.deal.cancel and a signed close to the buyer; a new offer is needed |
 | frozen -> expired | hardDeadline reached, or for hold_fork the frozen hold's maxExpiresAt | emits bazaar.negotiation.closed (expired) |
 
 ```mermaid
@@ -48,11 +48,11 @@ stateDiagram-v2
   open --> rejected: reject by the party whose turn it is, or block, or listing unavailable, or depletion
   open --> withdrawn: either party withdraws, or the buyer vault receives round 1 for a root offer it already withdrew
   open --> expired: round expiresAt passes (the proposer waiting on its own round keeps it until graceUntil) or hardDeadline passes
-  open --> frozen: conflicting signed statements detected, or comms.consent.verify returns conflicted
+  open --> frozen: conflicting signed statements detected, federation.conflict.detected whose freezeScope names consent bazaar_negotiation <negotiationId>, or comms.consent.verify returns conflicted
   accepted --> frozen: seller vault  bazaar.inventory.conflict_detected names this chain's hold (acceptance on a forked device)
   accepted --> expired: seller vault  verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace)
   frozen --> accepted: bazaar.negotiation.keep_frozen by the seller for a hold_fork chain
-  frozen --> rejected: either party discards the chain
+  frozen --> rejected: either party discards the chain, or federation.conflict.resolved with decision drop_all
   frozen --> expired: hardDeadline reached, or for hold_fork the frozen hold's maxExpiresAt
   rejected --> [*]
   withdrawn --> [*]
@@ -79,4 +79,4 @@ stateDiagram-v2
 
 ## Dependencies
 
-Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

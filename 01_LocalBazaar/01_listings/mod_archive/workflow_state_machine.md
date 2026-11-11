@@ -22,10 +22,10 @@ Initial **live**; terminal **restored**, **superseded**, **purged**.
 |---|---|---|
 | live -> live | expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap | bazaar.publication.renew requestedBy expiry_deferral; autoExtensions counted in the next record |
 | live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached | Listing stays published locally; others see the signed expiresAt; deferredSince recorded |
-| live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired |
+| live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid |
 | live -> closed | bazaar.listing.close by owner or sold-out sweep | holds handled per V04; end publication first; Listing unpublished -> closed; emits bazaar.listing.closed |
 | live -> archived | bazaar.listing.archive by owner | holds handled per V04; end publication if active; Listing -> archived; emits bazaar.listing.archived |
-| deferred -> expired | sweep finds no active Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired |
+| deferred -> expired | sweep finds no active Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid |
 | deferred -> closed | bazaar.listing.close by owner | holds handled per V04; end publication; Listing -> closed; emits bazaar.listing.closed |
 | expired -> closed | bazaar.listing.close by owner | holds handled per V04; Listing expired -> closed; emits bazaar.listing.closed |
 | expired -> superseded | consumes bazaar.listing.published for the listing (published again by F01.S01.M03) | record closed; the listing is live again and a later end creates a new record |

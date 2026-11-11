@@ -20,13 +20,13 @@
 - vault diagnostics counters: outbound_by_sync_state, inbound_quarantined_by_reason, decrypt_failures (local only)
 
 **Logs**
-- relay info mailbox.put {mailboxIdHash, size, senderClass, correlationId} — no sender, blob or plaintext.
+- relay info mailbox.put {mailboxIdHash, size, senderClass, correlationId} — no request key, sender, ciphertext or plaintext.
 - vault warn message.quarantined {messageId, reason} — local diagnostics only.
 
 **Budgets**
-- Relay put p95 ≤ 300 ms at 100 req/s including put proof verification; fetch 100 envelopes p95 ≤ 150 ms; sweep deletes 50 000 expired envelopes in ≤ 30 s.
+- Relay put p95 ≤ 300 ms at 100 req/s including RFC 9421 verification, limit checks and receipt signing; fetch 100 envelopes p95 ≤ 150 ms; sweep deletes 50 000 expired envelopes in ≤ 30 s.
 - Vault compose, encrypt, commit, wrap for 12 devices and sign ≤ 150 ms on a mid-range phone (Moto G class).
-- Each per-recipient blob ≤ 16 384 bytes including at most 5 wrapped keys for that recipient's devices.
+- Each chat message wrapper ≤ 16 384 bytes including at most 5 wrapped keys for that recipient's devices; other wrappers ≤ the tenant maxEnvelopeBytes.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -38,4 +38,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F12.S03.M04, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

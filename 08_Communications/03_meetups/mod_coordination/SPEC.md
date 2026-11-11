@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Two (or more) members agree a time window and a place for handing over goods. A proposal is a signed statement from the proposer's vault naming a window of 15 minutes to 4 hours and a place that is either a curated safe spot, matched to a curator-verified SafeSpot statement by its cid, or a coarse L3 area label. Every party, including the proposer, agrees by a consent statement (F08.S02.M02, consent.comms.meetup.agree.v1) on the exact proposal cid; propose and reschedule sign the proposer's own consent in the same transaction, so the evidence is uniform. The meetup is agreed in a vault only when it holds valid agreements from every party, so the UI says "you agreed, waiting for the other party" until the peer's signature arrives. Agreed is not a commit: consents may be revoked until windowStart, which this module declares through the ConsentSubjectPort it registers for comms_meetup. Any two different valid proposals with the same revision number, whoever sent them, freeze the meetup for renegotiation. Either party can reschedule up to 5 times or cancel. No exact home address and no live location are ever part of a meetup.
+Two (or more) members agree a time window and a place for handing over goods. A proposal is a signed statement from the proposer's vault naming a window of 15 minutes to 4 hours and a place that is either a curated safe spot, matched to a curator-verified SafeSpot statement by its cid, or a coarse L3 area label. Every party, including the proposer, agrees by a consent statement (F08.S02.M02, consent.comms.meetup.agree.v1) on the exact proposal cid; propose and reschedule sign the proposer's own consent in the same transaction, so the evidence is uniform. The meetup is agreed in a vault only when it holds valid agreements from every party, so the UI says "you agreed, waiting for the other party" until the peer's signature arrives. Agreed is not a commit: consents may be revoked until windowStart, which this module declares through the SubjectCanonicalizerPort it registers for comms_meetup. Any two different valid proposals with the same revision number, whoever sent them, freeze the meetup for renegotiation. Either party can reschedule up to 5 times or cancel. No exact home address and no live location are ever part of a meetup.
 
 ## Responsibilities
 
@@ -16,7 +16,7 @@ Two (or more) members agree a time window and a place for handing over goods. A 
 - Enforce the reschedule limit of 5 per meetup, the window rules, and the place rules (verified safe spot or L3 area label).
 - Cancel or expire meetups when their context closes, the local principal blocks a party, or the window passes, including frozen meetups whose competing windows all passed.
 - Detect conflicting proposals (any two different valid proposals with the same revision number, whoever proposed them) and freeze the meetup for renegotiation instead of picking one.
-- Register the ConsentSubjectPort for subjectType comms_meetup (agreed is not committed until windowStart) and the F10 privacy ports, keeping signed proposals as evidence (N6).
+- Register the SubjectCanonicalizerPort for subjectType comms_meetup (agreed is not committed until windowStart) and the F10 privacy ports, keeping signed proposals as evidence (N6).
 
 ## Not responsible for
 

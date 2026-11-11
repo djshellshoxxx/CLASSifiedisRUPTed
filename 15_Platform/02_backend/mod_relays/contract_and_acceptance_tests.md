@@ -9,12 +9,13 @@
 - **PS-118-09.R01** Every requirement of this module is covered by at least one automated test.
 - **PS-118-09.R02** Configuration, identity, shutdown and dispatcher behavior are tested against a real node:http server and a real node:sqlite database in CI.
 - **PS-118-09.R03** A canary suite runs the node:sqlite adapter on the pinned Node version and on the latest 22.x to detect behavior changes in the stability 1.1 API early.
+- **PS-118-09.R04** Production relay builds expose no test-only route or hook (clock, seed); end-to-end and chaos suites start the relay through the separate in-process e2e entry that injects the FakeClock and seeding, and F17.S01.M04 V07 and T21 probe and scan the production build.
 
 ## Specification
 
 See the module test table below (all processes).
 
-**Fixtures:** Temp data dir per test; Node 22.18.0 pinned in .nvmrc and Docker image plus latest 22.x canary; stub consumers (ok, flaky, always-failing); F16.S01.M01 role fixtures (relay_operator RO1 scope relay, tenant operator TO1 scope tenant:T1, member M1); stub TenantPort with maxUploadBytes 4194304; vault-side receipt verifier shared with F15.S01.M01; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Temp data dir per test; Node 22.18.0 pinned in .nvmrc and Docker image plus latest 22.x canary; stub consumers (ok, flaky, always-failing); F16.S01.M01 role fixtures (relay_operator RO1 scope relay, tenant operator TO1 scope tenant:T1, member M1); stub TenantPort with maxUploadBytes 4194304; vault-side receipt verifier shared with F15.S01.M01 with a key set pinned at relay selection; key files with modes 0600, 0400, 0644, a symlink and a foreign owner; RELAY_SECRET_DATA_KEY_FILE set; a stub NewIdentityHook standing in for F15.S03.M03; fixed clock 2026-11-04T10:00:00Z (FakeClock through apps/relay/src/e2e.ts).
 
 ## Verification
 
@@ -46,15 +47,20 @@ See the module test table below (all processes).
 | TEST-PS-118-09.T24 | integration | PS-118-06.R01, PS-118-04.R02, PS-118-02.R04 | rotate replayed with the same Idempotency-Key and body, with the same key and a different body, with a stale expectedRevision, and a second rotation 2 h later | original response replayed; IDEMPOTENCY_KEY_REUSED; CONFLICT_REVISION; RATE_LIMITED |
 | TEST-PS-118-09.T25 | integration | PS-118-05.R01, PS-118-05.R02 | relay_operator RO1 with an active relay-scope RoleAssignment rotates and reads status; RO1 after the assignment expires | allowed; then FORBIDDEN; no capability consults relay configuration for roles |
 | TEST-PS-118-09.T26 | unit | PS-118-01.R04 | derive relayId from a fixed genesis key; format and parse keyId and each destination form; parse malformed strings | values equal the published vectors used by F15.S01.M01, F15.S02.M03, F11.S02.M01 and F01.S01.M03; malformed strings rejected with VALIDATION_FAILED |
+| TEST-PS-118-09.T27 | abuse | PS-118-09.R04, PS-118-02.R01 | build and start the production relay, probe clock and seed routes and list the route table; scan the bundle; then start apps/relay/src/e2e.ts in process and advance its FakeClock | 404 on both probes, no test route or hook in the table or bundle (V16); the e2e handle moves receipt time in process only, with no HTTP route for it |
+| TEST-PS-118-09.T28 | integration | PS-118-02.R05, PS-118-01.R01 | key file 0644, symlink, foreign owner, then 0400; RELAY_SECRET_DATA_KEY_FILE set; inspect startup output, logs and util.inspect of the loaded key | SECURITY_SECRET_PERMISSIONS for the first three and no seed read; 0400 starts; RELAY_SECRET_* neither warned nor printed; the key renders [REDACTED] |
+| TEST-PS-118-09.T29 | integration | PS-118-01.R05, PS-118-03.R04 | revoke the active key with reason compromised while its key file is readable, then relay identity init --new-identity; repeat with the key file deleted using the pre-signed certificate | revocation signed by the key names successorRelayId equal to the new relayId; the new identity records predecessorRelayId and its restore announcement naming it is served before readyz 200; without the announcement hook the relay stays in starting; the certificate path has no successorRelayId and the announcement still names the predecessor |
+| TEST-PS-118-09.T30 | contract | PS-118-04.R07, PS-118-01.R03 | well-known document after two rotations; a fault-injected row with seq 4 and no rotation statement; a vault verifier with the key set pinned at selection | k2 and k3 published with rotations signed by k1 and k2 under classrup-relay-rotate:v1; the unchained row is never published; the verifier follows k1 to k3 and treats an unchained key as a different relay |
 
 ## Acceptance criteria
 
-- All tests T01-T26 pass in CI.
+- All tests T01-T30 pass in CI.
 - The relay starts from environment variables alone, serves its identity and key history, and shuts down within the drain and hook budgets without losing in-flight committed work or unarchived WAL frames.
 - No plaintext private user data and no private key material is ever stored in the database or logs, and no log line links a client address to a mailbox.
-- Every receipt binds destination and the digest of the exact bytes and verifies against the published key history; a stolen key can be revoked from the CLI at once.
+- Every receipt binds destination and the digest of the exact bytes and verifies against the published key history; a stolen key can be revoked from the CLI at once, the revocation names the successor, and the successor's first statement is a signed restore announcement naming the predecessor.
+- No production relay build exposes a test-only route or hook.
 - Stopping or losing the relay loses no vault data; vault tests still pass with the relay stopped.
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

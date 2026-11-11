@@ -12,6 +12,7 @@
 - **PS-118-04.R04** Every relay route that accepts bytes for storage or forwarding (mailbox put of F08.S01.M01, index and publication intake of F06.S01.M01 and F11.S01.M02, federation inbox POST /fed/v1/inbox, media upload PUT /media/v1, auction bid intake of F04.S01.M02) returns in its response field receipt a classrup.platform.relay_receipt/v1 from ReceiptPort.issue - the RFC 8785 JCS body { relayId, keyId, destination, digest, cid?, receivedAt, epoch, seq } signed with Ed25519 over the bytes of context 'classrup-relay-receipt:v1', a 0x0A byte and the JCS body, where digest is sha256- plus base64url SHA-256 of the exact request bytes received (the ciphertext for mailbox puts) and cid is present only for P0 public statements; vaults verify it against the published key set including retired keys.
 - **PS-118-04.R05** Statements signed by this module and their signer role relay_identity are registered with F11.S01.M01 (N2) - classrup.platform.relay_receipt/v1, classrup.platform.relay_rotation/v1 and classrup.platform.relay_key_revocation/v1; the restore announcements classrup.platform.relay_restore/v1 written by F15.S03.M03 are served here unchanged.
 - **PS-118-04.R06** The public media route GET /media/v1/sha256-<base64url> is handled before the command bus and sends Cache-Control public, max-age=31536000, immutable, ETag equal to the content address, Content-Type of the blob, X-Content-Type-Options nosniff, Cross-Origin-Resource-Policy cross-origin, Access-Control-Allow-Origin echoing an allowlisted PWA origin with Vary Origin, and never Set-Cookie (exempt from the bus's no-store policy).
+- **PS-118-04.R07** Every non-genesis key is published at /.well-known/classrup-relay.json only together with its rotation statement signed by the previous key under classrup-relay-rotate:v1, so a vault that pinned the relay's key set when the user selected the relay follows only signed rotations (F01.S01.M03 V16, F15.S01.M01 V15) and treats any key outside the chain as a different relay.
 
 ## Specification
 
@@ -20,13 +21,13 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `platform.relay_identity.rotate` | platform.relay_identity.rotate | { reason (≤ 200 chars), expectedRevision } with Idempotency-Key — relay command, relay_operator or admin, or local CLI | { keyId, publicKey, retiredKeyId, rotationStatementCid } | FORBIDDEN, CONFLICT_REVISION, IDEMPOTENCY_KEY_REUSED, PLATFORM_RELAY_IDENTITY_MISSING, RATE_LIMITED | platform.relay_identity.rotated | yes (Idempotency-Key) |
-| `platform.relay_identity.revoke` | platform.relay_identity.revoke | { keyId, reason: compromised\|lost\|superseded, expectedRevision, useCertificate?: boolean } — relay command dispatched only by the local CLI (relay identity revoke) with filesystem access to RELAY_DATA_DIR; no prior-key authorization; exempt from the 24 h rotation limit | { keyId, revokedAt, revocationStatementCid, activeKeyRemaining: boolean } | FORBIDDEN, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | platform.relay_identity.rotated | yes (Idempotency-Key) |
+| `platform.relay_identity.revoke` | platform.relay_identity.revoke | { keyId, reason: compromised\|lost\|superseded, expectedRevision, useCertificate?: boolean } — relay command dispatched only by the local CLI (relay identity revoke) with filesystem access to RELAY_DATA_DIR; no prior-key authorization; exempt from the 24 h rotation limit; for reason compromised without useCertificate the CLI first writes the pending successor genesis key (checked by checkSecretFile) and the revocation names its successorRelayId | { keyId, revokedAt, revocationStatementCid, activeKeyRemaining: boolean, successorRelayId? } | FORBIDDEN, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | platform.relay_identity.rotated | yes (Idempotency-Key) |
 
 ### Queries
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `platform.relay_identity.get` | platform.relay_identity.read_public | { includeRetired?: boolean } — relay query, public; also served as /.well-known/classrup-relay.json | { relayId, displayName, publicUrl, keys: [{ keyId, seq, publicKey, status, prevKeyId?, createdAt, retiredAt?, revokedAt?, rotationStatement?, revocationStatement? }], restoreAnnouncements: classrup.platform.relay_restore/v1[] (newest 10), receiptEpoch, software: { name, version }, features: string[] } |  |
+| `platform.relay_identity.get` | platform.relay_identity.read_public | { includeRetired?: boolean } — relay query, public; also served as /.well-known/classrup-relay.json | { relayId, displayName, publicUrl, predecessorRelayId?, keys: [{ keyId, seq, publicKey, status, prevKeyId?, createdAt, retiredAt?, revokedAt?, rotationStatement (required when seq > 1, signed by prevKeyId), revocationStatement? }], restoreAnnouncements: classrup.platform.relay_restore/v1[] (newest 10; the first one of a new identity names predecessorRelayId), receiptEpoch, software: { name, version }, features: string[] } |  |
 | `platform.relay.get_status` | platform.relay.read_status | { } (no input) — relay query, relay_operator or admin | { state, uptimeMs, nodeVersion, sqliteDriver: 'node:sqlite', dispatcher: { lagMs, deadLetters, lastBatchAt }, draining, activeKeyId } | FORBIDDEN |
 
 ### Events produced
@@ -57,7 +58,10 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 # minimal environment
 RELAY_ENV=production RELAY_PUBLIC_URL=https://relay.example.org RELAY_DATA_DIR=/var/lib/classrup
 RELAY_DB_PATH=/var/lib/classrup/relay.sqlite RELAY_ALLOWED_ORIGINS=https://app.example.org RELAY_PORT=8787
-$ node apps/relay/src/main.ts      # Node >=22.18 strips types natively, no build step
+$ node apps/relay/src/main.ts      # Node >=22.18 strips types natively, no build step; key file checked by checkSecretFile
+# tests only: import { startRelay } from 'apps/relay/src/e2e.ts' -> { url, clock: FakeClock, seed(fixture) } in process; main.ts has no such route
+$ relay identity revoke --key relay:7k3m...#k2 --reason compromised -> { successorRelayId: "relay:q4n8..." }
+$ relay identity init --new-identity -> relay:q4n8... active; restore announcement { relayId: "relay:q4n8...", predecessorRelayId: "relay:7k3m...", epoch: 0 } served before readyz 200
 GET /.well-known/classrup-relay.json -> 200 { "relayId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk",
   "keys": [{ "keyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k2", "seq": 2, "status": "active", "prevKeyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k1" },
            { "keyId": "relay:7k3mqxw2a9b4c5d6e7f8g9h0jk#k1", "seq": 1, "status": "retired" }], "receiptEpoch": 0 }
@@ -76,7 +80,8 @@ kill -TERM <pid>  -> /readyz 503, in-flight finish within 10 s, WAL archived by 
 | TEST-PS-118-09.T19 | contract | PS-118-04.R04, PS-118-07.R04 | mailbox put to A, index write, federation inbox batch and media upload; rotate; verify each receipt with the vault verifier; present A's receipt for mailbox B | receipts validate as classrup.platform.relay_receipt/v1 with context classrup-relay-receipt:v1, digest of the exact bytes (ciphertext for the mailbox) and no cid for the mailbox put; keyId resolves to the right key after rotation; A's receipt rejected for B |
 | TEST-PS-118-09.T22 | contract | PS-118-04.R06, PS-118-02.R04 | GET /media/v1 for a P0 blob from an allowlisted and a foreign origin, for an encrypted blob and for a missing blob | P0 blob served with Cache-Control public, max-age=31536000, immutable, ETag, nosniff, CORP cross-origin, ACAO only for the allowlisted origin, Vary Origin, no Set-Cookie and no no-store; encrypted and missing both 404 |
 | TEST-PS-118-09.T24 | integration | PS-118-06.R01, PS-118-04.R02, PS-118-02.R04 | rotate replayed with the same Idempotency-Key and body, with the same key and a different body, with a stale expectedRevision, and a second rotation 2 h later | original response replayed; IDEMPOTENCY_KEY_REUSED; CONFLICT_REVISION; RATE_LIMITED |
+| TEST-PS-118-09.T30 | contract | PS-118-04.R07, PS-118-01.R03 | well-known document after two rotations; a fault-injected row with seq 4 and no rotation statement; a vault verifier with the key set pinned at selection | k2 and k3 published with rotations signed by k1 and k2 under classrup-relay-rotate:v1; the unchained row is never published; the verifier follows k1 to k3 and treats an unchained key as a different relay |
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

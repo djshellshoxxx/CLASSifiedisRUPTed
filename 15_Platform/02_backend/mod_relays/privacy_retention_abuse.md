@@ -32,7 +32,9 @@
 | T03 | Slowloris and oversized body denial of service | headersTimeout 10 s, requestTimeout 30 s, JSON body limit 262144 bytes, media 5308416 bytes, per-connection cap 256, reverse proxy rate limits |
 | T04 | Cross-origin abuse from a malicious page | CORS allowlist without wildcard, no cookies, bearer tokens only in Authorization headers, preflight cache 600 s |
 | T05 | Malicious relay impersonates another or a thief forks the identity | relayId self-certifying from the genesis key; rotations signed by the previous key with prevKeyId and seq; two rotations from one prevKeyId are equivocation that vaults detect and freeze; new identities always get a new relayId |
-| T06 | Config secrets leak through logs or crash dumps | config printer redacts names containing KEY, SECRET, PASSPHRASE or TOKEN; *_FILE variants for secrets; startup errors list names only |
+| T06 | Config secrets leak through logs or crash dumps | secrets use the F16.S01.M02 RELAY_SECRET_<NAME>[_FILE] names, which this loader never reads or prints; the relay seed lives only in the Secret wrapper (renders [REDACTED]); config printer redacts names containing KEY, SECRET, PASSPHRASE or TOKEN; startup errors list names only |
+| T09 | A test-only clock or seed route shipped in production lets anyone move receipt or auction times or plant data | production entry main.ts registers no such route (V16); the FakeClock and seeding exist only in the in-process e2e entry; F17.S01.M04 V07 and T21 probe and scan the build |
+| T10 | Users follow an attacker's relay after a compromise, or lose their relay because nothing links the new identity | the compromise revocation names successorRelayId and the new identity's first restore announcement names predecessorRelayId, both signed; vaults still require an out-of-band fingerprint confirmation (F16.S03.M03 RB-01) before rerouting |
 | T07 | Operator or seizer rebuilds the communication graph from access logs | route templates only, no mailbox or listing ids, no query strings, no IP prefix on mailbox routes; mailbox-id canary test |
 | T08 | A receipt for one mailbox presented as proof for another | receipt binds destination and the digest of the exact bytes; vault verification compares both |
 
@@ -51,4 +53,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

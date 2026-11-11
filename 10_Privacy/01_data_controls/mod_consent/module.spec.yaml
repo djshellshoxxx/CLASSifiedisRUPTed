@@ -2,10 +2,13 @@
 id: F10.S01.M01
 scope: MVP
 summary: >-
-  Purpose-based, revocable consent kept in the user's vault. Five purposes exist: publishing to federation, notifications by
-  email, notifications by Web Push, optional analytics sharing, and precise location sharing. Every purpose is off by default.
-  A grant records the exact policy text version and its SHA-256 hash that the user saw. Other modules call a local check before
-  processing for a purpose. Federation, email and push consents are each scoped to one user-selected relay. Exactly one
+  Purpose-based, revocable consent kept in the user's vault. Six purposes exist: publishing to federation, notifications by
+  email, notifications by Web Push, optional analytics sharing, precise location sharing, and chain lookups that disclose
+  addresses and transaction IDs to a user-chosen crypto verifier endpoint. Every purpose is off by default. A grant records
+  the exact policy text version and its SHA-256 hash that the user saw. Other modules call a local check before processing
+  for a purpose and refuse with PRIVACY_CONSENT_REQUIRED when it is not granted. Federation, email and push consents are each
+  scoped to one user-selected relay named by its canonical relayId (F15.S02.M01), and chain lookup consents to one verifier
+  endpoint origin. Exactly one
   relay-facing artifact exists per purpose: for federation_publish the vault signs classrup.privacy.consent_statement/v1 for that
   relay, which accepts and acknowledges it through the relay command privacy.consent.relay_register; for email and push the
   relay-facing artifact is the F13.S02.M03 channel consent statement, which carries this module's consent ID and purpose. A
@@ -20,12 +23,16 @@ responsibilities:
   - Withdraw consent immediately and locally on user request, on an F13 unsubscribe or settings opt-out for the same purpose and relay, and in this module's DeletionPort step when a deletion executes.
   - Serve the relay command privacy.consent.relay_register, which verifies a consent or withdrawal statement and returns a relay-signed acknowledgement, and the in-process relay query privacy.consent.relay_check that relay federation calls before indexing or forwarding an author's records.
   - Meet the N6 duties for its own data, namely ExportSectionPort section privacy.consents, a DeletionPort step and a RetentionPurgePort kind, with every field classified by F10.S02.M02.
+  - Define PRIVACY_CONSENT_REQUIRED, the single error code every consumer returns when a purpose check is not granted, and the in-process guard privacy.consent.require that returns it.
+  - Bind privacy.consent.check as the ConsentCheckPort in the kernel port registry at vault composition (inverted registration), so modules this module depends on, F07.S01.M01 among them, consult consent without a depends_on edge that would close a cycle.
 non_responsibilities:
   - Per-channel notification preferences, quiet hours, unsubscribe tokens and the relay-facing statement for notify_email and notify_push (F13.S02.M03), which read consent from this module.
   - Precise location storage and sharing mechanics (F06.S02.M02); a location_precise grant only enables the feature, and every L4 share still needs an explicit per-counterparty action with a TTL of at most 24 h there.
   - Relay-side enforcement of federation scope by the relay federation modules (F11.S02.M01 calls privacy.consent.relay_check) and of notification channels (F13.S02.M03).
+  - Chain verifier configuration and the unauthenticated lookups themselves (F09.S01.M03); a chain_lookup grant only permits lookups to the one endpoint origin it names.
+  - The canonical relayId format, defined by F15.S02.M01; this module only validates and stores it.
   - "Future: age-based consent rules and guardian consent; MVP assumes users meet the minimum age of the community and records no age."
-depends_on: [F07.S01.M01, F11.S01.M01, F15.S01.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F07.S01.M01, F11.S01.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
   - As a user, I decide separately whether my listings may be published to federated relays, whether I get email or push notifications, and whether I share precise location, and everything is off until I say yes.
   - As a user, I can see the exact policy text version I agreed to and withdraw with one tap.
@@ -40,10 +47,12 @@ edge_cases:
   - Import from an older export carries consents with an unknown policy hash; they import as lapsed.
   - A relay receives a replayed grant whose cid already has a withdrawal, a grant addressed to another relay, or a statement signed by a revoked key; privacy.consent.relay_register refuses each with PRIVACY_CONSENT_STATEMENT_INVALID.
   - A burst of 100 withdrawals in one hour from unsubscribes across several relays all succeed locally; the outgoing withdrawal statements are coalesced per relay in the sync outbox and none is dropped.
+  - A grant names a relay by hostname such as relay.example.org instead of its canonical relayId; it is refused with VALIDATION_FAILED, and a relay whose genesis key changed (new identity) has a different relayId and needs a new grant.
+  - The user grants chain_lookup for https://esplora.example.net and later switches the verifier to another endpoint; check for the new origin returns granted false with reason scope, F09.S01.M03 refuses the lookup with PRIVACY_CONSENT_REQUIRED and the settings sheet asks for a grant for the new origin.
 ux:
   screens:
-    - "Privacy settings: one row per purpose with plain-language description, current state, the relay it applies to (federation, email, push), policy version and Read the text link, and a switch."
-    - "Grant sheet: shows the policy text for the purpose, the relay it applies to, what cannot be undone ('copies already fetched by others cannot be recalled'), for precise location the sentence 'Turning this on shares nothing; each share is a separate choice', and a Grant button."
+    - "Privacy settings: one row per purpose with plain-language description, current state, the relay it applies to (federation, email, push) shown by relay name and identity fingerprint, the verifier endpoint origin for chain lookups, policy version and Read the text link, and a switch."
+    - "Grant sheet: shows the policy text for the purpose, the relay or endpoint it applies to, what cannot be undone ('copies already fetched by others cannot be recalled'), for precise location the sentence 'Turning this on shares nothing; each share is a separate choice', for chain lookups the sentence 'This endpoint learns which transactions and addresses you look up', and a Grant button."
     - "History: list of grants and withdrawals with dates and policy versions."
   states: [loading, off-default, granted, withdrawn, lapsed-needs-regrant, pending-offline, error]
   a11y:
@@ -53,7 +62,7 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A PrivacyConsent stores purpose, scope (relay and record kinds), policy id, version and SHA-256 hash, locale of the text shown, grant and withdrawal times, status and source; federation_publish, notify_email and notify_push are scoped to exactly one relay.
+      - A PrivacyConsent stores purpose, scope (relay, verifier endpoint and record kinds), policy id, version and SHA-256 hash, locale of the text shown, grant and withdrawal times, status and source; federation_publish, notify_email and notify_push are scoped to exactly one relay named by its canonical self-certifying relayId (F15.S02.M01, 'relay:' plus 26 lowercase base32 characters of the genesis key hash, never a hostname), and chain_lookup is scoped to exactly one HTTPS verifier endpoint origin.
       - The history is append-only; a new grant creates a new row and supersedes the previous one rather than editing it.
       - Consents are P3 in the vault and retained as RET-EVIDENCE (2 years after withdrawal) as proof of what was agreed; the vault entity schema classrup.privacy.consent/v1 never leaves the vault except in the user's own export.
       - "The relay-facing statements have their own schemas with explicit field allowlists, registered with signer role in the F11.S01.M01 statement registry (N2): classrup.privacy.consent_statement/v1 with payload exactly {consentId, purpose, relayId, recordKinds, policyId, policyVersion, policyHash, grantedAt} and classrup.privacy.consent_withdrawal/v1 with payload exactly {consentId, targetCid, purpose, relayId, withdrawnAt, reason}; the did appears only as the envelope author, with per-author seq and prev (CTR-FED-001)."
@@ -66,8 +75,8 @@ processes:
         fields:
           - "id: uuidv7 — primary key"
           - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
-          - "purpose: enum — federation_publish | notify_email | notify_push | analytics_share | location_precise"
-          - "scope: object — {relayId?: string, recordKinds?: string[] up to 20}; relayId required for federation_publish, notify_email and notify_push"
+          - "purpose: enum — federation_publish | notify_email | notify_push | analytics_share | location_precise | chain_lookup"
+          - "scope: object — {relayId?: string, endpoint?: string, recordKinds?: string[] up to 20}; relayId is the canonical relayId of F15.S02.M01 and required for federation_publish, notify_email and notify_push; endpoint is an HTTPS origin (scheme, host, optional port; no path, query or credentials) and required for chain_lookup"
           - "policyId: string — e.g. privacy.federation.v3"
           - "policyVersion: int — ≥ 1"
           - "policyHash: string — sha256 hex of the canonical policy text shown"
@@ -81,15 +90,17 @@ processes:
           - "peerSync?: string — local_committed | prepared | transport_acknowledged | peer_accepted"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - At most one row with status granted per (purpose, scope.relayId).
+          - At most one row with status granted per (purpose, scope key), where the scope key is scope.relayId for relay-scoped purposes, scope.endpoint for chain_lookup and empty otherwise.
           - No purpose is granted by default; absence of a row means not granted.
           - policyHash equals the hash of the bundled policy text of policyId at policyVersion when the row is created.
-          - statementCid and withdrawalCid are set only for federation_publish; notify_email and notify_push are linked from F13.S02.M03 ChannelConsent by consent ID, and analytics_share and location_precise produce no statement.
+          - statementCid and withdrawalCid are set only for federation_publish; notify_email and notify_push are linked from F13.S02.M03 ChannelConsent by consent ID, and analytics_share, location_precise and chain_lookup produce no statement.
+          - scope.relayId, when present, matches the canonical relayId pattern of F15.S02.M01; a hostname is never stored as a relayId.
     sql: |
       CREATE TABLE privacy_consent (
-        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, purpose TEXT NOT NULL, relay_id TEXT, status TEXT NOT NULL,
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, purpose TEXT NOT NULL, scope_key TEXT, status TEXT NOT NULL,
         policy_hash TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE UNIQUE INDEX privacy_consent_active ON privacy_consent(vault_id, purpose, ifnull(relay_id,'')) WHERE status = 'granted';
+      -- scope_key: canonical relayId (federation_publish, notify_email, notify_push), endpoint origin (chain_lookup) or NULL
+      CREATE UNIQUE INDEX privacy_consent_active ON privacy_consent(vault_id, purpose, ifnull(scope_key,'')) WHERE status = 'granted';
   validation_rules:
     requirements:
       - Grant input is validated strictly, including purpose, scope and policy hash.
@@ -97,9 +108,10 @@ processes:
       - Defaults are enforced in code, so processing is allowed only when a granted, non-lapsed consent exists.
       - Withdrawal always succeeds locally whatever its source (user, unsubscribe, deletion step or lapse) and is never refused for rate reasons; only the outgoing withdrawal statements are coalesced in the sync outbox.
       - A relay accepts a consent or withdrawal statement only after verifying signer key and role, audience, field allowlist, chain position and that the grant was not already withdrawn.
+      - Scope identifiers are validated in canonical form only, a relayId per F15.S02.M01 and a chain_lookup endpoint as a bare HTTPS origin, and a consumer whose check is not granted refuses with PRIVACY_CONSENT_REQUIRED.
     rules:
-      - "V01 | purpose is one of the five defined purposes | VALIDATION_FAILED"
-      - "V02 | relayId is present for federation_publish, notify_email and notify_push and refers to a relay the user selected | VALIDATION_FAILED"
+      - "V01 | purpose is one of the six defined purposes | VALIDATION_FAILED"
+      - "V02 | relayId is present for federation_publish, notify_email and notify_push, is a canonical relayId ('relay:' plus 26 lowercase RFC 4648 base32 characters, F15.S02.M01) and refers to a relay the user selected | VALIDATION_FAILED"
       - "V03 | policyHash equals the hash of the current bundled policy text for the purpose | PRIVACY_POLICY_STALE"
       - "V04 | the purpose is available in this build and not disabled by a feature flag (CTR-FLG-001) | FEATURE_DISABLED"
       - "V05 | the user command withdraw targets a granted consent | CONFLICT_STATE"
@@ -108,6 +120,8 @@ processes:
       - "V08 | relay_register - the envelope signature verifies over JCS bytes with a registered, non-revoked device key of the author did (F16.S02.M02), the signer role is principal per F11.S01.M01 roleFor, and the payload has exactly the allowlisted fields | PRIVACY_CONSENT_STATEMENT_INVALID"
       - "V09 | relay_register - payload relayId equals the receiving relay, seq and prev extend the author's chain at this relay, and a grant whose cid already has a recorded withdrawal is refused | PRIVACY_CONSENT_STATEMENT_INVALID"
       - "V10 | relay_register - a withdrawal names in targetCid a grant of the same author, purpose and relay; an unknown targetCid is recorded so that grant is refused if it arrives later | PRIVACY_CONSENT_STATEMENT_INVALID"
+      - "V11 | endpoint is present for chain_lookup and absent for every other purpose, and is an https origin without path, query, fragment or user info | VALIDATION_FAILED"
+      - "V12 | privacy.consent.require and every consumer refuse processing for a purpose unless privacy.consent.check returns granted true for that purpose and scope (relayId, endpoint or recordKind); any check error counts as not granted | PRIVACY_CONSENT_REQUIRED"
   workflow_state_machine:
     requirements:
       - A consent is granted until it is withdrawn, superseded by a newer grant or lapsed by a material policy change.
@@ -128,9 +142,10 @@ processes:
     requirements:
       - Grant and withdraw are vault commands; for federation_publish they also produce classrup.privacy.consent_statement/v1 and classrup.privacy.consent_withdrawal/v1; check and list are vault queries; privacy.consent.relay_register is the relay command that accepts and acknowledges those statements, and privacy.consent.relay_check is an in-process relay query.
       - Grant and withdraw emit events into the vault outbox in the same IndexedDB transaction as the state change.
-      - Other modules must call privacy.consent.check before processing for a purpose and treat any failure as not granted.
+      - Other modules must call privacy.consent.check (or the guard privacy.consent.require) before processing for a purpose, treat any failure as not granted and refuse with PRIVACY_CONSENT_REQUIRED, the one consent-missing code defined here.
       - Each statement declares signer role and audience for the N2 registry; both are signed by the principal and addressed to one named relay, sealed to that relay's published key because they are P2 for that relay only (PRV-5), and notify_email and notify_push produce no statement here because the F13.S02.M03 channel consent carries consentId and purpose.
       - The privacy ports of this module are defined in the note, including the DeletionPort step that withdraws every consent and signs the federation withdrawals before F07.S01.M01 destroys the keys.
+      - privacy.consent.check is bound as ConsentCheckPort in the kernel port registry at vault composition, so modules that this module depends on (F07.S01.M01 checks federation_publish before a handle claim) call it through the port with the same inputs, outputs and fail-closed behavior, and chain_lookup is matched by purpose plus the exact endpoint origin.
     commands:
       - name: privacy.consent.grant
         capability: privacy.consent.grant
@@ -156,9 +171,14 @@ processes:
     queries:
       - name: privacy.consent.check
         capability: privacy.consent.check
-        input: "{ purpose, relayId?, recordKind? }"
+        input: "[vault in-process query; also bound as ConsentCheckPort.check] { purpose, relayId?, endpoint?, recordKind? }"
         output: "{ granted: boolean, consentId?, policyVersion?, reason?: none|withdrawn|lapsed|scope }"
         errors: []
+      - name: privacy.consent.require
+        capability: privacy.consent.check
+        input: "[vault in-process guard query] { purpose, relayId?, endpoint?, recordKind? }"
+        output: "{ ok: true, consentId, policyVersion } or the error PRIVACY_CONSENT_REQUIRED with params {purpose, relayId?, endpoint?, reason}"
+        errors: [PRIVACY_CONSENT_REQUIRED, VALIDATION_FAILED]
       - name: privacy.consent.list_mine
         capability: privacy.consent.read
         input: "{ purpose?, status?, cursor?, limit ≤ 100 }"
@@ -178,7 +198,16 @@ processes:
       the grant it revokes), purpose, relayId, withdrawnAt, reason: user|unsubscribe|account_deletion|policy_changed}.
       notify_email and notify_push send no F10 statement; F13.S02.M03 classrup.notify.channel_consent/v1 references consentId
       and purpose, and its 365-day channel expiry asks the user to reconfirm the channel only, while the purpose consent here
-      has no time expiry. analytics_share and location_precise are local gates without a statement. Relay side - the relay
+      has no time expiry. analytics_share, location_precise and chain_lookup are local gates without a statement;
+      chain_lookup (F09.S01.M03 verifier lookups, a third-party disclosure of addresses and txids) is scoped to one HTTPS
+      endpoint origin and matched by purpose plus that exact origin. relayId everywhere in this module, including the
+      statements, check inputs and the notify.channel.opted_out match, is the canonical self-certifying relayId of
+      F15.S02.M01 ('relay:' plus 26 lowercase base32 characters of the SHA-256 of the relay genesis key), never a hostname.
+      Consent-missing refusal - consumers return PRIVACY_CONSENT_REQUIRED with params {purpose, relayId?, endpoint?, reason}
+      whenever check returns granted false or fails; privacy.consent.require is the in-process guard that does this for
+      them. ConsentCheckPort - the vault composition root registers privacy.consent.check in the kernel port registry as
+      ConsentCheckPort {check(input) -> output of privacy.consent.check}, which F07.S01.M01 and any other module this module
+      depends on consume without a depends_on edge (inverted registration). Relay side - the relay
       keeps verified statements per (author did, relayId) and answers privacy.consent.relay_check for its federation
       handlers. Privacy ports (N6) - ExportSectionPort section privacy.consents with schemas classrup.privacy.consent/v1,
       classrup.privacy.consent_statement/v1 and classrup.privacy.consent_withdrawal/v1; DeletionPort plan {willDelete:
@@ -194,14 +223,17 @@ processes:
     errors:
       - "PRIVACY_POLICY_STALE | 409 | no | the policy hash does not match the current policy text; reload and read the new text"
       - "PRIVACY_CONSENT_STATEMENT_INVALID | 422 | no | a consent or withdrawal statement failed the signer, audience, allowlist, chain or replay checks at the relay"
+      - "PRIVACY_CONSENT_REQUIRED | 412 | no | the purpose consent for this relay, endpoint or record kind is not granted (missing, withdrawn, lapsed or out of scope); ask the user to grant it and retry"
     example: |
       vault command privacy.consent.grant
-      { "purpose": "federation_publish", "scope": { "relayId": "relay.example.org" }, "policyId": "privacy.federation.v3",
+      { "purpose": "federation_publish", "scope": { "relayId": "relay:3fz7hq2wkmpd5ra6t4ncxb7ygu" }, "policyId": "privacy.federation.v3",
         "policyVersion": 3, "policyHash": "9c1185a5c5e9fc54612808977ee8f548b2258d31…", "locale": "en" }
       => { "consentId": "0192f3b0-…", "revision": 1, "status": "granted", "statementCid": "sha256-e01c…", "peerSync": "prepared" }
       relay command privacy.consent.relay_register { "statement": <sealed classrup.privacy.consent_statement/v1> }
       => { "cid": "sha256-e01c…", "status": "registered", "relayReceivedAt": "2026-11-04T10:00:02.120Z", "relayAckSig": "…" }   vault peerSync -> peer_accepted
-      query privacy.consent.check { "purpose": "federation_publish", "relayId": "relay.example.org" } => { "granted": true, "policyVersion": 3 }
+      query privacy.consent.check { "purpose": "federation_publish", "relayId": "relay:3fz7hq2wkmpd5ra6t4ncxb7ygu" } => { "granted": true, "policyVersion": 3 }
+      query privacy.consent.require { "purpose": "chain_lookup", "endpoint": "https://esplora.example.net" }
+      => PRIVACY_CONSENT_REQUIRED { "params": { "purpose": "chain_lookup", "endpoint": "https://esplora.example.net", "reason": "none" } }
   authorization_capabilities:
     requirements:
       - Under vault policy (CAP-8) only the unlocked local principal grants, withdraws or reads its own consents.
@@ -210,7 +242,7 @@ processes:
     capabilities:
       - "privacy.consent.grant | local-principal | vault unlocked; current policy hash supplied"
       - "privacy.consent.withdraw | local-principal | vault unlocked; consent granted"
-      - "privacy.consent.check | local-principal | in-process call from a module of the unlocked vault"
+      - "privacy.consent.check | local-principal | in-process call from a module of the unlocked vault, directly, through privacy.consent.require or through the ConsentCheckPort bound in the kernel port registry"
       - "privacy.consent.read | local-principal | vault unlocked"
       - "privacy.consent.relay_register | signed-statement | request and statement signed by a registered, non-revoked device key of the author did; grants limited to 20 per hour per did, withdrawals always accepted"
       - "privacy.consent.relay_check | relay-system | in-process call from relay federation handlers (F11.S02.M01) on the same relay"
@@ -231,6 +263,7 @@ processes:
       - The UI states the limits of withdrawal, namely that future processing stops, copies already fetched by other vaults and relays cannot be recalled.
     data:
       - "PrivacyConsent: P3 in the vault. classrup.privacy.consent_statement/v1 and classrup.privacy.consent_withdrawal/v1: P2 for the named relay only, fields exactly as listed in the note, did only as envelope author, sealed to that relay. Relay copy of verified statements: kept while the grant is active and RET-EVIDENCE after withdrawal."
+      - "chain_lookup consents: P3 in the vault like every other consent; the endpoint origin is never sent anywhere by this module, and the lookups the grant permits are made by F09.S01.M03 without DID, signature or relay access token."
     retention:
       - "RET-EVIDENCE (2 years after withdrawal) as proof of consent; deletable earlier on account deletion; relay legal holds (F10.S01.M02) apply only to the signed consent statements that relay holds, never to vault records."
     threats:
@@ -240,6 +273,8 @@ processes:
       - "T04 | Consent replay, forgery or cross-relay reuse toward a relay | statements signed over JCS with Ed25519 by a registered, non-revoked key, audience relayId bound in the payload, per-author seq and prev, relays dedupe by cid and refuse a grant whose cid already has a withdrawal (V08 to V10)"
       - "T05 | Withdrawal blocked during an unsubscribe or deletion burst | withdrawal is never rate limited and always commits locally; outgoing statements are coalesced per relay instead of limited"
       - "T06 | Two notification consent mechanisms disagree | one relay-facing artifact per purpose: F13 channel consent for notify_email and notify_push, the F10 statement for federation_publish"
+      - "T07 | A chain verifier learns the user's addresses and txids without an informed choice, or a consent for one endpoint is reused for another | chain_lookup is off by default, scoped to one exact HTTPS origin, checked fail closed before every lookup, and refused with PRIVACY_CONSENT_REQUIRED for any other origin"
+      - "T08 | A consent for one relay is applied to another relay that reuses its hostname | relay scopes use the canonical self-certifying relayId of F15.S02.M01, so a new relay identity behind the same hostname has a different relayId and is not granted"
     abuse_controls:
       - "Grants limited to 30 per hour per vault; withdrawals are never limited; a relay accepts at most 20 grant statements per hour per did and always accepts withdrawals, which arrive coalesced per relay."
   observability_performance:
@@ -261,12 +296,12 @@ processes:
       - Every requirement is covered by at least one automated test.
       - Contract tests validate command outputs, statements and event payloads against the schema registry.
       - Default-off behavior is covered by a test that enumerates every purpose on a fresh vault.
-    fixtures: "Fresh vault; bundled policies for five purposes with fixed hashes; relay double with a key registry; F13.S02.M03 and F06.S02.M02 doubles; network capture double; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Fresh vault; bundled policies for six purposes with fixed hashes; relay double with canonical relayId relay:3fz7hq2wkmpd5ra6t4ncxb7ygu and a key registry; verifier endpoints https://esplora.example.net and https://node.example.org; F07.S01.M01, F09.S01.M03, F13.S02.M03 and F06.S02.M02 doubles; kernel port registry double; network capture double; fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,02.R01 | grant federation_publish, notify_email and notify_push for a relay with the current hash; grant notify_email without relayId | rows stored granted with scope.relayId; the federation grant has a signed statement; missing relayId returns VALIDATION_FAILED"
+      - "T01 | unit | 01.R01,02.R01 | grant federation_publish, notify_email and notify_push for a canonical relayId and chain_lookup for an endpoint origin with the current hash; grant notify_email without relayId; grant notify_push with relayId relay.example.org | rows stored granted with scope.relayId or scope.endpoint; the federation grant has a signed statement; missing relayId and the hostname both return VALIDATION_FAILED"
       - "T02 | unit | 01.R02,03.R01 | grant, regrant with new version, withdraw | history keeps three rows with statuses superseded, then withdrawn; none edited"
-      - "T03 | unit | 02.R02,02.R03 | rules V01 to V07 violated in turn | documented error code and nothing stored"
-      - "T04 | unit | 02.R03 | fresh vault, check every purpose | all return granted false"
+      - "T03 | unit | 02.R02,02.R03,02.R06 | rules V01 to V07, V11 and V12 violated in turn | documented error code and nothing stored"
+      - "T04 | unit | 02.R03 | fresh vault, check every one of the six purposes | all return granted false"
       - "T05 | property | 03.R01,03.R02 | random grant and withdraw sequences | at most one granted row per purpose and relay; withdrawn rows never return to granted"
       - "T06 | integration | 03.R03 | change policy hash with materialChange for a federation consent | consent lapses at unlock, privacy.consent.withdrawn emitted with reason policy_changed, check returns false, and a withdrawal statement naming the grant cid is queued for the relay"
       - "T07 | contract | 04.R01,04.R02,09.R02 | execute each command and query, including relay_register and relay_check on a relay double | outputs, statements and events validate against registry schemas; events are in the same transaction as the state change"
@@ -284,8 +319,10 @@ processes:
       - "T19 | abuse | 02.R05,04.R04 | relay_register with a replayed grant after its withdrawal, a grant addressed to another relay, a statement signed by a revoked key, a withdrawal naming another author's grant, an extra payload field, and a withdrawal that arrives before its grant | each refused with PRIVACY_CONSENT_STATEMENT_INVALID and the late grant refused; a valid statement is registered and its relay-signed acknowledgement moves the vault to peer_accepted"
       - "T20 | integration | 04.R04,01.R01 | cross-module contract with F13.S02.M03 and F06.S02.M02 doubles: grant notify_email for relay A, F13 opt-in, F13 channel expiry after 365 days; grant location_precise | the channel consent carries consentId and purpose; no F10 statement is sent for notify_*; channel expiry leaves the F10 consent granted; the location_precise grant shares nothing until an explicit per-share action"
       - "T21 | integration | 04.R05 | deletion DeletionPort plan and execute, retention purge port and export section with stub registries; cancel during grace | plan lists consent rows; cancel leaves every consent unchanged and queues no relay statement; execute withdraws all with source deletion and signs the federation withdrawals before the destroy_keys step; purge removes rows 2 years after withdrawal; section privacy.consents exported"
+      - "T22 | integration | 04.R06,04.R03,02.R06 | vault composition with the kernel port registry double; F07.S01.M01 double calls ConsentCheckPort for federation_publish before a handle claim with and without a grant; F09.S01.M03 double calls privacy.consent.require for chain_lookup on a granted origin, another origin and with check failing; F06.S02.M02 double asks for location_precise without a grant | ConsentCheckPort answers exactly like privacy.consent.check; no depends_on edge from F07.S01.M01 is needed; the granted origin passes; the other origin, the failing check and the missing location consent return PRIVACY_CONSENT_REQUIRED with params purpose, endpoint or relayId and reason"
+      - "T23 | integration | 01.R01,04.R04 | notify.channel.opted_out with via unsubscribe_link for the canonical relayId of the granted notify_email consent and for a hostname of the same relay | the canonical relayId withdraws the consent; the hostname matches nothing and the consent stays granted"
     acceptance:
-      - All tests T01 to T21 pass in CI.
+      - All tests T01 to T23 pass in CI.
       - On a fresh vault every purpose reports not granted and no consumer processes for any purpose.
       - Withdrawal stops in-vault processing within 1 second, is never refused, and the UI states that copies cannot be recalled.
       - Exactly one relay-facing statement exists per relay-scoped purpose, and relays refuse replayed, cross-relay or revoked-key statements.

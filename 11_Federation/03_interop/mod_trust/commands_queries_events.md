@@ -11,6 +11,7 @@
 - **PS-091-04.R03** The module consumes rejection, conflict and delivery failure events to maintain health scores for relay-attributable faults only, plus the flag and deletion events.
 - **PS-091-04.R04** Health penalties apply only to relay-attributable faults (invalid signatures, cids or canonical forms it forwarded, invalid request signatures, forwarding traffic relays never forward, quota breaches, receipts it signed that contradict each other, and equivocation signed by its own relay key); author forks, local-policy rejections and gap or buffer codes never change a peer's health.
 - **PS-091-04.R05** Peer statements and signer roles are registered with F11.S01.M01 (N2); peer_offer by the proposing relay key, peer_accept by the accepting relay key, key_rotation by the current pinned key and relay_identity by the relay key it names, all signed through the StatementPublisherPort.
+- **PS-091-04.R06** Every pinned relay key change is published as a local event: federation.peer.added carries the pinned relayKey and federation.peer.key_rotated {peerId, relayId, kind, oldRelayKey, newRelayKey, effectiveAt, previousKeyUntil} is emitted in the transaction that applies a verified rotation statement, so consumers (F16.S02.M02 peer key pins, F07.S03.M02 relay attestations) never wait for a periodic refresh.
 
 ## Specification
 
@@ -25,7 +26,7 @@
 | `federation.peer.suspend` | federation.peer.suspend | [vault-local or relay-local command] { peerId, expectedRevision, reason: operator\|health\|key_mismatch\|equivocation\|compromise } | { peerId, revision, status: suspended } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | federation.peer.suspended | yes (Idempotency-Key) |
 | `federation.peer.reinstate` | federation.peer.reinstate | [vault-local or relay-local command] { peerId, expectedRevision, fingerprintConfirmed: true } | { peerId, revision, status: active } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED | federation.peer.reinstated | yes (Idempotency-Key) |
 | `federation.peer.remove` | federation.peer.remove | [vault-local or relay-local command] { peerId, expectedRevision } | { peerId, revision, status: removed } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | federation.peer.removed | yes (Idempotency-Key) |
-| `federation.peer.update` | federation.peer.update | [vault-local or relay-local command; key rotation consumes a statement classrup.federation.key_rotation/v1] { peerId, expectedRevision, trustLevel?, quotas?, listInIdentityDoc?, rotation?: Envelope } | { peerId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, FEDERATION_KEY_MISMATCH |  | yes (Idempotency-Key) |
+| `federation.peer.update` | federation.peer.update | [vault-local or relay-local command; key rotation consumes a statement classrup.federation.key_rotation/v1] { peerId, expectedRevision, trustLevel?, quotas?, listInIdentityDoc?, rotation?: Envelope } | { peerId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, FEDERATION_KEY_MISMATCH | federation.peer.key_rotated | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -39,7 +40,8 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `federation.peer.added` | P1 | { peerId, relayId, kind, direction, trustLevel } |
+| `federation.peer.added` | P1 | { peerId, relayId, relayKey, kind, direction, trustLevel } |
+| `federation.peer.key_rotated` | P1 | { peerId, relayId, kind, oldRelayKey, newRelayKey, effectiveAt, previousKeyUntil, rotationCid } — emitted when federation.peer.update applies a verified classrup.federation.key_rotation/v1 |
 | `federation.peer.suspended` | P1 | { peerId, relayId, reason } |
 | `federation.peer.reinstated` | P1 | { peerId, relayId } |
 | `federation.peer.removed` | P1 | { peerId, relayId } |
@@ -49,7 +51,7 @@
 | Type | Effect |
 |---|---|
 | `federation.record.rejected` | relay-attributable codes only: lower the sending peer's health by 5 per FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH or FEDERATION_ENVELOPE_NOT_CANONICALIZABLE it forwarded (max 25 per hour) and by 2 per FEDERATION_REQUEST_SIGNATURE_INVALID or FEDERATION_ORIGIN_MISMATCH (max 10 per hour); FEDERATION_NOT_ACCEPTED, FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_TOMBSTONED, FEDERATION_RECORD_TIME_INVALID, FEDERATION_PAYLOAD_INVALID, gap and buffer codes are ignored |
-| `federation.conflict.detected` | only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks and commitment conflicts are ignored |
+| `federation.conflict.detected` | only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks, commitment conflicts and key_compromise records are ignored |
 | `federation.delivery.failed` | transport reasons (timeout, unreachable, 5xx) lower the destination peer's health by 1 per entry (max 10 per hour); reason receipt_equivocation (two receipts signed by the peer key for one cid with different outcomes) lowers it by 20; per-envelope rejections by the peer's own policy are ignored |
 | `platform.flag.changed` | when F11 turns off, freeze health scores and mark peer_relay peers dormant; selected_relay peers are unaffected |
 | `privacy.deletion.completed` | vault: delete the deleted principal's selected-relay list after the DeletionPort plan ran; relay peer records hold no user data and are unchanged |
@@ -85,6 +87,7 @@ relay A: federation.peer.receive_accept { accept } -> { peerId: "0192f3d0-...", 
 | TEST-PS-091-09.T08 | contract | PS-091-04.R01, PS-091-04.R05, PS-091-09.R03 | each command, query and event; peer_offer, peer_accept, key_rotation and relay_identity statements | validate against registry schemas and signer roles of F11.S01.M01 |
 | TEST-PS-091-09.T19 | abuse | PS-091-04.R04 | malicious author forks twice via honest relays A and B; throwaway did:keys trigger FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_NOT_ACCEPTED and gap codes through peer A | no health change and no suspension for A or B |
 | TEST-PS-091-09.T23 | integration | PS-091-04.R03 | flag F11 off then on | peer_relay health frozen and peers dormant; selected relays keep working; scores resume |
+| TEST-PS-091-09.T24 | contract | PS-091-04.R06 | activate a peer; apply a verified key_rotation; apply a rotation signed by a non-pinned key | federation.peer.added carries relayKey; federation.peer.key_rotated carries oldRelayKey, newRelayKey, effectiveAt and previousKeyUntil in the same transaction as the update; the invalid rotation FEDERATION_KEY_MISMATCH and no event |
 
 ## Dependencies
 

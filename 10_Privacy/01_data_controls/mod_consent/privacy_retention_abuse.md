@@ -14,6 +14,7 @@
 
 **Data classification**
 - PrivacyConsent: P3 in the vault. classrup.privacy.consent_statement/v1 and classrup.privacy.consent_withdrawal/v1: P2 for the named relay only, fields exactly as listed in the note, did only as envelope author, sealed to that relay. Relay copy of verified statements: kept while the grant is active and RET-EVIDENCE after withdrawal.
+- chain_lookup consents: P3 in the vault like every other consent; the endpoint origin is never sent anywhere by this module, and the lookups the grant permits are made by F09.S01.M03 without DID, signature or relay access token.
 
 **Retention**
 - RET-EVIDENCE (2 years after withdrawal) as proof of consent; deletable earlier on account deletion; relay legal holds (F10.S01.M02) apply only to the signed consent statements that relay holds, never to vault records.
@@ -28,6 +29,8 @@
 | T04 | Consent replay, forgery or cross-relay reuse toward a relay | statements signed over JCS with Ed25519 by a registered, non-revoked key, audience relayId bound in the payload, per-author seq and prev, relays dedupe by cid and refuse a grant whose cid already has a withdrawal (V08 to V10) |
 | T05 | Withdrawal blocked during an unsubscribe or deletion burst | withdrawal is never rate limited and always commits locally; outgoing statements are coalesced per relay instead of limited |
 | T06 | Two notification consent mechanisms disagree | one relay-facing artifact per purpose: F13 channel consent for notify_email and notify_push, the F10 statement for federation_publish |
+| T07 | A chain verifier learns the user's addresses and txids without an informed choice, or a consent for one endpoint is reused for another | chain_lookup is off by default, scoped to one exact HTTPS origin, checked fail closed before every lookup, and refused with PRIVACY_CONSENT_REQUIRED for any other origin |
+| T08 | A consent for one relay is applied to another relay that reuses its hostname | relay scopes use the canonical self-certifying relayId of F15.S02.M01, so a new relay identity behind the same hostname has a different relayId and is not granted |
 
 **Abuse controls**
 - Grants limited to 30 per hour per vault; withdrawals are never limited; a relay accepts at most 20 grant statements per hour per did and always accepts withdrawals, which arrive coalesced per relay.
@@ -44,4 +47,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F11.S01.M01, F15.S01.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

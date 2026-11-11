@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-125-03.R01** A tenant is created directly in active within one transaction that also creates its first operator and admin role assignments through the F16 RoleBootstrapPort and its first signed configuration statement, so no partially provisioned tenant exists, and any transition not listed is refused with CONFLICT_STATE.
+- **PS-125-03.R01** A tenant is created directly in active within one transaction that also creates its first operator and admin role assignments through F16 RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys, tenantId, breakGlassReason?, osUser }) and its first signed configuration statement, so no partially provisioned tenant exists (a SECURITY_BOOTSTRAP_REFUSED answer rolls everything back), and any transition not listed is refused with CONFLICT_STATE.
 - **PS-125-03.R02** Suspension is reversible; archiving is final and is allowed only from suspended to prevent accidents.
 - **PS-125-03.R03** Status changes are written with their event and the new signed configuration statement in one transaction.
 
@@ -43,6 +43,7 @@ stateDiagram-v2
 | TEST-PS-125-09.T03 | property | PS-125-03.R01, PS-125-03.R02 | random sequences of status commands | only declared transitions occur; archived never changes; archive requires 30 days suspended |
 | TEST-PS-125-09.T04 | integration | PS-125-03.R03, PS-125-04.R02, PS-125-06.R03 | status change with injected event-insert failure | transaction rolled back, no status change, no new statement, no event |
 | TEST-PS-125-09.T23 | integration | PS-125-03.R01, PS-125-06.R02 | bootstrap with a RoleBootstrapPort that fails on the admin assignment; then a successful bootstrap | no tenant and no assignment after the failure; afterwards one tenant in active with operator and admin assignments and revision 1 statement in one transaction |
+| TEST-PS-125-09.T30 | integration | PS-125-02.R04, PS-125-03.R01, PS-125-06.R02 | bootstrap a fresh relay with --admin and --operator; bootstrap a second tenant with --admin; again with --break-glass and a 10 code point reason, then a 30 code point reason; HTTP create by admin A1 with adminKey; assign_operator by A1 | first creates tenant, operator and admin in one transaction; second SECURITY_BOOTSTRAP_REFUSED with nothing created; 10 code points refused, 30 accepted as break_glass; HTTP create VALIDATION_FAILED; assign_operator calls security.roleassignment.assign with role operator and scope tenant:<id> and grants no admin |
 
 ## Dependencies
 

@@ -19,7 +19,7 @@
 - relayReceipt.receivedAt: relay-clock evidence only, not a trusted timestamp.
 
 **Retention**
-- peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); transport_acknowledged entries with acknowledger none: kept with their receipt until createdAt + 30 d so a restore announcement can still return them, then deleted; discarded: deleted immediately (the replacement entry keeps supersedes); expired: payload erased at expiresAt, payload-free stub shown for 24 h then deleted. No payload outlives createdAt + 30 d (RET-SHORT) and no stub outlives createdAt + 30 d + 24 h.
+- peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); completed entries (acknowledger none): kept with their receipt until createdAt + 30 d so a restore announcement can still return them, then deleted; discarded: deleted immediately (the replacement entry keeps supersedes); expired: payload erased at expiresAt, payload-free stub shown for 24 h then deleted. No payload outlives createdAt + 30 d (RET-SHORT) and no stub outlives createdAt + 30 d + 24 h.
 - Locking keeps entries so queued work is not lost; 'Erase vault' and F10.S01.M04 deletion (DeletionPort) remove all entries of the principal; the RetentionPurgePort runs the rules above at app start and every 60 s while the app is open.
 
 **Threats and controls**
@@ -56,4 +56,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

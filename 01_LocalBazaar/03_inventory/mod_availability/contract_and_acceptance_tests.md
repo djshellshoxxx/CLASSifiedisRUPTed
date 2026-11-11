@@ -22,10 +22,10 @@ See the module test table below (all processes).
 |---|---|---|---|---|
 | TEST-PS-008-09.T01 | unit | PS-008-01.R01, PS-008-01.R02, PS-008-02.R01, PS-008-02.R02 | hold 1 of L; hold 1 more | first held with expiry, second BAZAAR_INVENTORY_INSUFFICIENT; available never negative |
 | TEST-PS-008-09.T02 | unit | PS-008-01.R03, PS-008-07.R01 | read public projection and event payloads | no quantities or holder ids outside P2 events; projection has only in-stock boolean |
-| TEST-PS-008-09.T03 | unit | PS-008-02.R03 | violate each rule V01-V15 | documented error code returned and no state change |
+| TEST-PS-008-09.T03 | unit | PS-008-02.R03 | violate each rule V01-V19 | documented error code returned and no state change |
 | TEST-PS-008-09.T04 | property | PS-008-03.R01, PS-008-03.R02 | random hold/release/renew/convert/clock sequences | only declared transitions; onHand >= reserved; converted exactly once |
 | TEST-PS-008-09.T05 | integration | PS-008-03.R02, PS-008-06.R02 | two tabs hold the last unit concurrently | exactly one hold succeeds, other gets INSUFFICIENT |
-| TEST-PS-008-09.T06 | integration | PS-008-03.R03, PS-008-06.R02 | D2 holds the same last unit offline then syncs | both holds frozen, conflict event with linkedDealIds emitted, convert refused with FROZEN until owner releases one |
+| TEST-PS-008-09.T06 | integration | PS-008-03.R03, PS-008-06.R02 | D2 holds the same last unit offline then syncs | F11.S02.M03 emits federation.conflict.detected for the two reservations with the same allocationSeq; both holds frozen, conflict event with linkedDealIds emitted, convert refused with BAZAAR_INVENTORY_FROZEN until owner releases one |
 | TEST-PS-008-09.T07 | contract | PS-008-04.R01, PS-008-04.R02, PS-008-09.R02 | each command and the reservation and release statements | outputs, events and statements validate; signature verifies with owner key |
 | TEST-PS-008-09.T08 | integration | PS-008-04.R03, PS-008-07.R02 | reservation travels via relay mailbox | relay sees ciphertext and routing metadata only; no network call from hold/release/convert |
 | TEST-PS-008-09.T09 | abuse | PS-008-05.R01, PS-008-05.R02, PS-008-05.R03 | UI-context dispatch of hold; peer statement signed by non-owner | FORBIDDEN; statement quarantined; relay has no policy row |
@@ -44,13 +44,17 @@ See the module test table below (all processes).
 | TEST-PS-008-09.T22 | integration | PS-008-04.R04 | release with owner_override and listing archive before expiresAt for a hold with an issued reservation; B1 receives the release | releaseCid set and statement queued to the audience; B1's PeerReservation becomes released; cycle holds queue no bazaar release |
 | TEST-PS-008-09.T23 | integration | PS-008-04.R05 | F01.S03.M02 adds the first variant of L inside its transaction via set_quantity, then a second variant | variant item created synchronously and the listing-level item superseded in the same transaction; with an active listing-level hold CONFLICT_STATE; bazaar.variant.changed creates nothing |
 | TEST-PS-008-09.T24 | integration | PS-008-07.R04 | export sections, deletion plan, retention purge, then privacy.deletion.completed | sections present with field classes; buyer DID pseudonymized in retained evidence holds and peer reservations |
+| TEST-PS-008-09.T25 | integration | PS-008-03.R06, PS-008-02.R05 | F02.S03.M02 holds two lines of M with holder {type: cycle, id} and ttl 14 d, issues one reservation for both holdIds with expiresAt day 17 and ext {subjectType, revisionHash}; then expiresAt day 31; then renews on day 13 | first published with both items and the absolute day-17 expiresAt; day 31 refused with VALIDATION_FAILED (above maxExpiresAt); the renewal extends the holds without re-signing or changing the statement |
+| TEST-PS-008-09.T26 | contract | PS-008-04.R06 | issue a reservation and a release through the StatementPublisherPort test double; B1 receives the reservation | both created by federation.record.publish with audience participants, recipients [{did, mailboxId}], stream thr:<id> and a ciphertext of at most 12288 bytes (12289 refused with PAYLOAD_TOO_LARGE); the module calls no signing primitive; B1's F11.S01.M02 signs classrup.federation.ack/v1 and S's entry reaches peer_accepted |
+| TEST-PS-008-09.T27 | integration | PS-008-04.R07, PS-008-02.R05 | federation.conflict.detected names a reservation of L, then hold, renew, convert and issue_reservation are attempted; then the conflict store fails; then federation.conflict.resolved drop_all | the hold freezes and each action is refused with BAZAAR_INVENTORY_FROZEN; with the failing store each refuses with DEPENDENCY_UNAVAILABLE; drop_all releases the frozen hold; no mutiny event is consumed |
+| TEST-PS-008-09.T28 | property | PS-008-01.R05 | random sequences of holds and reservations on items with onHand 1..5 on one device, and forked sequences on two devices | reservations from one device never conflict under the confirmed predicate; forked devices conflict exactly when they promised the same allocationSeq to different holders |
 
 ## Acceptance criteria
 
-- All tests T01-T24 pass in CI.
+- All tests T01-T28 pass in CI.
 - available never goes negative and a unit is never converted twice, including under concurrent tabs and forked devices.
 - The UI and APIs never describe a reservation as guaranteed or as accepted by the peer without the signed acknowledgement, and every early release or freeze of an issued reservation reaches its audience as a signed release.
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

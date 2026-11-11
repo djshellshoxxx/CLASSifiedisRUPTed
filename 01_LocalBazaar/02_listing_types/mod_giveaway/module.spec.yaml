@@ -22,11 +22,12 @@ non_responsibilities:
   - Listing creation and publication (F01.S01.M01, F01.S01.M03).
   - Inventory quantities and holds (F01.S03.M01).
   - Messaging and meetup coordination between giver and recipient (F08).
+  - Mailbox storage, quotas and relay mailbox policy (F08.S01.M01 comms.mailbox.put, fetch and ack, at most 1 000 envelopes and 20 MiB per mailbox with the unknown-sender share); this module declares no relay capability.
   - Reputation effects (F07.S03.M01).
   - Verifying the requester's real identity or neediness; requesters are pseudonymous principals and rings of pseudonyms cannot be fully detected.
   - Mirror verification of the listing projection (F11.S01.M02); this module reads the verified mirror view.
   - "Future: lottery selection and charity-verified givers."
-depends_on: [F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
+depends_on: [F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
 user_stories:
   - As a giver, I choose first come or my own choice and see who asked, with a short note from each.
   - As a requester, I can ask for an item once, withdraw my request, and see whether I was selected and until when I must collect.
@@ -40,7 +41,8 @@ edge_cases:
   - The giver chooses a requester who withdrew a moment ago; selection returns CONFLICT_STATE and the queue refreshes.
   - A request arrives for a closed or full giveaway; it is rejected with BAZAAR_GIVEAWAY_CLOSED and a signed decline is returned.
   - A request statement carries a forged signature or a signer different from the stated requester; it is quarantined with reason and never queued.
-  - The giver's vault is offline for days; requests wait in the relay mailbox as ciphertext and are processed on next unlock; requesters see pending, never selected, until the signed selection arrives.
+  - The giver's vault is offline for days; requests wait in the giver's F08.S01.M01 mailbox as ciphertext and are processed on next unlock; requesters see pending, never selected, until the signed selection arrives.
+  - The giver's mailbox is full or the unknown-sender share is used up; comms.mailbox.put returns COMMS_MAILBOX_FULL or RATE_LIMITED to the requester's vault, the request stays prepared with retry after retryAfterMs, and nothing is queued at the giver.
   - 200 fresh keys send requests within a minute to a first-come giveaway with queueLimit 50; at most 25 are queued, they are tied and drawn, and nothing is selected until the giver confirms.
   - A selection arrives at the requester signed by a key that is not the listing author, or a selection of an older withdrawn request is replayed; both are quarantined and the request stays pending.
 ux:
@@ -185,6 +187,7 @@ processes:
     requirements:
       - "define_terms, select, decline and confirm_collected are vault-local commands; select and decline produce signed statements (classrup.bazaar.giveaway_selection/v1 and classrup.bazaar.giveaway_decision/v1); a requester's vault produces classrup.bazaar.giveaway_request/v1 and classrup.bazaar.giveaway_withdrawal/v1 through request and withdraw."
       - "Incoming statements are handled by bazaar.giveaway_request.receive, which verifies and stores them with provenance or quarantines them."
+      - "Statements between giver and requester travel only as sealed envelopes through the F08.S01.M01 mailbox: the sender's vault delivers with comms.mailbox.put to the mailbox hint of the verified projection (giver) or of the request statement (requester), the receiving vault reads with comms.mailbox.fetch, passes the unsealed statement to receive, and calls comms.mailbox.ack after the receive transaction committed; the mailbox limits of 1 000 envelopes and 20 MiB, with the unknown-sender share, are F08.S01.M01's."
       - "bazaar.giveaway.recipient_selected is the only catalog event and carries ids and quantity, never notes."
       - "In the requester vault, bazaar.giveaway_selection.receive (capability peer) verifies selection and decline statements: the signer is the author did:key of the verified listing projection, the statement binds requestId, requestCid and listingId (and selectedUntil), it is deduplicated by cid, and anything else is quarantined."
     commands:
@@ -197,14 +200,14 @@ processes:
         idempotent: true
       - name: bazaar.giveaway_request.request
         capability: bazaar.giveaway_request.create
-        input: "[vault-local + statement classrup.bazaar.giveaway_request/v1, encrypted to the giver's mailbox hint of the verified projection] { listingId, listingCid, quantity?, note? }"
+        input: "[vault-local + statement classrup.bazaar.giveaway_request/v1, sealed to the giver and delivered with comms.mailbox.put to the mailbox hint of the verified projection] { listingId, listingCid, quantity?, note? }"
         output: "{ requestId, requestCid, syncState: prepared }"
         errors: [VALIDATION_FAILED, NOT_FOUND, BAZAAR_GIVEAWAY_CLOSED, BAZAAR_GIVEAWAY_DUPLICATE_REQUEST, BLOCKED_PARTY, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: bazaar.giveaway_request.receive
         capability: bazaar.giveaway_request.receive
-        input: "[vault-local, inbound statement in the giver vault] { envelope: classrup.bazaar.giveaway_request/v1 | classrup.bazaar.giveaway_withdrawal/v1, provenance: { syncBatchId, receivedAt, relayId? } }"
+        input: "[vault-local, inbound statement in the giver vault, unsealed from a comms.mailbox.fetch batch and acknowledged with comms.mailbox.ack after commit] { envelope: classrup.bazaar.giveaway_request/v1 | classrup.bazaar.giveaway_withdrawal/v1, provenance: { syncBatchId (the fetch batch), receivedAt, relayId? } }"
         output: "{ requestId?, accepted: boolean, quarantineReason?, tieGroup? }"
         errors: [VALIDATION_FAILED, BAZAAR_GIVEAWAY_CLOSED, BAZAAR_GIVEAWAY_DUPLICATE_REQUEST, BAZAAR_GIVEAWAY_LIMIT]
         emits: []
@@ -218,7 +221,7 @@ processes:
         idempotent: true
       - name: bazaar.giveaway_request.select
         capability: bazaar.giveaway_request.decide
-        input: "[vault-local + statement classrup.bazaar.giveaway_selection/v1, encrypted to requester] { requestId, expectedRevision, confirmProposal? (first_come) }"
+        input: "[vault-local + statement classrup.bazaar.giveaway_selection/v1, sealed to the requester and delivered with comms.mailbox.put] { requestId, expectedRevision, confirmProposal? (first_come) }"
         output: "{ requestId, revision, holdId, selectedUntil, selectionCid }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_GIVEAWAY_NOT_SELECTABLE]
         emits: [bazaar.giveaway.recipient_selected]
@@ -289,7 +292,7 @@ processes:
     requirements:
       - "Vault policy: only the giver's principal defines terms, selects, declines and confirms; only the requester's principal creates or withdraws a request."
       - "Incoming statements are accepted only if signed by the stated requester or, for selection, by the listing owner key (CAP-8); otherwise quarantined with a reason."
-      - "Relay policy: mailbox access for the encrypted envelopes is authorized by the relay for signed requests from the recipient's registered device key; the relay cannot read request contents."
+      - "Relay policy for the sealed envelopes is F08.S01.M01's comms.mailbox.put, fetch and ack (put proof by the sender's device key, fetch and ack by the owner); this module declares no relay capability and the relay cannot read request contents."
     capabilities:
       - "bazaar.giveaway_terms.define | owner | listing.ownerId = local principal; listing kind giveaway; status draft, published or unpublished"
       - "bazaar.giveaway_request.create | owner | local principal is the requester; not blocked by the giver; one live request per giveaway"
@@ -298,7 +301,6 @@ processes:
       - "bazaar.giveaway_request.decide | owner | giver vault: request.giverId = local principal; requester vault: confirm_collected only, request.requesterId = local principal (mark received)"
       - "bazaar.giveaway_request.read_as_giver | owner | listing.ownerId = local principal"
       - "bazaar.giveaway_request.read_own | owner | request.requesterId = local principal"
-      - "bazaar.giveaway_request.relay_mailbox | relay-member | relay policy: request signed by the recipient device key; ciphertext only; mailbox quota default 10 MiB"
   failure_recovery_idempotency:
     requirements:
       - "Commands are idempotent per CTR-IDM-001; inbound statements are idempotent by requestCid."
@@ -325,7 +327,7 @@ processes:
     threats:
       - "T01 | Hoarding by one person or a ring of pseudonyms for resale | per-giver caps (3 pending, 2 uncollected, 5 per 7 days), fresh-key share of 50 % of the queue, giver confirmation of every first-come pick, giver choice mode, visible honest note that pseudonym rings cannot be fully detected"
       - "T02 | Forged request or selection statements | requests verified against the stated requester; selections and declines verified against the author of the verified listing projection and bound to requestId and requestCid; mismatches quarantined"
-      - "T03 | Spam flooding a giver's queue | queueLimit up to 200, fresh-key share, relay mailbox quotas, requester rate limit 20 requests per hour, block list silent drop"
+      - "T03 | Spam flooding a giver's queue | queueLimit up to 200, fresh-key share, F08.S01.M01 mailbox caps (1 000 envelopes, 20 MiB, unknown senders limited to 20 % of capacity and 200 puts per day), requester rate limit 20 requests per hour, block list silent drop"
       - "T04 | Harassment or stalking through pickup details | pickupNote only in the selection statement to the recipient; exact location shared by the user only through F06.S02.M02 shares with TTL 24 h"
       - "T05 | Gaming first-come with forged timestamps or a relay reordering deliveries | order uses the giver vault's receipt order, requests within one sync batch or 60 s are tied and drawn locally, requester claimedAt is shown only as a claim, and the queue says relays can influence order"
       - "T06 | Sybil swarm of free did:keys draining stock while the giver is away | first-come picks wait for one giver confirmation; fresh keys capped at 50 % of the queue"
@@ -337,12 +339,12 @@ processes:
     requirements:
       - "No telemetry leaves the device (OBS-7); queue sizes and statement outcomes are local diagnostics."
       - "Queue processing for 200 requests meets local budgets on Moto G-class hardware."
-      - "Relay mailbox behaviour is measured by the relay under OBS-1 to OBS-4 without reading content."
+      - "Mailbox behaviour on the relay is measured by F08.S01.M01 under OBS-1 to OBS-4 without reading content; this module keeps only local counters of put outcomes."
     metrics:
       - "classrup_bazaar_giveaway_requests_total{outcome} (local)"
       - "classrup_bazaar_giveaway_quarantined_total{reason} (local)"
       - "classrup_bazaar_giveaway_selection_duration_ms (local histogram)"
-      - "classrup_bazaar_mailbox_bytes (relay gauge, OBS-2 labels only)"
+      - "classrup_bazaar_giveaway_mailbox_put_total{outcome=ok|full|rate_limited} (local)"
     logs:
       - "info giveaway.selected {listingId, requestId, correlationId} in local diagnostics; no notes or pseudonyms."
     budgets:
@@ -363,9 +365,9 @@ processes:
       - "T06 | integration | 03.R03 | selected recipient does not collect for 72 h | request expired, hold released, second selection possible"
       - "T07 | contract | 01.R04,04.R01,04.R03,09.R02 | request, select, decline, withdraw run in both vaults | statements validate and verify; recipient_selected payload has no notes; stored records validate as classrup.bazaar.giveaway_request_record/v1 with localRole giver or requester and never as the statement schema"
       - "T08 | integration | 04.R02,05.R02 | statement with wrong signer, tampered body, unknown schema | all quarantined with reasons; none queued"
-      - "T09 | abuse | 05.R01,05.R03 | non-giver selects; relay reads mailbox | FORBIDDEN; relay holds ciphertext only"
+      - "T09 | abuse | 05.R01,05.R03 | non-giver selects; relay reads the F08.S01.M01 mailbox; capability list inspected | FORBIDDEN; relay holds ciphertext only; no bazaar.giveaway_request.relay_mailbox capability exists and access is decided by comms.mailbox.put, fetch and ack"
       - "T10 | integration | 06.R01,06.R03 | replay select with same key; fail signing | one selection; failure rolls back hold"
-      - "T11 | chaos | 06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock with tie groups per sync batch; requester sees pending until signed receipt"
+      - "T11 | chaos | 06.R03 | giver offline 3 days, the giver's F08.S01.M01 mailbox holds requests | fetched with comms.mailbox.fetch and processed in receipt order on unlock with tie groups per fetch batch; comms.mailbox.ack only after each receive commit; requester sees pending until signed receipt"
       - "T12 | abuse | 02.R03,07.R03 | requester sends 4th pending request and 6th collection within 7 days; 21 requests in an hour | BAZAAR_GIVEAWAY_LIMIT and RATE_LIMITED; the rejected requester learns nothing about the queue"
       - "T13 | abuse | 07.R02 | terminal request older than 30 days | note purged, evidence fields retained"
       - "T14 | load | 08.R01,08.R02,08.R03 | 200 queued requests on Moto G profile | select p95 <= 120 ms, receive p95 <= 80 ms, list p95 <= 150 ms, no telemetry"
@@ -376,8 +378,9 @@ processes:
       - "T19 | integration | 07.R03 | R1 and R2 each request L; R1 calls list_mine and the giver calls list_for_listing | R1 sees only its own request; only the giver vault returns the queue"
       - "T20 | integration | 02.R04 | R1 requests after the verified projection's closesAt, and after its tombstone was applied | BAZAAR_GIVEAWAY_CLOSED in the requester vault without contacting the giver; pending request expires on tombstone"
       - "T21 | integration | 07.R04 | export sections, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for R2 | sections present with field classes; R2's DID replaced by the pseudonym in retained requests and notes purged"
+      - "T22 | integration | 04.R05,08.R03 | requests delivered with comms.mailbox.put until the giver's mailbox reports COMMS_MAILBOX_FULL, then the unknown-sender share is used up | requests stay prepared and retry after retryAfterMs; nothing is queued at the giver; local put counters record full and rate_limited"
     acceptance:
-      - All tests T01-T21 pass in CI.
+      - All tests T01-T22 pass in CI.
       - A recipient is never shown as selected before a selection statement signed by the listing author for that exact request is verified, and handover is never described as proven.
       - Per-requester limits and the fresh-key share hold under retries, replays, Sybil swarms and concurrent tabs.
   import_export_backup_rollback:

@@ -36,10 +36,11 @@ _None._
 | PLATFORM_INSTALL_NOT_ELIGIBLE | 409 | no | install card gating rules not satisfied |
 | PLATFORM_UPDATE_NOT_SAFE | 409 | yes | unsaved draft or sending outbox entry blocks activation; retry after saving |
 | PLATFORM_UPDATE_UNVERIFIED | 422 | no | the waiting build's release manifest is missing or not signed by the pinned release key; update not offered |
+| PLATFORM_UPDATE_HELD | 409 | no | a valid release hold signed by the pinned release key covers the waiting build; activation is paused until the hold's expiresAt |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** UI and build module: no vault commands, statements or relay commands. Local API: install() calls the deferred beforeinstallprompt; applyUpdate() refuses unless navigator.userActivation.isActive, runs the V05 and V07 checks, gets the nonce through GET_VERSION from the waiting worker and posts SKIP_WAITING { nonce } (F15.S01.M02); getInstallState() returns { installed, installable, platform, updateAvailable, updateVerified, buildId, releaseSeq }.
+**Note:** UI and build module: no vault commands, statements or relay commands. Local API: install() calls the deferred beforeinstallprompt; applyUpdate() refuses unless navigator.userActivation.isActive, runs the V05, V07 and V08 checks, gets the nonce through GET_VERSION from the waiting worker and posts SKIP_WAITING { nonce } (F15.S01.M02); getInstallState() returns { installed, installable, platform, updateAvailable, updateVerified, updateHeld, holdExpiresAt?, buildId, releaseSeq }. Release holds are verified with the F16.S02.M03 verify function for context classrup/release-hold/v1.
 
 ### Example
 
@@ -63,4 +64,4 @@ update: waiting worker -> /release-manifest.json verified (V07) -> banner 'A new
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

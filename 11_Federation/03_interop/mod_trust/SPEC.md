@@ -15,7 +15,7 @@ Keeps the explicit, opt-in list of relays a vault or relay exchanges signed stat
 - Activate a vault's selected relay from the relay's verified classrup.federation.relay_identity/v1 statement and the user's fingerprint confirmation.
 - Resolve a request key id to an active peer and enforce quotas (default 6000 envelopes/hour, 10 batches/minute, 2 GiB stored per peer) for F11.S01.M02 and F11.S02.M01, owning FEDERATION_PEER_NOT_ALLOWED and FEDERATION_QUOTA_EXCEEDED (N1).
 - Maintain the health score from relay-attributable faults only and suspend automatically below 40 or on 20 invalid signatures in 10 minutes.
-- Support key rotation through a rotation statement signed by the old key with a 7-day overlap, and refuse unexpected key changes with FEDERATION_KEY_MISMATCH.
+- Support key rotation through a rotation statement signed by the old key with a 7-day overlap, emit federation.peer.key_rotated when a pinned key rotates so consumers re-check relay attestations without waiting for a descriptor refresh, and refuse unexpected key changes with FEDERATION_KEY_MISMATCH.
 - Register the N6 privacy ports for the vault's selected-relay list.
 
 ## Not responsible for
@@ -45,6 +45,7 @@ Keeps the explicit, opt-in list of relays a vault or relay exchanges signed stat
 - Health score reaches 39 during a batch; the current batch finishes and the peer is suspended before the next request.
 - An author forks twice in 24 h and both forks reach this relay through two honest peers; no peer loses health, and the author is limited by F11.S02.M03.
 - The previous key of a rotated peer is used 7 days and 1 minute after the rotation; refused with FEDERATION_KEY_MISMATCH.
+- A selected relay rotates its key with a verified classrup.federation.key_rotation/v1; federation.peer.key_rotated is emitted in the same transaction with the old and new key, so F07.S03.M02 re-checks relay_email_check attestations at once instead of after its 24 h descriptor refresh.
 - Operator lowers a quota below current usage; existing records stay, new envelopes are refused with FEDERATION_QUOTA_EXCEEDED until usage falls.
 - Flag F11 is off; peer relays stay in the table dormant and their health score is frozen, while selected relays keep working.
 
@@ -67,7 +68,7 @@ Keeps the explicit, opt-in list of relays a vault or relay exchanges signed stat
 
 - Commands: `federation.peer.propose`, `federation.peer.receive_offer`, `federation.peer.accept`, `federation.peer.receive_accept`, `federation.peer.suspend`, `federation.peer.reinstate`, `federation.peer.remove`, `federation.peer.update`
 - Queries: `federation.peer.list`, `federation.peer.get`, `federation.peer.resolve_key`
-- Emits: `federation.peer.added`, `federation.peer.suspended`, `federation.peer.reinstated`, `federation.peer.removed`
+- Emits: `federation.peer.added`, `federation.peer.key_rotated`, `federation.peer.suspended`, `federation.peer.reinstated`, `federation.peer.removed`
 - Consumes: `federation.record.rejected`, `federation.conflict.detected`, `federation.delivery.failed`, `platform.flag.changed`, `privacy.deletion.completed`
 
 ## Dependencies
@@ -81,7 +82,7 @@ F11.S01.M01, F11.S01.M03, F15.S04.M02, F07.S02.M01, F12.S03.M03, F10.S01.M02, F1
 | PS-091-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-091-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-091-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-091-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-091-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-091-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-091-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-091-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -93,6 +94,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No peer becomes active without both sides' signed opt-in (or a selected relay's signed identity statement) and a recorded fingerprint confirmation.
 - SSRF, key substitution and unsolicited-offer tests pass, and no honest relay is penalized for an author's fork.

@@ -14,8 +14,8 @@
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| comms.consent.sign | local principal | vault policy; party of the subject with the role required by the statement key (ConsentSubjectPort.partyRole); readConfirmed true |
-| comms.consent.revoke | local principal | the targeted consents are signed by the local principal; subject not committed (ConsentSubjectPort.isCommitted false) |
+| comms.consent.sign | local principal | vault policy; party of the subject with the role required by the statement key (SubjectCanonicalizerPort.partyRole); readConfirmed true |
+| comms.consent.revoke | local principal | the targeted consents are signed by the local principal; subject not committed (SubjectCanonicalizerPort.isCommitted false) |
 | comms.consent.accept | local principal | internal; invoked by the transport layer; statement verified before storage |
 | comms.consent.verify | local principal | any local module; pure read |
 | comms.consent.read | local principal | party of the subject |
@@ -30,4 +30,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

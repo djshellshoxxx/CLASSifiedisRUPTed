@@ -6,7 +6,7 @@
 
 ## Purpose
 
-A relay operator's backups: full SQLite snapshots every 6 h taken with the node:sqlite online backup API on the relay's writer connection (page-exact, consistent as of the completion of the final step), continuous WAL archiving in the Litestream style (this module is the only checkpointer: automatic checkpoints are off, a read transaction is held between archive runs, frames are copied up to mxFrame and fsynced before a checkpoint), and a tombstone ledger so that no restore ever resurrects deleted public content. Every artifact is encrypted with its own key derived from an operator-supplied backup key, every manifest is authenticated and chained to the previous one, retention rotates to 30 daily and 12 monthly copies, and an automated restore check verifies each snapshot (CTR-IOX-001 IOX-3, IOX-7). Under ADR-0016 these backups cover only what a relay holds: signed public projections, end-to-end encrypted envelopes, P0 media and relay-local operational data. The user's own vault export is the primary backup of private records (IOX-6) and is not handled here; losing a relay loses no user-owned private data. The relay never holds funds and backups never contain vault keys.
+A relay operator's backups: full SQLite snapshots every 6 h taken with the node:sqlite online backup API on the relay's writer connection (page-exact, consistent as of the completion of the final step), continuous WAL archiving in the Litestream style (this module is the only checkpointer: automatic checkpoints are off, a read transaction is held between archive runs, frames are copied up to mxFrame and fsynced before a checkpoint), and a tombstone ledger so that no restore ever resurrects deleted public content. Every artifact is encrypted with its own key derived from an operator-supplied backup key, every manifest is authenticated and chained to the previous one, retention rotates to 30 daily and 12 monthly copies, and an automated restore check verifies each snapshot (CTR-IOX-001 IOX-3, IOX-7). Under ADR-0016 these backups cover only what a relay holds: signed public projections, end-to-end encrypted envelopes, P0 media and relay-local operational data; the encrypted attachment MediaBlobs of F08.S01.M03 are excluded and only their attachment rows are backed up. The user's own vault export is the primary backup of private records (IOX-6) and is not handled here; losing a relay loses no user-owned private data. The relay never holds funds and backups never contain vault keys.
 
 ## Responsibilities
 
@@ -18,11 +18,13 @@ A relay operator's backups: full SQLite snapshots every 6 h taken with the node:
 - Rotate retention to 8 six-hourly, 30 daily and 12 monthly full snapshots, 7 days of WAL segments and 546 days of ledger, deleting a completed or verified artifact only after a newer verified snapshot covers its tier and a failed record's artifact when its tier retention ends.
 - Verify each snapshot right after writing it (key fingerprint, manifest MAC and chain, decrypt, checksum, PRAGMA integrity_check, foreign_key_check, row-count comparison) and provide the verification command used by quarterly restore drills.
 - Emit platform.backup.completed and platform.backup.failed for operators and the observability module.
+- Exclude encrypted MediaBlobs (encrypted true, the F08.S01.M03 attachment ciphertext) from every snapshot, WAL segment and archive - the backup set is schema main of the relay database, where the attachment rows and blob metadata (ref, size, encrypted, holders) live, while the ciphertext bytes live in the separate attached store blobs_enc of the F15.S02.M03 relay adapter, which this module never snapshots, archives or checkpoints - and record how many were left out.
 
 ## Not responsible for
 
 - Restore tooling, runbook, RPO/RTO drills and dead-letter replay (F15.S03.M03 mod_recovery).
-- Opening relay SQLite connections with wal_autocheckpoint=0 (an F15.S02.M03 adapter option this module requires) and the shutdown sequence (F15.S02.M01 runs the registered pre-checkpoint hook).
+- Opening relay SQLite connections with wal_autocheckpoint=0 and keeping encrypted MediaBlob bytes in the separate attached store blobs_enc (F15.S02.M03 relay adapter options this module requires) and the shutdown sequence (F15.S02.M01 runs the registered pre-checkpoint hook).
+- Attachment slots, rows and their expiry after a restore (F08.S01.M03, whose reconciliation sweep marks rows without ciphertext as expired).
 - Tombstone verification and the tombstone records themselves (F11.S01.M02 registers a TombstoneSourcePort with the relay process; no depends_on edge).
 - The user's vault export and its 30-day reminder (F10.S01.M03 and F15.S01.M01); this module never reads vaults.
 - Backup of the relay identity key file and the backup key; the operator stores them separately.
@@ -34,6 +36,7 @@ A relay operator's backups: full SQLite snapshots every 6 h taken with the node:
 - As a relay operator, I can run a verification that restores the latest backup into a temporary directory and proves it opens and passes integrity checks.
 - As a relay operator, I know that someone with write access to my backup directory cannot pass off an older backup as the latest or splice artifacts together.
 - As a member who selected this relay, I know that losing it never loses my private records, because those are in my own vault export, and that restoring it never brings back a listing I deleted.
+- As a member who deleted a photo attachment, I know this relay's backups never held its ciphertext, so a restore cannot bring it back.
 
 ## Edge cases
 
@@ -47,6 +50,7 @@ A relay operator's backups: full SQLite snapshots every 6 h taken with the node:
 - A backup artifact is truncated, modified or has a chunk spliced in from another artifact; checksum or chunk authentication fails with the correct key, the record becomes failed and an extra snapshot is taken.
 - An older authentic artifact and manifest are copied or renamed to look like the latest; the manifest chain does not link, catalog import and restore planning reject it with PLATFORM_BACKUP_MANIFEST_INVALID.
 - Clock jumps backward; scheduling uses a monotonic timer for intervals and stamps records with wall time only for labeling.
+- The storage adapter is misconfigured and encrypted MediaBlob bytes sit in schema main; the run refuses with PLATFORM_BACKUP_CONFIG_INVALID before writing anything, because a snapshot or WAL segment would otherwise copy attachment ciphertext.
 
 ## UX and accessibility
 
@@ -73,13 +77,13 @@ F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-PRV-001, CT
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-120-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-120-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-120-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-120-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-120-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-120-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-120-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-120-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-120-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
+| PS-120-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-120-08 | [Observability and performance](observability_performance.md) | 4 |
 | PS-120-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-120-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -88,7 +92,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T25 pass in CI and a restore drill is performed at least every 100 days.
+- All tests T01-T26 pass in CI and a restore drill is performed at least every 100 days.
 - A verified encrypted snapshot exists at least every 6 hours or an alert fires within 7 hours, and WAL archiving keeps the typical data-loss window at 5 minutes with zero gaps under the reference load.
-- No backup artifact contains plaintext private data or key material, and no spliced or relabelled artifact or manifest is accepted.
+- No backup artifact contains plaintext private data, key material or encrypted attachment MediaBlobs, and no spliced or relabelled artifact or manifest is accepted.
 - A restored relay reproduces the database content hash of the snapshot and re-applies every ledger tombstone, whatever the age of the snapshot.

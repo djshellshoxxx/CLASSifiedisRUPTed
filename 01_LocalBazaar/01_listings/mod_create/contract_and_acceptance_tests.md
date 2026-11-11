@@ -22,7 +22,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-002-09.T01 | unit | PS-002-01.R01, PS-002-02.R01 | create a valid sell draft | Listing stored with status draft, revision 1; unknown field rejected |
-| TEST-PS-002-09.T02 | unit | PS-002-02.R02, PS-002-02.R03 | violate each rule V01-V12 in turn | the documented error code is returned and nothing is stored |
+| TEST-PS-002-09.T02 | unit | PS-002-02.R02, PS-002-02.R03 | violate each rule V01-V14 in turn | the documented error code is returned and nothing is stored |
 | TEST-PS-002-09.T03 | property | PS-002-03.R01, PS-002-03.R02 | random sequences of apply_status calls | only declared transitions succeed, including expired -> closed and published -> published on renew; others return CONFLICT_STATE |
 | TEST-PS-002-09.T04 | integration | PS-002-03.R03, PS-002-07.R02 | delete draft | tombstone with id, type, deletedAt exists; content and blob keys purged after 30 days (clock advance) |
 | TEST-PS-002-09.T05 | contract | PS-002-04.R01, PS-002-09.R02 | each command runs | outputs and bazaar.listing.created/deleted payloads validate against registry schemas; no command enqueues a statement |
@@ -40,13 +40,16 @@ See the module test table below (all processes).
 | TEST-PS-002-09.T17 | integration | PS-002-01.R02 | create, edit and delete drafts with a network spy, then inspect the sync outbox | zero network requests; no outbox entry has a destination or payload derived from a draft; stored record validates as classrup.bazaar.listing_record/v1, never as the projection schema |
 | TEST-PS-002-09.T18 | property | PS-002-03.R04, PS-002-03.R01 | random apply_status calls including reason relay_notice and a relay removal processed by F01.S01.M03 | relay_notice refused with VALIDATION_FAILED; Listing.status unchanged by any relay removal |
 | TEST-PS-002-09.T19 | integration | PS-002-07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.listings lists every own listing with field classes; deletion plan tombstones and purges all; CI lint fails on an injected unannotated field |
+| TEST-PS-002-09.T20 | unit | PS-002-01.R04, PS-002-02.R04 | create with media [{ref, alt of 140 code points}, {ref, decorative true}, {ref}] then with alt of 141 code points, alt with a control character, decorative true plus alt and a duplicated ref | first stored as MediaRef entries unchanged; the others return VALIDATION_FAILED or BAZAAR_LISTING_MEDIA_INVALID and nothing is stored |
+| TEST-PS-002-09.T21 | property | PS-002-01.R05 | create 1 000 listings at random clock times without an id, then with supplied ids of finer and floored time | every minted id is a UUIDv7 whose embedded time equals the hour floor of the clock (F10.S02.M03 assertCoarseTime passes); supplied finer ids are refused with VALIDATION_FAILED |
+| TEST-PS-002-09.T22 | contract | PS-002-04.R04 | F08.S01.M02 conformance suite calls the listing ThreadContextPort for an own published, closed and deleted listing and an unknown id | exists, isParty (owner true), roster [ownerId] and isClosed answer as specified; unknown id returns exists false |
 
 ## Acceptance criteria
 
-- All tests T01-T19 pass in CI.
+- All tests T01-T22 pass in CI.
 - No draft or listing payload leaves the device from this module (network spy test).
 - No stored Listing field can hold coordinates or an address, region cells never exceed 5 characters, and no relay notice changes Listing.status.
 
 ## Dependencies
 
-Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

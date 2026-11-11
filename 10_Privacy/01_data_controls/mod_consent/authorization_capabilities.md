@@ -16,7 +16,7 @@
 |---|---|---|
 | privacy.consent.grant | local-principal | vault unlocked; current policy hash supplied |
 | privacy.consent.withdraw | local-principal | vault unlocked; consent granted |
-| privacy.consent.check | local-principal | in-process call from a module of the unlocked vault |
+| privacy.consent.check | local-principal | in-process call from a module of the unlocked vault, directly, through privacy.consent.require or through the ConsentCheckPort bound in the kernel port registry |
 | privacy.consent.read | local-principal | vault unlocked |
 | privacy.consent.relay_register | signed-statement | request and statement signed by a registered, non-revoked device key of the author did; grants limited to 20 per hour per did, withdrawals always accepted |
 | privacy.consent.relay_check | relay-system | in-process call from relay federation handlers (F11.S02.M01) on the same relay |
@@ -31,4 +31,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F11.S01.M01, F15.S01.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F11.S01.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

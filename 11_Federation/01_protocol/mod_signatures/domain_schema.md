@@ -13,7 +13,7 @@
 
 ## Specification
 
-**Note:** Pure functions and value types only; nothing is persisted by this module, so no entities are owned. Normative definitions: signedBytes(env) = JCS(env minus {sig}); cid(env) = "sha256-" + base64url(SHA-256(JCS(env minus {sig, cid}))); signing computes cid first, writes it into the envelope, then signs signedBytes. The relay request signature is RFC 9421 with Signature-Input sig1=("@method" "@target-uri" "content-digest");created=<unix>;keyid="<did:key or relay key id>";nonce="<batchId>";alg="ed25519" and Content-Digest per RFC 9530 (sha-256).
+**Note:** Pure functions and value types only; nothing is persisted by this module, so no entities are owned. Normative definitions: signedBytes(env) = JCS(env minus {sig}); cid(env) = "sha256-" + base64url(SHA-256(JCS(env minus {sig, cid}))); signing computes cid first, writes it into the envelope, then signs signedBytes. The relay request signature is RFC 9421 with Signature-Input sig1=("@method" "@target-uri" "content-digest");created=<unix>;keyid="<did:key or relay key id>";nonce="<batchId>";alg="ed25519" and Content-Digest per RFC 9530 (sha-256); device-to-relay requests add ;expires=<unix, at most created + 300>;tag="classrup/relay-request/v1". ext is kept byte-exact (it is inside the signed bytes), capped at 4096 bytes, and ext.crit lists members a reader must understand.
 
 ## Verification
 

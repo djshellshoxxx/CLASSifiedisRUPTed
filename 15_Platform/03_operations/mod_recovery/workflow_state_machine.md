@@ -24,7 +24,7 @@ Initial **planned**; terminal **ready**, **aborted**.
 | fetching -> verifying | all artifacts present | manifests authenticated (V10), checksums and GCM tags verified (V02-V04), ledger checked (V09) |
 | verifying -> applying | verification passed | snapshot decrypted, WAL frames after walPosition applied up to the target time |
 | applying -> replaying | database opens and integrity_check is ok | tombstone ledger re-applied; archived events with occurredAt ≤ reachedTimestamp, an existing aggregate revision and no inbox row re-delivered to consumers without external side effects; later events counted lost |
-| replaying -> ready | replay finished and migrations current | restore announcement signed with the relay key (or the new identity) and written for F15.S02.M01, receipt epoch incremented, auctions with activity in lostWindow frozen through AuctionHostPort, restore-report.json written; relay may be started on the new host |
+| replaying -> ready | replay finished and migrations current | restore announcement signed with the relay key, or with the new identity through the NewIdentityHook naming predecessorRelayId, and written for F15.S02.M01, receipt epoch incremented, auctions with activity in lostWindow frozen through AuctionHostPort, restore-report.json written; relay may be started on the new host |
 | planned -> aborted | validation fails or operator cancels | target directory left for inspection |
 | fetching -> aborted | artifact missing or IO error | report records the phase |
 | verifying -> aborted | manifest, checksum, key, ledger or chain failure | report records the failed check |
@@ -87,6 +87,7 @@ stateDiagram-v2
 | TEST-PS-122-09.T20 | integration | PS-122-03.R04, PS-122-01.R03 | archive holds events before and after reachedTimestamp, one whose aggregate revision is missing in the restored records, and push events in range | only events ≤ reachedTimestamp with existing revisions re-delivered; the rest counted in lostEvents and rpoAchievedMs; push consumer listed in excludedConsumers and sends nothing |
 | TEST-PS-122-09.T21 | integration | PS-122-03.R05, PS-122-04.R04, PS-122-06.R04 | restore with receipts issued after the restored point and an auction bid in the lost window | signed restore announcement served in the well-known document with lostWindow, lastReceiptSeq and epoch 1; the stub outbox returns covered entries to prepared and resends them once; the auction is frozen through AuctionHostPort |
 | TEST-PS-122-09.T22 | integration | PS-122-03.R03 | dead letter left 30 days; a requeued event whose consumer is then disabled; a requeued event not delivered for 7 days | first purged and counted; second and third return to dead_lettered with replay_count kept |
+| TEST-PS-122-09.T24 | integration | PS-122-04.R05, PS-122-03.R05 | relay identity init --new-identity after a compromise revocation, with an empty database; then relay restore --new-identity of the fixture set | each new identity's first announcement is signed by its genesis key under classrup-relay-restore:v1, names predecessorRelayId, has epoch 0 and lastReceiptSeq 0 and is served in the well-known document before readyz 200; a stub vault applies it only to the new relayId; the report records predecessorRelayId and excludedBlobs |
 
 ## Dependencies
 

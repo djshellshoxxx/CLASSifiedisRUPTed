@@ -13,7 +13,7 @@
 ## Specification
 
 **Metrics**
-- local counters sessions, completedActions, install_prompt_shown, install_accepted, install_dismissed, update_prompted, update_accepted, update_deferred, update_unverified (never transmitted)
+- local counters sessions, completedActions, install_prompt_shown, install_accepted, install_dismissed, update_prompted, update_accepted, update_deferred, update_unverified, update_held, hold_rejected (never transmitted)
 
 **Logs**
 - Local diagnostic log lines install.state {state} and update.state {state, verified}; exportable by the user, never uploaded.
@@ -34,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

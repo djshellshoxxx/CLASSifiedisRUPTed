@@ -10,6 +10,7 @@
 - **PS-077-02.R02** Execution validates that grace has ended, that deferral limits are respected and that every registered module has a plan.
 - **PS-077-02.R03** Incoming relay deletion statements are verified for signature by a registered, non-revoked key of the did (or one listed as final by its account_deleted revocation) and for replay rather than age: dedupe on (did, requestId, batch hash) and accept signedAt up to 30 days old plus 10 minutes of clock skew.
 - **PS-077-02.R04** Publishing and new commitments are refused during an active request through the guard privacy.deletion.assert_not_pending, which every publishing and commitment module calls.
+- **PS-077-02.R05** Deletion notices are validated against the allowlist of their kind and sent only to recipients that a DeletionPort plan listed as commitment counterparties or thread counterparties.
 
 ## Specification
 
@@ -26,6 +27,8 @@
 | V09 | privacy.deletion.assert_not_pending - no request is pending_grace, deferred, executing or failed in this vault | PRIVACY_DELETION_PENDING |
 | V10 | a DeletionPort step starts only after every lower-order step of every module is done (sign, revoke_keys, pseudonymize, shred, purge, destroy_keys) | CONFLICT_STATE |
 | V11 | a relay_apply batch has at most 100 tombstone cids and its batch index is within total | VALIDATION_FAILED |
+| V12 | a deletion_notice payload has exactly the allowlisted fields of its kind (commitment - requestId, signedAt, kind, commitmentRef, effectiveAt, recourse; departure - requestId, signedAt, kind, effectiveAt, recourse none) and every recipient is listed by a DeletionPort plan as a counterparty of that commitment or as a thread counterparty | VALIDATION_FAILED |
+| V13 | Erase vault and privacy.deletion.request delete no vault data before the export prompt was shown in this flow; vault lock and principal switch never call DeletionPort | PRECONDITION_FAILED |
 
 ## Verification
 
@@ -37,6 +40,8 @@
 | TEST-PS-077-09.T12 | abuse | PS-077-02.R04 | publish a listing, open a deal, commit a cycle, book a service and reserve a rental during grace through module doubles that call the guard | each refused with PRIVACY_DELETION_PENDING |
 | TEST-PS-077-09.T14 | unit | PS-077-09.R01, PS-077-09.R03, PS-077-02.R02, PS-077-04.R04 | traceability tool run and the DeletionPort CI conformance check with a module without a port and one whose execute differs between runs | every PS-077 requirement maps to a passing test; build fails for a module without a plan or with non-idempotent steps |
 | TEST-PS-077-09.T17 | abuse | PS-077-02.R03 | relay_apply with a statement signed 31 days ago, a replayed batch with changed content, a statement signed by a key revoked for compromise, and a valid statement delivered on day 3 after the account_deleted revocation | first three PRIVACY_DELETION_STATEMENT_INVALID; an exact replay is a no-op; the day-3 statement is accepted because the revocation lists its cid |
+| TEST-PS-077-09.T25 | integration | PS-077-01.R06, PS-077-02.R05, PS-077-04.R02 | deletion with 40 threads and 63 thread counterparties listed by an F08.S01.M02 plan double, one open cycle and a notice addressed to a did that no plan listed | one departure notice signed once and sealed to 63 mailboxes under one cid, payload {requestId, signedAt, kind, effectiveAt, recourse}; the cycle gets a commitment notice; the unlisted recipient is refused with VALIDATION_FAILED; the account_deleted revocation lists the departure cid |
+| TEST-PS-077-09.T27 | e2e | PS-077-02.R05, PS-077-07.R02 | tap Erase vault in the PWA, then lock the vault and switch principal with queued entries | the export prompt is shown before anything is deleted and the deletion request starts grace only after confirmation; lock and switch keep every record and entry and never call DeletionPort |
 
 ## Dependencies
 

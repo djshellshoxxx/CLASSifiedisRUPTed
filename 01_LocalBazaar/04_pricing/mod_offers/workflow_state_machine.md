@@ -28,9 +28,9 @@ Initial **made**; terminal **rejected**, **withdrawn**, **expired**.
 | made -> expired | seller vault: expiresAt on the seller clock (timeout, no statement), listing unpublished, expired or closed (listing_unavailable), last unit taken (superseded), or verified timeout close from the buyer; buyer vault: verified decision outcome expired, or expiresAt + 24 h grace on the buyer clock (timeout) | seller: decision statement queued for listing_unavailable and superseded; buyer: timeout close queued after the grace; emits bazaar.offer.expired |
 | accepted -> withdrawn | seller vault: verified withdrawal statement from the buyer that crossed the acceptance | commerce.deal.cancel in the same transaction; the hold is released by F01.S03.M01 on commerce.deal.cancelled with a signed release; emits bazaar.offer.withdrawn (withdrawn before accept) |
 | accepted -> expired | seller vault: verified timeout close from the buyer because the acceptance arrived after the buyer's grace | commerce.deal.cancel in the same transaction; hold released; emits bazaar.offer.expired (timeout) |
-| accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device); buyer vault: comms.consent.verify returns conflicted | the Deal does not proceed; the owner must keep one offer |
-| frozen -> accepted | seller vault: bazaar.offer.resolve_conflict keeps this offer; buyer vault: comms.consent.verify returns valid again | competing offers are dropped in the same transaction; the hold returns to active |
-| frozen -> rejected | seller vault: bazaar.offer.resolve_conflict drops this offer; buyer vault: verified decision rejected with reason conflict_resolved | commerce.deal.cancel; decision statement queued to that buyer; emits bazaar.offer.rejected |
+| accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device); both vaults: federation.conflict.detected whose freezeScope names consent:bazaar_offer:<offerId>; buyer vault: comms.consent.verify returns conflicted | the Deal does not proceed; the owner must keep one offer |
+| frozen -> accepted | seller vault: bazaar.offer.resolve_conflict keeps this offer; both vaults: federation.conflict.resolved superseded by a renegotiated consent signed by every required signer; buyer vault: comms.consent.verify returns valid again | competing offers are dropped in the same transaction; the hold returns to active |
+| frozen -> rejected | seller vault: bazaar.offer.resolve_conflict drops this offer, or federation.conflict.resolved with decision drop_all; buyer vault: verified decision rejected with reason conflict_resolved, or federation.conflict.resolved drop_all | commerce.deal.cancel; decision statement queued to that buyer; emits bazaar.offer.rejected |
 | accepted -> rejected | buyer vault: verified decision rejected with reason conflict_resolved bound to this offer | the mirrored Deal is cancelled by the seller's statement; emits bazaar.offer.rejected |
 | frozen -> expired | commerce.deal.cancelled for the linked Deal, or the frozen hold reached maxExpiresAt | emits bazaar.offer.expired (timeout) |
 
@@ -43,9 +43,9 @@ stateDiagram-v2
   made --> expired: seller vault  expiresAt on the seller clock (timeout, no statement), listing unpublished, expired or closed (listing_unavailable), last unit taken (superseded), or verified timeout close from the buyer  buyer vault  verified decision outcome expired, or expiresAt + 24 h grace on the buyer clock (timeout)
   accepted --> withdrawn: seller vault  verified withdrawal statement from the buyer that crossed the acceptance
   accepted --> expired: seller vault  verified timeout close from the buyer because the acceptance arrived after the buyer's grace
-  accepted --> frozen: seller vault  bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device)  buyer vault  comms.consent.verify returns conflicted
-  frozen --> accepted: seller vault  bazaar.offer.resolve_conflict keeps this offer  buyer vault  comms.consent.verify returns valid again
-  frozen --> rejected: seller vault  bazaar.offer.resolve_conflict drops this offer  buyer vault  verified decision rejected with reason conflict_resolved
+  accepted --> frozen: seller vault  bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device)  both vaults  federation.conflict.detected whose freezeScope names consent bazaar_offer <offerId>  buyer vault  comms.consent.verify returns conflicted
+  frozen --> accepted: seller vault  bazaar.offer.resolve_conflict keeps this offer  both vaults  federation.conflict.resolved superseded by a renegotiated consent signed by every required signer  buyer vault  comms.consent.verify returns valid again
+  frozen --> rejected: seller vault  bazaar.offer.resolve_conflict drops this offer, or federation.conflict.resolved with decision drop_all  buyer vault  verified decision rejected with reason conflict_resolved, or federation.conflict.resolved drop_all
   accepted --> rejected: buyer vault  verified decision rejected with reason conflict_resolved bound to this offer
   frozen --> expired: commerce.deal.cancelled for the linked Deal, or the frozen hold reached maxExpiresAt
   rejected --> [*]
@@ -73,4 +73,4 @@ stateDiagram-v2
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

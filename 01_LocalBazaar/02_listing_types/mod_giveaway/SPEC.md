@@ -23,6 +23,7 @@ Free-item listings. A giver publishes a giveaway with a selection mode (first co
 - Listing creation and publication (F01.S01.M01, F01.S01.M03).
 - Inventory quantities and holds (F01.S03.M01).
 - Messaging and meetup coordination between giver and recipient (F08).
+- Mailbox storage, quotas and relay mailbox policy (F08.S01.M01 comms.mailbox.put, fetch and ack, at most 1 000 envelopes and 20 MiB per mailbox with the unknown-sender share); this module declares no relay capability.
 - Reputation effects (F07.S03.M01).
 - Verifying the requester's real identity or neediness; requesters are pseudonymous principals and rings of pseudonyms cannot be fully detected.
 - Mirror verification of the listing projection (F11.S01.M02); this module reads the verified mirror view.
@@ -44,7 +45,8 @@ Free-item listings. A giver publishes a giveaway with a selection mode (first co
 - The giver chooses a requester who withdrew a moment ago; selection returns CONFLICT_STATE and the queue refreshes.
 - A request arrives for a closed or full giveaway; it is rejected with BAZAAR_GIVEAWAY_CLOSED and a signed decline is returned.
 - A request statement carries a forged signature or a signer different from the stated requester; it is quarantined with reason and never queued.
-- The giver's vault is offline for days; requests wait in the relay mailbox as ciphertext and are processed on next unlock; requesters see pending, never selected, until the signed selection arrives.
+- The giver's vault is offline for days; requests wait in the giver's F08.S01.M01 mailbox as ciphertext and are processed on next unlock; requesters see pending, never selected, until the signed selection arrives.
+- The giver's mailbox is full or the unknown-sender share is used up; comms.mailbox.put returns COMMS_MAILBOX_FULL or RATE_LIMITED to the requester's vault, the request stays prepared with retry after retryAfterMs, and nothing is queued at the giver.
 - 200 fresh keys send requests within a minute to a first-come giveaway with queueLimit 50; at most 25 are queued, they are tied and drawn, and nothing is selected until the giver confirms.
 - A selection arrives at the requester signed by a key that is not the listing author, or a selection of an older withdrawn request is replayed; both are quarantined and the request stays pending.
 
@@ -72,7 +74,7 @@ Free-item listings. A giver publishes a giveaway with a selection mode (first co
 
 ## Dependencies
 
-F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001
+F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -81,7 +83,7 @@ F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F1
 | PS-005-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-005-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-005-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-005-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-005-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-005-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-005-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-005-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -93,6 +95,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T22 pass in CI.
 - A recipient is never shown as selected before a selection statement signed by the listing author for that exact request is verified, and handover is never described as proven.
 - Per-requester limits and the fresh-key share hold under retries, replays, Sybil swarms and concurrent tabs.

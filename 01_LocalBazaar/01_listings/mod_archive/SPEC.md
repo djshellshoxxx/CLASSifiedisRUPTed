@@ -80,7 +80,7 @@ F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F1
 | PS-001-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-001-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-001-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-001-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-001-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-001-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-001-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-001-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -92,6 +92,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T20 pass in CI.
+- All tests T01-T21 pass in CI.
 - Closing or archiving a published listing always ends its publication and queues a tombstone, and never releases a Deal-linked hold without the Deal's cancellation.
 - Restore never republishes, no listing with an active cycle or Deal-linked hold expires under the sweep, and no sold marking is displayed as verified without a signed counterparty record.

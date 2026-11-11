@@ -28,7 +28,7 @@
 |---|---|---|
 | T01 | Hoarding by one person or a ring of pseudonyms for resale | per-giver caps (3 pending, 2 uncollected, 5 per 7 days), fresh-key share of 50 % of the queue, giver confirmation of every first-come pick, giver choice mode, visible honest note that pseudonym rings cannot be fully detected |
 | T02 | Forged request or selection statements | requests verified against the stated requester; selections and declines verified against the author of the verified listing projection and bound to requestId and requestCid; mismatches quarantined |
-| T03 | Spam flooding a giver's queue | queueLimit up to 200, fresh-key share, relay mailbox quotas, requester rate limit 20 requests per hour, block list silent drop |
+| T03 | Spam flooding a giver's queue | queueLimit up to 200, fresh-key share, F08.S01.M01 mailbox caps (1 000 envelopes, 20 MiB, unknown senders limited to 20 % of capacity and 200 puts per day), requester rate limit 20 requests per hour, block list silent drop |
 | T04 | Harassment or stalking through pickup details | pickupNote only in the selection statement to the recipient; exact location shared by the user only through F06.S02.M02 shares with TTL 24 h |
 | T05 | Gaming first-come with forged timestamps or a relay reordering deliveries | order uses the giver vault's receipt order, requests within one sync batch or 60 s are tied and drawn locally, requester claimedAt is shown only as a claim, and the queue says relays can influence order |
 | T06 | Sybil swarm of free did:keys draining stock while the giver is away | first-come picks wait for one giver confirmation; fresh keys capped at 50 % of the queue |
@@ -52,4 +52,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

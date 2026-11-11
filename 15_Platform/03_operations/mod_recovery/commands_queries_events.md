@@ -10,6 +10,7 @@
 - **PS-122-04.R02** Replay emits one summary event per call and never changes event payloads or order guarantees.
 - **PS-122-04.R03** The module consumes backup events only to refresh the restore-readiness alert; the recovery plan is computed from BackupRecords and authenticated manifests, including WAL segments, which emit no event.
 - **PS-122-04.R04** The restore announcement classrup.platform.relay_restore/v1 is a statement signed by the relay key under context classrup-relay-restore:v1 with signer role relay_identity, registered with F11.S01.M01 (N2), served unchanged by F15.S02.M01 and verified by F15.S01.M01 (V16).
+- **PS-122-04.R05** For a new identity (relay identity init --new-identity of F15.S02.M01, or relay restore --new-identity) the NewIdentityHook signs the first restore announcement with the new genesis key, naming predecessorRelayId, with epoch 0, lastReceiptSeq 0, restoredTo the newest data the instance holds (announcedAt when it starts empty) and lostWindow from the predecessor's revokedAt (or restoredTo) to announcedAt; vaults apply it only to the new relayId and reroute to it only after the user confirms the new fingerprint.
 
 ## Specification
 
@@ -62,6 +63,9 @@ $ relay restore --to /srv/relay-new --at latest
 ... fetching, verifying, applying, replaying (ledger 412 tombstones, 1 830 events re-delivered, 37 lost, push excluded), ready
 restore announcement { "relayId": "relay:7k3m...", "keyId": "relay:7k3m...#k2", "restoredTo": "2026-11-04T12:12:00Z",
   "lostWindow": { "from": "2026-11-04T12:12:00Z", "to": "2026-11-04T12:16:52Z" }, "lastReceiptSeq": 88000, "epoch": 1 }
+$ relay identity init --new-identity   (after relay identity revoke --reason compromised named successorRelayId relay:q4n8...)
+NewIdentityHook -> { "relayId": "relay:q4n8...", "keyId": "relay:q4n8...#k1", "predecessorRelayId": "relay:7k3m...", "epoch": 0, "lastReceiptSeq": 0,
+  "restoredTo": "2026-11-04T13:00:00Z", "lostWindow": { "from": "2026-11-04T12:40:00Z", "to": "2026-11-04T13:00:00Z" } }
 POST /api/v1/cmd/platform.deadletter.replay { "filter": { "consumer": "relay.index" }, "limit": 100 }
 200 { "replayId": "0192f700-…", "requeued": 98, "skipped": 0, "refused": [ { "eventId": "0192f6aa-…", "code": "PLATFORM_DEADLETTER_REPLAY_LIMIT" } ] }
 ```
@@ -73,6 +77,7 @@ POST /api/v1/cmd/platform.deadletter.replay { "filter": { "consumer": "relay.ind
 | TEST-PS-122-09.T05 | contract | PS-122-04.R01, PS-122-04.R02 | replay, list and plan calls | outputs and the platform.deadletter.replayed payload validate against registry schemas; list omits payloads and shows replayCount |
 | TEST-PS-122-09.T06 | integration | PS-122-04.R03 | publish backup.failed and backup.completed events, then add a WAL segment without an event | readiness alert marks the restore point stale then fresh; the plan includes the new segment because it reads BackupRecords |
 | TEST-PS-122-09.T21 | integration | PS-122-03.R05, PS-122-04.R04, PS-122-06.R04 | restore with receipts issued after the restored point and an auction bid in the lost window | signed restore announcement served in the well-known document with lostWindow, lastReceiptSeq and epoch 1; the stub outbox returns covered entries to prepared and resends them once; the auction is frozen through AuctionHostPort |
+| TEST-PS-122-09.T24 | integration | PS-122-04.R05, PS-122-03.R05 | relay identity init --new-identity after a compromise revocation, with an empty database; then relay restore --new-identity of the fixture set | each new identity's first announcement is signed by its genesis key under classrup-relay-restore:v1, names predecessorRelayId, has epoch 0 and lastReceiptSeq 0 and is served in the well-known document before readyz 200; a stub vault applies it only to the new relayId; the report records predecessorRelayId and excludedBlobs |
 
 ## Dependencies
 

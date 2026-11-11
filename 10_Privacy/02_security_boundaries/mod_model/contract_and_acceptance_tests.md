@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Schemas with fields of every class P0 to P4 and one unannotated field, locations at L0 to L4, nested records, and a fake PII corpus of emails, phones and addresses.
+**Fixtures:** Schemas with fields of every class P0 to P4 and one unannotated field, locations at L0 to L4, nested records, a fake PII corpus of emails, phones and addresses, the F04 Auction and Bid classification maps with auction_host disclosures, and a reported P2 message, offer and cycle proposal with their redact/1 outputs.
 
 ## Verification
 
@@ -37,6 +37,8 @@ See the module test table below (all processes).
 | TEST-PS-081-09.T15 | unit | PS-081-10.R01, PS-081-10.R02, PS-081-10.R03, PS-081-03.R03 | load v1 maps and a v2 candidate with an added class or sink | v1 maps load; an added class or sink requires the major version flag |
 | TEST-PS-081-09.T16 | unit | PS-081-01.R03 | redactForExport on records with an unannotated field, a field from a newer schema version and a P4 key field | none of those paths appears in any redactForExport result |
 | TEST-PS-081-09.T17 | unit | PS-081-02.R04, PS-081-02.R02 | redactForEnvelope with a P2 field and encrypted false, encrypted true with no recipients, encrypted true with recipients; a P3 field; redactForEvent with a P4 field and an L4 location; redactForSearch with an L3 location and a P1 field | refused, refused, allowed; P3 refused; P4 and L4 refused for events; search snaps to L2 and drops the P1 field |
+| TEST-PS-081-09.T18 | unit | PS-081-01.R05, PS-081-02.R05 | reservePrice, reserveSalt, maxAmount, bidderId and clientNonce through redactForEnvelope with one host key and recipientRole auction_host, with two recipients, with role participant, unencrypted, and through redactForEvent, redactForLog, redactForProjection, redactForExport for another user and ui_participant; a map that puts disclose on a P4 field or with maxRecipients 2 | only the single encrypted auction_host envelope carries the fields as P2; every other call drops or refuses them with PRIVACY_SINK_FORBIDDEN; the owner's own export keeps them; the bad maps fail the lint |
+| TEST-PS-081-09.T19 | unit | PS-081-01.R06, PS-081-02.R05 | redact/1 output of a P2 message, offer and cycle proposal through redactForEnvelope to one relay_moderation key with state export_prepared; the same with state previewed, without previewDigest, with two recipients, with recipientRole relay_operator, and the unredacted message | the three approved disclosures pass; every other call is refused with PRIVACY_SINK_FORBIDDEN, so no other P2 content reaches a non-participant |
 
 ## Acceptance criteria
 

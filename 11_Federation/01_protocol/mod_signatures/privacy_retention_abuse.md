@@ -31,6 +31,7 @@
 | T04 | Canonicalization or duplicate-member differences between platforms causing forged-looking or rejected valid records | single vendored canonicalize 5.1.0 tested against RFC 8785 vectors, strict parser rejecting duplicate members, shared golden envelopes on Node and browser CI |
 | T05 | Downgrade to a weaker key type via did:key multicodec swap | only 0xed 0x01 accepted for author and signerKey (V03, V07) |
 | T06 | cid substitution: attacker swaps the cid to collide dedup with another record | cid recomputed over the envelope minus sig and cid (V05) and the cid is inside the signed bytes |
+| T07 | Critical-extension downgrade: an old reader acting on an envelope whose meaning depends on an extension it ignores, or ext used to smuggle large data | V08 refuses unknown members named in ext.crit, keeps others byte-exact and caps ext at 4096 bytes |
 
 **Abuse controls**
 - Callers count FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH and FEDERATION_REQUEST_SIGNATURE_INVALID per sending peer and feed them to the F11.S03.M01 health score; a peer with 20 invalid signatures in 10 minutes is suspended there.

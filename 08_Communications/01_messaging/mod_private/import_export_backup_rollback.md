@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Section comms.messages in classrup-export/v1, registered through ExportSectionPort; one line per Message (schema classrup.comms.message/v1) with body, signed envelope and delivery rows; export is the primary backup (IOX-6) and is encrypted with a user-chosen passphrase or the recovery kit key.
+- **export:** Section comms.messages in classrup-export/v1, registered through ExportSectionPort; one line per Message (schema classrup.comms.message/v1) with body, signed envelope and delivery rows, plus the own mailbox rows; per-relay request keys are not exported, a restored vault generates new ones and its next sealed message carries the new key to each contact; export is the primary backup (IOX-6) and is encrypted with a user-chosen passphrase or the recovery kit key.
 - **import:** Envelopes are verified for schema, signature and key commitment; existing IDs are skipped; failed signatures are kept quarantined; messages are never re-wrapped or re-sent on import.
 - **backup:** The vault export is the backup; relay mailboxes are covered by the relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) and contain only ciphertext expiring in 30 days and mailbox registrations.
 - **migration rollback:** Additive optional fields only in v1; a new alg value is introduced behind a tenant flag and older clients ignore messages with unknown alg and show an unsupported-message notice; rollback is safe because unknown algs remain stored.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F12.S03.M04, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

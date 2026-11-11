@@ -40,10 +40,13 @@ See the module test table below (all processes).
 | TEST-PS-085-09.T18 | unit | PS-085-07.R02 | PWA bundle import scan and fetch/XHR/sendBeacon spies while running the full suite | no network or telemetry call from this library; counters exist only in the local diagnostics store |
 | TEST-PS-085-09.T19 | unit | PS-085-01.R04 | envelope signed by a device key with ext.signerKey; envelope signed by the author root key without signerKey; signerKey set but signature made by the author key | first verifies against signerKey and returns it; second returns signerKey = author; third FED_SIGNATURE_INVALID |
 | TEST-PS-085-09.T20 | unit | PS-085-04.R04 | spec registry scan over all module.spec.yaml files | the five envelope and signature codes are defined only in F11.S01.M03 |
+| TEST-PS-085-09.T21 | unit | PS-085-02.R06 | envelope with ext.crit naming an unknown member; with an unknown non-critical member; ext of 4097 bytes; ext.crit naming an absent member; 17 crit names | first VALIDATION_FAILED; second parses and re-verifies with identical cid and signature bytes; the other three VALIDATION_FAILED before any hash call |
+| TEST-PS-085-09.T22 | unit | PS-085-02.R07 | device-to-relay request with tag classrup/relay-request/v1 and expires = created + 300; expires = created + 301; missing tag; expired expires; relay-to-relay FED-10 request without tag | first verifies; next three FEDERATION_REQUEST_SIGNATURE_INVALID; the relay request verifies under the relay profile |
+| TEST-PS-085-09.T23 | unit | PS-085-04.R05, PS-085-02.R03 | import scan of F16.S02.M03 and every signing module; small-order public key vector | they import jcs, ed25519 and did:key only from this module and contain no implementation of their own; the small-order key is rejected FED_SIGNATURE_INVALID |
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI on Node 22 and Chromium.
+- All tests T01–T23 pass in CI on Node 22 and Chromium.
 - Every RFC 8785, RFC 8032 and RFC 9421 vector and every shared golden envelope passes.
 - No private key bytes appear in any log, metric or error output (abuse tests T11 and T17).
 

@@ -6,16 +6,18 @@
 
 ## Purpose
 
-Turns a local draft into a public offer to the world. Publishing runs local checks before anything leaves the vault (prohibited-item rules and jurisdiction notices from F18, local spam heuristics, the in-process risk assessment of F12.S03.M01, the federation consent purpose of F10.S01.M01 and the public-cell assertion of F06.S02.M01), then signs a public projection of the listing as a classrup.bazaar.listing/v1 statement (CTR-FED-001 envelope, Ed25519 over JCS) with an exact allowlist of P0 keys, distinct from the private vault record classrup.bazaar.listing_record/v1, and queues it to the relays the user selected. Unpublishing signs a tombstone. Each destination relay applies its own hosting policy and may refuse or remove the projection; such a relay-signed notice changes only that relay's delivery state, never the owner's records. The owner sees per-relay sync state (prepared, transport_acknowledged, peer_accepted) and never more certainty than that. Optional promotion is a relay-local policy whose fee is claimed through a noncustodial Deal and is shown only after the relay signs it. Copies already fetched by other vaults cannot be recalled.
+Turns a local draft into a public offer to the world. Publishing runs local checks before anything leaves the vault (prohibited-item rules and jurisdiction notices from F18, local spam heuristics, the in-process risk assessment of F12.S03.M01, the federation consent purpose of F10.S01.M01 and the public-cell assertion of F06.S02.M01, plus the deletion guard of F10.S01.M04), then builds a public projection of the listing as a classrup.bazaar.listing/v1 statement with an exact allowlist of P0 keys, distinct from the private vault record classrup.bazaar.listing_record/v1, and hands it to the StatementPublisherPort (declared by F11.S01.M01, implemented by F11.S01.M02 federation.record.publish), which signs it (CTR-FED-001 envelope), allocates seq and prev and routes it through the F15.S01.M01 sync outbox to the relays the user selected, named by their canonical relayId (F15.S02.M01). Unpublishing issues a tombstone through federation.tombstone.issue. Each destination relay applies its own hosting policy and may refuse the projection (relay_rejected) or remove it later with a signed classrup.federation.relay_removal/v1 advisory; either changes only that relay's delivery state, never the owner's records. The owner sees per-relay sync state (prepared, transport_acknowledged, peer_accepted) and never more certainty than that. Optional promotion is a relay-local policy whose fee is claimed through a noncustodial Deal and is shown only after the relay signs it. Copies already fetched by other vaults cannot be recalled.
 
 ## Responsibilities
 
 - [object Object]
-- Evaluate prohibited-item rules (F18.S01.M02), jurisdiction notices (F18.S01.M01), local spam heuristics (moderation.spam.evaluate of F12.S02.M02, N19), the risk assessment (moderation.risk.assess of F12.S03.M01, N19), the federation consent purpose (F10.S01.M01, N6) and the public-cell assertion (F06.S02.M01, N8) before signing; block, hold for owner confirmation, or allow.
-- Build the projection from an exact P0 allowlist (maximum location L2, EXIF-free media, mailbox hints, barterAcceptable, in-stock flag, kind-specific public subsets) and sign and queue it and tombstones through the sync outbox.
+- Evaluate prohibited-item rules (F18.S01.M02), jurisdiction notices (F18.S01.M01), local spam heuristics (moderation.spam.evaluate of F12.S02.M02 in mode author_presign, N19), the risk assessment (moderation.risk.assess of F12.S03.M01 with subjectType listing_publication, levels low, medium and high, N19), the federation consent purpose (F10.S01.M01, N6), the public-cell assertion (F06.S02.M01, N8), photo descriptions (F14.S01.M02) and the deletion guard privacy.deletion.assert_not_pending (F10.S01.M04) before anything is published; block, hold for owner confirmation, or allow.
+- Build the projection from an exact P0 allowlist (maximum location L2, EXIF-free media with author alt text, mailbox hints, the vault tenantId for thread derivation, barterAcceptable, in-stock flag, kind-specific public subsets) and publish it and its tombstones only through the StatementPublisherPort (federation.record.publish and federation.tombstone.issue of F11.S01.M02, which allocate seq and prev atomically); this module keeps no signing path and no seq counter of its own.
 - Renew a publication (last 7 days of life, +30 days, maximum 3 renewals and 120 days in total), also on request of the F01.S01.M04 expiry deferral.
 - Record optional per-relay promotion whose fee is claimed through a Deal with the relay operator (F09), active only on that relay's signed promotion statement and revocable by it.
-- Verify inbound relay-signed hosting notices and promotion statements, quarantine anything not signed by the relay of that delivery, and react to policy pack changes without claiming any global takedown.
+- Act on relay-signed classrup.federation.relay_removal/v1 advisories, hosting reversals and promotion statements after F11.S01.M02 verified them, quarantine anything not signed by the relay of that delivery, and react to policy pack changes without claiming any global takedown.
+- Derive each relay's delivery state from the F15.S01.M01 OutboxEntry of the statement (relay receipt, relay-signed index acceptance, relay_rejected with its reason cid) and never claim more than it shows.
+- Implement the F09.S01.M01 ContextTermsPort {verify, openerRole, ownerRole} for the Deal context type listing_fee (N5).
 
 ## Not responsible for
 
@@ -24,7 +26,8 @@ Turns a local draft into a public offer to the world. Publishing runs local chec
 - Relay-side indexing, ranking and hosting decisions (F06 and F12 on the relay); this module only submits and records outcomes.
 - Payment handling (F09.S01.M01); promotion uses a Deal and payment claim between the user and the relay operator, never platform custody.
 - Variant data, which F01.S03.M02 contributes to the projection through the ProjectionContributorPort it registers here.
-- Federation transport between relays (F11).
+- Federation transport between relays (F11), and signing, seq and prev allocation of every statement (F11.S01.M02 behind the F11.S01.M01 StatementPublisherPort).
+- Sync outbox entries, retries and receipt verification (F15.S01.M01) and the canonical relay identifiers and relay receipts (F15.S02.M01).
 - Future: scheduled publication at a chosen time; multi-author shop accounts.
 
 ## User stories
@@ -34,6 +37,7 @@ Turns a local draft into a public offer to the world. Publishing runs local chec
 - As a seller, I can unpublish and understand that people who already saw it may still have a copy.
 - As a seller, I can pay a relay operator for a promoted slot and see 'Promoted on R' only after that relay signs it.
 - As a seller, if one relay removes my listing under its policy, my listing stays published on my other relays and I can read that relay's signed reasons.
+- As a seller using a screen reader, I am told before publishing which photo still needs a description or a decorative mark.
 
 ## Edge cases
 
@@ -43,9 +47,11 @@ Turns a local draft into a public offer to the world. Publishing runs local chec
 - The policy pack is updated while publications are active and a new block rule matches; the publication is ended locally with reason policy_changed and a tombstone is queued.
 - The same publish command is replayed after a crash; the original PublicationRecord is returned and exactly one statement exists in the outbox.
 - The device clock is more than 24 h off the median of the latest receipts of at least 2 relays; publish refuses with PRECONDITION_FAILED. With only one relay the UI warns instead, and a relay whose receipts run more than 24 h ahead of the median is flagged untrusted and ignored.
-- Federation opt-in is set but the federation_publish consent for a destination relay is missing; publish is refused with BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED and the UI links to the consent screen.
-- The risk assessment returns elevated for a new key posting many listings; the publication is held for confirmation instead of being signed.
-- A hosting notice for relay R2 arrives signed by relay R1 or by a random key; it is quarantined and no delivery changes.
+- The federation_publish consent for a destination relay is missing (F11.S01.M02 requires it for every public projection; with federationOptIn it also covers relay-to-relay forwarding); publish is refused with BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED and the UI links to the consent screen.
+- The risk assessment returns medium for a new key posting many listings; the publication is held for confirmation instead of being published.
+- A relay_removal advisory naming relay R2 arrives signed by relay R1 or by a random key; it is quarantined and no delivery changes.
+- Photo 2 of a listing has no alt text and is not marked decorative; publish is refused with BAZAAR_LISTING_MEDIA_ALT_MISSING naming the photo, before anything is published.
+- The principal requested deletion and another tab publishes during the grace period; publish is refused with PRIVACY_DELETION_PENDING.
 - A relay removed the listing; the next publish skips that relay and reports it in skippedRelays instead of failing for every relay.
 - Promotion claim is never acknowledged within 14 days; promotion becomes expired and the listing stays published unpromoted.
 - The owner unpublishes a listing that has an active deal hold; the command asks for confirmation and the hold stays valid.
@@ -70,20 +76,20 @@ Turns a local draft into a public offer to the world. Publishing runs local chec
 - Commands: `bazaar.publication.publish`, `bazaar.publication.confirm`, `bazaar.publication.unpublish`, `bazaar.publication.end`, `bazaar.publication.renew`, `bazaar.publication.attach_promotion`, `bazaar.publication.receive_relay_notice`
 - Queries: `bazaar.publication.get`, `bazaar.publication.list_mine`, `bazaar.publication.preview_policy`
 - Emits: `bazaar.listing.published`, `bazaar.listing.unpublished`, `bazaar.publication.renewed`, `bazaar.publication.promotion_activated`
-- Consumes: `bazaar.listing.expired`, `governance.prohibited_rule.changed`, `governance.category.changed`, `commerce.payment.claimed`, `commerce.payment.acknowledged`, `commerce.payment.finalized`, `commerce.payment.reorged`, `commerce.payment.expired`, `commerce.payment.failed`, `commerce.deal.cancelled`, `privacy.deletion.completed`
+- Consumes: `bazaar.listing.expired`, `governance.prohibited_rule.changed`, `governance.category.changed`, `commerce.payment.claimed`, `commerce.payment.acknowledged`, `commerce.payment.finalized`, `federation.conflict.detected`, `federation.conflict.resolved`, `commerce.payment.reorged`, `commerce.payment.expired`, `commerce.payment.failed`, `commerce.deal.cancelled`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001
+F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F11.S01.M01, F11.S01.M02, F15.S01.M01, F15.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-004-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-004-02 | [Validation rules](validation_rules.md) | 6 |
+| PS-004-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-004-02 | [Validation rules](validation_rules.md) | 8 |
 | PS-004-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-004-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-004-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-004-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-004-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-004-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -95,6 +101,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T22 pass in CI.
-- No projection contains data beyond the P0 allowlist or a region finer than L2.
+- All tests T01-T28 pass in CI.
+- No projection contains data beyond the P0 allowlist or a region finer than L2, and no projection is published with a photo that lacks both alt text and a decorative mark.
 - No UI or API reports transport_acknowledged, peer_accepted or Promoted without a verified signed receipt or relay statement, no relay notice changes the owner's Listing, and no text claims global removal.

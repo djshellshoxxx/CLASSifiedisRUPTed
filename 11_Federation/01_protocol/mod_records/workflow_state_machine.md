@@ -11,6 +11,7 @@
 - **PS-084-03.R03** Tombstoned, rejected and dropped are terminal, so a rejected envelope can only be reconsidered by a new submission and purged content cannot be restored; hidden is reversible and never purges.
 - **PS-084-03.R04** Every non-terminal state has an exit; buffered records are released (with chainGap when predecessors never arrive), held_on_fork records follow the conflict resolution, and quarantined records are discarded, released, resolved or dropped after 30 days unless an open conflict holds them.
 - **PS-084-03.R05** A pending tombstone is never applied without checking its issuer against the arriving target; a tombstone whose issuer does not match is rejected and the target accepted.
+- **PS-084-03.R06** Accepted statements this vault first received inside [revocationEffectiveFrom, arrival of the revocation] move to quarantined with signerKeyMarker signed_during_claimed_compromise, and for commitment statements F11.S02.M03 opens a key_compromise conflict that freezes the dependent coordination in the same transaction.
 
 ## Specification
 
@@ -24,15 +25,15 @@ Initial **received**; terminal **rejected**, **dropped**, **tombstoned**.
 | received -> hidden | validation passes and F11.S03.M02 evaluate returns hide | stored with hiddenByRuleIds, not served, no record.accepted until unhidden |
 | received -> buffered | F11.S02.M02 decides buffer (anchored chain, gap of 1..100 within per-source caps) | bufferedUntil = receivedAt + 24 h |
 | received -> held_on_fork | prev names a candidate of an open ConflictRecord for this chain, or the chain head is quarantined as a fork | held without the 24 h drop until the conflict is resolved |
-| received -> quarantined | type unregistered or signer lacks the role (V14) | statusReason signer_role_invalid, not acted on; principal or operator may discard |
+| received -> quarantined | authorizeStatement returns Quarantine(signer_role_invalid) (V14) or Quarantine(signer_key_revoked) (V15) | statusReason signer_role_invalid or signer_key_revoked; result code FEDERATION_SIGNER_ROLE_INVALID; not acted on; principal or operator may discard |
 | received -> quarantined | fork (same chain key and seq, different cid) or commitment conflict (same subject key, different digest) | federation.conflict.detect in the same transaction; every candidate quarantined in that transaction; dependent coordination frozen |
-| received -> rejected | any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, V15) | cid stub only; emits federation.record.rejected |
+| received -> rejected | any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, and at relay intake from a hosted vault key V18 to V21) | cid stub only; emits federation.record.rejected |
 | received -> dropped | author blocked in either direction (V16) | silent: no ack, no event, generic outcome; statusReason blocked_party |
 | buffered -> accepted | missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true) | emits federation.record.accepted for each released record in seq order |
 | buffered -> held_on_fork | a predecessor turns out to be a fork candidate | waits for the conflict resolution |
 | held_on_fork -> accepted | conflict resolved keeping the candidate it chains from, or resolved drop_all or superseded (re-anchored with chainGap = true; subject freezes still apply) | emits federation.record.accepted |
 | held_on_fork -> dropped | conflict resolved keeping a different candidate, so it chains from a dropped branch | purges content; statusReason superseded |
-| accepted -> quarantined | federation.conflict.detected names this cid, a late fork appears, or the signer key is learned revoked and this vault first saw the record at or after revokesEffectiveAt | hides from readers; statusReason fork, commitment_conflict or signer_key_revoked |
+| accepted -> quarantined | federation.conflict.detected names this cid, a late fork appears, or a revocation of the signer key arrives and this vault first received the record inside [revocationEffectiveFrom, arrival] (effectiveFrom as clamped by F16.S02.M02) | hides from readers; statusReason fork, commitment_conflict or signer_key_revoked; revocation case: signerKeyMarker signed_during_claimed_compromise and, for commitment statements, federation.conflict.detect kind key_compromise freezes the dependent coordination in the same transaction |
 | accepted -> hidden | hide rule added or activated (federation.block_rule.changed action hide), including a cid hide rule the user adds from a removal notice | reversible; no purge |
 | hidden -> accepted | every matching hide rule disabled, removed or expired | emits federation.record.accepted |
 | hidden -> tombstoned | applied author tombstone | purge within 1 h; emits federation.tombstone.applied |
@@ -49,15 +50,15 @@ stateDiagram-v2
   received --> hidden: validation passes and F11.S03.M02 evaluate returns hide
   received --> buffered: F11.S02.M02 decides buffer (anchored chain, gap of 1..100 within per-source caps)
   received --> held_on_fork: prev names a candidate of an open ConflictRecord for this chain, or the chain head is quarantined as a fork
-  received --> quarantined: type unregistered or signer lacks the role (V14)
+  received --> quarantined: authorizeStatement returns Quarantine(signer_role_invalid) (V14) or Quarantine(signer_key_revoked) (V15)
   received --> quarantined: fork (same chain key and seq, different cid) or commitment conflict (same subject key, different digest)
-  received --> rejected: any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, V15)
+  received --> rejected: any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, and at relay intake from a hosted vault key V18 to V21)
   received --> dropped: author blocked in either direction (V16)
   buffered --> accepted: missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true)
   buffered --> held_on_fork: a predecessor turns out to be a fork candidate
   held_on_fork --> accepted: conflict resolved keeping the candidate it chains from, or resolved drop_all or superseded (re-anchored with chainGap = true  subject freezes still apply)
   held_on_fork --> dropped: conflict resolved keeping a different candidate, so it chains from a dropped branch
-  accepted --> quarantined: federation.conflict.detected names this cid, a late fork appears, or the signer key is learned revoked and this vault first saw the record at or after revokesEffectiveAt
+  accepted --> quarantined: federation.conflict.detected names this cid, a late fork appears, or a revocation of the signer key arrives and this vault first received the record inside [revocationEffectiveFrom, arrival] (effectiveFrom as clamped by F16.S02.M02)
   accepted --> hidden: hide rule added or activated (federation.block_rule.changed action hide), including a cid hide rule the user adds from a removal notice
   hidden --> accepted: every matching hide rule disabled, removed or expired
   hidden --> tombstoned: applied author tombstone
@@ -126,7 +127,8 @@ stateDiagram-v2
 | TEST-PS-084-09.T22 | integration | PS-084-08.R04, PS-084-03.R03 | 10 000 tombstoned mirrors and delayed purge | sweep ≤ 10 s; purge_lag alert fires when lag exceeds 1 h |
 | TEST-PS-084-09.T29 | abuse | PS-084-07.R03, PS-084-03.R03 | relay R1's operator issues relay_removal (moderation_removed) with a statement of reasons for X's listing that R2 and vault V1 also hold | R1's index drops it; R2's mirror stays accepted and only enters R2's review queue; V1 keeps it with a removal notice; X's own vault ignores it and X republishes on another relay without FEDERATION_TOMBSTONED |
 | TEST-PS-084-09.T35 | integration | PS-084-03.R02, PS-084-03.R03 | personal hide rule on author Z then undo; reject rule on author Z; peer reject rule on relay B for records whose only provenance is B | hidden then accepted with envelope intact; reject purges to dropped; only B-only records dropped |
+| TEST-PS-084-09.T37 | integration | PS-084-02.R06, PS-084-03.R06 | statement signed by a revoked key with a backdated createdAt received after the revocation; revocation with effectiveFrom 3 days back learned after acceptance of a consent first received 2 days ago and one received 4 days ago; a revocation whose claim F16.S02.M02 clamped | first refused FEDERATION_SIGNER_ROLE_INVALID and listed in the quarantine list with reason signer_key_revoked; the 2-day consent re-marked signed_during_claimed_compromise, quarantined and its proposal frozen by a key_compromise conflict in the same transaction; the 4-day one stays accepted with signer_later_revoked; the clamped effectiveFrom is used as reported, never earlier |
 
 ## Dependencies
 
-Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F15.S04.M02, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F16.S01.M01, F15.S02.M01, F15.S04.M02, F15.S04.M03, F12.S02.M02, F12.S03.M03, F12.S03.M04, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

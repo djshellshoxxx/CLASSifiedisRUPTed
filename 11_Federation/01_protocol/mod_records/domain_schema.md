@@ -13,6 +13,7 @@
 - **PS-084-01.R05** Chains are scoped per (author, signer key, stream), with stream pub for public projections and one stream per participant thread (thr:<id>), so two devices of one principal never fork each other and a recipient can always obtain every predecessor of its own thread.
 - **PS-084-01.R06** A receiver with no head for a chain anchors at the first verified envelope at any seq and records chainAnchor and anchoredAt; the chain then detects equivocation and orders delivery but never gates acceptance.
 - **PS-084-01.R07** Commitment statements are indexed by subject key and digest (FederatedRecord.subjectKey and promiseDigest); this promise index, owned here, is what F11.S02.M03 conflict detection reads.
+- **PS-084-01.R08** Supersession of portable records uses the registry version member of the type (listingRevision, offering seq, rental offering revision) and otherwise the per-chain seq, never createdAt; a newer version of an already mirrored record is stored as a new FederatedRecord, the older one gets supersededBy, and federation.record.accepted fires for the newer one with recordKey, version and supersededRecordId.
 
 ## Specification
 
@@ -36,7 +37,8 @@ Schema `classrup.federation.record/v1` · storage **relay+device** · privacy **
 | chainAnchor | boolean — true when this was the first envelope this receiver saw of the chain |
 | anchoredAt? | timestamp — local clock when the chain was anchored here |
 | chainGap | boolean — true when accepted without contiguous predecessors (buffer expiry, gap over 100 or fork re-anchor) |
-| recordKey? | string — payload id used to supersede older versions of the same item |
+| recordKey? | string — registry recordKey of the type (listing listingId, offering offeringId, rental offering offeringId, profile did) used to supersede older versions of the same item |
+| version? | int — registry version member (listingRevision, offering seq, rental offering revision); supersession compares it, never createdAt |
 | subjectKey? | string — registry subject key for commitment statements (promise index) |
 | promiseDigest? | string — SHA-256 of JCS(payload) for commitment statements; compared by the registry predicate |
 | envelope? | json — verified envelope ≤ 262144 bytes (participants ≤ 12288 bytes); null after purge |
@@ -46,7 +48,9 @@ Schema `classrup.federation.record/v1` · storage **relay+device** · privacy **
 | via | string[] — relays seen delivering this cid, display only, ≤ 5 |
 | verifiedAt | timestamp — local clock when signature, cid and role verification succeeded |
 | claimedAt | timestamp — createdAt from the envelope; a claim of the signer, not evidence |
-| relayReceipt? | json — {relayId, at, sig}; relay-signed receipt time, evidence only of that relay's clock |
+| relayReceipt? | json — classrup.platform.relay_receipt/v1 {relayId, keyId, destination, digest, cid?, receivedAt, epoch, seq, sig} from F15.S02.M01 ReceiptPort.issue; evidence only of that relay's clock |
+| verification? | json — {signerDid, keyId, keyStatus, checkedAt}: F07.S02.M01 key_status fact recorded when authorizeStatement accepted the statement, passed on to F15.S01.M01 record_peer_ack for acks |
+| signerKeyMarker? | enum — signed_during_claimed_compromise (first received inside [revocationEffectiveFrom, arrival of the revocation]) \| signer_later_revoked (first received before revocationEffectiveFrom) |
 | signerRole? | string — role the signer was verified to hold for this type, e.g. listing_author, recipient, hosting_relay |
 | status | enum — received \| buffered \| held_on_fork \| accepted \| hidden \| quarantined \| rejected \| dropped \| tombstoned |
 | statusReason? | enum — chain_gap \| fork \| commitment_conflict \| signer_role_invalid \| signer_key_revoked \| blocked \| blocked_party \| hidden_by_rule \| peer_suspended \| conflict_limit \| tombstoned \| superseded \| operator_dropped \| discarded \| quarantine_expired |
@@ -83,7 +87,8 @@ Schema `classrup.federation.tombstone/v1` · storage **relay+device** · privacy
 | targetRecordKey? | string — record id; an author tombstone removes all versions with this recordKey by the same author principal |
 | author | string — did:key that signed: the target's author principal for tombstones, the hosting relay key for advisories |
 | signerKey | string — device key (tombstones) or relay key (advisories) that produced the signature |
-| issuerKind | enum — author \| origin_relay (origin_relay = hosting-relay advisory; binding only for that relay's own index) |
+| issuerKind | enum — author \| origin_relay (origin_relay = hosting-relay advisory; binding only for that relay's own index, never a withdrawal of a user-signed statement) |
+| targetAuthor? | string — author principal of the target record, set when the target is known; an author tombstone applies only when it equals author |
 | relayId? | string — advisories only: the relay whose index the item left |
 | reason | enum — owner_withdrawn \| account_deleted \| listing_expired (tombstones) \| moderation_removed \| legal (advisories only) |
 | statementOfReasons? | string — advisories only, ≤ 2000 code points plain text, required |
@@ -140,7 +145,8 @@ CREATE INDEX fed_tombstone_key ON fed_tombstone(tenant_id, author, target_record
 | TEST-PS-084-09.T36 | abuse | PS-084-07.R01, PS-084-01.R03 | send a participants statement through relay A's mailbox and inspect A's storage, logs and events | relay holds only the sealed wrapper {v, mailboxId, ciphertext, size, sentAt}; no author DID, type or seq appears anywhere on A |
 | TEST-PS-084-09.T38 | integration | PS-084-01.R06, PS-084-01.R04 | vault V2 joins after author X has published 200 public records, some older than 180 days but within maxAge and some tombstoned | V2 anchors at the first record it receives, tombstone stubs satisfy chain continuity, every live record is accepted and the final state equals V1's |
 | TEST-PS-084-09.T39 | unit | PS-084-01.R04 | purge an accepted record after an author tombstone | the stored row keeps only cid, recordKey, author, chain key, seq and purgedAt; envelope null |
+| TEST-PS-084-09.T43 | contract | PS-084-04.R06, PS-084-01.R08 | buyer vault mirrors listingRevision 3, then receives revision 4 at seq n+1, then revision 5 from the seller's second device with a lower chain seq; an ack accepted for an outbox entry | three federation.record.accepted events with recordKey, version and supersededRecordId; older rows supersededBy by version only; the ack event carries verification {signerDid, keyId, keyStatus, checkedAt} |
 
 ## Dependencies
 
-Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F15.S04.M02, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F16.S01.M01, F15.S02.M01, F15.S04.M02, F15.S04.M03, F12.S02.M02, F12.S03.M03, F12.S03.M04, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [module SPEC](SPEC.md).

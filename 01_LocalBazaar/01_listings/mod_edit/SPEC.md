@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Lets the owner revise a draft or published listing in the local vault with optimistic concurrency, records an immutable ListingRevision for every non-draft change, and detects material changes (price, condition, category). A material change on a published listing is announced by event so offers and negotiations can flag their assumptions, and the owner is offered a re-publish that sends a new signed projection (F01.S01.M03). Material edits are refused while an auction on the listing has bids (N11). The module never changes what other parties already hold; their copies change only when they accept the new statement.
+Lets the owner revise a draft or published listing in the local vault with optimistic concurrency, records an immutable ListingRevision for every non-draft change, and detects material changes (price, condition, category). A material change on a published listing is announced by event so offers and negotiations can flag their assumptions, and the owner is offered a re-publish that sends a new signed projection (F01.S01.M03). Before a material edit the module asks the listing edit-lock port, which F04.S01.M01 registers with its vault query auctions.auction.edit_lock (inverted port registration, because F04.S01.M01 already depends on F01), and refuses the edit while the port reports locked (N11). On an auction host relay the same module derives bazaar.listing.edited host-side from a changed public projection of a listing that a hosted auction references, so F04.S02.M03 consumes the edit signal as an event. The module never changes what other parties already hold; their copies change only when they accept the new statement.
 
 ## Responsibilities
 
@@ -15,15 +15,16 @@ Lets the owner revise a draft or published listing in the local vault with optim
 - Detect material changes (price, condition, category) and set the material flag and changedFields on bazaar.listing.edited.
 - Provide the system command bazaar.listing_revision.record so F01.S02.M01 (price), F01.S02.M02 (want spec) and F01.S03.M02 (variant price) report their changes as listing revisions inside their own transaction.
 - Re-run local prohibited-item rules on edits of published listings.
-- Refuse material edits while an auction on the listing has at least one bid, tracked from consumed auction events (N11).
+- Refuse material edits while the ListingEditLockPort (implemented by F04.S01.M01 auctions.auction.edit_lock) reports the listing locked, asking it synchronously before every material edit or record (N11).
 - Keep revisions cited by offers, negotiations or deals for the evidence window when the listing is purged.
+- On an auction host relay, compare each newly accepted public projection of an auction-kind listing with the previous one and raise bazaar.listing.edited host-side (listingId, material, changedFields) when a hosted auction references the listing.
 
 ## Not responsible for
 
 - Creating listings and the Listing status field (F01.S01.M01).
 - Signing and sending the updated public projection (F01.S01.M03); this module only marks the listing as having unsent changes.
 - Notifying offerers; offers (F01.S04.M01) and negotiations (F01.S04.M02) consume bazaar.listing.edited and notify through F13.
-- Auction bidding and close (F04); this module only reads their events in the seller's vault.
+- Auction bidding, close and the edit-lock answer (F04); this module only declares the ListingEditLockPort and asks it, and F04.S02.M03 decides what a host-side edit signal means for fraud review.
 - Future: three-way merge of concurrent edits from two devices.
 
 ## User stories
@@ -42,7 +43,9 @@ Lets the owner revise a draft or published listing in the local vault with optim
 - The listing reaches 100 revisions; the next edit returns BAZAAR_EDIT_REVISION_LIMIT and suggests archiving and relisting.
 - An edit arrives for an expired, closed or archived listing; CONFLICT_STATE is returned.
 - The owner edits a published listing offline; the edit is committed locally and the UI shows that other parties still see the earlier version until the new projection is sent.
-- An auction on the listing has one bid and the seller changes the condition; BAZAAR_EDIT_AUCTION_HAS_BIDS is returned while a title typo fix is still allowed.
+- An auction on the listing has one bid and the seller changes the condition; the edit-lock port answers locked and BAZAAR_EDIT_AUCTION_HAS_BIDS is returned while a title typo fix is still allowed.
+- The edit-lock port cannot answer (auction store unreadable) during a material edit of an auction-kind listing; the edit is refused with DEPENDENCY_UNAVAILABLE (fail closed), while non-material edits proceed.
+- The seller fixes a title typo after bids; the host relay receives the new projection, finds the listing referenced by a hosted auction and raises bazaar.listing.edited host-side with material false and changedFields [title].
 - The listing is purged 90 days after archive while a two-year-old accepted offer cites revision 4; revision 4 and later rows are kept as evidence, the rest of the listing content is purged.
 
 ## UX and accessibility
@@ -64,11 +67,11 @@ Lets the owner revise a draft or published listing in the local vault with optim
 - Commands: `bazaar.listing.edit`, `bazaar.listing_revision.record`
 - Queries: `bazaar.listing_revision.list`, `bazaar.listing_revision.get`
 - Emits: `bazaar.listing.edited`
-- Consumes: `bazaar.listing.published`, `bazaar.publication.renewed`, `bazaar.listing.deleted`, `auctions.auction.scheduled`, `auctions.bid.placed`, `auctions.auction.cancelled`, `auctions.auction.unsold`, `privacy.deletion.completed`
+- Consumes: `bazaar.listing.published`, `bazaar.publication.renewed`, `bazaar.listing.deleted`, `federation.record.accepted`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001
+F01.S01.M01, F18.S01.M02, F18.S01.M03, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001
 
 ## Process specifications and aggregation
 
@@ -77,7 +80,7 @@ F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F1
 | PS-003-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-003-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-003-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-003-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-003-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-003-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-003-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-003-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -89,6 +92,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T19 pass in CI.
+- All tests T01-T22 pass in CI.
 - A material change always produces bazaar.listing.edited with material true and never carries field values.
-- No edit path changes Listing.status or bypasses expectedRevision, and no material edit succeeds while an auction on the listing has bids.
+- No edit path changes Listing.status or bypasses expectedRevision, and no material edit succeeds while the auction edit lock reports locked or cannot answer.

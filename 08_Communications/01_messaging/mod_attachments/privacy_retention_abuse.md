@@ -16,7 +16,7 @@
 **Data classification**
 - Attachment ciphertext: P2, opaque to the relay, stored as an encrypted MediaBlob.
 - Attachment metadata (uploader relay identity, size, declared type, thread label hash, timestamps): P2 visible to the relay operator.
-- Object key and nonce prefix: P4 inside encrypted message bodies only.
+- Object key and nonce prefix: P4 inside encrypted message bodies and sealed attachment_share statements only.
 
 **Retention**
 - Relay blobs and rows: RET-SHORT (30 days after upload) or immediately on delete; no extension.
@@ -54,4 +54,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

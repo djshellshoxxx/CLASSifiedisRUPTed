@@ -20,8 +20,8 @@ Initial **running**; terminal **expired**.
 |---|---|---|
 | running -> completed | artifact written, encrypted, fsynced, manifest with MAC and chain hash renamed into place | emits no event until verification passes |
 | running -> failed | any error (no space, IO, snapshot error) | partial files removed; emits platform.backup.failed |
-| completed -> verified | verification passes V04, V05, V06, V09 and V10 (V07 for WAL segments) | verifiedAt set; emits platform.backup.completed |
-| completed -> failed | verification with the correct key fails V05, V06, V09 or V10 | errorCode set; emits platform.backup.failed; an extra snapshot is scheduled |
+| completed -> verified | verification passes V04, V05, V06, V09, V10 and V13 (V07 for WAL segments) | verifiedAt set; emits platform.backup.completed |
+| completed -> failed | verification with the correct key fails V05, V06, V09, V10 or V13 | errorCode set; emits platform.backup.failed; an extra snapshot is scheduled |
 | completed -> completed | verification attempted with a wrong or missing key (V04 fails) | errorCode PLATFORM_BACKUP_DECRYPT_FAILED, verifiedAt unset, artifact untouched, alert raised |
 | verified -> failed | later periodic re-verification fails (weekly checksum scan) | emits platform.backup.failed |
 | verified -> expired | retention elapsed and a newer verified snapshot covers the tier | artifact deleted, record kept |
@@ -33,8 +33,8 @@ stateDiagram-v2
   [*] --> running
   running --> completed: artifact written, encrypted, fsynced, manifest with MAC and chain hash renamed into place
   running --> failed: any error (no space, IO, snapshot error)
-  completed --> verified: verification passes V04, V05, V06, V09 and V10 (V07 for WAL segments)
-  completed --> failed: verification with the correct key fails V05, V06, V09 or V10
+  completed --> verified: verification passes V04, V05, V06, V09, V10 and V13 (V07 for WAL segments)
+  completed --> failed: verification with the correct key fails V05, V06, V09, V10 or V13
   completed --> completed: verification attempted with a wrong or missing key (V04 fails)
   verified --> failed: later periodic re-verification fails (weekly checksum scan)
   verified --> expired: retention elapsed and a newer verified snapshot covers the tier

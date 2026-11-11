@@ -10,11 +10,12 @@
 - **PS-114-07.R02** Cached public images are limited to 200 entries and 30 days per partition, are unbound on vault lock and principal switch, are deleted on Erase vault, and are deleted on version change of the cache name.
 - **PS-114-07.R03** The worker scope is limited to the application path and refuses to cache cross-origin opaque responses.
 - **PS-114-07.R04** A relay cannot substitute or alter a cached or displayed image, because bytes are verified against the content address before caching and before display, and the cache is keyed by content address independent of the relay.
+- **PS-114-07.R05** Catalog loads never reveal the chosen locale, because every production catalog is precached together at install and served from the precache, so neither the static host nor a relay sees a per-locale request (F14.S02.M01 T03 and T10).
 
 ## Specification
 
 **Data classification**
-- classrup-precache-v{buildId}: P0 build assets.
+- classrup-precache-v{buildId}: P0 build assets, including all four production locale catalogs, so the cache contents do not depend on the chosen locale.
 - classrup-img-v1-<partition>: P0 public listing images verified against their content address; metadata (EXIF, GPS) is stripped in the author's vault by F10.S02.M03 before content addressing (N9), so a relay cannot add location data without breaking the hash. Which images a principal viewed is kept per partition and never shared across principals.
 - Bound relay origins and partition id: in worker memory only, dropped on lock, principal switch and worker restart.
 
@@ -32,6 +33,7 @@
 | T04 | Worker scope hijack via path confusion | worker served from the app root with Service-Worker-Allowed unset, scope '/', navigation denylist on /__media/ |
 | T05 | Principal B on a shared profile learns which listings principal A viewed | per-principal partitions; only the bound partition is readable; unbound on lock and switch, deleted on erase |
 | T06 | Malicious relay swaps a listing photo (bait-and-switch) or serves one with GPS data | content-address verification before caching and display; mismatches discarded and counted; cache keyed by content address, so revalidating against the same relay is never relied on |
+| T07 | Static host or network observer learns the user's language from which catalog is fetched | all production catalogs precached together at install (V10); no runtime catalog request by locale |
 
 **Abuse controls**
 - Cache limits (200 images per partition, 30 days, 5 MiB per image) bound local storage use from a hostile feed of image URLs.
@@ -48,6 +50,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-114-09.T12 | integration | PS-114-07.R03, PS-114-07.R02 | media route fed a cross-origin opaque response and a 6 MiB image | neither is stored |
 | TEST-PS-114-09.T18 | abuse | PS-114-07.R04, PS-114-02.R02, PS-114-09.R03 | stub relay r2 returns different bytes for img1's content address, first with no worker and then with the worker | image neither cached nor displayed, neutral image frame shown, digest_mismatch counted; r1 then supplies the correct bytes which are cached once under the content-address key |
 | TEST-PS-114-09.T20 | integration | PS-114-07.R02, PS-114-03.R04 | 201 distinct images viewed, then clock advanced 31 days and 3 new images viewed | at most 200 entries after the first step; after the advance only the 3 fresh entries remain |
+| TEST-PS-114-09.T24 | e2e | PS-114-07.R05, PS-114-02.R05 | first visit online, then capture all network traffic while switching the locale en, de, fr, es and back, online and offline | every catalog is served from the precache; zero catalog requests reach the static host or any relay; offline switches succeed |
 
 ## Dependencies
 

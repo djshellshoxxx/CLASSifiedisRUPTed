@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** Tooling module: restore state is the file restore-report.json { startedAt, finishedAt, baseBackupId, walSegments[], reachedTimestamp, eventsReplayed, lostEvents, excludedConsumers[], tombstonesApplied, ledgerBackupId, checks, rpoAchievedMs, lostWindow { from, to }, announcementCid, receiptEpoch, frozenAuctions, newIdentity, rtoElapsedMs } written to the restore directory and exported by the operator; dead letters are owned by F15.S02.M03 (dead_letter with replay_count and last_replayed_at).
+**Note:** Tooling module: restore state is the file restore-report.json { startedAt, finishedAt, baseBackupId, walSegments[], reachedTimestamp, eventsReplayed, lostEvents, excludedConsumers[], excludedBlobs, tombstonesApplied, ledgerBackupId, checks, rpoAchievedMs, lostWindow { from, to }, announcementCid, receiptEpoch, frozenAuctions, newIdentity, predecessorRelayId?, rtoElapsedMs } written to the restore directory and exported by the operator; dead letters are owned by F15.S02.M03 (dead_letter with replay_count and last_replayed_at).
 
 ## Verification
 

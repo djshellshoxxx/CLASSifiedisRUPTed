@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Buyers make money offers on published sell listings. Under ADR-0016 the buyer's vault records the offer and sends it to the seller as a signed, end-to-end encrypted statement (classrup.bazaar.offer/v1) through the mailbox named in the verified listing projection or by direct exchange. The seller's vault verifies it and can accept, reject or let it expire; the buyer can withdraw before a decision. Acceptance runs in the seller's vault in one IndexedDB transaction: it places a local inventory hold (F01.S03.M01) tied to the lifetime of a noncustodial Deal (F09.S01.M01) and signs the acceptance through the shared consent API (F08.S02.M02, N13). Every other seller-side close is sent to the buyer as a signed decision, so both copies converge. A hold only protects inside one vault: two forked devices of the seller that accept different offers are detected and frozen for the owner, never resolved by timestamp. Offers below the seller's private minimum look to the buyer exactly like unanswered offers. The platform never takes payment and no relay is authoritative or can read offers.
+Buyers make money offers on published sell listings. Under ADR-0016 the buyer's vault records the offer and publishes it as a participant statement (classrup.bazaar.offer/v1) through the StatementPublisherPort (F11.S01.M02 federation.record.publish), sealed end to end to the mailbox named in the verified listing projection on the offer's own thread stream; F11.S01.M02 signs it and the receiving vault's F11.S01.M02 acknowledges it. Before acting on an offer each vault asks federation.conflict.is_frozen (F11.S02.M03) and fails closed. The seller's vault verifies it and can accept, reject or let it expire; the buyer can withdraw before a decision. Acceptance runs in the seller's vault in one IndexedDB transaction: it places a local inventory hold (F01.S03.M01) tied to the lifetime of a noncustodial Deal (F09.S01.M01) and signs the acceptance through the shared consent API (F08.S02.M02, N13). Every other seller-side close is sent to the buyer as a signed decision, so both copies converge. A hold only protects inside one vault: two forked devices of the seller that accept different offers are detected and frozen for the owner, never resolved by timestamp. Offers below the seller's private minimum look to the buyer exactly like unanswered offers. The platform never takes payment and no relay is authoritative or can read offers.
 
 ## Responsibilities
 
@@ -17,6 +17,9 @@ Buyers make money offers on published sell listings. Under ADR-0016 the buyer's 
 - Send a signed decision for every seller-side close except timeout and below-minimum, and derive buyer-side listing changes from the verified mirror.
 - Expire offers after their deadline (default 48 h, range 1 h to 7 days), with a 24 h grace in the buyer vault for late acceptances.
 - Register the F10 privacy ports and pseudonymize retained offers after principal deletion (N6).
+- Register the ConsentSubjectPort {canonicalBytes, currentRevision, partyRole, isCommitted} of F08.S02.M02 for subjectType bazaar_offer and echo every received consent statement to the other participant before committing on it (N13).
+- Implement the F09.S01.M01 ContextTermsPort {verify, openerRole, ownerRole} for Deal context type offer, including Deals opened on an accepted negotiation round of the offer (N5).
+- Consume federation.conflict.detected and federation.conflict.resolved and call federation.conflict.is_frozen synchronously before acting on an offer subject (F11.S02.M03).
 
 ## Not responsible for
 
@@ -24,6 +27,7 @@ Buyers make money offers on published sell listings. Under ADR-0016 the buyer's 
 - Payment, receipts, disputes and the Deal lifecycle after acceptance (F09).
 - Messaging between parties (F08); offers are referenced from threads, not copied.
 - Consent signing and verification primitives (F08.S02.M02) and mirror verification of listing projections (F11.S01.M02).
+- Signing, seq allocation, mailbox routing and transport acknowledgements of statements (F11.S01.M02 and F11.S02.M01) and conflict records (F11.S02.M03).
 
 ## User stories
 
@@ -46,6 +50,7 @@ Buyers make money offers on published sell listings. Under ADR-0016 the buyer's 
 - The buyer withdraws while the seller's acceptance is in transit; the seller vault receives the withdrawal after accepting, cancels the Deal and releases the hold (withdrawn before accept); the buyer keeps the late acceptance only as evidence.
 - A decision signed by a key that is not the listing author, or an acceptance consent replayed from another offer, is quarantined and the offer stays made.
 - The seller answers with a counter; the offer is rejected with reason countered in the same transaction as the first negotiation round and the chain continues in F01.S04.M02.
+- F11.S02.M03 detects that the seller signed two acceptance consents with different subjectRevisionHash values for one offer and emits federation.conflict.detected; the offer freezes and accept, reject, withdraw and resolve_conflict return CONFLICT_STATE until the conflict is resolved; if the conflict store cannot be read they return DEPENDENCY_UNAVAILABLE.
 
 ## UX and accessibility
 
@@ -67,20 +72,20 @@ Buyers make money offers on published sell listings. Under ADR-0016 the buyer's 
 - Commands: `bazaar.offer.make`, `bazaar.offer.receive`, `bazaar.offer.accept`, `bazaar.offer.reject`, `bazaar.offer.withdraw`, `bazaar.offer.resolve_conflict`
 - Queries: `bazaar.offer.list_for_listing`, `bazaar.offer.list_mine`
 - Emits: `bazaar.offer.made`, `bazaar.offer.accepted`, `bazaar.offer.rejected`, `bazaar.offer.withdrawn`, `bazaar.offer.expired`
-- Consumes: `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.closed`, `bazaar.inventory.depleted`, `bazaar.inventory.conflict_detected`, `identity.block.added`, `federation.record.accepted`, `federation.tombstone.applied`, `comms.consent.received`, `commerce.deal.cancelled`, `privacy.deletion.completed`
+- Consumes: `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.closed`, `bazaar.inventory.depleted`, `bazaar.inventory.conflict_detected`, `identity.block.added`, `federation.record.accepted`, `federation.tombstone.applied`, `comms.consent.received`, `federation.conflict.detected`, `federation.conflict.resolved`, `commerce.deal.cancelled`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001
+F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-011-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-011-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-011-02 | [Validation rules](validation_rules.md) | 6 |
 | PS-011-03 | [Workflow state machine](workflow_state_machine.md) | 7 |
-| PS-011-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-011-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-011-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-011-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-011-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -92,6 +97,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T28 pass in CI.
+- All tests T01–T31 pass in CI.
 - No offer data appears in public, search, relay index or federation payloads (privacy test suite).
 - Never two accepted offers for one unit within one vault; cross-device forks are detected and frozen, never resolved by timestamp; an offer below the private minimum is indistinguishable for the buyer from an unanswered one.

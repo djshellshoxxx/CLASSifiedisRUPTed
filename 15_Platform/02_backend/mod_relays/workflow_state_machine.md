@@ -9,6 +9,7 @@
 - **PS-118-03.R01** The process follows starting, ready, draining, stopped, and /readyz is true only in ready.
 - **PS-118-03.R02** Shutdown is ordered, meaning stop accepting, drain in-flight requests for up to 10 s, stop the dispatcher after its current batch, run the registered pre-checkpoint hooks (the F15.S03.M02 final WAL archive), checkpoint with TRUNCATE only if every hook succeeded, and close the database.
 - **PS-118-03.R03** A RelayIdentity key moves from active to retired only through a rotation that it signs itself, from active or retired to revoked only through revocation from the local CLI with filesystem access (no prior-key authorization required), and never back.
+- **PS-118-03.R04** relay identity init --new-identity activates the pending successor key named by a compromise revocation (or a fresh genesis key), and before the port opens it calls the NewIdentityHook that F15.S03.M03 registers with the relay process to sign and publish a classrup.platform.relay_restore/v1 announcement from the new identity naming predecessorRelayId; the relay does not become ready without that announcement.
 
 ## Specification
 
@@ -18,7 +19,7 @@ Initial **starting**; terminal **stopped**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| starting -> ready | configuration valid, migrations current, identity loaded with an active key, dispatcher lease held, port bound | /readyz returns 200 |
+| starting -> ready | configuration valid, key file passes checkSecretFile, migrations current, identity loaded with an active key (for a new identity, its restore announcement written through the NewIdentityHook), dispatcher lease held, port bound | /readyz returns 200 |
 | starting -> stopped | configuration or runtime check fails, or no active key exists | exit code 78 or 1; no port opened |
 | ready -> draining | SIGTERM or SIGINT | /readyz returns 503, server.close() called, idle connections closed, new requests get PLATFORM_RELAY_DRAINING |
 | draining -> stopped | in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed | dispatcher stopped after current batch, remaining connections closed, pre-checkpoint hooks run with a 5000 ms budget (F15.S03.M02 archives WAL frames up to mxFrame), wal_checkpoint(TRUNCATE) only if every hook succeeded, database closed, exit 0 (1 if requests were cut, 130 on second signal without TRUNCATE) |
@@ -26,7 +27,7 @@ Initial **starting**; terminal **stopped**.
 ```mermaid
 stateDiagram-v2
   [*] --> starting
-  starting --> ready: configuration valid, migrations current, identity loaded with an active key, dispatcher lease held, port bound
+  starting --> ready: configuration valid, key file passes checkSecretFile, migrations current, identity loaded with an active key (for a new identity, its restore announcement written through the NewIdentityHook), dispatcher lease held, port bound
   starting --> stopped: configuration or runtime check fails, or no active key exists
   ready --> draining: SIGTERM or SIGINT
   draining --> stopped: in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed
@@ -40,7 +41,7 @@ Initial **active**; terminal **revoked**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | active -> retired | platform.relay_identity.rotate by a relay_operator or admin, V10 and V11 pass | new key generated, rotation statement signed by this key with prevKeyId and seq, new revocation certificate written; old key published as retired |
-| active -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | revocation statement signed by the key itself or its pre-signed certificate, published; relay stops serving until --new-identity creates a new relayId |
+| active -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | for reason compromised with a readable key file the pending successor genesis key is generated first and the revocation, signed by the key itself, names successorRelayId; otherwise the revocation is signed by the key or its pre-signed certificate; published; relay stops serving until --new-identity activates the successor or creates a new relayId |
 | retired -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | revocation statement published; receipts by this key are valid only if stored before revokedAt |
 
 ```mermaid
@@ -68,7 +69,8 @@ stateDiagram-v2
 | TEST-PS-118-09.T06 | property | PS-118-03.R03, PS-118-01.R03 | random sequences of rotate, revoke requests and clock changes | active to retired and active or retired to revoked only, never back; rotation rate limit respected; revocation never rate limited |
 | TEST-PS-118-09.T20 | abuse | PS-118-03.R03, PS-118-01.R03, PS-118-02.R04 | CLI revoke of the stolen active key 1 h after a rotation, using the pre-signed certificate; vault holds receipts by that key stored before and after revokedAt | revocation accepted without prior-key authorization and without RATE_LIMITED; relay refuses to serve until --new-identity; receipts stored before revokedAt still verify, later ones are rejected |
 | TEST-PS-118-09.T23 | integration | PS-118-03.R02, PS-118-06.R03 | shutdown with a registered pre-checkpoint hook that succeeds, then one that fails | WAL archived before TRUNCATE in the first case; TRUNCATE skipped and the WAL kept in the second; next start archives it first |
+| TEST-PS-118-09.T29 | integration | PS-118-01.R05, PS-118-03.R04 | revoke the active key with reason compromised while its key file is readable, then relay identity init --new-identity; repeat with the key file deleted using the pre-signed certificate | revocation signed by the key names successorRelayId equal to the new relayId; the new identity records predecessorRelayId and its restore announcement naming it is served before readyz 200; without the announcement hook the relay stays in starting; the certificate path has no successorRelayId and the announcement still names the predecessor |
 
 ## Dependencies
 
-Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

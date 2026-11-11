@@ -25,10 +25,11 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | New local field silently leaking into federation | default-deny allowlist; CI test fails if a record type has a field without a classification annotation |
-| T02 | Location refinement attack (geohash 7 or coordinates in payload or ext) | V04 snaps outbound cells to L2 and refuses coordinates; V09 rejects finer inbound cells; assertPublicCell on both paths; ext members limited to the registered keys |
+| T02 | Location refinement attack (geohash 7 or coordinates in payload or ext) | V04 snaps outbound cells to L2 and refuses coordinates anywhere in payload or ext; V09 rejects finer inbound cells; assertPublicCell on both paths; outbound drafts carry only registered ext members |
 | T03 | Metadata leakage through images (EXIF GPS, device serial) | V05 only references stripped media hashes; relay rejects GPS tags per PRV-4 |
 | T04 | Remote payload with executable or HTML content | inbound strings are plain text; mirror view escapes at render; links shown as text |
 | T05 | Signer-role confusion: a relay key used as a user author, or a user key presented for a relay role | V10 resolves relay and user roles through separate resolvers; tests per registry entry include relay-key-as-author and user-key-as-relay negatives (T16, T19) |
+| T06 | Activity-pattern inference from exact public timestamps | publicTime floors every public payload timestamp and createdAt to the UTC hour (V12, F10.S02.M03); order inside the hour comes from version members and per-chain seq only |
 
 **Abuse controls**
 - Per-author publish rate cap 60 statements/hour enforced by F11.S01.M02 through F12.S03.M03 rate limits.
@@ -48,4 +49,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -38,7 +38,7 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink), capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForSearch / redactForExport(record, schema, ctx), redactForEnvelope(record, schema, ctx{encrypted: true, recipients: did[]}), labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). redactForExport returns a refusal with PRIVACY_CLASSIFICATION_MISSING when a schema has no map, so an export section fails loudly instead of shrinking silently. No relay or vault commands, no events.
+**Note:** Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink), capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForSearch / redactForExport(record, schema, ctx), redactForEnvelope(record, schema, ctx EnvelopeContext{encrypted: true, recipients, recipientRole?, disclosure?}) applying V05, V07 and V08, labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). redactForExport returns a refusal with PRIVACY_CLASSIFICATION_MISSING when a schema has no map, so an export section fails loudly instead of shrinking silently. No relay or vault commands, no events.
 
 ### Example
 
@@ -47,6 +47,11 @@ redactForLog({ id: "0192…", title: "Bike", address: "Main St 4", note: "mail m
 => { id: "0192…", title: "Bike", address: "[redacted:P3]", note: "mail me [email]" } with dropped ["address"]
 redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u33dc" (L2) or refused if opt-in is missing
 redactForEnvelope(offer, "classrup.bazaar.offer/v1", { encrypted: false, recipients: [] }) => refused PRIVACY_SINK_FORBIDDEN
+map classrup.auctions.auction/v1: reservePrice { class: P3, disclose: { as: P2, recipientRole: auction_host, maxRecipients: 1 } }
+redactForEnvelope({ auctionId, reservePrice, reserveSalt }, …, { encrypted: true, recipients: ["ed25519:hostkey1"], recipientRole: "auction_host" }) => allowed as P2
+redactForEnvelope(sameReserve, …, { encrypted: true, recipients: ["ed25519:hostkey1", "ed25519:bidder2"], recipientRole: "auction_host" }) => refused PRIVACY_SINK_FORBIDDEN
+redactForEnvelope(redactedMessage, "classrup.comms.message/v1", { encrypted: true, recipients: ["relay:3fz7hq2wkmpd5ra6t4ncxb7ygu#k2"], recipientRole: "relay_moderation",
+  disclosure: { kind: "moderation_report", targetType: "message", rulesVersion: "redact/1", state: "export_prepared", previewDigest: "7a51…" } }) => allowed (PRV-9)
 ```
 
 ## Verification

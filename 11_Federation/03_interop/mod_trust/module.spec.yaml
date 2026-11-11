@@ -18,7 +18,7 @@ responsibilities:
   - Activate a vault's selected relay from the relay's verified classrup.federation.relay_identity/v1 statement and the user's fingerprint confirmation.
   - "Resolve a request key id to an active peer and enforce quotas (default 6000 envelopes/hour, 10 batches/minute, 2 GiB stored per peer) for F11.S01.M02 and F11.S02.M01, owning FEDERATION_PEER_NOT_ALLOWED and FEDERATION_QUOTA_EXCEEDED (N1)."
   - Maintain the health score from relay-attributable faults only and suspend automatically below 40 or on 20 invalid signatures in 10 minutes.
-  - Support key rotation through a rotation statement signed by the old key with a 7-day overlap, and refuse unexpected key changes with FEDERATION_KEY_MISMATCH.
+  - Support key rotation through a rotation statement signed by the old key with a 7-day overlap, emit federation.peer.key_rotated when a pinned key rotates so consumers re-check relay attestations without waiting for a descriptor refresh, and refuse unexpected key changes with FEDERATION_KEY_MISMATCH.
   - Register the N6 privacy ports for the vault's selected-relay list.
 non_responsibilities:
   - Verifying envelopes and requests cryptographically (F11.S01.M03) and storing records (F11.S01.M02).
@@ -43,6 +43,7 @@ edge_cases:
   - Health score reaches 39 during a batch; the current batch finishes and the peer is suspended before the next request.
   - An author forks twice in 24 h and both forks reach this relay through two honest peers; no peer loses health, and the author is limited by F11.S02.M03.
   - The previous key of a rotated peer is used 7 days and 1 minute after the rotation; refused with FEDERATION_KEY_MISMATCH.
+  - A selected relay rotates its key with a verified classrup.federation.key_rotation/v1; federation.peer.key_rotated is emitted in the same transaction with the old and new key, so F07.S03.M02 re-checks relay_email_check attestations at once instead of after its 24 h descriptor refresh.
   - Operator lowers a quota below current usage; existing records stay, new envelopes are refused with FEDERATION_QUOTA_EXCEEDED until usage falls.
   - Flag F11 is off; peer relays stay in the table dormant and their health score is frozen, while selected relays keep working.
 ux:
@@ -157,6 +158,7 @@ processes:
       - The module consumes rejection, conflict and delivery failure events to maintain health scores for relay-attributable faults only, plus the flag and deletion events.
       - Health penalties apply only to relay-attributable faults (invalid signatures, cids or canonical forms it forwarded, invalid request signatures, forwarding traffic relays never forward, quota breaches, receipts it signed that contradict each other, and equivocation signed by its own relay key); author forks, local-policy rejections and gap or buffer codes never change a peer's health.
       - Peer statements and signer roles are registered with F11.S01.M01 (N2); peer_offer by the proposing relay key, peer_accept by the accepting relay key, key_rotation by the current pinned key and relay_identity by the relay key it names, all signed through the StatementPublisherPort.
+      - "Every pinned relay key change is published as a local event: federation.peer.added carries the pinned relayKey and federation.peer.key_rotated {peerId, relayId, kind, oldRelayKey, newRelayKey, effectiveAt, previousKeyUntil} is emitted in the transaction that applies a verified rotation statement, so consumers (F16.S02.M02 peer key pins, F07.S03.M02 relay attestations) never wait for a periodic refresh."
     commands:
       - name: federation.peer.propose
         capability: federation.peer.propose
@@ -212,7 +214,7 @@ processes:
         input: "[vault-local or relay-local command; key rotation consumes a statement classrup.federation.key_rotation/v1] { peerId, expectedRevision, trustLevel?, quotas?, listInIdentityDoc?, rotation?: Envelope }"
         output: "{ peerId, revision }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, FEDERATION_KEY_MISMATCH]
-        emits: []
+        emits: [federation.peer.key_rotated]
         idempotent: true
     queries:
       - name: federation.peer.list
@@ -231,13 +233,14 @@ processes:
         output: "{ peerId, relayId, status, trustLevel, quotaRemaining } or none"
         errors: [FEDERATION_PEER_NOT_ALLOWED, FEDERATION_QUOTA_EXCEEDED]
     events_produced:
-      - {type: federation.peer.added, privacy: P1, payload: "{ peerId, relayId, kind, direction, trustLevel }"}
+      - {type: federation.peer.added, privacy: P1, payload: "{ peerId, relayId, relayKey, kind, direction, trustLevel }"}
+      - {type: federation.peer.key_rotated, privacy: P1, payload: "{ peerId, relayId, kind, oldRelayKey, newRelayKey, effectiveAt, previousKeyUntil, rotationCid } — emitted when federation.peer.update applies a verified classrup.federation.key_rotation/v1"}
       - {type: federation.peer.suspended, privacy: P1, payload: "{ peerId, relayId, reason }"}
       - {type: federation.peer.reinstated, privacy: P1, payload: "{ peerId, relayId }"}
       - {type: federation.peer.removed, privacy: P1, payload: "{ peerId, relayId }"}
     events_consumed:
       - {type: federation.record.rejected, effect: "relay-attributable codes only: lower the sending peer's health by 5 per FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH or FEDERATION_ENVELOPE_NOT_CANONICALIZABLE it forwarded (max 25 per hour) and by 2 per FEDERATION_REQUEST_SIGNATURE_INVALID or FEDERATION_ORIGIN_MISMATCH (max 10 per hour); FEDERATION_NOT_ACCEPTED, FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_TOMBSTONED, FEDERATION_RECORD_TIME_INVALID, FEDERATION_PAYLOAD_INVALID, gap and buffer codes are ignored"}
-      - {type: federation.conflict.detected, effect: "only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks and commitment conflicts are ignored"}
+      - {type: federation.conflict.detected, effect: "only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks, commitment conflicts and key_compromise records are ignored"}
       - {type: federation.delivery.failed, effect: "transport reasons (timeout, unreachable, 5xx) lower the destination peer's health by 1 per entry (max 10 per hour); reason receipt_equivocation (two receipts signed by the peer key for one cid with different outcomes) lowers it by 20; per-envelope rejections by the peer's own policy are ignored"}
       - {type: platform.flag.changed, effect: "when F11 turns off, freeze health scores and mark peer_relay peers dormant; selected_relay peers are unaffected"}
       - {type: privacy.deletion.completed, effect: "vault: delete the deleted principal's selected-relay list after the DeletionPort plan ran; relay peer records hold no user data and are unchanged"}
@@ -348,8 +351,9 @@ processes:
       - "T21 | integration | 06.R02 | crash injected after an envelope acceptance but before commit, and after commit | neither counter nor acceptance persisted in the first case, both in the second; counted envelopes equal accepted envelopes"
       - "T22 | unit | 07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed in a vault | selected-relay section exported without secrets; list deleted; relay peers untouched"
       - "T23 | integration | 04.R03 | flag F11 off then on | peer_relay health frozen and peers dormant; selected relays keep working; scores resume"
+      - "T24 | contract | 04.R06 | activate a peer; apply a verified key_rotation; apply a rotation signed by a non-pinned key | federation.peer.added carries relayKey; federation.peer.key_rotated carries oldRelayKey, newRelayKey, effectiveAt and previousKeyUntil in the same transaction as the update; the invalid rotation FEDERATION_KEY_MISMATCH and no event"
     acceptance:
-      - All tests T01–T23 pass in CI.
+      - All tests T01–T24 pass in CI.
       - No peer becomes active without both sides' signed opt-in (or a selected relay's signed identity statement) and a recorded fingerprint confirmation.
       - SSRF, key substitution and unsolicited-offer tests pass, and no honest relay is penalized for an author's fork.
   import_export_backup_rollback:

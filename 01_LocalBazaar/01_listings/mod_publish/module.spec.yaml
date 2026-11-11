@@ -150,7 +150,7 @@ processes:
       - "V05 | prohibited-item verdict is not block | BAZAAR_PUBLISH_BLOCKED"
       - "V06 | verdict review or risk level medium or high requires ownerConfirmedAt | BAZAAR_PUBLISH_CONFIRMATION_REQUIRED"
       - "V07 | expiresInDays between 1 and 90 | VALIDATION_FAILED"
-      - "V08 | 1 to 10 destination relays, each a user-selected relay known to the vault with a pinned signing key | VALIDATION_FAILED"
+      - "V08 | 1 to 10 destination relays, each a user-selected relay known to the vault with a pinned signing key and named by its canonical relayId (relay: plus 26 lowercase base32 characters, F15.S02.M01) | VALIDATION_FAILED"
       - "V09 | vault has fewer than 100 active publications | BAZAAR_PUBLISH_LIMIT"
       - "V10 | publish and renew: device clock within 24 h of the median of the latest receipts from at least 2 distinct relays in the last 7 days, after discarding receipts more than 24 h ahead of that median (their relay is flagged untrusted); with fewer than 2 relays the UI warns and the command proceeds | PRECONDITION_FAILED"
       - "V11 | renew only in the last 7 days of life (or at expiry when requested by the F01.S01.M04 deferral), renewals < 3 and total life <= 120 days | BAZAAR_PUBLISH_RENEW_NOT_ALLOWED"

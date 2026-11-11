@@ -9,7 +9,7 @@
 - **PS-064-03.R01** A meetup starts proposed; reschedule creates a new proposal revision, clears prior agreements and stays proposed until every party agreed.
 - **PS-064-03.R02** Agreed is computed only from verified consent statements of every party, the proposer included, for the current hash; a reschedule or a verified revocation of an agreement before windowStart moves an agreed meetup back to proposed.
 - **PS-064-03.R03** Cancelled, expired and elapsed are terminal; conflicted ends by a new proposal revision higher than every competing one, by a cancellation, or by expiry once the local clock passes the windowStart of every competing proposal.
-- **PS-064-03.R04** Propose and reschedule sign the proposer's own consent.comms.meetup.agree.v1 consent in the same transaction, so the agreement evidence is uniform for every party; agreed is not a commit, and consents may be revoked until windowStart (ConsentSubjectPort.isCommitted).
+- **PS-064-03.R04** Propose and reschedule sign the proposer's own consent.comms.meetup.agree.v1 consent in the same transaction, so the agreement evidence is uniform for every party; agreed is not a commit, and consents may be revoked until windowStart (SubjectCanonicalizerPort.isCommitted).
 - **PS-064-03.R05** A conflict is any two distinct valid proposals with the same proposalRevision and different proposalHash, whoever proposed them, and it freezes the meetup for explicit renegotiation.
 
 ## Specification

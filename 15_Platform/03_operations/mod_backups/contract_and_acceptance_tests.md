@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Temp relay data dir with a 100 000-row database opened with wal_autocheckpoint=0, backup dir on a separate tmpfs, 32-byte test key and a second wrong key, tombstone fixtures over 14 months, fixed clock 2026-11-04T00:00:00Z advanced by the test.
+**Fixtures:** Temp relay data dir with a 100 000-row database opened with wal_autocheckpoint=0 and the attached store blobs_enc holding 3 encrypted attachment blobs with a canary byte pattern next to 2 P0 blobs in main, backup dir on a separate tmpfs, 32-byte test key and a second wrong key, tombstone fixtures over 14 months, fixed clock 2026-11-04T00:00:00Z advanced by the test.
 
 ## Verification
 
@@ -45,12 +45,13 @@ See the module test table below (all processes).
 | TEST-PS-120-09.T23 | integration | PS-120-07.R03 | restore the 6-month-old monthly snapshot after 40 tombstones were applied since then | every tombstoned projection stays deleted after restore; ledger applied before readyz returns 200 |
 | TEST-PS-120-09.T24 | integration | PS-120-03.R02, PS-120-03.R03 | failed record reaches its tier expiry; completed record reaches retention with and without a newer verified snapshot | failed artifact deleted, record kept; completed expires only when a newer verified snapshot covers the tier |
 | TEST-PS-120-09.T25 | integration | PS-120-06.R03, PS-120-08.R04 | SIGTERM with 900 unarchived frames; then an external sqlite3 checkpoint twice within 30 min | shutdown hook archives the 900 frames before TRUNCATE; first external checkpoint marks a gap and triggers one full snapshot; second gap within 30 min triggers no further snapshot |
+| TEST-PS-120-09.T26 | abuse | PS-120-01.R05, PS-120-02.R05, PS-120-07.R05 | full snapshot and 10 min of WAL segments while attachments are uploaded and one is deleted; restore; scan every artifact for the canary; then a run with an adapter that keeps encrypted bytes in main, and verify of a planted snapshot holding ciphertext | P0 blobs, attachment rows and blob metadata restored; no canary in any artifact; excludedBlobs 3 in the record and event; the misconfigured run refused with PLATFORM_BACKUP_CONFIG_INVALID; the planted snapshot fails with PLATFORM_BACKUP_VERIFY_FAILED |
 
 ## Acceptance criteria
 
-- All tests T01-T25 pass in CI and a restore drill is performed at least every 100 days.
+- All tests T01-T26 pass in CI and a restore drill is performed at least every 100 days.
 - A verified encrypted snapshot exists at least every 6 hours or an alert fires within 7 hours, and WAL archiving keeps the typical data-loss window at 5 minutes with zero gaps under the reference load.
-- No backup artifact contains plaintext private data or key material, and no spliced or relabelled artifact or manifest is accepted.
+- No backup artifact contains plaintext private data, key material or encrypted attachment MediaBlobs, and no spliced or relabelled artifact or manifest is accepted.
 - A restored relay reproduces the database content hash of the snapshot and re-applies every ledger tombstone, whatever the age of the snapshot.
 
 ## Dependencies

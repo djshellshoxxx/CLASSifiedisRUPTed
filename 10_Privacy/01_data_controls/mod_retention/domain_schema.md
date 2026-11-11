@@ -10,6 +10,7 @@
 - **PS-079-01.R02** A LegalHold stores relay, subject, reason code, a non-personal reference, requester, approver, status and review dates, and exists only on the relay that placed it.
 - **PS-079-01.R03** Vault-scope policy rows are P3 (owner only) and relay-scope policy rows are P0 (the relay's published policy); holds are P3 operator records retained as RET-AUDIT for 1 year after release.
 - **PS-079-01.R04** Run records hold counts per kind and class plus startedAt; the latest startedAt of a committed vault run is the high-water clock, and the latest relay-signed receipt time the vault has seen is kept beside it for clock-jump detection.
+- **PS-079-01.R05** RET-SIGNAL (CTR-PRV-001 PRV-8) is expiry-bounded - a signal record is kept until its own expiresAt and never longer than 365 days after its createdAt, is then folded into a counts-only rollup that holds no identifiers, and the rollup is kept 365 days; its policy row sets only the rollup duration, fixed at 365 days, and the defaults row exists in every vault and relay scope for F12.S03.M02 Signal records.
 
 ## Specification
 
@@ -22,8 +23,8 @@ Schema `classrup.privacy.retention_policy/v1` · storage **relay+device** · pri
 | id | uuidv7 — primary key |
 | scopeKind | enum — vault \| relay |
 | scopeId | string — vault id or relay id |
-| class | enum — RET-EPHEMERAL \| RET-SHORT \| RET-STANDARD \| RET-EVIDENCE \| RET-AUDIT |
-| durationDays | int — within bounds: EPHEMERAL 1 fixed, SHORT 7..90, STANDARD purge delay 7..90, EVIDENCE 365..3650, AUDIT 180..2555 |
+| class | enum — RET-EPHEMERAL \| RET-SHORT \| RET-STANDARD \| RET-EVIDENCE \| RET-AUDIT \| RET-SIGNAL |
+| durationDays | int — within bounds: EPHEMERAL 1 fixed, SHORT 7..90, STANDARD purge delay 7..90, EVIDENCE 365..3650, AUDIT 180..2555, SIGNAL 365 fixed (rollup retention; the signal record itself ends at its expiresAt, capped at createdAt + 365 days) |
 | source | enum — default \| jurisdiction \| user \| relay_operator |
 | jurisdictionCode? | string — profile code from F18.S01.M01, e.g. DE or US-CA |
 | effectiveFrom | timestamp — RFC 3339 UTC |
@@ -32,7 +33,8 @@ Schema `classrup.privacy.retention_policy/v1` · storage **relay+device** · pri
 **Invariants**
 - Unique per (scopeKind, scopeId, class).
 - durationDays is inside the bounds of its class; RET-LEGAL-HOLD cannot be configured as a policy.
-- Defaults are EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365.
+- Defaults are EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365, SIGNAL 365 (rollup).
+- Neither a user, a relay operator nor a jurisdiction profile changes RET-SIGNAL; its record cap of 365 days after createdAt and its 365-day rollup are fixed by PRV-8.
 - Vault-scope rows are P3 and never leave the vault except in the owner's export; relay-scope rows are served read-only as the relay's public P0 policy.
 
 ### LegalHold
@@ -42,7 +44,7 @@ Schema `classrup.privacy.legal_hold/v1` · storage **relay** · privacy **P3** �
 | Field | Type and constraints |
 |---|---|
 | id | uuidv7 — primary key |
-| relayId | string — relay that holds the data |
+| relayId | string — canonical relayId (F15.S02.M01) of the relay that holds the data |
 | subject | object — {kind: record\|author\|mailbox, ref: cid or did or mailbox id} |
 | reasonCode | enum — court_order \| regulatory_request \| abuse_investigation \| safety_emergency |
 | reference | string — ≤ 100 code points, case or ticket number, no personal data |
@@ -82,10 +84,11 @@ CREATE INDEX privacy_legal_hold_subject ON privacy_legal_hold(relay_id, subject_
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-079-09.T01 | unit | PS-079-01.R01, PS-079-02.R01 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365 |
+| TEST-PS-079-09.T01 | unit | PS-079-01.R01, PS-079-02.R01 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365, SIGNAL 365 |
 | TEST-PS-079-09.T02 | unit | PS-079-01.R02, PS-079-02.R01 | hold requested with personal data in reference; user tries to change AUDIT | VALIDATION_FAILED and FORBIDDEN |
 | TEST-PS-079-09.T17 | integration | PS-079-01.R03 | inspect classification and retention of vault policies, the relay policy endpoint and a hold released 366 days ago | vault rows annotated P3 and absent from relay traffic; relay rows served as public P0 policy; the released hold record is purged 1 year after release |
 | TEST-PS-079-09.T19 | unit | PS-079-02.R04, PS-079-01.R04 | clock set 3 days forward since the last sweep; clock 2 days ahead of the latest relay-signed receipt; clock set 3 days back | both forward cases run as dry runs and return PRIVACY_RETENTION_CLOCK_JUMP until confirmClockJump; the backward case purges nothing with a future anchor and does not lower the high-water clock |
+| TEST-PS-079-09.T23 | integration | PS-079-01.R05, PS-079-02.R05 | sweep over the signal fixtures in a vault and on a relay, one signal record under an active hold; rollup rows aged 364 and 366 days; set RET-SIGNAL to 180 days as user, operator and jurisdiction; register a signal kind without rollupKind and one whose rollup holds a did | the expired and the 400-day records are rolled up and purged (the latter at createdAt + 365 days), the 10-day record and the held record are kept; the 366-day rollup row is purged; every set returns FORBIDDEN; both registrations fail with VALIDATION_FAILED |
 
 ## Dependencies
 

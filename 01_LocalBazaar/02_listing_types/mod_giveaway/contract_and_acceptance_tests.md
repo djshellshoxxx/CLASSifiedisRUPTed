@@ -28,9 +28,9 @@ See the module test table below (all processes).
 | TEST-PS-005-09.T06 | integration | PS-005-03.R03 | selected recipient does not collect for 72 h | request expired, hold released, second selection possible |
 | TEST-PS-005-09.T07 | contract | PS-005-01.R04, PS-005-04.R01, PS-005-04.R03, PS-005-09.R02 | request, select, decline, withdraw run in both vaults | statements validate and verify; recipient_selected payload has no notes; stored records validate as classrup.bazaar.giveaway_request_record/v1 with localRole giver or requester and never as the statement schema |
 | TEST-PS-005-09.T08 | integration | PS-005-04.R02, PS-005-05.R02 | statement with wrong signer, tampered body, unknown schema | all quarantined with reasons; none queued |
-| TEST-PS-005-09.T09 | abuse | PS-005-05.R01, PS-005-05.R03 | non-giver selects; relay reads mailbox | FORBIDDEN; relay holds ciphertext only |
+| TEST-PS-005-09.T09 | abuse | PS-005-05.R01, PS-005-05.R03 | non-giver selects; relay reads the F08.S01.M01 mailbox; capability list inspected | FORBIDDEN; relay holds ciphertext only; no bazaar.giveaway_request.relay_mailbox capability exists and access is decided by comms.mailbox.put, fetch and ack |
 | TEST-PS-005-09.T10 | integration | PS-005-06.R01, PS-005-06.R03 | replay select with same key; fail signing | one selection; failure rolls back hold |
-| TEST-PS-005-09.T11 | chaos | PS-005-06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock with tie groups per sync batch; requester sees pending until signed receipt |
+| TEST-PS-005-09.T11 | chaos | PS-005-06.R03 | giver offline 3 days, the giver's F08.S01.M01 mailbox holds requests | fetched with comms.mailbox.fetch and processed in receipt order on unlock with tie groups per fetch batch; comms.mailbox.ack only after each receive commit; requester sees pending until signed receipt |
 | TEST-PS-005-09.T12 | abuse | PS-005-02.R03, PS-005-07.R03 | requester sends 4th pending request and 6th collection within 7 days; 21 requests in an hour | BAZAAR_GIVEAWAY_LIMIT and RATE_LIMITED; the rejected requester learns nothing about the queue |
 | TEST-PS-005-09.T13 | abuse | PS-005-07.R02 | terminal request older than 30 days | note purged, evidence fields retained |
 | TEST-PS-005-09.T14 | load | PS-005-08.R01, PS-005-08.R02, PS-005-08.R03 | 200 queued requests on Moto G profile | select p95 <= 120 ms, receive p95 <= 80 ms, list p95 <= 150 ms, no telemetry |
@@ -41,13 +41,14 @@ See the module test table below (all processes).
 | TEST-PS-005-09.T19 | integration | PS-005-07.R03 | R1 and R2 each request L; R1 calls list_mine and the giver calls list_for_listing | R1 sees only its own request; only the giver vault returns the queue |
 | TEST-PS-005-09.T20 | integration | PS-005-02.R04 | R1 requests after the verified projection's closesAt, and after its tombstone was applied | BAZAAR_GIVEAWAY_CLOSED in the requester vault without contacting the giver; pending request expires on tombstone |
 | TEST-PS-005-09.T21 | integration | PS-005-07.R04 | export sections, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for R2 | sections present with field classes; R2's DID replaced by the pseudonym in retained requests and notes purged |
+| TEST-PS-005-09.T22 | integration | PS-005-04.R05, PS-005-08.R03 | requests delivered with comms.mailbox.put until the giver's mailbox reports COMMS_MAILBOX_FULL, then the unknown-sender share is used up | requests stay prepared and retry after retryAfterMs; nothing is queued at the giver; local put counters record full and rate_limited |
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T22 pass in CI.
 - A recipient is never shown as selected before a selection statement signed by the listing author for that exact request is verified, and handover is never described as proven.
 - Per-requester limits and the fresh-key share hold under retries, replays, Sybil swarms and concurrent tabs.
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

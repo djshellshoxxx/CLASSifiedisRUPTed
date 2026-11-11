@@ -10,6 +10,7 @@
 - **PS-115-02.R02** The install prompt is shown only when its gating rules hold, so it never interrupts first-time use and appears at most once per session.
 - **PS-115-02.R03** Update activation is allowed only at a safe point.
 - **PS-115-02.R04** An update is offered only for a waiting build whose signed release manifest verifies under the release key pinned in the running build, and activation requires a live user gesture checked in the page (navigator.userActivation.isActive) plus the waiting worker's one-time nonce.
+- **PS-115-02.R05** Before an update is offered and again immediately before activation, the module checks for a release hold that verifies through F16.S02.M03 under context classrup/release-hold/v1 and the release key pinned in the running build, and refuses activation of a covered build while the hold is valid.
 
 ## Specification
 
@@ -22,6 +23,7 @@
 | V05 | update activation requires no unsaved draft, outbox entry in sending absent or finished within 10 s | PLATFORM_UPDATE_NOT_SAFE |
 | V06 | applyUpdate() proceeds only while navigator.userActivation.isActive is true in the page, and the SKIP_WAITING it posts carries the nonce the waiting worker issued through GET_VERSION (F15.S01.M02 V07) | FORBIDDEN |
 | V07 | the waiting build's /release-manifest.json has an Ed25519 signature under context classrup-release:v1 by the release key pinned in the running build (or by a successor key endorsed by it), its buildId equals the waiting worker's GET_VERSION buildId and its releaseSeq is greater than the running build's | PLATFORM_UPDATE_UNVERIFIED |
+| V08 | no valid release hold covers the waiting build: a hold is valid when the envelope from /release-hold.json (fetched network-only with cache no-store from the app's own origin) or the stored releaseHold verifies through F16.S02.M03 with ctx classrup/release-hold/v1, kid equal to the release key pinned in the running build and payload.releaseKeyId equal to that key, and issuedAt ≤ now < expiresAt; it covers the waiting build when heldBuildIds is empty or contains its buildId; envelopes that fail verification are ignored | PLATFORM_UPDATE_HELD |
 
 ## Verification
 
@@ -33,7 +35,8 @@
 | TEST-PS-115-09.T08 | abuse | PS-115-05.R01, PS-115-05.R02, PS-115-05.R03, PS-115-02.R04 | applyUpdate() called from a timer without user activation; a script posts SKIP_WAITING without a nonce and with a stale nonce; a foreign origin messages the worker | applyUpdate refuses with FORBIDDEN; the worker ignores every message without a valid nonce; version unchanged |
 | TEST-PS-115-09.T18 | e2e | PS-115-02.R02, PS-115-07.R03 | eligible user starts one session and navigates through 10 screens, dismissing nothing | install card shown exactly once in the session; shown again only in a later session |
 | TEST-PS-115-09.T19 | abuse | PS-115-02.R04, PS-115-03.R02, PS-115-03.R04, PS-115-05.R03 | unsigned build B' deployed while A is open; then all tabs closed and the app reopened | no Update button, warning shown with PLATFORM_UPDATE_UNVERIFIED in diagnostics; after the cold start B' runs (browser behavior) and the warning is shown again from unverifiedBuildId |
+| TEST-PS-115-09.T20 | e2e | PS-115-02.R05, PS-115-03.R05 | signed build B waiting while A is open; hold for [B] published; the host then deletes /release-hold.json; the clock passes expiresAt; separately a hold with empty heldBuildIds and a hold signed by another key | Update hidden and paused notice shown with reason and expiry; applyUpdate refuses with PLATFORM_UPDATE_HELD; the stored hold still applies after deletion; after expiresAt the banner returns; the empty list holds B; the forged hold is ignored and counted as hold_rejected |
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

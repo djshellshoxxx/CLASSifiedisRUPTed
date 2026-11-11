@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Creates and owns the Listing record in the principal's local vault. A listing starts as a private draft (P3, vault only, schema classrup.bazaar.listing_record/v1) with kind, title, description, category, condition, media references and a coarse region (L1 or L2 geohash). It never stores an exact address. Later lifecycle changes (publish, renew, expire, close, archive) are applied by sibling modules through narrow system commands on this module, so Listing keeps a single owner. Publishing is done by F01.S01.M03 as a separate signed public projection statement (classrup.bazaar.listing/v1); this module never talks to a relay, and no relay notice can change a Listing (ADR-0016 §3, §8).
+Creates and owns the Listing record in the principal's local vault. A listing starts as a private draft (P3, vault only, schema classrup.bazaar.listing_record/v1) with kind, title, description, category, condition, photos as shared MediaRef entries {ref, alt?, decorative?} and a coarse region (L1 or L2 geohash). It never stores an exact address. Listing ids are minted with publicRecordId (F10.S02.M03) because they appear in the public projection, and the module answers the ThreadContextPort of F08.S01.M02 for listing threads. Later lifecycle changes (publish, renew, expire, close, archive) are applied by sibling modules through narrow system commands on this module, so Listing keeps a single owner. Publishing is done by F01.S01.M03 as a separate signed public projection statement (classrup.bazaar.listing/v1); this module never talks to a relay, and no relay notice can change a Listing (ADR-0016 §3, §8).
 
 ## Responsibilities
 
@@ -15,6 +15,9 @@ Creates and owns the Listing record in the principal's local vault. A listing st
 - Expose the vault-local commands apply_status and apply_edit that F01.S01.M02, F01.S01.M03 and F01.S01.M04 use inside their own transactions.
 - Purge drafts untouched for 180 days after a 14-day in-app warning.
 - Register the F10 privacy ports (export section, deletion plan, retention purge) for Listing records and classify every field (N6).
+- Mint every listing id with F10.S02.M03 publicRecordId (UUIDv7 with the hour-floored time), since the id is part of the signed public projection.
+- Hold photos as shared MediaRef entries {ref, alt? (plain text up to 140 code points), decorative?} so the projection carries author alt text (F14.S01.M02).
+- Implement the ThreadContextPort {exists, isParty, roster, isClosed} that F08.S01.M02 declares for context type listing; F08.S01.M02 depends on this module, so no reverse edge exists.
 
 ## Not responsible for
 
@@ -24,6 +27,7 @@ Creates and owns the Listing record in the principal's local vault. A listing st
 - [object Object]
 - Storing listings authored by other principals; verified mirrors of them are kept by F11.S01.M02.
 - Relay hosting decisions; a relay's removal of a projection changes only that relay's delivery state in F01.S01.M03.
+- Thread storage, derivation of threadIds and message delivery (F08.S01.M02, F08.S01.M01); the contextTenantId used for derivation travels in the signed projection of F01.S01.M03.
 - Future: photo upload pipeline owner; this module only holds content-addressed media references.
 
 ## User stories
@@ -31,6 +35,7 @@ Creates and owns the Listing record in the principal's local vault. A listing st
 - As a seller, I can start a listing offline, add photos and a coarse region, and finish it later; nothing leaves my device until I publish.
 - As a seller without location permission, I can pick my region by name and the app stores only a 5-character area cell, never coordinates.
 - As a member, I can delete a draft I no longer want and know it is gone from my vault.
+- As a seller using a screen reader, I give each photo a short description or mark it decorative, and buyers' screen readers read my description.
 
 ## Edge cases
 
@@ -42,10 +47,12 @@ Creates and owns the Listing record in the principal's local vault. A listing st
 - Two devices of the same principal edit the same draft; the second apply_edit gets CONFLICT_REVISION and is never auto-merged.
 - A relay removes the published projection from its index; the Listing stays published in the vault and only that relay's delivery in F01.S01.M03 becomes relay_removed.
 - A listing expired before the owner sold it in person; the owner closes it directly from expired without republishing.
+- A photo alt text of 141 code points or containing a control character is refused with VALIDATION_FAILED; a photo with neither alt text nor decorative stays allowed in the draft and is refused only at publication (F01.S01.M03).
+- A client supplies a listing id whose embedded UUIDv7 time is not floored to the hour; create refuses it with VALIDATION_FAILED, and without a supplied id the vault mints one with publicRecordId.
 
 ## UX and accessibility
 
-- Create listing wizard: kind chooser, title (3-120), description (up to 5000, counter), category picker (tree, depth 4), condition, up to 10 photos, region picker (name search or map snapped to 5-character cell, shows the approximate area size).
+- Create listing wizard: kind chooser, title (3-120), description (up to 5000, counter), category picker (tree, depth 4), condition, up to 10 photos each with an alt text field (up to 140 characters) or a Decorative toggle, region picker (name search or map snapped to 5-character cell, shows the approximate area size).
 - Drafts list: sorted by last edit, shows days until automatic purge when under 14, delete with confirm dialog.
 
 **States:** loading; empty; saving-local; saved-local; error; conflict; over-limit
@@ -65,16 +72,16 @@ Creates and owns the Listing record in the principal's local vault. A listing st
 
 ## Dependencies
 
-F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001
+F18.S01.M03, F15.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-002-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-002-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-002-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-002-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-002-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-002-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-002-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-002-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-002-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-002-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -86,6 +93,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T19 pass in CI.
+- All tests T01-T22 pass in CI.
 - No draft or listing payload leaves the device from this module (network spy test).
 - No stored Listing field can hold coordinates or an address, region cells never exceed 5 characters, and no relay notice changes Listing.status.

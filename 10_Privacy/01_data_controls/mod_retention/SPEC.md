@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, standard, evidence 2 years, audit 1 year) by scheduled sweeps that purge expired records through the RetentionPurgePort that this module defines and every data-owning module implements. A sweep runs in the user's vault for the user's own records and on each relay for the data that relay holds, under that relay's published policy and optional jurisdiction override. The vault sweep guards against a device clock that jumps forward by asking the user to confirm before purging. A legal hold is a relay-side action: two different relay operators whose DIDs are not linked must request and approve it, at least one of them a relay admin (CTR-PRV-001), and it keeps relay-held sealed data from being purged. A hold can never reach into a user's vault or force a user to keep data.
+Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, standard, evidence 2 years, audit 1 year, and the expiry-bounded signal class that keeps a record until its own expiresAt, at most 365 days, then a counts-only rollup for 365 days, PRV-8) by scheduled sweeps that purge expired records through the RetentionPurgePort that this module defines and every data-owning module implements, discovered through the kernel port registry. A sweep runs in the user's vault for the user's own records and on each relay for the data that relay holds, under that relay's published policy and optional jurisdiction override. The vault sweep guards against a device clock that jumps forward by asking the user to confirm before purging. A legal hold is a relay-side action: two different relay operators whose DIDs are not linked must request and approve it, at least one of them a relay admin (CTR-PRV-001), and it keeps relay-held sealed data from being purged. A hold can never reach into a user's vault or force a user to keep data.
 
 ## Responsibilities
 
@@ -15,6 +15,9 @@ Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, st
 - Own LegalHold on relays with two-person approval in which requester and approver differ, are not linked by key linkage (N11) and include at least one relay admin, a 72 h approval deadline, a 180-day review and a two-person release with its own 72 h deadline.
 - Exclude held subjects from sweeps and from relay-side purges triggered by federation.tombstone.applied or by a verified deletion statement applied through privacy.deletion.relay_apply (F10.S01.M04), keeping them sealed (no public serving) until release.
 - Provide a dry-run preview of what a sweep would purge and a record of every run, and guard vault sweeps against forward clock jumps with a persisted high-water clock.
+- Enforce RET-SIGNAL (CTR-PRV-001 PRV-8) - purge each signal record at its expiresAt and never later than 365 days after creation, after its module folded it into a counts-only rollup, and purge the rollup 365 days later.
+- Discover RetentionPurgePort registrations through the kernel port registry at vault and relay composition (inverted registration), so modules that cannot list this module in depends_on without closing a cycle, such as F15.S01.M01 and F15.S04.M03, register their kinds without a depends_on edge.
+- Carry the held subject (subjectKind and subjectRef) in privacy.legal_hold.placed and privacy.legal_hold.released so relay-side holders of that subject react without scanning every record.
 
 ## Not responsible for
 
@@ -45,6 +48,8 @@ Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, st
 - A sweep is interrupted halfway; it resumes from the last committed batch cursor and never double-counts.
 - The device clock is set back; the sweep never purges records whose anchor time is in the future of the local clock and does not move the high-water clock back.
 - The device clock jumps forward by 3 days, by the user or by malware, or runs more than 24 h ahead of the latest relay-signed receipt time; the sweep runs as a dry run and purges RET-SHORT, RET-STANDARD and RET-EVIDENCE records only after the user confirms the preview.
+- A RET-SIGNAL record carries an expiresAt 400 days after its createdAt; the sweep treats createdAt plus 365 days as its end, folds it into the counts-only rollup and purges it at that cap, and the CI conformance check fails the schema that allowed the longer expiry.
+- A legal hold on an author is placed on a relay; privacy.legal_hold.placed names subjectKind author and the author's did as subjectRef, and the relay's evidence holder flags exactly that author's snapshots instead of re-checking every record.
 
 ## UX and accessibility
 
@@ -75,10 +80,10 @@ F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-079-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-079-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-079-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-079-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-079-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-079-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-079-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-079-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-079-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-079-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -90,7 +95,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T22 pass in CI.
+- All tests T01 to T25 pass in CI.
 - No hold can be activated or released by one person alone, by two linked DIDs, or by a pair without an admin.
 - Active holds are never violated by any sweep or tombstone handler, and holds never alter a vault.
 - Every record kind has a registered purge port or the build fails.

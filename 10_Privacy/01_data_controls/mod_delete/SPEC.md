@@ -6,18 +6,19 @@
 
 ## Purpose
 
-The user can delete their identity and data on this device. A request starts a 14-day grace period that the user can cancel; during grace other modules may only take reversible actions (hide, pause), cancelling emits privacy.deletion.cancelled so they undo them, and publishing and new commitments are refused through the guard privacy.deletion.assert_not_pending. At the end of grace (deferred up to 30 more days while committed trades, deals, bookings, reservations or rentals are still open) the vault executes deletion as an ordered sequence of DeletionPort steps defined here. First every module signs what it must send while the keys still exist - federation tombstones through F11.S01.M02, consent withdrawals, this module's signed deletion statement for each relay and end-to-end encrypted deletion notices for counterparties - then F07.S01.M01 signs revocations of every registered device key, modules pseudonymize retained evidence with a per-deletion pseudonym, crypto-shred blobs and purge content, and the final step, owned by F07.S01.M01, destroys the keys. privacy.deletion.completed is then a notification only. What must outlive the erased vault (the deletion ledger, statements still awaiting delivery and, when the user keeps evidence, a pseudonymized evidence-only vault) lives in a small per-origin residue store with its own retention. The guarantee is limited to this device and browser profile, and the UI states plainly that the recovery kit and the principal's other devices can re-create the identity unless the user destroys them, that copies already fetched by other vaults or relays cannot be recalled, that exported files stay with the user, and that evidence is pseudonymized, not anonymized.
+The user can delete their identity and data on this device; the PWA's Erase vault action is this deletion flow and shows the export prompt (IOX-6) before any vault data is deleted, while vault lock and principal switch never delete data. A request starts a 14-day grace period that the user can cancel; during grace other modules may only take reversible actions (hide, pause), cancelling emits privacy.deletion.cancelled so they undo them, and publishing and new commitments are refused through the guard privacy.deletion.assert_not_pending. At the end of grace (deferred up to 30 more days while committed trades, deals, bookings, reservations or rentals are still open) the vault executes deletion as an ordered sequence of DeletionPort steps defined here. First every module signs what it must send while the keys still exist - federation tombstones through F11.S01.M02, consent withdrawals, F07.S01.M01 handle releases, identity document tombstone and relay session revocations, F08 message and attachment deletes and mailbox closes, this module's signed deletion statement for each relay and end-to-end encrypted deletion notices for counterparties of open commitments and for every thread counterparty - then F07.S01.M01 signs revocations of every registered device key, modules pseudonymize retained evidence with a per-deletion pseudonym, crypto-shred blobs and purge content, and the final step, owned by F07.S01.M01, destroys the keys. privacy.deletion.completed is then a notification only. What must outlive the erased vault (the deletion ledger, statements still awaiting delivery and, when the user keeps evidence, a pseudonymized evidence-only vault) lives in a small per-origin residue store with its own retention. The guarantee is limited to this device and browser profile, and the UI states plainly that the recovery kit and the principal's other devices can re-create the identity unless the user destroys them, that copies already fetched by other vaults or relays cannot be recalled, that exported files stay with the user, and that evidence is pseudonymized, not anonymized.
 
 ## Responsibilities
 
 - Own DeletionRequest with its states, grace and deferral deadlines, per-module step progress, per-relay and per-counterparty delivery state, and its residue form after completion.
-- Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules through its registry, idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
-- Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments, each signed once at execution and valid for the whole 30-day delivery window.
+- Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules discovered through the kernel port registry at vault composition (by inverted registration for F07.S01.M01, F15.S01.M01 and F15.S04.M03, which cannot list this module in depends_on without closing a cycle), idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
+- Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments and for every thread counterparty listed by the F08 DeletionPort plans, each signed once at execution and valid for the whole 30-day delivery window.
 - Orchestrate, not produce, federation tombstones by running the F11.S01.M02 DeletionPort sign step at execution, never during grace.
 - Pseudonymize the principal in retained RET-EVIDENCE records with a per-deletion pseudonym, destroy the pseudonymization salt at completion, and never keep the did and the pseudonym in the same retained record.
 - Keep a deletion ledger keyed by a salted hash of the did in the per-origin residue store for 180 days so restores into this browser profile never resurrect deleted data.
 - Handle relay-side application of a verified deletion statement as the relay command privacy.deletion.relay_apply, which calls privacy.legal_hold.check and the relay purge path of F10.S01.M02.
 - Expose the in-process guard privacy.deletion.assert_not_pending that every publishing and commitment module calls, and emit privacy.deletion.cancelled when a request is cancelled.
+- Be the deletion flow behind the PWA's Erase vault action - it shows the export prompt (IOX-6) before any IndexedDB vault data is deleted, and vault lock and principal switch (F07.S01.M02, F15.S01.M02) never delete data.
 
 ## Not responsible for
 
@@ -47,10 +48,13 @@ The user can delete their identity and data on this device. A request starts a 1
 - The principal has a second device and a recovery kit; before the keys are destroyed every registered device key is revoked by signed revocation statements queued to the user's relays, and the summary warns that the recovery kit can still re-create the identity unless the user destroys it.
 - A relay receives the device-key revocation before the deletion statement; it still accepts the statement because the revocation, with reason account_deleted, lists the cids of the final statements signed just before it.
 - A replayed batch with changed content, a statement older than 30 days, or one signed by a key revoked for another reason reaches a relay; relay_apply refuses it with PRIVACY_DELETION_STATEMENT_INVALID, while a second delivery of the same valid batch is a no-op.
+- The user has 40 threads with 63 distinct counterparties and no open commitment; the sign step signs one departure notice, the F08.S01.M02 plan lists the 63 counterparties with their mailboxes, the notice is sealed to each of them under the same cid, and the account_deleted revocation lists that single cid.
+- The user taps Erase vault in the PWA; the export prompt opens first, and nothing in IndexedDB is deleted until the user has seen it and confirmed the deletion request; locking the vault or switching principal instead keeps every record.
+- The F15.S01.M01 outbox purge step runs while deletion statements and notices signed in the sign step still await delivery; those entries move to the residue outbox instead of being deleted, and only the principal's other entries are purged.
 
 ## UX and accessibility
 
-- Delete account screen: what will be deleted, what will be pseudonymized and kept (evidence for up to 2 years), what cannot be recalled, the notice 'This deletes your account on this device. Your recovery kit and your other devices can re-create it unless you destroy them', export-first link, checkbox Also remove my evidence copies on this device, typed confirmation of the pseudonym, fresh unlock required.
+- Delete account screen, reached from Settings and from the PWA's Erase vault action: the export prompt (IOX-6) with last-export age and an Export now button comes first, then what will be deleted, what will be pseudonymized and kept (evidence for up to 2 years), what cannot be recalled, that thread counterparties are told the account was deleted, the notice 'This deletes your account on this device. Your recovery kit and your other devices can re-create it unless you destroy them', checkbox Also remove my evidence copies on this device, typed confirmation of the pseudonym, fresh unlock required.
 - Pending deletion banner on every screen with days left, Cancel deletion button, and blocking commitments list when deferred.
 - Completion summary: counts per module, relays by delivery state (prepared, relay received, peer accepted), device keys revoked, pseudonym assigned to retained evidence, what the residue store keeps and for how long, the this-device-only notice, the recovery-kit warning and the cannot-recall notice.
 
@@ -77,10 +81,10 @@ F10.S01.M02, F10.S01.M03, F07.S01.M01, F16.S02.M02, F11.S01.M01, F15.S01.M01, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-077-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-077-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-077-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-077-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-077-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-077-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-077-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-077-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -92,7 +96,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T24 pass in CI.
+- All tests T01 to T27 pass in CI.
 - After completion no module on this device retains content or recoverable keys for the principal, retained evidence carries only the pseudonym, and no record joins the did and the pseudonym.
 - The grace period of 14 days cannot be shortened by any API.
 - The completion summary always states what cannot be recalled and that the guarantee covers this device only.

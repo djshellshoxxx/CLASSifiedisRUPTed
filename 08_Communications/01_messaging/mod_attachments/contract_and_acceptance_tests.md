@@ -41,13 +41,16 @@ See the module test table below (all processes).
 | TEST-PS-059-09.T18 | integration | PS-059-04.R04, PS-059-07.R04 | account deletion with three uploaded attachments | DeletionPort.execute sends three signed relay deletes before keys are destroyed; privacy.deletion.completed finds nothing to sign; export section comms.attachments present beforehand |
 | TEST-PS-059-09.T19 | integration | PS-059-03.R04 | finalize, delete and expiry responses recorded | comms.attachment.uploaded and comms.attachment.deleted emitted in the uploader vault with threadId from the local record; the relay emitted nothing and holds only thread_label_hash |
 | TEST-PS-059-09.T20 | unit | PS-059-07.R03 | render the delete confirmation and documentation page | text says removed from the relay's live store and that recipients who saved it and relay-kept backups may still hold a copy; it never says crypto-shredded |
+| TEST-PS-059-09.T21 | unit | PS-059-01.R05, PS-059-02.R03 | attach with altText of 140 and 141 characters, decorative true without and with altText, then decrypt the message body | 140 accepted and carried with decorative inside the encrypted body; 141 and decorative with altText refused with VALIDATION_FAILED; nothing reaches the relay in plaintext |
+| TEST-PS-059-09.T22 | integration | PS-059-02.R05, PS-059-02.R01 | owner O blocks renter R after a rental was confirmed, the direct thread is archived with reason blocked, then O attaches a damage photo for that rental and R downloads it; O then attaches a photo to an unrelated new conversation with R | evidence attach, upload, finalize and download succeed and only the notification is suppressed; the unrelated attach is refused with NOT_FOUND |
+| TEST-PS-059-09.T23 | integration | PS-059-04.R05, PS-059-02.R04 | F09.S02.M02 calls AttachmentTransportPort.send for a stripped evidence MediaBlob with recipients B and a mediator M; a tampered share whose plaintext differs from the cited blobRef | ciphertext uploaded once, one attachment_share statement sealed per recipient through the F08.S01.M01 MailboxPort, B and M store a MediaBlob whose content address equals blobRef; the tampered share is quarantined with COMMS_ATTACHMENT_HASH_MISMATCH |
 
 ## Acceptance criteria
 
-- All tests T01 to T20 pass in CI.
+- All tests T01 to T23 pass in CI.
 - Fixture images with GPS, XMP and text metadata produce zero metadata after the device pipeline.
 - After a message is deleted no ciphertext blob for its attachment exists in the relay's live MediaBlob store.
 
 ## Dependencies
 
-Module depends on: F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

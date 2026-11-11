@@ -6,7 +6,7 @@
 
 ## Purpose
 
-The PWA is the product and works with no server after install: every domain command commits first in the user's IndexedDB vault. This module is the vault's single sync outbox (catalog owner of OutboxEntry). Whatever must reach another party or a user-selected relay (a signed statement such as a published listing, offer or consent, or a relay command such as an index write) becomes an OutboxEntry row in the vault's one IndexedDB database, written through the F15.S02.M03 transaction(fn) together with the domain record, and moves through the honest states prepared (export prepared), transport_acknowledged (verified relay receipt) and peer_accepted (verified signed acknowledgement of the exact digest by the acknowledger the statement registry names). The UI never shows more certainty than the reached state. Entries replay in creation order with the original Idempotency-Key or cid (CTR-IDM-001 IDM-1, IDM-4, IDM-5, IDM-7); relay commands older than the relay's 24 h idempotency window are resent only when replay is provably safe; conflicts are never merged automatically; unsent entries expire after 7 days following a prompt and no entry outlives 30 days. The module also reports storage status (persistence grant, quota, eviction warnings, last-export age with a 30-day warning, or 7 days when persistent storage is not granted).
+The PWA is the product and works with no server after install: every domain command commits first in the user's IndexedDB vault. This module is the vault's single sync outbox (catalog owner of OutboxEntry). Whatever must reach another party or a user-selected relay (a signed statement such as a published listing, offer or consent, or a relay command such as an index write) becomes an OutboxEntry row in the vault's one IndexedDB database, written through the F15.S02.M03 transaction(fn) together with the domain record, and moves through the honest states prepared (export prepared), transport_acknowledged (verified relay receipt while a peer acknowledgement is awaited), completed (verified relay receipt as the final sync state of an entry that needs no peer acknowledgement: public statements and relay commands) and peer_accepted (participant statements only: verified signed acknowledgement of the exact digest by the recipient the statement registry names). It is the single vault-side outbox for federation statements, which it delivers through the FederationTransportPort of F11.S02.M01. The UI never shows more certainty than the reached state and renders every state from the shared catalog keys sync.state.<value>. Entries replay in creation order with the original Idempotency-Key or cid (CTR-IDM-001 IDM-1, IDM-4, IDM-5, IDM-7); relay commands older than the relay's 24 h idempotency window are resent only when replay is provably safe; conflicts are never merged automatically; unsent entries expire after 7 days following a prompt and no entry outlives 30 days. The module also reports storage status (persistence grant, quota, eviction warnings, last-export age with a 30-day warning, or 7 days when persistent storage is not granted).
 
 ## Responsibilities
 
@@ -18,10 +18,13 @@ The PWA is the product and works with no server after install: every domain comm
 - Apply verified relay restore announcements and key revocations published by the destination relay, returning entries whose receipts the relay lost to prepared for resending, and freezing delivery to a relay whose identity equivocates.
 - Report vault storage status through navigator.storage.persist() and estimate(), eviction warnings and last-export age (warn at 30 days, or at 7 days without persistent storage, per CTR-IOX-001 IOX-6).
 - [object Object]
+- Be the single vault-side outbox for federation statements - store the F11.S02.M01 destination descriptor ({kind: selected_relay, relayId} for public statements, {kind: recipient_mailbox, recipientDid, mailboxId, relayId} for participant statements), call the FederationTransportPort that F11.S02.M01 registers in the kernel port registry (inverted registration, because F11.S02.M01 depends on this module) with that descriptor and needsPeerAck (true only for participant statements), hold entries for which the adapter reports an unresolved recipient, and accept F11.S02.M01 re-routes of recipient_mailbox entries after a recipient moves.
+- Render the sync chip, its accessible name and the outbox sheet only from the shared catalog keys sync.state.<value> (local_committed and the nine OutboxEntry states), naming the transport (relay display name or the peer's device directly), so the visual text equals the F14.S01.M02 spokenSync text.
 
 ## Not responsible for
 
 - Verifying incoming signed statements and quarantine (F11 federation modules and the receiving domain module); this module only accepts a reference to an already verified acknowledgement and checks its binding to the entry.
+- Routing statements to destinations, resolving recipient mailboxes after a move, RFC 9421 request signing and batching (F11.S02.M01 owns the routing, the descriptor format and the FederationTransportPort adapter); the catalog strings themselves (F14.S02.M01 catalogs, wording owned by F14.S01.M02).
 - The persistence primitive (F15.S02.M03 owns repositories and transaction(fn); it holds no outbox state machine of its own) and relay-to-relay forwarding of public records (F11.S02.M01 PeerOutbox).
 - Issuing relay receipts, relay identity documents and restore announcements (F15.S02.M01 and F15.S03.M03); relay-side idempotency storage (F15.S02.M02).
 - Service worker caching (F15.S01.M02) and install flow (F15.S01.M03); the outbox does not rely on the Background Sync API, which is missing in some supported browsers.
@@ -32,11 +35,12 @@ The PWA is the product and works with no server after install: every domain comm
 
 ## User stories
 
-- As a member on a train without signal, I can publish a listing and see it as saved on my device and waiting to send, then see "reached relay" when my phone reconnects, and "peer confirmed" only when the counterparty's (or, for a publication, the relay's) signed acknowledgement of exactly what I sent arrives.
+- As a member on a train without signal, I can publish a listing and see "Saved on this device only, waiting to send", then "Delivered to relay Old Town Swap, no peer confirmation needed" when my phone reconnects, and for an offer "Confirmed by peer" only when the counterparty's signed acknowledgement of exactly what I sent arrives.
 - As a member, when a queued offer collides with a newer signed revision from the other party, I see both versions and choose to prepare a new version or discard, never a silent overwrite.
 - As a member, I am warned a day before an unsent action expires and can send it, keep it or discard it.
 - As a member, I see whether my browser granted persistent storage, how much space is left and when I last exported my vault, with a warning after 30 days, or after 7 days when the browser refused persistent storage.
 - As a member whose relay was restored from an older backup, the deliveries that relay lost are sent again without my intervention.
+- As a member whose trading partner moved to a new relay, my queued offer waits instead of going to the old mailbox and is sent to the new mailbox once it is known.
 
 ## Edge cases
 
@@ -44,7 +48,8 @@ The PWA is the product and works with no server after install: every domain comm
 - Two tabs are open on reconnect; only the tab holding the Web Lock classrup-outbox-replay sends, the other observes through BroadcastChannel.
 - IndexedDB is unavailable or over quota; enqueue fails inside the domain command's storage.transaction(fn), the whole transaction including the domain record rolls back, enqueue reports PLATFORM_OUTBOX_STORAGE_UNAVAILABLE and the UI says nothing was saved.
 - The destination relay is stopped or removed; entries stay prepared with "relay unreachable, status unknown", other destinations keep flowing, and the user may re-route an entry to a different relay (the old entry is discarded as rerouted and a new entry is prepared) or discard it.
-- A relay receipt arrives but the peer never acknowledges; the entry stays transport_acknowledged and shows "delivered to relay, peer has not confirmed" until createdAt + 30 days moves it to expired.
+- A relay receipt arrives but the peer never acknowledges; the entry stays transport_acknowledged and shows "Delivered to relay <display name>, peer has not confirmed" until createdAt + 30 days moves it to expired with expiredOutcome unconfirmed, a terminal unconfirmed outcome that keeps that text and is never shown as failed or as not sent.
+- The recipient of a queued offer moved and the FederationTransportPort reports an unresolved recipient (F11.S02.M01 retryable FEDERATION_RECIPIENT_UNRESOLVED); the entry is held in prepared without counting attempts, and when F11.S02.M01 re-routes it to the new mailbox the held entry is discarded as rerouted and a new entry with the same payload and cid is sent there.
 - A peer acknowledgement arrives before the relay receipt is recorded (or for a direct QR or file transfer that never has a receipt); the entry moves straight to peer_accepted.
 - Two vaults signed conflicting promises (for example two acceptances for the same inventory); the receiving module reports the fork, the entry becomes conflict, dependent coordination is frozen and nothing is resolved by last-writer-wins.
 - A relay command first attempted 25 h ago is retried; the relay no longer holds its idempotency record, so the command is resent only if it carries expectedRevision or a deterministic resource id, or a read-back shows it was not applied; otherwise the entry becomes conflict with "may already have been applied".
@@ -57,16 +62,16 @@ The PWA is the product and works with no server after install: every domain comm
 
 ## UX and accessibility
 
-- Sync status chip on every item with queued statements, with three distinct labels and icons: Saved on this device (Export prepared for a direct transfer), Reached relay (receipt), Confirmed by peer; a fourth Needs attention state for conflict and failed (including Rejected by relay with the relay's reason).
+- Sync status chip on every item with queued statements, with text and icon taken only from the shared catalog keys sync.state.<value> for local_committed and the nine OutboxEntry states, where {transport} is 'relay <display name>' or 'the peer's device directly': for example 'Saved on this device only, waiting to send', 'Delivered to relay Old Town Swap, peer has not confirmed', 'Delivered to relay Old Town Swap, no peer confirmation needed' (completed), 'Confirmed by peer', and 'Needs attention: not sent, retry or choose another relay' for failed (including Rejected by relay with the relay's reason); an expired entry that holds a verified receipt keeps the transport_acknowledged text, and the outbox sheet adds Export prepared for an exported direct transfer.
 - Outbox sheet: entries per destination, newest first, with command label, creation time, state, attempts, and buttons Retry now, Cancel, Change relay, Export (direct transfers) and for conflicts Review.
 - Conflict dialog: shows 'Your signed version' and 'Their signed version' for the changed fields, buttons Prepare a new version on theirs and Discard mine; for an unsafe late replay it says 'This action may already have been applied' with Check on relay, Send anyway as a new action and Discard.
 - Expiry prompt: at day 6 lists unsent entries expiring within 24 h with Send now, Keep until expiry, Discard.
 - Storage status panel: persistence granted yes/no with a Request persistence button, used and available space from estimate(), last export date with Export now, and a warning banner after 30 days without export (7 days when persistence is not granted).
 - Relay warning banner: 'This relay restored an older backup; N items are being sent again' or 'This relay's identity is inconsistent; sending is paused'.
 
-**States:** empty; prepared-offline; export-prepared; sending; transport-acknowledged; peer-accepted; conflict; failed; relay-rejected; expired; relay-frozen; storage-unavailable; storage-not-persistent; export-overdue
+**States:** empty; prepared-offline; export-prepared; sending; held-recipient-unresolved; transport-acknowledged; completed; peer-accepted; conflict; failed; relay-rejected; expired-unsent; expired-unconfirmed; discarded; relay-frozen; storage-unavailable; storage-not-persistent; export-overdue
 
-**Accessibility:** Sync state changes are announced through one aria-live polite region; conflicts use role=alertdialog with focus on the first action.; Sync state is conveyed by text and icon, never color alone, and the accessible names read "Saved on this device only", "Delivered to relay, peer has not confirmed", "Confirmed by peer".; All outbox and storage buttons are at least 44x44 px, keyboard operable with visible focus.; Timestamps use locale formatting through F14.S02.M01 and relative text carries the absolute time in a title.
+**Accessibility:** Sync state changes are announced through one aria-live polite region; conflicts use role=alertdialog with focus on the first action.; Sync state is conveyed by text and icon, never color alone, and the accessible names are the same sync.state.<value> strings that F14.S01.M02 spokenSync speaks, for example "Saved on this device only", "Delivered to relay Old Town Swap, peer has not confirmed", "Delivered to the peer's device directly, peer has not confirmed", "Confirmed by peer".; All outbox and storage buttons are at least 44x44 px, keyboard operable with visible focus.; Timestamps use locale formatting through F14.S02.M01 and relative text carries the absolute time in a title.
 
 ## Owned data
 
@@ -81,16 +86,16 @@ The PWA is the product and works with no server after install: every domain comm
 
 ## Dependencies
 
-F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001
+F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-116-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-116-02 | [Validation rules](validation_rules.md) | 6 |
-| PS-116-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-116-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
+| PS-116-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-116-02 | [Validation rules](validation_rules.md) | 7 |
+| PS-116-03 | [Workflow state machine](workflow_state_machine.md) | 8 |
+| PS-116-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-116-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-116-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-116-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -102,8 +107,8 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T33 pass in CI on Chromium, WebKit and Firefox profiles.
+- All tests T01-T37 pass in CI on Chromium, WebKit and Firefox profiles.
 - A statement queued offline is delivered at most once per destination after reconnect, in creation order, regardless of tab crashes or duplicate deliveries inside the relay's idempotency window, and a late relay command is never blindly re-applied.
-- A conflicting queued action is never applied without the user's explicit choice, relay receipts are never presented as peer acceptance, and an acknowledgement counts only for the exact cid it signs.
+- A conflicting queued action is never applied without the user's explicit choice, relay receipts are never presented as peer acceptance, an acknowledgement counts only for the exact cid it signs, and a receipted statement whose peer never confirmed is never shown as failed or as not sent.
 - No P2 plaintext is ever queued for a relay and no P3/P4 data is ever queued.
 - Storage status shows persistence, quota and a warning after 30 days without export (7 days without persistence); no queued data remains after the vault is erased.

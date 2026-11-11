@@ -10,6 +10,7 @@
 - **PS-120-02.R02** Verification checks every integrity property before a snapshot may be marked verified.
 - **PS-120-02.R03** Every violation maps to one stable error code with a messageKey for the operator tool.
 - **PS-120-02.R04** Manifests and artifacts are accepted for verification, catalog import and restore planning only when their MAC verifies and they link into the chain.
+- **PS-120-02.R05** A run refuses to start when encrypted MediaBlob bytes would be inside the backed-up database, and verification fails when a snapshot contains any.
 
 ## Specification
 
@@ -26,6 +27,8 @@
 | V09 | artifact SHA-256 equals the recorded sha256 and every chunk authenticates under the per-artifact key with nonce = chunk index and AAD backupId ‖ chunkIndex ‖ finalFlag, with finalFlag set on the last chunk only | PLATFORM_BACKUP_VERIFY_FAILED |
 | V10 | manifest MAC verifies under the manifest subkey and prevManifestHash equals SHA-256 of the previous manifest of this relay's chain | PLATFORM_BACKUP_MANIFEST_INVALID |
 | V11 | a gap-triggered full snapshot starts only if none started in the last 1800000 ms (30 min) | RATE_LIMITED |
+| V12 | the snapshot source is schema main, the archiver reads only the main database WAL, and no row of main.blobs with encrypted = 1 holds ciphertext bytes (the F15.S02.M03 relay adapter keeps them in the attached store blobs_enc) | PLATFORM_BACKUP_CONFIG_INVALID |
+| V13 | the verification copy contains no ciphertext of an encrypted MediaBlob: every main.blobs row with encrypted = 1 has zero-length bytes and no blobs_enc schema is present | PLATFORM_BACKUP_VERIFY_FAILED |
 
 ## Verification
 
@@ -36,6 +39,7 @@
 | TEST-PS-120-09.T11 | integration | PS-120-07.R03, PS-120-02.R03 | tombstone recorded after the snapshot, restore of the latest snapshot | tombstone re-applied from the ledger before serving |
 | TEST-PS-120-09.T21 | abuse | PS-120-07.R04, PS-120-02.R02 | splice chunk 3 of artifact A into artifact B, reorder two chunks of B, drop B's final chunk; derive keys for 1 000 artifacts | each splice fails chunk authentication; no (key, nonce) pair repeats across the 1 000 artifacts |
 | TEST-PS-120-09.T22 | abuse | PS-120-02.R04, PS-120-07.R04 | copy an older authentic artifact and manifest under the latest name; delete a manifest from the middle of the chain; forge a manifest without the backup key; run import-catalog and the F15.S03.M03 plan | all rejected with PLATFORM_BACKUP_MANIFEST_INVALID; the catalog keeps the authenticated chain head |
+| TEST-PS-120-09.T26 | abuse | PS-120-01.R05, PS-120-02.R05, PS-120-07.R05 | full snapshot and 10 min of WAL segments while attachments are uploaded and one is deleted; restore; scan every artifact for the canary; then a run with an adapter that keeps encrypted bytes in main, and verify of a planted snapshot holding ciphertext | P0 blobs, attachment rows and blob metadata restored; no canary in any artifact; excludedBlobs 3 in the record and event; the misconfigured run refused with PLATFORM_BACKUP_CONFIG_INVALID; the planted snapshot fails with PLATFORM_BACKUP_VERIFY_FAILED |
 
 ## Dependencies
 

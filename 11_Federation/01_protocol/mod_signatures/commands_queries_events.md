@@ -10,6 +10,7 @@
 - **PS-085-04.R02** Function signatures return Result<T, AppError> per CTR-ERR-001 and never throw for bad input.
 - **PS-085-04.R03** The module emits no events; callers record the outcome of verification in their own events.
 - **PS-085-04.R04** This module is the single owner of the envelope and signature error codes; F11.S01.M02, F11.S02.*, and F11.S03.* reference them by listing F11.S01.M03 in depends_on and never redefine them (N1).
+- **PS-085-04.R05** This module is the single owner of the JCS, strict Ed25519, did:key and RFC 9421 request-signature primitives; F16.S02.M03 builds its domain-separated envelopes and the classrup/relay-request/v1 tag inventory on them and has no canonicalizer, Ed25519 or did:key implementation of its own.
 
 ## Specification
 
@@ -41,7 +42,7 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library API surface (TypeScript): parseStrict(text) -> Result<unknown>; canonicalize(value) -> Uint8Array; cidOf(envelope) -> Cid (over envelope minus sig and cid); signEnvelope(draft, signingKey, signerKey?) -> Envelope (sets ext.signerKey when a device key signs, computes cid, then sig over envelope minus sig); verifyEnvelope(envelope) -> Result<{ cid, author, signerKey }>; didKeyEncode(pub32) -> string; didKeyDecode(did) -> Uint8Array(32); signRequest(req, key, keyid, nonce, now) -> { Signature-Input, Signature, Content-Digest }; verifyRequest(req, resolveKey, nonceStore, now) -> Result<{ keyid, kind: peer_relay|device }>.
+**Note:** Library API surface (TypeScript): parseStrict(text, { understoodExt }) -> Result<unknown> (V01, V08); canonicalize(value) -> Uint8Array; cidOf(envelope) -> Cid (over envelope minus sig and cid); signEnvelope(draft, signingKey, signerKey?) -> Envelope (sets ext.signerKey when a device key signs, computes cid, then sig over envelope minus sig); verifyEnvelope(envelope) -> Result<{ cid, author, signerKey }>; didKeyEncode(pub32) -> string; didKeyDecode(did) -> Uint8Array(32); signRequest(req, key, keyid, nonce, now, { profile: device|relay, expiresInSec ≤ 300 }) -> { Signature-Input, Signature, Content-Digest } (device profile adds tag classrup/relay-request/v1 and expires); verifyRequest(req, resolveKey, nonceStore, now, { profile }) -> Result<{ keyid, kind: peer_relay|device, tag? }>; jcs, ed25519Sign and ed25519VerifyStrict are exported for F16.S02.M03.
 
 ### Example
 
@@ -50,6 +51,7 @@ const draft = { v: 1, type: "classrup.bazaar.listing/v1", author: "did:key:z6MkR
 const signed = signEnvelope(draft, deviceKey, "did:key:z6MkDev...");  // sets ext.signerKey, cid over draft minus sig/cid, then sig over envelope minus sig
 verifyEnvelope(signed);                                                // Ok({ cid, author: "did:key:z6MkRoot...", signerKey: "did:key:z6MkDev..." })
 verifyEnvelope({ ...signed, payload: { title: "Car" } });             // Err(FEDERATION_CID_MISMATCH)
+signRequest(POST https://relay-a.example/fed/v1/inbox, deviceKey, "did:key:z6MkDev...", "0192f3a4-...", now, { profile: "device" }) // Signature-Input sig1=("@method" "@target-uri" "content-digest");created=1793786400;expires=1793786700;keyid="did:key:z6MkDev...";nonce="0192f3a4-...";alg="ed25519";tag="classrup/relay-request/v1"
 verifyRequest(POST https://relay-b.example/fed/v1/inbox with Signature-Input sig1=("@method" "@target-uri" "content-digest");created=1793786400;keyid="relay:a.example#k1";nonce="0192f3a4-...";alg="ed25519", resolveKey, nonces, now) // Ok({ keyid, kind: "peer_relay" })
 ```
 
@@ -60,6 +62,7 @@ verifyRequest(POST https://relay-b.example/fed/v1/inbox with Signature-Input sig
 | TEST-PS-085-09.T06 | unit | PS-085-02.R03, PS-085-04.R02 | did:key with multicodec 0xe7 and with 31-byte key as author and as ext.signerKey; valid did round trip | FEDERATION_DID_UNSUPPORTED returned as a Result; valid did encodes and decodes identically |
 | TEST-PS-085-09.T10 | unit | PS-085-01.R01, PS-085-03.R01, PS-085-03.R02, PS-085-03.R03, PS-085-04.R01, PS-085-04.R03, PS-085-05.R01, PS-085-05.R03 | call every function twice with identical input and inspect module for I/O and key-store access | identical outputs, no network or filesystem access, no event emitted, private keys only received as call arguments |
 | TEST-PS-085-09.T20 | unit | PS-085-04.R04 | spec registry scan over all module.spec.yaml files | the five envelope and signature codes are defined only in F11.S01.M03 |
+| TEST-PS-085-09.T23 | unit | PS-085-04.R05, PS-085-02.R03 | import scan of F16.S02.M03 and every signing module; small-order public key vector | they import jcs, ed25519 and did:key only from this module and contain no implementation of their own; the small-order key is rejected FED_SIGNATURE_INVALID |
 
 ## Dependencies
 

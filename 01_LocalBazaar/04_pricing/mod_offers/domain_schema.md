@@ -37,7 +37,8 @@ Schema `classrup.bazaar.offer_record/v1` · storage **device** · privacy **P2**
 | listingRevisionAtOffer | int — listing revision seen by buyer |
 | listingChangedSinceOffer | boolean — seller vault: set by bazaar.listing.edited; buyer vault: set by a newer verified projection |
 | listingUnavailable | boolean — buyer vault only: the projection was tombstoned or expired; informational |
-| offerCid | string — sha256- over JCS of the signed offer statement; subject of the acceptance consent |
+| offerCid | string — cid returned by F11.S01.M02 federation.record.publish (FED-7); equals the subjectRevisionHash of the acceptance consent |
+| streamId | string — thr:<base64url 16 random bytes> chosen by the buyer vault at make; every statement about this offer and its negotiation, and the seller's reservation for it, uses this ext.stream |
 | consentCid? | string — acceptance consent statement (comms.consent.sign) signed by the listing author |
 | decisionCid? | string — signed decision statement |
 | withdrawalCid? | string — signed withdrawal or timeout statement |
@@ -77,4 +78,4 @@ CREATE INDEX bazaar_offer_listing ON bazaar_offer(tenant_id, listing_id, status)
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

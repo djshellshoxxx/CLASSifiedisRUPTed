@@ -14,7 +14,7 @@
 
 **Data classification**
 - Restore report: P1 counters, backup ids, timestamps, lost window; no content.
-- Restore announcement: P0 relay-signed statement with timestamps and receipt sequence numbers only.
+- Restore announcement: P0 relay-signed statement with timestamps, receipt sequence numbers and, for a new identity, the predecessor relayId only.
 - Dead-letter rows: event envelopes with IDs and minimal fields (P0 to P1) kept 30 days.
 
 **Retention**
@@ -32,6 +32,7 @@
 | T05 | Resurrected deleted content after restore | tombstone ledger re-application before readyz returns 200, refusal without a covering ledger (V09), and test for it |
 | T06 | Senders believe data was delivered that the restored relay lost | signed restore announcement with lostWindow and lastReceiptSeq; vault outboxes resend covered entries |
 | T07 | Restored auction host contradicts bid orders or results it already signed | auctions with activity in the lost window frozen for renegotiation through AuctionHostPort |
+| T08 | An attacker's relay claims to succeed a compromised one | the new identity's announcement names predecessorRelayId and the compromise revocation (signed by the old key) names successorRelayId; vaults reroute only after an out-of-band fingerprint confirmation (F16.S03.M03 RB-01) |
 
 **Abuse controls**
 - Rate limit 500 replays per minute and 1 restore per target directory.

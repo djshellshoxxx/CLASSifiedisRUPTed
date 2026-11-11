@@ -13,7 +13,8 @@ Restore tooling and the runbook for a relay, with targets of RPO 6 h and RTO 4 h
 - Provide the restore command relay restore --to <dir> [--at <timestamp>|latest] [--new-identity] that locates the base snapshot through authenticated manifests, verifies checksums, decrypts, applies WAL frames after the snapshot's walPosition in order up to the target time, runs integrity checks and migrations check, re-applies the tombstone ledger, and writes a restore report.
 - Provide a recovery plan query computed from BackupRecords and authenticated manifests (not from events) that shows which snapshot, WAL segments, archive and ledger artifacts would be used, the expected data-loss window and an RTO estimate before anything is restored.
 - Re-deliver archived outbox events only when occurredAt ≤ reachedTimestamp, the event's aggregate revision exists in the restored records and the consumer's inbox row is absent, never to consumers registered with external side effects (push, email), and report every later event as lost.
-- Publish after restore a relay-signed restore announcement classrup.platform.relay_restore/v1 { relayId, keyId, restoredTo, lostWindow, lastReceiptSeq, epoch, announcedAt } (epoch is the new receipt epoch; receipts of earlier epochs with seq above lastReceiptSeq are the ones the relay lost) served by F15.S02.M01 in /.well-known/classrup-relay.json, increment the receipt epoch, and freeze relay-hosted auctions with activity in the lost window through the AuctionHostPort registered by F04.
+- Publish after restore a relay-signed restore announcement classrup.platform.relay_restore/v1 { relayId, keyId, restoredTo, lostWindow, lastReceiptSeq, epoch, announcedAt, predecessorRelayId? } (epoch is the new receipt epoch; receipts of earlier epochs with seq above lastReceiptSeq are the ones the relay lost; predecessorRelayId only from a new identity) served by F15.S02.M01 in /.well-known/classrup-relay.json, increment the receipt epoch, and freeze relay-hosted auctions with activity in the lost window through the AuctionHostPort registered by F04.
+- Register the NewIdentityHook with the F15.S02.M01 relay process (inverted registration, because this module depends on F15.S02.M01) so that relay identity init --new-identity, with or without a restore, publishes a restore announcement signed by the new identity and naming predecessorRelayId before the port opens (F16.S03.M03 RB-01).
 - Provide dead-letter listing and operator replay (max 500 events per call, max 3 replays per event, tracked in the dead_letter replay_count) with audit and a dry-run mode, and purge dead letters 30 days after dead-lettering.
 - Maintain the restore runbook with timed steps that fit in 4 h and the quarterly drill checklist.
 
@@ -37,7 +38,8 @@ Restore tooling and the runbook for a relay, with targets of RPO 6 h and RTO 4 h
 - The newest snapshot fails verification; the plan automatically selects the newest verified snapshot and states the larger data-loss window.
 - A WAL segment in the middle of the chain is missing or corrupt; restore stops at the last contiguous segment and reports the exact timestamp reached, never applying later segments.
 - A manifest has been relabelled or does not link into the chain; the plan and restore reject it with PLATFORM_BACKUP_MANIFEST_INVALID and use the authenticated chain only.
-- The relay identity key file is not available; restore proceeds only with --new-identity, which creates a new genesis key and therefore a new relayId; vaults see a different relay, the old relay's entries stay pending until users reroute, and the report says so.
+- The relay identity key file is not available; restore proceeds only with --new-identity, which creates a new genesis key and therefore a new relayId (or activates the pending successor named by a compromise revocation); its first restore announcement names predecessorRelayId, vaults see a different relay, the old relay's entries stay pending until users confirm the new fingerprint and reroute, and the report says so.
+- The restored snapshot holds attachment rows of F08.S01.M03 whose encrypted MediaBlobs F15.S03.M02 excluded from the backup set; the restore report counts them in excludedBlobs, and the F08.S01.M03 reconciliation sweep marks those rows expired after the relay starts, so no attachment is served from a backup.
 - Restored data is older than receipts the relay already issued; the signed restore announcement names lostWindow and lastReceiptSeq, vault outboxes resend the covered entries, and relay-hosted auctions with bids or a close in the lost window are frozen for renegotiation instead of contradicting bid orders or results already signed.
 - An archived event occurred after the reached timestamp, or its aggregate revision is missing from the restored records; it is not re-delivered and is counted as lost.
 - A push notification consumer has archived events in the replay range; it is excluded from restore re-delivery so no notification is sent twice.
@@ -73,7 +75,7 @@ F15.S03.M02, F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CT
 | PS-122-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-122-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-122-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-122-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-122-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-122-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-122-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-122-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -85,7 +87,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T16 and T18-T23 pass in CI and the manual drill T17 is completed at least every 100 days.
+- All tests T01-T16 and T18-T24 pass in CI and the manual drill T17 is completed at least every 100 days.
 - A restore to a new instance completes within 4 h with at most 6 h of data loss, and the report states both numbers and every lost event.
 - Dead-letter replay never produces duplicate side effects, writes only dead_letter and inbox rows and is limited to 3 replays per event.
 - After a restore, vault outboxes learn from a signed announcement what the relay lost, and no relay-hosted auction contradicts what it signed before.

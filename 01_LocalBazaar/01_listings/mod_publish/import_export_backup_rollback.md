@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Section bazaar.publications in classrup-export/v1, one line per PublicationRecord, followed by the referenced statements (classrup.bazaar.listing/v1 projections, tombstones, relay notices and promotion statements) as separate lines.
+- **export:** Section bazaar.publications in classrup-export/v1, one line per PublicationRecord, followed by the referenced statements (classrup.bazaar.listing/v1 projections, tombstones, relay_removal advisories, reversals and promotion statements) as separate lines.
 - **import:** Signature and cid verified; records with invalid signatures are quarantined; imported active records become status ended with endReason owner and the UI offers Publish again, so stale promises are never revived silently; imported promotions are shown as ended.
 - **backup:** Vault export is the primary backup (IOX-6); relays hold only copies of public projections under their own policy (IOX-7).
 - **migration rollback:** Additive fields only in v1; rollback is by reinstalling the previous release; statements already sent remain valid because their schema is unchanged.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F11.S01.M01, F11.S01.M02, F15.S01.M01, F15.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

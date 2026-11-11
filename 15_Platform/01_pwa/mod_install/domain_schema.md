@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** Configuration and UI module: no domain entities. Device preferences classrup.install.v1 { version: 1, sessions:int (incremented once per app start), completedActions:int (incremented on each committed vault command reported by the shell), dismissals:int, lastDismissedAt?:timestamp, lastShownSession?:int, deferredUntil?:timestamp, installedAt?:timestamp, unverifiedBuildId?:string } live in localStorage, are P0, and are not part of the vault export. Release manifest /release-manifest.json { buildId, releaseSeq, files: { path: sha256 }, sig } is a build artifact.
+**Note:** Configuration and UI module: no domain entities. Device preferences classrup.install.v1 { version: 1, sessions:int (incremented once per app start), completedActions:int (incremented on each committed vault command reported by the shell), dismissals:int, lastDismissedAt?:timestamp, lastShownSession?:int, deferredUntil?:timestamp, installedAt?:timestamp, unverifiedBuildId?:string, releaseHold?: { envelope, releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt } } live in localStorage, are P0, and are not part of the vault export. Release manifest /release-manifest.json { buildId, releaseSeq, files: { path: sha256 }, sig } is a build artifact; the release hold /release-hold.json is a classrup.security.envelope/v1 of context classrup/release-hold/v1 (F16.S02.M03) with payload { releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt }; an empty heldBuildIds holds every update.
 
 ## Verification
 
@@ -25,4 +25,4 @@
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [module SPEC](SPEC.md).

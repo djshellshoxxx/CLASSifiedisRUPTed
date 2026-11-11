@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Built PWA served by a static server on :4173 plus stub relays r1 on :8787 and r2 on :8788 with /api/v1/q/bazaar.listing.get (relay access token required), /media/v1/sha256-<b64> for img1.webp (r1 honest, r2 optionally lying), /mailbox/v1/m1; two builds A and B with different buildId and releaseSeq; principals P1 and P2 sharing one browser profile; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Built PWA served by a static server on :4173 plus stub relays r1 on :8787 and r2 on :8788 with /api/v1/q/bazaar.listing.get (relay access token required), /media/v1/sha256-<b64> for img1.webp (r1 honest, r2 optionally lying), /mailbox/v1/m1; two builds A and B with different buildId and releaseSeq; catalogs en, de, fr, es plus pseudolocales en-XA and ar-XB and an oversized de fixture; principals P1 and P2 sharing one browser profile; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -42,10 +42,12 @@ See the module test table below (all processes).
 | TEST-PS-114-09.T20 | integration | PS-114-07.R02, PS-114-03.R04 | 201 distinct images viewed, then clock advanced 31 days and 3 new images viewed | at most 200 entries after the first step; after the advance only the 3 fresh entries remain |
 | TEST-PS-114-09.T21 | abuse | PS-114-04.R02, PS-114-02.R04 | page script posts SKIP_WAITING with no nonce, an expired nonce, a used nonce and a nonce from another waiting worker | all ignored with FORBIDDEN counted; the waiting worker stays waiting |
 | TEST-PS-114-09.T22 | integration | PS-114-01.R04, PS-114-04.R04 | img1 fetched from r1, then the same content address requested while only r2 (honest) is bound and then offline | second and third requests served from the cache entry keyed by content address without contacting a relay; r1 response headers match the F15.S02.M01 media contract |
+| TEST-PS-114-09.T23 | integration | PS-114-02.R05, PS-114-01.R02 | CI build with the four production catalogs; then with fr removed from the manifest; then with the oversized de fixture pushing the catalogs past 120 KiB gzip | first build lists en, de, fr, es in classrup-precache-v{buildId} and no pseudolocale; the other two fail with PLATFORM_CACHE_PRECACHE_BUDGET |
+| TEST-PS-114-09.T24 | e2e | PS-114-07.R05, PS-114-02.R05 | first visit online, then capture all network traffic while switching the locale en, de, fr, es and back, online and offline | every catalog is served from the precache; zero catalog requests reach the static host or any relay; offline switches succeed |
 
 ## Acceptance criteria
 
-- All tests T01-T22 pass in CI.
+- All tests T01-T24 pass in CI.
 - After first visit the app shell opens offline in under 2.5 s LCP on a Moto G-class 4G profile.
 - No relay command response, vault data or private media is ever present in Cache Storage, and no image whose bytes fail content-address verification is ever cached or shown (abuse suite T08, T09, T18).
 - A new release never takes control without user consent while a client is open, except a known-good replacement ordered by the kill file.

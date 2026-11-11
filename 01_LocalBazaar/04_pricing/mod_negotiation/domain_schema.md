@@ -28,6 +28,7 @@ Schema `classrup.bazaar.negotiation/v1` · storage **device** · privacy **P2** 
 | sellerId | did:key — listing owner, author of the verified projection |
 | localRole | enum — buyer \| seller (which side this vault holds) |
 | rootOfferId | uuidv7 — ref F01.S04.M01 Offer, round zero |
+| streamId | string — the root offer's thr: stream; every round, close and confirmation of the chain is published on it |
 | currency | string — the root offer's currency; every round uses it |
 | quantity | int — the root offer's quantity, 1..100; every round uses it |
 | status | enum — open \| frozen \| accept_sent \| accepted \| rejected \| withdrawn \| expired |
@@ -105,4 +106,4 @@ CREATE UNIQUE INDEX bazaar_negotiation_round_no ON bazaar_negotiation_round(tena
 
 ## Dependencies
 
-Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

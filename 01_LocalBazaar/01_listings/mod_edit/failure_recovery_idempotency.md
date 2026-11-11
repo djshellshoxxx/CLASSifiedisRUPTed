@@ -13,10 +13,10 @@
 ## Specification
 
 - **idempotency:** Idempotency-Key required on edit; the key and request hash are kept 24 h in the vault; replay returns the stored result. Event consumers record (consumer, eventId) before side effects and skip duplicates (EVT-3).
-- **concurrency:** expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. Auction events and edits serialize on the IndexedDB transaction; an edit committed before the first bid event stands.
+- **concurrency:** expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. The edit-lock port is asked inside the edit transaction; it answers from the cached host projection and locks an open auction whose host projection is older than 5 minutes, so a bid in transit cannot be overtaken by a material edit. Host-side baselines serialize per listing in the relay transaction that stores the derived event.
 - **retries:** Only IndexedDB transaction aborts are retried (max 3); policy and validation errors are not retried.
 - **offline:** Edits work offline. Sync-outbox state for the projection belongs to F01.S01.M03: local committed, prepared, transport_acknowledged, peer_accepted.
-- **partial failure:** If the prohibited-rule pack cannot be read, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history before the next material edit is accepted.
+- **partial failure:** If the prohibited-rule pack cannot be read, or the edit-lock port fails during a material edit, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history; a missing host baseline is rebuilt from the stored projections before the next comparison, and a projection without a baseline only seeds it.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -29,4 +29,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F18.S01.M02, F18.S01.M03, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

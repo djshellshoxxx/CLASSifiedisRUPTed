@@ -26,7 +26,7 @@
 | V09 | a spot whose validUntil has passed on the local clock is never suggested and is retired with reason expired; publishing with validUntil in the past is refused | EXPIRED |
 | V10 | report reason is in the enum, text is at most 280 characters, a registered device files at most 10 reports per day and holds one open report per spot | RATE_LIMITED |
 | V11 | curator-list updates are requested by a key holding the operator role on that relay (F16.S01.M01) and are signed by the relay key | FORBIDDEN |
-| V12 | publish and report requests to the relay carry a signed request of a registered device key (classrup/relay-request/v1, F16.S02.M03) | UNAUTHENTICATED |
+| V12 | publish and report requests to the relay carry an RFC 9421 request signature of a registered device key, made with F11.S01.M03 signRequest under the request-signature tag classrup/relay-request/v1 (not an F16.S02.M03 envelope) and covering @method, @target-uri, content-digest, created, keyid and nonce | UNAUTHENTICATED |
 
 ## Verification
 
@@ -39,4 +39,4 @@
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F16.S01.M01, F16.S02.M03, F11.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F16.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

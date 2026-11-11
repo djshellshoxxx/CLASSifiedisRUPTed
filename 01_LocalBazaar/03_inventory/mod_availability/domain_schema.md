@@ -10,6 +10,7 @@
 - **PS-008-01.R02** InventoryHold is a local lease in the owner's vault with holder type, holder id, quantity, expiry, maximum lifetime and renewals; verified reservation statements of other principals are stored separately as PeerReservation evidence and never change availability.
 - **PS-008-01.R03** Inventory is P2 data in the owner's vault; the public sees only a coarse in-stock indicator inside the signed listing projection.
 - **PS-008-01.R04** PeerReservation records a verified classrup.bazaar.reservation/v1 of another principal keyed by (issuerDid, listingId, variantId, reservationCid) with holder, quantity, absolute expiresAt, status and provenance; it needs no local InventoryItem.
+- **PS-008-01.R05** Each hold takes a per-item allocationSeq in its creating transaction and every reservation item names it, so a commitment conflict (F11.S01.M01 entry) means one signer promised the same allocation of the same listing and variant to different holders in overlapping unexpired, unreleased windows; several reservations of a multi-unit item with distinct allocations never conflict.
 
 ## Specification
 
@@ -25,6 +26,7 @@ Schema `classrup.bazaar.inventory_item/v1` · storage **device** · privacy **P2
 | variantId? | uuidv7 — ref F01.S03.M02 Variant; absent for listings without variants |
 | ownerId | did:key — local principal |
 | onHand | int — 0..100000 |
+| nextAllocationSeq | int — >= 1; per-item counter; each new hold takes the current value and increments it in the same transaction |
 | supersededAt? | timestamp — set when the listing gains variants and this listing-level item is retired |
 | retiredAt? | timestamp — set while the variant is retired; retired items accept no new holds |
 | depletedSince? | timestamp — set when available becomes 0 |
@@ -54,10 +56,12 @@ Schema `classrup.bazaar.inventory_hold/v1` · storage **device** · privacy **P2
 | linkedDealId? | uuidv7 — ref F09.S01.M01 Deal, set when the holder opened a Deal |
 | status | enum — active \| frozen \| converted \| released \| expired |
 | expiresAt | timestamp — now + ttl; ttl 60 s..14 d, default 15 min |
-| maxExpiresAt | timestamp — <= createdAt + 30 d; for Deal-linked holds the Deal expiry capped at 30 d |
+| maxExpiresAt | timestamp — <= createdAt + 30 d; for Deal-linked holds the Deal expiry capped at 30 d; default createdAt + 30 d for holderType cycle |
+| allocationSeq | int — value of InventoryItem.nextAllocationSeq taken at hold creation; named in every reservation item so two devices promising the same allocation are detectable |
 | renewals | int — 0..20 |
 | reservationCids? | string[] — sha256- of reservation statements issued for this hold |
-| reservationAudience? | did:key[] — <= 10 principals the reservations were sent to |
+| reservationAudience? | object[] — <= 10 recipients {did, mailboxId} the reservations were published to |
+| reservationStream? | string — thr:<base64url 16 bytes> stream of the issued reservations; the caller's thread stream, or derived from SHA-256 of the holder when none is given |
 | releaseCid? | string — sha256- of the signed release sent when the hold ended early |
 | releaseReason? | enum — released \| owner_override \| listing_gone \| deal_cancelled \| frozen \| expired |
 | revision | int — CTR-ID-001 ID-4 |
@@ -123,7 +127,8 @@ CREATE UNIQUE INDEX bazaar_peer_reservation_key ON bazaar_peer_reservation(tenan
 | TEST-PS-008-09.T01 | unit | PS-008-01.R01, PS-008-01.R02, PS-008-02.R01, PS-008-02.R02 | hold 1 of L; hold 1 more | first held with expiry, second BAZAAR_INVENTORY_INSUFFICIENT; available never negative |
 | TEST-PS-008-09.T02 | unit | PS-008-01.R03, PS-008-07.R01 | read public projection and event payloads | no quantities or holder ids outside P2 events; projection has only in-stock boolean |
 | TEST-PS-008-09.T18 | integration | PS-008-01.R04 | B1 records S's reservation for L although B1 has no InventoryItem for L, then a release signed by K, then a valid release | PeerReservation stored valid with provenance and no itemId; K's release quarantined; valid release marks it released |
+| TEST-PS-008-09.T28 | property | PS-008-01.R05 | random sequences of holds and reservations on items with onHand 1..5 on one device, and forked sequences on two devices | reservations from one device never conflict under the confirmed predicate; forked devices conflict exactly when they promised the same allocationSeq to different holders |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

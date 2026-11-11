@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Built PWA builds A and B (B signed by the test release key) and B' (unsigned) served by a static server; Playwright with beforeinstallprompt and user-activation simulation; localStorage seeded with counters; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Built PWA builds A and B (B signed by the test release key) and B' (unsigned) served by a static server; release holds signed by the test release key (heldBuildIds [B] and empty, expiresAt 2026-11-05T10:00:00Z) and one signed by another key; Playwright with beforeinstallprompt and user-activation simulation; localStorage seeded with counters; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -39,14 +39,16 @@ See the module test table below (all processes).
 | TEST-PS-115-09.T17 | e2e | PS-115-10.R02 | install, create a vault, uninstall the app (site data kept) and reinstall on the same origin; then clear site data | after reinstall the IndexedDB vault marker of F15.S01.M01 is present and the vault opens; after clearing site data the data-loss warning appears |
 | TEST-PS-115-09.T18 | e2e | PS-115-02.R02, PS-115-07.R03 | eligible user starts one session and navigates through 10 screens, dismissing nothing | install card shown exactly once in the session; shown again only in a later session |
 | TEST-PS-115-09.T19 | abuse | PS-115-02.R04, PS-115-03.R02, PS-115-03.R04, PS-115-05.R03 | unsigned build B' deployed while A is open; then all tabs closed and the app reopened | no Update button, warning shown with PLATFORM_UPDATE_UNVERIFIED in diagnostics; after the cold start B' runs (browser behavior) and the warning is shown again from unverifiedBuildId |
+| TEST-PS-115-09.T20 | e2e | PS-115-02.R05, PS-115-03.R05 | signed build B waiting while A is open; hold for [B] published; the host then deletes /release-hold.json; the clock passes expiresAt; separately a hold with empty heldBuildIds and a hold signed by another key | Update hidden and paused notice shown with reason and expiry; applyUpdate refuses with PLATFORM_UPDATE_HELD; the stored hold still applies after deletion; after expiresAt the banner returns; the empty list holds B; the forged hold is ignored and counted as hold_rejected |
+| TEST-PS-115-09.T21 | property | PS-115-03.R05, PS-115-03.R01 | random sequences of waiting builds, holds (valid, expired, forged, covering or not), deferrals and Update now taps | activation never happens through applyUpdate while a valid covering hold exists; held always returns to update_available exactly at expiresAt or is superseded; only declared transitions occur |
 
 ## Acceptance criteria
 
-- All tests T01-T19 pass in CI.
+- All tests T01-T21 pass in CI.
 - The built app is installable (Lighthouse) and starts offline after install with the vault intact.
-- A new version never replaces the running one in a live tab without a user gesture and never loses a draft, and an unsigned build is never offered for update.
+- A new version never replaces the running one in a live tab without a user gesture and never loses a draft, an unsigned build is never offered for update, and no build covered by a valid signed release hold is activated through the update flow.
 - No network request other than same-origin static assets occurs during install and update flows.
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an immutable signed statement (classrup.bazaar.negotiation_round/v1) sent end to end encrypted to the counterparty. Round zero is the buyer's Offer (F01.S04.M01), which the first counter closes with reason countered (N10); every round keeps the root offer's currency and quantity. The chain closes on acceptance, rejection, withdrawal or expiry. Consent is always given on the exact round and the exact listing revision through the shared consent API (comms.consent.sign with subjectType bazaar_negotiation over the round digest, N13). Because there is no shared server, each party's vault keeps its own copy and agreement exists only when the seller's vault has taken a Deal-linked inventory hold and signed a confirmation. Expiry is judged by each vault's clock with a 24 h grace for a decision in transit, after which the waiting side sends a signed timeout close. Forked or conflicting signed rounds freeze the negotiation for explicit discarding; the app never picks a winner by timestamp.
+Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an immutable signed statement (classrup.bazaar.negotiation_round/v1) published through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants) and sealed end to end to the counterparty on the root offer's thread stream; before acting each vault asks federation.conflict.is_frozen (F11.S02.M03). Round zero is the buyer's Offer (F01.S04.M01), which the first counter closes with reason countered (N10); every round keeps the root offer's currency and quantity. The chain closes on acceptance, rejection, withdrawal or expiry. Consent is always given on the exact round and the exact listing revision through the shared consent API (comms.consent.sign with subjectType bazaar_negotiation over the round digest, N13). Because there is no shared server, each party's vault keeps its own copy and agreement exists only when the seller's vault has taken a Deal-linked inventory hold and signed a confirmation. Expiry is judged by each vault's clock with a 24 h grace for a decision in transit, after which the waiting side sends a signed timeout close. Forked or conflicting signed rounds freeze the negotiation for explicit discarding; the app never picks a winner by timestamp.
 
 ## Responsibilities
 
@@ -17,6 +17,9 @@ Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an
 - Close the root offer with reason countered in the same transaction as the first counter.
 - React to listing changes, depletion, hold forks and blocks by closing or freezing the chain.
 - Register the F10 privacy ports and pseudonymize retained chains after principal deletion (N6).
+- Register the ConsentSubjectPort of F08.S02.M02 for subjectType bazaar_negotiation and echo every received consent statement to the other participant before committing on it (N13).
+- Register the NegotiationTermsPort with F01.S04.M01 so its ContextTermsPort for context type offer can verify Deals opened on an accepted round (inverted registration, no reverse edge).
+- Consume federation.conflict.detected and federation.conflict.resolved and call federation.conflict.is_frozen synchronously before acting on a chain (F11.S02.M03).
 
 ## Not responsible for
 
@@ -24,6 +27,7 @@ Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an
 - Inventory quantities and holds (F01.S03.M01) and Deal, payment claims and receipts (F09).
 - Consent signing and verification primitives (F08.S02.M02) and mirror verification of listing projections (F11.S01.M02).
 - Messaging threads (F08); rounds are referenced from threads as structured cards, not copied.
+- Signing, seq allocation, mailbox routing and transport acknowledgements of statements (F11.S01.M02, F11.S02.M01, F08.S01.M01 mailboxes) and conflict records (F11.S02.M03).
 - Multi-party barter revisions (F02.S01.M04).
 - Future: automated counter rules such as auto-accept above a threshold, and bundle negotiations over several listings.
 
@@ -47,6 +51,7 @@ Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an
 - Either vault is offline for days; the other side sees prepared or transport_acknowledged, never accepted, and the round expiry keeps running.
 - The buyer withdraws the root offer while the seller's first counter is in transit; when round 1 arrives the buyer vault closes the chain as withdrawn and sends a signed close.
 - A chain stays frozen and nobody decides; it expires at its hard deadline.
+- F11.S02.M03 detects two acceptance consents of the buyer over different round digests of one chain; federation.conflict.detected freezes the chain in both vaults, and counter, accept, reject and withdraw return CONFLICT_STATE; if the conflict store cannot be read they return DEPENDENCY_UNAVAILABLE.
 
 ## UX and accessibility
 
@@ -68,20 +73,20 @@ Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an
 - Commands: `bazaar.negotiation.counter`, `bazaar.negotiation.accept`, `bazaar.negotiation.reject`, `bazaar.negotiation.withdraw`, `bazaar.negotiation.discard_frozen`, `bazaar.negotiation.keep_frozen`, `bazaar.negotiation.receive`
 - Queries: `bazaar.negotiation.get`, `bazaar.negotiation.list_mine`
 - Emits: `bazaar.negotiation.countered`, `bazaar.negotiation.closed`
-- Consumes: `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.closed`, `bazaar.inventory.depleted`, `bazaar.inventory.conflict_detected`, `identity.block.added`, `federation.record.accepted`, `federation.tombstone.applied`, `comms.consent.received`, `commerce.deal.cancelled`, `privacy.deletion.completed`
+- Consumes: `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.closed`, `bazaar.inventory.depleted`, `bazaar.inventory.conflict_detected`, `identity.block.added`, `federation.record.accepted`, `federation.tombstone.applied`, `comms.consent.received`, `federation.conflict.detected`, `federation.conflict.resolved`, `commerce.deal.cancelled`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001
+F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-010-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-010-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-010-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-010-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-010-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-010-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-010-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-010-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-010-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -93,6 +98,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T26 pass in CI.
+- All tests T01-T29 pass in CI.
 - An acceptance is never shown as agreed until the seller's signed confirmation with hold and Deal reference is verified, and a late confirmation never leaves an open Deal behind an expired chain.
 - Conflicting signed rounds freeze the chain and never resolve by timestamp or last writer; amounts and notes never leave the two parties' encrypted channel.

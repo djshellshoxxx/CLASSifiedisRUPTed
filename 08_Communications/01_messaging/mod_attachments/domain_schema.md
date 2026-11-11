@@ -10,7 +10,7 @@
 - **PS-059-01.R02** Relay-side attachment rows and blobs are RET-SHORT (deleted 30 days after upload, or earlier on delete) and the vault copy follows the referencing message's RET-STANDARD; deleting the blob removes it from the relay's live store, which is not crypto-shredding in the CTR-PRV-001 sense because every recipient of the message holds the per-object key.
 - **PS-059-01.R03** Limits are 5 MiB (5 242 880 bytes) of ciphertext, which allows at most 5 241 600 bytes of processed plaintext in at most 80 chunks, 4096 px maximum on the long edge, and media types image/jpeg, image/png and image/webp only.
 - **PS-059-01.R04** Encryption is a STREAM construction over XChaCha20-Poly1305 with a fresh 32-byte key: chunk i (65 536 bytes, last chunk shorter) is sealed with the 24-byte nonce = 20-byte random prefix || uint32 big-endian i and additional data JCS({attachmentId, chunkCount, index: i, last: i = chunkCount - 1}), so reordering, truncation or dropping of chunks fails authentication.
-- **PS-059-01.R05** The encrypted message body (F08.S01.M01) carries {attachmentId, relayId, blobRef, key, noncePrefix, cipherSha256, cipherSize, plainSize, chunkCount, declaredType, downloadToken, altText?}; recipients check cipherSha256 and cipherSize of the downloaded ciphertext against these values before decrypting any chunk.
+- **PS-059-01.R05** The encrypted message body (F08.S01.M01) carries {attachmentId, relayId, blobRef, key, noncePrefix, cipherSha256, cipherSize, plainSize, chunkCount, declaredType, downloadToken, altText? (plain text ≤ 140 characters, the shared MediaRef limit), decorative?: boolean}; recipients check cipherSha256 and cipherSize of the downloaded ciphertext against these values before decrypting any chunk.
 
 ## Specification
 
@@ -66,7 +66,8 @@ CREATE INDEX comms_attachment_retain ON comms_attachment(status, retain_until);
 | TEST-PS-059-09.T10 | abuse | PS-059-01.R02, PS-059-07.R03, PS-059-02.R03 | after message delete inspect the relay live store and the relay backup set; a recipient who saved key and blob opens it; 61st slot in a day | blob absent from live store and backup set; the saved copy still opens as documented; RATE_LIMITED |
 | TEST-PS-059-09.T16 | abuse | PS-059-01.R04, PS-059-01.R05, PS-059-02.R04 | hostile relay serves chunks reordered, truncated, with one chunk dropped and with the last chunk flag moved | recipient rejects with COMMS_ATTACHMENT_HASH_MISMATCH before decrypting; no plaintext produced |
 | TEST-PS-059-09.T17 | integration | PS-059-01.R01 | finalize an upload and inspect storage | ciphertext stored as MediaBlob blob:sha256-… with encrypted true; the attachment row holds only slot, chunk and size metadata |
+| TEST-PS-059-09.T21 | unit | PS-059-01.R05, PS-059-02.R03 | attach with altText of 140 and 141 characters, decorative true without and with altText, then decrypt the message body | 140 accepted and carried with decorative inside the encrypted body; 141 and decorative with altText refused with VALIDATION_FAILED; nothing reaches the relay in plaintext |
 
 ## Dependencies
 
-Module depends on: F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [module SPEC](SPEC.md).

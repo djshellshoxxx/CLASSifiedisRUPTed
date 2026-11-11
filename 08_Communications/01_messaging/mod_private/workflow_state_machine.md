@@ -106,7 +106,9 @@ stateDiagram-v2
 - Delivery rows follow the F15.S01.M01 outbox timers (CTR-IDM-001 IDM-4 backoff base 500 ms, cap 30 s, full jitter, 6 attempts; unsent entries expire 7 days after creation after a day-6 prompt; transport_acknowledged entries leave the outbox 30 days after the relay receipt while the row stays transport_acknowledged).
 - Relay deletes mailbox envelopes 30 days after receivedAt (hourly sweep).
 - Quarantined inbound messages are erased 30 days after arrival.
-- Relay put nonces are kept 24 h for replay detection (RET-EPHEMERAL).
+- Relay request (keyid, nonce) pairs are kept 600 s for replay detection (F11.S01.M03 NonceStore, RET-EPHEMERAL).
+- Each own mailbox ID is rotated 30 days after registration or the last rotation, per relay; the previous ID forwards for 14 days.
+- Request-key first-put rows (comms_mailbox_writer) are deleted 30 days after the first put; pre-signed mailbox close statements are accepted for 30 days after signing.
 
 ## Verification
 
@@ -116,8 +118,9 @@ stateDiagram-v2
 | TEST-PS-060-09.T05 | property | PS-060-03.R01, PS-060-03.R03 | random sequences of send, relay outcomes per recipient, receipts and delete | rows only move forward as declared; message state equals the minimum row state; deleted never returns; UI state equals the reached state |
 | TEST-PS-060-09.T10 | e2e | PS-060-06.R03, PS-060-03.R01 | relay down for 4 days then restored; second run with relay down for 8 days | first: rows stay prepared then become transport acknowledged and the recipient receives 30 messages in sender order; second: day-6 prompt, entries expire at 7 days, message shows failed with resend; UI never shows delivered early |
 | TEST-PS-060-09.T18 | integration | PS-060-01.R05, PS-060-03.R01, PS-060-04.R01 | A sends in TG; B acknowledges, C does not; then C sends a receipt for a different messageCid | message shows transport acknowledged with 1 of 2 acknowledged; C's mismatched receipt rejected with COMMS_MESSAGE_RECEIPT_MISMATCH; peer accepted only after C's matching receipt |
-| TEST-PS-060-09.T25 | unit | PS-060-03.R04, PS-060-04.R04 | author deletes messages in local_committed, prepared, failed, transport_acknowledged and peer_accepted; inspect statement registry entries | comms.message.deleted with reason author in every case; registry lists message, delete and receipt statements with signer roles |
+| TEST-PS-060-09.T25 | unit | PS-060-03.R04, PS-060-04.R04 | author deletes messages in local_committed, prepared, failed, transport_acknowledged and peer_accepted; inspect statement registry entries | comms.message.deleted with reason author in every case; registry lists message, delete, receipt and mailbox_close statements with signer roles and no F16.S02.M03 context for relay requests |
+| TEST-PS-060-09.T27 | integration | PS-060-04.R08, PS-060-03.R01 | put twice with identical ciphertext; a receipt with a wrong destination or digest; a receipt signed by a retired relay key | each put returns a classrup.platform.relay_receipt/v1 with destination <relayId>/mailbox/<mailboxId>, the ciphertext digest and no cid; the duplicate returns the stored receipt; the mismatched receipt leaves the row prepared; the retired-key receipt verifies against the published key set |
 
 ## Dependencies
 
-Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F12.S03.M04, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

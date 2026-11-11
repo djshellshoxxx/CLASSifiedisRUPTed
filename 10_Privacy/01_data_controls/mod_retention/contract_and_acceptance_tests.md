@@ -14,13 +14,13 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Vault and relay with records in each class aged 0, 1, 31, 731 and 366 days and one with an anchor 2 days in the future; stub purge ports; operators A and B, admin C, operator D linked to A by a same-owner attestation and operator E linked to A by a rotation chain (KeyLinkagePort double); fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Vault and relay with records in each class aged 0, 1, 31, 731 and 366 days and one with an anchor 2 days in the future; signal records with expiresAt in 10 days, 2 days ago and 400 days after createdAt plus a signal rollup kind; stub purge ports registered through a kernel port registry double (F07.S01.M01, F15.S01.M01, F15.S04.M03, F11 and F12.S03.M02 stubs); operators A and B, admin C, operator D linked to A by a same-owner attestation and operator E linked to A by a rotation chain (KeyLinkagePort double); fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-079-09.T01 | unit | PS-079-01.R01, PS-079-02.R01 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365 |
+| TEST-PS-079-09.T01 | unit | PS-079-01.R01, PS-079-02.R01 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365, SIGNAL 365 |
 | TEST-PS-079-09.T02 | unit | PS-079-01.R02, PS-079-02.R01 | hold requested with personal data in reference; user tries to change AUDIT | VALIDATION_FAILED and FORBIDDEN |
 | TEST-PS-079-09.T03 | unit | PS-079-02.R02, PS-079-03.R01, PS-079-07.R03 | A requests and A approves; B approves A's request; C approves A's request; C requests release and C approves it; B approves C's release; D approves A's request | self and linked approvals refused with PRIVACY_HOLD_SELF_APPROVAL; operator-only pair refused with FORBIDDEN; admin-plus-operator pairs succeed |
 | TEST-PS-079-09.T04 | integration | PS-079-03.R01, PS-079-03.R03 | 72 h without approval; requester role revoked; release request unanswered for 72 h; release declined with approve=false; policy change | hold lapses; release returns to active in both release cases; policy revision effective at next sweep |
@@ -42,10 +42,13 @@ See the module test table below (all processes).
 | TEST-PS-079-09.T20 | integration | PS-079-07.R02 | active hold with the clock at activeSince + 180, + 210 and + 240 days; review recorded at + 215 days | reminders at 180 and 210 days; none after the review until the next due date; the held subject stays excluded |
 | TEST-PS-079-09.T21 | abuse | PS-079-07.R03, PS-079-02.R02 | E (rotation chain of A) approves A's request; KeyLinkagePort unavailable during an approval | refused with PRIVACY_HOLD_SELF_APPROVAL in both cases (fail closed) |
 | TEST-PS-079-09.T22 | contract | PS-079-04.R04 | RetentionPurgePort conformance with stub modules: limit 1001, unknown kind, replay of (runId, kind, cursor), a kind whose class differs from its schema annotation, anchorField missing | VALIDATION_FAILED for the bad calls; the replay purges nothing twice; the CI check fails for the mismatched and missing cases |
+| TEST-PS-079-09.T23 | integration | PS-079-01.R05, PS-079-02.R05 | sweep over the signal fixtures in a vault and on a relay, one signal record under an active hold; rollup rows aged 364 and 366 days; set RET-SIGNAL to 180 days as user, operator and jurisdiction; register a signal kind without rollupKind and one whose rollup holds a did | the expired and the 400-day records are rolled up and purged (the latter at createdAt + 365 days), the 10-day record and the held record are kept; the 366-day rollup row is purged; every set returns FORBIDDEN; both registrations fail with VALIDATION_FAILED |
+| TEST-PS-079-09.T24 | contract | PS-079-04.R06 | approve and release a hold on an author and on a record, then deliver the events to an F12.S01.M02 double on the relay and try to route them to a vault and a federation sink | placed and released carry subjectKind and subjectRef (did or cid) with the canonical relayId; the double flags and clears exactly that subject; the vault and federation routes are refused |
+| TEST-PS-079-09.T25 | integration | PS-079-04.R07 | vault and relay composition through the kernel port registry with stub registrants F07.S01.M01, F15.S01.M01, F15.S04.M03, the seven F11 kinds and F12.S03.M02, then a second registrant for platform.outbox_entry | every kind is discovered without a depends_on edge and swept; the duplicate kind fails composition |
 
 ## Acceptance criteria
 
-- All tests T01 to T22 pass in CI.
+- All tests T01 to T25 pass in CI.
 - No hold can be activated or released by one person alone, by two linked DIDs, or by a pair without an admin.
 - Active holds are never violated by any sweep or tombstone handler, and holds never alter a vault.
 - Every record kind has a registered purge port or the build fails.

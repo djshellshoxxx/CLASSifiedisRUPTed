@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Encrypted image attachments for private messages (ADR-0016). The sender's vault strips all metadata with the F10.S02.M03 pipeline (EXIF, GPS, XMP, IPTC, ICC description text, thumbnails), re-encodes the image, encrypts it in 64 KiB chunks with a fresh per-object key under a STREAM construction (XChaCha20-Poly1305, nonce = random prefix plus chunk index, last-chunk flag in the additional data) and uploads only ciphertext, stored as an encrypted F15.S02.M03 MediaBlob on the user-selected relay. The object key, nonce prefix, ciphertext hash, chunk count and a random download token travel inside the end-to-end encrypted message body, so recipients verify the downloaded ciphertext before decrypting. Deleting an attachment removes the blob from the relay's live store; it is not crypto-shredding, because recipients who received the message hold the key, and a relay that keeps its own backups could still hold ciphertext, which the UI says. Ciphertext is limited to 5 MiB. A relay without blob storage disables attachments for its users (fail closed).
+Encrypted image attachments for private messages (ADR-0016). The sender's vault strips all metadata with the F10.S02.M03 pipeline (EXIF, GPS, XMP, IPTC, ICC description text, thumbnails), re-encodes the image, encrypts it in 64 KiB chunks with a fresh per-object key under a STREAM construction (XChaCha20-Poly1305, nonce = random prefix plus chunk index, last-chunk flag in the additional data) and uploads only ciphertext, stored as an encrypted F15.S02.M03 MediaBlob on the user-selected relay. The object key, nonce prefix, ciphertext hash, chunk count and a random download token travel inside the end-to-end encrypted message body, so recipients verify the downloaded ciphertext before decrypting. Deleting an attachment removes the blob from the relay's live store; it is not crypto-shredding, because recipients who received the message hold the key, and a relay that keeps its own backups could still hold ciphertext, which the UI says. Ciphertext is limited to 5 MiB. A relay without blob storage disables attachments for its users (fail closed). The same pipeline implements the F09.S02.M02 AttachmentTransportPort for dispute evidence, whose key material reaches recipients sealed through the F08.S01.M01 mailbox; thread archives and blocks never stop evidence for a context confirmed before the block.
 
 ## Responsibilities
 
@@ -17,6 +17,7 @@ Encrypted image attachments for private messages (ADR-0016). The sender's vault 
 - Enforce size, type and quota limits on declared values and on the stored ciphertext length.
 - Provide the client-side pipeline contract for metadata stripping before encryption and verification by round-trip tests.
 - Register the F10 privacy ports so that account deletion sends signed relay deletes for every uploaded blob while the device keys still exist (N6).
+- [object Object]
 
 ## Not responsible for
 
@@ -24,6 +25,7 @@ Encrypted image attachments for private messages (ADR-0016). The sender's vault 
 - Public listing photos and their processing (F01 listing media).
 - Image content moderation by the relay; the relay cannot read ciphertext, so reports carry plaintext from the reporter's device (F12.S01.M02).
 - Blob storage and content addressing (F15.S02.M03 MediaBlob) and the metadata stripping implementation (F10.S02.M03); this module calls them.
+- The meaning of dispute evidence (F09.S02.M02) and the alt text component (F14.S01.M02); this module transports the evidence blob and carries altText and decorative unchanged.
 - Future: video and audio attachments, resumable uploads over 5 MiB, perceptual-hash matching on the client.
 
 ## User stories
@@ -44,6 +46,8 @@ Encrypted image attachments for private messages (ADR-0016). The sender's vault 
 - A hostile relay serves chunks reordered, truncated or with one chunk dropped; the recipient rejects the ciphertext because the hash, chunk count or chunk index nonce does not match, and nothing is decrypted.
 - Same photo attached twice; two independent keys and blobs are produced, no deduplication, so identical images cannot be linked.
 - Quota exhausted (50 MiB per registered device per day); the next slot request is refused with COMMS_ATTACHMENT_QUOTA.
+- An owner blocks the renter after a rental was confirmed and the direct thread is archived with reason blocked; the owner's damage photos for that rental still upload, the renter still downloads them, and only notifications are suppressed (N7a).
+- Alt text of 141 characters, or decorative true together with alt text, is refused with VALIDATION_FAILED before encryption.
 
 ## UX and accessibility
 
@@ -54,7 +58,7 @@ Encrypted image attachments for private messages (ADR-0016). The sender's vault 
 
 **States:** idle; processing; uploading; uploaded; failed-retry; deleted; expired-slot; quota-exceeded; integrity-failed
 
-**Accessibility:** Progress bar exposes role=progressbar with aria-valuenow and an accessible name.; Images carry an alt text field the sender may fill (max 200 characters) that travels inside the encrypted body; default alt is Photo attachment.; Viewer controls are keyboard operable with targets of at least 44 by 44 px.
+**Accessibility:** Progress bar exposes role=progressbar with aria-valuenow and an accessible name.; Images carry an alt text field the sender may fill (plain text of at most 140 characters, the shared MediaRef limit of F14.S01.M02) or a decorative flag, both inside the encrypted body; default alt is Photo attachment and a decorative image renders with empty alt.; Viewer controls are keyboard operable with targets of at least 44 by 44 px.
 
 ## Owned data
 
@@ -69,16 +73,16 @@ Encrypted image attachments for private messages (ADR-0016). The sender's vault 
 
 ## Dependencies
 
-F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001
+F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-059-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-059-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-059-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-059-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-059-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-059-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-059-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-059-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-059-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -90,6 +94,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T20 pass in CI.
+- All tests T01 to T23 pass in CI.
 - Fixture images with GPS, XMP and text metadata produce zero metadata after the device pipeline.
 - After a message is deleted no ciphertext blob for its attachment exists in the relay's live MediaBlob store.

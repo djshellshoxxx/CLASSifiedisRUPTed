@@ -21,6 +21,7 @@
 |---|---|---|---|---|
 | TEST-PS-114-09.T01 | unit | PS-114-01.R01, PS-114-01.R02, PS-114-01.R03 | routing table evaluated for 30 sample URLs (shell, /__media/ path, relay media, relay command, mailbox, cross-origin) | each URL maps to the documented strategy and cache name |
 | TEST-PS-114-09.T22 | integration | PS-114-01.R04, PS-114-04.R04 | img1 fetched from r1, then the same content address requested while only r2 (honest) is bound and then offline | second and third requests served from the cache entry keyed by content address without contacting a relay; r1 response headers match the F15.S02.M01 media contract |
+| TEST-PS-114-09.T23 | integration | PS-114-02.R05, PS-114-01.R02 | CI build with the four production catalogs; then with fr removed from the manifest; then with the oversized de fixture pushing the catalogs past 120 KiB gzip | first build lists en, de, fr, es in classrup-precache-v{buildId} and no pseudolocale; the other two fail with PLATFORM_CACHE_PRECACHE_BUDGET |
 
 ## Dependencies
 

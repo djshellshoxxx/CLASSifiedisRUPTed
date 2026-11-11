@@ -28,7 +28,7 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | Hold hoarding to block a seller (denial of stock) | holds are created only by the seller's vault on its own decisions; buyers cannot create holds; limits of 500 active holds and 30 days life |
-| T02 | Double promise of the last unit across two devices | frozen state, conflict event and signed frozen release to each audience; no automatic conversion; signed statements make the conflict provable |
+| T02 | Double promise of the last unit across two devices | allocationSeq in every reservation, F11.S02.M03 commitment conflict, frozen state checked synchronously by is_frozen (fail closed), conflict event and signed frozen release to each audience; no automatic conversion; signed statements make the conflict provable |
 | T03 | Forged reservation or release statement shown to a buyer | verification against the author of the verified listing projection; releases must bind a stored reservationCid; unverified statements are quarantined and never rendered |
 | T04 | Stock probing to infer sales volume | quantities are not published; check results to peers are boolean only via signed statements |
 | T05 | Stale promise after the seller released early | signed release queued to the audience on every early release or freeze; the peer marks its copy released or frozen |
@@ -50,4 +50,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

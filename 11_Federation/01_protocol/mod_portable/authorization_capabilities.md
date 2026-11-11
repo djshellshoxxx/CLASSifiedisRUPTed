@@ -23,7 +23,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | TEST-PS-083-09.T08 | unit | PS-083-03.R03, PS-083-04.R03, PS-083-05.R01 | inspect module for event emission, stored lifecycle state and authorization calls | none present |
 | TEST-PS-083-09.T09 | integration | PS-083-03.R02, PS-083-05.R03, PS-083-09.R03 | draft then F11.S01.M02 publish then receive in a second vault then toMirrorView | mirror view equals source P0 fields, labelled remote, readable anonymously, no private fields |
 | TEST-PS-083-09.T17 | integration | PS-083-05.R02 | opt-in revoked between buildDraft and F11.S01.M02 publish; opt-in revoked after publish while deliveries are prepared | first refused with FEDERATION_NOT_OPTED_IN and nothing signed; second cancels the prepared deliveries and queues a tombstone for delivered copies |
+| TEST-PS-083-09.T27 | unit | PS-083-03.R01, PS-083-05.R03 | toMirrorView of a verified listing (sell with variants, and giveaway) and of a rental offering | mirror exposes author, recordKey, version, listingRevision, expiresAt, inStock, variants, acceptedCurrencies, mailboxHints and giveaway closesAt, labelled remote and read-only; no member outside the allowlist |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).

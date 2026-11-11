@@ -10,12 +10,16 @@ summary: >-
   The author of an envelope is the principal did:key; when ext.signerKey is present the signature is made by that
   device key, whose delegation F11.S01.M02 checks against the author's portable identity document. A valid signature
   is evidence that the holder of the key asserted the content; it proves nothing about delivery, truthfulness or the
-  real-world identity of the signer.
+  real-world identity of the signer. It is the single owner of the JCS, strict Ed25519, did:key and RFC 9421
+  request-signature primitives that F16.S02.M03 builds its domain-separated envelopes on, and it enforces the
+  critical-extension list ext.crit and the 4 KiB ext cap of CTR-SCH-001 SCH-2.
 responsibilities:
   - "Produce the normative signed bytes and cid: cid = \"sha256-\" + base64url(SHA-256(JCS(envelope minus {sig, cid}))) and sig = Ed25519 over JCS(envelope minus {sig}), which includes cid; F11.S01.M02, F07 and CTR-ID-001 ID-3 reference this definition instead of restating it."
   - Sign and verify Ed25519 signatures encoded as unpadded base64url (64 bytes decoded) with strict canonical-S checking.
   - Encode a 32-byte Ed25519 public key to did:key:z6Mk... and decode it back, rejecting any other multicodec or length.
-  - "Sign and verify relay and device requests as RFC 9421 HTTP Message Signatures (alg ed25519) covering @method, @target-uri (with the destination authority), content-digest (RFC 9530 sha-256), created, keyid and nonce = batchId, with a ±300 s created window and a 600 s (keyid, nonce) replay memory."
+  - "Sign and verify relay and device requests as RFC 9421 HTTP Message Signatures (alg ed25519) covering @method, @target-uri (with the destination authority) and content-digest (RFC 9530 sha-256) with the parameters created, expires (at most created + 300 s), keyid, nonce (batchId for inbox batches) and tag, with a ±300 s created window and a 600 s (keyid, nonce) replay memory; the device-to-relay profile is tag classrup/relay-request/v1 and the relay-to-relay profile is the FED-10 profile."
+  - "Parse ext strictly: a reader that does not understand a member named in ext.crit refuses the envelope with VALIDATION_FAILED, unknown non-critical members are preserved byte-exact so cid and signature re-verify, and ext is capped at 4096 bytes (CTR-SCH-001 SCH-2)."
+  - Be the single owner of the JCS, strict Ed25519, did:key and RFC 9421 primitives; F16.S02.M03 and every other signing module call them and implement none of their own.
   - Resolve the verification key of an envelope (ext.signerKey when present, otherwise the author key) and return {cid, author, signerKey}; whether that key is delegated by the author is decided by F11.S01.M02 V14 with the F07 portable document.
   - Parse received envelope JSON text with a strict parser that rejects duplicate member names before any hashing.
   - Own the envelope and signature error codes (FED_SIGNATURE_INVALID, FEDERATION_REQUEST_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH, FEDERATION_ENVELOPE_NOT_CANONICALIZABLE, FEDERATION_DID_UNSUPPORTED); other F11 modules reference them through depends_on (N1).
@@ -36,6 +40,9 @@ edge_cases:
   - Signature is a valid Ed25519 signature but with non-canonical S (malleable); verification rejects it as FED_SIGNATURE_INVALID.
   - author or ext.signerKey did:key uses a secp256k1 (0xe7) or P-256 multicodec; decode rejects it with FEDERATION_DID_UNSUPPORTED.
   - Envelope with sig member plus an extra unknown top-level member; the unknown member is part of the signed bytes, so removing it invalidates the signature.
+  - Envelope with ext.crit ["escrowRef"] and an ext.escrowRef member this reader does not understand; refused with VALIDATION_FAILED, while an unknown member not named in ext.crit is kept byte-exact and the signature still verifies.
+  - ext of 4097 canonical bytes, or ext.crit naming a member that is absent from ext; refused with VALIDATION_FAILED before any signature work.
+  - A device-to-relay request carries expires = created + 301 s, or omits tag classrup/relay-request/v1; verification fails with FEDERATION_REQUEST_SIGNATURE_INVALID.
   - The claimed cid is replaced by another cid while the rest is unchanged; the cid check fails with FEDERATION_CID_MISMATCH and, because the cid is inside the signed bytes, the signature also fails.
   - Request created parameter is 301 s old, content-digest does not match the body, or the same (keyid, nonce) arrives again within 600 s; request verification rejects it with FEDERATION_REQUEST_SIGNATURE_INVALID.
   - A request signed for relay A is replayed to relay B; @target-uri covers the destination authority, so verification at B fails.
@@ -50,22 +57,25 @@ processes:
       - Keys and signatures are fixed-size binary types with enforced lengths of 32 bytes (public key), 64 bytes (signature) and 32 bytes (SHA-256 digest).
       - "The verification key of an envelope is ext.signerKey when present (a device did:key of the author principal) and otherwise the author did:key itself (a principal root key or a relay key); verifyEnvelope returns {cid, author, signerKey} and never decides delegation."
     entities: []
-    note: "Pure functions and value types only; nothing is persisted by this module, so no entities are owned. Normative definitions: signedBytes(env) = JCS(env minus {sig}); cid(env) = \"sha256-\" + base64url(SHA-256(JCS(env minus {sig, cid}))); signing computes cid first, writes it into the envelope, then signs signedBytes. The relay request signature is RFC 9421 with Signature-Input sig1=(\"@method\" \"@target-uri\" \"content-digest\");created=<unix>;keyid=\"<did:key or relay key id>\";nonce=\"<batchId>\";alg=\"ed25519\" and Content-Digest per RFC 9530 (sha-256)."
+    note: "Pure functions and value types only; nothing is persisted by this module, so no entities are owned. Normative definitions: signedBytes(env) = JCS(env minus {sig}); cid(env) = \"sha256-\" + base64url(SHA-256(JCS(env minus {sig, cid}))); signing computes cid first, writes it into the envelope, then signs signedBytes. The relay request signature is RFC 9421 with Signature-Input sig1=(\"@method\" \"@target-uri\" \"content-digest\");created=<unix>;keyid=\"<did:key or relay key id>\";nonce=\"<batchId>\";alg=\"ed25519\" and Content-Digest per RFC 9530 (sha-256); device-to-relay requests add ;expires=<unix, at most created + 300>;tag=\"classrup/relay-request/v1\". ext is kept byte-exact (it is inside the signed bytes), capped at 4096 bytes, and ext.crit lists members a reader must understand."
   validation_rules:
     requirements:
       - Every input is validated before cryptographic work to keep verification cost bounded and failure codes stable.
       - Envelope size is capped at 262144 bytes of canonical JSON and nesting depth at 32 to bound CPU use.
       - Each rule violation maps to one stable error code so callers can count and rate-limit by cause.
-      - "Request signatures follow RFC 9421 with the covered components @method, @target-uri (including the destination authority), content-digest (RFC 9530), created, keyid and nonce = batchId; verification checks the created window of ±300 s, the digest, the ed25519 signature over the signature base and that (keyid, nonce) was not seen in the last 600 s; resolveKey covers peer relay keys (F11.S03.M01) and device keys (F07.S02.M01 portable document)."
+      - "Request signatures follow RFC 9421 with the covered components @method, @target-uri (including the destination authority), content-digest (RFC 9530) and the parameters created, keyid and nonce (batchId for inbox batches); verification checks the created window of ±300 s, the digest, the ed25519 signature over the signature base and that (keyid, nonce) was not seen in the last 600 s; resolveKey covers peer relay keys (F11.S03.M01) and device keys (F07.S02.M01 portable document)."
       - Received envelope text is parsed by a strict parser that rejects duplicate member names, so every implementation canonicalizes exactly the same object.
+      - The ext member of a received envelope is preserved byte-exact, is at most 4096 bytes of canonical JSON, and every member named in ext.crit must be understood by the reader (the injected understood-extension set from the F11.S01.M01 registered ext members), otherwise the envelope is refused with VALIDATION_FAILED.
+      - "Device-to-relay requests use the profile tag=\"classrup/relay-request/v1\" and must carry the parameters created, expires (at most created + 300 s), keyid, nonce and tag over @method, @target-uri and content-digest; relay-to-relay requests use the FED-10 profile and, when they carry expires, it is also at most created + 300 s."
     rules:
       - "V01 | envelope text parses strictly (no duplicate member names) into a JSON object, canonical size ≤ 262144 bytes, nesting depth ≤ 32, no non-finite numbers or lone surrogates | FEDERATION_ENVELOPE_NOT_CANONICALIZABLE"
       - "V02 | sig is unpadded base64url decoding to exactly 64 bytes | FED_SIGNATURE_INVALID"
       - "V03 | author is did:key with multibase prefix z, multicodec bytes 0xed 0x01 and a 32-byte key | FEDERATION_DID_UNSUPPORTED"
-      - "V04 | Ed25519 verification with the verification key (ext.signerKey or author) over JCS(envelope minus sig) succeeds and S < group order L (RFC 8032 section 5.1.7) | FED_SIGNATURE_INVALID"
+      - "V04 | Ed25519 verification with the verification key (ext.signerKey or author) over JCS(envelope minus sig) succeeds, S < group order L (RFC 8032 section 5.1.7) and the public key is not a small-order point | FED_SIGNATURE_INVALID"
       - "V05 | claimed cid equals \"sha256-\" + base64url(SHA-256(JCS(envelope minus sig and cid))) | FEDERATION_CID_MISMATCH"
-      - "V06 | RFC 9421 request signature: Signature-Input covers @method, @target-uri, content-digest, created, keyid and nonce with alg ed25519; created within ±300 s of now; Content-Digest equals sha-256 of the body; keyid resolves through resolveKey to a peer relay key or a registered device key; (keyid, nonce) not seen in the last 600 s (a repeat is reported with params.reason = replay and is answered only from the caller's Idempotency-Key store); the signature over the signature base verifies | FEDERATION_REQUEST_SIGNATURE_INVALID"
+      - "V06 | RFC 9421 request signature: Signature-Input covers @method, @target-uri and content-digest with the parameters created, keyid and nonce and alg ed25519; device-to-relay requests also carry tag classrup/relay-request/v1 and expires, and any expires is after created and at most created + 300 s and not passed; created within ±300 s of now; Content-Digest equals sha-256 of the body; keyid resolves through resolveKey to a peer relay key or a registered device key; (keyid, nonce) not seen in the last 600 s (a repeat is reported with params.reason = replay and is answered only from the caller's Idempotency-Key store); the signature over the signature base verifies | FEDERATION_REQUEST_SIGNATURE_INVALID"
       - "V07 | ext.signerKey, when present, is a did:key with multicodec 0xed 0x01 and a 32-byte key | FEDERATION_DID_UNSUPPORTED"
+      - "V08 | ext is a JSON object of at most 4096 canonical bytes; ext.crit, when present, is an array of 1..16 distinct member names each present in ext, and every name in it is in the reader's understood-extension set; unknown members not named in ext.crit are preserved byte-exact | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - The library is stateless and every call is a pure function of its arguments and an injected clock.
@@ -80,9 +90,10 @@ processes:
       - Function signatures return Result<T, AppError> per CTR-ERR-001 and never throw for bad input.
       - The module emits no events; callers record the outcome of verification in their own events.
       - This module is the single owner of the envelope and signature error codes; F11.S01.M02, F11.S02.*, and F11.S03.* reference them by listing F11.S01.M03 in depends_on and never redefine them (N1).
+      - This module is the single owner of the JCS, strict Ed25519, did:key and RFC 9421 request-signature primitives; F16.S02.M03 builds its domain-separated envelopes and the classrup/relay-request/v1 tag inventory on them and has no canonicalizer, Ed25519 or did:key implementation of its own.
     commands: []
     queries: []
-    note: "Library API surface (TypeScript): parseStrict(text) -> Result<unknown>; canonicalize(value) -> Uint8Array; cidOf(envelope) -> Cid (over envelope minus sig and cid); signEnvelope(draft, signingKey, signerKey?) -> Envelope (sets ext.signerKey when a device key signs, computes cid, then sig over envelope minus sig); verifyEnvelope(envelope) -> Result<{ cid, author, signerKey }>; didKeyEncode(pub32) -> string; didKeyDecode(did) -> Uint8Array(32); signRequest(req, key, keyid, nonce, now) -> { Signature-Input, Signature, Content-Digest }; verifyRequest(req, resolveKey, nonceStore, now) -> Result<{ keyid, kind: peer_relay|device }>."
+    note: "Library API surface (TypeScript): parseStrict(text, { understoodExt }) -> Result<unknown> (V01, V08); canonicalize(value) -> Uint8Array; cidOf(envelope) -> Cid (over envelope minus sig and cid); signEnvelope(draft, signingKey, signerKey?) -> Envelope (sets ext.signerKey when a device key signs, computes cid, then sig over envelope minus sig); verifyEnvelope(envelope) -> Result<{ cid, author, signerKey }>; didKeyEncode(pub32) -> string; didKeyDecode(did) -> Uint8Array(32); signRequest(req, key, keyid, nonce, now, { profile: device|relay, expiresInSec ≤ 300 }) -> { Signature-Input, Signature, Content-Digest } (device profile adds tag classrup/relay-request/v1 and expires); verifyRequest(req, resolveKey, nonceStore, now, { profile }) -> Result<{ keyid, kind: peer_relay|device, tag? }>; jcs, ed25519Sign and ed25519VerifyStrict are exported for F16.S02.M03."
     events_produced: []
     events_consumed: []
     errors:
@@ -96,6 +107,7 @@ processes:
       const signed = signEnvelope(draft, deviceKey, "did:key:z6MkDev...");  // sets ext.signerKey, cid over draft minus sig/cid, then sig over envelope minus sig
       verifyEnvelope(signed);                                                // Ok({ cid, author: "did:key:z6MkRoot...", signerKey: "did:key:z6MkDev..." })
       verifyEnvelope({ ...signed, payload: { title: "Car" } });             // Err(FEDERATION_CID_MISMATCH)
+      signRequest(POST https://relay-a.example/fed/v1/inbox, deviceKey, "did:key:z6MkDev...", "0192f3a4-...", now, { profile: "device" }) // Signature-Input sig1=("@method" "@target-uri" "content-digest");created=1793786400;expires=1793786700;keyid="did:key:z6MkDev...";nonce="0192f3a4-...";alg="ed25519";tag="classrup/relay-request/v1"
       verifyRequest(POST https://relay-b.example/fed/v1/inbox with Signature-Input sig1=("@method" "@target-uri" "content-digest");created=1793786400;keyid="relay:a.example#k1";nonce="0192f3a4-...";alg="ed25519", resolveKey, nonces, now) // Ok({ keyid, kind: "peer_relay" })
   authorization_capabilities:
     requirements:
@@ -132,6 +144,7 @@ processes:
       - "T04 | Canonicalization or duplicate-member differences between platforms causing forged-looking or rejected valid records | single vendored canonicalize 5.1.0 tested against RFC 8785 vectors, strict parser rejecting duplicate members, shared golden envelopes on Node and browser CI"
       - "T05 | Downgrade to a weaker key type via did:key multicodec swap | only 0xed 0x01 accepted for author and signerKey (V03, V07)"
       - "T06 | cid substitution: attacker swaps the cid to collide dedup with another record | cid recomputed over the envelope minus sig and cid (V05) and the cid is inside the signed bytes"
+      - "T07 | Critical-extension downgrade: an old reader acting on an envelope whose meaning depends on an extension it ignores, or ext used to smuggle large data | V08 refuses unknown members named in ext.crit, keeps others byte-exact and caps ext at 4096 bytes"
     abuse_controls:
       - "Callers count FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH and FEDERATION_REQUEST_SIGNATURE_INVALID per sending peer and feed them to the F11.S03.M01 health score; a peer with 20 invalid signatures in 10 minutes is suspended there."
   observability_performance:
@@ -175,8 +188,11 @@ processes:
       - "T18 | unit | 07.R02 | PWA bundle import scan and fetch/XHR/sendBeacon spies while running the full suite | no network or telemetry call from this library; counters exist only in the local diagnostics store"
       - "T19 | unit | 01.R04 | envelope signed by a device key with ext.signerKey; envelope signed by the author root key without signerKey; signerKey set but signature made by the author key | first verifies against signerKey and returns it; second returns signerKey = author; third FED_SIGNATURE_INVALID"
       - "T20 | unit | 04.R04 | spec registry scan over all module.spec.yaml files | the five envelope and signature codes are defined only in F11.S01.M03"
+      - "T21 | unit | 02.R06 | envelope with ext.crit naming an unknown member; with an unknown non-critical member; ext of 4097 bytes; ext.crit naming an absent member; 17 crit names | first VALIDATION_FAILED; second parses and re-verifies with identical cid and signature bytes; the other three VALIDATION_FAILED before any hash call"
+      - "T22 | unit | 02.R07 | device-to-relay request with tag classrup/relay-request/v1 and expires = created + 300; expires = created + 301; missing tag; expired expires; relay-to-relay FED-10 request without tag | first verifies; next three FEDERATION_REQUEST_SIGNATURE_INVALID; the relay request verifies under the relay profile"
+      - "T23 | unit | 04.R05,02.R03 | import scan of F16.S02.M03 and every signing module; small-order public key vector | they import jcs, ed25519 and did:key only from this module and contain no implementation of their own; the small-order key is rejected FED_SIGNATURE_INVALID"
     acceptance:
-      - All tests T01–T20 pass in CI on Node 22 and Chromium.
+      - All tests T01–T23 pass in CI on Node 22 and Chromium.
       - Every RFC 8785, RFC 8032 and RFC 9421 vector and every shared golden envelope passes.
       - No private key bytes appear in any log, metric or error output (abuse tests T11 and T17).
   import_export_backup_rollback:

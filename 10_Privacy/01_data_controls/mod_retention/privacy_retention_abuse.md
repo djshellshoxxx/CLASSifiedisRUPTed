@@ -18,6 +18,7 @@
 
 **Retention**
 - Run records RET-AUDIT (1 year); LegalHold RET-AUDIT for 1 year after release; policies retained while effective plus 1 year.
+- RET-SIGNAL records of other modules until their expiresAt and at most 365 days after creation, then only their counts-only rollup for 365 days (PRV-8).
 
 **Threats and controls**
 
@@ -28,6 +29,8 @@
 | T03 | Sweep deletes records under dispute or hold | purge re-checks hold inside the deleting transaction; disputes are protected by RET-EVIDENCE duration |
 | T04 | Policy manipulation to shorten audit retention | AUDIT bounds 180 to 2555 days enforced in code; changes audited |
 | T05 | Forward clock jump makes the vault sweep purge early | persisted high-water clock and latest relay-signed receipt time; a jump over 24 h forces a dry run and user confirmation before RET-SHORT, RET-STANDARD or RET-EVIDENCE purges; future anchors are never purged |
+| T06 | Fraud signals kept past their purpose or re-identified from their rollup | RET-SIGNAL purges at expiresAt with a hard cap of 365 days after createdAt, the rollup holds counts per day and kind only and is purged after 365 days, and the class cannot be changed by any scope or jurisdiction (V15, V16) |
+| T07 | Hold events disclose the held subject beyond the relay | placed and released are relay-local P3 events delivered only to relay-system handlers, never to vaults, federation or notifications |
 
 **Abuse controls**
 - Hold requests limited to 10 per operator per day and sweep runs limited to 6 per day per scope, enforced by the command bus (F15.S02.M02) through RateLimitPort (N18).

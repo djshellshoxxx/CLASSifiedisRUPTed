@@ -24,7 +24,7 @@
 | V07 | share expiry is at most 24 hours ahead and not after windowEnd plus 6 hours; at most 3 active shares per meetup | COMMS_SHARE_LIMIT |
 | V08 | UX guard in the reporter vault: at most 5 no-shows per day; receiving vaults keep at most 3 reports per meetup and reporter and drop the rest silently | RATE_LIMITED |
 | V09 | share snapshot plaintext is at most 1 024 bytes before encryption and ciphertext at most 2 048 bytes | PAYLOAD_TOO_LARGE |
-| V10 | share blob put, update and delete requests are signed by the creating device key (classrup/relay-request/v1, F16.S02.M03) | FORBIDDEN |
+| V10 | share blob put, update and delete requests carry an RFC 9421 request signature by the creating device key, made with F11.S01.M03 signRequest under the request-signature tag classrup/relay-request/v1 (not an F16.S02.M03 envelope) | FORBIDDEN |
 | V11 | inbound check-in and report statements from DIDs the local principal blocked (F07.S02.M02 isBlockedEither over local data) are dropped silently; a party blocked by someone else sees no difference | BLOCKED_PARTY |
 | V12 | the share snapshot plaintext holds exactly placeLabel, windowStart, windowEnd, ownCheckinState and updatedAt | VALIDATION_FAILED |
 
@@ -38,4 +38,4 @@
 
 ## Dependencies
 
-Module depends on: F08.S03.M03, F08.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S03.M03, F08.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

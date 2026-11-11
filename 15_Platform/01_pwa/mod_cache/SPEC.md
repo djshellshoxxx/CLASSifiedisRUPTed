@@ -10,7 +10,7 @@ The service worker (Vite 8.3.5 with vite-plugin-pwa 2.0.0, injectManifest strate
 
 ## Responsibilities
 
-- Precache the app shell (HTML entry, hashed JS and CSS, fonts, icons, locale catalogs for the default locale) within a 1.5 MiB budget and serve navigations from the precached index.html when offline.
+- Precache the app shell (HTML entry, hashed JS and CSS, fonts, icons and every shipped production locale catalog - en, de, fr and es of F14.S02.M01, at most 120 KiB gzip together - installed together at service-worker install, never only the default locale) within a 1.5 MiB budget and serve navigations from the precached index.html when offline.
 - Serve public listing images cache-first from the per-principal cache classrup-img-v1-<partition>, keyed by content address and independent of the relay that served them, limited to 200 entries and 30 days per partition, after verifying SHA-256 of the body against the content address, and drop them first under storage pressure.
 - Send every other request to a user-selected relay origin (relay commands and queries, mailbox, private or encrypted media) and every non-GET request straight to the network (NetworkOnly) so no user data is ever written to a cache.
 - Delete outdated precaches and runtime caches on activate using the cache-name allowlist, unbind the principal's image partition on vault lock and principal switch, and delete it on Erase vault (CLEAR_USER_CACHES).
@@ -69,12 +69,12 @@ F15.S02.M01, F15.S02.M03, CTR-CAP-001, CTR-ID-001, CTR-OBS-001, CTR-PRV-001, CTR
 | ID | Process | Requirements |
 |---|---|---|
 | PS-114-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-114-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-114-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-114-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-114-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-114-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-114-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-114-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
+| PS-114-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-114-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-114-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-114-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -83,7 +83,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T22 pass in CI.
+- All tests T01-T24 pass in CI.
 - After first visit the app shell opens offline in under 2.5 s LCP on a Moto G-class 4G profile.
 - No relay command response, vault data or private media is ever present in Cache Storage, and no image whose bytes fail content-address verification is ever cached or shown (abuse suite T08, T09, T18).
 - A new release never takes control without user consent while a client is open, except a known-good replacement ordered by the kill file.

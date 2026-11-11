@@ -3,8 +3,10 @@ id: F01.S04.M01
 scope: MVP
 summary: >-
   Buyers make money offers on published sell listings. Under ADR-0016 the buyer's vault records the offer and
-  sends it to the seller as a signed, end-to-end encrypted statement (classrup.bazaar.offer/v1) through the
-  mailbox named in the verified listing projection or by direct exchange. The seller's vault verifies it and can
+  publishes it as a participant statement (classrup.bazaar.offer/v1) through the StatementPublisherPort
+  (F11.S01.M02 federation.record.publish), sealed end to end to the mailbox named in the verified listing projection
+  on the offer's own thread stream; F11.S01.M02 signs it and the receiving vault's F11.S01.M02 acknowledges it. Before
+  acting on an offer each vault asks federation.conflict.is_frozen (F11.S02.M03) and fails closed. The seller's vault verifies it and can
   accept, reject or let it expire; the buyer can withdraw before a decision. Acceptance runs in the seller's vault
   in one IndexedDB transaction: it places a local inventory hold (F01.S03.M01) tied to the lifetime of a
   noncustodial Deal (F09.S01.M01) and signs the acceptance through the shared consent API (F08.S02.M02, N13).
@@ -20,12 +22,16 @@ responsibilities:
   - Send a signed decision for every seller-side close except timeout and below-minimum, and derive buyer-side listing changes from the verified mirror.
   - Expire offers after their deadline (default 48 h, range 1 h to 7 days), with a 24 h grace in the buyer vault for late acceptances.
   - Register the F10 privacy ports and pseudonymize retained offers after principal deletion (N6).
+  - Register the ConsentSubjectPort {canonicalBytes, currentRevision, partyRole, isCommitted} of F08.S02.M02 for subjectType bazaar_offer and echo every received consent statement to the other participant before committing on it (N13).
+  - Implement the F09.S01.M01 ContextTermsPort {verify, openerRole, ownerRole} for Deal context type offer, including Deals opened on an accepted negotiation round of the offer (N5).
+  - Consume federation.conflict.detected and federation.conflict.resolved and call federation.conflict.is_frozen synchronously before acting on an offer subject (F11.S02.M03).
 non_responsibilities:
   - Counteroffer rounds (F01.S04.M02 negotiation owns them and reuses Offer as round zero).
   - Payment, receipts, disputes and the Deal lifecycle after acceptance (F09).
   - Messaging between parties (F08); offers are referenced from threads, not copied.
   - Consent signing and verification primitives (F08.S02.M02) and mirror verification of listing projections (F11.S01.M02).
-depends_on: [F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
+  - Signing, seq allocation, mailbox routing and transport acknowledgements of statements (F11.S01.M02 and F11.S02.M01) and conflict records (F11.S02.M03).
+depends_on: [F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
 user_stories:
   - As a buyer, I can offer a price below the asking price and see whether it is pending, accepted, rejected or expired.
   - As a seller, I can review all open offers on my listing sorted by amount and accept one, which reserves the item for that buyer.
@@ -44,6 +50,7 @@ edge_cases:
   - The buyer withdraws while the seller's acceptance is in transit; the seller vault receives the withdrawal after accepting, cancels the Deal and releases the hold (withdrawn before accept); the buyer keeps the late acceptance only as evidence.
   - A decision signed by a key that is not the listing author, or an acceptance consent replayed from another offer, is quarantined and the offer stays made.
   - The seller answers with a counter; the offer is rejected with reason countered in the same transaction as the first negotiation round and the chain continues in F01.S04.M02.
+  - F11.S02.M03 detects that the seller signed two acceptance consents with different subjectRevisionHash values for one offer and emits federation.conflict.detected; the offer freezes and accept, reject, withdraw and resolve_conflict return CONFLICT_STATE until the conflict is resolved; if the conflict store cannot be read they return DEPENDENCY_UNAVAILABLE.
 ux:
   screens:
     - "Make offer sheet: amount input with currency, quantity, optional note (≤ 280 chars), expiry selector, summary showing asking price from the verified listing projection."
@@ -87,7 +94,8 @@ processes:
           - "listingRevisionAtOffer: int — listing revision seen by buyer"
           - "listingChangedSinceOffer: boolean — seller vault: set by bazaar.listing.edited; buyer vault: set by a newer verified projection"
           - "listingUnavailable: boolean — buyer vault only: the projection was tombstoned or expired; informational"
-          - "offerCid: string — sha256- over JCS of the signed offer statement; subject of the acceptance consent"
+          - "offerCid: string — cid returned by F11.S01.M02 federation.record.publish (FED-7); equals the subjectRevisionHash of the acceptance consent"
+          - "streamId: string — thr:<base64url 16 random bytes> chosen by the buyer vault at make; every statement about this offer and its negotiation, and the seller's reservation for it, uses this ext.stream"
           - "consentCid?: string — acceptance consent statement (comms.consent.sign) signed by the listing author"
           - "decisionCid?: string — signed decision statement"
           - "withdrawalCid?: string — signed withdrawal or timeout statement"
@@ -116,8 +124,9 @@ processes:
       - Offer input is validated strictly against the schema; unknown fields are rejected with VALIDATION_FAILED.
       - Business rules check listing state, currency acceptance, self-dealing, blocks and open-offer caps before persistence; each rule names the vault that runs it, the buyer vault evaluating against the verified listing projection (F11.S01.M02 mirror view) and the seller vault against its own records.
       - Every rule violation maps to exactly one stable error code with a localized message key.
-      - "On receipt in the seller vault an offer below SellTerms.minOffer is stored as rejected with reason below_minimum and hidden from the seller list; the buyer sees exactly what an unanswered offer shows: the same peer acknowledgement, no rejection statement and expiry at expiresAt with reason timeout."
+      - "On receipt in the seller vault an offer below SellTerms.minOffer is stored as rejected with reason below_minimum and hidden from the seller list; the buyer sees exactly what an unanswered offer shows: the same classrup.federation.ack/v1 signed by the seller's F11.S01.M02, no rejection statement and expiry at expiresAt with reason timeout."
       - "Inbound statements are verified before they change state: Ed25519 over JCS, signer = buyerId for offer and withdrawal statements, signer = author of the verified listing projection for decisions, decisions and withdrawals bound to the offer statement cid, cid deduplication; failures are quarantined with signature_invalid, role_mismatch or binding_mismatch."
+      - "Before accept, reject, withdraw and resolve_conflict, and before applying an inbound acceptance, decision or withdrawal, the vault calls federation.conflict.is_frozen (F11.S02.M03) synchronously for consent:bazaar_offer:<offerId> and, in the seller vault, for the reservation subject of the offered item; frozen refuses with CONFLICT_STATE (params.state frozen) and a store that cannot answer refuses with DEPENDENCY_UNAVAILABLE."
     rules:
       - "V01 | both vaults: amount.amount is a positive integer string <= maxAmount(amount.currency) and amount.currency is registered (F09.S03.M01) | VALIDATION_FAILED"
       - "V02 | buyer vault: the verified listing projection exists, is kind sell, is not tombstoned and is before its expiresAt; seller vault receive: own Listing (F01.S01.M01) is published, kind sell and not expired, and listingCid names a projection this vault signed | BAZAAR_LISTING_NOT_OFFERABLE"
@@ -133,7 +142,9 @@ processes:
       - "V12 | seller vault receive: amount >= SellTerms.minOffer in the same currency, else stored rejected with reason below_minimum, hidden, no statement and no event | BAZAAR_OFFER_BELOW_MINIMUM"
       - "V13 | seller vault accept: now < expiresAt on the seller clock | EXPIRED"
       - "V14 | buyer vault: an acceptance is applied only when comms.consent.verify returns valid for signerDid = listing author over this offer's statement digest, no later than expiresAt + 24 h on the buyer clock; later acceptances are answered with a timeout withdrawal | EXPIRED"
-      - "V15 | seller vault receive: at most 20 offers per listing per hour from keys this vault has never seen; excess statements are dropped without acknowledgement | RATE_LIMITED"
+      - "V15 | seller vault receive: at most 20 offers per listing per hour from keys this vault has never seen; excess statements are dropped without any decision or event (the F11.S01.M02 receipt acknowledgement proves delivery only) | RATE_LIMITED"
+      - "V16 | both vaults: federation.conflict.is_frozen({subjectRef: consent:bazaar_offer:<offerId>}) and, for accept, the reservation subject of the item return frozen false | CONFLICT_STATE"
+      - "V17 | both vaults: federation.conflict.is_frozen answers; a store that cannot be read refuses the action (fail closed) | DEPENDENCY_UNAVAILABLE"
   workflow_state_machine:
     requirements:
       - Offers follow the declared lifecycle; any transition not listed is refused with CONFLICT_STATE.
@@ -154,9 +165,9 @@ processes:
           - "made -> expired | seller vault: expiresAt on the seller clock (timeout, no statement), listing unpublished, expired or closed (listing_unavailable), last unit taken (superseded), or verified timeout close from the buyer; buyer vault: verified decision outcome expired, or expiresAt + 24 h grace on the buyer clock (timeout) | seller: decision statement queued for listing_unavailable and superseded; buyer: timeout close queued after the grace; emits bazaar.offer.expired"
           - "accepted -> withdrawn | seller vault: verified withdrawal statement from the buyer that crossed the acceptance | commerce.deal.cancel in the same transaction; the hold is released by F01.S03.M01 on commerce.deal.cancelled with a signed release; emits bazaar.offer.withdrawn (withdrawn before accept)"
           - "accepted -> expired | seller vault: verified timeout close from the buyer because the acceptance arrived after the buyer's grace | commerce.deal.cancel in the same transaction; hold released; emits bazaar.offer.expired (timeout)"
-          - "accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device); buyer vault: comms.consent.verify returns conflicted | the Deal does not proceed; the owner must keep one offer"
-          - "frozen -> accepted | seller vault: bazaar.offer.resolve_conflict keeps this offer; buyer vault: comms.consent.verify returns valid again | competing offers are dropped in the same transaction; the hold returns to active"
-          - "frozen -> rejected | seller vault: bazaar.offer.resolve_conflict drops this offer; buyer vault: verified decision rejected with reason conflict_resolved | commerce.deal.cancel; decision statement queued to that buyer; emits bazaar.offer.rejected"
+          - "accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this offer's hold (acceptance on a forked device); both vaults: federation.conflict.detected whose freezeScope names consent:bazaar_offer:<offerId>; buyer vault: comms.consent.verify returns conflicted | the Deal does not proceed; the owner must keep one offer"
+          - "frozen -> accepted | seller vault: bazaar.offer.resolve_conflict keeps this offer; both vaults: federation.conflict.resolved superseded by a renegotiated consent signed by every required signer; buyer vault: comms.consent.verify returns valid again | competing offers are dropped in the same transaction; the hold returns to active"
+          - "frozen -> rejected | seller vault: bazaar.offer.resolve_conflict drops this offer, or federation.conflict.resolved with decision drop_all; buyer vault: verified decision rejected with reason conflict_resolved, or federation.conflict.resolved drop_all | commerce.deal.cancel; decision statement queued to that buyer; emits bazaar.offer.rejected"
           - "accepted -> rejected | buyer vault: verified decision rejected with reason conflict_resolved bound to this offer | the mirrored Deal is cancelled by the seller's statement; emits bazaar.offer.rejected"
           - "frozen -> expired | commerce.deal.cancelled for the linked Deal, or the frozen hold reached maxExpiresAt | emits bazaar.offer.expired (timeout)"
     timeouts:
@@ -168,11 +179,12 @@ processes:
       - Every command emits exactly the listed events in the same transaction as the state change.
       - "In the seller vault the module consumes listing, inventory and block events to keep open offers consistent; in the buyer vault it consumes verified mirror updates (federation.record.accepted, federation.tombstone.applied) and consent events instead of bazaar.listing.* events."
       - "Statements and signer roles are registered with F11.S01.M01 (N2): classrup.bazaar.offer/v1 and classrup.bazaar.offer_withdrawal/v1 signed by the buyer, classrup.bazaar.offer_decision/v1 signed by the listing author; the vault acts only on statements this module or F08.S02.M02 accepted."
-      - "Acceptance is signed with comms.consent.sign {subjectType bazaar_offer, subjectRef offerId, subjectRevision 1, subjectRevisionHash = SHA-256 of JCS of the offer statement, statementKey consent.bazaar.offer.accept.v1} and verified with comms.consent.verify; the module registers the SubjectCanonicalizerPort for bazaar_offer, and a conflicted status freezes the offer (N13)."
+      - "Acceptance is signed with comms.consent.sign {subjectType bazaar_offer, subjectRef offerId, subjectRevision 1, subjectRevisionHash (ID-3 cid sha256-<base64url> of ConsentSubjectPort.canonicalBytes, which equals offerCid), statementKey consent.bazaar.offer.accept.v1, statementLocale (BCP 47 locale of the wording shown), statementTextHash} and verified with comms.consent.verify; the module registers the ConsentSubjectPort for bazaar_offer, a conflicted status (decline, revocation after commit or peer-reported invalidity) freezes the offer, and every received consent statement is echoed to the other participant before the vault commits on it (N13)."
+      - "Offer, decision and withdrawal statements are published only through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, recipients [{did, mailboxId}], ext.stream thr:<streamId>, sealed ciphertext of at most 12288 bytes) and acknowledged by the receiving vault's F11.S01.M02 with classrup.federation.ack/v1; the module implements the F09.S01.M01 ContextTermsPort for context type offer, including Deals on an accepted negotiation round read through the NegotiationTermsPort that F01.S04.M02 registers here."
     commands:
       - name: bazaar.offer.make
         capability: bazaar.offer.make
-        input: "[vault-local in the buyer vault + statement classrup.bazaar.offer/v1, encrypted to the seller's mailbox hint from the verified projection] { listingId, listingCid, variantId?, quantity? (1..100, default 1), amount: Money, note?, expiresInMs? (default 172800000) }"
+        input: "[vault-local in the buyer vault + statement classrup.bazaar.offer/v1 published with federation.record.publish {audience participants, recipients [{did: sellerId, mailboxId from the projection's mailboxHints}], stream streamId, ciphertext <= 12288 bytes}] { listingId, listingCid, variantId?, quantity? (1..100, default 1), amount: Money, note?, expiresInMs? (default 172800000) }"
         output: "{ offerId, revision: 1, expiresAt, offerCid, syncState: prepared }"
         errors: [VALIDATION_FAILED, NOT_FOUND, BAZAAR_LISTING_NOT_OFFERABLE, BAZAAR_OFFER_CURRENCY_NOT_ACCEPTED, BAZAAR_OFFER_SELF, BLOCKED_PARTY, BAZAAR_OFFER_DUPLICATE, RATE_LIMITED]
         emits: [bazaar.offer.made]
@@ -181,7 +193,7 @@ processes:
         capability: bazaar.offer.receive
         input: "[vault-local, inbound statement] { envelope: classrup.bazaar.offer/v1 | classrup.bazaar.offer_withdrawal/v1 | classrup.bazaar.offer_decision/v1, provenance }"
         output: "{ offerId?, accepted: boolean, status?, quarantineReason?: signature_invalid|role_mismatch|binding_mismatch|unknown_offer|duplicate }"
-        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, CONFLICT_STATE, RATE_LIMITED]
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, CONFLICT_STATE, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
         emits: [bazaar.offer.made, bazaar.offer.rejected, bazaar.offer.withdrawn, bazaar.offer.expired]
         idempotent: true
       - name: bazaar.offer.accept
@@ -195,14 +207,14 @@ processes:
         capability: bazaar.offer.reject
         input: "[vault-local + statement classrup.bazaar.offer_decision/v1 except for countered] { offerId, expectedRevision, reason?: seller_rejected|countered (default seller_rejected; countered only from F01.S04.M02) }"
         output: "{ offerId, revision, decisionCid? }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, DEPENDENCY_UNAVAILABLE]
         emits: [bazaar.offer.rejected]
         idempotent: true
       - name: bazaar.offer.withdraw
         capability: bazaar.offer.withdraw
         input: "[vault-local in the buyer vault + statement classrup.bazaar.offer_withdrawal/v1] { offerId, expectedRevision }"
         output: "{ offerId, revision, withdrawalCid, syncState: prepared }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
         emits: [bazaar.offer.withdrawn]
         idempotent: true
       - name: bazaar.offer.resolve_conflict
@@ -222,7 +234,21 @@ processes:
       signer role listing author; acceptance classrup.comms.consent/v1 (F08.S02.M02, statementKey
       consent.bazaar.offer.accept.v1), signer role listing author, plus classrup.commerce.deal/v1 (F09.S01.M01) and
       classrup.bazaar.reservation/v1 (F01.S03.M01). Countered is implied by the first negotiation round whose prev is
-      the offerCid; below_minimum and timeout produce no decision. Relays only carry the encrypted envelopes. Privacy
+      the offerCid; below_minimum and timeout produce no decision. Every statement of this module is published through
+      the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, recipients [{did,
+      mailboxId}], ext.stream = the offer's streamId, sealed ciphertext <= 12288 bytes) and acknowledged by the
+      receiving vault's F11.S01.M02 with classrup.federation.ack/v1; this module signs no acknowledgement. Relays only
+      carry the sealed envelopes. ConsentSubjectPort (F08.S02.M02) for bazaar_offer: canonicalBytes(offerId, 1) =
+      JCS of the stored offer envelope without sig and cid (so its ID-3 cid equals offerCid), currentRevision = 1,
+      partyRole = buyer or seller (listing author; consent.bazaar.offer.accept.v1 requires seller), isCommitted = status
+      accepted. ContextTermsPort (F09.S01.M01) for context type offer: verify(contextRef {offer, offerId}, contextCid,
+      parties, obligations) recomputes parties [buyer payer, seller payee] and one obligation {payer buyer, payee seller,
+      amount, purpose goods} from the verified offer statement when contextCid = offerCid, or from the accepted
+      negotiation round when contextCid is a round cid of a chain rooted in offerId, read through the
+      NegotiationTermsPort that F01.S04.M02 registers here (inverted registration, F01.S04.M02 depends on this module);
+      openerRole(offer) and ownerRole(offer) = listing author. Commitment conflicts on acceptances are the
+      classrup.comms.consent/v1 entry of F08.S02.M02 (one signer, same subjectType, subjectRef and statementKey, different
+      subjectRevisionHash), confirmed for bazaar_offer. Privacy
       ports (N6): the module registers ExportSectionPort (section bazaar.offers), DeletionPort (plan: pseudonymize the
       deleted party's DID in retained offers, purge notes of non-evidence offers) and RetentionPurgePort (purge after
       RET-EVIDENCE) with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
@@ -253,7 +279,9 @@ processes:
       - {type: identity.block.added, effect: "seller vault: reject open offers from the blocked buyer with local reason blocked and a decision statement with reason seller_rejected; buyer vault: withdraw open offers to the blocked seller with a withdrawal statement"}
       - {type: federation.record.accepted, effect: "buyer vault: a newer verified projection of an offered listing (author = sellerId) sets listingChangedSinceOffer when its listingRevision is higher with material changes, and listingUnavailable when the variant is no longer in stock or expiresAt passed"}
       - {type: federation.tombstone.applied, effect: "buyer vault: a tombstone of the offered listing's projection sets listingUnavailable; the offer stays made until the seller's decision or the grace ends"}
-      - {type: comms.consent.received, effect: "buyer vault: for subjectType bazaar_offer and subjectRef offerId, call comms.consent.verify for signerDid = sellerId over offerCid; valid within expiresAt + 24 h moves made to accepted (later answers with a timeout close), conflicted moves accepted to frozen, stale or revoked is ignored"}
+      - {type: comms.consent.received, effect: "buyer vault: for subjectType bazaar_offer and subjectRef offerId, echo the received consent statement to the seller, then call comms.consent.verify for signerDid = sellerId over offerCid; valid within expiresAt + 24 h moves made to accepted (later answers with a timeout close), conflicted moves accepted to frozen, stale or revoked is ignored"}
+      - {type: federation.conflict.detected, effect: "both vaults: freezeScope naming consent:bazaar_offer:<offerId> moves an accepted offer to frozen; candidateCids, statementClass and freezeScope are kept for the resolution sheet"}
+      - {type: federation.conflict.resolved, effect: "both vaults: drop_all moves the frozen offer to rejected (conflict_resolved) and cancels its Deal; superseded by a renegotiated consent returns it to accepted"}
       - {type: commerce.deal.cancelled, effect: "frozen offers whose dealId matches move to expired with reason timeout"}
       - {type: privacy.deletion.completed, effect: "replace the deleted principal's DID with the payload pseudonym in offers retained under RET-EVIDENCE and purge notes of non-evidence offers"}
     errors:
@@ -268,13 +296,13 @@ processes:
       buyer vault: vault.dispatch("bazaar.offer.make", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "listingCid": "sha256-Lst...",
         "amount": { "amount": "4500", "currency": "EUR" } }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000001")
       => { "offerId": "0192f3a5-…", "revision": 1, "expiresAt": "2026-11-06T10:00:00.000Z", "offerCid": "sha256-Ofr...", "syncState": "prepared" }
-         sync outbox: encrypted classrup.bazaar.offer/v1 signed by the buyer key, addressed to the seller's mailbox hint
+         federation.record.publish { type: "classrup.bazaar.offer/v1", audience: "participants", recipients: [{ did: seller, mailboxId: hint }], stream: "thr:Hk2Qm..." } signs it (seq allocated by F11.S01.M02)
       seller vault: vault.dispatch("bazaar.offer.receive", { "envelope": { "type": "classrup.bazaar.offer/v1", "author": "did:key:z6MkBuyer...", ... } })
       => { "offerId": "0192f3a5-…", "accepted": true, "status": "made" }
       seller vault: vault.dispatch("bazaar.offer.accept", { "offerId": "0192f3a5-…", "expectedRevision": 1 }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000002")
       => { "offerId": "0192f3a5-…", "revision": 2, "dealId": "0192f3a6-…", "holdId": "0192f3a6-…", "consentCid": "sha256-Cns...", "reservationCid": "sha256-Rsv..." }
          sync outbox: encrypted classrup.comms.consent/v1 (consent.bazaar.offer.accept.v1), classrup.commerce.deal/v1 and classrup.bazaar.reservation/v1 to the buyer
-      buyer vault: comms.consent.received → comms.consent.verify { subjectType: "bazaar_offer", subjectRef: "0192f3a5-…", signerDid: seller } = valid → offer accepted
+      buyer vault: comms.consent.received → echo to the seller → comms.consent.verify { subjectType: "bazaar_offer", subjectRef: "0192f3a5-…", subjectRevisionHash: "sha256-Ofr...", signerDid: seller, statementKey: "consent.bazaar.offer.accept.v1" } = valid → offer accepted
   authorization_capabilities:
     requirements:
       - "Vault policy (CAP-8): only the unlocked local principal acts: the buyer vault makes and withdraws, the listing author's vault accepts, rejects and resolves conflicts; inbound statements count only when signed by an authorized key of buyerId (offer, withdrawal) or of the listing author of the verified projection (decision, acceptance consent)."
@@ -316,7 +344,7 @@ processes:
       - "T01 | Lowball offer flooding to harass a seller | per-buyer rate limit 20 offers/hour, per-listing 50 open cap, at most 20 offers per listing per hour from unseen keys, private minimum below which offers are stored rejected and hidden with no buyer-visible difference"
       - "T02 | Offer note used for phishing links | link detection via F12.S02.M02; links rendered as plain text; report action on each offer"
       - "T03 | Relay learns offer contents or who offered | envelopes end-to-end encrypted to the seller's key; relay sees mailbox ID, size and time only (PRV-5)"
-      - "T04 | Replay of an acceptance or decision onto another offer | the acceptance consent binds the SHA-256 of the offer statement and decisions bind offerCid; cid dedup; idempotency key and expectedRevision for local commands"
+      - "T04 | Replay of an acceptance or decision onto another offer | the acceptance consent binds subjectRevisionHash = offerCid (ID-3 cid of ConsentSubjectPort.canonicalBytes) and decisions bind offerCid; cid dedup; idempotency key and expectedRevision for local commands"
       - "T05 | Forged acceptance or decision | signer must be the author of the verified listing projection (comms.consent.verify, V10); quarantine role_mismatch"
       - "T06 | Bisecting the seller's private minOffer with probe offers | below-minimum offers get the same acknowledgement, no statement and timeout expiry, and receive the same listing_unavailable and superseded decisions as open offers before expiresAt"
       - "T07 | Fresh did:keys to evade per-key limits | per-listing caps independent of keys, unseen-key cap per listing, and no information gained from probes"
@@ -347,7 +375,7 @@ processes:
     fixtures: "Seller vault S (and its second device S2) with published sell listing L (EUR 50.00, qty 1, minOffer EUR 35.00), buyer vaults B1 and B2 holding the verified projection of L, a key K that is not the listing author, relay stub with a moderator, clocks 2026-11-04T10:00:00Z with injectable skew."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R01 | make offer with valid input | Offer stored with status made, revision 1, amount and quantity unchanged, offerCid set"
-      - "T02 | unit | 02.R02,02.R03 | each rule V01–V15 violated in turn in the vault the rule names | the documented error code is returned or the statement is quarantined or dropped; nothing is stored"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V17 violated in turn in the vault the rule names | the documented error code is returned or the statement is quarantined or dropped; nothing is stored"
       - "T03 | property | 03.R01 | random sequences of commands and inbound statements on one offer | only declared transitions succeed; others return CONFLICT_STATE"
       - "T04 | integration | 03.R02,06.R03 | Deal port or consent signing fails during accept | offer stays made, no hold, no Deal, no consent; DEPENDENCY_UNAVAILABLE returned"
       - "T05 | integration | 03.R03,06.R02,09.R03 | B1 and B2 offers accepted concurrently in two tabs of S's vault for qty 1 | within one vault one accepted, the other CONFLICT_STATE, then expired superseded with a signed decision to B2"
@@ -371,11 +399,14 @@ processes:
       - "T23 | integration | 03.R05 | two vaults with clocks skewed +10 and -10 min; acceptance delivered 3 h after expiresAt, then another delivered 25 h after | first applied inside the grace and both vaults show accepted; second refused; B1 expires and sends a timeout close; S moves accepted to expired, cancels the Deal and the hold is released"
       - "T24 | integration | 03.R06,06.R02 | S and S2 accept B1's and B2's offers offline for the last unit, then sync | both acceptances kept; conflict_detected freezes both holds and both offers; neither Deal proceeds; S keeps B1 and B2 receives a signed decision rejected conflict_resolved with its Deal cancelled"
       - "T25 | integration | 03.R07 | seller-side reject, listing unpublished, superseded and block; then a seller-side timeout | a signed decision reaches the buyer for each close except the timeout; the block decision reads seller_rejected; both vaults converge on the same terminal status"
-      - "T26 | integration | 04.R05 | accept, then a conflicted consent status in B1 | consent signed with subjectType bazaar_offer, statementKey consent.bazaar.offer.accept.v1 over the offer digest through the registered SubjectCanonicalizerPort; B1 verifies with comms.consent.verify; conflicted moves B1's offer to frozen"
+      - "T26 | integration | 04.R05 | accept, then a conflicted consent status in B1 | consent signed with subjectType bazaar_offer, statementKey consent.bazaar.offer.accept.v1, statementLocale and subjectRevisionHash equal to offerCid (ID-3 cid) through the registered ConsentSubjectPort, which passes the F08.S02.M02 conformance suite; B1 echoes the received consent to S before committing and verifies with comms.consent.verify; conflicted moves B1's offer to frozen"
       - "T27 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.offers present with field classes; deletion plan pseudonymizes retained offers and purges notes of non-evidence offers"
       - "T28 | integration | 03.R02,06.R03 | accept B1's offer, then deliver a crossing withdrawal from B1 | hold has holder {offer, offerId}, ttl 7 d, maxExpiresAt equal to the Deal expiry and linkedDealId; the withdrawal moves the offer to withdrawn and calls commerce.deal.cancel in the same transaction; the hold is released through commerce.deal.cancelled"
+      - "T29 | contract | 04.R04,04.R06 | make, decide, withdraw and accept through the StatementPublisherPort test double; S's vault receives the offer | every statement is created by federation.record.publish with audience participants, recipients [{did, mailboxId}], ext.stream equal to streamId and a ciphertext of at most 12288 bytes; the module calls no signing primitive; S's F11.S01.M02 signs classrup.federation.ack/v1 and B1's entry reaches peer_accepted; the below-minimum probe receives the same ack"
+      - "T30 | contract | 04.R06 | F09.S01.M01 conformance suite calls the offer ContextTermsPort with the Deal of an accepted offer, a Deal on an accepted negotiation round (through the NegotiationTermsPort stub of F01.S04.M02), and a Deal with a larger amount | first two confirmed with parties [buyer, seller] and the offer or round amount; the larger amount is rejected; openerRole and ownerRole return listing author"
+      - "T31 | integration | 02.R06 | federation.conflict.detected freezes consent:bazaar_offer for B1's accepted offer, then accept, reject, withdraw and an inbound decision are attempted; then the conflict store fails; then federation.conflict.resolved drop_all | the offer is frozen and every action returns CONFLICT_STATE; with the failing store DEPENDENCY_UNAVAILABLE; drop_all moves the offer to rejected conflict_resolved and cancels the Deal"
     acceptance:
-      - All tests T01–T28 pass in CI.
+      - All tests T01–T31 pass in CI.
       - No offer data appears in public, search, relay index or federation payloads (privacy test suite).
       - Never two accepted offers for one unit within one vault; cross-device forks are detected and frozen, never resolved by timestamp; an offer below the private minimum is indistinguishable for the buyer from an unanswered one.
   import_export_backup_rollback:

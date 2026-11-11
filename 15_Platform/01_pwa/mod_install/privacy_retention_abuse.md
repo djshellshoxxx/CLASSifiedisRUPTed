@@ -27,6 +27,7 @@
 | T02 | Phishing clone of the install card or fake update banner | banner is rendered by the app shell only, never from remote content; no external links or scripts in the component |
 | T03 | Repeated install prompts used as a nuisance | gating V04, at most once per session, and the 3-dismissal cap |
 | T04 | Page script activates a waiting worker without the user | applyUpdate() requires navigator.userActivation.isActive; SKIP_WAITING needs the waiting worker's one-time nonce; a same-origin script can still call the browser APIs directly, which is why V07 and the warning exist |
+| T05 | A signed release must be stopped while a distributor compromise is investigated | release hold signed by the pinned release key (V08), re-read before activation and kept on the device until expiresAt so deleting the file does not lift it; forged holds are ignored; limit stated: a host that withholds the hold file cannot be detected by this check, and a cold start with every tab closed is browser behavior |
 
 **Abuse controls**
 - Install card is capped at once per session and 3 lifetime dismissals; update banner at most once per 24 h after Later.
@@ -45,4 +46,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S01.M01, F15.S01.M02, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -10,11 +10,12 @@
 - **PS-120-07.R02** Retention is 8 six-hourly, 30 daily, 12 monthly snapshots, 7 days of WAL segments and 546 days of tombstone ledger, and expired artifacts, including those of failed records, are deleted from disk.
 - **PS-120-07.R03** Signed tombstones (CTR-PRV-001 PRV-6, CTR-FED-001 FED-4) survive restore - every tombstone the relay received is in the ledger, kept at least the maximum snapshot age plus 180 days and written by every run, and restore re-applies the newest ledger in its replaying phase - so restoring any retained snapshot, including a 12-month-old monthly one, never resurrects deleted public content.
 - **PS-120-07.R04** Nonces never repeat under one key, chunks cannot be moved between artifacts, and manifests are authenticated and chained, so someone with write access to the backup directory cannot splice artifacts or relabel an older authentic backup as the latest.
+- **PS-120-07.R05** Encrypted attachment MediaBlobs of F08.S01.M03 are never in a backup artifact, only their attachment rows and blob metadata are, so a deleted attachment cannot be recovered from this module's backups, and after a restore F08.S01.M03 marks the rows without ciphertext expired.
 
 ## Specification
 
 **Data classification**
-- Full snapshots and WAL segments: relay database content (public projections P0, P0 media, ciphertext envelopes, relay operational data P1).
+- Full snapshots and WAL segments: relay database content of schema main (public projections P0, P0 media, ciphertext envelopes, F08.S01.M03 attachment rows and blob metadata, relay operational data P1); never the encrypted attachment MediaBlobs of the attached store blobs_enc.
 - Tombstone ledger: P0 tombstone cids, target cids and receipt times.
 - Manifests: P1 metadata with salt, MAC and chain hash, without keys.
 
@@ -33,6 +34,7 @@
 | T05 | Backup job used to exhaust disk | free-space precheck (2 x database size), retention rotation, max one run at a time, manual runs limited to 1 per 10 minutes, gap snapshots at most every 30 min |
 | T06 | Rollback attack: an older authentic artifact and manifest relabelled as the latest | MAC over backupId, startedAt, eventWatermark, walPosition and prevManifestHash; catalog import and restore plan accept only the authenticated chain |
 | T07 | Silent RPO loss through WAL resets | archiver is the only checkpointer, autocheckpoint off, forced archive at 64 MiB, archive before shutdown TRUNCATE, gap counter alert |
+| T08 | A deleted attachment is recovered from a relay backup | encrypted MediaBlobs are outside schema main and never snapshotted or archived (V12), verification rejects a snapshot holding ciphertext (V13), and only attachment rows are backed up |
 
 **Abuse controls**
 - Operator-only capabilities with signed requests by relay_operator or admin keys; every run and verify is audit-logged by the bus (CTR-CAP-001 CAP-7).
@@ -50,6 +52,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-120-09.T21 | abuse | PS-120-07.R04, PS-120-02.R02 | splice chunk 3 of artifact A into artifact B, reorder two chunks of B, drop B's final chunk; derive keys for 1 000 artifacts | each splice fails chunk authentication; no (key, nonce) pair repeats across the 1 000 artifacts |
 | TEST-PS-120-09.T22 | abuse | PS-120-02.R04, PS-120-07.R04 | copy an older authentic artifact and manifest under the latest name; delete a manifest from the middle of the chain; forge a manifest without the backup key; run import-catalog and the F15.S03.M03 plan | all rejected with PLATFORM_BACKUP_MANIFEST_INVALID; the catalog keeps the authenticated chain head |
 | TEST-PS-120-09.T23 | integration | PS-120-07.R03 | restore the 6-month-old monthly snapshot after 40 tombstones were applied since then | every tombstoned projection stays deleted after restore; ledger applied before readyz returns 200 |
+| TEST-PS-120-09.T26 | abuse | PS-120-01.R05, PS-120-02.R05, PS-120-07.R05 | full snapshot and 10 min of WAL segments while attachments are uploaded and one is deleted; restore; scan every artifact for the canary; then a run with an adapter that keeps encrypted bytes in main, and verify of a planted snapshot holding ciphertext | P0 blobs, attachment rows and blob metadata restored; no canary in any artifact; excludedBlobs 3 in the record and event; the misconfigured run refused with PLATFORM_BACKUP_CONFIG_INVALID; the planted snapshot fails with PLATFORM_BACKUP_VERIFY_FAILED |
 
 ## Dependencies
 

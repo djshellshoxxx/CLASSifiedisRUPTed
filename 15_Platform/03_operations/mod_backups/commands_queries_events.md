@@ -18,7 +18,7 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `platform.backup.run` | platform.backup.run | { kind?: full (default) } — relay command, relay_operator or admin | { backupId, status: running } | FORBIDDEN, CONFLICT_STATE, RATE_LIMITED, PLATFORM_BACKUP_CONFIG_INVALID, PLATFORM_BACKUP_NO_SPACE | platform.backup.failed | no |
-| `platform.backup.verify` | platform.backup.verify | { backupId \| 'latest', drill?: boolean } — relay command, relay_operator or admin; restores into a temporary directory and checks V04-V06, V09, V10 | { backupId, status, checks: { keyFingerprint, manifest, checksum, decrypt, integrity, foreignKeys, rowCounts }, durationMs } | FORBIDDEN, NOT_FOUND, PLATFORM_BACKUP_DECRYPT_FAILED, PLATFORM_BACKUP_VERIFY_FAILED, PLATFORM_BACKUP_MANIFEST_INVALID | platform.backup.completed, platform.backup.failed | yes (Idempotency-Key) |
+| `platform.backup.verify` | platform.backup.verify | { backupId \| 'latest', drill?: boolean } — relay command, relay_operator or admin; restores into a temporary directory and checks V04-V06, V09, V10, V13 | { backupId, status, checks: { keyFingerprint, manifest, checksum, decrypt, integrity, foreignKeys, rowCounts, noEncryptedBlobs }, excludedBlobs?, durationMs } | FORBIDDEN, NOT_FOUND, PLATFORM_BACKUP_DECRYPT_FAILED, PLATFORM_BACKUP_VERIFY_FAILED, PLATFORM_BACKUP_MANIFEST_INVALID | platform.backup.completed, platform.backup.failed | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -31,7 +31,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `platform.backup.completed` | P1 | { backupId, kind, tier, sizeBytes, finishedAt, consistentAt?, walPosition?: { salt1, salt2, mxFrame }, schemaVersion, eventWatermark? } |
+| `platform.backup.completed` | P1 | { backupId, kind, tier, sizeBytes, finishedAt, consistentAt?, walPosition?: { salt1, salt2, mxFrame }, schemaVersion, eventWatermark?, excludedBlobs? } |
 | `platform.backup.failed` | P1 | { backupId, kind, errorCode, failedAt } |
 
 ### Events consumed

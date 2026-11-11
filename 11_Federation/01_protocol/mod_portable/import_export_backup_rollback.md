@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Allowlist tables and the statement-type registry are exported as build artifacts (allowlists.json, statement-registry.json) with each release for audit; no user data.
+- **export:** Allowlist tables and the compiled statement-type registry are exported as build artifacts (allowlists.json, statement-registry.json with one row per type including owner, audience, signerRole, roleResolution, payloadSchema, maxAge, acknowledger and privacyClass) with each release for audit and test generation (F17.S01.M03); no user data.
 - **import:** No user data is imported by this module; inbound payload validation uses the allowlist and registry bundled with the running release.
 - **backup:** Nothing to back up; allowlists and the registry are versioned in source control with the schema registry.
 - **migration rollback:** Expand/contract: new optional fields are added to the allowlist in a release before any producer uses them; rollback restores the earlier narrower allowlist, which rejects newer payload members as FEDERATION_PAYLOAD_INVALID, and unknown newer statement types are quarantined.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).

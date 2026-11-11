@@ -17,7 +17,7 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `federation.conflict.detect` | federation.conflict.detect | [vault-local or relay-local command, called by F11.S01.M02 inside the receive transaction and by F11.S03.M03 for moves] { kind, author, chainKey?, seq?, subjectRef?, candidates: Envelope[2..5], statementClass } | { conflictId, status: open, freezeScope, authorQuarantined: boolean } | FED_SIGNATURE_INVALID, VALIDATION_FAILED, CONFLICT_STATE, FEDERATION_CONFLICT_AUTHOR_LIMIT | federation.conflict.detected | yes (Idempotency-Key) |
+| `federation.conflict.detect` | federation.conflict.detect | [vault-local or relay-local command, called by F11.S01.M02 inside the receive transaction or the revocation re-marking transaction and by F11.S03.M03 for moves] { kind, author, chainKey?, seq?, subjectRef?, candidates: Envelope[2..5] (Envelope[1] for key_compromise), statementClass } | { conflictId, status: open, freezeScope, authorQuarantined: boolean } | FED_SIGNATURE_INVALID, VALIDATION_FAILED, CONFLICT_STATE, FEDERATION_CONFLICT_AUTHOR_LIMIT | federation.conflict.detected | yes (Idempotency-Key) |
 | `federation.conflict.resolve` | federation.conflict.resolve | [vault-local command in the vault; relay command under relay policy for public_projection only] { conflictId, expectedRevision, decision: keep\|drop_all\|superseded, keptCid?, supersededByCid?, note? ≤ 280 } | { conflictId, revision, status } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_CONFLICT_INVALID_RESOLUTION, FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE, FORBIDDEN | federation.conflict.resolved | yes (Idempotency-Key) |
 
 ### Queries

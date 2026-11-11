@@ -128,10 +128,10 @@ processes:
         transitions:
           - "live -> live | expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap | bazaar.publication.renew requestedBy expiry_deferral; autoExtensions counted in the next record"
           - "live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached | Listing stays published locally; others see the signed expiresAt; deferredSince recorded"
-          - "live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired"
+          - "live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid"
           - "live -> closed | bazaar.listing.close by owner or sold-out sweep | holds handled per V04; end publication first; Listing unpublished -> closed; emits bazaar.listing.closed"
           - "live -> archived | bazaar.listing.archive by owner | holds handled per V04; end publication if active; Listing -> archived; emits bazaar.listing.archived"
-          - "deferred -> expired | sweep finds no active Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired"
+          - "deferred -> expired | sweep finds no active Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid"
           - "deferred -> closed | bazaar.listing.close by owner | holds handled per V04; end publication; Listing -> closed; emits bazaar.listing.closed"
           - "expired -> closed | bazaar.listing.close by owner | holds handled per V04; Listing expired -> closed; emits bazaar.listing.closed"
           - "expired -> superseded | consumes bazaar.listing.published for the listing (published again by F01.S01.M03) | record closed; the listing is live again and a later end creates a new record"
@@ -149,6 +149,7 @@ processes:
       - "close, archive, restore and expire are vault commands; none produces a signed statement itself; the tombstone is produced by bazaar.publication.end in F01.S01.M03 when a publication is active, and a reservation release by F01.S03.M01 when a Deal-linked hold is released with its Deal."
       - "Events expired, archived, restored and closed are emitted in the same transaction as the status change."
       - "Expiry also depends on the owner's own clock; other vaults apply the expiresAt inside the signed projection and treat relay receipt times as claims."
+      - "The expire command ends the active publication through bazaar.publication.end {reason expired} of F01.S01.M03 in its own transaction, which issues the tombstone through F11.S01.M02 federation.tombstone.issue (idempotent per target), and bazaar.listing.expired carries that tombstoneCid, so F11.S01.M02 links it instead of issuing a second tombstone; when no publication was active the field is absent."
     commands:
       - name: bazaar.listing.close
         capability: bazaar.listing.close
@@ -174,7 +175,7 @@ processes:
       - name: bazaar.listing.expire
         capability: bazaar.listing.expire
         input: "[vault-local, scheduler] { listingId }"
-        output: "{ archiveRecordId?, outcome: expired|renewed|deferred, expiredAt? }"
+        output: "{ archiveRecordId?, outcome: expired|renewed|deferred, expiredAt?, tombstoneCid? }"
         errors: [NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED]
         emits: [bazaar.listing.expired]
         idempotent: true
@@ -191,7 +192,7 @@ processes:
         output: "{ record: ArchiveRecord }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: bazaar.listing.expired, privacy: P0, payload: "{ listingId, ownerId, expiredAt }"}
+      - {type: bazaar.listing.expired, privacy: P0, payload: "{ listingId, ownerId, expiredAt, tombstoneCid? (set when bazaar.publication.end issued the tombstone in the expiry transaction) }"}
       - {type: bazaar.listing.archived, privacy: P1, payload: "{ listingId, ownerId, archiveRecordId, restoreUntil }"}
       - {type: bazaar.listing.restored, privacy: P1, payload: "{ listingId, ownerId, archiveRecordId }"}
       - {type: bazaar.listing.closed, privacy: P0, payload: "{ listingId, ownerId, closeReason }"}
@@ -293,8 +294,9 @@ processes:
       - "T18 | abuse | 02.R04 | R3 returns receipts 3 days ahead while R1 and R2 agree; then only R3 remains | R3 ignored and the sweep expires on time; with R3 alone the device clock is used and a warning is recorded"
       - "T19 | integration | 01.R03,07.R02 | purge C with an accepted offer citing it and D without references, then privacy.deletion.requested and completed | C keeps evidence fields until evidenceUntil with ownerId pseudonymized and keepEvidence passed to F01.S01.M01; D purged at min(restoreUntil, request + 30 d) with a tombstone"
       - "T20 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.archive_records present with field classes; deletion plan archives and pseudonymizes; purge honours purgeAt and evidenceUntil"
+      - "T21 | integration | 04.R04 | A expires with an active publication, then a listing whose publication already ended expires | first: bazaar.publication.end {reason expired} runs in the expiry transaction and bazaar.listing.expired carries its tombstoneCid, and the F11.S01.M02 consumer issues no second tombstone; second: the event has no tombstoneCid"
     acceptance:
-      - All tests T01-T20 pass in CI.
+      - All tests T01-T21 pass in CI.
       - Closing or archiving a published listing always ends its publication and queues a tombstone, and never releases a Deal-linked hold without the Deal's cancellation.
       - Restore never republishes, no listing with an active cycle or Deal-linked hold expires under the sweep, and no sold marking is displayed as verified without a signed counterparty record.
   import_export_backup_rollback:

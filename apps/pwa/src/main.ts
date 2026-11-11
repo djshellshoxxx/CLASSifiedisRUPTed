@@ -201,3 +201,7 @@ if ('serviceWorker' in navigator && globalThis.isSecureContext) {
     message('Offline asset installation failed. Local records are intact; reconnect to load the app again.');
   });
 }
+
+// Install all vault form event handlers before revealing or enabling vault access.
+element('access').removeAttribute('inert');
+element('access').hidden = false;

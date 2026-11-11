@@ -95,30 +95,14 @@ export interface DeadLetterRow {
   readonly attempts: number;
   readonly errorCode: string;
   readonly deadAt: string;
+  /** Times the replay primitive requeued this event; kept across requeue and re-dead-lettering. */
+  readonly replayCount: number;
+  readonly lastReplayedAt: string | null;
 }
 
-export type SyncState = 'prepared' | 'transport_acknowledged' | 'peer_accepted' | 'failed';
-
-export interface SyncRow {
-  readonly id: string;
-  readonly tenant: string;
-  readonly destination: string;
-  readonly ref: string;
-  readonly envelope: string;
-  readonly state: SyncState;
-  readonly attempts: number;
-  readonly nextAttemptAt: string | null;
-  readonly lastError: string | null;
-  readonly receipt: string | null;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
-export interface SyncListQuery {
+export interface DeadLetterListQuery {
+  readonly consumer?: string;
   readonly tenant?: string;
-  readonly destination?: string;
-  readonly state?: SyncState;
-  readonly ref?: string;
   readonly limit: number;
 }
 
@@ -135,6 +119,17 @@ export interface BlobRow {
   readonly encrypted: boolean;
   readonly createdAt: string;
 }
+
+export type BlobMeta = Omit<BlobRow, 'bytes'> & {
+  /** False when the ciphertext of an encrypted blob is absent from the separate store (relay restore or power loss). */
+  readonly bytesPresent: boolean;
+};
+
+/**
+ * Where an adapter keeps ciphertext of encrypted blobs: `inline` in the blobs store (memory, IndexedDB),
+ * `separate` in the relay's attached blobs_enc database, or `unavailable` when that store is not attached.
+ */
+export type EncryptedBlobStore = 'inline' | 'separate' | 'unavailable';
 
 export interface MigrationRow {
   readonly id: string;
@@ -162,10 +157,13 @@ export interface DriverTx {
      * events still held by a dead letter are kept until that dead letter is purged. Returns events deleted.
      */
     purgeBefore(occurredAt: string): number;
+    /** Deletes one event with every consumer's inbox row for it. */
+    remove(eventId: string): void;
   };
   readonly inbox: {
     get(consumer: string, eventId: string): InboxRow | undefined;
     upsert(row: InboxRow): void;
+    remove(consumer: string, eventId: string): void;
   };
   readonly idempotency: {
     get(tenant: string, actor: string, command: string, key: string): IdempotencyRow | undefined;
@@ -180,20 +178,25 @@ export interface DriverTx {
     get(consumer: string, eventId: string): DeadLetterRow | undefined;
     upsert(row: DeadLetterRow): void;
     remove(consumer: string, eventId: string): void;
-    list(consumer: string | undefined, limit: number): DeadLetterRow[];
-    /** Deletes dead letters with deadAt before the cutoff; their inbox rows go with the event's outbox purge. */
-    purgeBefore(deadAt: string): number;
-  };
-  readonly sync: {
-    get(id: string): SyncRow | undefined;
-    upsert(row: SyncRow): void;
-    /** Per destination, the oldest prepared entry, if its nextAttemptAt is null or <= now. */
-    heads(now: string, limit: number): SyncRow[];
-    list(q: SyncListQuery): SyncRow[];
+    /** Ordered by deadAt, consumer, eventId. */
+    list(q: DeadLetterListQuery): DeadLetterRow[];
+    /** Dead letters whose inbox row is retry (requeued and not yet delivered or dead again), ordered like list. */
+    requeued(q: DeadLetterListQuery): DeadLetterRow[];
+    /** Dead letters with deadAt before the cutoff whose event is not currently requeued, ordered like list. */
+    purgeable(deadAt: string, limit: number, tenant?: string): DeadLetterRow[];
+    /** Number of dead letters (any consumer) holding the event. */
+    countFor(eventId: string): number;
   };
   readonly blobs: {
-    get(tenant: string, ref: string): BlobRow | undefined;
+    readonly encryptedStore: EncryptedBlobStore;
+    /** Metadata and bytes; bytes is null when an encrypted blob's ciphertext is absent from the separate store. */
+    get(tenant: string, ref: string): (BlobMeta & { readonly bytes: Uint8Array | null }) | undefined;
+    /** Metadata without reading bytes. */
+    meta(tenant: string, ref: string): BlobMeta | undefined;
+    /** Writes the metadata row and the bytes (ciphertext to the separate store when encrypted and separate). */
     upsert(row: BlobRow): void;
+    setPrivacy(tenant: string, ref: string, privacy: BlobPrivacy): void;
+    /** Deletes the metadata row and its ciphertext row in the same transaction. */
     remove(tenant: string, ref: string): void;
     /** Number of holder rows (referencing records) for the ref. */
     holders(tenant: string, ref: string): number;
@@ -201,6 +204,9 @@ export interface DriverTx {
     detach(tenant: string, ref: string, holder: string): void;
     /** Refs of stored blobs without holders created before the cutoff, oldest first (no bytes read). */
     orphans(createdBefore: string, limit: number): { tenant: string; ref: string; encrypted: boolean }[];
+    /** Ciphertext rows of the separate store without a metadata row (power loss between the two file commits). */
+    orphanCiphertext(limit: number): { tenant: string; ref: string }[];
+    removeCiphertext(tenant: string, ref: string): void;
   };
   readonly migrations: {
     list(): MigrationRow[];

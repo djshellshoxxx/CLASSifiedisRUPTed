@@ -1,12 +1,14 @@
-// Unit of work over a driver transaction: optimistic concurrency, leases, idempotency, inbox,
-// dead letters and the sync outbox. Semantics live here once so every adapter behaves identically.
+// Unit of work over a driver transaction: optimistic concurrency, leases, idempotency, inbox, dead letters
+// with their replay primitives, and media blobs. Semantics live here once so every adapter behaves
+// identically. Storage holds no sync outbox: F15.S01.M01 OutboxEntry rows are ordinary records (N24).
 import { toIso } from '../clock/clock.ts';
 import { appError, type AppError } from '../errors/app-error.ts';
 import { err, ok, type Result } from '../errors/result.ts';
 import type { EventEnvelope } from '../events/envelope.ts';
 import { bytesToBase64url } from './base64url.ts';
-import type { BlobPrivacy, BlobRow, DeadLetterRow, DriverKind, DriverTx, IndexValues, InboxRow, MigrationRow, RecordQuery, RecordRow, SyncListQuery, SyncRow, SyncState } from './driver.ts';
-import { syncMachine, type SyncEvent } from './machines.ts';
+import type { BlobMeta, BlobPrivacy, BlobRow, DeadLetterRow, DriverKind, DriverTx, IndexValues, InboxRow, MigrationRow, RecordQuery, RecordRow } from './driver.ts';
+import { blobMachine, inboxMachine } from './machines.ts';
+import type { BlobPutEvent, ImageVerifier, StorageSite, TenantLimitsPort } from './ports.ts';
 
 export interface StoredRecord<T = unknown> {
   readonly tenantId: string;
@@ -62,35 +64,6 @@ export interface IdempotencyKeyRef {
   readonly actor: string;
   readonly command: string;
   readonly key: string;
-}
-
-/** A signed statement (CTR-FED-001 envelope); the kernel treats it as opaque JSON with cid and type. */
-export interface SignedEnvelope {
-  readonly cid: string;
-  readonly type: string;
-  readonly [field: string]: unknown;
-}
-
-export interface SyncEntry {
-  readonly id: string;
-  readonly tenantId: string;
-  readonly destination: string;
-  readonly ref: string;
-  readonly envelope: SignedEnvelope;
-  readonly state: SyncState;
-  readonly attempts: number;
-  readonly nextAttemptAt: string | null;
-  readonly lastError: string | null;
-  readonly receipt: unknown;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
-export interface SyncTransitionPatch {
-  readonly attempts?: number;
-  readonly nextAttemptAt?: string | null;
-  readonly lastError?: string | null;
-  readonly receipt?: unknown;
 }
 
 export const DEFAULT_LEASE_TTL_MS = 15 * 60 * 1000;
@@ -296,11 +269,31 @@ function inboxStore(d: DriverTx) {
   });
   return {
     get: (consumer: string, eventId: string): InboxRow | undefined => d.inbox.get(consumer, eventId),
-    markDone: (m: InboxMark, attempts: number): void => d.inbox.upsert(row(m, 'done', attempts, null, null)),
+    /** pending|retry -> done; a requeued event's dead_letter row is deleted in the same transaction. */
+    markDone(m: InboxMark, attempts: number): void {
+      d.inbox.upsert(row(m, 'done', attempts, null, null));
+      if (d.deadLetters.get(m.consumer, m.envelope.eventId)) d.deadLetters.remove(m.consumer, m.envelope.eventId);
+    },
     markRetry: (m: InboxMark, attempts: number, nextAttemptAt: number, code: string): void => d.inbox.upsert(row(m, 'retry', attempts, toIso(nextAttemptAt), code)),
+    /**
+     * pending|retry -> dead with the error code only. A requeued event updates its existing dead_letter row
+     * (attempts, error code, deadAt) and keeps replayCount and lastReplayedAt; a first death starts at 0.
+     */
     markDead(m: InboxMark, attempts: number, code: string): void {
       d.inbox.upsert(row(m, 'dead', attempts, null, code));
-      d.deadLetters.upsert({ consumer: m.consumer, eventId: m.envelope.eventId, tenant: m.envelope.tenantId, type: m.envelope.type, envelope: jsonText(m.envelope, 'envelope'), attempts, errorCode: code, deadAt: toIso(m.now) });
+      const prior = d.deadLetters.get(m.consumer, m.envelope.eventId);
+      d.deadLetters.upsert({
+        consumer: m.consumer,
+        eventId: m.envelope.eventId,
+        tenant: m.envelope.tenantId,
+        type: m.envelope.type,
+        envelope: prior?.envelope ?? jsonText(m.envelope, 'envelope'),
+        attempts,
+        errorCode: code,
+        deadAt: toIso(m.now),
+        replayCount: prior?.replayCount ?? 0,
+        lastReplayedAt: prior?.lastReplayedAt ?? null,
+      });
     },
   };
 }
@@ -314,98 +307,131 @@ export interface DeadLetter {
   readonly attempts: number;
   readonly errorCode: string;
   readonly deadAt: string;
+  /** Times the replay primitive requeued the event; kept across requeue and re-dead-lettering. */
+  readonly replayCount: number;
+  readonly lastReplayedAt: string | null;
+  /** True while requeued (inbox retry) and not yet delivered or dead again. */
+  readonly requeued: boolean;
 }
 
-function toDeadLetter(r: DeadLetterRow): DeadLetter {
-  return { consumer: r.consumer, eventId: r.eventId, tenantId: r.tenant, type: r.type, envelope: JSON.parse(r.envelope) as EventEnvelope, attempts: r.attempts, errorCode: r.errorCode, deadAt: r.deadAt };
+export interface DeadLetterQuery {
+  readonly consumer?: string;
+  readonly tenantId?: string;
+  /** 1..500, default 100. */
+  readonly limit?: number;
 }
 
+export interface DeadLetterPurgeOptions {
+  readonly tenantId?: string;
+  readonly limit?: number;
+}
+
+/** Codes a requeued dead letter returns to dead with, besides a consumer error code (PS-119-03). */
+export type ReturnToDeadCode = 'FEATURE_DISABLED' | 'EXPIRED';
+
+const MAX_DEAD_LETTER_PAGE = 500;
+
+function deadLetterQuery(q: DeadLetterQuery) {
+  const limit = q.limit ?? 100;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_DEAD_LETTER_PAGE) throw new RangeError('dead letter limit must be 1..500');
+  return { limit, ...(q.consumer === undefined ? {} : { consumer: q.consumer }), ...(q.tenantId === undefined ? {} : { tenant: q.tenantId }) };
+}
+
+/**
+ * Dead-letter primitives behind F15.S03.M03 platform.deadletter.replay (PS-119-03): list, requeue (dead ->
+ * retry with replayCount + 1), return to dead (FEATURE_DISABLED, EXPIRED) and purge (dead -> purged).
+ */
 function deadLetterStore(d: DriverTx) {
+  const toDeadLetter = (r: DeadLetterRow): DeadLetter => ({
+    consumer: r.consumer,
+    eventId: r.eventId,
+    tenantId: r.tenant,
+    type: r.type,
+    envelope: JSON.parse(r.envelope) as EventEnvelope,
+    attempts: r.attempts,
+    errorCode: r.errorCode,
+    deadAt: r.deadAt,
+    replayCount: r.replayCount,
+    lastReplayedAt: r.lastReplayedAt,
+    requeued: d.inbox.get(r.consumer, r.eventId)?.status === 'retry',
+  });
+
+  function purge(before: number, opts: DeadLetterPurgeOptions = {}): number {
+    const cutoff = toIso(before);
+    const rows = d.deadLetters.purgeable(cutoff, opts.limit ?? Number.MAX_SAFE_INTEGER, opts.tenantId).filter((r) => inboxMachine.can(d.inbox.get(r.consumer, r.eventId)?.status ?? 'dead', 'purge'));
+    for (const r of rows) d.deadLetters.remove(r.consumer, r.eventId);
+    for (const eventId of new Set(rows.map((r) => r.eventId))) {
+      const ev = d.outbox.get(eventId);
+      if (!ev) {
+        for (const r of rows) if (r.eventId === eventId) d.inbox.remove(r.consumer, eventId);
+      } else if (d.deadLetters.countFor(eventId) === 0 && ev.occurredAt < cutoff) {
+        // The event is deleted with every consumer's inbox row, so it can never be redelivered.
+        d.outbox.remove(eventId);
+      }
+      // Otherwise another dead letter still holds the event (or it is younger than the cutoff): the dead
+      // inbox rows stay so it is not redelivered, and the outbox purge deletes them with the event.
+    }
+    return rows.length;
+  }
+
   return {
-    list: (consumer: string | undefined, limit = 100): DeadLetter[] => d.deadLetters.list(consumer, limit).map(toDeadLetter),
+    /** Dead letters ordered by deadAt; `consumer` narrows to one consumer, `tenantId` to one tenant. */
+    list: (consumer?: string, limit?: number, tenantId?: string): DeadLetter[] =>
+      d.deadLetters.list(deadLetterQuery({ ...(consumer === undefined ? {} : { consumer }), ...(tenantId === undefined ? {} : { tenantId }), ...(limit === undefined ? {} : { limit }) })).map(toDeadLetter),
     get(consumer: string, eventId: string): DeadLetter | undefined {
       const r = d.deadLetters.get(consumer, eventId);
       return r ? toDeadLetter(r) : undefined;
     },
-    /** Moves a dead letter back to retry, due immediately, with attempts reset (replay primitive for EVT-6). */
-    requeue(consumer: string, eventId: string, now: number): Result<void, AppError> {
+    /** Currently requeued dead letters (inbox retry), for the dispatcher's 7-day return to dead. */
+    requeued: (q: DeadLetterQuery = {}): DeadLetter[] => d.deadLetters.requeued(deadLetterQuery(q)).map(toDeadLetter),
+    /**
+     * dead -> retry: inbox attempts reset to 0, due immediately; the dead_letter row is kept with
+     * replayCount + 1 and lastReplayedAt = now. NOT_FOUND without a dead letter; CONFLICT_STATE when the
+     * event is already requeued (V05), so each replay is counted once.
+     */
+    requeue(consumer: string, eventId: string, now: number): Result<DeadLetter, AppError> {
+      const dl = d.deadLetters.get(consumer, eventId);
+      if (!dl) return err(appError('NOT_FOUND'));
+      const inbox = d.inbox.get(consumer, eventId);
+      const to = inboxMachine.next(inbox?.status ?? 'pending', 'requeue');
+      if (!to.ok) return to;
+      const at = toIso(now);
+      const next = { ...dl, replayCount: dl.replayCount + 1, lastReplayedAt: at };
+      d.deadLetters.upsert(next);
+      d.inbox.upsert({ consumer, eventId, aggregateId: inbox?.aggregateId ?? '', status: 'retry', attempts: 0, nextAttemptAt: at, lastError: inbox?.lastError ?? dl.errorCode, updatedAt: at });
+      return ok(toDeadLetter(next));
+    },
+    /**
+     * retry -> dead for a requeued event whose consumer module is disabled (FEATURE_DISABLED) or that was not
+     * delivered within 7 days of lastReplayedAt (EXPIRED): deadAt = now, replayCount and lastReplayedAt kept.
+     */
+    returnToDead(consumer: string, eventId: string, code: ReturnToDeadCode, now: number): Result<DeadLetter, AppError> {
       const dl = d.deadLetters.get(consumer, eventId);
       const inbox = d.inbox.get(consumer, eventId);
-      if (!dl || !inbox || inbox.status !== 'dead') return err(appError('NOT_FOUND'));
-      d.deadLetters.remove(consumer, eventId);
-      d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: toIso(now), updatedAt: toIso(now) });
-      return ok(undefined);
-    },
-    /** Deletes dead letters that died before the cutoff (30-day RET-SHORT); returns the count. */
-    purgeBefore: (deadAt: number): number => d.deadLetters.purgeBefore(toIso(deadAt)),
-  };
-}
-
-function toSyncEntry(r: SyncRow): SyncEntry {
-  return {
-    id: r.id,
-    tenantId: r.tenant,
-    destination: r.destination,
-    ref: r.ref,
-    envelope: JSON.parse(r.envelope) as SignedEnvelope,
-    state: r.state,
-    attempts: r.attempts,
-    nextAttemptAt: r.nextAttemptAt,
-    lastError: r.lastError,
-    receipt: r.receipt === null ? null : (JSON.parse(r.receipt) as unknown),
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-  };
-}
-
-export interface EnqueueStatement {
-  readonly id: string;
-  readonly tenant: string;
-  readonly destination: string;
-  readonly envelope: SignedEnvelope;
-  readonly now: number;
-}
-
-function syncStore(d: DriverTx) {
-  return {
-    enqueue(input: EnqueueStatement): SyncEntry {
-      if (typeof input.envelope.cid !== 'string' || typeof input.envelope.type !== 'string') throw new TypeError('signed envelope requires cid and type');
-      const now = toIso(input.now);
-      const row: SyncRow = { id: input.id, tenant: input.tenant, destination: input.destination, ref: input.envelope.cid, envelope: jsonText(input.envelope, 'signed envelope'), state: 'prepared', attempts: 0, nextAttemptAt: null, lastError: null, receipt: null, createdAt: now, updatedAt: now };
-      d.sync.upsert(row);
-      return toSyncEntry(row);
-    },
-    get(id: string): SyncEntry | undefined {
-      const r = d.sync.get(id);
-      return r ? toSyncEntry(r) : undefined;
-    },
-    list: (q: Partial<SyncListQuery> = {}): SyncEntry[] => d.sync.list({ ...q, limit: q.limit ?? 100 }).map(toSyncEntry),
-    heads: (now: number, limit: number): SyncEntry[] => d.sync.heads(toIso(now), limit).map(toSyncEntry),
-    /** Applies a declared sync-outbox transition; undeclared ones return CONFLICT_STATE. */
-    transition(id: string, event: SyncEvent, patch: SyncTransitionPatch, now: number): Result<SyncEntry, AppError> {
-      const row = d.sync.get(id);
-      if (!row) return err(appError('NOT_FOUND'));
-      const to = syncMachine.next(row.state, event);
+      if (!dl || !inbox) return err(appError('NOT_FOUND'));
+      const to = inboxMachine.next(inbox.status, code === 'EXPIRED' ? 'expire' : 'disable');
       if (!to.ok) return to;
-      const receipt = patch.receipt === undefined ? row.receipt : jsonText(patch.receipt, 'receipt');
-      const next: SyncRow = {
-        ...row,
-        state: to.value,
-        attempts: patch.attempts ?? row.attempts,
-        nextAttemptAt: patch.nextAttemptAt === undefined ? row.nextAttemptAt : patch.nextAttemptAt,
-        lastError: patch.lastError === undefined ? row.lastError : patch.lastError,
-        receipt,
-        updatedAt: toIso(now),
-      };
-      d.sync.upsert(next);
-      return ok(toSyncEntry(next));
+      const at = toIso(now);
+      d.inbox.upsert({ ...inbox, status: 'dead', nextAttemptAt: null, lastError: code, updatedAt: at });
+      const next = { ...dl, errorCode: code, deadAt: at };
+      d.deadLetters.upsert(next);
+      return ok(toDeadLetter(next));
     },
+    /**
+     * dead -> purged: deletes dead letters whose deadAt is before the cutoff and whose event is not requeued,
+     * with their inbox rows, in this transaction; an event no dead letter holds any more is deleted with it.
+     * Returns the number of dead letters purged (RET-SHORT, 30 days after deadAt by F15.S03.M03's schedule).
+     */
+    purge,
+    /** Alias of purge(before) kept for callers of the first kernel release. */
+    purgeBefore: (before: number): number => purge(before),
   };
 }
 
 export const MAX_BLOB_BYTES = 5 * 1024 * 1024;
 const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{43}$/;
 const CONTENT_TYPE_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
+const PRIVACY: readonly BlobPrivacy[] = ['P0', 'P1', 'P2', 'P3'];
 
 export interface BlobInfo {
   readonly ref: string;
@@ -415,6 +441,12 @@ export interface BlobInfo {
   readonly encrypted: boolean;
   readonly createdAt: string;
   readonly holders: number;
+  /**
+   * False when an encrypted blob's ciphertext is absent from the relay's blobs_enc store (after a restore
+   * from a backup of schema main, or a power loss between the two file commits); get() then returns
+   * undefined and F08.S01.M03 expires the attachment rows.
+   */
+  readonly bytesPresent: boolean;
 }
 
 export interface MediaBlob extends BlobInfo {
@@ -428,6 +460,8 @@ export interface PutBlobInput {
   readonly contentType: string;
   readonly privacy: BlobPrivacy;
   readonly encrypted?: boolean;
+  /** The ref the signed record references; the bytes must hash to it (V11). */
+  readonly expectedRef?: string;
   readonly now: number;
 }
 
@@ -441,17 +475,42 @@ export async function blobRefOf(bytes: Uint8Array): Promise<string> {
   return `blob:sha256-${bytesToBase64url(new Uint8Array(digest))}`;
 }
 
-function blobCheck(input: PutBlobInput, kind: DriverKind): AppError | undefined {
-  if (input.bytes.byteLength > MAX_BLOB_BYTES) return appError('PAYLOAD_TOO_LARGE', { params: { limitBytes: MAX_BLOB_BYTES } });
-  if (!CONTENT_TYPE_RE.test(input.contentType)) return appError('VALIDATION_FAILED', { fields: [{ path: 'contentType', code: 'INVALID_FORMAT' }] });
-  if (!['P0', 'P1', 'P2', 'P3'].includes(input.privacy)) return appError('VALIDATION_FAILED', { fields: [{ path: 'privacy', code: 'INVALID_VALUE' }] });
+/** Environment of one transaction: where it runs and the ports registered at composition. */
+export interface TxEnv {
+  readonly kind: DriverKind;
+  readonly site: StorageSite;
+  readonly tenants?: TenantLimitsPort | undefined;
+  readonly imageVerifier?: ImageVerifier | undefined;
+  readonly onBlobPut?: ((e: BlobPutEvent) => void) | undefined;
+}
+
+/** min(5 MiB, the TenantPort limit): limits(tenantId).maxUploadBytes on a relay, localLimits in the vault (V08). */
+export function blobLimitBytes(env: TxEnv, tenant: string): number {
+  const port = env.tenants;
+  const limit = env.site === 'relay' ? port?.limits?.(tenant)?.maxUploadBytes : port?.localLimits?.()?.maxLocalAttachmentBytes;
+  return limit === undefined || !Number.isFinite(limit) ? MAX_BLOB_BYTES : Math.max(0, Math.min(MAX_BLOB_BYTES, Math.floor(limit)));
+}
+
+function invalidField(path: string, code: string): AppError {
+  return appError('VALIDATION_FAILED', { fields: [{ path, code }] });
+}
+
+/** V08, V09, V14 and the relay plaintext rule; checks that need no hashing. */
+function blobCheck(input: PutBlobInput, env: TxEnv, encryptedStore: DriverTx['blobs']['encryptedStore']): AppError | undefined {
+  const limitBytes = blobLimitBytes(env, input.tenant);
+  if (input.bytes.byteLength > limitBytes) return appError('PAYLOAD_TOO_LARGE', { params: { limitBytes } });
+  if (!CONTENT_TYPE_RE.test(input.contentType)) return invalidField('contentType', 'INVALID_FORMAT');
+  if (!PRIVACY.includes(input.privacy)) return invalidField('privacy', 'INVALID_VALUE');
+  if (input.expectedRef !== undefined && !isBlobRef(input.expectedRef)) return invalidField('expectedRef', 'INVALID_BLOB_REF');
   // A relay holds public blobs and ciphertext only (ADR-0016 §3, PRV-5).
-  if (kind === 'sqlite' && input.privacy !== 'P0' && !input.encrypted) return appError('VALIDATION_FAILED', { fields: [{ path: 'privacy', code: 'PLAINTEXT_NOT_PUBLIC' }] });
+  if (env.site === 'relay' && input.privacy !== 'P0' && input.encrypted !== true) return invalidField('privacy', 'PLAINTEXT_NOT_PUBLIC');
+  // Fail closed: without the attached blobs_enc store no ciphertext is written anywhere (V14).
+  if (input.encrypted === true && encryptedStore === 'unavailable') return appError('INTERNAL', { params: { reason: 'encrypted_blob_store_unavailable' } });
   return undefined;
 }
 
-function toBlobInfo(b: BlobRow, holders: number): BlobInfo {
-  return { ref: b.ref, size: b.size, contentType: b.contentType, privacy: b.privacy, encrypted: b.encrypted, createdAt: b.createdAt, holders };
+function toBlobInfo(b: BlobMeta, holders: number): BlobInfo {
+  return { ref: b.ref, size: b.size, contentType: b.contentType, privacy: b.privacy, encrypted: b.encrypted, createdAt: b.createdAt, holders, bytesPresent: b.bytesPresent };
 }
 
 export interface ShreddedBlob {
@@ -464,57 +523,96 @@ export interface ShreddedBlob {
  * blob deleted in this transaction, whether by detach, a repository write or the orphan sweep, is listed
  * by shredded() so the key owner deletes its per-object key in the same unit of work.
  */
-function blobStore(d: DriverTx, kind: DriverKind) {
+function blobStore(d: DriverTx, env: TxEnv) {
   const shredded: ShreddedBlob[] = [];
   const removeBlob = (b: Pick<BlobRow, 'tenant' | 'ref' | 'encrypted'>): void => {
     d.blobs.remove(b.tenant, b.ref);
     if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
   };
+  const report = (outcome: BlobPutEvent['outcome'], code: string, input: PutBlobInput): void => env.onBlobPut?.({ outcome, code, size: input.bytes.byteLength, contentType: input.contentType });
+  const reject = (e: AppError, input: PutBlobInput): Result<never, AppError> => {
+    report('rejected', e.code, input);
+    return err(e);
+  };
+  /** Relay receipt check of plaintext images (V12): the registered verifier sees a copy, never the stored bytes. */
+  const verify = async (input: PutBlobInput): Promise<Result<void, AppError>> => {
+    if (env.site !== 'relay' || input.encrypted === true || !input.contentType.startsWith('image/')) return ok(undefined);
+    if (!env.imageVerifier) return err(appError('INTERNAL', { params: { reason: 'image_verifier_not_registered' } }));
+    return env.imageVerifier.verifyImageClean(input.bytes.slice(), input.contentType);
+  };
   const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
     d.blobs.detach(tenant, ref, holder);
-    if (d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
-    const blob = d.blobs.get(tenant, ref);
+    const blob = d.blobs.meta(tenant, ref);
     if (!blob) return { deleted: false, shred: false };
+    const next = blobMachine.next('referenced', d.blobs.holders(tenant, ref) > 0 ? 'holders_changed' : 'detach_last');
+    if (!next.ok || next.value !== 'deleted') return { deleted: false, shred: false };
     removeBlob(blob);
     return { deleted: true, shred: blob.encrypted };
   };
   return {
     /**
-     * Stores bytes under their content address. Storing identical bytes again returns the existing blob;
-     * a more public class (e.g. a draft photo being published) lowers the stored class.
+     * Stores exactly the received bytes under their content address after the size, format, expectedRef and
+     * (on a relay) verifyImageClean checks. Identical bytes return the existing blob (a more public class
+     * lowers the stored class); an encrypted blob whose ciphertext is absent is written again.
      */
     async put(input: PutBlobInput): Promise<Result<BlobInfo, AppError>> {
-      const bad = blobCheck(input, kind);
-      if (bad) return err(bad);
-      const ref = await blobRefOf(input.bytes);
-      const existing = d.blobs.get(input.tenant, ref);
-      if (existing && input.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: input.privacy });
-      if (existing) return ok(toBlobInfo({ ...existing, privacy: input.privacy < existing.privacy ? input.privacy : existing.privacy }, d.blobs.holders(input.tenant, ref)));
-      const row: BlobRow = { tenant: input.tenant, ref, bytes: input.bytes, size: input.bytes.byteLength, contentType: input.contentType, privacy: input.privacy, encrypted: input.encrypted === true, createdAt: toIso(input.now) };
+      const bad = blobCheck(input, env, d.blobs.encryptedStore);
+      if (bad) return reject(bad, input);
+      const bytes = input.bytes.slice();
+      const ref = await blobRefOf(bytes);
+      if (input.expectedRef !== undefined && ref !== input.expectedRef) return reject(invalidField('expectedRef', 'REF_MISMATCH'), input);
+      const clean = await verify(input);
+      if (!clean.ok) return reject(clean.error, input);
+      const existing = d.blobs.meta(input.tenant, ref);
+      const holders = d.blobs.holders(input.tenant, ref);
+      if (existing && existing.bytesPresent) {
+        const privacy = input.privacy < existing.privacy ? input.privacy : existing.privacy;
+        if (privacy !== existing.privacy) d.blobs.setPrivacy(input.tenant, ref, privacy);
+        report('duplicate', 'OK', input);
+        return ok(toBlobInfo({ ...existing, privacy }, holders));
+      }
+      const row: BlobRow = {
+        tenant: input.tenant,
+        ref,
+        bytes,
+        size: bytes.byteLength,
+        contentType: existing?.contentType ?? input.contentType,
+        privacy: existing && existing.privacy < input.privacy ? existing.privacy : input.privacy,
+        encrypted: existing?.encrypted ?? input.encrypted === true,
+        createdAt: existing?.createdAt ?? toIso(input.now),
+      };
       d.blobs.upsert(row);
-      return ok(toBlobInfo(row, d.blobs.holders(input.tenant, ref)));
+      report('stored', 'OK', input);
+      return ok(toBlobInfo({ ...row, bytesPresent: true }, holders));
     },
+    /** The stored bytes, or undefined when absent (including an encrypted blob whose ciphertext is missing). */
     get(tenant: string, ref: string): MediaBlob | undefined {
       const b = d.blobs.get(tenant, ref);
-      return b ? { ...toBlobInfo(b, d.blobs.holders(tenant, ref)), bytes: b.bytes } : undefined;
+      return b && b.bytes ? { ...toBlobInfo(b, d.blobs.holders(tenant, ref)), bytes: b.bytes } : undefined;
     },
     info(tenant: string, ref: string): BlobInfo | undefined {
-      const b = d.blobs.get(tenant, ref);
+      const b = d.blobs.meta(tenant, ref);
       return b ? toBlobInfo(b, d.blobs.holders(tenant, ref)) : undefined;
     },
     /** Records that `holder` (e.g. `bazaar.listing/<id>`) references the blob; idempotent. */
     attach(tenant: string, ref: string, holder: string): Result<{ holders: number; present: boolean }, AppError> {
-      if (!isBlobRef(ref)) return err(appError('VALIDATION_FAILED', { fields: [{ path: 'ref', code: 'INVALID_BLOB_REF' }] }));
+      if (!isBlobRef(ref)) return err(invalidField('ref', 'INVALID_BLOB_REF'));
       d.blobs.attach(tenant, ref, holder);
-      return ok({ holders: d.blobs.holders(tenant, ref), present: d.blobs.get(tenant, ref) !== undefined });
+      return ok({ holders: d.blobs.holders(tenant, ref), present: d.blobs.meta(tenant, ref) !== undefined });
     },
     /** Drops one reference; the blob is deleted with its last reference. `shred` asks the owner to delete the blob key. */
     detach,
-    /** Deletes stored blobs that no record references and that were created before the cutoff. */
+    /**
+     * Orphan sweep: deletes stored blobs that no record references and that were created before the cutoff
+     * (stored -> deleted), and ciphertext rows of the relay's blobs_enc store without a metadata row.
+     * Returns the number of rows deleted.
+     */
     collectOrphans(createdBefore: number, limit = 100): number {
       const list = d.blobs.orphans(toIso(createdBefore), limit);
-      for (const o of list) removeBlob(o);
-      return list.length;
+      for (const o of list) if (blobMachine.can('stored', 'sweep')) removeBlob(o);
+      const strays = d.blobs.orphanCiphertext(limit);
+      for (const c of strays) d.blobs.removeCiphertext(c.tenant, c.ref);
+      return list.length + strays.length;
     },
     /** Encrypted blobs deleted so far in this transaction (empty again after rollback: the list dies with it). */
     shredded: (): readonly ShreddedBlob[] => [...shredded],
@@ -528,9 +626,11 @@ function migrationStore(d: DriverTx) {
   };
 }
 
-export function createTx(d: DriverTx, kind: DriverKind = 'memory') {
+const DEFAULT_ENV: TxEnv = { kind: 'memory', site: 'vault' };
+
+export function createTx(d: DriverTx, env: TxEnv = DEFAULT_ENV) {
   return {
-    blobs: blobStore(d, kind),
+    blobs: blobStore(d, env),
     records: recordStore(d),
     leases: leaseStore(d),
     idempotency: idempotencyStore(d),

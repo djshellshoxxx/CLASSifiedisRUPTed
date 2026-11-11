@@ -1,4 +1,6 @@
-// UUIDv7 identifiers (RFC 9562 §5.7) with a monotonic counter (§6.2 method 1) — CTR-ID-001 ID-1/ID-2.
+// UUIDv7 identifiers (RFC 9562 §5.7): the millisecond generator with a monotonic counter (§6.2 method 1)
+// for private records (CTR-ID-001 ID-1/ID-2) and the hour-floored generator for IDs that appear in
+// public projections (ID-8), whose remaining 74 bits are fresh randomness and carry no order.
 import { appError, type AppError } from '../errors/app-error.ts';
 import { err, ok, type Result } from '../errors/result.ts';
 
@@ -13,6 +15,8 @@ export interface IdGen {
 export type RandomFill = (bytes: Uint8Array<ArrayBuffer>) => void;
 
 export const MAX_ID_SKEW_MS = 24 * 60 * 60 * 1000;
+/** One UTC hour; public-projection IDs embed a timestamp that is a multiple of it (ID-8). */
+export const HOUR_MS = 60 * 60 * 1000;
 const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COUNTER_BITS = 42;
 const COUNTER_MAX = 2 ** COUNTER_BITS - 1;
@@ -42,6 +46,27 @@ export function checkIdSkew<T extends string>(id: Id<T>, nowMs: number, maxSkewM
   const ts = uuidV7Timestamp(id);
   if (ts - nowMs > maxSkewMs) return err(appError('ID_TIMESTAMP_SKEW', { params: { maxSkewMs } }));
   return ok(id);
+}
+
+/** nowMs floored to the start of its UTC hour (nowMs minus nowMs mod 3 600 000). */
+export function floorToHour(ms: number): number {
+  return ms - (((ms % HOUR_MS) + HOUR_MS) % HOUR_MS);
+}
+
+/** True for a UUIDv7 whose embedded timestamp is a whole UTC hour (CTR-ID-001 ID-8). */
+export function isHourFloored(id: string): boolean {
+  return isUuidV7(id) && uuidV7Timestamp(id) % HOUR_MS === 0;
+}
+
+/**
+ * Validates an ID taken from a public projection: lowercase UUIDv7 (INVALID_UUIDV7), embedded time a whole
+ * UTC hour (NOT_HOUR_FLOORED, VALIDATION_FAILED) and at most 24 h ahead of the receiver (ID_TIMESTAMP_SKEW).
+ */
+export function parsePublicId<T extends string = string>(value: unknown, nowMs: number, path = 'id'): Result<Id<T>, AppError> {
+  const id = parseId<T>(value, path);
+  if (!id.ok) return id;
+  if (!isHourFloored(id.value)) return err(appError('VALIDATION_FAILED', { fields: [{ path, code: 'NOT_HOUR_FLOORED' }] }));
+  return checkIdSkew(id.value, nowMs);
 }
 
 function hex(bytes: Uint8Array): string {
@@ -109,6 +134,31 @@ export function createUuidV7Generator(opts: UuidV7Options = {}): IdGen {
       return encodeUuidV7(lastMs, counter, tail) as Id<T>;
     },
   };
+}
+
+/**
+ * Hour-floored UUIDv7 for records whose IDs appear in public projections (CTR-ID-001 ID-8): the 48-bit
+ * timestamp is nowMs floored to the UTC hour and rand_a and rand_b (74 bits) are fresh randomness with no
+ * counter, so IDs minted in one hour are unique with overwhelming probability but reveal no order.
+ */
+export function hourFlooredUuidV7<T extends string = string>(nowMs: number, random: RandomFill = webCryptoRandom): Id<T> {
+  const b = new Uint8Array(16);
+  random(b);
+  let t = floorToHour(nowMs);
+  for (let i = 5; i >= 0; i--) {
+    b[i] = t % 256;
+    t = Math.floor(t / 256);
+  }
+  b[6] = 0x70 | ((b[6] ?? 0) & 0x0f);
+  b[8] = 0x80 | ((b[8] ?? 0) & 0x3f);
+  return hex(b) as Id<T>;
+}
+
+/** IdGen over hourFlooredUuidV7 for owning modules that mint public-projection IDs (e.g. F10.S02.M03 publicRecordId). */
+export function createHourFlooredIds(opts: UuidV7Options = {}): IdGen {
+  const now = opts.now ?? (() => Date.now());
+  const fill = opts.random ?? webCryptoRandom;
+  return { next: <T extends string = string>(): Id<T> => hourFlooredUuidV7<T>(now(), fill) };
 }
 
 /** Seeded xorshift32 byte source for deterministic tests (CTR-TST-001 TST-3). */

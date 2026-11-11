@@ -1,6 +1,7 @@
-// Shared zod validators: UUIDv7, RFC 3339 timestamps, code-point-bounded strings, Money shape (CTR-ID-001, CTR-MNY-001, SCH-6).
+// Shared zod validators: UUIDv7, public (hour-floored) IDs, cid strings, RFC 3339 timestamps, code-point-bounded
+// strings and the Money shape (CTR-ID-001, CTR-FED-001 FED-7, CTR-MNY-001, SCH-6).
 import * as z from 'zod';
-import { isUuidV7, type Id } from '../ids/uuidv7.ts';
+import { isHourFloored, isUuidV7, type Id } from '../ids/uuidv7.ts';
 
 export { z };
 
@@ -12,6 +13,32 @@ export function uuidv7<T extends string = string>() {
     .string()
     .refine((v) => isUuidV7(v), { params: { code: 'INVALID_UUIDV7' } })
     .transform((v) => v as Id<T>);
+}
+
+/**
+ * ID of a record that appears in a public projection (ID-8): a lowercase UUIDv7 (INVALID_UUIDV7) whose
+ * embedded timestamp is a multiple of 3 600 000 ms (NOT_HOUR_FLOORED). The 24 h skew rule needs the receiver
+ * clock: apply checkIdSkew, or use parsePublicId, where the ID is accepted.
+ */
+export function publicId<T extends string = string>() {
+  return z
+    .string()
+    .refine((v) => isUuidV7(v), { params: { code: 'INVALID_UUIDV7' }, abort: true })
+    .refine((v) => isHourFloored(v), { params: { code: 'NOT_HOUR_FLOORED' } })
+    .transform((v) => v as Id<T>);
+}
+
+/** cid string form of CTR-FED-001 FED-7 (ID-9): `sha256-` plus 43 base64url characters without padding. */
+export const CID_RE = /^sha256-[A-Za-z0-9_-]{43}$/;
+
+/** Shape check only; the kernel never computes cids (F11.S01.M03 cidOf does) and never keys records by them. */
+export function isCid(value: unknown): value is string {
+  return typeof value === 'string' && CID_RE.test(value);
+}
+
+/** Field validator for a cid string (INVALID_CID otherwise). */
+export function cid() {
+  return z.string().refine((v) => isCid(v), { params: { code: 'INVALID_CID' } });
 }
 
 const TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;

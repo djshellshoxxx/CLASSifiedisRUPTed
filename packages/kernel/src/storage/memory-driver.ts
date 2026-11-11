@@ -2,7 +2,9 @@
 // The IndexedDB vault adapter reuses it as its working set and persists each commit's change set.
 import { compareUtf8 } from '../hash/canonical.ts';
 import type {
+  BlobMeta,
   BlobRow,
+  DeadLetterListQuery,
   DeadLetterRow,
   DriverTx,
   IdempotencyRow,
@@ -15,11 +17,10 @@ import type {
   RecordQuery,
   RecordRow,
   StorageDriver,
-  SyncListQuery,
-  SyncRow,
 } from './driver.ts';
 
-export const TABLES = ['records', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'sync_outbox', 'blobs', 'blob_refs', 'schema_migrations', 'meta'] as const;
+/** Tables (IndexedDB object stores) of the row model; storage has no sync outbox table (N24). */
+export const TABLES = ['records', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'blobs', 'blob_refs', 'schema_migrations', 'meta'] as const;
 export type TableName = (typeof TABLES)[number];
 
 type Row = object;
@@ -136,8 +137,17 @@ function bySeq(a: OutboxRow, b: OutboxRow): number {
   return a.seq - b.seq;
 }
 
-function byCreated(a: SyncRow, b: SyncRow): number {
-  return cmp(a.createdAt, b.createdAt) || cmp(a.id, b.id);
+function byDeadAt(a: DeadLetterRow, b: DeadLetterRow): number {
+  return cmp(a.deadAt, b.deadAt) || cmp(a.consumer, b.consumer) || cmp(a.eventId, b.eventId);
+}
+
+/** Rows written before kernel:0003 carry no replay fields; they read as never replayed (SCH-4 lazy default). */
+function deadRow(r: DeadLetterRow): DeadLetterRow {
+  return { ...r, replayCount: r.replayCount ?? 0, lastReplayedAt: r.lastReplayedAt ?? null };
+}
+
+function blobMeta(b: BlobRow): BlobMeta {
+  return { tenant: b.tenant, ref: b.ref, size: b.size, contentType: b.contentType, privacy: b.privacy, encrypted: b.encrypted, createdAt: b.createdAt, bytesPresent: true };
 }
 
 function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
@@ -149,7 +159,13 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
   const recs = () => state.table<RecordRow>('records');
   const inbox = () => state.table<InboxRow>('inbox');
   const outbox = () => state.table<OutboxRow>('outbox');
-  const sync = () => state.table<SyncRow>('sync_outbox');
+  const dead = () => [...state.table<DeadLetterRow>('dead_letter').values()].map(deadRow);
+  const inboxStatus = (d: DeadLetterRow) => inbox().get(k(d.consumer, d.eventId))?.status;
+  const listed = (rows: DeadLetterRow[], q: DeadLetterListQuery) =>
+    rows
+      .filter((d) => (q.consumer === undefined || d.consumer === q.consumer) && (q.tenant === undefined || d.tenant === q.tenant))
+      .sort(byDeadAt)
+      .slice(0, q.limit);
 
   const inboxRowsFor = (consumer: string): InboxRow[] => [...state.groupKeys('inbox', consumer)].map((key) => inbox().get(key) as InboxRow);
 
@@ -209,10 +225,15 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
         for (const eventId of purge) write('outbox', eventId, undefined);
         return purge.size;
       },
+      remove: (eventId) => {
+        for (const [key, row] of [...inbox().entries()]) if (row.eventId === eventId) write('inbox', key, undefined);
+        write('outbox', eventId, undefined);
+      },
     },
     inbox: {
       get: (consumer, eventId) => inbox().get(k(consumer, eventId)),
       upsert: (row) => write('inbox', k(row.consumer, row.eventId), row),
+      remove: (consumer, eventId) => write('inbox', k(consumer, eventId), undefined),
     },
     idempotency: {
       get: (tenant, actor, command, key) => state.table<IdempotencyRow>('idempotency').get(k(tenant, actor, command, key)),
@@ -228,44 +249,32 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
       upsert: (row) => write('leases', k(row.tenant, row.resourceId), row),
     },
     deadLetters: {
-      get: (consumer, eventId) => state.table<DeadLetterRow>('dead_letter').get(k(consumer, eventId)),
+      get: (consumer, eventId) => {
+        const d = state.table<DeadLetterRow>('dead_letter').get(k(consumer, eventId));
+        return d ? deadRow(d) : undefined;
+      },
       upsert: (row) => write('dead_letter', k(row.consumer, row.eventId), row),
       remove: (consumer, eventId) => write('dead_letter', k(consumer, eventId), undefined),
-      list: (consumer, limit) =>
-        [...state.table<DeadLetterRow>('dead_letter').values()]
-          .filter((d) => consumer === undefined || d.consumer === consumer)
-          .sort((a, b) => cmp(a.deadAt, b.deadAt) || cmp(a.consumer, b.consumer) || cmp(a.eventId, b.eventId))
-          .slice(0, limit),
-      purgeBefore: (deadAt) => {
-        const old = [...state.table<DeadLetterRow>('dead_letter').entries()].filter(([, d]) => cmp(d.deadAt, deadAt) < 0);
-        for (const [key] of old) write('dead_letter', key, undefined);
-        return old.length;
-      },
-    },
-    sync: {
-      get: (id) => sync().get(id),
-      upsert: (row) => write('sync_outbox', row.id, row),
-      heads: (now, limit) => {
-        const heads = new Map<string, SyncRow>();
-        for (const r of [...sync().values()].filter((s) => s.state === 'prepared').sort(byCreated)) {
-          const dest = k(r.tenant, r.destination);
-          if (!heads.has(dest)) heads.set(dest, r);
-        }
-        return [...heads.values()].filter((r) => r.nextAttemptAt === null || cmp(r.nextAttemptAt, now) <= 0).sort(byCreated).slice(0, limit);
-      },
-      list: (q: SyncListQuery) =>
-        [...sync().values()]
-          .filter((r) => (q.tenant === undefined || r.tenant === q.tenant) && (q.destination === undefined || r.destination === q.destination))
-          .filter((r) => (q.state === undefined || r.state === q.state) && (q.ref === undefined || r.ref === q.ref))
-          .sort(byCreated)
-          .slice(0, q.limit),
+      list: (q) => listed(dead(), q),
+      requeued: (q) => listed(dead().filter((d) => inboxStatus(d) === 'retry'), q),
+      purgeable: (deadAt, limit, tenant) => listed(dead().filter((d) => cmp(d.deadAt, deadAt) < 0 && inboxStatus(d) !== 'retry'), { limit, ...(tenant === undefined ? {} : { tenant }) }),
+      countFor: (eventId) => dead().filter((d) => d.eventId === eventId).length,
     },
     blobs: {
+      encryptedStore: 'inline',
       get: (tenant, ref) => {
         const b = state.table<BlobRow>('blobs').get(k(tenant, ref));
-        return b ? { ...b, bytes: b.bytes.slice() } : undefined;
+        return b ? { ...blobMeta(b), bytes: b.bytes.slice() } : undefined;
+      },
+      meta: (tenant, ref) => {
+        const b = state.table<BlobRow>('blobs').get(k(tenant, ref));
+        return b ? blobMeta(b) : undefined;
       },
       upsert: (row) => write('blobs', k(row.tenant, row.ref), { ...row, bytes: row.bytes.slice() }),
+      setPrivacy: (tenant, ref, privacy) => {
+        const b = state.table<BlobRow>('blobs').get(k(tenant, ref));
+        if (b) write('blobs', k(tenant, ref), { ...b, privacy });
+      },
       remove: (tenant, ref) => write('blobs', k(tenant, ref), undefined),
       holders: (tenant, ref) => state.groupKeys('blob_refs', k(tenant, ref)).size,
       attach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), { tenant, ref, holder }),
@@ -276,6 +285,8 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
           .sort((a, b) => cmp(a.createdAt, b.createdAt) || cmp(a.tenant, b.tenant) || cmp(a.ref, b.ref))
           .slice(0, limit)
           .map((b) => ({ tenant: b.tenant, ref: b.ref, encrypted: b.encrypted })),
+      orphanCiphertext: () => [],
+      removeCiphertext: () => undefined,
     },
     migrations: {
       list: () => [...state.table<MigrationRow>('schema_migrations').values()].sort((a, b) => cmp(a.appliedAt, b.appliedAt) || cmp(a.id, b.id)),

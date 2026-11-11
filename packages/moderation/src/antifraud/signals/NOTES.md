@@ -30,3 +30,7 @@ T09 (aborted transaction and dispatcher outage: kernel behaviour, no module-spec
 - moderation.spam.detected carries `subjectKeyHash`, not a did:key; who resolves it to the subject key?
 - Relay pseudonymization of signals on subject deletion for the case duration is not implemented (needs the privacy module).
 - report_dismissed_bad_faith has no consumed event in the spec table; no mapping.
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 60 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

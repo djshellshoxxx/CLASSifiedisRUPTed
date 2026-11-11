@@ -26,3 +26,7 @@ T11 (30-day retention after membership deletion and 1-year audit history are roo
 - moderation.action.applied has no limit key field in its documented payload; this module reads optional `limitKey` / `limitKeys`. Who adds them?
 - commerce.deal.completed payload documents `{ dealId, contextRef, completedAt }`; this module reads `parties[{did}]` as N3 says.
 - Rate-store outage: spec ties flow limits to the F12.S03.M03 class fail mode; `flowFailMode` is the injected equivalent.
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 60 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

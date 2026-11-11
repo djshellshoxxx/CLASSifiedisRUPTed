@@ -45,10 +45,10 @@
 
 | Type | Effect |
 |---|---|
-| `moderation.report.received` | relay only: increment reports_received for payload.reasonCode (12-code F12.S01.M01 taxonomy) in the period of relayReceivedAt; dedupe by eventId |
+| `moderation.report.received` | relay only: increment reports_received for payload.reasonCode (12-code F12.S01.M01 taxonomy) in the period of relayReceivedAt; dedupe by eventId; the vault-local moderation.report.filed is not consumed |
 | `moderation.action.applied` | relay only, origin relay only (vault-derived copies ignored): increment actions_applied for payload.kind (warn, remove_from_index, restrict_feature, suspend_relay_access); dedupe by eventId |
 | `moderation.appeal.filed` | relay only (relay-local event): increment appeals_filed with dimension filed; dedupe by eventId |
-| `moderation.appeal.decided` | relay only, origin relay only: increment appeals_decided for payload.outcome upheld, overturned or reduced; dedupe by eventId |
+| `moderation.appeal.decided` | relay only, origin relay only: increment appeals_decided for payload.outcome upheld, overturned or reduced; dedupe by eventId; moot closures emit no decided event and are never counted as decided |
 | `moderation.spam.detected` | relay only, mode relay_intake only (vault_filter ignored): increment spam_detected with dimension throttled when a throttle is present, else flagged; dedupe by eventId |
 | `governance.policy_proposal.decided` | relay only, scope relay and payload.publisherId an operator key of this relay: increment policy_decisions for the outcome once per (proposalId, statementCid); vault-scope copies ignored |
 
@@ -93,7 +93,7 @@ published table excerpt: { "actions_applied": { "warn": 41, "remove_from_index":
 | TEST-PS-148-09.T18 | integration | PS-148-05.R02, PS-148-04.R03 | anonymous get_published on the relay; relay_upload by O2 with a two-key report, with a single-signature report and by X | anonymous read served; two-key upload stored with receipt; single-signature and X uploads refused |
 | TEST-PS-148-09.T19 | integration | PS-148-04.R02, PS-148-01.R04, PS-148-03.R04 | F12 fixtures emit relay-local events through the quarter; relay freezes at periodEnd + 24 h; O1 and O2 each fetch the snapshot; O1 computes and requests review; O2 recomputes and publishes | both snapshots have the same snapshotCid; O2's recomputed contentCid equals O1's; the published report matches the event fixture after suppression |
 | TEST-PS-148-09.T21 | integration | PS-148-03.R02, PS-148-04.R03 | two different verified version-1 reports for 2026-Q3 reach V in either order | both marked conflicted; get_published returns conflicted true and neither is current |
-| TEST-PS-148-09.T22 | contract | PS-148-01.R04, PS-148-04.R02 | compare the dimension vocabularies with the F12.S01.M01, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas | every enum value maps to one dimension and no dimension lacks a producer value |
+| TEST-PS-148-09.T22 | contract | PS-148-01.R04, PS-148-04.R02 | compare the dimension vocabularies with the F12.S01.M01 moderation.report.received, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas; a moderation.report.filed fixture; an appeal closed as moot | every enum value maps to one dimension and no dimension lacks a producer value; report.filed and the moot closure change no counter and appeals_decided has exactly upheld, overturned and reduced |
 
 ## Dependencies
 

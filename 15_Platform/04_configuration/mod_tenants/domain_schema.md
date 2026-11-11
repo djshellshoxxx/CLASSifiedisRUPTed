@@ -6,12 +6,13 @@
 
 ## Requirements
 
-- **PS-125-01.R01** A Tenant stores slug, display name, status, allowed currencies, jurisdiction profile id, default locale, limits and revision with the base record fields of CTR-ID-001 (id is the tenantId); its operator keys are not stored but derived from F16.S01.M01 RoleAssignment records of scope tenant:<id>.
+- **PS-125-01.R01** A Tenant stores slug, display name, status, allowed currencies, jurisdiction profile reference (ProfileRef), default locale, limits and revision with the base record fields of CTR-ID-001 (id is the tenantId); its operator keys are not stored but derived from F16.S01.M01 RoleAssignment records of scope tenant:<id>.
 - **PS-125-01.R02** Tenant data is public hosting information (P0), including the derived operator public keys, and is retained as RET-STANDARD while the community exists.
 - **PS-125-01.R03** LocalSettings is the vault's own preference record (P3, stored only on the device and exported with the vault) and holds the vaultId, a UUIDv7 created once at vault initialisation that is the CTR-ID-001 ID-6 tenantId of every record in that vault; the vault has no relay tenant record.
 - **PS-125-01.R04** Every limit is capped by the platform maximums (maxUploadBytes and maxLocalAttachmentBytes ≤ 5242880 per N9, maxEnvelopeBytes ≤ 262144 per CTR-SCH-001 SCH-6) and names the module that enforces it; a limit without an enforcer is not part of the record.
 - **PS-125-01.R05** Tenant limits hold the relay discovery settings read by F06.S02.M03 - anonymousAllowed (default true), anonymousMinRadiusKm (25, 50 or 100, default 25), anonymousCenterLevel (L1, the only public level coarse enough for anonymous callers) and maxDepth (1..500, default 500) - and they appear in every signed configuration statement.
 - **PS-125-01.R06** LocalSettings holds the optional display preferences a11yMotion (system or reduced, default system) and moneyDisplay (symbol, code or name, default symbol), returned with their defaults by platform.local_settings.get and changed only through platform.local_settings.update.
+- **PS-125-01.R07** The tenant jurisdictionProfile is a ProfileRef {publisherId?, code} of F18.S01.M01 - code matching ^[a-z0-9_-]{2,40}$, publisherId an optional did:key Ed25519 publisher key - with default code generic and no publisherId, which resolves to the bundled generic profile of F18.S01.M01; it appears in the Tenant, in every signed configuration statement and in the platform.tenant.created and platform.tenant.configured payloads, and this module never resolves it.
 
 ## Specification
 
@@ -26,10 +27,10 @@ Schema `classrup.platform.tenant/v1` · storage **relay** · privacy **P0** · r
 | displayName | string — 1..80 characters, plain text |
 | status | enum — active \| suspended \| archived |
 | allowedCurrencies | string[] — 1..20 distinct codes matching ^[A-Z0-9]{2,12}$ (ISO 4217 alpha-3 or configured asset code); enforced by the relay index and publish intake (F06.S01.M01, F11.S01.M02) |
-| jurisdictionProfile | string — ^[a-z0-9_-]{2,40}$, default 'generic' |
+| jurisdictionProfile | ProfileRef — { publisherId?: did:key (Ed25519 publisher key), code: ^[a-z0-9_-]{2,40}$ } of F18.S01.M01, default { code: 'generic' }, which resolves to the bundled generic profile of F18.S01.M01; a reference without publisherId is resolved by F18.S01.M01 (pinned profiles publisher, then the bundled project publisher) |
 | defaultLocale | string — BCP 47 tag matching ^[a-z]{2,3}(-[A-Z]{2})?$, default 'en' |
 | limits | json — { maxIndexedListingsPerPublisher 1..1000 default 100 (F06.S01.M01 index write), maxUploadBytes 65536..5242880 default 5242880 (F15.S02.M01 media upload), maxMailboxBytesPerRecipient 1048576..1073741824 default 52428800 (F08.S01.M01), maxEnvelopeBytes 4096..262144 default 262144 (F08.S01.M01), maxCycleLength 3..6 default 5 (F02.S02.M03 relay matching), anonymousAllowed boolean default true, anonymousMinRadiusKm 25 \| 50 \| 100 default 25, anonymousCenterLevel L1 default L1, maxDepth 1..500 default 500 (the four relay discovery settings of F06.S02.M03 proximity queries) } |
-| operatorKeys | derived string[] — did:key subjects of active F16.S01.M01 RoleAssignments with role operator and scope tenant:<id>; read through F16, never stored here |
+| operatorKeys | derived string[] — did:key subjects of active F16.S01.M01 RoleAssignments with role operator and scope tenant:<id>; read through F16, never stored here; published in every classrup.platform.tenant_config/v1 statement, where F18.S02.M02 receivers verify transparency compiler and reviewer keys |
 | suspendedReason? | string — ≤ 200 characters, shown to clients |
 | suspendedAt? | timestamp — RFC 3339 UTC |
 | configStatementCid | string — cid of the relay-signed classrup.platform.tenant_config/v1 statement of the current revision |
@@ -57,7 +58,7 @@ Schema `classrup.platform.local_settings/v1` · storage **device** · privacy **
 | localLimits | json — { maxLocalAttachmentBytes 65536..5242880 default 5242880 (vault blob store of F15.S02.M03 and F08.S01.M03), maxOutboxEntries 10..200 default 200 (F15.S01.M01) } |
 | a11yMotion? | enum — system \| reduced; default system; read by the PWA shell and passed to F14.S01.M01 setMotionPreference |
 | moneyDisplay? | enum — symbol \| code \| name; default symbol; read by the PWA shell and passed to F14.S02.M02 formatMoney as the display option |
-| knownRelayConfigs? | json — per relayId the last verified tenant_config statement { tenantId, revision, cid, statement } used to show what changed |
+| knownRelayConfigs? | json — per relayId the last verified tenant_config statement { tenantId, revision, cid, statement } used to show what changed and read by the vault operatorKeys resolver |
 | revision | int — CTR-ID-001 ID-4 |
 | updatedAt | timestamp — RFC 3339 UTC |
 
@@ -92,6 +93,8 @@ CREATE TABLE platform_tenant_config (tenant_id TEXT NOT NULL, revision INTEGER N
 | TEST-PS-125-09.T25 | unit | PS-125-01.R03 | initialise vaults V1 and V2, dispatch a vault command in each, try a LocalSettings patch with vaultId | each vault has one immutable UUIDv7 vaultId used as the dispatch context tenantId of its records; the two differ; the patch is refused with VALIDATION_FAILED |
 | TEST-PS-125-09.T28 | contract | PS-125-01.R05, PS-125-04.R04 | default discovery settings; then anonymousAllowed false, anonymousMinRadiusKm 50 and maxDepth 200; then anonymousMinRadiusKm 10, anonymousCenterLevel L2 and maxDepth 501 | the signed configuration and limits(tenantId) give true, 25, L1, 500 and then the new values to an F06.S02.M03 stub, which refuses anonymous callers, a 25 km anonymous radius and depth 201; the three invalid values are refused with VALIDATION_FAILED |
 | TEST-PS-125-09.T29 | unit | PS-125-01.R06, PS-125-02.R05, PS-125-10.R03 | get on a new vault; update with a11yMotion reduced and moneyDisplay code; update with a11yMotion fast; import a record with moneyDisplay emoji and a11yMotion reduced | defaults system and symbol; the values stored and returned; VALIDATION_FAILED for fast; the import keeps reduced and replaces emoji with symbol |
+| TEST-PS-125-09.T31 | contract | PS-125-01.R07, PS-125-02.R01, PS-125-04.R01 | create T1 without jurisdictionProfile, configure { code: eu_de }, then { publisherId: did:key KP, code: eu_de }; then a plain string eu_de, { code: EU }, { publisherId: notakey, code: eu_de } and { code: eu_de, version: 2 } | defaults to { code: generic } and the F18.S01.M01 resolve stub returns the bundled generic profile; both valid references are stored, signed in tenant_config and carried in platform.tenant.configured unchanged; the four invalid values are refused with VALIDATION_FAILED and their field paths |
+| TEST-PS-125-09.T32 | integration | PS-125-04.R06, PS-125-01.R07 | V1 stores the verified tenant_config of relay R listing O1 and O2; the F18.S02.M02 receive stub checks a report compiled by O1 and reviewed by O2, one reviewed by X, and one for a relay V1 holds no statement for; A1 revokes O2, V1 re-fetches and the O1-O2 report is checked again | the resolver returns [O1, O2], roleFor accepts the first report and resolves no role for X or for the unknown relay; after the revocation the resolver returns [O1] from the new verified statement and the reviewer role of O2 is no longer resolved |
 
 ## Dependencies
 

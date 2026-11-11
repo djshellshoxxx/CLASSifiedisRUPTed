@@ -41,7 +41,7 @@ See the module test table below (all processes).
 | TEST-PS-148-09.T19 | integration | PS-148-04.R02, PS-148-01.R04, PS-148-03.R04 | F12 fixtures emit relay-local events through the quarter; relay freezes at periodEnd + 24 h; O1 and O2 each fetch the snapshot; O1 computes and requests review; O2 recomputes and publishes | both snapshots have the same snapshotCid; O2's recomputed contentCid equals O1's; the published report matches the event fixture after suppression |
 | TEST-PS-148-09.T20 | abuse | PS-148-07.R04, PS-148-02.R05 | publish quarterly 2026-Q3 then compute 2026-08; publish a correction where one cell changes from 15 to 12 | monthly compute rejected with GOVERNANCE_TRANSPARENCY_PERIOD_INVALID; the changed cell is suppressed in v2 |
 | TEST-PS-148-09.T21 | integration | PS-148-03.R02, PS-148-04.R03 | two different verified version-1 reports for 2026-Q3 reach V in either order | both marked conflicted; get_published returns conflicted true and neither is current |
-| TEST-PS-148-09.T22 | contract | PS-148-01.R04, PS-148-04.R02 | compare the dimension vocabularies with the F12.S01.M01, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas | every enum value maps to one dimension and no dimension lacks a producer value |
+| TEST-PS-148-09.T22 | contract | PS-148-01.R04, PS-148-04.R02 | compare the dimension vocabularies with the F12.S01.M01 moderation.report.received, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas; a moderation.report.filed fixture; an appeal closed as moot | every enum value maps to one dimension and no dimension lacks a producer value; report.filed and the moot closure change no counter and appeals_decided has exactly upheld, overturned and reduced |
 
 ## Acceptance criteria
 

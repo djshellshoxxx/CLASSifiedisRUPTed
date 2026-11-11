@@ -57,7 +57,7 @@ processes:
       - "A TransparencyReport is an immutable computed report identified by relayId, periodKey and version, with suppressed aggregate tables, a content digest, the snapshot it was computed from and a publication status; corrections are new versions."
       - "TransparencyCounter rows hold only period key, metric, dimension value and count; they never reference users, cases, listings or free text."
       - "Reports are public P0; counters are relay-local operational data (IOX-7) of class P2 for that relay's operator role, stored only on the relay, and leave it only as a relay-signed snapshot sealed to an operator key."
-      - "Dimension vocabularies are bound to the producer enums: reason codes of F12.S01.M01, action kinds of F12.S02.M01, appeal outcomes of F12.S01.M03 and spam detections of F12.S02.M02 relay intake."
+      - "Dimension vocabularies are bound to the producer enums: reason codes of the relay-side moderation.report.received of F12.S01.M01 (the vault-local moderation.report.filed is never counted), action kinds of F12.S02.M01, appeal outcomes upheld, overturned and reduced of moderation.appeal.decided of F12.S01.M03 (moot closures emit no event and are not counted) and spam detections of F12.S02.M02 relay intake."
     entities:
       - name: TransparencyReport
         schema: classrup.governance.transparency_report/v1
@@ -119,10 +119,10 @@ processes:
           - Counters of frozen periods change only by an explicit correction recount recorded with the reason.
     note: |
       Dimension vocabularies (bound to producer enums; contract-tested against the F12 event schemas):
-      reports_received - reasonCode of moderation.report.received, the 12-code taxonomy of F12.S01.M01: spam, scam_fraud, prohibited_item, harassment, hate, sexual_content, violence, counterfeit, privacy_leak, impersonation, minor_safety, other.
+      reports_received - reasonCode of the relay-side moderation.report.received, the 12-code taxonomy of F12.S01.M01: spam, scam_fraud, prohibited_item, harassment, hate, sexual_content, violence, counterfeit, privacy_leak, impersonation, minor_safety, other. The vault-local moderation.report.filed never reaches the relay (EVT-8) and is not counted.
       actions_applied - kind of moderation.action.applied with origin relay (F12.S02.M01): warn, remove_from_index, restrict_feature, suspend_relay_access.
       appeals_filed - filed (relay-local moderation.appeal.filed of F12.S01.M03).
-      appeals_decided - outcome of moderation.appeal.decided with origin relay (F12.S01.M03): upheld, overturned, reduced.
+      appeals_decided - outcome of moderation.appeal.decided with origin relay (F12.S01.M03): upheld, overturned, reduced. Moot closures (mootReason action_reverted or action_expired) emit no decided event, so moot is not a dimension and moot appeals appear only in appeals_filed.
       spam_detected - throttled or flagged (moderation.spam.detected of F12.S02.M02 with mode relay_intake only; throttled when the payload carries a throttle).
       policy_decisions - approved, rejected, conflicted (governance.policy_proposal.decided with scope relay whose publisherId is an operator key of this relay).
       legal_requests - <type>:<outcome> with type court_order, law_enforcement, data_subject, other and outcome complied, partial, rejected.
@@ -271,10 +271,10 @@ processes:
     events_produced:
       - {type: governance.transparency.published, privacy: P0, payload: "{ reportId, relayId, periodKey, version, contentCid, statementCid, compilerId, reviewerId, supersedes? } — vault-local in the reviewer vault on publish and in receiving vaults on receive"}
     events_consumed:
-      - {type: moderation.report.received, effect: "relay only: increment reports_received for payload.reasonCode (12-code F12.S01.M01 taxonomy) in the period of relayReceivedAt; dedupe by eventId"}
+      - {type: moderation.report.received, effect: "relay only: increment reports_received for payload.reasonCode (12-code F12.S01.M01 taxonomy) in the period of relayReceivedAt; dedupe by eventId; the vault-local moderation.report.filed is not consumed"}
       - {type: moderation.action.applied, effect: "relay only, origin relay only (vault-derived copies ignored): increment actions_applied for payload.kind (warn, remove_from_index, restrict_feature, suspend_relay_access); dedupe by eventId"}
       - {type: moderation.appeal.filed, effect: "relay only (relay-local event): increment appeals_filed with dimension filed; dedupe by eventId"}
-      - {type: moderation.appeal.decided, effect: "relay only, origin relay only: increment appeals_decided for payload.outcome upheld, overturned or reduced; dedupe by eventId"}
+      - {type: moderation.appeal.decided, effect: "relay only, origin relay only: increment appeals_decided for payload.outcome upheld, overturned or reduced; dedupe by eventId; moot closures emit no decided event and are never counted as decided"}
       - {type: moderation.spam.detected, effect: "relay only, mode relay_intake only (vault_filter ignored): increment spam_detected with dimension throttled when a throttle is present, else flagged; dedupe by eventId"}
       - {type: governance.policy_proposal.decided, effect: "relay only, scope relay and payload.publisherId an operator key of this relay: increment policy_decisions for the outcome once per (proposalId, statementCid); vault-scope copies ignored"}
     errors:
@@ -388,7 +388,7 @@ processes:
       - "T19 | integration | 04.R02,01.R04,03.R04 | F12 fixtures emit relay-local events through the quarter; relay freezes at periodEnd + 24 h; O1 and O2 each fetch the snapshot; O1 computes and requests review; O2 recomputes and publishes | both snapshots have the same snapshotCid; O2's recomputed contentCid equals O1's; the published report matches the event fixture after suppression"
       - "T20 | abuse | 07.R04,02.R05 | publish quarterly 2026-Q3 then compute 2026-08; publish a correction where one cell changes from 15 to 12 | monthly compute rejected with GOVERNANCE_TRANSPARENCY_PERIOD_INVALID; the changed cell is suppressed in v2"
       - "T21 | integration | 03.R02,04.R03 | two different verified version-1 reports for 2026-Q3 reach V in either order | both marked conflicted; get_published returns conflicted true and neither is current"
-      - "T22 | contract | 01.R04,04.R02 | compare the dimension vocabularies with the F12.S01.M01, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas | every enum value maps to one dimension and no dimension lacks a producer value"
+      - "T22 | contract | 01.R04,04.R02 | compare the dimension vocabularies with the F12.S01.M01 moderation.report.received, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas; a moderation.report.filed fixture; an appeal closed as moot | every enum value maps to one dimension and no dimension lacks a producer value; report.filed and the moot closure change no counter and appeals_decided has exactly upheld, overturned and reduced"
     acceptance:
       - All tests T01-T22 pass in CI.
       - No published cell reveals a count between 1 and 9 directly, through totals or by differencing across periods or versions, and totals under 10 hide all breakdowns.

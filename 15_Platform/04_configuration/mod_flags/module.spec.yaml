@@ -1,0 +1,282 @@
+# F15.S04.M02 Feature flags (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S04.M02
+scope: MVP
+summary: >-
+  Flag values and their evaluation (CTR-FLG-001). Two independent scopes exist: the vault scope, set by the
+  local user within the modules compiled into their build and evaluated entirely on the device, and the relay
+  scope, set per community (tenant) hosted on a relay by a key holding the tenant-scoped operator role (or admin)
+  in F16.S01.M01 and evaluated by that relay for its relay commands. A flag value is off, on or beta(roles). The
+  dependency rule (a module can be on only if all modules it depends_on are on, FLG-2) is checked when a value is
+  written and again at evaluation, using the generated registry of F15.S04.M01. A disabled module returns
+  FEATURE_DISABLED for its commands, stops its consumers and hides its entry points while keeping its data (FLG-3).
+  When stored settings cannot be read, evaluation fails closed: last committed values, otherwise every switchable
+  non-core module off. There is no global flag service and no remote switch that can disable features inside
+  someone's vault.
+responsibilities:
+  - Own the FlagSetting record for both scopes (vault and relay-community), with tenantId from the dispatch context (the vaultId of F15.S04.M03 in the vault, the relay tenant on a relay), expectedRevision concurrency and a reason for each change.
+  - Evaluate effective state for a key and actor with the dependency rule, the feature-level cascade (feature off turns all its modules off) and defaults from the registry (FLG-4), caching results for at most 30 s and invalidating immediately in-process on change.
+  - Fail closed when settings cannot be read - last committed values from memory or the mirror row, otherwise every switchable non-core module off with "settings unavailable", and DEPENDENCY_UNAVAILABLE for affected relay commands - so a module the user or operator switched off never comes back on silently.
+  - Reject writes that would violate the dependency rule with PLATFORM_FLAG_DEPENDENCY, listing blocking or dependent modules, with an optional cascade that switches dependents off atomically.
+  - Protect core features (F15, F16) from being switched off with PLATFORM_FLAG_LOCKED.
+  - Emit platform.flag.changed for each changed key so local consumers (UI, command bus) refresh without polling.
+  - Register the F10 privacy ports (ExportSectionPort, DeletionPort, RetentionPurgePort) for vault-scope settings with F10.S01.M03, F10.S01.M04 and F10.S01.M02 (N6).
+non_responsibilities:
+  - The graph, defaults and module surfaces (F15.S04.M01 mod_feature).
+  - Enforcing FEATURE_DISABLED on commands (F15.S02.M02 mod_api calls the evaluator).
+  - Hiding UI entry points (each feature's UI uses the evaluator).
+  - Tenants, their settings and the vaultId (F15.S04.M03 mod_tenants).
+  - Relay role assignments (F16.S01.M01 RoleAssignment; this module only names the roles its capabilities need).
+  - "Future: percentage rollouts and experiments; Future: signed remote flag advisories that a user can accept or ignore."
+depends_on: [F15.S04.M01, F15.S04.M03, F15.S02.M03, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FLG-001, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001]
+user_stories:
+  - As a member, I can turn off modules I do not want, such as auctions, and the app hides them while keeping any data I already have.
+  - As a member, I am told exactly which other modules must be on before I can enable one, or which would also switch off.
+  - As a member, a module I switched off stays off even if my device cannot read my settings for a moment.
+  - As a relay operator, I can enable beta features for operators only on my community before opening them to everyone, and my relay answers FEATURE_DISABLED for anything that is off.
+  - As a developer, I can rely on one evaluation function in the vault and on the relay with identical dependency semantics.
+edge_cases:
+  - Turning on a module whose dependency is off; rejected with PLATFORM_FLAG_DEPENDENCY listing the missing dependency, no state changed.
+  - Turning off a module that other modules depend on while they are on; rejected unless cascade is true, in which case dependents switch off in one transaction and one platform.flag.changed event per key is emitted.
+  - Turning a whole feature off while a module of another feature depends on one of its modules; the same rule applies and cascade handles it.
+  - Two operator devices change the same flag at once; the second gets CONFLICT_REVISION and must re-read.
+  - A module is on in the relay scope but off in the vault scope; relay commands for it work for other users of that relay, while this vault hides its UI and does not run its consumers.
+  - A module is on in the vault scope but the selected relay has it off; the vault keeps local features working and shows relay-dependent actions as "this relay does not offer it", using FEATURE_DISABLED from the relay.
+  - A beta(roles) value names a role that does not exist or contains duplicates; rejected with VALIDATION_FAILED.
+  - Cache is stale by up to 30 s on another device; the relay is authoritative for its own relay commands at call time and the stale device sees FEATURE_DISABLED on its next call.
+  - The vault's settings rows cannot be read (IndexedDB error); evaluation uses the last committed values, or with none every switchable non-core module off, and Settings shows "settings unavailable"; federation publishing, push and location modules the user had switched off stay off.
+  - A member without the tenant operator role calls platform.flag.reset_relay to put a module back to its default (on); refused with FORBIDDEN.
+ux:
+  screens:
+    - "Settings > Features (vault scope): feature groups with module toggles for modules of surface vault or both, dependency text from the registry, a Show beta features switch, and explanations of what happens to data when off; a 'Settings unavailable, optional modules are paused' banner when settings cannot be read."
+    - "Operator console > Flags (relay scope, part of the operator tool): table of keys of surface relay or both with value, beta roles, last change, reason, with Change and Reset to default dialogs that show blocking dependencies and a cascade checkbox."
+  states: [loading, ready, saving, conflict, blocked-by-dependency, locked-core, offline-read-only, settings-unavailable]
+  a11y:
+    - Toggles are real switches with accessible names including module title and dependency summary, and state changes are announced by aria-live polite.
+    - The dependency dialog lists blocking modules as text and focus moves to its first action.
+    - Targets are at least 44x44 px and the table is keyboard navigable.
+processes:
+  domain_schema:
+    requirements:
+      - A FlagSetting stores scope, tenantId, key, value, beta roles, reason, actor and revision, with unique (scope, tenantId, key).
+      - Vault-scope settings live only in the user's vault and are P3 (device-only configuration that could fingerprint a user and is never transmitted); relay-scope settings live in the relay database and are P0 because they describe hosting policy visible to clients.
+      - Settings are never deleted when a module is turned off; resetting a key removes the row so the registry default applies.
+      - The vault-scope tenantId is the vaultId of the vault (F15.S04.M03), taken from the dispatch context tenantId, and never a constant; the relay-scope tenantId is the relay tenant of F15.S04.M03.
+    entities:
+      - name: FlagSetting
+        schema: classrup.platform.flag_setting/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "scope: enum — vault | relay"
+          - "tenantId: uuidv7 — CTR-ID-001 ID-6 from the dispatch context: the relay tenant (community) for scope relay, the vaultId of F15.S04.M03 for scope vault"
+          - "key: string — module ID (F04.S01.M01) or feature ID (F04) present in the registry"
+          - "value: enum — off | on | beta"
+          - "betaRoles?: string[] — roles among member, moderator, operator, relay_operator, admin; 1..5 items, required when value is beta; for the vault scope the value beta means enabled when Show beta features is on"
+          - "reason?: string — ≤ 200 chars, plain text"
+          - "changedBy: string — did:key of the local principal (vault) or of the operator key (relay)"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one FlagSetting per (scope, tenantId, key).
+          - A stored on or beta value never violates the dependency rule against the stored effective state of its dependencies at write time.
+          - Core features F15 and F16 have no stored off value.
+          - Keys exist in the registry and FUTURE modules cannot be set to on or beta.
+          - Vault-scope rows exist only in the vault's IndexedDB with tenantId equal to that vault's vaultId and are classified P3 field by field (F10.S02.M02); relay-scope rows are classified P0.
+    sql: |
+      CREATE TABLE platform_flag_setting (
+        id TEXT PRIMARY KEY, scope TEXT NOT NULL, tenant_id TEXT NOT NULL, key TEXT NOT NULL,
+        value TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX platform_flag_key ON platform_flag_setting(scope, tenant_id, key);
+      -- mirror of the last committed effective values per (scope, tenant), written in the same transaction as each change
+      CREATE TABLE platform_flag_mirror (scope TEXT NOT NULL, tenant_id TEXT NOT NULL, revision INTEGER NOT NULL,
+        effective TEXT NOT NULL, PRIMARY KEY (scope, tenant_id)) WITHOUT ROWID;
+      -- vault: the same rows as F15.S02.M03 records of types platform.flag_setting and platform.flag_mirror (tenant = vaultId)
+  validation_rules:
+    requirements:
+      - Every write is validated against the registry, the dependency rule, the lock list and role names before any change.
+      - Evaluation never throws; unknown keys evaluate to off and are logged locally.
+      - Each violation maps to one stable error code with params that list the modules involved.
+    rules:
+      - "V01 | key exists in the registry and its scope is MVP for on or beta | VALIDATION_FAILED"
+      - "V02 | value is off, on or beta; beta has 1..5 distinct known roles | VALIDATION_FAILED"
+      - "V03 | on or beta requires all depends_on modules effectively on (beta requires on or beta with a superset of roles) | PLATFORM_FLAG_DEPENDENCY"
+      - "V04 | off or reset of a key with effectively-on dependents requires cascade true | PLATFORM_FLAG_DEPENDENCY"
+      - "V05 | key is not under core features F15 or F16 when value is off | PLATFORM_FLAG_LOCKED"
+      - "V06 | expectedRevision equals the stored revision when the setting exists | CONFLICT_REVISION"
+      - "V07 | reason is at most 200 chars and a reason is present when value is off or beta | VALIDATION_FAILED"
+      - "V08 | at most 30 flag changes per minute per actor | RATE_LIMITED"
+      - "V09 | a relay-scope set or reset is made by a key holding an active F16.S01.M01 RoleAssignment of role operator for scope tenant:<tenantId>, or admin, on this relay | FORBIDDEN"
+      - "V10 | platform.flag.reset_relay and platform.flag.set_relay carry tenantId of an existing relay tenant and an Idempotency-Key; platform.flag.set and platform.flag.reset act only on the vault scope of the dispatch context | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A flag key has three values and any change goes through the same validated transition.
+      - A change and its cascade are atomic, so all dependents change or none.
+      - Evaluation always reflects the committed state after at most 30 s of caching, and immediately in the writing process.
+    machines: []
+    note: "A flag key is a cyclic value register, not a lifecycle with a terminal state. Allowed value changes: off to on, off to beta, beta to on, on to beta, on to off, beta to off, each only when the dependency rule passes (V03, V04) and the key is not locked (V05); a reset removes the row and applies the registry default under the same rules; each change emits platform.flag.changed."
+    timeouts:
+      - "Evaluation cache TTL 30000 ms; cleared immediately in the writing process on every change and on platform.tenant.created for that tenant."
+  commands_queries_events:
+    requirements:
+      - The module has two vault-local commands (set and reset, vault scope only) and two relay commands (set_relay and reset_relay, relay scope only, each with tenantId and Idempotency-Key), plus queries for evaluation and listing, all with the signatures below.
+      - A vault-local change produces no signed statement and never leaves the device; a relay change is a relay command that emits a relay-local event.
+      - The module consumes platform.tenant.created to prepare evaluation for a new community, and privacy.deletion.completed to confirm that the deleted principal's vault-scope settings are gone (N6).
+    commands:
+      - name: platform.flag.set
+        capability: platform.flag.set
+        input: "{ key, value: off|on|beta, betaRoles?, cascade?: boolean, reason?, expectedRevision? } — vault-local command, actor is the unlocked local principal, scope vault, tenantId from the dispatch context (vaultId)"
+        output: "{ changed: [{ key, previous, value, revision }] }"
+        errors: [VALIDATION_FAILED, PLATFORM_FLAG_DEPENDENCY, PLATFORM_FLAG_LOCKED, CONFLICT_REVISION, RATE_LIMITED]
+        emits: [platform.flag.changed]
+        idempotent: true
+      - name: platform.flag.set_relay
+        capability: platform.flag.set_relay
+        input: "{ tenantId, key, value: off|on|beta, betaRoles?, cascade?: boolean, reason, expectedRevision? } — relay command with Idempotency-Key, signed by a key holding the tenant operator or admin role"
+        output: "{ changed: [{ key, previous, value, revision }] }"
+        errors: [FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PLATFORM_FLAG_DEPENDENCY, PLATFORM_FLAG_LOCKED, CONFLICT_REVISION, RATE_LIMITED]
+        emits: [platform.flag.changed]
+        idempotent: true
+      - name: platform.flag.reset
+        capability: platform.flag.set
+        input: "{ key, cascade?, expectedRevision } — vault-local command, scope vault only; removes the setting so the registry default applies"
+        output: "{ changed: [{ key, previous, value, revision }] }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, PLATFORM_FLAG_DEPENDENCY, PLATFORM_FLAG_LOCKED, CONFLICT_REVISION]
+        emits: [platform.flag.changed]
+        idempotent: true
+      - name: platform.flag.reset_relay
+        capability: platform.flag.set_relay
+        input: "{ tenantId, key, cascade?, expectedRevision, reason } — relay command with Idempotency-Key, scope relay only, signed by a key holding the tenant operator or admin role (V09); removes the setting so the registry default applies"
+        output: "{ changed: [{ key, previous, value, revision }] }"
+        errors: [FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, PLATFORM_FLAG_DEPENDENCY, PLATFORM_FLAG_LOCKED, CONFLICT_REVISION, RATE_LIMITED]
+        emits: [platform.flag.changed]
+        idempotent: true
+    queries:
+      - name: platform.flag.evaluate
+        capability: platform.flag.read_effective
+        input: "{ scope: vault|relay, tenantId?, keys?: id[] (default all), roles?: string[] } — vault-local query or relay query; roles default to the caller's roles"
+        output: "{ values: { [key]: on|off }, cachedUntil, registryHash, source: committed|last_committed|fail_closed }"
+        errors: [NOT_FOUND]
+      - name: platform.flag.list
+        capability: platform.flag.read_settings
+        input: "{ scope: vault|relay, tenantId?, cursor?, limit ≤ 200 } — vault-local query or relay query (tenant operator or admin)"
+        output: "{ items: [{ key, value, betaRoles?, effective, blockedBy?: id[], revision, reason? }], nextCursor? }"
+        errors: [FORBIDDEN, NOT_FOUND, DEPENDENCY_UNAVAILABLE]
+    events_produced:
+      - {type: platform.flag.changed, privacy: P1, payload: "{ scope, tenantId, key, previous, value, betaRoles?, cascadeOf?, changedBy, changedAt, revision }"}
+    events_consumed:
+      - {type: platform.tenant.created, effect: "invalidate the evaluation cache for the new tenant; no rows are created because defaults come from the registry"}
+      - {type: privacy.deletion.completed, effect: "confirm that the DeletionPort removed every vault-scope FlagSetting and mirror row of the deleted principal's vault; flag settings hold no evidence, so nothing is pseudonymized"}
+    errors:
+      - "PLATFORM_FLAG_DEPENDENCY | 422 | no | the change violates the module dependency rule; params list blocking or dependent modules"
+      - "PLATFORM_FLAG_LOCKED | 422 | no | core feature cannot be switched off"
+    example: |
+      platform.flag.set({ key: "F04.S01.M01", value: "on", reason: "enable auctions" })
+      -> 422 { "code": "PLATFORM_FLAG_DEPENDENCY", "params": { "blockedBy": ["F09.S03.M01"] } }
+      platform.flag.set_relay({ tenantId: "0192f3a4-…", key: "F04", value: "beta", betaRoles: ["operator"], reason: "operator-only trial" })
+      -> 200 { "changed": [ { "key": "F04", "previous": "off", "value": "beta", "revision": 2 } ] }
+      Idempotency-Key: 0192f3a4-0000-7000-8000-000000000011
+      platform.flag.reset_relay({ tenantId: "0192f3a4-…", key: "F04", expectedRevision: 2, reason: "end of trial" })   (member key)
+      -> 403 { "code": "FORBIDDEN" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy applies, so only the unlocked local principal can change or reset vault-scope flags, and no remote party can change them.
+      - Relay policy applies, so only a key holding an active F16.S01.M01 RoleAssignment of role operator for scope tenant:<tenantId>, or admin, on that relay can change or reset relay-scope flags, and that changes only what that relay hosts for that community (CTR-CAP-001 CAP-9).
+      - Effective values may be read by any local principal, and by any relay client for the community they use, because clients need them to hide entry points.
+    capabilities:
+      - "platform.flag.set | local-principal | vault unlocked; actor owns the vault; vault scope only (set and reset)"
+      - "platform.flag.set_relay | operator, admin | signed request by a key holding an active F16.S01.M01 RoleAssignment of role operator for scope tenant:<tenantId> or admin on this relay; Idempotency-Key; rate limit 30 changes per minute (set_relay and reset_relay)"
+      - "platform.flag.read_effective | anonymous, member, moderator, operator, admin | none for relay public effective values; vault policy for vault scope"
+      - "platform.flag.read_settings | local-principal, operator, admin | vault owner for vault scope; tenant operator or admin for relay scope (includes reasons and actors)"
+  failure_recovery_idempotency:
+    requirements:
+      - Writes are idempotent per CTR-IDM-001 and use expectedRevision, so retries and concurrent edits are safe.
+      - A cascade is a single transaction; a failure leaves no partial change.
+      - When settings cannot be read, evaluation fails closed - it uses the last committed values kept in memory or in the mirror row, and when none are available every switchable non-core module evaluates off, the UI shows "settings unavailable" and the relay answers DEPENDENCY_UNAVAILABLE for relay commands of affected modules; FUTURE modules and relay-hosted features that need a host are always off without a value.
+    idempotency: "Relay commands (set_relay, reset_relay) require Idempotency-Key and replay the stored response for 24 h. Vault-local set and reset are idempotent by value: setting the same value with the matching revision, or resetting a key with no row, returns the current state without a new event."
+    concurrency: "expectedRevision per key; the unique index on (scope, tenant_id, key) enforces one row. Cascades run in one BEGIN IMMEDIATE transaction on the relay or one IndexedDB readwrite transaction in the vault, together with the mirror row."
+    retries: "Clients retry only network errors, DEPENDENCY_UNAVAILABLE and RATE_LIMITED with IDM-4 backoff; PLATFORM_FLAG_DEPENDENCY and CONFLICT_REVISION are not retried automatically."
+    offline: "Vault-scope flags work fully offline. Relay-scope changes need the relay and are not queued, because they are operator decisions that need live feedback; the operator console shows read-only when offline."
+    partial_failure: "If the event insert fails the whole transaction rolls back. If cache invalidation fails the entry expires within 30 s. If settings cannot be read, evaluation uses the last committed values from memory or the mirror row; with none it evaluates every switchable non-core module off, logs a local diagnostic and retries the read at the next evaluation after 5 s; it never falls back to registry defaults for a key that may have a stored off value."
+  privacy_retention_abuse:
+    requirements:
+      - Vault flag settings are the user's own configuration and never leave the device except in the user's own export; relay flag settings are public hosting policy of that relay.
+      - Changes record who and why for operators (relay scope) without recording content, and audit entries for relay changes are kept 1 year (RET-AUDIT).
+      - A relay cannot learn a user's vault flags and a user's flags are never sent to a relay, which prevents fingerprinting by configuration.
+      - Vault-scope settings are classified P3 field by field (F10.S02.M02), and the module registers ExportSectionPort (section platform.flags), DeletionPort and RetentionPurgePort with F10.S01.M03, F10.S01.M04 and F10.S01.M02 and consumes privacy.deletion.completed (N6).
+    data:
+      - "Vault scope FlagSetting and mirror row: P3 device-only configuration (it can fingerprint a user), never transmitted."
+      - "Relay scope FlagSetting: P0 hosting policy; changedBy is an operator key, reasons are operator-written and shown to tenant operators and admins only."
+    retention:
+      - "FlagSetting rows kept until reset or deletion of the vault (DeletionPort) or community; the RetentionPurgePort has nothing to purge before that; relay audit of changes 1 year (RET-AUDIT)."
+    threats:
+      - "T01 | A relay or remote party flips vault flags | no remote path exists; vault-scope commands require the unlocked local principal; no flag advisory is auto-applied"
+      - "T02 | Rogue operator disables safety features on a relay | core F15 and F16 locked, every change audited with actor and reason, vaults can leave the relay and local filtering continues"
+      - "T03 | Dependency bypass by direct row edit or crafted request | evaluation re-checks the dependency rule so a stored violation still evaluates off; commands re-verify inside the transaction"
+      - "T04 | Fingerprinting users through their flag set | vault flags P3 and never transmitted; relay evaluation depends only on community settings and caller roles"
+      - "T05 | Flag flapping to cause denial of service | 30 changes per minute per actor, 30 s cache, cascade size capped at 200 keys"
+      - "T06 | A non-operator re-enables a relay module by resetting it to its default | reset_relay requires the platform.flag.set_relay capability, the tenant operator or admin role and an Idempotency-Key; reset is vault-only"
+      - "T07 | Unreadable settings silently re-enable modules the user switched off (federation publishing, push, location) | fail closed with last committed values or all switchable non-core modules off"
+    abuse_controls:
+      - "Rate limit 30 changes per minute per actor and 200 keys per cascade."
+      - "Relay changes and resets are written to the operator audit log with actor, capability, key and decision only (CTR-CAP-001 CAP-7)."
+  observability_performance:
+    requirements:
+      - Relay-scope evaluation and change outcomes are measured per CTR-OBS-001; the vault sends no telemetry and keeps local counters only (OBS-7).
+      - Evaluation is fast enough to run on every command and render without measurable cost.
+      - Cache hit ratio and stale reads are observable on the relay.
+    metrics:
+      - "classrup_platform_flag_changes_total{outcome=ok|dependency|locked|conflict|forbidden}"
+      - "classrup_platform_flag_eval_duration_ms (relay histogram)"
+      - "classrup_platform_flag_cache_total{outcome=hit|miss}"
+      - "classrup_platform_flag_eval_source_total{source=committed|last_committed|fail_closed}"
+    logs:
+      - "info flag.changed {scope, key, value, tenantHash} on the relay; warn flag.settings_unreadable {scope, source}; local diagnostic line in the vault; no reasons or personal data."
+    budgets:
+      - "Evaluation p95 ≤ 1 ms from cache and ≤ 10 ms cold for the full catalog."
+      - "platform.flag.set_relay and reset_relay p95 ≤ 300 ms (OBS-4); cascade of 50 keys ≤ 500 ms."
+      - "Settings > Features renders the full catalog's toggles in ≤ 100 ms and adds ≤ 8 KiB gzip to the deferred chunk."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The dependency rule is covered by property tests over random registries and settings, running the same code for vault and relay adapters.
+      - Contract tests check command and event payloads against the schema registry.
+    fixtures: "Registry fixture with 12 modules in 3 features (one core), dependencies A->B->C and D->B; relay with tenants T1 and T2, F16.S01.M01 RoleAssignments O1 operator scope tenant:T1, O2 operator scope tenant:T2, AD1 admin, member M1; vaults V1 and V2 with vaultIds and local principal L1; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | set key on, reset key | one row per (scope, tenant, key); reset removes the row and default applies; settings kept when module is off"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01-V10 violated in turn | documented code returned and nothing stored"
+      - "T03 | property | 02.R02,03.R01 | random settings and random changes over random acyclic registries | stored state never violates the dependency rule; evaluation never throws; unknown keys evaluate off"
+      - "T04 | integration | 03.R02,06.R02 | cascade off of B with A and D on, injected failure on the third write | no key changed; without failure A, D, B off in one transaction with three events"
+      - "T05 | unit | 03.R03,08.R02 | write then evaluate in the same process and in a second process | same process sees new value immediately; second within 30 s"
+      - "T06 | contract | 04.R01,04.R02 | all four commands and both queries in vault and on relay | outputs and platform.flag.changed payloads validate against registry schemas; vault change emits no relay event and sends no network request; reset rejects scope relay and reset_relay rejects a missing tenantId"
+      - "T07 | integration | 04.R03 | publish platform.tenant.created | evaluation cache for the tenant invalidated, no rows created"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | member M1 and O2 (operator of T2) change T1's relay flags; relay tries to change vault flags | FORBIDDEN; no remote path alters vault flags"
+      - "T09 | integration | 06.R01,03.R01 | same Idempotency-Key replayed with same and different body on set_relay and reset_relay; stale expectedRevision | original response replayed; IDEMPOTENCY_KEY_REUSED; CONFLICT_REVISION"
+      - "T10 | integration | 06.R03,05.R03 | user turns F13 push and F06 location off, then the settings store becomes unreadable in a new process with and without the mirror row; relay settings unreadable; FUTURE module queried | with the mirror the switched-off modules stay off (source last_committed); without it every switchable non-core module is off (source fail_closed) and 'settings unavailable' is shown; relay commands of affected modules answer DEPENDENCY_UNAVAILABLE; FUTURE module off"
+      - "T11 | abuse | 07.R01,07.R03 | capture all network traffic while changing vault flags | zero requests carrying flag values; relay evaluation independent of vault flags"
+      - "T12 | abuse | 07.R02,07.R03 | operator turns F15 off and 31 changes in one minute | PLATFORM_FLAG_LOCKED and RATE_LIMITED; audit rows written for relay changes with actor and reason"
+      - "T13 | load | 08.R02,08.R03 | 50 req/s evaluations plus 5 changes per second on relay for 5 minutes | eval p95 ≤ 1 ms cached, change p95 ≤ 300 ms, metrics exported"
+      - "T14 | unit | 08.R01 | metrics scrape after mixed outcomes | counters per CTR-OBS-001 naming, no user ids as labels"
+      - "T15 | unit | 09.R01 | traceability tool run | every PS-124 requirement maps to a passing test"
+      - "T16 | contract | 09.R02,09.R03 | run dependency-rule suite against vault IndexedDB adapter and relay SQLite adapter | identical results"
+      - "T17 | a11y | 04.R01 | Settings > Features scanned with axe | zero serious issues; toggles have names with dependency summary; dialog focus managed"
+      - "T18 | integration | 10.R01,10.R02,10.R03 | export vault, import into fresh vault, restore relay from backup, roll back one release | vault flags round-trip with the new vault's tenantId; relay flags restored; older reader ignores new optional fields"
+      - "T19 | abuse | 05.R02,04.R01 | member M1, O2 and O1 call platform.flag.reset_relay on T1 for a module whose default is on; L1 calls platform.flag.reset with a relay scope argument | M1 and O2 get FORBIDDEN and the module stays off; O1 succeeds with one audit row; the vault reset refuses the relay scope with VALIDATION_FAILED"
+      - "T20 | contract | 01.R02,01.R04,07.R04 | set vault flags in V1 and V2, set relay flags for T1; inspect V1 and V2 IndexedDB, the relay database and every request | vault rows only in each vault's IndexedDB with tenantId equal to its own vaultId and P3 classification; no vault row or value in any relay request or relay table; relay rows in SQLite classified P0"
+      - "T21 | integration | 07.R04,04.R03 | export section, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for L1 | section platform.flags lists vault-scope settings with field classes; deletion removes every vault-scope row and the mirror; purge removes nothing early; no row remains after the event"
+    acceptance:
+      - All tests T01-T21 pass in CI.
+      - The dependency rule is never violated in stored or evaluated state for vault or relay scope.
+      - A disabled module returns FEATURE_DISABLED, stops its consumers and keeps its data, and stays disabled when settings cannot be read.
+      - No remote party can change a vault's flags, a vault's flags are never transmitted, and only a tenant operator or admin can set or reset relay flags.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export includes vault-scope FlagSetting records as the section platform.flags, so a restored vault keeps its configuration (CTR-IOX-001 IOX-1, IOX-6).
+      - Relay-scope settings are part of the relay database and its backups (IOX-3, IOX-7), and an operator may export them as relay configuration.
+      - Import validates keys against the registry and the dependency rule; violating or unknown entries are skipped and reported in the dry-run.
+    export: "Section platform.flags in classrup-export/v1, one line per vault-scope FlagSetting (schema classrup.platform.flag_setting/v1, classified P3); relay operators can run relay flags export --tenant <id> for relay scope."
+    import: "Import applies entries in dependency order with tenantId replaced by the importing vault's vaultId; entries for unknown or FUTURE modules and entries that would violate FLG-2 are skipped and listed in the dry-run report, never partially applied."
+    backup: "Vault scope: the vault export is the backup. Relay scope: relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because new optional fields are ignored by older readers; unknown keys from a newer registry evaluate off and are preserved. Vault rows written with the former constant tenantId are rewritten to the vaultId by a one-time data migration through F15.S02.M03."

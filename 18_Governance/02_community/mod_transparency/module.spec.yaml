@@ -1,0 +1,404 @@
+id: F18.S02.M02
+scope: MVP
+summary: >-
+  Periodic transparency reports for one relay: aggregate counts of reports received, moderation actions taken,
+  appeals and their outcomes, spam detections at relay intake, the operator's policy decisions and operator-attested
+  legal requests, with small-number suppression (any cell below 10 is shown as under 10, with complementary and
+  cross-version suppression). Counters live on the relay as relay-local operational data: a relay-side consumer of
+  the relay-local moderation events accumulates them, and the relay serves a relay-signed counter snapshot, sealed to
+  the requesting operator key, with coverage measured from its processing checkpoints. A compiler operator imports
+  the snapshot into its vault, computes the report deterministically and sends a compiler-signed draft to a second
+  operator key, which countersigns and publishes classrup.governance.transparency_report/v1. Receivers check both
+  signatures against the relay's signed operator list. The report covers only what that relay hosted; it is not a
+  global statistic and it contains no personal data, case content or requester identities.
+responsibilities:
+  - Own TransparencyReport (one two-signature report version per relayId, periodKey and version) and TransparencyCounter (relay-side period counters, no identities).
+  - Accumulate counters on the relay from relay-local moderation events bound to the F12 producer enums, from the operator's relay-scope policy decisions and from operator-signed legal request tallies, and serve operators a relay-signed, sealed counter snapshot with measured coverage.
+  - Compute a report deterministically from a verified snapshot at period end (one period granularity per relay), apply k >= 10 suppression with complementary and cross-version suppression, and send a compiler-signed draft to a second operator key for review.
+  - Publish the report countersigned by the reviewer to the relay, verify both signatures and the operator list in every receiving vault, and keep corrections as new versions that supersede the earlier one.
+  - Alert the operator when a period has not been published within 30 days after it ended.
+non_responsibilities:
+  - Moderation decisions, reports, evidence and appeals themselves (F12); this module only counts their relay-local events.
+  - Legal evaluation or content of legal requests; only counts by type and outcome, attested by the operator.
+  - Global or cross-relay statistics; each report states the relay and the hosting scope.
+  - User-level activity analytics; nothing here counts individual users.
+  - The relay's operator list (F15.S04.M03 tenant configuration and F16.S01.M01 role assignments) and relay receipts and keys (F15.S02.M01).
+  - "Future: federated roll-ups across cooperating relays using secure aggregation."
+depends_on: [F18.S02.M01, F16.S02.M03, F11.S01.M01, F15.S02.M01, F15.S04.M03, F07.S02.M01, F12.S01.M01, F12.S01.M03, F12.S02.M01, F12.S02.M02, F10.S01.M02, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-OBS-001]
+user_stories:
+  - As a community member, I read my relay's quarterly report and can verify that it is signed by two different operator keys of that relay.
+  - As a relay operator, I prepare the report from the relay's signed counter snapshot, a colleague reviews and countersigns it, and it is published with small numbers suppressed.
+  - As a researcher, I download the signed JSON and CSV and check that they match.
+edge_cases:
+  - A cell has 7 events; it is shown as under 10, one more cell in the same row is shown as suppressed and the row total is not published, so the value cannot be recovered from totals.
+  - Total reports in a period are below 10; every breakdown is suppressed and only the statement that the total is under 10 is shown.
+  - The same reviewer key as the compiler tries to publish; GOVERNANCE_TRANSPARENCY_SELF_REVIEW is returned.
+  - A reviewer key that is not in the relay's signed operator list countersigns; receivers quarantine the report with GOVERNANCE_TRANSPARENCY_SELF_REVIEW.
+  - A correction is needed after publication; a new version is computed from a new snapshot, every cell whose change from the earlier version is 1 to 9 is suppressed, and the earlier version is marked superseded but remains available.
+  - The relay's moderation consumers were stopped for 12 hours in a 92-day quarter; the snapshot's coverage is measured from processing checkpoints and the report states 99 percent.
+  - A legal request tally is entered for a period that is already published; it is added to the next period and the correction path is offered.
+  - Event delivery duplicates, and vault-derived copies of moderation events exist; counters use eventId deduplication, ignore origin vault and vault_filter events, and count each policy decision once by proposalId and statementCid.
+  - Operator clock is wrong by days; period boundaries use the relay's time of each event and the report states that times are the relay's claims.
+  - A relay that published quarterly reports tries a monthly report for a month in a published quarter; rejected with GOVERNANCE_TRANSPARENCY_PERIOD_INVALID.
+  - Two different version-1 reports for the same period are published from different reviewer vaults; readers mark both conflicted and show neither as current.
+ux:
+  screens:
+    - "Operator dashboard: current-period counters from the latest snapshot (with suppression preview), measured coverage percent, days since last publication, compute, request review and review actions."
+    - "Public report page: period, relay and operator fingerprints of compiler and reviewer with the text 'two different keys, not proof of two people', hosting scope statement, tables with suppressed cells shown as under 10 or suppressed, download JSON and CSV, verification status of both signatures."
+    - "Legal request entry: type, outcome, count increment; clear warning that no case details are stored."
+  states: [loading, empty, collecting, computed, awaiting-review, published, superseded, conflicted, overdue, offline-cached]
+  a11y:
+    - Tables have captions and header cells; suppressed cells read as fewer than ten or as withheld, not as an empty cell.
+    - Charts, if any, have a table alternative; status uses text and icon.
+    - Download buttons are at least 44x44 px with descriptive names.
+processes:
+  domain_schema:
+    requirements:
+      - "A TransparencyReport is an immutable computed report identified by relayId, periodKey and version, with suppressed aggregate tables, a content digest, the snapshot it was computed from and a publication status; corrections are new versions."
+      - "TransparencyCounter rows hold only period key, metric, dimension value and count; they never reference users, cases, listings or free text."
+      - "Reports are public P0; counters are relay-local operational data (IOX-7) of class P2 for that relay's operator role, stored only on the relay, and leave it only as a relay-signed snapshot sealed to an operator key."
+      - "Dimension vocabularies are bound to the producer enums: reason codes of the relay-side moderation.report.received of F12.S01.M01 (the vault-local moderation.report.filed is never counted), action kinds of F12.S02.M01, appeal outcomes upheld, overturned and reduced of moderation.appeal.decided of F12.S01.M03 (moot closures emit no event and are not counted) and spam detections of F12.S02.M02 relay intake."
+    entities:
+      - name: TransparencyReport
+        schema: classrup.governance.transparency_report/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "relayId: string — canonical relay id (F15.S02.M01); with periodKey and version identifies the report"
+          - "compilerId: did:key — operator key that computed the report and signed the draft"
+          - "reviewerId?: did:key — operator key that countersigned; differs from compilerId"
+          - "periodKey: string — YYYY-Qn or YYYY-MM, one granularity per relay"
+          - "granularity: enum — month | quarter; fixed by the relay's first published report"
+          - "periodStart: timestamp — RFC 3339 UTC, relay time"
+          - "periodEnd: timestamp — RFC 3339 UTC, relay time"
+          - "version: int — 1.. per (relayId, periodKey)"
+          - "scope: string — hosting scope statement key, for example this relay's hosted listings and mailboxes"
+          - "snapshotCid: string — cid of the relay-signed classrup.governance.transparency_counts/v1 the report was computed from"
+          - "coveragePercent: int — 0..100, floor of processed hours / period hours from the snapshot's processing checkpoints; never operator input"
+          - "tables: object — metric to dimension to count, the literal under_10 (primary suppression) or the literal suppressed (complementary or cross-version suppression); per-metric total only when no cell of the metric is suppressed; <= 64 KiB JCS"
+          - "suppressedCellCount: int — 0..500"
+          - "totalsVisible: boolean — false when the total of reports is under 10"
+          - "contentCid: string — sha256- over JCS of the report body"
+          - "draftCid?: string — cid of the compiler-signed classrup.governance.transparency_draft/v1"
+          - "supersedes?: uuidv7 — report id of the corrected version"
+          - "correctionNote?: string — 10..500 code points, required with supersedes"
+          - "status: enum — computed | awaiting_review | published | superseded | discarded | conflicted"
+          - "publishedAt?: timestamp — reviewer claim"
+          - "statementCid?: string — sha256- of the signed report envelope"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - No published cell holds a value between 1 and 9; such cells are the literal under_10, a row with exactly one under_10 cell shows its next smallest cell as suppressed too, and a metric with any suppressed cell publishes no total.
+          - In a correction every cell whose absolute change from the superseded version is between 1 and 9 is the literal suppressed.
+          - reviewerId differs from compilerId for status published and both are operator keys in the relay's verified tenant configuration.
+          - Exactly one report per (relayId, periodKey) has status published; older versions are superseded; two different reports with the same version are both conflicted.
+      - name: TransparencyCounter
+        schema: classrup.governance.transparency_counter/v1
+        storage: relay
+        privacy: P2
+        retention: RET-AUDIT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay tenant"
+          - "relayId: string — the relay holding the counter"
+          - "periodKey: string — YYYY-Qn or YYYY-MM in the relay's granularity, from the relay time of the counted event"
+          - "metric: enum — reports_received | actions_applied | appeals_filed | appeals_decided | spam_detected | policy_decisions | legal_requests"
+          - "dimension: string — closed vocabulary per metric bound to the producer enum (see note), 1..40 characters"
+          - "count: int — 0..100000000"
+          - "lastEventIds: string[] — <= 100 recent event ids (or proposalId:statementCid for decisions) for deduplication within the period window"
+          - "frozenAt?: timestamp — relay time, periodEnd + 24 h; afterwards only a correction recount changes it"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Unique (relayId, periodKey, metric, dimension); dimension values come only from the closed vocabulary of the metric.
+          - Counters never store user ids, listing ids, case ids or free text.
+          - Counters of frozen periods change only by an explicit correction recount recorded with the reason.
+    note: |
+      Dimension vocabularies (bound to producer enums; contract-tested against the F12 event schemas):
+      reports_received - reasonCode of the relay-side moderation.report.received, the 12-code taxonomy of F12.S01.M01: spam, scam_fraud, prohibited_item, harassment, hate, sexual_content, violence, counterfeit, privacy_leak, impersonation, minor_safety, other. The vault-local moderation.report.filed never reaches the relay (EVT-8) and is not counted.
+      actions_applied - kind of moderation.action.applied with origin relay (F12.S02.M01): warn, remove_from_index, restrict_feature, suspend_relay_access.
+      appeals_filed - filed (relay-local moderation.appeal.filed of F12.S01.M03).
+      appeals_decided - outcome of moderation.appeal.decided with origin relay (F12.S01.M03): upheld, overturned, reduced. Moot closures (mootReason action_reverted or action_expired) emit no decided event, so moot is not a dimension and moot appeals appear only in appeals_filed.
+      spam_detected - throttled or flagged (moderation.spam.detected of F12.S02.M02 with mode relay_intake only; throttled when the payload carries a throttle).
+      policy_decisions - approved, rejected, conflicted (governance.policy_proposal.decided with scope relay whose publisherId is an operator key of this relay).
+      legal_requests - <type>:<outcome> with type court_order, law_enforcement, data_subject, other and outcome complied, partial, rejected.
+      Relay-local ProcessingCheckpoint rows (one per hour bucket in which the relay's moderation consumers and the counter consumer committed a heartbeat) feed coverage: coveragePercent = floor(100 x processed hours / period hours).
+      The relay-signed statement classrup.governance.transparency_counts/v1 { relayId, periodKey, periodStart, periodEnd, frozenAt, counters [{metric, dimension, count}], coverage { processedHours, periodHours, coveragePercent, gaps [{from, to}] } } contains no generation time, so snapshots of a frozen period are byte-identical and have one snapshotCid.
+    sql: |
+      CREATE TABLE governance_transparency_report (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, period_key TEXT NOT NULL, version INTEGER NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX governance_transparency_published ON governance_transparency_report(tenant_id, relay_id, period_key) WHERE status = 'published';
+      CREATE TABLE governance_transparency_counter (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, period_key TEXT NOT NULL, metric TEXT NOT NULL, dimension TEXT NOT NULL,
+        count INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX governance_transparency_counter_key ON governance_transparency_counter(tenant_id, relay_id, period_key, metric, dimension);
+      CREATE TABLE governance_transparency_checkpoint (
+        tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, hour_bucket TEXT NOT NULL, PRIMARY KEY (tenant_id, relay_id, hour_bucket));
+  validation_rules:
+    requirements:
+      - "Inputs are validated against closed vocabularies so counters can never carry identifying text."
+      - "Computation and publication validate suppression, coverage, reviewer separation and period state."
+      - "Every violation maps to one stable error code."
+      - "Receivers verify two distinct operator signatures, compiler on the draft and reviewer on the report, against the relay's signed operator list and refuse self-reviewed reports."
+      - "Differencing is prevented across periods and versions: one period granularity per relay and suppression of small changes between a correction and the version it supersedes."
+    rules:
+      - "V01 | periodKey matches YYYY-Qn (n 1..4) or YYYY-MM and the period has ended (relay time) before compute | GOVERNANCE_TRANSPARENCY_PERIOD_INVALID"
+      - "V02 | legal request type in court_order, law_enforcement, data_subject, other and outcome in complied, partial, rejected | VALIDATION_FAILED"
+      - "V03 | legal request increment is an integer 1..1000 and no free text is accepted | VALIDATION_FAILED"
+      - "V04 | counter dimension belongs to the closed vocabulary of its metric bound to the producer enum; events with origin vault, spam events with mode vault_filter and decided events whose publisherId is not an operator key of this relay are ignored, not counted | VALIDATION_FAILED"
+      - "V05 | computed tables contain no cell with value 1..9 (shown under_10), apply complementary suppression per row (shown suppressed) and publish no total for a metric with any suppressed cell | GOVERNANCE_TRANSPARENCY_SUPPRESSION"
+      - "V06 | reviewer key differs from the compiler key and both are operatorKeys of the relay's latest verified classrup.platform.tenant_config/v1 (F15.S04.M03) | GOVERNANCE_TRANSPARENCY_SELF_REVIEW"
+      - "V07 | publish only for a received draft in awaiting_review whose contentCid the reviewer recomputed from the same snapshot or explicitly inspected | CONFLICT_STATE"
+      - "V08 | at most 1 published version per (relayId, periodKey) unless the new version supersedes it with a correction note | CONFLICT_STATE"
+      - "V09 | schema major version supported | UNSUPPORTED_SCHEMA_VERSION"
+      - "V10 | one period granularity per relay, fixed by its first published report; a periodKey of the other granularity, or one overlapping any published period, is rejected | GOVERNANCE_TRANSPARENCY_PERIOD_INVALID"
+      - "V11 | in a correction every cell whose absolute change from the superseded version is 1..9 is suppressed in the new version; compute fails otherwise | GOVERNANCE_TRANSPARENCY_SUPPRESSION"
+      - "V12 | the snapshot is a classrup.governance.transparency_counts/v1 signed by the relay's current key (or the previous key inside the 7-day rotation overlap), for the same relayId and periodKey, frozen, with coverage derived from processing checkpoints | VALIDATION_FAILED"
+      - "V13 | receivers verify the compiler signature on the embedded draft and the reviewer signature on the report over the same contentCid, signers distinct and both operator keys of the relay | GOVERNANCE_TRANSPARENCY_SELF_REVIEW"
+      - "V14 | two different verified reports for the same (relayId, periodKey, version) mark both conflicted and neither is shown as current | CONFLICT_STATE"
+      - "V15 | report body <= 64 KiB JCS and snapshot <= 256 KiB | PAYLOAD_TOO_LARGE"
+  workflow_state_machine:
+    requirements:
+      - "TransparencyReport follows the declared machine; superseded, discarded and conflicted are terminal."
+      - "Publication needs a compiler-signed draft and a reviewer countersignature by a different operator key of the same relay; there is no single-key publication path."
+      - "A published report is never edited; corrections create a new version that supersedes it."
+      - "Counters of a period freeze 24 hours after periodEnd on the relay's clock, so every snapshot of a frozen period is byte-identical and both operators can obtain the same snapshotCid."
+    machines:
+      - entity: TransparencyReport
+        initial: computed
+        terminal: [superseded, discarded, conflicted]
+        transitions:
+          - "computed -> awaiting_review | governance.transparency.request_review by the compiler | draft classrup.governance.transparency_draft/v1 signed and sealed to the reviewer; in the reviewer vault the received draft is stored directly as awaiting_review"
+          - "computed -> discarded | discard by the compiler, or 14 days after computation without a review request | counters unchanged"
+          - "awaiting_review -> published | governance.transparency.publish by the reviewer, or receive of the verified published report in other vaults | both signatures verified; previous published version of the period becomes superseded; emits governance.transparency.published"
+          - "awaiting_review -> discarded | discard by compiler or reviewer, or 14 days after computation without publication | the draft is not published"
+          - "published -> superseded | a verified corrected version for the same (relayId, periodKey) is published | earlier version stays downloadable with a superseded marker"
+          - "published -> conflicted | receive of a different verified report with the same (relayId, periodKey, version) | both marked conflicted; neither shown as current"
+    timeouts:
+      - "Overdue alert if a period has no published report 30 days after periodEnd; repeated weekly."
+      - "Computed or awaiting_review reports are discarded 14 days after computation if not published and must be recomputed."
+      - "Counters freeze at periodEnd + 24 h (relay time)."
+      - "Counters are purged exactly 90 days after the period's report is published, through RetentionPurgePort, and never later than the RET-AUDIT bound of 1 year."
+  commands_queries_events:
+    requirements:
+      - "import_snapshot, compute, request_review and discard are vault commands in the compiler's vault and publish runs in the reviewer's vault; request_review sends a compiler-signed classrup.governance.transparency_draft/v1 sealed to the reviewer, and publish signs classrup.governance.transparency_report/v1 embedding that draft and queues it to the relay."
+      - "Counters accumulate on the relay in a relay-side consumer of relay-local moderation events and relay-scope policy decisions, idempotent by event id and by proposalId and statementCid; legal request tallies are operator-signed relay commands; relay_counter_snapshot returns a relay-signed snapshot sealed to the requesting operator key."
+      - "receive is a vault command in any vault that verifies and stores reports from publishers trusted for scope transparency and drafts addressed to the local operator key; get_published and list_published are public reads on the relay and local reads in vaults; relay_upload accepts only two-key reports from the relay's operators."
+      - "Every statement type of this module is registered in the F11.S01.M01 registry with audience, signer role, role resolution and maxAge (N2)."
+    commands:
+      - name: governance.transparency.record_legal_request
+        capability: governance.transparency.record
+        input: "[relay command, request signed by an operator device key] { periodKey, type, outcome, count? (default 1) }"
+        output: "{ periodKey, metric: legal_requests, dimension, count }"
+        errors: [VALIDATION_FAILED, CONFLICT_STATE, FORBIDDEN, GOVERNANCE_TRANSPARENCY_PERIOD_INVALID, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: governance.transparency.import_snapshot
+        capability: governance.transparency.compile
+        input: "[vault-local, operator] { sealedSnapshot (from relay_counter_snapshot) }"
+        output: "{ snapshotCid, relayId, periodKey, coveragePercent, frozen: boolean }"
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, PAYLOAD_TOO_LARGE, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: governance.transparency.compute
+        capability: governance.transparency.compile
+        input: "[vault-local, operator] { periodKey, snapshotCid, correctionOf?: reportId, correctionNote? }"
+        output: "{ reportId, version, contentCid, suppressedCellCount, totalsVisible, coveragePercent }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_STATE, GOVERNANCE_TRANSPARENCY_PERIOD_INVALID, GOVERNANCE_TRANSPARENCY_SUPPRESSION]
+        emits: []
+        idempotent: true
+      - name: governance.transparency.request_review
+        capability: governance.transparency.compile
+        input: "[vault-local, compiler + statement classrup.governance.transparency_draft/v1 { relayId, periodKey, version, reportBody, contentCid, snapshotCid } sealed to the reviewer] { reportId, expectedRevision, reviewerId }"
+        output: "{ reportId, draftCid, status: awaiting_review, syncState: prepared }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_TRANSPARENCY_SELF_REVIEW]
+        emits: []
+        idempotent: true
+      - name: governance.transparency.publish
+        capability: governance.transparency.review
+        input: "[vault-local, reviewer + statement classrup.governance.transparency_report/v1 { draft envelope (compiler signature), contentCid, reviewerId, publishedAt }] { reportId, draftCid, contentCid, recomputed: boolean, relayIds[] }"
+        output: "{ reportId, version, statementCid, syncState: prepared }"
+        errors: [NOT_FOUND, CONFLICT_STATE, GOVERNANCE_TRANSPARENCY_SELF_REVIEW, GOVERNANCE_TRANSPARENCY_SUPPRESSION, GOVERNANCE_TRANSPARENCY_PERIOD_INVALID]
+        emits: [governance.transparency.published]
+        idempotent: true
+      - name: governance.transparency.discard
+        capability: governance.transparency.compile
+        input: "[vault-local, operator] { reportId, expectedRevision }"
+        output: "{ reportId, status: discarded }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: governance.transparency.receive
+        capability: governance.transparency.apply
+        input: "[vault-local, inbound statement or PendingApplyPort] { envelope (transparency_report, or transparency_draft addressed to a local operator key), receipt?, provenance }"
+        output: "{ reportId?, stored: boolean, status?, quarantineReason?, pendingId?, conflicted?: boolean }"
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, PAYLOAD_TOO_LARGE, GOVERNANCE_TRANSPARENCY_SUPPRESSION, GOVERNANCE_TRANSPARENCY_SELF_REVIEW]
+        emits: [governance.transparency.published]
+        idempotent: true
+      - name: governance.transparency.relay_upload
+        capability: governance.transparency.relay_publish
+        input: "[relay command] { envelope }"
+        output: "{ statementCid, relayReceipt: classrup.platform.relay_receipt/v1 }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, PAYLOAD_TOO_LARGE, RATE_LIMITED, GOVERNANCE_TRANSPARENCY_SELF_REVIEW, GOVERNANCE_TRANSPARENCY_SUPPRESSION, GOVERNANCE_TRANSPARENCY_PERIOD_INVALID]
+        emits: []
+        idempotent: true
+    queries:
+      - name: governance.transparency.get_published
+        capability: governance.transparency.read_public
+        input: "{ relayId, periodKey, version? }"
+        output: "{ report: TransparencyReport, compilerSignatureValid: boolean, reviewerSignatureValid: boolean, operatorListVerified: boolean, conflicted: boolean }"
+        errors: [NOT_FOUND]
+      - name: governance.transparency.list_published
+        capability: governance.transparency.read_public
+        input: "{ relayId?, cursor?, limit <= 50 }"
+        output: "{ items: TransparencyReport[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+      - name: governance.transparency.preview
+        capability: governance.transparency.compile
+        input: "{ periodKey, snapshotCid? }"
+        output: "{ counters (operator view from the latest imported snapshot), suppressionPreview, coveragePercent, daysSincePeriodEnd }"
+        errors: [GOVERNANCE_TRANSPARENCY_PERIOD_INVALID, NOT_FOUND]
+      - name: governance.transparency.relay_counter_snapshot
+        capability: governance.transparency.relay_snapshot
+        input: "[relay query, request signed by an operator device key] { periodKey }"
+        output: "{ sealedSnapshot: classrup.governance.transparency_counts/v1 signed by the relay key and sealed to the requesting operator key, snapshotCid, frozen: boolean }"
+        errors: [FORBIDDEN, NOT_FOUND, RATE_LIMITED, GOVERNANCE_TRANSPARENCY_PERIOD_INVALID]
+    events_produced:
+      - {type: governance.transparency.published, privacy: P0, payload: "{ reportId, relayId, periodKey, version, contentCid, statementCid, compilerId, reviewerId, supersedes? } — vault-local in the reviewer vault on publish and in receiving vaults on receive"}
+    events_consumed:
+      - {type: moderation.report.received, effect: "relay only: increment reports_received for payload.reasonCode (12-code F12.S01.M01 taxonomy) in the period of relayReceivedAt; dedupe by eventId; the vault-local moderation.report.filed is not consumed"}
+      - {type: moderation.action.applied, effect: "relay only, origin relay only (vault-derived copies ignored): increment actions_applied for payload.kind (warn, remove_from_index, restrict_feature, suspend_relay_access); dedupe by eventId"}
+      - {type: moderation.appeal.filed, effect: "relay only (relay-local event): increment appeals_filed with dimension filed; dedupe by eventId"}
+      - {type: moderation.appeal.decided, effect: "relay only, origin relay only: increment appeals_decided for payload.outcome upheld, overturned or reduced; dedupe by eventId; moot closures emit no decided event and are never counted as decided"}
+      - {type: moderation.spam.detected, effect: "relay only, mode relay_intake only (vault_filter ignored): increment spam_detected with dimension throttled when a throttle is present, else flagged; dedupe by eventId"}
+      - {type: governance.policy_proposal.decided, effect: "relay only, scope relay and payload.publisherId an operator key of this relay: increment policy_decisions for the outcome once per (proposalId, statementCid); vault-scope copies ignored"}
+    errors:
+      - "GOVERNANCE_TRANSPARENCY_PERIOD_INVALID | 422 | no | period key is malformed, not ended, of another granularity, overlapping a published period, or already published and frozen"
+      - "GOVERNANCE_TRANSPARENCY_SUPPRESSION | 422 | no | a table cell between 1 and 9 would be disclosed directly, through totals or by differencing against the superseded version"
+      - "GOVERNANCE_TRANSPARENCY_SELF_REVIEW | 403 | no | reviewer key equals the compiler key or either key is not an operator key of the relay"
+    note: |
+      Statements and signer roles (N2, registered in F11.S01.M01):
+      | Type | Audience | Signer role (resolution) | maxAge |
+      |---|---|---|---|
+      | classrup.governance.transparency_counts/v1 | participants (sealed to the requesting operator key) | relay (author is the relay key pinned through F15.S02.M01, current key or previous key inside the 7-day rotation overlap) | 30 d |
+      | classrup.governance.transparency_draft/v1 | participants (sealed to the reviewer) | compiler: principal listed in operatorKeys of the relay's latest verified classrup.platform.tenant_config/v1 (F15.S04.M03), ext.signerKey active per F07.S02.M01 key status | 30 d |
+      | classrup.governance.transparency_report/v1 | public | reviewer: principal in the same operatorKeys, different from the compiler of the embedded draft; both signatures over the same contentCid | none (public record) |
+      Receivers act only on reports their receiving path accepted; a report failing V13 is quarantined with GOVERNANCE_TRANSPARENCY_SELF_REVIEW. This module registers apply for classrup.governance.transparency_report/v1 in the F18.S02.M01 PendingApplyPort and registers a relay-scope RetentionPurgePort kind for TransparencyCounter (class RET-AUDIT, anchor publishedAt + 90 d) with F10.S01.M02. Reports and counters hold no user data, so no export or deletion port applies beyond the operator's own export section.
+    example: |
+      operator O1 vault: query relay governance.transparency.relay_counter_snapshot { "periodKey": "2026-Q3" } (signed request) => { "sealedSnapshot": "...", "snapshotCid": "sha256-U25h...", "frozen": true }
+      dispatch("governance.transparency.import_snapshot", { "sealedSnapshot": "..." }) => { "snapshotCid": "sha256-U25h...", "relayId": "relay:berlin.example", "periodKey": "2026-Q3", "coveragePercent": 99, "frozen": true }
+      dispatch("governance.transparency.compute", { "periodKey": "2026-Q3", "snapshotCid": "sha256-U25h..." })
+      => { "reportId": "0192f3b5-...", "version": 1, "contentCid": "sha256-Zm9v...", "suppressedCellCount": 6, "totalsVisible": true, "coveragePercent": 99 }
+      dispatch("governance.transparency.request_review", { "reportId": "0192f3b5-...", "expectedRevision": 1, "reviewerId": "did:key:z6MkO2..." }) => { "draftCid": "sha256-RHJm...", "status": "awaiting_review", "syncState": "prepared" }
+      reviewer O2 vault: dispatch("governance.transparency.publish", { "reportId": "0192f3b5-...", "draftCid": "sha256-RHJm...", "contentCid": "sha256-Zm9v...", "recomputed": true, "relayIds": ["relay:berlin.example"] })
+      => { "reportId": "0192f3b5-...", "version": 1, "statementCid": "sha256-Yg1b...", "syncState": "prepared" }
+      published table excerpt: { "actions_applied": { "warn": 41, "remove_from_index": "under_10", "restrict_feature": "suppressed", "suspend_relay_access": 12 } } (no total for actions_applied)
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: compiling, importing snapshots and discarding require an operator key of the relay; publishing requires a different operator key of the same relay; applying a received report is open to the vault owner for publishers trusted for scope transparency."
+      - "Relay policy (CAP-9): the relay serves published reports to anonymous readers, and serves counter snapshots and accepts legal tallies and report uploads only on requests signed by its operator keys; a relay role has no power over other relays."
+      - "Counter data is operator-private and is not readable by members or by other relays."
+    capabilities:
+      - "governance.transparency.record | relay-operator | relay policy: request signed by an operator device key of this relay; period not frozen; 100 requests per day per key"
+      - "governance.transparency.compile | owner | local principal holds an operator key of the relay (verified tenant_config operatorKeys); period ended"
+      - "governance.transparency.review | owner | local key is an operator key of the relay different from the draft's compiler key; draft verified and awaiting_review"
+      - "governance.transparency.apply | owner | vault unlocked; statement signatures valid and publisher relay trusted for scope transparency (otherwise held pending); drafts only when addressed to a local operator key"
+      - "governance.transparency.read_public | relay-anonymous | public signed reports; relay policy rate limit 60 requests per minute per IP prefix"
+      - "governance.transparency.relay_publish | relay-operator | relay policy: request signed by an operator device key of this relay; report carries two distinct operator signatures; report <= 64 KiB; 5 uploads per day per key"
+      - "governance.transparency.relay_snapshot | relay-operator | relay policy: request signed by an operator device key of this relay; response sealed to that key; 20 requests per day per key"
+  failure_recovery_idempotency:
+    requirements:
+      - "Commands are idempotent per CTR-IDM-001; counter consumers are idempotent by event id (EVT-3)."
+      - "Compute is deterministic: the same snapshot and parameters give the same contentCid."
+      - "Coverage is measured, not declared: counters accumulate on the relay while its consumers run, the snapshot's coverage comes from the relay's hourly processing checkpoints, and the report states it."
+    idempotency: "Idempotency-Key required on record_legal_request, import_snapshot, compute, request_review, publish and discard; keys kept 24 h; counter increments from events are deduplicated by (consumer, eventId) and policy decisions by (proposalId, statementCid); legal request increments are applied once per key."
+    concurrency: "expectedRevision on request_review and discard in the compiler vault; publish binds the draft cid; counters use compare-and-set increments inside one relay transaction; nothing orders two operator vaults, so two different reports published for the same (relayId, periodKey, version) are both marked conflicted by every reader (V14) and the operators publish a new version."
+    retries: "Relay-side consumers retry with IDM-4 backoff and dead-letter after 8 attempts (EVT-6); hours with dead-lettered counter events are not counted as processed; relay upload retries base 500 ms cap 30 s, 6 attempts."
+    offline: "Once a snapshot is imported, compute, review and publish signing work offline in the operator vaults; publication stays prepared until the relay returns a signed receipt (transport_acknowledged); peer_accepted is not used because a report has no single addressee."
+    partial_failure: "If upload fails after signing, the report is published locally with delivery pending and the public page does not show it until the relay confirms; a consumer failure for one event does not affect other counters and lowers measured coverage for that hour."
+  privacy_retention_abuse:
+    requirements:
+      - "Reports reveal only suppressed aggregate counts and contain no user, listing, case or request identities and no free text."
+      - "Counters are kept under RET-AUDIT and purged exactly 90 days after the period's report is published through RetentionPurgePort; published reports are kept as public record (RET-STANDARD) and as evidence in the operator vault."
+      - "Small-number suppression and complementary suppression prevent inference of individual cases from differences between rows, totals or periods."
+      - "Differencing across periods and versions is blocked by one period granularity per relay, by withholding totals of metrics with suppressed cells and by suppressing every cell whose change from the superseded version is 1 to 9."
+    data:
+      - "TransparencyReport: P0 signed aggregate."
+      - "TransparencyCounter: P2 relay-local operational data for the relay's operator role (IOX-7), closed vocabulary, no identifiers; leaves the relay only as a sealed snapshot."
+    retention:
+      - "TransparencyCounter: RET-AUDIT (bounded 1 year), purged exactly 90 days after publication of the period through RetentionPurgePort; counters of a period are never purged before it is published unless the 1-year bound is reached."
+      - "TransparencyReport: RET-STANDARD, kept indefinitely as public record while the relay exists."
+    threats:
+      - "T01 | Re-identification from small counts or differencing across rows, periods and versions | cells under 10 suppressed, complementary suppression, no totals for metrics with suppressed cells, one granularity per relay (V10), cross-version suppression (V11), totals hidden when under 10"
+      - "T02 | Operator cherry-picks or edits numbers | counts come from a relay-signed snapshot, deterministic compute, compiler and reviewer signatures over one contentCid verified by receivers, corrections as visible new versions; two keys are not proof of two people and the report says so"
+      - "T03 | Counter inflation or deflation by event replay or vault-derived copies | eventId and (proposalId, statementCid) deduplication, origin and mode filters, coverage measured from checkpoints, counters frozen after periodEnd + 24 h"
+      - "T04 | Legal request tally leaks case details | closed vocabulary only, no free text field, increments only"
+      - "T05 | Reader mistakes the report for global figures | scope statement key shown on every table and in the signed body"
+      - "T06 | Self-review with a key outside the operator list | receivers check both keys against the relay's signed tenant configuration and quarantine with GOVERNANCE_TRANSPARENCY_SELF_REVIEW"
+    abuse_controls:
+      - "Legal request increments limited to 100 commands per day per operator key."
+      - "Relay uploads limited to 5 reports per day per operator key; snapshots limited to 20 requests per day per key."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves user devices (OBS-7); operator-side jobs are measured under OBS-1 to OBS-4 on the relay."
+      - "Compute and publish are batch operations with explicit time budgets."
+      - "Overdue publication is a visible alert for operators."
+    metrics:
+      - "classrup_governance_transparency_counter_events_total{metric} (relay)"
+      - "classrup_governance_transparency_compute_duration_ms (operator vault, local)"
+      - "classrup_governance_transparency_days_overdue (gauge)"
+      - "classrup_governance_transparency_dead_letter_total (relay)"
+      - "classrup_governance_transparency_processed_hours (relay gauge per period)"
+    logs:
+      - "info transparency.published {reportId, periodKey, version, correlationId}; no counts below 10 and no identifiers."
+    budgets:
+      - "compute from a snapshot of 1 000 000 counted events p95 <= 2 s; publish p95 <= 300 ms."
+      - "Counter increment p95 <= 20 ms per event at 50 events per second on the relay."
+      - "Public report download p95 <= 150 ms at 50 req/s; snapshot generation p95 <= 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate the report statement, commands and events against the registry and verify signatures."
+      - "Suppression is covered by property tests with at least 200 runs, 10 000 nightly, including differencing attacks."
+    fixtures: "Relay stub R with key KR, tenant_config listing operator keys O1 (compiler) and O2 (reviewer), non-operator key X, F12 event fixtures for the 2026-Q3 quarter with cells of 3, 7, 12, 45 and total 67, 5 duplicate events and vault-origin copies, decided events from R's operator and from another publisher, reader vault V, injected relay and vault clocks starting 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | import the 2026-Q3 snapshot and compute | report immutable with contentCid and snapshotCid; counters hold closed-vocabulary dimensions only"
+      - "T02 | unit | 02.R02,02.R03 | violate each rule V01-V15 | documented error code returned; nothing published"
+      - "T03 | property | 07.R03,02.R05 | random counter tables, month and quarter series and v1/v2 correction pairs | no published cell between 1 and 9; complementary suppression and withheld totals prevent recovery; differencing across granularities is impossible because V10 rejects the second granularity; v1/v2 differences never reveal a value 1..9"
+      - "T04 | property | 03.R01,03.R03 | random lifecycle commands | only declared transitions; one published version per period; corrections supersede; terminal states never leave"
+      - "T05 | integration | 03.R02,02.R04 | O1 publishes its own draft; O2 publishes; X countersigns; V receives each | GOVERNANCE_TRANSPARENCY_SELF_REVIEW for O1 and for X's report in V; O2's report verified with both signatures against the operator list"
+      - "T06 | contract | 04.R01,04.R04,09.R02 | import_snapshot, compute, request_review, publish, receive | statements validate against classrup.governance.transparency_counts/v1, transparency_draft/v1 and transparency_report/v1 and their F11.S01.M01 registry rows; signatures verify; published event valid"
+      - "T07 | integration | 04.R02,06.R01 | deliver the same relay events twice and out of order, plus vault-origin copies, vault_filter spam events and decided events from another publisher | counts equal unique relay events; ignored events not counted; each operator decision counted once"
+      - "T08 | abuse | 05.R01,05.R03,01.R03 | member reads counters; non-operator computes; X requests a snapshot; inspect the sealed snapshot in transit | FORBIDDEN or NOT_FOUND; snapshot refused to X; counters only on the relay and the snapshot readable only by the requesting operator key"
+      - "T09 | chaos | 06.R03 | relay consumers stopped for 12 hours in the 92-day quarter; upload fails after signing | coverage computed as 99 percent from checkpoints and stated in the report; published locally with pending delivery and not shown publicly"
+      - "T10 | integration | 06.R01,06.R02 | replay compute and publish with same key; recompute from the same snapshot in O2's vault | same contentCid; one published report"
+      - "T11 | abuse | 07.R01,07.R02 | scan report, counters and logs for identifiers; advance the relay clock through a quarter, publication and 90 days | no identifiers or free text; counters survive until compile time and are purged exactly 90 days after publication"
+      - "T12 | abuse | 02.R01,07.R01 | legal request with free text; 101 increments in a day | rejected by schema; RATE_LIMITED; scope key present in body"
+      - "T13 | load | 08.R01,08.R02 | 1 000 000 counted events; relay 50 req/s | compute p95 <= 2 s, publish p95 <= 300 ms, download p95 <= 150 ms"
+      - "T14 | unit | 09.R01,09.R03 | traceability tool run, nightly seeds | every PS-148 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export operator vault, import to fresh vault, import tampered report and a self-reviewed report | reports and snapshots round-trip; tampered statement quarantined; self-reviewed report quarantined with GOVERNANCE_TRANSPARENCY_SELF_REVIEW; cell between 1 and 9 rejected"
+      - "T16 | a11y | 01.R01 | axe run on public report page | zero serious or critical issues; suppressed cells read as fewer than ten or withheld"
+      - "T17 | integration | 08.R03 | injected clock reaches periodEnd + 30 days without publication, then + 37 days | overdue alert raised at 30 days and repeated after 7 more days"
+      - "T18 | integration | 05.R02,04.R03 | anonymous get_published on the relay; relay_upload by O2 with a two-key report, with a single-signature report and by X | anonymous read served; two-key upload stored with receipt; single-signature and X uploads refused"
+      - "T19 | integration | 04.R02,01.R04,03.R04 | F12 fixtures emit relay-local events through the quarter; relay freezes at periodEnd + 24 h; O1 and O2 each fetch the snapshot; O1 computes and requests review; O2 recomputes and publishes | both snapshots have the same snapshotCid; O2's recomputed contentCid equals O1's; the published report matches the event fixture after suppression"
+      - "T20 | abuse | 07.R04,02.R05 | publish quarterly 2026-Q3 then compute 2026-08; publish a correction where one cell changes from 15 to 12 | monthly compute rejected with GOVERNANCE_TRANSPARENCY_PERIOD_INVALID; the changed cell is suppressed in v2"
+      - "T21 | integration | 03.R02,04.R03 | two different verified version-1 reports for 2026-Q3 reach V in either order | both marked conflicted; get_published returns conflicted true and neither is current"
+      - "T22 | contract | 01.R04,04.R02 | compare the dimension vocabularies with the F12.S01.M01 moderation.report.received, F12.S02.M01, F12.S01.M03 and F12.S02.M02 event schemas; a moderation.report.filed fixture; an appeal closed as moot | every enum value maps to one dimension and no dimension lacks a producer value; report.filed and the moot closure change no counter and appeals_decided has exactly upheld, overturned and reduced"
+    acceptance:
+      - All tests T01-T22 pass in CI.
+      - No published cell reveals a count between 1 and 9 directly, through totals or by differencing across periods or versions, and totals under 10 hide all breakdowns.
+      - Every published report is computed from a relay-signed snapshot, signed by one operator key and countersigned by a different operator key of the same relay, verified by receivers, states its hosting scope and measured coverage, and corrections never overwrite earlier versions.
+  import_export_backup_rollback:
+    requirements:
+      - "The operator export contains reports (all versions) and imported snapshots of unpublished periods; counters stay on the relay; a user export contains reports from trusted publishers that the user stored."
+      - "Import re-verifies both signatures, operator-list membership, suppression and reviewer separation; failing reports are quarantined."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Sections governance.transparency_reports and governance.transparency_snapshots in classrup-export/v1, one line per record (schemas classrup.governance.transparency_report/v1 and classrup.governance.transparency_counts/v1); snapshots only in an operator's own export."
+    import: "Signatures, operator list, suppression rules and reviewer separation re-verified; snapshots import only into a vault holding an operator key of that relay; duplicates by contentCid are skipped."
+    backup: "Vault export is the primary backup (IOX-6); counters and checkpoints are relay-local operational data covered by the relay backup (IOX-3, IOX-7), and the relay holds public signed reports."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; published reports stay valid because their schema is unchanged and corrections are new versions."

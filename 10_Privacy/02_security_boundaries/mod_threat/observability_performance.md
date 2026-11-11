@@ -1,35 +1,35 @@
-# PS-082-08 — observability performance
+# PS-082-08 — Observability and performance: Privacy threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-082-08. **Owner:** [10_Privacy/02_security_boundaries/mod_threat](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_threat. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S02.M01 Privacy threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/privacy/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the observability performance process for threat within 02_security_boundaries. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-082-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-082-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-082-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-082-08.R01** The CI check reports counts of threats, controls and tests, and the age of the last review.
+- **PS-082-08.R02** A review older than 90 days fails release candidate builds at once, while other builds warn on days 91 to 104 and fail from day 105.
+- **PS-082-08.R03** The check runs within the CI time budget.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- CI report: threats_total, threats_without_test, controls_unresolved, days_since_review, review_state=ok|warn|fail
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- CI log lists each violation with file, entry ID and rule ID.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-082-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- privacy-threat-check completes in ≤ 5 s for 100 entries; rendering Markdown ≤ 10 s.
+- Review age - non-release-candidate builds pass through day 90, warn on days 91 to 104 and fail from day 105; release candidate builds fail from day 91.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-082-09.T12 | unit | PS-082-08.R01, PS-082-08.R02, PS-082-08.R03 | run on 100 entries with review ages 90, 91, 104 and 105 days as a non-release-candidate build, and 90 and 91 days as a release candidate build | completes ≤ 5 s; non-RC passes at 90, warns at 91 and 104 and fails at 105; RC passes at 90 and fails at 91 |
+
+## Dependencies
+
+Module depends on: F10.S02.M02, F10.S02.M03, F10.S01.M01, CTR-PRV-001, CTR-FED-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

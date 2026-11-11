@@ -1,0 +1,25 @@
+{
+  "name": "classrup",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "spec:check": "node tools/specgen/specgen.mjs check",
+    "spec:render": "node tools/specgen/specgen.mjs render",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "trace": "node tools/trace/trace.mjs",
+    "deps:check": "node tools/deps/deps.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "fast-check": "4.10.2",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0",
+    "yaml": "2.9.1"
+  }
+}

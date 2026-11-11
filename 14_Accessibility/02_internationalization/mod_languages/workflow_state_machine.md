@@ -1,35 +1,32 @@
-# PS-113-03 — workflow state machine
+# PS-113-03 — Workflow state machine: Languages
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-03. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S02.M01 Languages](SPEC.md) · **Scope:** MVP · **Code:** `packages/i18n/src/internationalization/languages` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-113-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-113-03.R01** Locale switching is a deterministic sequence of negotiate, load catalog, set lang and dir, re-render and dispatch a localechange DOM event; setLocale resolves after the event, and the announcement is made by the F14.S01.M02 PageShell.
+- **PS-113-03.R02** A failed catalog load keeps the previous locale and shows the app in English if none was loaded, so the UI is never blank.
+- **PS-113-03.R03** There is no persisted lifecycle, so no entity state machine is declared.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Stateless library; the locale switch sequence is implemented in code and covered by tests, not stored as an entity lifecycle.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Catalog load timeout 5 s; on timeout the previous or en catalog stays active and a retry is offered.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-113-09.T04 | unit | PS-113-03.R02, PS-113-06.R02, PS-113-06.R03, PS-113-07.R03 | remove a key from fr at runtime; corrupt the de catalog JSON; call t() without a declared parameter; reload the page | en string returned with dev warning and a P0 {key, locale} entry in the F15.S03.M01 ring buffer; UI continues in en; missing parameter shown as '…' with dev warning; never raw key or blank; ring buffer empty after reload |
+| TEST-PS-113-09.T05 | e2e | PS-113-03.R01, PS-113-06.R01 | switch locale en to de to ar-XB while a form is half filled, with a step recorder; then switch to the active locale | steps run in the order negotiate, load catalog, set lang and dir, re-render, dispatch localechange; setLocale resolves after the event; input and focus preserved; switching to the active locale dispatches nothing |
+| TEST-PS-113-09.T06 | unit | PS-113-04.R01, PS-113-04.R02, PS-113-05.R01, PS-113-05.R02, PS-113-03.R03 | inspect exports, network calls, storage and authorization calls | pure functions or Result values; no vault or relay command; no network call during t(); no persisted state of its own |
+| TEST-PS-113-09.T11 | a11y | PS-113-03.R01 | axe in each shipped locale and pseudolocale | zero serious or critical findings; lang and dir correct on the html element; lang attributes correct on inline foreign text |
+
+## Dependencies
+
+Module depends on: F15.S04.M03, F15.S03.M01, F15.S01.M02, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

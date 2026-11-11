@@ -1,35 +1,47 @@
-# PS-140-07 — privacy retention abuse
+# PS-140-07 — Privacy, retention and abuse: Offline testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-07. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M03 Offline testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/offline` · **Contracts:** [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for offline within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-140-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-140-07.R01** Cached and queued data are synthetic; outbox entries for relay destinations contain only ciphertext for P2 and no P3 field, and an enqueue of plaintext P2 or of P3 is refused (F15.S01.M01, CTR-PRV-001 PRV-5), proven by a planted-leak test.
+- **PS-140-07.R02** Vault lock and principal switch keep the previous principal's vault encrypted and its outbox entries kept but neither shown nor sent; a locked vault's records are unreadable without unlock, unlocking restores them intact with zero entries lost, and only Erase vault after an export prompt deletes them.
+- **PS-140-07.R03** Browser traces from offline tests redact Authorization headers.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Synthetic outbox entries and cached public listings (P0/P1).
+- No real credentials; test tokens are random and short-lived.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Reports 14 days as CI artifacts; browser contexts are discarded after each test.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Relay-authenticated response or vault data exposed to the next principal on a shared device | network-only routes for relay-authenticated requests; per-principal image partitions unbound on lock and principal switch; locked vault unreadable without unlock; tests assert all three |
+| T02 | Resend applies a statement twice, for example a payment claim recorded twice | exactly-once assertions by cid and Idempotency-Key across resets |
+| T03 | Queued command with stale authority executes after privilege revocation | replay re-checks authorization; test expects FORBIDDEN |
+| T04 | A sign-out style wipe destroys the user's only copy of records and queued signed statements | lock and principal switch never delete; only Erase vault after an export prompt deletes vault data; V07 fails a planted wipe on lock |
+
+**Abuse controls**
+- Quota-filling attempts: the test fills storage to 95 percent and expects a visible error rather than silent drop.
+- Outbox size is limited to 200 entries and 5 MiB of payload per principal (or the lower local limit); the next enqueue is refused with PLATFORM_OUTBOX_FULL and a visible message.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-140-09.T08 | e2e | PS-140-05.R02, PS-140-07.R02 | P1 locks the vault with 3 queued entries and a relay access token; P2 unlocks its own vault; P1 unlocks again; finally P1 runs Erase vault | on lock in-memory keys are dropped, IndexedDB records stay encrypted and unreadable, the 3 entries are kept and not sent, relay access tokens are dropped and CLEAR_USER_CACHES reason lock unbinds the image partition; P2 sees only its separate vault; after unlock all records and the 3 entries are intact and sending resumes; IndexedDB data is deleted only by Erase vault after the export prompt |
+| TEST-PS-140-09.T18 | abuse | PS-140-07.R01 | planted leak - enqueue a plaintext P2 offer and a P3 address field for a relay destination, and plant a bypass of the enqueue check | both enqueues refused by F15.S01.M01; stored relay-destination entries contain only ciphertext; the bypass fails with QUALITY_OFFLINE_PLAINTEXT_QUEUED |
+| TEST-PS-140-09.T19 | abuse | PS-140-07.R03 | scan every browser trace and HAR from the offline browser run | no Authorization header value and no relay access token present |
+
+## Dependencies
+
+Module depends on: CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02, F15.S02.M03, F07.S01.M02, F10.S01.M04, F11.S01.M02, CTR-PRV-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

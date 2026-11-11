@@ -1,35 +1,36 @@
-# PS-082-02 — validation rules
+# PS-082-02 — Validation rules: Privacy threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-082-02. **Owner:** [10_Privacy/02_security_boundaries/mod_threat](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_threat. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S02.M01 Privacy threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/privacy/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the validation rules process for threat within 02_security_boundaries. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-082-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-082-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-082-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-082-02.R01** Every active threat entry must have at least one adversary, one control, one test and a non-empty residual-risk statement.
+- **PS-082-02.R02** Control and test references must resolve to existing requirement IDs and test IDs.
+- **PS-082-02.R03** The catalog must cover the mandatory topics list, and a topic without an active or retired entry fails the check.
+- **PS-082-02.R04** The mandatory topics include cross-relay linkability (one DID on every relay, mailbox hints in public projections, key-linkage reads by host relays), enumeration and scraping of public indexes, and the integrity of signed privacy statements (replay, forgery, signer-role confusion, fork or equivocation).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | each active threat has adversaries, assets, attack description, residual risk, at least 1 control and at least 1 test | VALIDATION_FAILED |
+| V02 | every control requirement ID exists in a module spec | VALIDATION_FAILED |
+| V03 | every PRIVT test ID exists in a module spec test list or the privacy suite index | VALIDATION_FAILED |
+| V04 | mandatory topics geolocation, metadata, sybil, social-graph, cycle-graph, cross-relay-linkability, enumeration-scraping, relay-compromise, federated-peer, statement-integrity, device, traffic-analysis, counterparty, auction-host, update-channel each have an entry | VALIDATION_FAILED |
+| V05 | review age - a release candidate build fails when the last review is more than 90 days old; any other build passes up to day 90, warns on days 91 to 104 and fails from day 105 | PRECONDITION_FAILED |
+| V06 | residual risk text avoids the words anonymous and untraceable | VALIDATION_FAILED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-082-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-082-09.T01 | unit | PS-082-01.R01, PS-082-01.R02, PS-082-02.R01 | run the check on the valid fixture and on one missing a test | valid passes with exit 0; invalid exits 1 naming the entry and rule |
+| TEST-PS-082-09.T02 | unit | PS-082-01.R02, PS-082-02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID |
+| TEST-PS-082-09.T03 | unit | PS-082-02.R03, PS-082-04.R01 | fixture with geolocation entry removed | check fails on missing mandatory topic |
+| TEST-PS-082-09.T17 | unit | PS-082-02.R04, PS-082-02.R03 | fixtures each missing one of cross-relay-linkability, enumeration-scraping and statement-integrity | check fails naming the missing topic; the valid fixture passes |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F10.S02.M02, F10.S02.M03, F10.S01.M01, CTR-PRV-001, CTR-FED-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

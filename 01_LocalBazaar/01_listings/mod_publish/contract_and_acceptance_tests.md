@@ -1,35 +1,63 @@
-# PS-004-09 — contract and acceptance tests
+# PS-004-09 — Contract and acceptance tests: Listing publication
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-004-09. **Owner:** [01_LocalBazaar/01_listings/mod_publish](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_publish. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S01.M03 Listing publication](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listings/publish` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for publish within 01_listings. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-004-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-004-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-004-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-004-09.R01** Every requirement is covered by at least one automated test.
+- **PS-004-09.R02** Contract tests validate the signed projection, tombstone and event payloads against the schema registry and verify signatures.
+- **PS-004-09.R03** Honesty tests assert that the UI and API never report relay receipt or peer acceptance without a signed receipt.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Vault with principal P1 and key K1, complete sell listing L (EUR 50.00, region u33db, barterAcceptable true, photo 1 with alt text, photo 2 decorative), listing M whose photo 2 has neither alt nor decorative, wanted listing W with private budget, relays R1 relay:abrq5gguqtrwbwrgupnsqfxm7b (accepting), R2 relay:4uxxpspglt72i7qxcnsd3gjeo2 (rejecting under its policy) and R3 (clock 3 days ahead) with pinned keys, F11.S01.M02 StatementPublisherPort and F15.S01.M01 outbox test doubles, policy pack with block rule b1 and review rule r1, spam and risk stubs, consent store, deletion guard stub, clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-004-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-004-09.T01 | unit | PS-004-01.R01, PS-004-01.R03, PS-004-06.R03 | publish L offline | PublicationRecord active, delivery prepared, no receiptAt, no relay receipt claim |
+| TEST-PS-004-09.T02 | contract | PS-004-01.R02, PS-004-01.R04, PS-004-04.R02, PS-004-09.R02 | publish L and W, then unpublish | projection validates against classrup.bazaar.listing/v1 and its key set equals the allowlist exactly (barterAcceptable, inStock, expiresAt, mailboxHints, tenantId and media with alt or decorative present; no status, closeReason, currentPublicationId or minOffer; W has no maxBudget); region <= 5 chars; signature by F11.S01.M02 verifies; tombstone validates |
+| TEST-PS-004-09.T03 | unit | PS-004-02.R01, PS-004-02.R02, PS-004-02.R03 | violate each rule V01-V22 | documented error code returned, no statement published |
+| TEST-PS-004-09.T04 | property | PS-004-03.R01, PS-004-03.R02 | random command sequences | only declared transitions succeed; active implies Listing published in same transaction |
+| TEST-PS-004-09.T05 | integration | PS-004-03.R03, PS-004-06.R02 | R1 accepts, R2 rejects | R1 transport_acknowledged once its verified receipt completes the outbox entry and never peer_accepted, R2 relay_rejected, record stays active |
+| TEST-PS-004-09.T06 | integration | PS-004-04.R01, PS-004-04.R03 | publish with review verdict then confirm | held_for_confirmation first, active after confirm with ownerConfirmedAt |
+| TEST-PS-004-09.T07 | contract | PS-004-04.R02 | each command runs | outputs and events validate against registry schemas |
+| TEST-PS-004-09.T08 | abuse | PS-004-05.R01, PS-004-05.R02 | another principal's key or revoked key signs publish | FORBIDDEN; no statement produced |
+| TEST-PS-004-09.T09 | abuse | PS-004-05.R03, PS-004-07.R03, PS-004-04.R04 | R2 signs a classrup.federation.relay_removal/v1 advisory with a statement of reasons for L, then a foreign-author statement reaches a receiving vault | delivery relay_removed with hostingRemoved {reasonCode, removalCid, statementOfReasons} only for R2; Listing status and R1 delivery unchanged; foreign statement quarantined; wording says pseudonymous not anonymous |
+| TEST-PS-004-09.T10 | integration | PS-004-06.R01, PS-004-06.R02 | replay publish with same key; federation.conflict.detected names the statementCid (second device published another projection of L), then federation.conflict.resolved drop_all | one statement; publication frozen with the user prompt, then unpublished with a tombstone issued through federation.tombstone.issue |
+| TEST-PS-004-09.T11 | chaos | PS-004-06.R03 | R1 unreachable for 2 h then returns | backoff schedule honoured, state moves prepared to transport_acknowledged without duplicate statements |
+| TEST-PS-004-09.T12 | integration | PS-004-07.R01, PS-004-07.R02 | unpublish after publish | tombstone queued to every relay with a received delivery; UI copy states fetched copies may persist |
+| TEST-PS-004-09.T13 | integration | PS-004-03.R01, PS-004-03.R05, PS-004-02.R09, PS-004-04.R08 | governance.prohibited_rule.changed adds a block rule matching active L; renew and publish of the unchanged revision; 6 days, then 7 days pass; the owner edits L so the verdict clears and publishes it; in a second run the owner confirms Unpublish; in a third run a later pack retires the rule | L moves to policy_attention with bazaar.publication.policy_attention raised for ownerId and no unpublish, end or federation.tombstone.issue call; renew and unchanged publish refused with BAZAAR_PUBLISH_POLICY_ATTENTION; no reminder at day 6, one at day 7; the edited revision is published and the attention resolved as edited; the confirmation unpublishes with reason policy_changed and only then issues the tombstone; the retirement returns L to active as verdict_cleared without a new statement |
+| TEST-PS-004-09.T14 | abuse | PS-004-04.R04 | a relay_removal for R2 signed by R1, one signed by a random key, a replay of an accepted advisory, then a valid R2 reversal | first three quarantined (signer_not_relay, signature_invalid or signer_not_relay, duplicate); reversal clears hostingRemoved on R2 only |
+| TEST-PS-004-09.T15 | integration | PS-004-03.R04, PS-004-04.R05 | attach_promotion, a crypto claim finalized only by the seller's own verifier, then commerce.payment.acknowledged by the operator with verificationSource chain, then a promotion statement signed by R1 vs by a random key, then a signed withdrawal | Deal opened with contextRef listing_fee and payee operatorDid; finalized alone keeps the promotion claimed with the label final per your verifier; acknowledged only after the operator's acknowledgement, without label; active only for R1's signature with promotion_activated; revoked after withdrawal |
+| TEST-PS-004-09.T16 | load | PS-004-08.R01, PS-004-08.R02, PS-004-08.R03 | 200 publications re-evaluated on Moto G profile; relay at 50 req/s | publish p95 <= 150 ms, batch <= 2 s, relay p95 <= 300 ms, no telemetry requests |
+| TEST-PS-004-09.T17 | unit | PS-004-09.R01, PS-004-09.R03 | traceability and honesty test | every PS-004 requirement maps to a passing test; UI never shows accepted without receipt |
+| TEST-PS-004-09.T18 | integration | PS-004-10.R01, PS-004-10.R02, PS-004-10.R03 | export, import to fresh vault, import with wrong owner | records round-trip; active publications import as unpublished-pending-resign; foreign owner read-only |
+| TEST-PS-004-09.T19 | integration | PS-004-02.R04 | spam stub (moderation.spam.evaluate, mode author_presign) scores 72 and risk stub (moderation.risk.assess with subjectType listing_publication and publication {draftId, spamScore 72, publicationsLast24h}) returns medium, then high, then a degraded spam result; publish without federation_publish consent for R1 (federationOptIn false); regionCell of 6 characters injected past the record check | held_for_confirmation and nothing published in the first three cases with riskLevel medium or high recorded; BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED; DISCOVERY_PRECISION_FORBIDDEN; nothing queued in each case |
+| TEST-PS-004-09.T20 | abuse | PS-004-02.R05 | R3 returns receipts 3 days in the future while R1 and R2 agree with the device; then only R3 is configured | R3 flagged untrusted and publish succeeds; with R3 alone the command proceeds with clockWarning instead of PRECONDITION_FAILED |
+| TEST-PS-004-09.T21 | integration | PS-004-02.R06 | unpublish L with an active deal hold without and with confirmHolds | BAZAAR_PUBLISH_HOLDS_ACTIVE first; then unpublished with the hold still active and listed |
+| TEST-PS-004-09.T22 | integration | PS-004-07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.publications present with field classes; deletion ends publications with account_deleted and pseudonymizes retained records |
+| TEST-PS-004-09.T23 | e2e | PS-004-02.R07 | on a mobile profile the seller publishes M (photo 2 without alt and not decorative), adds a description, then publishes again; L with a decorative photo is published | first publish refused with BAZAAR_LISTING_MEDIA_ALT_MISSING naming photo 2 and the review sheet announces it; second publish active; decorative photo accepted; axe reports zero serious issues; F14.S01.M02 T16 relies on this suite |
+| TEST-PS-004-09.T24 | integration | PS-004-02.R08 | deletion guard stub reports a pending request, then publish, confirm and renew; then the request is cancelled | each refused with PRIVACY_DELETION_PENDING and nothing published; after cancellation publish succeeds |
+| TEST-PS-004-09.T25 | contract | PS-004-04.R02, PS-004-06.R02 | publish, renew, unpublish and end with reason expired through the StatementPublisherPort test double | every statement is created by federation.record.publish or federation.tombstone.issue with the seq returned by F11.S01.M02; the module calls no signing primitive and keeps no seq counter; bazaar.listing.unpublished carries tombstoneCid; end with reason expired returns tombstoneCid and emits no bazaar.listing.unpublished |
+| TEST-PS-004-09.T26 | integration | PS-004-04.R06 | outbox double moves R1's entry to completed on a verified classrup.platform.relay_receipt/v1 (acknowledger none from the F11.S01.M01 registry), and R2's entry to failed with failureReason relay_rejected and lastError.reasonCid; relayIds use the canonical form | R1 delivery transport_acknowledged and never peer_accepted, with no peer acknowledgement awaited; R2 delivery relay_rejected with rejectReasonCid; a relayId like relay:berlin.example is refused with VALIDATION_FAILED |
+| TEST-PS-004-09.T27 | contract | PS-004-04.R07 | F09.S01.M01 conformance suite calls the listing_fee ContextTermsPort with the Deal of T15, then with a doubled amount and a wrong payee | verify confirms parties and obligation for the matching Deal and rejects the others; openerRole and ownerRole return listing author |
+| TEST-PS-004-09.T28 | integration | PS-004-01.R05 | publish L, then a buyer vault and the seller vault derive the listing thread through F08.S01.M02 | projection carries tenantId and both vaults derive the same threadId; media entries in the projection equal the listing's MediaRef entries |
+| TEST-PS-004-09.T29 | contract | PS-004-01.R01, PS-004-01.R06 | evaluate stub returns packs of publishers P and Q with a review match of Q's rule r2; preview_policy and publish with profileRefs [{publisherId P, code eu_de}], then confirm with confirmedRules [{publisherId Q, ruleKey r2}]; an input naming jurisdictionProfileId | evaluate and governance.jurisdiction_profile.resolve receive the ProfileRefs; the PublicationRecord stores packs [{publisherId, packVersion, packCid}] and packsDigest equal to the evaluate result and matchedRules with publisherId; no listing text stored; jurisdictionProfileId refused with VALIDATION_FAILED |
+| TEST-PS-004-09.T30 | integration | PS-004-03.R01, PS-004-04.R01 | edit active L to revision 6 and publish; publish revision 6 again; edit to revision 7 matching review rule r1 and publish without, then with confirmedRules and confirmedRisk | revision 6 projection published in place with the next seq and bazaar.listing.published; the repeat refused with BAZAAR_PUBLISH_NOT_ALLOWED; revision 7 refused with BAZAAR_PUBLISH_CONFIRMATION_REQUIRED first, published with ownerConfirmedAt after confirmation; one live PublicationRecord throughout |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01-T30 pass in CI.
+- No projection contains data beyond the P0 allowlist or a region finer than L2, and no projection is published with a photo that lacks both alt text and a decorative mark.
+- No UI or API reports transport_acknowledged or Promoted without a verified signed receipt or relay statement, no publication delivery is ever shown as peer_accepted, no relay notice changes the owner's Listing, and no text claims global removal.
+- A rule pack or category change never unpublishes, ends or tombstones a publication without its owner's confirmation; it only holds it in policy_attention with a reminder after at least 7 days.
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F11.S01.M01, F11.S01.M02, F15.S01.M01, F15.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

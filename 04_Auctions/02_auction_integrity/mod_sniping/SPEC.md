@@ -1,44 +1,89 @@
-# F04.S02.M02 — sniping
+# F04.S02.M02 — Anti-sniping soft close
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F04.S02.
+**Status:** SPECIFIED (Stage 3). **Scope:** MVP. **Parent:** [F04.S02](../SPEC.md). **Process IDs:** PS-038-01…PS-038-10. **Code:** `packages/auctions/src/auction_integrity/sniping`.
 
-## Purpose and business behavior
-Provide sniping as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
+
+## Purpose
+
+Soft close on the host relay. Every accepted bid with a visible amount placed by a bidder in the final 2 minutes (120 000 ms, inclusive) of an auction moves the end 2 minutes later, up to 30 extensions, so the end can move by at most 60 minutes in total. This removes the last-second advantage of a hard close; field evidence on eBay (hard close) and Amazon (soft close) auctions found far more last-minute bidding under a hard close (Roth and Ockenfels, 2002, American Economic Review 92(4)). Soft close reduces but does not eliminate strategic late bidding, so the cap guarantees that every auction ends. The constants are rules version softclose-v1, which the seller signs in the auction terms and the host echoes in its acceptance. The extension decision runs inside the bid transaction under the per-auction lease on the host, and every extension is a host-signed statement that bidders receive in their bid receipts and verify against the terms they hold.
+
+## Responsibilities
+
+- Own the Extension record - one immutable row per extension - and the statement classrup.auctions.extension/v1 signed by the host key.
+- Decide in the bid transaction whether an accepted bid qualifies - host time within 120 000 ms before currentEndsAt, strictly before the end, kind manual or proxy with a visible amount submitted by a bidder, extensionCount below 30.
+- Update currentEndsAt through F04.S01.M01 adjust_end with compare-and-set on extensionCount and the fence token, and emit auctions.auction.extended.
+- Expose the rule constants and the extension history publicly so that bidders can predict and audit the end time, and verify received extensions in vaults against the softCloseRulesVersion of the terms.
+
+## Not responsible for
+
+- Bid acceptance and ordering (F04.S01.M02) and closing (F04.S01.M03); this module only decides and records extensions.
+- Per-auction tuning of the window; the constants are fixed in rules version softclose-v1.
+- Client countdown rendering beyond using host time offsets (shared UX in F14).
+- Future: per-seller configurable windows and extensions proportional to bid activity.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
-## Scope
-- Required process spec: `sniping_domain_model.md` (not yet authored)
-- Required process spec: `sniping_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `sniping_validation_and_authorization.md` (not yet authored)
-- Required process spec: `sniping_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `sniping_interfaces_and_events.md` (not yet authored)
-- Required process spec: `sniping_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `sniping_acceptance_and_property_tests.md` (not yet authored)
+- As a bidder, I see that the auction can extend, how many extensions are left and the end time from the host's clock.
+- As a bidder who was outbid in the last two minutes, I get time to respond because the end moved.
+- As a seller, I know the auction can end up to 60 minutes after the scheduled end but never later.
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Edge cases
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- A bid lands when exactly 120 000 ms remain; it qualifies. At 120 001 ms remaining it does not.
+- A bid lands with 30 ms remaining and a second one 50 ms later; the first moves the end by 120 000 ms, so the second arrives with 119 980 ms remaining and extends again from the moved end; had the first bid landed with 60 000 ms remaining, the second would arrive with 179 950 ms remaining and not extend.
+- The 30th extension has been used; later bids in the window are still accepted but do not extend, and the UI shows final extension used.
+- A proxy auto-raise generated by the host after a bid, or a max-only update that changes no visible amount, does not extend by itself; only the triggering bidder-submitted bid with a visible amount counts.
+- A bid is rejected for a low amount inside the window; no extension is created.
+- A retraction inside the window is refused by the bid module anyway (more than 12 h rule), and a retraction never extends.
+- Host clock moves backward by an NTP step; the host keeps hostTime non-decreasing and uses the max of its clock and the last ledger time, so remaining time never grows because of a clock step.
+- Bidder's phone shows the old end time; the bid receipt carries the host-signed extension and the new currentEndsAt, and the UI updates from the receipt and the public history.
+- A host signs an extension with other constants or another rulesVersion than the terms' softCloseRulesVersion; vaults quarantine it with AUCTIONS_EXTENSION_INVALID and keep the last verified end time.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+## UX and accessibility
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Countdown on the auction page: host-time based, text such as ends at 10:02 (may extend by 2 minutes per late bid, 28 of 30 extensions left, rules softclose-v1).
+- Extension notice toast and history list: each extension with time, new end and triggering sequence number.
+- Bid receipt view: shows the end time after the bid and whether this bid extended the auction.
 
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+**States:** loading; running; in-final-window; extended; final-extension-used; closed
 
-## Required process specification inventory
-- [ ] `sniping_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+**Accessibility:** Extension notices are announced once through an aria-live polite region with the new end time as text.; The countdown is exposed as text updated at most every 10 s, and every 15 s inside the last minute.; Remaining extensions are a text count, not only a progress graphic.
+
+## Owned data
+
+- `Extension` (classrup.auctions.extension/v1, P0, RET-EVIDENCE)
+
+## Interfaces
+
+- Commands: `auctions.extension.apply`, `auctions.extension.receive`
+- Queries: `auctions.extension.list`, `auctions.extension.preview`
+- Emits: `auctions.auction.extended`
+- Consumes: `auctions.auction.closed`, `privacy.deletion.completed`
+
+## Dependencies
+
+F04.S01.M01, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001
+
+## Process specifications and aggregation
+
+| ID | Process | Requirements |
+|---|---|---|
+| PS-038-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-038-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-038-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-038-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-038-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
+| PS-038-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-038-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
+| PS-038-08 | [Observability and performance](observability_performance.md) | 3 |
+| PS-038-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-038-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/auctions/src/auction_integrity/sniping/index.ts`.
+
+## Acceptance criteria
+
+- All tests T01–T20 pass in CI.
+- No auction ever ends later than its scheduled end plus 60 minutes.
+- Every end-time change is a host-signed numbered extension that bidders can verify against the rules version in the terms.

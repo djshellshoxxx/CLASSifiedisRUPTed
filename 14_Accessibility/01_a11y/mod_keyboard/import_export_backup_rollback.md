@@ -1,35 +1,31 @@
-# PS-109-10 — import export backup rollback
+# PS-109-10 — Import, export, backup and rollback: Keyboard operability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-10. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M01 Keyboard operability](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/keyboard` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-109-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-109-10.R01** The module stores no user data, so a user export contains nothing from it.
+- **PS-109-10.R02** The only user preference that affects these primitives, the reduced-motion override, lives in F15.S04.M03 LocalSettings (optional field a11yMotion system | reduced) and travels with that module's vault export; the PWA shell reads LocalSettings and passes the value to the primitives as a parameter, so 05.R02 holds.
+- **PS-109-10.R03** Token and primitive changes are versioned and rollback restores the previous release without migration.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** No module data is exported; a11yMotion is part of the F15.S04.M03 LocalSettings vault export. MVP has no single-character shortcuts, so there is no shortcut setting.
+- **import:** F15.S04.M03 validates an imported a11yMotion against system or reduced and falls back to system for any other value; the primitives only ever receive the validated value from the PWA shell.
+- **backup:** Nothing to back up; tokens and primitives ship with the app bundle.
+- **migration rollback:** Tokens are additive; rollback to the previous release restores previous tokens and primitives without data migration; an a11yMotion value unknown to an older release is ignored and prefers-reduced-motion applies.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-109-09.T15 | unit | PS-109-10.R03 | upgrade token file from v1 to v1.1 and roll back | components render with defaults; no consumer breaks |
+| TEST-PS-109-09.T20 | integration | PS-109-10.R01, PS-109-10.R02 | vault export and import round trip through F15.S04.M03 with a11yMotion reduced, then with an invalid value | export holds nothing from this module; reduced survives and the shell passes it to setMotionPreference; invalid value falls back to system |
+
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

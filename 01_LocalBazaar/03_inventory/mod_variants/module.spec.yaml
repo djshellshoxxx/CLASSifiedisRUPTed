@@ -1,0 +1,275 @@
+id: F01.S03.M02
+scope: MVP
+summary: >-
+  Lets a seller offer one listing in up to 50 variants (size, colour, condition), each with its own price and
+  stock quantity. The Variant record owns attributes, price and ordering; the authoritative on-hand quantity is
+  stored by F01.S03.M01, and this module creates and updates the per-variant InventoryItem synchronously through
+  the bazaar.inventory.set_quantity upsert inside the same vault transaction. Price changes are reported to
+  F01.S01.M02 as material listing revisions. Variants are contributed to the signed listing projection of
+  F01.S01.M03 with an in-stock flag only; buyers learn of changes only by receiving a new signed statement.
+responsibilities:
+  - Own Variant: label, attribute map, own price in Money, position and status, at most 50 per listing.
+  - Create and update the per-variant InventoryItem synchronously through bazaar.inventory.set_quantity inside the same transaction; the first variant supersedes the listing-level item there.
+  - Report price changes to F01.S01.M02 so they count as material revisions and reach offers and negotiations.
+  - Refuse retiring or removing a variant that has active holds or open offers (checked through F01.S03.M01 and F01.S04.M01).
+  - Contribute the public variant subset {variantId, label, attributes, price?, inStock} to the projection through the ProjectionContributorPort of F01.S01.M03.
+  - Register the F10 privacy ports for Variant and classify every field (N6).
+non_responsibilities:
+  - On-hand quantity, holds and availability (F01.S03.M01).
+  - Listing-level asking price and accepted payment methods (F01.S02.M01); variant prices must use the listing's currency.
+  - Offers and negotiation on a variant (F01.S04.M01, F01.S04.M02) which reference variantId.
+  - Signing the projection (F01.S01.M03).
+  - "Future: shared attribute templates per category and bulk CSV import of variants."
+depends_on: [F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S01.M03, F01.S02.M01, F01.S04.M01, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a seller of shirts, I list sizes S, M and L with different stock, and buyers see which sizes are in stock.
+  - As a seller, I can change the price of one size and the app tells me buyers with open offers on that size will be notified.
+  - As a seller, I can retire a size that is out of production without breaking reservations already made.
+edge_cases:
+  - Seller adds the 51st variant; BAZAAR_VARIANT_LIMIT is returned.
+  - Two variants have the same attribute set; BAZAAR_VARIANT_DUPLICATE is returned and the existing one is highlighted.
+  - Variant price currency differs from the listing's asking currency; BAZAAR_VARIANT_CURRENCY_MISMATCH is returned.
+  - Retire a variant with an active hold or an open offer; BAZAAR_VARIANT_IN_USE is returned and the holds and offers are listed.
+  - Adding the first variant to a listing that has a listing-level hold; BAZAAR_VARIANT_LISTING_HELD is returned until the hold ends.
+  - Quantity edit lowers stock below the reserved amount; the error from the inventory module is surfaced unchanged and the variant is not modified.
+  - Same command replayed after offline queueing; one variant exists.
+  - An offer for a new variant arrives right after it was added; the variant's InventoryItem already exists because it was created in the same transaction as the variant.
+ux:
+  screens:
+    - "Variants editor: table of variants with label, attributes, price, quantity, status; add, edit, retire; reorder with drag and a button alternative."
+    - "Variant picker in the buyer's view of a mirrored listing: options with stock indicator and price per option."
+  states: [loading, empty, saving-local, saved-local, over-limit, in-use, conflict]
+  a11y:
+    - Reordering has up and down buttons as the single-pointer alternative to dragging (WCAG 2.5.7).
+    - Table has header cells and each row has a labelled action group.
+    - Price inputs state the currency in the visible label and use inputmode decimal.
+processes:
+  domain_schema:
+    requirements:
+      - "A Variant stores label, a small attribute map, price as Money in the listing currency, position and status; quantity is not stored here."
+      - "Variants are part of the owner's listing data (P0 once published inside the signed projection, P3 while draft)."
+      - "At most 50 variants exist per listing and at most 5 attribute pairs per variant."
+      - "The projection subset contributed through the ProjectionContributorPort is exactly {variantId, label, attributes, price?, inStock} per active variant; quantities and retired variants are never contributed."
+    entities:
+      - name: Variant
+        schema: classrup.bazaar.variant/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing"
+          - "ownerId: did:key — local principal"
+          - "label: string — 1..60 code points"
+          - "attributes: object — 1..5 pairs, key 1..20 and value 1..40 code points, keys from size, colour, condition, material, model, other"
+          - "price?: Money — CTR-MNY-001; > 0; <= maxAmount(currency) (F09.S03.M03); same currency as SellTerms.askingPrice; absent means the listing asking price applies"
+          - "position: int — 0..49"
+          - "status: enum — active | retired | deleted"
+          - "attributesHash: string — sha256- over JCS(attributes), unique per listing among active and retired"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most 50 variants with status active or retired per listing; positions are unique among them.
+          - price currency equals the listing asking currency whenever price is present.
+          - A variant with active holds or open offers is never retired or deleted.
+          - Every active or retired variant has an InventoryItem in F01.S03.M01 created in the same transaction as the variant.
+          - Field classes are annotated per F10.S02.M02 (P3 draft; label, attributes and price P0 once projected).
+    sql: |
+      CREATE TABLE bazaar_variant (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, status TEXT NOT NULL,
+        position INTEGER NOT NULL, attributes_hash TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_variant_attrs ON bazaar_variant(tenant_id, listing_id, attributes_hash) WHERE status <> 'deleted';
+      CREATE UNIQUE INDEX bazaar_variant_pos ON bazaar_variant(tenant_id, listing_id, position) WHERE status <> 'deleted';
+  validation_rules:
+    requirements:
+      - "Variant input is validated strictly, including money and currency rules from CTR-MNY-001."
+      - "Uniqueness and limits are enforced inside the same transaction as the write."
+      - "Every violation maps to one stable error code."
+      - "The variant price cap is per currency through the F09.S03.M03 helper maxAmount(currency) (10^10 major units), the same helper SellTerms, WantSpec and Offer use."
+    rules:
+      - "V01 | label 1..60 and attributes 1..5 pairs within length limits | VALIDATION_FAILED"
+      - "V02 | price amount is a positive integer string <= maxAmount(price.currency) = 10^(10 + registry decimals) minor units | VALIDATION_FAILED"
+      - "V03 | price currency equals the listing asking currency | BAZAAR_VARIANT_CURRENCY_MISMATCH"
+      - "V04 | listing has fewer than 50 non-deleted variants | BAZAAR_VARIANT_LIMIT"
+      - "V05 | attributesHash is unique among the listing's non-deleted variants | BAZAAR_VARIANT_DUPLICATE"
+      - "V06 | quantity is an integer 0..100000 | VALIDATION_FAILED"
+      - "V07 | retire or delete only when bazaar.inventory.list_holds shows no active hold and bazaar.offer.list_for_listing shows no open offer for the variant | BAZAAR_VARIANT_IN_USE"
+      - "V08 | adding the first variant requires the listing-level item to have no active hold | BAZAAR_VARIANT_LISTING_HELD"
+      - "V09 | listing kind is sell, giveaway or rental and status is draft, published or unpublished | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - "A Variant moves only along the declared transitions; deleted is terminal and keeps a tombstone for 180 days."
+      - "Retiring hides the variant from new offers and reservations but leaves existing holds, offers and history intact."
+      - "Reactivation re-checks the 50 variant limit and attribute uniqueness."
+    machines:
+      - entity: Variant
+        initial: active
+        terminal: [deleted]
+        transitions:
+          - "active -> retired | bazaar.variant.retire by owner | no active hold or open offer; emits bazaar.variant.changed (retired)"
+          - "retired -> active | bazaar.variant.reactivate by owner | limit and uniqueness rechecked; emits bazaar.variant.changed (reactivated)"
+          - "retired -> deleted | bazaar.variant.remove by owner | no references; tombstone written; emits bazaar.variant.changed (removed)"
+          - "active -> deleted | listing deleted event | cascade removal"
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - "All commands are vault-local commands run by the local principal; none produces a signed statement; the changed variants reach others only inside the next signed listing projection from F01.S01.M03."
+      - "Each command calls bazaar.inventory.set_quantity and, when the price changed on a published listing, bazaar.listing_revision.record inside the same transaction."
+      - "bazaar.variant.changed carries ids and a change enum only, so the inventory and offer modules can react without reading private data."
+      - "bazaar.inventory.set_quantity is a synchronous upsert: add creates the per-variant InventoryItem in the same transaction, the first variant supersedes the listing-level item there, and no InventoryItem is created asynchronously from bazaar.variant.changed."
+    commands:
+      - name: bazaar.variant.add
+        capability: bazaar.variant.add
+        input: "[vault-local] { listingId, label, attributes, price?, quantity, position? }"
+        output: "{ variantId, inventoryItemId, revision: 1 }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_STATE, BAZAAR_VARIANT_LIMIT, BAZAAR_VARIANT_DUPLICATE, BAZAAR_VARIANT_CURRENCY_MISMATCH, BAZAAR_VARIANT_LISTING_HELD]
+        emits: [bazaar.variant.changed]
+        idempotent: true
+      - name: bazaar.variant.update
+        capability: bazaar.variant.update
+        input: "[vault-local] { variantId, expectedRevision, label?, attributes?, price?, quantity?, position? }"
+        output: "{ variantId, revision, priceChanged }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_VARIANT_DUPLICATE, BAZAAR_VARIANT_CURRENCY_MISMATCH, BAZAAR_INVENTORY_BELOW_RESERVED, BAZAAR_EDIT_REVISION_LIMIT]
+        emits: [bazaar.variant.changed]
+        idempotent: true
+      - name: bazaar.variant.retire
+        capability: bazaar.variant.retire
+        input: "[vault-local] { variantId, expectedRevision }"
+        output: "{ variantId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_VARIANT_IN_USE]
+        emits: [bazaar.variant.changed]
+        idempotent: true
+      - name: bazaar.variant.reactivate
+        capability: bazaar.variant.retire
+        input: "[vault-local] { variantId, expectedRevision }"
+        output: "{ variantId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_VARIANT_LIMIT, BAZAAR_VARIANT_DUPLICATE]
+        emits: [bazaar.variant.changed]
+        idempotent: true
+      - name: bazaar.variant.remove
+        capability: bazaar.variant.retire
+        input: "[vault-local] { variantId, expectedRevision }"
+        output: "{ variantId, deletedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_VARIANT_IN_USE]
+        emits: [bazaar.variant.changed]
+        idempotent: true
+    note: "Ports: the module registers the ProjectionContributorPort of F01.S01.M03 (section variants: active variants with inStock from F01.S03.M01 at signing time). Privacy ports (N6): it registers ExportSectionPort (section bazaar.variants), DeletionPort (plan: delete variants of own listings with tombstones) and RetentionPurgePort with F10.S01.M03, F10.S01.M04 and F10.S01.M02. Variants hold no counterparty data, so nothing is pseudonymized."
+    queries:
+      - name: bazaar.variant.list
+        capability: bazaar.variant.read
+        input: "{ listingId, status?: active|all }"
+        output: "{ items: [{ variant: Variant, onHand, reserved, available }] }"
+        errors: [NOT_FOUND]
+      - name: bazaar.variant.get
+        capability: bazaar.variant.read
+        input: "{ variantId }"
+        output: "{ variant: Variant, onHand, reserved, available }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: bazaar.variant.changed, privacy: P1, payload: "{ listingId, variantId, ownerId, change: added|updated|retired|reactivated|removed, priceChanged: boolean, revision }"}
+    events_consumed:
+      - {type: bazaar.listing.deleted, effect: "delete all Variant rows of the listing and write tombstones"}
+    errors:
+      - "BAZAAR_VARIANT_LIMIT | 409 | no | listing already has 50 variants"
+      - "BAZAAR_VARIANT_DUPLICATE | 409 | no | another variant has the same attributes"
+      - "BAZAAR_VARIANT_CURRENCY_MISMATCH | 422 | no | variant price currency differs from the listing asking currency"
+      - "BAZAAR_VARIANT_IN_USE | 409 | no | variant has active holds or open offers"
+      - "BAZAAR_VARIANT_LISTING_HELD | 409 | no | listing-level stock has an active hold; release it before adding variants"
+    example: |
+      vault.dispatch("bazaar.variant.add", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "label": "Size M, blue",
+        "attributes": { "size": "M", "colour": "blue" }, "price": { "amount": "2500", "currency": "EUR" }, "quantity": 3 },
+        idempotencyKey: "0192f3a4-0000-7000-8000-000000000061")
+      inside the same transaction: bazaar.inventory.set_quantity { listingId, variantId, onHand: 3 } => { created: true, supersededItemId: "0192f3a4-aaaa-..." }
+      => { "variantId": "0192f3ab-...", "inventoryItemId": "0192f3ab-bbbb-...", "revision": 1 }
+      event bazaar.variant.changed { listingId, variantId, ownerId, change: "added", priceChanged: false, revision: 1 }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal who owns the listing may add, update, retire or remove variants."
+      - "Reads are limited to the owner; other parties see variants only inside signed listing projections."
+      - "No relay role participates and no relay policy row is needed."
+    capabilities:
+      - "bazaar.variant.add | owner | listing.ownerId = local principal; listing status draft, published or unpublished"
+      - "bazaar.variant.update | owner | variant.ownerId = local principal; variant status active or retired"
+      - "bazaar.variant.retire | owner | variant.ownerId = local principal; no active hold or open offer"
+      - "bazaar.variant.read | owner | variant.ownerId = local principal, or F01.S01.M03 through the ProjectionContributorPort on the owner's behalf"
+  failure_recovery_idempotency:
+    requirements:
+      - "Commands are idempotent per CTR-IDM-001 and use expectedRevision when changing an existing variant."
+      - "The variant write, quantity change in the inventory module, revision record and outbox event commit in one transaction or not at all."
+      - "Offline edits are committed locally; buyers see them only after a new signed projection has been sent and accepted."
+    idempotency: "Idempotency-Key required on every command; keys and request hashes kept 24 h; replay returns the stored result."
+    concurrency: "expectedRevision on update, retire, reactivate, remove; the unique indexes on attributes and positions enforce limits under races; two tabs adding the 50th variant give one success and one BAZAAR_VARIANT_LIMIT. The open-offer check reads the offers module inside the same transaction."
+    retries: "Only IndexedDB aborts are retried (max 3); validation and conflict errors are not retried."
+    offline: "Fully available offline; the UI shows unsent changes until the listing projection is re-sent through F01.S01.M03."
+    partial_failure: "If set_quantity fails (for example below reserved, or the listing-level item still has a hold), the variant change is rolled back and the inventory error code is returned unchanged or mapped to BAZAAR_VARIANT_LISTING_HELD."
+  privacy_retention_abuse:
+    requirements:
+      - "Variant data is P3 while the listing is a draft and becomes public only through the signed projection; quantities are never part of it beyond an in-stock flag."
+      - "Variants are retained RET-STANDARD with the listing; tombstones are kept 180 days."
+      - "Attribute text is plain text and is scanned by the same prohibited-item rules as listing text at publication."
+      - "The module registers ExportSectionPort (section bazaar.variants), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every Variant field with its F10.S02.M02 class."
+    data:
+      - "Variant: P3 draft data, P0 when projected; field classes annotated per F10.S02.M02."
+      - "Quantity: P2 in F01.S03.M01."
+    retention:
+      - "Variant: RET-STANDARD; removed with the listing; tombstone {id, type, deletedAt} for 180 days."
+    threats:
+      - "T01 | Variant price bait-and-switch against buyers with open offers | price changes are material revisions reported to F01.S01.M02 and notify offers; buyers must re-confirm"
+      - "T02 | Variant spam to bloat a listing | 50-variant limit, 5 attributes per variant, plain text only"
+      - "T03 | Hidden prohibited item in variant text | attributes included in publication policy evaluation"
+    abuse_controls:
+      - "At most 100 variant commands per hour per vault."
+      - "Price changes on one variant limited to 10 per day (RATE_LIMITED beyond)."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Variant commands including the inventory call meet local latency budgets on Moto G-class hardware."
+      - "Variant list rendering with 50 variants stays interactive."
+    metrics:
+      - "classrup_bazaar_variant_commands_total{outcome} (local)"
+      - "classrup_bazaar_variant_price_changes_total (local)"
+    logs:
+      - "info variant.changed {listingId, variantId, change, correlationId} in local diagnostics; no labels or prices."
+    budgets:
+      - "add/update p95 <= 80 ms including inventory call; list of 50 variants p95 <= 100 ms on Moto G-class hardware."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate commands, events and the Variant schema against the registry."
+      - "Limits and atomic rollback are tested with fault injection."
+    fixtures: "Vault with draft sell listing L (EUR 25.00) and its listing-level InventoryItem, 49 variants preloaded in a second listing M, inventory and offers modules in memory, currency registry with EUR and ETH, clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01,02.R02 | add a valid variant with quantity 3 | Variant stored, inventory item onHand 3, 50-variant and 5-attribute limits enforced"
+      - "T02 | unit | 01.R02,07.R01 | read projection and events | variants only in projection; no quantities in event or projection beyond in-stock flag"
+      - "T03 | unit | 02.R03 | violate each rule V01-V09, including retire with an open offer from bazaar.offer.list_for_listing | documented error code returned and nothing stored"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random commands | only declared transitions; retire blocked while holds or open offers exist; reactivation rechecks limits"
+      - "T05 | contract | 04.R01,04.R03,09.R02 | each command runs | outputs and bazaar.variant.changed payloads validate against registry"
+      - "T06 | integration | 04.R02,06.R02 | update variant price on published listing | listing revision recorded as material in the same transaction; event emitted once"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | other principal or UI-less caller attempts commands | FORBIDDEN or NOT_FOUND; no relay call"
+      - "T08 | integration | 06.R01,06.R03 | replay add with same key; edit offline | one variant; unsent changes shown until projection re-sent"
+      - "T09 | chaos | 06.R02,06.R03 | inventory set_quantity fails below reserved | variant change rolled back, inventory error returned unchanged"
+      - "T10 | integration | 06.R02 | two tabs add the 50th variant | one succeeds, other BAZAAR_VARIANT_LIMIT"
+      - "T11 | abuse | 07.R02,07.R03 | variant attribute with prohibited keyword at publish | publication blocked by policy; retention shows RET-STANDARD"
+      - "T12 | abuse | 02.R03 | 101 commands in an hour; 11 price changes in a day | RATE_LIMITED on the 101st and 11th"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 50 variants on Moto G profile | add p95 <= 80 ms, list p95 <= 100 ms, no telemetry"
+      - "T14 | unit | 09.R01,09.R03 | traceability tool run | every PS-009 requirement maps to a passing test; failures print seeds"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import duplicate attributes | round-trip identical; duplicate rejected in dry-run"
+      - "T16 | integration | 04.R04 | add the first variant of L and inspect inventory inside and after the transaction; deliver bazaar.variant.changed afterwards | variant InventoryItem exists and the listing-level item is superseded before commit; the event handler creates nothing; an offer hold on the new variant succeeds immediately"
+      - "T17 | property | 02.R04 | variant prices at and above maxAmount(currency) for EUR and ETH listings | at the cap accepted, above VALIDATION_FAILED"
+      - "T18 | contract | 01.R04 | F01.S01.M03 builds the projection of L with variants V1 (stock 3), V2 (stock 0) and a retired V3 | variants subset has exactly {variantId, label, attributes, price?, inStock} for V1 and V2, inStock false for V2, no V3 and no quantities"
+      - "T19 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.variants present with field classes; deletion plan deletes variants with tombstones"
+    acceptance:
+      - All tests T01-T19 pass in CI.
+      - A variant price change always creates a material listing revision and a bazaar.variant.changed event with priceChanged true.
+      - Variants with active holds or open offers can never be retired or removed, and every variant has its InventoryItem from the moment it exists.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains all Variant rows of own listings."
+      - "Import validates the 50-variant limit, attribute uniqueness and currency match, and rejects violating rows in the dry-run report."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Section bazaar.variants in classrup-export/v1, one line per Variant (schema classrup.bazaar.variant/v1); quantities travel in the inventory section."
+    import: "Rows import only for listings present in the import or vault; quantities imported from the inventory section through set_quantity; duplicates and over-limit rows are rejected."
+    backup: "Vault export is the primary backup (IOX-6); no relay holds variants other than inside public projections."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; older readers ignore new fields."

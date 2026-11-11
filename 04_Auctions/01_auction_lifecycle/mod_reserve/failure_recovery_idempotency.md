@@ -1,35 +1,36 @@
-# PS-035-06 — failure recovery idempotency
+# PS-035-06 — Failure recovery and idempotency: Auction setup and reserve
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-06. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S01.M01 Auction setup and reserve](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_lifecycle/reserve` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-035-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-035-06.R01** Vault commands are idempotent through local command ids; host commands are idempotent by terms cid and auction id.
+- **PS-035-06.R02** Host open, adjust_end and mark_closed run inside the per-auction lease (IDM-8) and are safe to repeat; a stale lease token is refused.
+- **PS-035-06.R03** A seller vault crash after signing terms but before recording them is repaired by re-sending the same terms cid, which the host deduplicates.
+- **PS-035-06.R04** A lost acceptance is never resolved by a silent local cancel - the vault sends auction_cancel at acceptBy and keeps the listing locked until the host answers, the seller explicitly releases it, or the host_silent deadline passes.
+- **PS-035-06.R05** A host restore never contradicts what the host signed before it - auctions whose bids or close may lie in the announced lost window are frozen before the restored relay accepts a request, a frozen auction is never reopened or closed with a new result, and freeze, re-adoption and the restore cancel are idempotent per auction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Local command id stored 24 h; host accept_hosting dedupes on termsCid and returns the same host_acceptance; apply_cancel returns the same host_cancel per auction; receive dedupes on statement cid; open, adjust_end and mark_closed ignore repeats once their effect is stored; freeze ignores repeats and merges causes; the restore cancel is signed once per frozen auction.
+- **concurrency:** Per-auction lease row on the host with a fencing token, TTL 5 s for bid-path commands and 30 s for the close path, always taken with BEGIN IMMEDIATE; adjust_end and mark_closed carry the fence token and a stale token is refused with PRECONDITION_FAILED. The lease is local to the host relay (IDM-8); the seller vault uses a Web Locks lock auctions-auction-<id>; no lock spans vaults.
+- **retries:** Terms upload retries 1 s, 2 s, 4 s, 8 s up to 8 attempts, then shows needs attention; the vault fetches the acceptance by termsCid at each retry; auction_cancel is re-sent with the same cid every 60 s while in cancel_pending; the host timer retries open every 5 s until success or cancellation.
+- **offline:** Create and cancel of a draft work offline; schedule needs the host and shows prepared until transport acknowledged; the UI never says scheduled until the host countersignature is verified; a cancel of a proposed or live auction waits in the sync outbox and the UI shows cancel requested, not cancelled, until host_cancel is verified.
+- **partial failure:** If the host acknowledges transport but the acceptance is lost, the seller sees proposed and fetches the acceptance by termsCid; at acceptBy it sends auction_cancel and waits in cancel_pending; if the host opened the auction and has bids, the cancel is refused and the vault shows it open. If the host is down at start time the auction opens late by the host clock and the delay is recorded, never backdated. If the host restores an older backup, auctions whose open interval overlaps the announced lost window are frozen (03.R05) instead of continuing on incomplete data.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-035-09.T05 | integration | PS-035-03.R03, PS-035-06.R02 | advance host clock past startsAt; run open twice; call adjust_end and mark_closed with a stale fence token | opened once with one signed auction_opened; both stale calls refused with PRECONDITION_FAILED |
+| TEST-PS-035-09.T09 | integration | PS-035-06.R01, PS-035-06.R03 | replay schedule; crash after signing terms before recording | same termsCid and acceptance; host dedupes |
+| TEST-PS-035-09.T18 | integration | PS-035-06.R04, PS-035-03.R04, PS-035-02.R04 | host accepts but the acceptance is lost; 24 h pass; host opened and a bidder bid; second run without bids; host tries to accept after acceptBy | vault sends auction_cancel at acceptBy and waits in cancel_pending; with a bid the host refuses AUCTIONS_HAS_BIDS and the vault shows open; without bids host_cancel and cancelled; late acceptance refused with EXPIRED |
+| TEST-PS-035-09.T25 | integration | PS-035-03.R05, PS-035-06.R05, PS-035-04.R08 | restore host H from a backup whose lost window covers bids on open auction A and the end of auction C; the AuctionHostPort implementations run before the port opens; seller vault S receives the restore announcement; S cancels A; nobody returns the result of C for 72 h | A and C frozen once on the host and in vaults with auctions.auction.frozen; bids and close refused; the cancel of A gives host_cancel host_restore although A has bids; C cancelled host_restore at 72 h; no new result determined for either; push dispatched once per opted-in recipient |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

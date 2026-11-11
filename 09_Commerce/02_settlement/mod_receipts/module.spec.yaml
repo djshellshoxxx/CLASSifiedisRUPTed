@@ -1,0 +1,295 @@
+# F09.S02.M01 Receipts (ADR-0015, ADR-0016). CTR-COM-001 COM-6: a receipt is a signed statement evidencing an assertion, not delivery.
+id: F09.S02.M01
+scope: MVP
+summary: >-
+  A party signs a short statement about a payment claim with a device key linked to their principal DID: the payer says they
+  paid, the payee says they received. The result is a Receipt {claimId, statement, signerId (the party's principal DID),
+  signingKeyId, signedAt, sig} that both vaults store, verify and can export as a portable file. The file embeds the
+  device-link statement chain from the principal's root key (or an identity-document snapshot), so anyone can verify offline
+  both the signature and that the signing device key belonged to the Deal party. Signing and verification use the F16.S02.M03
+  context classrup/receipt/v1. Key revocation status is derived from a trusted receipt time - this vault's receivedAt, or a
+  relay-signed receipt time labelled as that relay's evidence - compared with the revocation's effective-from time, never from
+  the signer's own signedAt. A receipt evidences what the signer asserted; it never proves that money moved or goods were
+  delivered, and the UI says so.
+responsibilities:
+  - Create receipts by signing a canonical statement with the local principal's device key under the F16.S02.M03 context classrup/receipt/v1 (signature over the JCS header {v, ctx, kid, alg, signedAt, payloadHash}, Ed25519), only for claims the signer is a party to, embedding the device-link chain that links the key to the principal.
+  - Ingest, verify and store receipts signed by the counterparty, with provenance, and quarantine invalid ones.
+  - Verify any receipt offline from its content, the embedded key-link chain and signerId through F16.S02.M03 and the F07 identity checks, reporting the signature result, partyBinding verified or unverified, and key status.
+  - Export a receipt as a portable classrup-receipt/v1 file and embed it in the vault export.
+  - Track signer key revocation from verified revocation statements with their effective-from time, and derive key status from a trusted receipt time (revoked_before_receipt, revoked_after_receipt or revoked_receipt_time_unknown), never from signedAt.
+  - Register the receipt type with the F09.S01.M01 ingest dispatcher (StatementHandlerPort), drop receipts from blocked dids, and bound the quarantine against Sybil floods.
+  - Register the F10 export, deletion and retention ports for receipts (N6).
+non_responsibilities:
+  - Payment claim state and acknowledgement (F09.S01.M01); a receipt does not change claim status.
+  - The cash receipt prompt after acknowledgement (F09.S01.M02), which calls commerce.receipt.issue when the in-force cash terms require receipts.
+  - Signature primitives, the context registry and key registry snapshots (F16.S02.M03), and device links and identity documents (F07.S01.M01, F07.S02.M01).
+  - Dispute handling (F09.S02.M02) and reconciliation (F09.S02.M03).
+  - Tax invoices, VAT and legal receipts; the receipt here is an evidence statement only.
+  - "Future: optional RFC 3161 timestamp tokens from a user-chosen timestamping authority, and PDF rendering for printing."
+depends_on: [F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001]
+user_stories:
+  - As a payer, I sign a receipt stating that I paid EUR 45.00 for the bike, and I keep a file I can show later.
+  - As a payee, I sign a receipt stating that I received the cash, and the buyer's vault stores it with my signature.
+  - As anyone holding a receipt file, I can verify the signature offline and see exactly what the signer asserted, which device key signed it and which principal that key belongs to.
+  - As a payee whose phone was stolen, I revoke its key and know that receipts the thief signs afterwards, even with a backdated signing time, never read as valid.
+edge_cases:
+  - The signer's device key was revoked after this vault received the receipt; verification reports keyStatus revoked_after_receipt, derived from receivedAt and the revocation's effective-from time, and does not hide the receipt.
+  - A receipt arrives from someone who is not a party to the claim; it is quarantined with reason signer_not_party.
+  - The same party tries to issue two receipts of the same type for one claim; the second returns CONFLICT_STATE and the first stays.
+  - The claim is later disputed or expires; existing receipts stay valid evidence of what was asserted and are never deleted by status changes.
+  - The statement text is edited after signing in a transported file; verification fails with COMMERCE_RECEIPT_SIGNATURE_INVALID.
+  - After the signer's account deletion their did is replaced by a pseudonym in retained records; the signature is kept but marked unverifiable-after-pseudonymization while the original signing check result is retained.
+  - A thief signs a receipt with a stolen, already revoked key and backdates signedAt to before the revocation; this vault receives it after the revocation took effect, so it reads revoked_before_receipt and is quarantined with COMMERCE_RECEIPT_KEY_REVOKED, never Valid.
+  - An offline receipt file is verified with no trusted receipt time and its key has a revocation; it reads 'key revoked; signing time unverifiable' (revoked_receipt_time_unknown), never 'revoked later'.
+  - A file signed by a freshly generated key with no device-link chain to the claim's party verifies cryptographically but reads partyBinding unverified and 'Signature valid - party not proven'.
+  - A receipt arrives from a did the receiver has blocked; it is dropped silently unless the claim's Deal has an open dispute case, in which case it is stored as evidence with notifications suppressed.
+  - 10 000 fresh dids each send one receipt; the shared bounded quarantine evicts oldest entries and then drops receipts from dids that are party to no known Deal.
+ux:
+  screens:
+    - "Receipt sheet on a claim: shows the exact sentence that will be signed, amount, currency, claim reference and the line 'This records what you assert. It does not prove payment or delivery.'; button Sign with this device."
+    - "Receipt view: signer pseudonym and principal, signing device key, role, signed time (as claimed by signer), received time (this device, or 'according to relay <name>'), signature status (Valid for <party>, Signature valid - party not proven, Invalid, Key revoked before receipt, Key revoked after receipt, Key revoked; signing time unverifiable), Export file and Copy verification code."
+    - "Verify screen: drop a receipt file or paste code; result with reasons, the device key and the principal it is linked to."
+  states: [loading, empty, ready-to-sign, signing, signed, peer-accepted, verified, party-not-proven, key-revoked, invalid, quarantined]
+  a11y:
+    - Signature status is text with an icon and an accessible description of what it means.
+    - The sentence to be signed is readable text and read out before the Sign button is focused.
+    - Sign and Export buttons are at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A Receipt stores claimId, dealId, statement type, canonical statement body, signerId, role, signedAt (the signer's claim), local receivedAt, signature and receipt cid, matching COM-6.
+      - Receipts are P2, retained as RET-EVIDENCE, and immutable once created; corrections are new receipts.
+      - The statement body binds the claim cid, dealId, the Deal's contextCid, amount and currency so a receipt cannot be moved to another claim or Deal (the F16.S02.M03 inventory binding for classrup/receipt/v1).
+      - signerId is the principal DID of the Deal party and signingKeyId names the device key that signed; the receipt embeds the device-link chain (root-signed classrup.identity.device_link/v1 statements) or an identity-document snapshot, so offline verification can link the key to the principal.
+      - Key status is stored with the trusted receipt time it was derived from - local receivedAt, or a relay-signed receipt time labelled as that relay's evidence - and the revocation's effective-from time; signedAt is never used for key status.
+    entities:
+      - name: Receipt
+        schema: classrup.commerce.receipt/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "claimId: uuidv7 — ref F09.S01.M01 PaymentClaim"
+          - "dealId: uuid — ref F09.S01.M01 Deal (UUIDv8)"
+          - "statementType: enum — payer_asserts_paid | payee_asserts_received"
+          - "statement: object — {claimCid, dealId, contextCid, amount: Money, method, text?: ≤ 280 code points} canonicalized with JCS; the F16.S02.M03 envelope payload"
+          - "signerId: did — principal DID of the signing party as named in the Deal (or per-deletion pseudonym after deletion)"
+          - "signingKeyId: string — F16.S02.M03 signer key ID of the device key that signed"
+          - "keyLink: object — {deviceLinkCids[], chain: root-signed classrup.identity.device_link/v1 envelopes, or identityDocSnapshot: classrup.identity.portable_doc/v1}"
+          - "signerRole: enum — payer | payee"
+          - "signedAt: timestamp — signer's claimed time, RFC 3339 UTC; never used for key status"
+          - "receivedAt: timestamp — local clock when stored"
+          - "relayReceipt?: object — {relayId, at, sig} relay-signed receipt time; evidence only of that relay's clock"
+          - "sig: string — base64url Ed25519 by signingKeyId in a classrup.security.envelope/v1 {v: 1, ctx: classrup/receipt/v1, kid: signingKeyId, alg: ed25519, signedAt, payloadHash, payload?, sig} over JCS({v, ctx, kid, alg, signedAt, payloadHash}), payloadHash = sha256-<base64url> of SHA-256(JCS(statement)) (F16.S02.M03)"
+          - "envelopeMode: enum — inline | hash_only; hash_only envelopes travel beside the statement, which this module supplies to verify"
+          - "receiptCid: string — sha256 of the signed receipt"
+          - "verification: object — {checkedAt, accepted: boolean (F16.S02.M03 verify result.accepted), reason?: F16 SECURITY_* code, result: valid|invalid, partyBinding: verified|unverified, keyStatus: active|revoked_before_receipt|revoked_after_receipt|revoked_receipt_time_unknown|unknown, trustedReceiptTime?: {source: local|relay, at, relayId?}, revocationEffectiveFrom?, provenance: local|peer}"
+          - "peerSync: string — local_committed | prepared | transport_acknowledged | peer_accepted | not_applicable"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - One receipt per (claimId, signerId, statementType).
+          - signerRole matches the signer's role in the claim (payer or payee).
+          - F16.S02.M03 verify returned accepted true for the stored envelope and statement at the time of storage, or the row is quarantined and not stored as a Receipt.
+          - A receipt is presented as valid for a party only when the signature verifies, partyBinding is verified and keyStatus is active or revoked_after_receipt.
+          - keyStatus is derived only from trustedReceiptTime and revocationEffectiveFrom, never from signedAt.
+    sql: |
+      CREATE TABLE commerce_receipt (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, claim_id TEXT NOT NULL, deal_id TEXT NOT NULL,
+        statement_type TEXT NOT NULL, signer_id TEXT NOT NULL, signing_key_id TEXT NOT NULL, received_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_receipt_unique ON commerce_receipt(vault_id, claim_id, signer_id, statement_type);
+      CREATE INDEX commerce_receipt_key ON commerce_receipt(vault_id, signing_key_id);
+  validation_rules:
+    requirements:
+      - Receipt input is validated strictly; unknown fields are rejected with VALIDATION_FAILED.
+      - Role and claim-state rules check that the signer is a party and that the claim status supports the assertion.
+      - Signature verification is exact, so any byte change in the canonical content invalidates the receipt.
+      - Verification is delegated to F16.S02.M03 verify(envelope, {expectedContext classrup/receipt/v1}, keyStatus, payload) - the signature covers JCS({v, ctx, kid, alg, signedAt, payloadHash}), the module supplies the statement as payload for hash-only envelopes and the key status for kid at the trusted receipt time - party binding is checked through the embedded device-link chain against F07.S01.M01 and F07.S02.M01, and a key revoked before the trusted receipt time is refused at ingest.
+    rules:
+      - "V01 | claim exists in this vault and signer is a party of its Deal | NOT_FOUND"
+      - "V02 | payer_asserts_paid requires the signer to be the claim payer and claim status not expired; payee_asserts_received requires the payee and claim status acknowledged, confirmed or final | COMMERCE_RECEIPT_ROLE"
+      - "V03 | statement.claimCid, dealId, contextCid, amount and currency equal the stored claim and its Deal | COMMERCE_RECEIPT_MISMATCH"
+      - "V04 | text at most 280 code points, plain text | VALIDATION_FAILED"
+      - "V05 | F16.S02.M03 verify returns accepted true - envelope v 1, ctx classrup/receipt/v1, kid equal to signingKeyId, strict Ed25519 over JCS({v, ctx, kid, alg, signedAt, payloadHash}) and payloadHash equal to SHA-256 of the JCS statement (supplied by this module for a hash-only envelope); any other F16 reason except SECURITY_KEY_REVOKED maps here | COMMERCE_RECEIPT_SIGNATURE_INVALID"
+      - "V06 | no receipt of the same type by the same signer exists for the claim | CONFLICT_STATE"
+      - "V07 | signedAt is not more than 10 minutes in the future of the local clock | COMMERCE_RECEIPT_SKEW"
+      - "V08 | signingKeyId is linked to signerId by a verified root-signed device-link chain or identity-document snapshot, and signerId is the claim party for the role; otherwise partyBinding is unverified and ingest quarantines with reason party_unbound | COMMERCE_RECEIPT_PARTY_UNBOUND"
+      - "V09 | the signing key was not revoked with an effective-from time before the trusted receipt time (local receivedAt or a relay-signed receipt time); a verify result with reason SECURITY_KEY_REVOKED for the key status at that time maps here | COMMERCE_RECEIPT_KEY_REVOKED"
+      - "V10 | neither party has blocked the other (F07.S02.M02 isBlockedEither); issue returns BLOCKED_PARTY and ingest drops receipts from a blocked did silently unless the claim's Deal has an open dispute case | BLOCKED_PARTY"
+  workflow_state_machine:
+    requirements:
+      - Receipts are immutable; there is no editing or deletion by status change.
+      - Delivery progress is tracked by the sync outbox states, not by receipt status.
+      - Verification is recomputed on demand and cached with its check time.
+    machines: []
+    note: "Receipts are immutable evidence records with no lifecycle; delivery state is carried by the sync outbox (prepared, transport_acknowledged, peer_accepted) and verification result, party binding and key status by the verification field."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - Issue is a vault command that produces the signed statement classrup.commerce.receipt/v1; ingest is a vault command for received statements; verify and export are vault queries; no relay command exists.
+      - Issue and ingest emit commerce.receipt.issued into the vault outbox in the same IndexedDB transaction as the insert.
+      - The module consumes claim and key-revocation events to prompt for receipts and to update key status.
+      - classrup.commerce.receipt/v1 (signer - the claim payer for payer_asserts_paid, the claim payee for payee_asserts_received, through a device key linked to that principal) is registered with the F09.S01.M01 ingest dispatcher through StatementHandlerPort, which hands it to commerce.receipt.ingest with cid deduplication, quarantine reasons and block filtering.
+      - The verify output names both the device key that signed and the principal it is linked to, with partyBinding, keyStatus and the trusted receipt time used, and its label never shows Valid together with 'revoked later' on the strength of signedAt.
+      - The module acts only on F16.S02.M03 result.accepted - issue stores, ingest stores and emits, and verify reports valid only when accepted is true - supplies the statement as payload for hash-only envelopes, and keeps the F16 reason (SECURITY_*) with every quarantined receipt.
+    commands:
+      - name: commerce.receipt.issue
+        capability: commerce.receipt.issue
+        input: "[vault command, produces signed statement classrup.commerce.receipt/v1 under F16.S02.M03 context classrup/receipt/v1] { claimId, statementType, text? }"
+        output: "{ receiptId, receiptCid, signerId, signingKeyId, signedAt, peerSync }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, CONFLICT_STATE, BLOCKED_PARTY, COMMERCE_RECEIPT_ROLE, COMMERCE_RECEIPT_MISMATCH, COMMERCE_RECEIPT_SKEW]
+        emits: [commerce.receipt.issued]
+        idempotent: true
+      - name: commerce.receipt.ingest
+        capability: commerce.receipt.ingest
+        input: "[vault command, internal; dispatched by F09.S01.M01 commerce.statement.ingest] { envelope: signed classrup.commerce.receipt/v1, relayReceipt? }"
+        output: "{ outcome: stored|quarantined|duplicate|dropped, reason?: signer_not_party|party_unbound|key_revoked|signature_invalid|claim_unknown|blocked }"
+        errors: [VALIDATION_FAILED, COMMERCE_RECEIPT_SIGNATURE_INVALID, COMMERCE_RECEIPT_ROLE, COMMERCE_RECEIPT_MISMATCH, COMMERCE_RECEIPT_PARTY_UNBOUND, COMMERCE_RECEIPT_KEY_REVOKED, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [commerce.receipt.issued]
+        idempotent: true
+    queries:
+      - name: commerce.receipt.verify
+        capability: commerce.receipt.read
+        input: "{ receiptId } or { file: classrup-receipt/v1 JSON, ≤ 16 KiB }"
+        output: "{ accepted (F16.S02.M03 result.accepted), result: valid|invalid (valid only when accepted), reasons[], signerId (principal), signingKeyId (device key), partyBinding: verified|unverified, signedAt (signer's claim), keyStatus: active|revoked_before_receipt|revoked_after_receipt|revoked_receipt_time_unknown|unknown, trustedReceiptTime?, label }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, PAYLOAD_TOO_LARGE]
+      - name: commerce.receipt.export
+        capability: commerce.receipt.read
+        input: "{ receiptId }"
+        output: "{ file: classrup-receipt/v1 JSON with keyLink chain, sizeBytes ≤ 8192 }"
+        errors: [NOT_FOUND]
+      - name: commerce.receipt.list_for_claim
+        capability: commerce.receipt.read
+        input: "{ claimId }"
+        output: "{ items: Receipt[] }"
+        errors: [NOT_FOUND]
+    note: >-
+      Statement registry (N2, registered in F11.S01.M01): classrup.commerce.receipt/v1 - signer role is the claim payer for
+      payer_asserts_paid and the claim payee for payee_asserts_received; the signing device key must be linked to that principal by
+      a root-signed classrup.identity.device_link/v1 chain. Signing and verification use the F16.S02.M03 envelope
+      classrup.security.envelope/v1 with context classrup/receipt/v1 (signed bytes JCS({v, ctx, kid, alg, signedAt, payloadHash}),
+      payloadHash over the JCS statement) and its verifier receipt time; for a hash-only envelope this module supplies the statement
+      as payload, and it acts only on result.accepted; as receipt time it supplies the local receivedAt or a relay-signed receipt time (labelled 'according to relay <name>'). The type is registered with
+      the F09.S01.M01 ingest dispatcher through StatementHandlerPort. Labels - valid and bound 'Valid for <party>'; party unbound
+      'Signature valid - party not proven'; revoked_before_receipt 'Key revoked before this receipt arrived'; revoked_after_receipt
+      'Key revoked after this receipt arrived'; revoked_receipt_time_unknown 'Key revoked; signing time unverifiable'.
+    events_produced:
+      - {type: commerce.receipt.issued, privacy: P2, payload: "{ receiptId, claimId, dealId, statementType, signerId, signingKeyId, parties[{did, role}], partyBinding, provenance: local|peer }"}
+    events_consumed:
+      - {type: commerce.payment.acknowledged, effect: "for external (non-cash) claims offer an optional receipt to both parties; the cash receipt prompt is owned by F09.S01.M02, which calls commerce.receipt.issue; no automatic signing ever occurs"}
+      - {type: commerce.payment.finalized, effect: "prompt the payee to sign a payee_asserts_received receipt for the final crypto claim"}
+      - {type: identity.device_key.revoked, effect: "record the revocation's effective-from time for that key and recompute keyStatus of stored receipts from their trusted receipt time - revoked_before_receipt, revoked_after_receipt or revoked_receipt_time_unknown - never from signedAt"}
+      - {type: privacy.deletion.completed, effect: "through the DeletionPort plan, replace signerId display with the per-deletion pseudonym in retained receipts and mark signatures unverifiable-after-pseudonymization"}
+    errors:
+      - "COMMERCE_RECEIPT_ROLE | 403 | no | signer role does not allow this statement for the claim status"
+      - "COMMERCE_RECEIPT_MISMATCH | 422 | no | statement does not match the claim cid, amount or currency"
+      - "COMMERCE_RECEIPT_SIGNATURE_INVALID | 422 | no | signature, context or signer key encoding is invalid"
+      - "COMMERCE_RECEIPT_SKEW | 422 | no | signedAt is too far in the future of the local clock"
+      - "COMMERCE_RECEIPT_PARTY_UNBOUND | 422 | no | the signing device key is not linked to the claim party by a verified device-link chain"
+      - "COMMERCE_RECEIPT_KEY_REVOKED | 422 | no | the signing key was revoked before this vault (or a named relay) received the receipt"
+    example: |
+      vault command commerce.receipt.issue (payee vault)
+      { "claimId": "0192f3a7-…", "statementType": "payee_asserts_received", "text": "Received EUR 45.00 in cash at the station." }
+      => { "receiptId": "0192f3aa-…", "receiptCid": "sha256-77de…", "signerId": "did:key:z6MkSeller…", "signingKeyId": "kid-orbit-maple…", "signedAt": "2026-11-04T10:20:00.000Z", "peerSync": "prepared" }
+      exported file: { "format": "classrup-receipt/v1", "claimId": "0192f3a7-…", "statement": { … }, "signerId": "did:key:z6MkSeller…",
+        "signingKeyId": "kid-orbit-maple…", "keyLink": { "chain": [ { "type": "classrup.identity.device_link/v1", … } ] }, "signedAt": "…", "sig": "…" }
+      verify of that file offline => { "result": "valid", "partyBinding": "verified", "keyStatus": "active", "label": "Valid for seller" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal signs with its own device key; the role in the Deal limits which statement type it may sign.
+      - Incoming receipts are accepted only when the signature verifies and the signer is a party of the claim; otherwise they are quarantined.
+      - No relay role has any capability over receipts; relays see only ciphertext.
+    capabilities:
+      - "commerce.receipt.issue | local-principal | principal is payer or payee of the claim; role matches statement type; vault unlocked"
+      - "commerce.receipt.ingest | local-principal | internal ingest pipeline; signer is a party of the claim through a linked device key"
+      - "commerce.receipt.read | local-principal, anonymous | principal reads receipts of its own claims; verification of a supplied file is a pure local function available without a vault"
+  failure_recovery_idempotency:
+    requirements:
+      - Issue is idempotent per CTR-IDM-001 using vault command IDs and unique (claim, signer, type).
+      - Signing and storing are one local transaction so there is no signed-but-unstored receipt.
+      - Delivery uses the sync outbox; the UI never claims the counterparty has the receipt before peer_accepted.
+    idempotency: "Vault command ID recorded for 24 h; receipts deduplicated by receiptCid; unique index on (claim, signer, type)."
+    concurrency: "Unique index serializes two tabs signing the same receipt; one wins and the other gets CONFLICT_STATE. No cross-vault lock is needed because each party signs independently."
+    retries: "Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h for 14 days."
+    offline: "Signing works offline with the local key; delivery waits in the outbox and shows prepared. Offline verification of a file uses only its embedded key-link chain; without a trusted receipt time a revoked key reads 'key revoked; signing time unverifiable'."
+    partial_failure: "If delivery fails after signing, the receipt exists locally and the user can export it as a file and send it by any channel; nothing is rolled back. If the key registry snapshot is unavailable, keyStatus is unknown and never reported as active."
+  privacy_retention_abuse:
+    requirements:
+      - Receipts are P2 and travel only inside end-to-end encrypted envelopes to the counterparty or in files the user chooses to share.
+      - The UI states that a receipt shows what the signer asserted and that a signed time is the signer's claim, not proof of time.
+      - Misuse such as forced signing or fake receipts is limited by role checks, signature verification and the dispute path.
+      - The module registers ExportSectionPort (section commerce.receipts), DeletionPort (pseudonymization of signerId) and RetentionPurgePort (RET-EVIDENCE) with F10 (N6), annotates every Receipt field with its F10.S02.M02 class, and consumes privacy.deletion.completed.
+      - Receipts from blocked dids are dropped silently (N7, F07.S02.M02) unless the claim's Deal has an open dispute case, and ingest uses the bounded quarantine of F09.S01.M01 (500 entries or 5 MiB, oldest-first eviction), dropping receipts from dids that are party to no known Deal once it is full.
+    data:
+      - "Receipt: P2; signerId is the party's principal did:key (pseudonymous, not anonymous); signingKeyId and keyLink are P2; text is P2 free text; field classes annotated per F10.S02.M02."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity) through the RetentionPurgePort; exported files are outside platform control."
+      - "On deletion: signerId replaced by a pseudonym in retained rows; signed bytes retained and flagged unverifiable-after-pseudonymization; counterparty copies unchanged."
+    threats:
+      - "T01 | Counterfeit receipt attributed to someone | Ed25519 signature under context classrup/receipt/v1; verification offline; role and claim binding by cid; party binding through the device-link chain"
+      - "T02 | Receipt reused for another claim | statement binds claimCid, amount and currency; mismatch rejected"
+      - "T03 | Coerced signing under pressure | UI shows the exact sentence, no auto-sign, receipts are optional unless agreed in cash terms, dispute path preserved"
+      - "T04 | Receipt misread as proof of delivery | mandatory disclaimer text on every receipt view and export; file contains assertion type explicitly"
+      - "T05 | Stolen, revoked key signs receipts with a backdated signedAt | key status from the trusted receipt time and the revocation's effective-from time; revoked_before_receipt quarantined with COMMERCE_RECEIPT_KEY_REVOKED"
+      - "T06 | Self-generated key presented as a party's signature in an offline file | partyBinding requires a root-signed device-link chain to the claim party; otherwise 'Signature valid - party not proven'"
+      - "T07 | Sybil flood of receipts from fresh dids | shared bounded quarantine; non-party receipts dropped once full; blocked senders dropped silently"
+    abuse_controls:
+      - "Receipts per vault limited to 500 per day; ingest limit 20 statements per hour per known party; receipts from unknown dids share the bounded quarantine of F09.S01.M01 and are dropped once it is full."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); signing and verification timings stay in local diagnostics.
+      - Signing and verification meet the stated budgets on a mid-range phone.
+      - Quarantine counts are visible in local diagnostics.
+    metrics:
+      - "Local diagnostics: classrup_commerce_receipts_total{outcome=issued|ingested|quarantined|invalid|dropped}"
+      - "Local diagnostics: classrup_commerce_receipt_quarantine_total{reason}"
+      - "Local diagnostics: classrup_commerce_receipt_verify_ms (histogram)"
+    logs:
+      - "info receipt.issued {receiptId, claimId, statementType, correlationId} — no text, no amounts."
+    budgets:
+      - "issue p95 ≤ 80 ms including Ed25519 signing; verify p95 ≤ 25 ms including the device-link chain check."
+      - "Exported receipt file ≤ 8 KiB including the device-link chain."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Signatures are tested with RFC 8032 vectors and JCS vectors from RFC 8785.
+      - Verification is tested against tampered, replayed and revoked-key receipts.
+    fixtures: "Two vaults A (payer) and B (payee) with an acknowledged EUR 45.00 cash claim; RFC 8032 test keys; principal root keys with device-link chains; a revoked device key with effective-from 2026-11-04T09:00:00Z; a self-generated unlinked key; a relay double that signs receipt times; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R03,09.R03 | sign a payee receipt, then flip one byte of statement text | original verifies valid; edited copy fails with COMMERCE_RECEIPT_SIGNATURE_INVALID"
+      - "T02 | unit | 02.R01,02.R02 | rules V01 to V10 violated in turn | documented error code returned and nothing stored"
+      - "T03 | unit | 01.R02,03.R01,03.R03 | attempt edit or delete via API and re-run verify after claim expiry | no edit path exists; verification result recomputed and receipt retained"
+      - "T04 | unit | 01.R03,02.R03,09.R03 | receipt for claim X replayed against claim Y | COMMERCE_RECEIPT_MISMATCH"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | execute issue, ingest, verify and export | outputs and events validate against registry schemas; commerce.receipt.issued carries parties with roles"
+      - "T06 | integration | 04.R03,09.R03 | identity.device_key.revoked with effective-from after the stored receipt's receivedAt, delivered twice | keyStatus revoked_after_receipt set once from receivedAt and the effective-from time, not from signedAt; receipt still listed"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | non-party signer; wrong-role statement; relay traffic inspection | quarantined with reason; relay sees only ciphertext"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | two tabs sign simultaneously; delivery fails after signing | one receipt; export still possible; UI shows prepared"
+      - "T09 | integration | 03.R02,07.R01 | offline signing then reconnect | receipt delivered, sync state advances to peer_accepted only on signed acknowledgement"
+      - "T10 | e2e | 07.R02 | both parties open receipts | disclaimer shown; labels say asserted by signer; axe zero serious issues"
+      - "T11 | integration | 07.R03 | account deletion completes | signerId pseudonymized, signature flagged unverifiable-after-pseudonymization, counterparty copy untouched"
+      - "T12 | abuse | 07.R03,07.R01 | 21 incoming receipts in one hour from one known party | 21st quarantined"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 1 000 signs and 1 000 verifies | p95 sign ≤ 80 ms, verify ≤ 25 ms, no telemetry sent, quarantine counts by reason visible in local diagnostics"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-071 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export vault, import to fresh vault with one tampered receipt, roll back one release | valid receipts round-trip; tampered one quarantined; v1 readable"
+      - "T16 | abuse | 01.R05,02.R04,04.R05 | a receipt signed with a key revoked at 09:00 and signedAt backdated to 08:00 arrives at 10:00; the same file verified offline with no trusted receipt time; a receipt with a relay-signed receipt time of 08:30 | first reads revoked_before_receipt and is quarantined with COMMERCE_RECEIPT_KEY_REVOKED, never Valid; second reads 'key revoked; signing time unverifiable'; third reads revoked_after_receipt labelled 'according to relay <name>'"
+      - "T17 | abuse | 01.R04,02.R04 | file signed by a self-generated key with no device-link chain to the payee, and one whose chain links to a different principal | signature valid but partyBinding unverified, label 'Signature valid - party not proven'; ingest quarantines with party_unbound (COMMERCE_RECEIPT_PARTY_UNBOUND)"
+      - "T18 | integration | 01.R04,04.R05 | export a receipt and verify the file on a device with no network and no vault | result names the signing device key and the principal it is linked to, partyBinding verified, file ≤ 8 KiB"
+      - "T19 | integration | 04.R04 | receipt delivered through F09.S01.M01 commerce.statement.ingest, then the same envelope again | dispatched once to commerce.receipt.ingest and stored; duplicate is a no-op"
+      - "T20 | integration | 07.R04 | export, deletion and retention purge driven by F10 | section commerce.receipts exported; DeletionPort pseudonymizes signerId; RetentionPurgePort purges after RET-EVIDENCE; every field carries an F10.S02.M02 class"
+      - "T21 | abuse | 07.R05 | blocked payee sends a receipt, then one on a Deal with an open dispute case; 10 000 fresh dids each send one receipt | first dropped silently; second stored as evidence with notification suppressed; quarantine stays within 500 entries or 5 MiB and non-party receipts are dropped once full"
+      - "T22 | contract | 04.R06,02.R04,01.R03 | sign a receipt and check the envelope bytes; ingest a hash-only envelope with its statement supplied, with a different statement, and with none; change kid or signedAt in the header; replay the statement under another dealId | signature covers exactly JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over the JCS statement; the first is accepted and stored; the others return accepted false (SECURITY_PAYLOAD_HASH_MISMATCH or SECURITY_SIGNATURE_INVALID) and are quarantined with that reason as COMMERCE_RECEIPT_SIGNATURE_INVALID; the replay returns COMMERCE_RECEIPT_MISMATCH; nothing is stored or emitted unless accepted is true"
+    acceptance:
+      - All tests T01 to T22 pass in CI.
+      - Every receipt view and export carries the statement that it evidences an assertion and not delivery.
+      - A receipt file verifies offline with no network and no vault, naming both the signing device key and the principal it is linked to.
+      - No receipt reads valid for a party unless its device key is linked to that party and was not revoked before a trusted receipt time; signedAt never decides key status.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's receipts with signatures in the section commerce.receipts.
+      - Import re-verifies every signature and quarantines receipts that fail or whose signer is not a party of an imported claim.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "ExportSectionPort section commerce.receipts in classrup-export/v1; one line per Receipt (schema classrup.commerce.receipt/v1) with its keyLink chain; single receipts also export as classrup-receipt/v1 files."
+    import: "Receipts import as read-only evidence after signature, party-binding and key-status re-verification; the import time is not a trusted receipt time for earlier revocations, so revoked keys without a stored receivedAt read revoked_receipt_time_unknown; failures go to quarantine with reason."
+    backup: "The vault export is the primary backup (IOX-6); relays hold only ciphertext envelopes of receipts in transit."
+    migration_rollback: "Signed bytes are never rewritten by a migration; the F16.S02.M03 header signed bytes JCS({v, ctx, kid, alg, signedAt, payloadHash}) are the only receipt signature format in v1; signingKeyId and keyLink are additive, and v1 receipts signed before this change keep their stored device did as signingKeyId with partyBinding recomputed; rollback is safe because older readers ignore unknown optional fields."

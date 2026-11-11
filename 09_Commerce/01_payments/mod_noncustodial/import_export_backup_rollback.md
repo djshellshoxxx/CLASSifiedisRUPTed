@@ -1,35 +1,32 @@
-# PS-069-10 — import export backup rollback
+# PS-069-10 — Import, export, backup and rollback: Noncustodial payment claims
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-10. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M01 Noncustodial payment claims](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/noncustodial` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-069-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-069-10.R01** The vault export contains the principal's Deals and claims with their signed statements and provenance, in the section commerce.deals.
+- **PS-069-10.R02** Import verifies signatures, schema versions and ID collisions; foreign statements are verified again and quarantined when the signer is not a party.
+- **PS-069-10.R03** Schema changes follow expand/contract and keep v1 readable for 180 days.
+- **PS-069-10.R04** A party can export the completion proof of a completed Deal as classrup-deal-completion/v1 - the deal_completion/v1 body {dealId, dealCid, outcome}, its completionCid and every party's signed completion envelope, without amounts, obligations or contextRef - for voluntary submission to a relay through F12.S03.M04 moderation.accountlimit.submit_completion.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** ExportSectionPort section commerce.deals in classrup-export/v1; one line per Deal and per PaymentClaim with the signed statement envelopes (schemas classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, payment_ack/v1, deal_cancel/v1, deal_completion/v1). Held claims and quarantined statements are not exported. Completion proofs leave the vault only as classrup-deal-completion/v1 files produced by commerce.deal.export_completion on explicit user action.
+- **import:** Terminal records import as read-only evidence; open Deals import as open but sync state is reset to local_committed and statements are re-sent only if the user chooses; claims past 14 days of no progress import as expired; imported Deals are re-checked through ContextTermsPort when the context statement is present.
+- **backup:** The vault export is the primary backup (IOX-6); no relay holds plaintext Deals other than a relay's own listing_fee Deals as payee.
+- **migration rollback:** Additive fields only in v1; rollback to the previous release is safe because new optional fields are ignored by older readers. Signed statement bytes are never rewritten by a migration.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-069-09.T18 | integration | PS-069-10.R01, PS-069-10.R02, PS-069-10.R03 | export vault A, import into fresh vault, roll back one release | Deals and claims round-trip identical; open Deals import as open with sync state local_committed; conflicting IDs rejected |
+| TEST-PS-069-09.T37 | contract | PS-069-10.R04, PS-069-07.R01 | export the completion proof of a completed two-party Deal, of a Deal missing the counterparty's completion statement, and submit the first to an F12.S03.M04 relay double | first returns dealId, dealCid, completionCid, outcome and both signed envelopes with no amount, obligation or contextRef field and verifies at the double; second CONFLICT_STATE; nothing is exported without the preview confirmation |
+
+## Dependencies
+
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

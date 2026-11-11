@@ -1,35 +1,125 @@
-# PS-045-01 — domain schema
+# PS-045-01 — Domain schema: Search index
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-01. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S01.M01 Search index](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/search/index` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the domain schema process for index within 01_search. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-045-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-045-01.R01** A SearchDocument stores only P0 fields from a signature-verified public projection, a location cell of 0, 4 or 5 geohash characters (L0, L1 or L2) checked with F06.S02.M01 assertPublicCell, and provenance (author DID, projection cid, origin, provenance relays, first-seen time).
+- **PS-045-01.R02** The FTS5 table indexes title and body only; every other attribute is a typed column used by filters and ranking.
+- **PS-045-01.R03** Removed documents lose title and body immediately and are purged 30 days after removal; the row until then only guarantees idempotent replay and tombstone handling, and after the purge a stub (source key, highest sourceRevision, removedReason, projectionCid) is kept 180 days so a resubmitted projection is still refused for sticky reasons.
+- **PS-045-01.R04** One document exists per listing, keyed by tenantId, sourceKind listing, sourceId (listingId) and authorDid; service offering, rental offering and auction statements enrich that document by listingId instead of creating a second document.
+- **PS-045-01.R05** Per-user view recency used for vault eviction is kept in a separate P3 vault-local table that is never exported, federated or placed in the P0 SearchDocument.
+- **PS-045-01.R06** barterAcceptable, inStock and, for wanted listings, wantMinCondition are typed columns copied from the verified listing projection (top-level barterAcceptable and inStock, want.minCondition) so that F06.S01.M03 can filter them; a remote document with inStock false stays active, while own documents still follow the inventory events.
+- **PS-045-01.R07** Enrichment keeps offeringRef.version, the highest registry version applied per offeringId (payload seq of classrup.services.offering/v1 per FED-3, payload revision of classrup.rentals.offering/v1); an offering event or projection with an equal or lower version is ignored, and a key re-sign with unchanged content only replaces projectionCid and version.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### SearchDocument
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.discovery.search_document/v1` · storage **relay+device** · privacy **P0** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key, generated by the vault or relay that indexes it |
+| tenantId | uuidv7 — tenant scope (single fixed tenant in a vault) |
+| sourceKind | enum — listing (the only value in v1; offering, rental and auction statements enrich the listing document) |
+| sourceId | uuidv7 — listingId of the source listing; unique with tenantId, sourceKind and authorDid |
+| sourceRevision | int — highest listing projection revision applied; older events are ignored |
+| authorDid | did — did:key of the signing author (the seller or provider) |
+| projectionCid | string — sha256-base64url cid of the signed listing projection (CTR-ID-001 ID-3) |
+| origin | enum — own \| fetched \| imported \| relay_published |
+| provenanceRelays | array — relay ids this vault received the projection from, taken from receivedFromRelay of federation.record.accepted (FED-11 display-only provenance, never an origin binding); empty for own and imported documents and on a relay |
+| listingKind | enum — sell \| wanted \| giveaway \| service \| rental \| auction |
+| title? | string — 1..120 code points after NFC and control-character stripping; null when removed |
+| body? | string — first 2000 code points of the projection description (which may hold up to 5000), plain text; null when removed |
+| categoryId | uuidv7 — category from governance catalog |
+| priceMinor? | int — 0..1 000 000 000 000, minor units per CTR-MNY-001; sell terms, lowest variant price, or the offering rate |
+| currency? | string — registered currency code, required when priceMinor is set |
+| condition? | enum — new \| like_new \| good \| fair \| poor \| for_parts |
+| barterAcceptable | boolean — author accepts barter proposals (N15), from the projection's top-level barterAcceptable |
+| inStock | boolean — inStock flag of the signed listing projection (F01.S03.M01 at signing); a remote document stays active when false and filters decide |
+| wantMinCondition? | enum — new \| like_new \| good \| fair \| poor \| for_parts; want.minCondition of a wanted listing's projection, null for every other listingKind |
+| geoCell | string — geohash of 0 (author shows no location), 4 (L1) or 5 (L2) characters; passes F06.S02.M01 assertPublicCell |
+| geoCell4 | string — derived first 4 characters of geoCell, empty when geoCell is empty; stored and indexed for precision-4 matching |
+| offeringRef? | object — { kind: service\|rental, offeringId, projectionCid, version, publishedAt } enrichment source for service and rental listings; version is the highest applied payload seq (service) or payload revision (rental) |
+| auctionId? | uuidv7 — link recorded from auctions.auction.scheduled so auction events keyed by auctionId resolve to this document |
+| auctionPhase? | enum — scheduled \| open; null for non-auction listings |
+| claimedPublishedAt | timestamp — author's claim; the recency anchor is this claim clamped by firstSeenAt |
+| firstSeenAt | timestamp — local clock when this vault or relay first indexed the document; preserved across rebuild and restore |
+| authorFirstSeenAt | timestamp — local clock when this index first saw any document by authorDid; read from discovery_author_seen and preserved across rebuild and restore |
+| expiresAt | timestamp — claimed expiry of the latest renewal; document removed at or after min(expiresAt, firstSeenAt + 120 d) |
+| endsAt? | timestamp — host-signed auction end (scheduled, opened or extended) |
+| promotedUntil? | timestamp — relay-local promotion end set only by discovery.search_document.set_promotion; always null in a vault index |
+| promotionClaimId? | uuidv7 — relay-local payment claim (F09.S01.M01) that justifies promotedUntil |
+| status | enum — active \| removed \| purged |
+| removedReason? | enum — unpublished \| expired \| archived \| sold_out \| held \| tombstoned \| hosting_policy \| deleted \| auction_closed \| auction_cancelled \| withdrawn \| evicted \| author_cap |
+| removedByActionId? | uuidv7 — relay-local moderation action that removed the document (reason hosting_policy) |
+| removedUntil? | timestamp — relay-local expiresAt of that moderation action; absent means until reverted |
+| removedAt? | timestamp — set when status becomes removed |
+| revision | int — CTR-ID-001 ID-4, increments on every applied change |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- geoCell is empty or a valid geohash of length 4 or 5 and geoCell4 equals its first 4 characters; a longer value is never stored.
+- status active implies the stored projection signature verified against authorDid, the signer held the author role and title is non-null.
+- status removed or purged implies title and body are null and no discovery_fts row exists for the document.
+- At most one document exists per (tenantId, sourceKind, sourceId, authorDid); enrichment never creates a second document for the same listing.
+- promotedUntil is null in every vault index and, on a relay, is set only while promotionClaimId refers to a final or operator-acknowledged claim.
+- origin own or imported documents are never removed by a relay_removal advisory or a relay moderation action.
+- inStock and wantMinCondition equal the values of the latest applied listing projection, and wantMinCondition is null unless listingKind is wanted.
+- offeringRef.version never decreases for an offeringId, and geoCell of a service listing enriched by an offering equals its 5-character serviceAreaCell.
+
+### Storage DDL
+
+```sql
+CREATE TABLE discovery_doc (
+  rid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, tenant_id TEXT NOT NULL, source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL, source_revision INTEGER NOT NULL, author_did TEXT NOT NULL, projection_cid TEXT NOT NULL,
+  origin TEXT NOT NULL, listing_kind TEXT NOT NULL, title TEXT, body TEXT, category_id TEXT NOT NULL,
+  price_minor INTEGER, currency TEXT, condition TEXT, barter INTEGER NOT NULL DEFAULT 0,
+  in_stock INTEGER NOT NULL DEFAULT 1, want_min_condition TEXT,
+  geo_cell TEXT NOT NULL DEFAULT '' CHECK (length(geo_cell) IN (0,4,5)),
+  geo_cell4 TEXT GENERATED ALWAYS AS (substr(geo_cell,1,4)) STORED,
+  auction_id TEXT, claimed_published_at TEXT NOT NULL, first_seen_at TEXT NOT NULL, author_first_seen_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL, ends_at TEXT, promoted_until TEXT, promotion_claim_id TEXT, status TEXT NOT NULL,
+  removed_reason TEXT, removed_at TEXT, removed_until TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX discovery_doc_source ON discovery_doc(tenant_id, source_kind, source_id, author_did);
+CREATE INDEX discovery_doc_cell ON discovery_doc(tenant_id, status, geo_cell, first_seen_at);
+CREATE INDEX discovery_doc_cell4 ON discovery_doc(tenant_id, status, geo_cell4, first_seen_at);
+CREATE INDEX discovery_doc_author ON discovery_doc(tenant_id, author_did, status);
+CREATE UNIQUE INDEX discovery_doc_auction ON discovery_doc(tenant_id, auction_id) WHERE auction_id IS NOT NULL;
+CREATE VIRTUAL TABLE discovery_fts USING fts5(title, body, content='discovery_doc', content_rowid='rid',
+  tokenize='unicode61 remove_diacritics 2', prefix='2 3');
+-- 180-day refusal stubs kept after purge and for refused author_cap projections
+CREATE TABLE discovery_doc_stub (
+  tenant_id TEXT NOT NULL, source_kind TEXT NOT NULL, source_id TEXT NOT NULL, author_did TEXT NOT NULL,
+  max_source_revision INTEGER NOT NULL, removed_reason TEXT NOT NULL, projection_cid TEXT NOT NULL,
+  removed_by_action_id TEXT, until TEXT NOT NULL, PRIMARY KEY (tenant_id, source_kind, source_id, author_did));
+CREATE TABLE discovery_author_seen (tenant_id TEXT NOT NULL, author_did TEXT NOT NULL, first_seen_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, author_did));
+-- vault only, P3: view recency used for eviction; never exported or federated
+CREATE TABLE discovery_doc_view (document_id TEXT PRIMARY KEY, last_viewed_at TEXT NOT NULL);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-045-09.T01 | unit | PS-045-01.R01, PS-045-01.R02, PS-045-02.R01 | upsert a valid signed projection with a 5000-code-point description and condition poor | document stored active, FTS row present, body truncated to 2000 code points, text NFC-normalized, provenance fields set |
+| TEST-PS-045-09.T02 | unit | PS-045-01.R01, PS-045-02.R02 | projections with geo cells u4pruy (6 chars), u4pr (4 chars) and empty | DISCOVERY_PRECISION_FORBIDDEN and no row for the first; the others stored with geoCell4 u4pr or empty |
+| TEST-PS-045-09.T05 | integration | PS-045-01.R03, PS-045-03.R03 | removed document older than 30 days | purge sweep deletes it and writes a stub kept 180 days; younger rows kept |
+| TEST-PS-045-09.T08 | abuse | PS-045-01.R01, PS-045-02.R01 | tampered projection, wrong author key, unsigned projection, signer without the author role | all rejected with DISCOVERY_PROJECTION_INVALID, nothing indexed |
+| TEST-PS-045-09.T17 | integration | PS-045-04.R02, PS-045-01.R04 | vault receives federation.record.accepted for a listing with sourceKind peer_relay and receivedFromRelay B and for another with sourceKind import; relay ingests the first listing with sourceKind hosted_device through federation.record.ingest | MirrorView loaded by cid, roleFor and signature checked; one document with origin fetched and provenanceRelays [B], one with origin imported and no provenance relay, origin relay_published on the relay; no originRelay field is read |
+| TEST-PS-045-09.T18 | integration | PS-045-01.R04, PS-045-04.R03 | service listing published, services.offering.published with seq 1 and then seq 2 for a published revision, rentals.offering.published for a rental listing, then services.offering.withdrawn and an author tombstone for the rental offering projection | exactly one document per listing, enriched from the offering projection with offeringRef.version 2; both withdrawals remove the listing document with reason withdrawn |
+| TEST-PS-045-09.T28 | contract | PS-045-04.R02, PS-045-01.R04 | F01 bazaar.listing.published and bazaar.publication.renewed fixtures with total life 120 days, F03 services.offering.published fixture | accepted; document expires at the renewed expiresAt, not at 90 days |
+| TEST-PS-045-09.T30 | integration | PS-045-01.R05, PS-045-07.R04 | vault at 5 000 documents receives new ones; deletion executes the registered DeletionPort plan; retention purge run | fetched documents with oldest last view evicted, own and imported kept; own documents removed with reason deleted; field classifications present for every column |
+| TEST-PS-045-09.T31 | integration | PS-045-01.R01, PS-045-02.R02 | L1 listing (cell u4pr) with F06.S01.M03 distance filters of 5, 10, 25, 50 and 100 km around u4pru | indexed; found at 25, 50 and 100 km; not matched at 5 or 10 km |
+| TEST-PS-045-09.T32 | integration | PS-045-01.R06, PS-045-04.R03 | remote sell projection with inStock false and barterAcceptable true, wanted projection with want.minCondition fair, and a projection whose inStock is a string; then F06.S01.M03 filters inStock true, barterAcceptable true and wantAcceptsCondition good | in_stock, barter and want_min_condition columns set and discovery.index.updated carries inStock, barterAcceptable and wantMinCondition; the string inStock refused with DISCOVERY_PROJECTION_INVALID; inStock true excludes the sell listing, barterAcceptable true matches it, wantAcceptsCondition good matches the wanted listing |
+| TEST-PS-045-09.T33 | integration | PS-045-01.R07, PS-045-02.R01 | services.offering.published with seq 1, seq 3, a delayed seq 2, a key re-sign seq 4 with unchanged content, and a remote offering with a 4-character serviceAreaCell | offeringRef.version 1, then 3, unchanged by seq 2 (DISCOVERY_SOURCE_STALE), then 4 with the new projectionCid and unchanged text; geoCell equals the 5-character serviceAreaCell; the 4-character area refused with DISCOVERY_PROJECTION_INVALID |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [module SPEC](SPEC.md).

@@ -1,0 +1,294 @@
+id: F12.S03.M02
+scope: MVP
+summary: >-
+  Append-only ingestion of fraud and trust signals about a counterparty key, with weights and exponential
+  decay. The same module runs in a user's vault (signals derived from that user's own verified dealings, such as
+  no-shows and disputes) and on a relay (signals derived from what that relay hosts, such as spam detections,
+  shill suspicions, enforcement actions, dismissed reports and module-reported patterns such as proximity query
+  patterns recorded through the in-process SignalPort.record). Signals are observations, not findings: weights
+  are small, the subject and source keys come only from fields the producing event carries, and corrections are
+  new compensating signals. Nothing here is shared as a global reputation; each store keeps its own view, and a
+  counterparty can never delete or change the signals another person's vault holds.
+responsibilities:
+  - Own the Signal record, append-only, with kind, weight, half-life, source event reference, source key and expiry.
+  - Map consumed events from other modules to signals through a fixed, versioned table (signals/3), deduplicated by source event ID, using only fields present in the producer payloads.
+  - Accept relay-local module signals in-process through SignalPort.record (moderation.signal.record_module) for the kinds of the module table (proximity_pattern from F06.S02.M03), so producers report patterns without emitting a catalog event.
+  - Compute decayed totals and per-kind counts per subject key on request and provide a read model for F12.S03.M01 and the report-class selector of F12.S03.M03.
+  - Accept manual signals from relay moderators or from the local user, always labelled manual with an author.
+  - Never edit or delete signals before expiry; corrections are compensating signals that reference the corrected one.
+non_responsibilities:
+  - Combining signals into risk levels (F12.S03.M01).
+  - Deciding or applying consequences (F12.S02.M01, F12.S03.M03 and F12.S03.M04).
+  - Producing the underlying events (auctions, commerce, comms, mutiny, rentals and moderation modules).
+  - "Future: signed signal exchange between cooperating relays; privacy-preserving aggregate sharing."
+depends_on: [F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a user, I see on a counterparty's profile that 'two no-shows in the last 60 days are recorded in your own history', not a global score.
+  - As a relay moderator, I see the signals behind a case with their sources and decayed weights.
+  - As a user, I can add a private note-signal about a counterparty and remove its effect by adding a compensating signal.
+  - As a reporter whose reports a relay keeps dismissing, I am rate limited more strictly only after a clear threshold, and never for minor-safety reports.
+edge_cases:
+  - The same source event is delivered twice; the unique source index makes the second ingestion a no-op.
+  - A dispute ends with refund_claimed accepted by every party; refund_agreed is recorded against the respondent of the dispute_opened signal with the same caseId; a no_fault_close or withdrawal compensates the dispute_opened signal instead; no outcome is read as one party 'losing'.
+  - A counterparty rotates keys; signals stay on the old key and are linked through the rotation statement, but only when the vault holds a verified rotation statement.
+  - The device clock is wrong; signal observedAt uses the store clock at ingestion and the event's claimed time is stored as a claim without affecting decay.
+  - One counterparty files many no-show reports about the same subject; only 3 per 30 days from that sourceKey count for scoring.
+  - A counterparty sends an account deletion tombstone and then reappears with a new key; the vault keeps its no-show signals about the old key until they expire, because only the local principal's own deletion removes vault signals.
+  - An action is overturned on appeal; a compensation signal cancels its report_actioned weight on the relay, while an action that simply expired keeps its decaying signal.
+  - An owner files a damage claim the renter has not answered yet; rentals.damage.claimed is an unanswered assertion and records nothing; only rentals.damage.resolved with outcome accepted, counter_accepted, refund_claimed or return_agreed records damage_agreed, and withdrawn or dispute_unresolved record nothing.
+  - A no-show report is contradicted by the accused's check-in statement after it was weighed; comms.meetup.no_show_contradicted records a compensation of that no_show signal, and a report that arrives already contradicted records nothing.
+  - An auction void confirmed by the host is recorded as a host-policy EnforcementAction; its moderation.action.applied records no report_actioned, because the void is weighed once through auctions.result.voided against the host-only subjectKeys (N22).
+  - F06.S02.M03 reports a proximity query pattern for an anonymous caller without a did:key; SignalPort.record refuses it with VALIDATION_FAILED and only the caller's rate-limit penalty applies.
+  - Signal volume exceeds 5 000 per subject key; older signals beyond decayed weight below 0.5 are summarized into a rollup signal and the originals are purged after expiry.
+ux:
+  notes: "Headless service; surfaces are the profile trust panel (counts and categories of local signals, no scores shown here) and the relay moderator case view (signal list with source, kind, weight and decayed weight)."
+  screens:
+    - "Trust panel on a counterparty profile: categories with counts for the last 90 days, an 'only based on your own history on this device' note, link to see details."
+    - "Relay signal list for moderators: kind, source module, source key (pseudonymous), observed time (store clock), weight, decayed weight, compensating links."
+  states: [loading, empty, populated, forbidden]
+  a11y:
+    - Categories and counts are text lists with no meaning carried by color alone.
+    - The list is a table with headers and sortable columns operable by keyboard.
+    - Explanatory notes are available to screen readers via aria-describedby.
+processes:
+  domain_schema:
+    requirements:
+      - A Signal stores subject key, kind, signed integer weight, half-life in days, source module and event ID, optional source key, evidence reference, observed time from the store clock and expiry, with tenant and revision per CTR-ID-001.
+      - Signals are P3 in a vault (owner only) and P2 on a relay (the subject and that relay's moderators), retained until expiresAt and at most 365 days under the expiry-bounded class RET-SIGNAL, and are never exported to other users.
+      - Signals are append-only; the only mutable field is none, and corrections are new signals that reference the corrected one.
+      - Each event-derived signal names the key that caused it (reporter, opener or counterparty) as sourceKey when the producer payload carries one, and at most 3 signals per (subject, sourceKey) in 30 days count for scoring.
+    entities:
+      - name: Signal
+        schema: classrup.moderation.signal/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-SIGNAL
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — store scope (vault scope or relay hosting scope)"
+          - "subjectKey: did:key — counterparty key the signal concerns; never the vault's own local principal"
+          - "kind: enum — shill_suspected | spam_detected | dispute_opened | refund_agreed | no_show | payment_claim_expired | payment_claim_disputed | cycle_dropout | auction_voided | damage_agreed | report_actioned | report_dismissed | report_dismissed_bad_faith | deal_completed | proximity_pattern | manual_concern | manual_positive | compensation"
+          - "weight: int — -100..100, positive increases risk, negative reduces it, defaults from the kind table"
+          - "halfLifeDays: int — 7..180, default from the kind table"
+          - "sourceModule: string — module ID that produced the source event or called SignalPort.record, or manual or import"
+          - "sourceEventId: string — unique per (tenantId, kind) except manual"
+          - "sourceKey?: did:key — reporter, opener or counterparty whose action produced the source event; absent for system observations"
+          - "evidenceRef?: string — id of snapshot, deal, dispute case, damage claim, action, report, no-show report statement cid or module pattern id, never content or location cells"
+          - "supersedesSignalId?: uuidv7 — set only on kind compensation"
+          - "observedAt: timestamp — RFC 3339 UTC, store clock at ingestion"
+          - "claimedAt?: timestamp — RFC 3339 UTC, time claimed by the source event, advisory only"
+          - "expiresAt: timestamp — observedAt + 5 half-lives, at most 365 days"
+          - "revision: int — CTR-ID-001 ID-4, always 1"
+        invariants:
+          - Signal rows are never updated or deleted before expiresAt, except by the local principal's own deletion in a vault and pseudonymization on a relay.
+          - At most one signal exists per (tenantId, kind, sourceEventId) for non-manual kinds.
+          - A compensation signal has weight equal to minus the weight of the signal it supersedes and references it.
+          - A vault never stores a signal whose subjectKey is its own local principal.
+    sql: |
+      CREATE TABLE moderation_signal (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, kind TEXT NOT NULL, weight INTEGER NOT NULL,
+        half_life_days INTEGER NOT NULL, source_event_id TEXT, source_key TEXT, evidence_ref TEXT, observed_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_signal_source ON moderation_signal(tenant_id, kind, source_event_id) WHERE source_event_id IS NOT NULL;
+      CREATE INDEX moderation_signal_subject ON moderation_signal(tenant_id, subject_key, observed_at);
+      CREATE INDEX moderation_signal_source_key ON moderation_signal(tenant_id, subject_key, source_key, observed_at);
+      CREATE INDEX moderation_signal_evidence ON moderation_signal(tenant_id, evidence_ref);
+      CREATE TRIGGER moderation_signal_no_update BEFORE UPDATE OF kind, weight, half_life_days, source_event_id, observed_at, expires_at ON moderation_signal
+        BEGIN SELECT RAISE(ABORT, 'append-only'); END;
+  validation_rules:
+    requirements:
+      - Manual signal input is validated strictly with bounded weight and a required reason.
+      - Ingestion from events validates the mapping table and ignores events lacking a verified signature in the vault case.
+      - Every violation maps to one stable error code.
+      - Mappings use only fields present in the producer payload; a mapping whose subject cannot be resolved records nothing, and a vault never records a signal about its own local principal.
+    rules:
+      - "V01 | weight is an integer in -100..100 and halfLifeDays in 7..180 | VALIDATION_FAILED"
+      - "V02 | kind is in the enum and manual kinds are only manual_concern, manual_positive or compensation | VALIDATION_FAILED"
+      - "V03 | supersedesSignalId exists in this store, belongs to the same subject and is not itself a compensation | NOT_FOUND"
+      - "V04 | a signal with the same (kind, sourceEventId) does not exist | MODERATION_SIGNAL_DUPLICATE_SOURCE"
+      - "V05 | manual signals carry a reason of 10..500 code points and the author is the local principal or a relay moderator | FORBIDDEN"
+      - "V06 | total manual weight per subject within 30 days is at most 20 in absolute value | MODERATION_SIGNAL_MANUAL_CAP"
+      - "V07 | the subject of an event-derived signal comes from a named payload field of the source event and differs from the vault's local principal | VALIDATION_FAILED"
+      - "V08 | SignalPort.record names a kind of the module table registered for the calling module (proximity_pattern for F06.S02.M03), a did:key subjectKey, a sourceRef of 1..128 characters and an evidenceRef without location cells, and runs on a relay | VALIDATION_FAILED"
+  workflow_state_machine:
+    note: "Signals are immutable records without a lifecycle; expiry is time-based and does not change stored fields."
+    machines: []
+    requirements:
+      - A signal has no transitions; it is valid from observedAt until expiresAt and read with decay applied.
+      - Decay is exponential, weight times 0.5 to the power of age over half-life, evaluated at read time in the store clock.
+      - Expired signals are purged by a daily sweep and a rollup keeps only counts per kind for 365 days.
+    timeouts:
+      - "Daily purge sweep at 04:00 UTC (relay) or on app idle once per 24 h (vault) removes rows past expiresAt through the RetentionPurgePort and writes counts per kind to a rollup row."
+  commands_queries_events:
+    requirements:
+      - The module exposes a manual record command and three queries; automated ingestion happens through event consumers.
+      - Every recorded signal emits moderation.signal.recorded in the same transaction as the row.
+      - The consumed event table below is fixed per rulesVersion (signals/3), and every mapping names its subject, source key and evidence fields from the producer's payload.
+      - "Report outcomes map to relay signals: an applied action records report_actioned by kind, a revert other than expiry records a compensation, and moderation.report.dismissed records report_dismissed_bad_faith only when one reporter key reaches 5 non-exempt dismissals in 30 days."
+      - The in-process summarize read exposes per-kind counts in a window for F12.S03.M01 scoring, and the moderation.signal.recorded event of kind report_dismissed_bad_faith is what F12.S03.M03 uses to select the reduced report class for 30 days.
+      - "SignalPort.record is the in-process relay port (command moderation.signal.record_module) through which relay-local modules record signals of the module table without a catalog event: proximity_pattern from F06.S02.M03, weight 10, half-life 7 days, against the caller's did:key; it deduplicates on (kind, sourceRef) and emits moderation.signal.recorded like any other signal."
+      - "Claims that the other party has not answered carry no weight: rentals.damage.claimed and a comms.meetup.no_show with contradicted true record nothing, rentals.damage.resolved records damage_agreed only for outcomes accepted, counter_accepted, refund_claimed or return_agreed (F05.S02.M03 applies no automatic penalty), and comms.meetup.no_show_contradicted records a compensation of the weighed no_show signal."
+    commands:
+      - name: moderation.signal.record_manual
+        mode: "vault-local (local principal) or relay command (moderator); no signed statement"
+        capability: moderation.signal.record_manual
+        input: "{ subjectKey, kind: manual_concern|manual_positive|compensation, weight, halfLifeDays?, reason, supersedesSignalId? }"
+        output: "{ signalId, expiresAt }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, MODERATION_SIGNAL_MANUAL_CAP, FORBIDDEN]
+        emits: [moderation.signal.recorded]
+        idempotent: true
+      - name: moderation.signal.record_module
+        mode: "relay-local, in-process SignalPort.record for relay modules of the module table (F06.S02.M03 proximity pattern detector); no signed statement; not routable over HTTP"
+        capability: moderation.signal.record_module
+        input: "{ kind: proximity_pattern, subjectKey: did:key of the caller principal of the relay access token or signed request, sourceModule, sourceRef (unique per detection), evidenceRef? (pattern id, never cells) }"
+        output: "{ signalId, expiresAt, duplicate: boolean }"
+        errors: [VALIDATION_FAILED, FORBIDDEN]
+        emits: [moderation.signal.recorded]
+        idempotent: true
+    queries:
+      - name: moderation.signal.list_for_subject
+        capability: moderation.signal.read_as_reviewer
+        input: "{ subjectKey, since?, kind?, cursor?, limit ≤ 100 }"
+        output: "{ items: Signal[] with decayedWeight and countsForScoring, nextCursor? }"
+        errors: []
+      - name: moderation.signal.summarize
+        capability: moderation.signal.read_summary
+        input: "{ subjectKey, asOf?, kinds?: kind[], windowDays?: 1..365 }"
+        output: "{ totalDecayedWeight, byKind: { kind: { count, decayedWeight } }, sourceCapped: int, computedAt }"
+        errors: []
+      - name: moderation.signal.categories_own
+        capability: moderation.signal.read_categories
+        input: "{ subjectKey, windowDays ≤ 90 }"
+        output: "{ byKind: { kind: count } } for the local vault, or for the caller's own key on a relay"
+        errors: []
+    events_produced:
+      - {type: moderation.signal.recorded, privacy: P2, payload: "{ signalId, subjectKey, kind, weight, halfLifeDays, sourceModule, sourceEventId?, observedAt } — store-local (EVT-8); never sourceKey"}
+    events_consumed:
+      - {type: moderation.spam.detected, effect: "record spam_detected against payload subjectKey, weight 5 per full 10 score points above 50, half-life 14 days, evidenceRef targetCid"}
+      - {type: auctions.shill.suspected, effect: "host relay: record shill_suspected against subjectId, weight 40, half-life 90 days, evidenceRef checkId"}
+      - {type: auctions.result.voided, effect: "host relay (N22): record auction_voided against each key in the host-only subjectKeys of the host-local event (seller for seller_fraud and listing_prohibited, confirmed bidders for shill_bidding and bidder_collusion, nobody for technical_error), weight 25, half-life 90 days, evidenceRef voidCid; never against parties named elsewhere in the payload; vault-derived events without subjectKeys record nothing"}
+      - {type: commerce.dispute.opened, effect: "vault: record dispute_opened against each respondentIds entry, sourceKey openerId, weight 10, half-life 60 days, evidenceRef caseId"}
+      - {type: commerce.dispute.resolved, effect: "vault: resolution refund_claimed or return_agreed (accepted by every party in F09.S02.M02) records refund_agreed, weight 10, half-life 60 days, against the subjects of this store's dispute_opened signals with evidenceRef caseId; no_fault_close records compensations of those signals; lapsed and enforcement_referral change nothing"}
+      - {type: commerce.dispute.withdrawn, effect: "vault: record compensations of the dispute_opened signals with evidenceRef caseId"}
+      - {type: commerce.payment.disputed, effect: "vault: record payment_claim_disputed against payerId, sourceKey payeeId, weight 15, half-life 60 days"}
+      - {type: commerce.payment.expired, effect: "vault: record payment_claim_expired against payerId, weight 6, half-life 30 days, no sourceKey"}
+      - {type: commerce.deal.completed, effect: "vault: when completionCid is set, record deal_completed, weight -4, half-life 120 days, for each did in parties[] (N3) other than the local principal, evidenceRef dealId"}
+      - {type: comms.meetup.no_show, effect: "vault: contradicted false records no_show against targetDid, sourceKey reportedByDid, weight 10, half-life 60 days, evidenceRef reportStatementCid; contradicted true records nothing (a contradicted claim carries no weight)"}
+      - {type: comms.meetup.no_show_contradicted, effect: "vault: record a compensation of the no_show signal with evidenceRef reportStatementCid for targetDid (weight −10, sourceEventId the corrected signal id); nothing when no such signal exists"}
+      - {type: mutiny.cycle.participant_dropped, effect: "vault: record cycle_dropout against participantId when afterConsent is true, weight 12, half-life 60 days"}
+      - {type: rentals.damage.resolved, effect: "vault: outcome accepted, counter_accepted, refund_claimed or return_agreed records damage_agreed against renterId, sourceKey ownerId, weight 8, half-life 90 days, evidenceRef claimId; outcomes withdrawn and dispute_unresolved record nothing; rentals.damage.claimed (an unanswered owner assertion) is not consumed"}
+      - {type: moderation.action.applied, effect: "relay origin only: record report_actioned against subjectKey with weight warn 10, remove_from_index 15, restrict_feature 20, suspend_relay_access 40, half-life 180 days, evidenceRef actionId; caseSource auction_review (host-policy auction void records) records nothing because auctions.result.voided carries that weight (N22)"}
+      - {type: moderation.action.reverted, effect: "relay origin only: reasons appeal_overturned, appeal_reduced, moderator_decision and error_correction record a compensation of the report_actioned signal with evidenceRef actionId when one exists; reason expired changes nothing"}
+      - {type: moderation.report.dismissed, effect: "relay only: exempt false records report_dismissed (weight 0, half-life 7 days) against reporterKey with evidenceRef reportId; when that key then holds 5 report_dismissed signals observed in 30 days and no report_dismissed_bad_faith in that window, also record report_dismissed_bad_faith (weight 15, half-life 7 days); exempt true records nothing"}
+      - {type: privacy.deletion.completed, effect: "vault: only the local principal's own completed deletion removes this vault's signals, through the DeletionPort; relay: signals whose subjectKey or sourceKey is the deleted principal get the payload pseudonym when the relay applies the signed deletion request; a counterparty's deletion or tombstone never removes signals in another vault"}
+    errors:
+      - "MODERATION_SIGNAL_DUPLICATE_SOURCE | 409 | no | a signal for this source event already exists; ingestion is a no-op"
+      - "MODERATION_SIGNAL_MANUAL_CAP | 422 | no | manual signals for this subject exceed the 30-day cap"
+    note: "Module table signals/3 for SignalPort.record: proximity_pattern (F06.S02.M03, relay only, weight 10, half-life 7 days, subject the caller's did:key, evidenceRef the detector's pattern id). Producers call the port and depend on this module; this module does not depend on them. Privacy ports (N6): ExportSectionPort (section moderation.signals, vault only), DeletionPort and RetentionPurgePort (RET-SIGNAL: until expiresAt, at most 365 days, counts-only rollup 365 days) are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02."
+    example: |
+      vault command moderation.signal.record_manual (local, Idempotency-Key 0192f3e0-0000-7000-8000-000000000f01)
+      { "subjectKey": "did:key:z6MkCounterpartyExample", "kind": "manual_concern", "weight": 8, "reason": "Asked to move the payment outside the app twice." }
+      -> { "signalId": "0192f3e0-7777-7000-8000-000000000007", "expiresAt": "2027-01-23T10:00:00Z" }
+      consumed comms.meetup.no_show { "targetDid": "did:key:z6MkCounterpartyExample", "reportedByDid": "did:key:z6MkMe" } -> Signal { kind: "no_show", weight: 10, sourceKey: "did:key:z6MkMe" }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal can read and add signals in its vault, and signals derive only from events produced by verified local state or verified signed statements."
+      - "Relay policy: moderators read signals on that relay for open cases, operators read summaries, and subjects can read category counts about themselves on that relay."
+      - Signals about a subject are never returned to other members or federated.
+    capabilities:
+      - "moderation.signal.record_manual | local principal, moderator | vault unlocked, or relay moderator with open case; subject differs from actor"
+      - "moderation.signal.record_module | operator | in-process relay call by a module registered for the kind in the module table (F06.S02.M03 for proximity_pattern); not routable over HTTP"
+      - "moderation.signal.read_as_reviewer | local principal, moderator | vault unlocked, or relay moderator with open case on the subject"
+      - "moderation.signal.read_summary | local principal, moderator, operator | vault unlocked, or relay role; used in-process by F12.S03.M01"
+      - "moderation.signal.read_categories | local principal, member | vault unlocked, or subject reading own categories on a relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Ingestion is idempotent through the unique source index and the inbox table of CTR-EVT-001 EVT-3.
+      - A row and its event commit in one transaction.
+      - Consumer failures retry with CTR-IDM-001 backoff and dead-letter after 8 attempts.
+    idempotency: "Unique (tenantId, kind, sourceEventId); compensations use the corrected signal's id as sourceEventId; manual command uses a local Idempotency-Key replayed for 24 h."
+    concurrency: "Append-only inserts need no locking; summarize reads a consistent snapshot; the manual cap, the source-key cap count and the 5-dismissals threshold are evaluated inside the insert transaction."
+    retries: "Event retries per EVT-6; callers of the manual command retry DEPENDENCY_UNAVAILABLE only."
+    offline: "The vault records signals from local events while offline; relay signals require the relay."
+    partial_failure: "If the event insert succeeds but outbox dispatch fails, the dispatcher retries; summarize never reads partial transactions. Privacy ports (N6) run resumably per signal id."
+  privacy_retention_abuse:
+    requirements:
+      - Signals are P3 in a vault and P2 on a relay, contain no content, and are never federated, never shown to other members and never merged across stores.
+      - Retention is bounded by expiry (at most 365 days, class RET-SIGNAL) with a counts-only rollup; in a vault signals are deleted only by the local principal's own deletion or by expiry, never by a counterparty's tombstone or deletion, and relay signals are pseudonymized when the subject's signed deletion request is applied.
+      - Signal poisoning (fake disputes to damage a rival) is limited by small weights, decay, source verification and a per-source cap.
+      - The module meets N6 by registering ExportSectionPort, DeletionPort and RetentionPurgePort with F10, classifying every Signal field per F10.S02.M02, and consuming privacy.deletion.completed.
+    data:
+      - "Signal in a vault: P3 (vault owner only)."
+      - "Signal on a relay: P2 (the subject's category counts and that relay's moderators with a case)."
+      - "Rollup counts: P3 counts per kind without sources."
+    retention:
+      - "Signals: RET-SIGNAL, until expiresAt and at most 365 days, through the RetentionPurgePort."
+      - "Rollup counts: 365 days."
+    threats:
+      - "T01 | Fake disputes or no-shows to smear a rival | single events have bounded weights (≤ 40), decay, and need verified source events; signals from one sourceKey about one subject count at most 3 times per 30 days"
+      - "T02 | Hidden permanent blacklist | maximum lifetime 365 days; counts shown to the subject; no global sharing"
+      - "T03 | Moderator planting manual signals | manual weight capped at 20 per subject per 30 days and audited"
+      - "T04 | Tampering with stored signals | append-only trigger, hash of rows in daily audit digest on the relay"
+      - "T05 | Re-identification through signal queries | queries return categories and counts to non-moderators and only for own history"
+      - "T06 | Counterparty wipes its history in other vaults with a deletion tombstone before switching keys | vault signals are removed only by the local principal's own deletion or expiry"
+      - "T07 | Overturned actions keep adding risk | revert compensations cancel report_actioned weight"
+    abuse_controls:
+      - "Per-source cap: signals from one sourceKey for one subject count at most 3 times in 30 days."
+      - "Manual signals limited to 10 per 24 h per author via F12.S03.M03."
+      - "Reporting bad faith: report_dismissed_bad_faith only at 5 non-exempt dismissals of one key in 30 days; minor_safety dismissals never count."
+  observability_performance:
+    requirements:
+      - Relay ingestion lag and outcomes are measured per CTR-OBS-001 without subject keys in logs; the vault keeps local diagnostics only.
+      - Summarize meets p95 ≤ 50 ms for subjects with up to 5 000 signals.
+      - Dead-lettered ingestion events are alerting on the relay.
+    metrics:
+      - "classrup_moderation_signals_total{kind,outcome=recorded|duplicate|capped|unresolved_subject}"
+      - "classrup_moderation_signal_ingest_lag_ms"
+      - "classrup_moderation_signal_summarize_ms (histogram)"
+      - "classrup_moderation_signal_dead_letters_total"
+    logs:
+      - "relay info signal.recorded {signalId, kind, sourceModule, correlationId} — no subject or source key."
+    budgets:
+      - "record and ingest p95 ≤ 100 ms; summarize p95 ≤ 50 ms for 5 000 signals; list p95 ≤ 150 ms for 100 items."
+      - "Daily purge of 100 000 expired rows completes in ≤ 30 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Decay math and cap logic are covered by deterministic and property tests.
+      - Consumer mapping is covered by contract tests per consumed event.
+    fixtures: "Vault of principal P with counterparties B and C, relay X with moderator M1, events from catalog producers with their documented payloads, fixed clock 2026-11-04T10:00:00Z with an injectable clock, half-life 60 days example weight 10."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | record valid manual signals; invalid weight and kind | stored with expiry = observedAt + 5 half-lives; documented errors otherwise"
+      - "T02 | property | 01.R03,03.R01,03.R02 | random signal sets and times | decayed weight equals w × 0.5^(age/h); order of ingestion does not change totals; no row changes after insert"
+      - "T03 | unit | 02.R03 | compensation referencing a missing signal, another subject, or a compensation | NOT_FOUND"
+      - "T04 | contract | 04.R03,06.R01,09.R03 | each consumed event delivered twice with the producer's documented payload fixture | exactly one signal per source event with the documented kind, weight, half-life, subject field and sourceKey field"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | command, queries and event | validate against registry schemas; signal.recorded emitted in the row transaction without sourceKey"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | other member queries signals; relay moderator without case; subject reads own categories | NOT_FOUND, FORBIDDEN, categories only"
+      - "T07 | abuse | 07.R03,01.R04 | 4th no_show signal from the same sourceKey about B in 30 days; 4th from a different sourceKey; manual weight above cap | first 4th ignored for scoring and counted in sourceCapped; second counts; MODERATION_SIGNAL_MANUAL_CAP"
+      - "T08 | integration | 03.R03,07.R02 | injected clock past expiresAt; counterparty B's deletion tombstone; P's own privacy.deletion.completed; relay applies B's signed deletion request | rows purged through the RetentionPurgePort and rollup counts kept; B's tombstone removes nothing in P's vault; P's deletion removes P's vault signals; relay signals about B pseudonymized"
+      - "T09 | integration | 06.R02,06.R03 | transaction aborted mid-ingest; outbox dispatcher down; consumer failing 8 times | no partial row; event delivered after recovery; dead letter after 8 attempts"
+      - "T10 | abuse | 07.R01,07.R03 | UPDATE of weight and observedAt on signal rows | aborted by trigger"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 200 ingests per second for 5 minutes; summarize 5 000-signal subject; purge 100 000 rows; a dead-lettered event | p95 targets met, purge ≤ 30 s, dead-letter metric alerts, no keys in logs"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-101 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | vault export, import into fresh vault, relay backup restore; read a v1 row with an unknown kind with the previous reader | signals round-trip with original observedAt; imported signals marked source import with weight cap 20; unknown kind counts as manual_concern with weight 0"
+      - "T14 | integration | 02.R04,01.R02 | commerce.deal.completed with parties [P, B]; payment.disputed where P is the payer; auctions.result.voided without subjectKeys in a vault | deal_completed recorded only for B; no signal about P; nothing recorded for the void; unresolved_subject metric increments"
+      - "T15 | integration | 04.R04 | on relay X: action.applied remove_from_index, then reverted appeal_overturned; another applied then expired; 5 non-exempt report.dismissed for reporter R in 30 days and 1 exempt | report_actioned 15 then compensation; expired one kept; report_dismissed_bad_faith recorded once at the 5th dismissal; exempt dismissal records nothing"
+      - "T16 | contract | 04.R05 | F12.S03.M01 calls summarize with kinds and windowDays; the 5th dismissal's moderation.signal.recorded is delivered to the F12.S03.M03 contract fixture | byKind counts for the window returned, report_dismissed_bad_faith count 1 within 30 days and 0 after 31 days; F12.S03.M03 writes one reduced marker for the reporter key"
+      - "T17 | abuse | 07.R01,02.R04 | F12 privacy suite: scan federation payloads, public projections, notifications, relay and vault logs after ingesting every mapped event | no Signal field, subject key, source key or weight appears in any of them"
+      - "T18 | integration | 07.R04 | ExportSectionPort run, DeletionPort plan and RetentionPurgePort run in a vault and on a relay | section moderation.signals exported in the vault only; deletion and purge counts reported; relay export absent"
+      - "T19 | integration | 02.R04 | commerce.dispute.resolved refund_claimed, then no_fault_close for another case, then withdrawn for a third | refund_agreed against the respondent of the matching dispute_opened signal; compensations for the other two; no dispute_lost kind exists"
+      - "T20 | contract | 04.R06,02.R04 | F06.S02.M03 contract fixture calls SignalPort.record with proximity_pattern for a token caller twice with one sourceRef, for an anonymous caller without did:key, with an unregistered kind, with a cell in evidenceRef, and over HTTP | one signal weight 10 half-life 7 days and duplicate true on the repeat, moderation.signal.recorded once; VALIDATION_FAILED three times; no route"
+      - "T21 | integration | 04.R07,04.R03 | rentals.damage.claimed; rentals.damage.resolved with each outcome; comms.meetup.no_show contradicted false then comms.meetup.no_show_contradicted for it; comms.meetup.no_show with contradicted true; moderation.action.applied with caseSource auction_review and auctions.result.voided with subjectKeys [seller] for the same auction | nothing for claimed; damage_agreed only for accepted, counter_accepted, refund_claimed and return_agreed; no_show then its compensation; nothing for the contradicted arrival; only auction_voided against the seller and no report_actioned"
+    acceptance:
+      - All tests T01–T21 pass in CI.
+      - No signal row is ever modified before expiry, and no counterparty action removes signals from another person's vault.
+      - Decayed totals match the closed-form formula within 1e-9 in property tests.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export includes the signals recorded in their vault; relay signals about a subject are exported only to relay operators under legal hold.
+      - Imported signals are marked with source import, capped at weight 20 per source and never inflate decay.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.signals in classrup-export/v1 (vault only, ExportSectionPort): one line per unexpired signal including sourceKey and reason text for manual ones."
+    import: "Signals import with sourceModule import and weight clamped to ±20; duplicates by (kind, sourceEventId) are skipped; expired ones are dropped; signals about the importing principal are dropped."
+    backup: "Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) covers relay signals."
+    migration_rollback: "Additive fields only in v1 (sourceKey, kinds refund_agreed, report_dismissed, damage_agreed and proximity_pattern); the mapping table moves from signals/2 to signals/3 for new events only (rentals.damage.resolved replaces rentals.damage.claimed, whose stored damage_claimed rows are read as damage_agreed until they expire; no-show contradictions; host-policy actions skipped; module table); rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0."

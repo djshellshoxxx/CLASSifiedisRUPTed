@@ -1,35 +1,51 @@
-# PS-100-07 — privacy retention abuse
+# PS-100-07 — Privacy, retention and abuse: Risk scoring
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-07. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S03.M01 Risk scoring](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/antifraud/risk` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-100-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-100-07.R01** Assessments are derived data (P3 in a vault, P2 on a relay) kept 30 days and contain only factor kinds and counts, never content or counterparties' identities beyond the subject key.
+- **PS-100-07.R02** Consumers receive the minimum, level and factor kinds, not signal sources.
+- **PS-100-07.R03** Misuse of levels (as a de facto ban, or to shame) is limited by friction-only semantics, subject visibility and no federation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- RiskAssessment: P3 in a vault (owner only); P2 on a relay (subject and that relay's moderators with a case).
+- moderation.risk.elevated and moderation.risk.lowered: P2 store-local, consumed by F12.S03.M04, F12.S02.M01 and local UI only.
+- First-seen map: P2 derived, store-local, hashed keys.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Assessments: 30 days (RET-SHORT) through the store sweep.
+- Level history rows for hysteresis: the latest one is always kept.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Silent shadow penalty | frictions are enumerated and shown to the subject; no friction hides content or blocks access; schema forbids ban-like friction values |
+| T02 | Gaming the model by farming positive signals | deal credit capped at −20 points (10 completed dealings) and only from deal_completed signals; negative signals dominate by design |
+| T03 | Using levels to defame | levels never leave the store; relay does not publish them; the UI says levels are not findings |
+| T04 | Model drift or opacity | fixed versioned model risk/1 with the published points table, input digest and factors that sum to the score |
+| T05 | Flapping levels cause UI churn or friction oscillation | hysteresis thresholds (70/60 and 35/25) and 5 second debounce |
+| T06 | Frictions kept after the level dropped | crossing scheduler and moderation.risk.lowered lift them when the drop happens |
+
+**Abuse controls**
+- Recompute is rate limited to 60 per hour per principal (F12.S03.M03) to prevent probing of the model with fake signals.
+- Transaction assessments reveal only the level and factor kinds of the counterparty from the requester's own history.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-100-09.T08 | abuse | PS-100-07.R01, PS-100-07.R03 | schema with a ban-like friction value; 61 recomputes in an hour | schema rejects; 61st RATE_LIMITED |
+| TEST-PS-100-09.T10 | unit | PS-100-07.R02, PS-100-01.R02 | injected clock 31 days after computation; consumer payload | assessment purged; payload has level and kinds only |
+| TEST-PS-100-09.T15 | abuse | PS-100-07.R01, PS-100-01.R02 | F12 privacy suite after recomputes in a vault and on a relay: scan federation payloads, public projections, notifications and logs | no assessment field, score, level or factor appears in any of them |
+
+## Dependencies
+
+Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

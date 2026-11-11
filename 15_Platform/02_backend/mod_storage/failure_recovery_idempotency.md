@@ -1,35 +1,38 @@
-# PS-119-06 — failure recovery idempotency
+# PS-119-06 — Failure recovery and idempotency: Storage
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-06. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M03 Storage](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/storage` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for storage within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-119-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-119-06.R01** Writes are serialized per vault or relay (SQLite BEGIN IMMEDIATE with WAL and busy_timeout 5000; IndexedDB one readwrite transaction per commit), and a busy database maps to DEPENDENCY_UNAVAILABLE.
+- **PS-119-06.R02** A failed IndexedDB commit restores the in-memory working set so the vault state equals the last committed state.
+- **PS-119-06.R03** Consumer failures are retried with backoff and dead-lettered after 8 attempts, and a duplicate delivery is acknowledged without re-running side effects.
+- **PS-119-06.R04** The SQLite adapter option walAutocheckpoint 0 runs PRAGMA wal_autocheckpoint=0 on every relay connection it opens, and while F15.S03.M02 is the checkpointer registered through registerCheckpointer the adapter never checkpoints schema main by itself (no wal_checkpoint pragma on main or without a schema name, no checkpoint on close before the F15.S02.M01 shutdown sequence ran the pre-checkpoint hook) and exposes its writer connection through writerConnection() for node:sqlite backup() of schema main.
+- **PS-119-06.R05** The attached schema blobs_enc runs in WAL mode and is checkpointed only by storage, with the schema-qualified PRAGMA blobs_enc.wal_checkpoint(PASSIVE) after a commit leaves its WAL above 1000 frames and blobs_enc.wal_checkpoint(TRUNCATE) at close, so the WAL of schema main that F15.S03.M02 archives is never touched by these checkpoints.
+- **PS-119-06.R06** Because SQLite keeps each attached database file atomic but not the pair across a power loss, the orphan blob sweep also deletes blobs_enc.blob_bytes rows that have no main.blobs row, and a main.blobs encrypted row without ciphertext is read as absent bytes (04.R08), so neither state serves wrong bytes or keeps unreferenced ciphertext.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Inbox rows make consumers idempotent per (consumer, eventId); blob put is idempotent by content address; restore of an identical record is a no-op; requeue of an already requeued event is refused with CONFLICT_STATE so replay_count counts each replay once.
+- **concurrency:** Single writer per store with a transaction mutex; optimistic concurrency by revision for records; leases with compare-and-set and fencing for local reservations; no distributed lock (IDM-8). On a relay the registered checkpointer is the only connection that checkpoints schema main and storage checkpoints only blobs_enc; backup() steps run on the writer connection between transactions.
+- **retries:** The dispatcher uses full jitter, base 500 ms, cap 30 s and dead-letters after 8 attempts; requeued dead letters get 8 new attempts and return to dead after 7 days without delivery or when their consumer is disabled.
+- **offline:** The vault works with no relay: commits are local, consumers run locally and F15.S01.M01 OutboxEntry records stay in the vault until its sender delivers them; nothing is lost when a relay is unreachable.
+- **partial failure:** A handler exception, an err result or a failed IndexedDB write rolls back every table touched; SQLite COMMIT failure triggers ROLLBACK before the error is rethrown. An IndexedDB upgrade that fails after the pre-upgrade snapshot leaves the snapshot and the old database intact. A relay transaction that writes both main and blobs_enc is atomic per file; a power loss between the two file commits is repaired by the orphan sweep or read as absent ciphertext.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-119-09.T04 | integration | PS-119-01.R02, PS-119-03.R01, PS-119-04.R03, PS-119-06.R03, PS-119-09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered |
+| TEST-PS-119-09.T07 | integration | PS-119-06.R01 | pragmas on a file database; another connection holds BEGIN IMMEDIATE | journal_mode wal, busy_timeout 5000 by default; DEPENDENCY_UNAVAILABLE through storage and bus |
+| TEST-PS-119-09.T08 | integration | PS-119-06.R02 | reopen an IndexedDB vault; inject a QuotaExceededError on commit | data and outbox sequence survive reopen; failed commit leaves no trace; next commit persists |
+| TEST-PS-119-09.T20 | integration | PS-119-06.R04 | open a relay file database with walAutocheckpoint 0 and a registered recording checkpointer, write 20 000 rows, open a second connection, close the store, then take node:sqlite backup() of writerConnection() | PRAGMA wal_autocheckpoint is 0 on both connections; WAL salts unchanged by storage; no checkpoint before the pre-checkpoint hook; backup copy passes integrity_check with every committed row |
+| TEST-PS-119-09.T25 | chaos | PS-119-06.R04, PS-119-06.R05, PS-119-06.R06 | registered recording checkpointer; write 2 000 encrypted blobs; create directly a blobs_enc row without a main.blobs row and a main.blobs encrypted row without ciphertext (the two states a power loss between file commits can leave); run the orphan sweep; close the store | main WAL salts unchanged by storage; only schema-qualified blobs_enc checkpoints issued and the blobs_enc WAL stays below 1000 frames after each commit; orphan ciphertext row deleted; the row without ciphertext reads NOT_FOUND with bytesPresent false |
+
+## Dependencies
+
+Module depends on: F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-IOX-001, CTR-FLG-001, CTR-OBS-001, CTR-TST-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

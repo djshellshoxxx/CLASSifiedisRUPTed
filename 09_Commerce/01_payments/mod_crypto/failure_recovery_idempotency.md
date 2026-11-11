@@ -1,35 +1,32 @@
-# PS-068-06 — failure recovery idempotency
+# PS-068-06 — Failure recovery and idempotency: Crypto payments
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-068-06. **Owner:** [09_Commerce/01_payments/mod_crypto](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_crypto. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M03 Crypto payments](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/crypto` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for crypto within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-068-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-068-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-068-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-068-06.R01** Commands are idempotent per CTR-IDM-001 and observation updates are idempotent by (claimId, txid).
+- **PS-068-06.R02** Endpoint failures never change claim status; the observation keeps its last good state and shows when it was last checked.
+- **PS-068-06.R03** Conflicting data from two endpoints or an inconsistent single endpoint freezes progress and warns the user instead of picking a winner.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Vault command ID recorded for 24 h; observation upserts keyed by (vault, claim, txid); consumed events deduplicated in the inbox; request statements deduplicated by cid in the ingest handler.
+- **concurrency:** expectedRevision on cancel; partial unique indexes allow one open or claimed request per obligation and one per address; observation loop holds a Web Lock commerce-chain per vault so two tabs share one tip poll and one budget.
+- **retries:** Endpoint calls: 3 attempts per poll with 1 s, 2 s, 4 s backoff and 8 s timeout, each attempt counted against the hourly budget; poll backoff doubles to 10 min; refresh failures return DEPENDENCY_UNAVAILABLE (retryable).
+- **offline:** Requests and cancellations commit locally and queue statements. Observation pauses offline; on reconnect it catches up from the chain, so a missed 3-day window is verified at open. A crypto claim made offline with a verifier configured stays held until the txid lookup succeeds.
+- **partial failure:** A failure after the verifier answered but before commit discards the answer; the next poll repeats it. A partially applied reorg cannot happen because status, confirmations and event outbox row commit in one IndexedDB transaction.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-068-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-068-09.T09 | integration | PS-068-04.R03, PS-068-06.R01 | consumed events delivered twice; same command ID replayed | one request and one observation; original result returned |
+| TEST-PS-068-09.T11 | chaos | PS-068-06.R02, PS-068-06.R03 | endpoint timeouts, two endpoints disagreeing, endpoint returning lower height | claim status unchanged, disagreement flagged, no progress applied |
+
+## Dependencies
+
+Module depends on: F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

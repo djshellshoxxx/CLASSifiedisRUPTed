@@ -1,0 +1,201 @@
+id: F17.S01.M04
+scope: MVP
+summary: 'Browser end-to-end tests with @playwright/test 1.63.0 pinned to the preinstalled Chromium, run on Pixel 7 and iPhone 14 device profiles against the built PWA. The PWA is the product: its vault lives in IndexedDB, so the first profile runs with no relay configured and must work fully offline. A second profile adds a self-hosted relay on an in-memory SQLite database. There are no accounts or logins (ADR-0016, CTR-UX-001 UX-5): journeys create an identity locally, unlock the vault and optionally obtain a relay access token. A journey passes only when each participant''s UI matches that participant''s own vault and the vaults agree on the signed statements they exchanged; the relay is never the oracle. Covers core journeys, offline and reconnect behaviour along the F15.S01.M01 sync states, PWA budgets (LCP, INP, CLS, initial JS) and axe-core accessibility checks (@axe-core/playwright 4.14.0) with zero serious or critical violations.'
+responsibilities:
+- Provide Playwright configuration with two projects (Pixel 7, iPhone 14 viewport and user agent, both on pinned Chromium), traces on first retry, video off, 30 s test timeout and 1 retry only in CI.
+- 'Serve the already-built PWA artifact (built once by CI) on a random free port. Run two profiles: no-relay (no relay configured, network blocked) and with-relay (a test relay started on a random port with in-memory SQLite, then selected by the user in settings); each worker has an isolated browser context and vault.'
+- 'Provide journey specs: create identity (local device-key generation) and unlock vault, restore from a recovery kit, then optionally select a relay and obtain a relay access token by challenge-response (CTR-CAP-001 CAP-10); publish listing, make and accept offer, propose barter, offline create and reconnect along the sync states, install prompt and update flow, and language switch.'
+- Run axe on every screen visited by a journey and fail on any serious or critical violation; record minor ones in the report.
+- 'Prove that the PWA works offline with no relay configured: create identity, draft and publish a listing locally, search local records, export and restore the vault, all with the network blocked.'
+non_responsibilities:
+- Relay-level flows without a browser (F17.S01.M03).
+- 'Real WebKit and Firefox engines: the browser matrix is checked by F17.S03.M03; this module runs on the pinned Chromium with device emulation only.'
+- Application accessibility fixes (F14).
+- 'Future: visual regression snapshots and real-device cloud runs.'
+depends_on:
+- CTR-TST-001
+- CTR-UX-001
+- CTR-OBS-001
+- CTR-IDM-001
+- CTR-CAP-001
+- CTR-PRV-001
+- F17.S01.M01
+- F15.S01.M01
+- F15.S01.M02
+- F14.S01.M03
+- F07.S01.M01
+- F07.S01.M02
+- F07.S01.M03
+- F11.S01.M02
+- F01.S04.M01
+user_stories:
+- As a developer, I run pnpm test:e2e and watch the buyer and seller journey pass on both device profiles with a trace for any failure.
+- As an accessibility lead, I see axe results per screen and the build fails on a serious violation.
+- As a tester, I toggle offline in a test and verify that queued actions replay once the connection returns.
+edge_cases:
+- The browser goes offline mid-submit; the offer is local committed and its OutboxEntry stays prepared (Saved on this device); on reconnect it is sent with the same cid and the seller vault applies it once (dedupe by cid).
+- Service worker update arrives during a test; the update-available prompt appears and the page does not reload without consent.
+- Two workers use the same port; ports are allocated from the OS and recorded in the worker fixture to avoid clashes.
+- A screen is correct visually but has an unlabeled input; axe reports a serious violation and the test fails with the node selector.
+- Slow 4G emulation with CPU throttle 4x; the app shell still loads offline after the first visit.
+- Chromium preinstalled path differs per runner; the config resolves it from PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH and fails clearly if absent.
+- No relay is configured and the network is blocked; every core journey still completes and shows delivery as unknown rather than failed or sent.
+- A correctly signed acceptance made by a key that is not the listing author is injected into the buyer vault; it appears in the quarantine list with its reason and the offer never shows as accepted.
+- A production relay build is started; the e2e clock and seeding hooks are absent and their routes answer 404.
+- A screen shows sign-up, sign-in, log-in or account wording, or blocks paste in the passphrase field; the run fails.
+ux:
+  notes: 'Headless runner. Output is the Playwright HTML report, traces for failed tests, JUnit XML, reports/e2e-axe.json listing violations per screen and impact, and reports/pwa-budgets.json. Covered contract notes: CTR-UX-001 UX-1 and UX-5 (accessible authentication without accounts or logins, N20 and N23), CTR-OBS-001 OBS-5, CTR-IDM-001 IDM-7, CTR-CAP-001 CAP-8 and CAP-10.'
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; each worker gets a fresh browser context whose vault (IndexedDB) starts empty, plus an optional throwaway test relay for the with-relay profile.
+    - Test principals are generated pseudonyms whose did:key identities and device keys are created locally in the browser context, each with its own vault; there are no accounts or logins (ADR-0016, CTR-UX-001 UX-5).
+    - Artifacts (traces, screenshots on failure) are written under test-results/ and git-ignored.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - Each e2e test title starts with a valid TEST-PS-NNN-PP.Tnn ID per CTR-TST-001.
+    - A test fails if axe reports any violation with impact serious or critical on a visited screen, or any console error not on an allow list.
+    - Playwright config validation rejects a run when the Chromium path is missing, versions differ from the pinned 1.63.0 or when fewer than the two device projects are configured.
+    - 'Identity screens meet CTR-UX-001 UX-5: vault unlock uses autocomplete current-password, new passphrase uses autocomplete new-password, paste and password managers are never blocked, a show/hide toggle exists, and a recovery kit can be imported by file; no screen shows sign-up, sign-in, log-in or account wording (N20).'
+    rules:
+    - V01 | Playwright version is 1.63.0 and exactly the two device projects Pixel 7 and iPhone 14 are configured | QUALITY_E2E_CONFIG_INVALID
+    - V02 | Chromium executable resolves from the preinstalled path and PWA_DIST exists | QUALITY_E2E_ENV_MISSING
+    - V03 | Axe reports zero violations with impact serious or critical on every visited screen | QUALITY_E2E_A11Y_VIOLATION
+    - V04 | No console error or unhandled rejection outside the allow list | QUALITY_E2E_CONSOLE_ERROR
+    - 'V05 | OBS-5 budgets hold: LCP 2.5 s, INP 200 ms over the scripted interaction (open a listing, tap Make offer), CLS 0.1, initial JS 150 KiB gzip | QUALITY_E2E_BUDGET_EXCEEDED'
+    - V06 | No-relay profile completes the offline journey with zero network requests and no error screen | QUALITY_E2E_RELAY_REQUIRED
+    - V07 | The production relay build exposes no test-only route or hook (clock, seed); a probe gets 404 and the bundle scan finds none | QUALITY_E2E_TEST_ENDPOINT_IN_PROD
+    - V08 | Identity screens meet UX-5 (autocomplete current-password and new-password, paste allowed, show/hide toggle, recovery kit import by file) and no screen shows sign-up, sign-in, log-in or account wording | QUALITY_E2E_AUTH_UX_INVALID
+    - V09 | No test needed a retry in more than 3 of the last 20 CI runs, counted per test from the stored history artifact reports/e2e-history.json | QUALITY_E2E_FLAKY
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle for the module; each journey exercises lifecycles owned by other modules.
+    - 'A journey passes only if the UI state of each participant matches that participant''s own vault state, and the vaults agree on the signed statements they exchanged (same cid and revision, verified signer). For an offer, the buyer and seller vaults in separate browser contexts hold the same accepted offer cid and revision and the Deal, and the buyer''s OutboxEntry reaches peer_accepted bound to that cid; in the no-relay profile the envelopes travel as direct file transfers. Relay checks cover only relay-held artifacts (the receipt for an opaque envelope, index presence of a P0 projection), and no relay query returns offer plaintext (P2, CTR-PRV-001 PRV-5).'
+    - 'Offline journeys walk the F15.S01.M01 sync states: the offer is local committed at once; its OutboxEntry is prepared while offline (Saved on this device), then sending, then transport_acknowledged after a verified relay receipt (Delivered to relay, peer has not confirmed), then peer_accepted when the seller''s signed acknowledgement arrives (Confirmed by peer); conflict, failed and expired are driven by injected relay responses and page.clock; each state is visible and announced and the UI never shows more than the reached state.'
+    - 'A no-relay journey runs with all network requests aborted: first-run identity creation, local listing publish, local search, vault export and restore, and sync status displayed as Saved on this device (local committed, OutboxEntry prepared) without claiming delivery.'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:e2e, pnpm test:e2e --project=pixel7, pnpm test:e2e --grep <TEST ID>, pnpm test:e2e:a11y and pnpm test:e2e:budgets, which writes reports/pwa-budgets.json (classrup-pwa-budget-report/v1 with commitSha, profile, lcpMs, inpMs, cls, initialJsGzipBytes) for the release gates.
+    - 'Exit codes: 0 pass, 1 test failure, 2 accessibility violation, 3 configuration failure.'
+    - The suite consumes the PWA build artifact path from env PWA_DIST and fails when the directory is missing.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_E2E_CONFIG_INVALID | 422 | no | Playwright version or device projects differ from the pinned set (exit 3)
+    - QUALITY_E2E_ENV_MISSING | 422 | no | Chromium path or PWA build directory missing (exit 3)
+    - QUALITY_E2E_A11Y_VIOLATION | 422 | no | axe found a serious or critical violation (exit 2)
+    - QUALITY_E2E_CONSOLE_ERROR | 422 | no | unexpected console error during a journey (exit 1)
+    - QUALITY_E2E_BUDGET_EXCEEDED | 422 | no | PWA budget from OBS-5 exceeded (exit 1)
+    - QUALITY_E2E_RELAY_REQUIRED | 422 | no | a core journey failed or blocked because no relay was configured (exit 1)
+    - QUALITY_E2E_TEST_ENDPOINT_IN_PROD | 422 | no | a test-only route or hook (clock, seed) is present in a production relay build (exit 1)
+    - QUALITY_E2E_AUTH_UX_INVALID | 422 | no | identity screen breaks UX-5 or shows account, sign-up or login wording (exit 1)
+    - QUALITY_E2E_FLAKY | 422 | no | a test needed a retry in more than 3 of the last 20 CI runs (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ PWA_DIST=apps/pwa/dist pnpm test:e2e --project=pixel7 --grep TEST-PS-134-09.T06
+        TEST-PS-134-09.T06 offline offer: one OutboxEntry (cid sha256-Xq1...) survives reload; seller vault applied once   OK (6.2 s)
+          labels: Saved on this device -> Delivered to relay, peer has not confirmed -> Confirmed by peer
+      $ pnpm test:e2e:budgets
+        pixel7  LCP 1.9 s  INP 140 ms (open listing, tap Make offer)  CLS 0.03  initial JS 131 KiB gzip  OK  reports/pwa-budgets.json
+      $ pnpm test:e2e:a11y
+        screens 14, serious 0, critical 0, moderate 2  exit 0
+  authorization_capabilities:
+    requirements:
+    - E2E tests unlock the local vault with a generated passphrase; relay access, when selected, uses the challenge-response token flow (CTR-CAP-001 CAP-10) with generated device keys.
+    - 'Authorization is tested at the UI level: a correctly signed statement from a non-author injected into a vault is shown in the quarantine list with its reason and never as accepted, a non-owner sees no accept or reject controls and a direct URL returns the not-found screen.'
+    - Test principals, their vaults and the relay are discarded after the run; no relay access tokens are written to traces (traces redact Authorization headers).
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles. Identity is a locally created key and the vault is unlocked on the device; challenge-response yields only an optional relay access token (CAP-10), and the unlock and recovery screens are checked against CTR-UX-001 UX-5.'
+  failure_recovery_idempotency:
+    requirements:
+    - 'Offline replay is verified: an offer created offline keeps exactly one OutboxEntry with its original cid across a page reload during the outage, and after reconnect the seller vault applies it exactly once (statements dedupe by cid; relay commands keep their Idempotency-Key).'
+    - Parallel workers are fully isolated by browser context, vault and relay tenant; no shared state exists between tests.
+    - A failed test is retried at most once in CI; the report marks flaky tests, appends each run to the stored history artifact reports/e2e-history.json, and the job fails if any single test needed a retry in more than 3 of the last 20 CI runs read from that history.
+    idempotency: 'E2E runs are repeatable: each worker starts a fresh relay, database and browser context, so a re-run never depends on earlier state.'
+    concurrency: Workers run in parallel with unique tenants and ports; tests in one file are serial when they share a context.
+    retries: One retry in CI for browser-level flakiness, none locally; a retried pass is reported as flaky and recorded per test in reports/e2e-history.json, and more than 3 retried runs of one test in the last 20 fail the job (V09). The system's own retry behavior is tested by explicit offline and reconnect steps.
+    offline: Offline is simulated with context.setOffline(true) and with route abort for flaky network profiles; the suite proves the app shell works offline after first visit.
+    partial_failure: If the relay or browser crashes, the worker fails its current test with a trace, restarts, and the remaining tests continue; the final exit code reflects any failure.
+  privacy_retention_abuse:
+    requirements:
+    - Traces and screenshots are retained 14 days in CI and are scrubbed of Authorization headers and request bodies for P2–P4 endpoints.
+    - Test data are synthetic and locations are rendered at coarse L2.
+    - The suite asserts no P3 value (exact address) appears in the DOM of public pages or in page URLs.
+    - No test-only route or hook (relay clock, seeding) exists in a production relay build; the relay FakeClock is injected in-process through the e2e relay entry and the PWA clock through Playwright page.clock.
+    data:
+    - Traces and screenshots may contain synthetic P0–P2 data only.
+    - axe reports contain DOM selectors, not user data.
+    retention:
+    - Playwright report, traces and axe JSON retained 14 days in CI; local test-results/ is git-ignored.
+    threats:
+    - T01 | Trace reveals tokens or secrets | trace config redacts Authorization and cookies; principals and relay access tokens are synthetic and short-lived
+    - T02 | Tests pass only because accessibility checks are skipped | every journey calls the shared a11y helper in its teardown; a self-test fails the run if a screen was visited without axe
+    - T03 | Dependency on remote services makes tests flaky or leaks data | route handlers abort any request not to the local relay or dist server
+    - T04 | Test clock or seed endpoint shipped in a relay build lets anyone move auction close or relay receipt times | the relay FakeClock and seeding are injected in-process only under the e2e relay entry and never exposed over HTTP; the production build scan and a 404 probe fail with QUALITY_E2E_TEST_ENDPOINT_IN_PROD
+    abuse_controls:
+    - Network is limited to localhost; any external request fails the test with QUALITY_E2E_CONSOLE_ERROR.
+    - No test-only HTTP endpoint exists; the relay FakeClock and seeding are driven in-process through the e2e relay entry handle, the PWA clock through Playwright page.clock, and V07 proves the production relay build has neither.
+  observability_performance:
+    requirements:
+    - The suite records per-test duration and Web Vitals measured in Chromium (LCP, INP, CLS) on the 4G Moto G-class profile for the home and listing pages, and writes them with the initial JS size and commit SHA to reports/pwa-budgets.json for the release gates.
+    - Smoke subset (5 tests) finishes in at most 90 s; full suite in at most 8 min on 2 vCPU.
+    - 'PWA budgets from CTR-OBS-001 OBS-5 are asserted: LCP at most 2.5 s, INP at most 200 ms measured over a scripted interaction (open a listing, tap Make offer), CLS at most 0.1, initial JS at most 150 KiB gzip.'
+    metrics:
+    - classrup_quality_e2e_tests_total{outcome=pass|fail|flaky}
+    - classrup_quality_e2e_axe_violations_total{impact}
+    - classrup_quality_e2e_duration_ms{project}
+    logs:
+    - JSON line per test {ts, level, msg, module, testId, project, durationMs, code?} with no request or response bodies.
+    budgets:
+    - Smoke subset at most 90 s and full suite at most 8 min on 2 vCPU.
+    - Each test at most 30 s; relay start at most 2 s; browser context creation at most 1 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Self-tests plant a missing label and a failing console error to prove the gate fails.
+    - Both device projects must run every test tagged smoke; the report lists project coverage.
+    fixtures: Pixel 7 and iPhone 14 Playwright device descriptors on pinned Chromium; relay on random port with seeded tenant per worker, started in-process by the e2e relay entry; principals Alice (seller) and Bob (buyer), each a locally created identity with its own vault in its own browser context; time driven by Playwright page.clock from 2026-11-04T10:00:00Z in both profiles, and the relay FakeClock advanced through the in-process relay handle only for relay-side expiry in the with-relay profile; a recovery kit file for Alice; a non-author acceptance envelope signed by a third key; a recorded reports/e2e-history.json of 20 runs.
+    tests:
+    - T01 | e2e | 01.R01,01.R02,06.R02 | two workers run journeys in parallel | separate tenants and databases; no cross-test interference
+    - T02 | e2e | 01.R03,07.R01 | force a failing test | artifacts only under test-results/, and Authorization headers are redacted in the trace
+    - T03 | unit | 02.R01,02.R03 | validate Playwright config with wrong version, one project, missing Chromium path | QUALITY_E2E_CONFIG_INVALID or QUALITY_E2E_ENV_MISSING and exit 3
+    - T04 | a11y | 02.R02,09.R02 | visit a screen with an unlabeled input | QUALITY_E2E_A11Y_VIOLATION with the selector and exit 2
+    - T05 | e2e | 03.R01,03.R02 | buyer makes offer, seller accepts on a second browser context (with-relay profile, and no-relay profile with direct file transfer) | buyer and seller vaults both hold the accepted offer (same cid and revision, verified signer) and the Deal, and each UI matches its own vault; the buyer OutboxEntry is peer_accepted bound to that cid; the relay holds only ciphertext envelopes and receipts for that thread and no relay query returns offer plaintext
+    - T06 | e2e | 03.R03,06.R01 | go offline, create offer, reload page, go online, seller acknowledges | one OutboxEntry with the original cid survives the reload; the seller vault applies the offer once (dedupe by cid); labels move Saved on this device, then Delivered to relay, peer has not confirmed, then Confirmed by peer and never ahead of the reached state
+    - T07 | unit | 04.R01,04.R02,04.R03 | invoke documented scripts | exit codes as documented and PWA_DIST missing yields exit 3
+    - T08 | e2e | 05.R01,05.R02 | unlock vault; select relay and obtain a relay access token via challenge-response; non-owner opens seller controls and a direct URL | token issued without any account; non-owner sees no accept control; direct URL shows the not-found screen
+    - T09 | abuse | 05.R03,07.R02 | scan trace and DOM of public page for token, exact address canary | none found; public pages show max L2 location
+    - T10 | e2e | 06.R03 | history artifact reports/e2e-history.json where test A needed a retry in 4 of the last 20 runs and test B in 3, plus a new run where A fails on its first attempt | the run marks A flaky; the job fails with QUALITY_E2E_FLAKY naming test A only; test B passes the rule
+    - T11 | e2e | 07.R03 | view public listing page | no P3 value in DOM or URL
+    - T12 | e2e | 08.R01,08.R03 | load home and listing on 4G profile with 4x CPU throttle, then open a listing and tap Make offer | LCP at most 2.5 s, INP at most 200 ms, CLS at most 0.1, initial JS at most 150 KiB gzip; reports/pwa-budgets.json written with commitSha and profile
+    - T13 | load | 08.R02 | run smoke and full suites on 2 vCPU | 90 s and 8 min budgets met
+    - T14 | e2e | 09.R01,09.R03 | run suite and read report | both device projects ran every smoke test; each requirement maps to a test
+    - T15 | e2e | 09.R02 | plant a console error and a missing label | run fails with QUALITY_E2E_CONSOLE_ERROR and QUALITY_E2E_A11Y_VIOLATION
+    - T16 | a11y | 03.R03 | walk prepared, sending, transport_acknowledged, peer_accepted plus conflict, failed and expired with a screen-reader live region check | each change announced via aria-live polite with the F15.S01.M01 label; conflict uses role=alertdialog
+    - T17 | e2e | 10.R01,10.R02,10.R03 | export report, upgrade Playwright in a branch, revert | report contains no user data; versions pinned 1.63.0 and 4.14.0 after revert
+    - T18 | e2e | 03.R04 | block all network, create identity, publish listing locally, search, export and restore the vault | journey completes with zero network requests; status Saved on this device; QUALITY_E2E_RELAY_REQUIRED never raised
+    - T19 | a11y | 02.R04 | create identity, set a new passphrase, lock and unlock, restore from a recovery kit file, then scan every visited screen for wording | autocomplete new-password and current-password present, paste allowed, show/hide toggle works, kit import by file works; no sign-up, sign-in, log-in or account wording; a planted paste block fails with QUALITY_E2E_AUTH_UX_INVALID
+    - T20 | abuse | 05.R02 | inject a correctly signed acceptance by a non-author key into the buyer vault by direct file import | shown in the quarantine list with reason signer not authorized; the offer is never shown as accepted and no Deal appears
+    - T21 | abuse | 07.R04 | start the production relay build and probe the clock and seed routes; scan the relay bundle | 404 on both routes; no test hook in the bundle; a planted route fails with QUALITY_E2E_TEST_ENDPOINT_IN_PROD
+    acceptance:
+    - The buyer and seller offer journey passes on Pixel 7 and iPhone 14 profiles.
+    - An offer queued offline is applied exactly once by the recipient vault after reconnect, and the UI never shows more than the reached sync state.
+    - No journey depends on an account, sign-up or login, and the relay is never the oracle for domain state.
+    - Every visited screen has zero serious or critical axe violations.
+    - Smoke subset finishes within 90 s and OBS-5 PWA budgets (LCP, INP, CLS, initial JS) hold and are written to reports/pwa-budgets.json.
+  import_export_backup_rollback:
+    requirements:
+    - The HTML report and JUnit XML are exportable CI artifacts; no user data is included.
+    - Playwright and axe versions are pinned in the lockfile (1.63.0, 4.14.0); upgrades are separate reviewed pull requests.
+    - Rollback is a git revert; there is no persistent state.
+    export: Playwright HTML report, JUnit XML, reports/e2e-axe.json, reports/pwa-budgets.json (classrup-pwa-budget-report/v1) and reports/e2e-history.json as CI artifacts; no user data.
+    backup: Test code in git; artifacts 14 days.
+    migration_rollback: Pinned Playwright 1.63.0 and axe 4.14.0; upgrades are separate pull requests and rolled back by git revert.
+    import: The suite imports the built PWA from PWA_DIST and seed data through public commands; no external data is imported.

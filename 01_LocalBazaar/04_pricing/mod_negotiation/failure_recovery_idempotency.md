@@ -1,35 +1,34 @@
-# PS-010-06 — failure recovery idempotency
+# PS-010-06 — Failure recovery and idempotency: Price negotiation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-010-06. **Owner:** [01_LocalBazaar/04_pricing/mod_negotiation](SPEC.md). **Implementing module:** 01_LocalBazaar/04_pricing/mod_negotiation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S04.M02 Price negotiation](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/pricing/negotiation` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for negotiation within 04_pricing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-010-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-010-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-010-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-010-06.R01** Commands are idempotent per CTR-IDM-001; inbound statements are idempotent by statementCid.
+- **PS-010-06.R02** In the seller vault, the Deal-linked hold (ttl 7 d, maxExpiresAt = Deal expiry), the Deal handoff, the Negotiation update and the signed confirmation commit in one transaction; if the hold or the handoff fails, nothing is confirmed and a signed close is sent instead.
+- **PS-010-06.R03** Conflicting signed promises are detected and frozen; no last-writer-wins for consent, money or inventory.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Idempotency-Key required on every command, kept 24 h in the vault; inbound statements deduplicated by cid; replayed accept returns the stored confirmation or accept_sent state.
+- **concurrency:** expectedRevision on every command; turn check by awaiting; unique live-chain index; the hold is serialized by the inventory module; simultaneous counters from both sides produce two signed rounds with the same number and freeze the chain in both vaults on exchange.
+- **retries:** Transport retries follow IDM-4: base 500 ms, cap 30 s, 6 attempts per burst; quarantined statements and signed closes are not retried against a closed chain.
+- **offline:** Counter and withdraw can be prepared offline; accept can be signed offline but the UI keeps it at accept_sent and states that the seller has not confirmed; expiry keeps running by each vault's own clock, with the 24 h grace for a decision in transit.
+- **partial failure:** If the confirmation cannot be delivered after the seller committed, the seller vault retries and the buyer sees accept_sent until a verified confirmation or graceUntil; the seller's hold lives as long as the Deal, and a buyer timeout close after the grace makes the seller cancel the Deal, which releases the hold.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-010-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-010-09.T05 | integration | PS-010-03.R02, PS-010-06.R02 | B accepts S's round 1; S vault holds and confirms | B shows accept_sent then accepted only after verified confirmation; S has a Deal-linked hold (ttl 7 d, maxExpiresAt = Deal expiry) and the Deal |
+| TEST-PS-010-09.T06 | integration | PS-010-03.R03, PS-010-06.R03 | S and B counter simultaneously | both vaults freeze on exchange, no hold taken, discard needed to continue |
+| TEST-PS-010-09.T09 | integration | PS-010-04.R02, PS-010-06.R03 | statements sent with relay down then up | states move prepared to transport_acknowledged to peer_accepted only on receipts; UI never shows more |
+| TEST-PS-010-09.T12 | chaos | PS-010-06.R01, PS-010-06.R03 | replay accept with same key; crash after hold before confirmation | one confirmation; hold and Negotiation consistent after restart |
+
+## Dependencies
+
+Module depends on: F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

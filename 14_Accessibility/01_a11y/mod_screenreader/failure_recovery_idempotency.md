@@ -1,35 +1,32 @@
-# PS-110-06 — failure recovery idempotency
+# PS-110-06 — Failure recovery and idempotency: Screen reader support
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-06. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M02 Screen reader support](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/screenreader` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-110-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-110-06.R01** Announcing the same message twice within 2 s results in one announcement.
+- **PS-110-06.R02** If a locale lacks a spoken-name pattern, the helper falls back to English patterns and logs a development warning, never to an empty string.
+- **PS-110-06.R03** Helpers are pure and return Result<string, AppError> - Ok for every valid typed input, Err(COMMERCE_MONEY_INVALID) for a malformed amount and Err(COMMERCE_CURRENCY_UNKNOWN) when the caller found no CurrencyDef - and components render the localized error text on Err, so a value is never silent and never spoken as raw minor-unit digits.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** announce() de-duplicates identical text per region within 2 s; helpers are pure functions.
+- **concurrency:** Single-threaded UI; the announcer serializes messages per region in a queue of at most 3.
+- **retries:** Not applicable; no network or storage operations.
+- **offline:** Fully offline; all patterns are bundled in the locale catalogs.
+- **partial failure:** spokenMoney has no separate Intl fallback: on Err from F14.S02.M02 or a missing CurrencyDef the component speaks the localized 'amount unavailable' or 'amount unavailable, unknown currency {code}' text, never minor-unit digits; an unknown SyncState value returns Err(VALIDATION_FAILED) and the component speaks the 'Needs attention' text.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-110-09.T04 | property | PS-110-03.R01, PS-110-03.R02, PS-110-03.R04, PS-110-06.R01, PS-110-07.R04 | random sequences of announce() calls (200 runs), plus 1 000 distinct polite messages with one coalesce key within 1 s, plus messages left queued for 11 s | at most one message per 2 s per region; assertive never interrupted by polite; duplicates dropped; queue never exceeds 3; at most 4 announcements for the 1 000 messages and the last is the '{count} updates' summary; stale messages dropped |
+| TEST-PS-110-09.T07 | unit | PS-110-06.R02, PS-110-06.R03 | missing locale pattern; unregistered code XYZ with spec null; BTC and ETH amounts with their CurrencyDef | English fallback with dev warning; Err(COMMERCE_CURRENCY_UNKNOWN) rendered as 'amount unavailable, unknown currency XYZ'; BTC and ETH spoken with 8 and 18 decimals; never empty and never raw minor-unit digits |
+
+## Dependencies
+
+Module depends on: F14.S02.M01, F14.S02.M02, F09.S03.M01, F09.S03.M03, F06.S02.M01, F15.S01.M01, CTR-UX-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

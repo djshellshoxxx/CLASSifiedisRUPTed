@@ -1,35 +1,46 @@
-# PS-007-07 — privacy retention abuse
+# PS-007-07 — Privacy, retention and abuse: Wanted listing type
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-007-07. **Owner:** [01_LocalBazaar/02_listing_types/mod_wanted](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_wanted. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S02.M02 Wanted listing type](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listing_types/wanted` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for wanted within 02_listing_types. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-007-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-007-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-007-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-007-07.R01** The maximum budget is private by default because revealing it weakens the buyer's negotiating position; it is never in an event payload.
+- **PS-007-07.R02** Wants follow RET-STANDARD with the listing; fulfilled and withdrawn wants are purged with the listing and leave a 180-day tombstone.
+- **PS-007-07.R03** Wants reveal interests, so the UI states that published keywords are public and linkable to the pseudonym.
+- **PS-007-07.R04** The module registers ExportSectionPort (section bazaar.wants), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every WantSpec field with its F10.S02.M02 class.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- WantSpec: P3 draft; category, keywords, minCondition and conditions of the want P0 when projected; maxBudget P3 unless budgetVisible; field classes annotated per F10.S02.M02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- WantSpec: RET-STANDARD; deleted 30 days after the listing is deleted.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-007-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Budget leakage lets sellers price up | budget excluded from events, from list_open results for relay-facing callers and from the projection unless budgetVisible; contract test checks allowlist |
+| T02 | Fake wants to pollute matching or harvest offers | cap of 100 open wants, matching requires signed projection and local block lists, relay hosting policy |
+| T03 | Sensitive interest disclosure through keywords | owner sees exactly what becomes public before publishing; pseudonymity is not anonymity notice |
+| T04 | Keyword stuffing | at most 10 keywords of 2..40 code points; duplicates rejected |
+
+**Abuse controls**
+- At most 100 open wants and 30 define commands per hour per vault.
+- Prohibited-item rules apply to keywords at publication (F01.S01.M03).
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-007-09.T10 | abuse | PS-007-07.R01, PS-007-07.R02, PS-007-07.R03 | scan events, logs and projection; delete listing | budget absent everywhere; tombstone after purge; public-keywords notice present |
+| TEST-PS-007-09.T18 | integration | PS-007-07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.wants present with field classes, maxBudget marked P3; deletion plan deletes own wants |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

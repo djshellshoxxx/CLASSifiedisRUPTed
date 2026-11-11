@@ -1,35 +1,49 @@
-# PS-125-02 — validation rules
+# PS-125-02 — Validation rules: Tenants
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-02. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M03 Tenants](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/tenants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the validation rules process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-125-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-125-02.R01** Tenant input is validated strictly; unknown fields are rejected with VALIDATION_FAILED and each violation lists its field path.
+- **PS-125-02.R02** Currency, locale and profile values are validated for format here and for registry membership by their owning modules at use time.
+- **PS-125-02.R03** Operator assignment rules protect the community from becoming unmanageable, and operators can be added only by an admin with an expiry.
+- **PS-125-02.R04** Bootstrap passes admin keys only through RoleBootstrapPort from the local CLI, which refuses an admin key while an active relay admin exists unless a break-glass reason of 20 to 500 code points is given, and admin grants on a bootstrapped relay go only through security.roleassignment.propose and approve.
+- **PS-125-02.R05** Discovery settings and the LocalSettings display preferences are validated against their enums and ranges, and an import replaces an invalid display preference with its default instead of failing.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | slug matches ^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$ | VALIDATION_FAILED |
+| V02 | displayName is 1..80 characters of plain text | VALIDATION_FAILED |
+| V03 | allowedCurrencies has 1..20 distinct codes matching ^[A-Z0-9]{2,12}$ | VALIDATION_FAILED |
+| V04 | defaultLocale matches ^[a-z]{2,3}(-[A-Z]{2})?$ and jurisdictionProfile is a ProfileRef object with only code matching ^[a-z0-9_-]{2,40}$ and an optional publisherId that is a valid did:key Ed25519 key | VALIDATION_FAILED |
+| V05 | each limit is within its documented range, maxUploadBytes and maxLocalAttachmentBytes ≤ 5242880 and maxEnvelopeBytes ≤ 262144 | VALIDATION_FAILED |
+| V06 | create and bootstrap name 1..10 distinct valid did:key Ed25519 operator keys; bootstrap names at most one admin key | VALIDATION_FAILED |
+| V07 | removing an operator assignment through this module leaves at least 1 active operator assignment of scope tenant:<id> | PLATFORM_TENANT_LAST_OPERATOR |
+| V08 | member writes to a tenant require status active (TenantPort stage of the bus); configure and assign_operator are allowed in active and suspended and refused in archived | PLATFORM_TENANT_SUSPENDED |
+| V09 | the relay hosts at most 50 tenants | PLATFORM_TENANT_LIMIT |
+| V10 | expectedRevision equals the stored revision | CONFLICT_REVISION |
+| V11 | slug is not in use by another tenant on this relay | PLATFORM_TENANT_SLUG_TAKEN |
+| V12 | an operator added through assign_operator carries expiresInMs ≤ 31536000000 (365 days), as F16.S01.M01 requires for operator roles | VALIDATION_FAILED |
+| V13 | a LocalSettings patch never contains vaultId and localLimits stay within their ranges | VALIDATION_FAILED |
+| V14 | limits.anonymousAllowed is boolean, anonymousMinRadiusKm is 25, 50 or 100, anonymousCenterLevel is L1 and maxDepth is 1..500 | VALIDATION_FAILED |
+| V15 | a LocalSettings patch sets a11yMotion only to system or reduced and moneyDisplay only to symbol, code or name (an import replaces any other value with the default instead) | VALIDATION_FAILED |
+| V16 | an adminKey or breakGlassReason reaches RoleBootstrapPort.bootstrap only from the local relay CLI; the port refuses an admin key while an active relay admin exists unless breakGlassReason has 20..500 code points | SECURITY_BOOTSTRAP_REFUSED |
+| V17 | platform.tenant.create over HTTP by an admin carries no adminKey or breakGlassReason; admin grants use security.roleassignment.propose and approve | VALIDATION_FAILED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-125-09.T01 | unit | PS-125-01.R01, PS-125-01.R02, PS-125-02.R01 | create a tenant with valid input | stored with revision 1, status active, defaults applied, schema classrup.platform.tenant/v1, operatorKeys read from F16 |
+| TEST-PS-125-09.T02 | unit | PS-125-02.R01, PS-125-02.R02, PS-125-02.R03 | each rule V01-V13 violated in turn | documented code returned and nothing stored; a malformed slug gets VALIDATION_FAILED and a used slug PLATFORM_TENANT_SLUG_TAKEN; fields list the offending paths |
+| TEST-PS-125-09.T29 | unit | PS-125-01.R06, PS-125-02.R05, PS-125-10.R03 | get on a new vault; update with a11yMotion reduced and moneyDisplay code; update with a11yMotion fast; import a record with moneyDisplay emoji and a11yMotion reduced | defaults system and symbol; the values stored and returned; VALIDATION_FAILED for fast; the import keeps reduced and replaces emoji with symbol |
+| TEST-PS-125-09.T30 | integration | PS-125-02.R04, PS-125-03.R01, PS-125-06.R02 | bootstrap a fresh relay with --admin and --operator; bootstrap a second tenant with --admin; again with --break-glass and a 10 code point reason, then a 30 code point reason; HTTP create by admin A1 with adminKey; assign_operator by A1 | first creates tenant, operator and admin in one transaction; second SECURITY_BOOTSTRAP_REFUSED with nothing created; 10 code points refused, 30 accepted as break_glass; HTTP create VALIDATION_FAILED; assign_operator calls security.roleassignment.assign with role operator and scope tenant:<id> and grants no admin |
+| TEST-PS-125-09.T31 | contract | PS-125-01.R07, PS-125-02.R01, PS-125-04.R01 | create T1 without jurisdictionProfile, configure { code: eu_de }, then { publisherId: did:key KP, code: eu_de }; then a plain string eu_de, { code: EU }, { publisherId: notakey, code: eu_de } and { code: eu_de, version: 2 } | defaults to { code: generic } and the F18.S01.M01 resolve stub returns the bundled generic profile; both valid references are stored, signed in tenant_config and carried in platform.tenant.configured unchanged; the four invalid values are refused with VALIDATION_FAILED and their field paths |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S02.M01, F15.S04.M01, F16.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,38 @@
-# PS-112-08 — observability performance
+# PS-112-08 — Observability and performance: Currency display
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-112-08. **Owner:** [14_Accessibility/02_internationalization/mod_currencies](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_currencies. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S02.M02 Currency display](SPEC.md) · **Scope:** MVP · **Code:** `packages/i18n/src/internationalization/currencies` · **Contracts:** [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the observability performance process for currencies within 02_internationalization. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-112-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-112-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-112-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-112-08.R01** CI reports golden-string and property test results; production builds send no metrics.
+- **PS-112-08.R02** Formatting one amount takes 0.05 ms or less at p95 after the formatter cache is warm.
+- **PS-112-08.R03** The module adds at most 3 KiB gzip to the initial bundle beyond the browser's built-in Intl and the F09.S03.M03 package.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- ci_i18n_money_golden_mismatch_total{locale, engine} (CI artifact)
+- ci_i18n_money_property_runs_total (CI artifact)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- dev-only console.warn i18n.money.fallback {currency, reason} — no amounts; removed from production builds.
+- dev-only console.warn i18n.money.selftest_disagreement {sample index} — no amounts; the BigInt path stays active for the session.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-112-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- formatMoney p95 ≤ 0.05 ms warm, ≤ 1 ms cold; parseMoneyInput p95 ≤ 0.05 ms.
+- Self-test of both formatting paths ≤ 10 ms at startup.
+- Bundle addition ≤ 3 KiB gzip.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-112-09.T12 | load | PS-112-08.R01, PS-112-08.R02, PS-112-08.R03 | 100 000 format calls warm and cold; bundle check | p95 ≤ 0.05 ms warm, ≤ 1 ms cold, ≤ 3 KiB gzip |
+
+## Dependencies
+
+Module depends on: F14.S02.M01, F09.S03.M01, F09.S03.M02, F09.S03.M03, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

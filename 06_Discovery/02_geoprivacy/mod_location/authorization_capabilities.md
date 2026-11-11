@@ -1,35 +1,39 @@
-# PS-048-05 — authorization capabilities
+# PS-048-05 — Authorization and capabilities: User location settings
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-05. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S02.M02 User location settings](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/geoprivacy/location` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-048-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-048-05.R01** Vault policy - only the unlocked local principal may set the home region or grant and revoke shares; incoming shares and revokes are accepted only from records F11.S01.M02 accepted, signed by the sharer and addressed to the principal.
+- **PS-048-05.R02** There is no relay role and no relay command in this module; relays carry the encrypted envelope as opaque ciphertext and cannot read, create or alter shares.
+- **PS-048-05.R03** A blocked party can never create an incoming share on this vault.
+- **PS-048-05.R04** Precise sharing and one-shot GPS require a granted privacy.consent.check for purpose location_precise (N6); without it the command is refused with PRECONDITION_FAILED.
+- **PS-048-05.R05** A granted location_precise consent only enables precise sharing and never creates, renews, extends or widens a share; every L3 or L4 share still needs its own explicit discovery.location_share.grant by the principal for exactly one counterparty with a TTL of at most 24 h, and this module takes part in the F10.S01.M01 T20 cross-module contract test that proves it.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| discovery.location_setting.write_own | principal | unlocked local principal; device_gps_once additionally needs location_precise consent |
+| discovery.location_setting.read_own | principal | unlocked local principal |
+| discovery.location_share.grant | principal | unlocked principal; location_precise consent granted; recipient not blockedWith; fewer than 5 active shares |
+| discovery.location_share.revoke | principal | unlocked principal and share.direction is outgoing |
+| discovery.location_share.receive | principal | record accepted by F11.S01.M02 with signer role sharer (sharerDid), addressed to the principal, sharer not blocked; covers receive and receive_revoke |
+| discovery.location_share.read_own | principal | unlocked local principal |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-048-09.T07 | abuse | PS-048-02.R03, PS-048-05.R01, PS-048-05.R03 | incoming share with a bad signature, wrong addressee, claimed expiry 5 days ahead, a record F11 did not accept, and one from a blocked sender | rejected, clamped to receipt time plus 24 h, or ignored; the blocked sender's statement is dropped silently and quarantined with no UI trace |
+| TEST-PS-048-09.T08 | abuse | PS-048-05.R02, PS-048-07.R01, PS-048-07.R02 | inspect relay-visible bytes, logs, events, and export of another user | only ciphertext visible to relay; no coordinates in logs or events; no shares in others' exports |
+| TEST-PS-048-09.T17 | integration | PS-048-05.R04 | grant L4 and set_home with device_gps_once while location_precise consent is not granted, then after inline consent | PRECONDITION_FAILED with nothing stored; both succeed after consent |
+| TEST-PS-048-09.T22 | contract | PS-048-05.R05, PS-048-05.R04 | cross-module contract test F10.S01.M01 T20 run with the real module: grant location_precise and advance the clock 1 h; then an explicit L4 grant to Q with ttl 2 h; then a grant input naming Q and R, a grant with ttl 25 h, and a second location_precise grant while the share is active | consent alone creates no LocationShare, no statement, no outbox entry and no network request; the explicit grant creates exactly one share to Q with effectiveExpiresAt at most creation plus 24 h; two recipients VALIDATION_FAILED; ttl 25 h DISCOVERY_SHARE_TTL_INVALID; the second consent grant leaves the share's effectiveExpiresAt unchanged |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

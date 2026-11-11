@@ -1,0 +1,296 @@
+id: F11.S02.M03
+scope: MVP
+summary: >-
+  Detects forked or equivocating signed statements, quarantines them and drives review. A fork is two valid
+  envelopes with the same chain key (author, signer key, stream) and seq but different cids, or a prev that
+  contradicts a stored neighbour; a commitment conflict is two verified statements whose registry subject key is the
+  same and whose digests differ under the registry predicate (consent, money, inventory, reservation, identity move);
+  a key-compromise conflict is one commitment statement that this vault first received inside the claimed compromise
+  window of its later revoked signer key.
+  F11.S01.M02 calls detect inside the receive transaction and quarantines every candidate there, and domain modules
+  check is_frozen synchronously before acting, so the freeze never fails open. Public projections follow an
+  origin-wins policy after a 7-day review window, based on the relays listed in the author's own portable identity
+  document, never on a relay binding. Commitments are never resolved by keeping one side: the vault principal can
+  only release the freeze locally (drop_all) or close it with a renegotiated statement every required signer signed,
+  with no last-writer-wins. In a vault the local principal reviews; on a relay the operator reviews public projections
+  only.
+responsibilities:
+  - Own ConflictRecord and open one when F11.S02.M02 returns fork, when F11.S01.M02 finds a commitment conflict in its promise index or quarantines a commitment statement signed during a claimed key compromise, or when F11.S03.M03 receives conflicting move statements.
+  - Classify each conflict as public_projection or commitment from the statement-type registry in F11.S01.M01 and take its subject key and predicate from there.
+  - Freeze commitment conflicts in the detecting transaction, emit federation.conflict.detected with the frozen subject IDs, and answer the synchronous is_frozen check that domain modules call before acting (fail closed).
+  - Apply the origin-wins policy to public projections after 7 days without review, keeping the candidate first received from a relay listed in the author's latest verified portable document, and record that this is a policy choice, not proof.
+  - Record resolution (keep one cid or drop_all for public projections; drop_all or superseded by a statement signed by every required signer for commitments) and emit federation.conflict.resolved with candidateCids, statementClass and freezeScope.
+  - Attribute forks to the author with an author-level limit of 20 open conflicts, after which the author's further envelopes are quarantined; forwarding relays are never blamed.
+  - Register the N6 privacy ports and pseudonymize retained conflict evidence only in its F10.S01.M04 DeletionPort pseudonymize step, the only call that receives the pseudonym, never on privacy.deletion.completed (N6a).
+non_responsibilities:
+  - Fork arithmetic on seq and prev (F11.S02.M02 decides; this module records and drives review).
+  - Storing, holding or purging envelopes and the promise index itself (F11.S01.M02 consumes the conflict events and changes record status).
+  - Negotiating the new terms of a frozen commitment (the owning domain module, for example F01.S04.M01 offers, F02 proposals, F09 deals).
+  - Peer suspension (F11.S03.M01 acts only on conflicts among statements signed by a pinned relay key).
+  - "Future: automated gossip of equivocation proofs between relays and cryptographic fork proofs published as signed statements."
+depends_on: [F11.S02.M02, F11.S01.M03, F11.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001]
+user_stories:
+  - As a user, when two conflicting signed acceptances arrive for the same offer, I see the dependent trade frozen with both statements side by side and I am asked to renegotiate or release it.
+  - As a relay operator, I can review a forked author's two listing versions, keep one and see that both signatures verify.
+  - As a reader of a public listing, I see a notice that the author published conflicting versions and that none is shown until review or the 7-day policy applies.
+  - As a domain module, I can ask synchronously whether a subject is frozen before I act, and I refuse to act if the answer is unavailable.
+edge_cases:
+  - Both fork candidates arrive in one batch; one ConflictRecord is opened containing both cids, not two.
+  - A third candidate for the same chain key and seq arrives later; it is appended to the same open record (maximum 5 candidates).
+  - Author legitimately re-signs a corrected record with a new seq that supersedes both and names their cids in ext.supersedes; the public_projection conflict becomes superseded.
+  - Commitment conflict where a consent was signed twice with different proposal digests; frozen, never auto-resolved even after 30 days, and resolve with keep is refused.
+  - A party tries to settle a commitment conflict alone by superseding with a statement only it signed; refused with FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE until every required signer has signed the new digest.
+  - A relay operator tries to resolve a commitment conflict; refused with FORBIDDEN (relays hold public projections only).
+  - The author publishes a new portable document listing a different relay while a public conflict is open; the listed relays used by origin-wins are recomputed before the 7-day decision.
+  - Both candidates contain identical payload bytes but different createdAt claims; still treated as a fork because the cids differ.
+  - A device key is revoked with revocationEffectiveFrom 3 days back and this vault accepted a consent signed by it 2 days ago; F11.S01.M02 opens a key_compromise conflict with that single candidate, the proposal is frozen, and only drop_all or a consent re-signed with a current key by every required signer closes it.
+  - An author forks 21 times through two honest relays; the 21st puts the author's further envelopes in author-level quarantine, and neither relay's health changes.
+ux:
+  screens:
+    - "Conflict review: two columns with each candidate's cid prefix, claimed time (labelled claim), relay receipt time if any (labelled evidence of that relay's clock), whether it came from a relay listed in the author's identity document, signer role verified and a diff of payload fields."
+    - "Frozen coordination banner on the affected proposal or deal: 'Conflicting signed statements received; actions paused. Renegotiate with everyone involved, or release this locally.'"
+    - "Relay operator queue: open public-projection conflicts by age with 7-day auto-resolution countdown."
+  states: [loading, empty, open, frozen, resolved, auto-resolved, superseded, check-unavailable]
+  a11y:
+    - Candidate columns are a table with row and column headers and the diff is not conveyed by colour alone.
+    - Keep and drop buttons are ≥ 44×44 px, name the cid prefix in their accessible names and ask for confirmation in a focus-trapping dialog.
+    - Status changes announced through an aria-live polite region.
+processes:
+  domain_schema:
+    requirements:
+      - A ConflictRecord stores the author, subject, conflict kind, class (public_projection or commitment), up to 5 candidate cids with provenance, status, resolution and freeze scope.
+      - Commitment ConflictRecords are P2, visible only to the vault owner, never leave the vault by themselves and appear in logs as IDs only; public_projection ConflictRecords are the only kind a relay holds and are visible to that relay's operator.
+      - Candidate claimed times are stored as claims and relay receipt times as evidence of that relay's clock only.
+      - Commitment conflict predicates and subject keys come from the F11.S01.M01 registry, and the promise index they are evaluated against is the FederatedRecord subject index owned by F11.S01.M02.
+      - A key_compromise ConflictRecord holds exactly one candidate, a commitment statement this vault first received inside [revocationEffectiveFrom, arrival of the revocation] of its signer key, freezes that statement's subject like a commitment conflict and closes only by drop_all or superseded by a statement re-signed with a current key by every required signer.
+    entities:
+      - name: ConflictRecord
+        schema: classrup.federation.conflict/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
+          - "kind: enum — fork_seq | prev_mismatch | commitment_conflict | key_compromise (one commitment statement signed during the claimed compromise window of a later revoked key; statementClass commitment)"
+          - "statementClass: enum — public_projection | commitment (relays hold public_projection only)"
+          - "author: string — did:key whose statements conflict"
+          - "chainKey?: json — {signerKey, stream} for fork kinds"
+          - "seq?: int — conflicting sequence number for fork kinds"
+          - "subjectRef?: string — registry subject key the commitment concerns, e.g. consent subject, reservation listing, move:subject"
+          - "candidates: json — 2..5 entries (exactly 1 for key_compromise) {cid, claimedAt, receivedAt, receivedFromRelay?, fromListedRelay: boolean, relayReceipt?}"
+          - "freezeScope: string[] — subject keys and aggregate IDs whose coordination is frozen; empty for public_projection"
+          - "requiredSigners?: string[] — commitment only: every principal the registry requires to sign a superseding statement"
+          - "status: enum — open | resolved | auto_resolved | superseded"
+          - "resolution?: json — {decision: keep|drop_all|origin_wins|superseded, keptCid?, decidedBy: principal|operator|policy, decidedAt, listedRelaysAtDecision?}"
+          - "supersededByCid?: string — renegotiated or corrected statement that closed the conflict"
+          - "detectedAt: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one open ConflictRecord per (tenantId, author, chainKey, seq) for fork kinds and per (tenantId, subjectRef) for commitment conflicts.
+          - A commitment ConflictRecord never reaches auto_resolved and never ends with decision keep.
+          - status resolved with decision keep implies statementClass public_projection and keptCid is one of the candidate cids.
+          - candidates always has at least 2 distinct cids, except kind key_compromise, which has exactly 1.
+          - A relay never stores a ConflictRecord with statementClass commitment.
+    sql: |
+      CREATE TABLE fed_conflict (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, kind TEXT NOT NULL, statement_class TEXT NOT NULL,
+        author TEXT NOT NULL, chain_key TEXT, seq INTEGER, subject_ref TEXT, status TEXT NOT NULL, detected_at TEXT NOT NULL,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX fed_conflict_open_fork ON fed_conflict(tenant_id, author, chain_key, seq) WHERE status = 'open' AND seq IS NOT NULL;
+      CREATE UNIQUE INDEX fed_conflict_open_subject ON fed_conflict(tenant_id, subject_ref) WHERE status = 'open' AND subject_ref IS NOT NULL;
+      CREATE INDEX fed_conflict_author_open ON fed_conflict(tenant_id, author) WHERE status = 'open';
+  validation_rules:
+    requirements:
+      - A conflict is opened only from verified envelopes, so unsigned or invalid statements can never freeze a trade.
+      - Resolution input is validated against the candidate set and the caller's authority.
+      - Each violation maps to one stable error code.
+      - A commitment conflict accepts only drop_all, which releases the freeze locally and cancels the dependent coordination, or superseded by a renegotiated statement whose digest every required signer of the registry entry has signed; keeping one candidate is refused.
+      - A relay operator may resolve only public_projection conflicts on that relay.
+    rules:
+      - "V01 | every candidate envelope has a verified signature (F11.S01.M03) and holds its registry role (for key_compromise: held it when accepted and its key was later revoked with this vault's first receipt inside the claimed compromise window); fork candidates share one chain key and seq, commitment candidates share one subject key and conflict under the registry predicate | FED_SIGNATURE_INVALID"
+      - "V02 | candidates contain ≥ 2 distinct cids and ≤ 5 entries, or exactly 1 entry for kind key_compromise | VALIDATION_FAILED"
+      - "V03 | public_projection resolve decision is keep with keptCid in candidates, drop_all, or superseded with a verified envelope of higher seq naming all candidate cids in ext.supersedes | FEDERATION_CONFLICT_INVALID_RESOLUTION"
+      - "V04 | statementClass commitment accepts only drop_all (local release of the freeze) or superseded with a renegotiated statement whose digest is signed by every required signer in the registry (all listed participants) | FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE"
+      - "V05 | expectedRevision equals current revision | CONFLICT_REVISION"
+      - "V06 | conflict is open when resolving | CONFLICT_STATE"
+      - "V07 | relay policy: an operator may resolve only statementClass public_projection | FORBIDDEN"
+      - "V08 | at most 20 open conflicts per author per tenant; a further detection puts the author's later envelopes in author-level quarantine instead of opening a record | FEDERATION_CONFLICT_AUTHOR_LIMIT"
+      - "V09 | is_frozen reads the local conflict store synchronously; when the store cannot be read callers receive this code and must refuse the action (fail closed) | DEPENDENCY_UNAVAILABLE"
+  workflow_state_machine:
+    requirements:
+      - Conflicts move only along the declared transitions and any other transition is refused with CONFLICT_STATE.
+      - Public projections may auto-resolve after 7 days by the origin-wins policy based on the author's portable identity document; commitments may only be released locally by drop_all or superseded by a statement every required signer signed.
+      - Resolution is recorded permanently and never rewrites the signed candidates.
+      - The freeze takes effect in the receive transaction that detects the conflict, and domain modules check is_frozen synchronously before acting, so the freeze never fails open while events are in transit.
+    machines:
+      - entity: ConflictRecord
+        initial: open
+        terminal: [resolved, auto_resolved, superseded]
+        transitions:
+          - "open -> resolved | federation.conflict.resolve: public_projection keep or drop_all by the local principal (vault) or the relay operator; commitment drop_all by the local principal only | records decision, emits federation.conflict.resolved with candidateCids, statementClass and freezeScope"
+          - "open -> auto_resolved | review window of 7 days elapsed and statementClass = public_projection | origin_wins: keeps the candidate first received (local clock) from a relay listed in the author's latest verified portable document, or drop_all when no candidate came from a listed relay; emits federation.conflict.resolved"
+          - "open -> superseded | verified superseding statement: for public_projection a higher seq naming all candidate cids in ext.supersedes; for commitment a renegotiated statement whose digest every required signer signed | records supersededByCid, emits federation.conflict.resolved"
+    timeouts:
+      - "Auto-resolution sweep every 15 min applies origin-wins to public_projection conflicts open longer than 7 days."
+      - "Reminder after 24 h and again after 7 days for open commitment conflicts; no automatic resolution and no automatic freeze release at any age."
+  commands_queries_events:
+    requirements:
+      - The module exposes detect, resolve and read operations plus the synchronous is_frozen check; detect is an internal vault or relay command and resolve is a review action.
+      - Each command emits its events in the same local transaction as the state change.
+      - The module consumes account move, identity document and peer suspension events to recompute the author's listed relays and review windows; retained evidence is pseudonymized only in its DeletionPort pseudonymize step, and privacy.deletion.completed is a notification only that never triggers pseudonymization (N6a).
+      - Domain modules that act on commitments (F01.S04.M01 offers, F02 proposals, F01.S03.M01 reservations, F08.S02.M02 consent, F09 deals, F11.S03.M03 moves) consume federation.conflict.detected and resolved and call is_frozen before acting; these are N-note obligations recorded for their owners.
+    commands:
+      - name: federation.conflict.detect
+        capability: federation.conflict.detect
+        input: "[vault-local or relay-local command, called by F11.S01.M02 inside the receive transaction or the revocation re-marking transaction and by F11.S03.M03 for moves] { kind, author, chainKey?, seq?, subjectRef?, candidates: Envelope[2..5] (Envelope[1] for key_compromise), statementClass }"
+        output: "{ conflictId, status: open, freezeScope, authorQuarantined: boolean }"
+        errors: [FED_SIGNATURE_INVALID, VALIDATION_FAILED, CONFLICT_STATE, FEDERATION_CONFLICT_AUTHOR_LIMIT]
+        emits: [federation.conflict.detected]
+        idempotent: true
+      - name: federation.conflict.resolve
+        capability: federation.conflict.resolve
+        input: "[vault-local command in the vault; relay command under relay policy for public_projection only] { conflictId, expectedRevision, decision: keep|drop_all|superseded, keptCid?, supersededByCid?, note? ≤ 280 }"
+        output: "{ conflictId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_CONFLICT_INVALID_RESOLUTION, FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE, FORBIDDEN]
+        emits: [federation.conflict.resolved]
+        idempotent: true
+    queries:
+      - name: federation.conflict.list
+        capability: federation.conflict.read
+        input: "{ status?: open|all, statementClass?, cursor?, limit ≤ 50 }"
+        output: "{ items: ConflictRecord[], nextCursor? }"
+        errors: []
+      - name: federation.conflict.get
+        capability: federation.conflict.read
+        input: "{ conflictId }"
+        output: "{ conflict: ConflictRecord, diff: FieldDiff[] }"
+        errors: [NOT_FOUND]
+      - name: federation.conflict.is_frozen
+        capability: federation.conflict.check
+        input: "[in-process synchronous vault query] { subjectRef }"
+        output: "{ frozen: boolean, conflictIds: uuidv7[] }"
+        errors: [DEPENDENCY_UNAVAILABLE]
+    events_produced:
+      - {type: federation.conflict.detected, privacy: P2, payload: "{ conflictId, kind, statementClass, author, chainKey?, seq?, subjectRef?, candidates: [{cid, receivedFromRelay?}], freezeScope, authorQuarantined } — IDs only"}
+      - {type: federation.conflict.resolved, privacy: P2, payload: "{ conflictId, decision, statementClass, candidateCids, keptCid?, supersededByCid?, freezeScope, decidedBy } — IDs only"}
+    events_consumed:
+      - {type: federation.account.moved, effect: "recompute the author's listed relays from the verified move and portable document for open public_projection conflicts of that author before auto-resolution"}
+      - {type: identity.portable_doc.published, effect: "origin received: refresh the listed relays of the author used by origin-wins for open public_projection conflicts"}
+      - {type: federation.peer.suspended, effect: "extend the 7-day review window of public_projection conflicts whose candidates came from that peer by 7 days"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): mark the deletion closed in local diagnostics; the deleted principal's DID in retained RET-EVIDENCE ConflictRecords was already replaced by the pseudonym in this module's DeletionPort pseudonymize step and the open commitment records of that principal's own vault were deleted in its purge step, so nothing is signed, pseudonymized, deleted or sent to a relay here"}
+    errors:
+      - "FEDERATION_CONFLICT_INVALID_RESOLUTION | 422 | no | decision does not match the candidates or lacks a verified superseding statement"
+      - "FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE | 409 | no | commitments accept only drop_all or a renegotiated statement signed by every required signer"
+      - "FEDERATION_CONFLICT_AUTHOR_LIMIT | 429 | no | the author has 20 open conflicts; its further envelopes are quarantined at author level"
+    example: |
+      federation.conflict.detect { kind: "fork_seq", author: "did:key:z6Mk...", chainKey: { signerKey: "did:key:z6MkDev...", stream: "pub" }, seq: 7, statementClass: "public_projection", candidates: [env1, env2] }
+      -> { conflictId: "0192f3b0-...", status: "open", freezeScope: [], authorQuarantined: false }   emits federation.conflict.detected
+      federation.conflict.resolve { conflictId: "0192f3b0-...", expectedRevision: 1, decision: "keep", keptCid: "sha256-Qm..." }
+      -> { conflictId: "0192f3b0-...", revision: 2, status: "resolved" }   emits federation.conflict.resolved
+      federation.conflict.is_frozen { subjectRef: "consent:bazaar_offer:0192f3c1-..." } -> { frozen: true, conflictIds: ["0192f3b4-..."] }
+      federation.conflict.resolve { conflictId: "0192f3b4-...", expectedRevision: 1, decision: "keep", keptCid: "sha256-C1..." } -> error FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE
+  authorization_capabilities:
+    requirements:
+      - In the vault only the unlocked local principal may resolve conflicts; on a relay only that relay's operator may, and only public_projection conflicts.
+      - Detection is an internal capability granted only to F11.S01.M02 and F11.S03.M03 code paths, never to external requests.
+      - Conflict records are visible only to the owner of the vault or the operator of the hosting relay; others receive NOT_FOUND.
+    capabilities:
+      - "federation.conflict.detect | local principal, system | vault policy: called from the verified receive pipeline or move verification; relay policy: called from the verified inbox pipeline"
+      - "federation.conflict.resolve | local principal, operator | vault policy: unlocked vault owner; relay policy: operator role of that relay for statementClass public_projection only, with an audit entry"
+      - "federation.conflict.read | local principal, operator | vault: own vault; relay: operator of that relay"
+      - "federation.conflict.check | local principal, system | in-process synchronous call by domain modules of the unlocked vault; never exposed to other principals"
+  failure_recovery_idempotency:
+    requirements:
+      - Detect is idempotent per (author, chain key, seq) or subject so repeated arrivals append at most new candidates and never open duplicates.
+      - Resolve requires expectedRevision and is idempotent on identical replay.
+      - A crash between opening a conflict and writing the event cannot lose the freeze because both are in one local transaction with the quarantine of the candidates.
+    idempotency: "Detect replay with the same candidates returns the existing conflictId; resolve replay with the same Idempotency-Key and body returns the stored response for 24 h."
+    concurrency: "Unique partial indexes enforce one open conflict per chain position or subject; resolve uses expectedRevision; two concurrent resolves produce one success and one CONFLICT_REVISION."
+    retries: "Callers retry only on DEPENDENCY_UNAVAILABLE; resolution is never auto-retried with a different decision."
+    offline: "Fully offline in the vault; later signed statements of the counterparties arrive through normal sync, and the UI shows the freeze as local committed state."
+    partial_failure: "If the freeze event cannot be delivered to a domain consumer it is retried from the outbox (CTR-EVT-001 EVT-6); safety does not depend on the event, because domain modules call is_frozen synchronously before acting and refuse with DEPENDENCY_UNAVAILABLE when the store cannot be read; the UI shows a warning when the outbox lag exceeds 60 s."
+  privacy_retention_abuse:
+    requirements:
+      - Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference participant statements by cid, never store plaintext and never exist on a relay.
+      - A relay operator sees only public projections and therefore resolves only public_projection conflicts on that relay.
+      - Attackers must not be able to freeze someone else's trade with unsigned or role-less statements.
+      - The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort) and classifies fields with F10.S02.M02; its DeletionPort pseudonymize step (pseudonymize(ctx{requestId, pseudonym}), the only call that receives the pseudonym) replaces the deleted principal's DID in retained RET-EVIDENCE conflict records, its purge step deletes the open commitment records of that principal's own vault, and privacy.deletion.completed is a notification only (N6a).
+      - Forks are attributed to the author; after 20 open conflicts the author's further envelopes are quarantined, and forwarding relays are never penalized for an author's equivocation.
+    data:
+      - "ConflictRecord commitment class: P2, vault only; logs carry IDs only."
+      - "ConflictRecord public_projection class: P1 to the relay operator; candidate cids, claimed and receipt times, author did."
+      - "Candidate payloads stay in F11.S01.M02 under their own class."
+    retention:
+      - "RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized in the DeletionPort pseudonymize step on account deletion."
+    threats:
+      - "T01 | Griefing: attacker injects a second statement to freeze a victim's trade | detect requires a verified signature by the victim's authorized key or a listed participant; role-less statements are quarantined by F11.S01.M02 and never open a conflict"
+      - "T02 | Equivocating author shows different histories to different peers | both versions retained as evidence; the author's chain marked forked; author-level limit of 20 open conflicts then author quarantine; forwarding relays are not blamed"
+      - "T03 | Operator abuse: resolving in favor of a friendly author | operators resolve public projections only; resolution recorded with decidedBy and note; both signed candidates remain; audit entry under RET-AUDIT"
+      - "T04 | Clock-claim manipulation to look earlier, or a relay claiming to be the author's home | claimed times labelled claims; origin-wins uses this receiver's receipt from a relay listed in the author's own portable document, never claimed time or a relay binding"
+      - "T05 | One party settling a double promise alone | commitments accept only drop_all (local release) or a renegotiated digest signed by every required signer (V04)"
+      - "T06 | Freeze failing open while the detected event is in transit | candidates quarantined in the detecting transaction; domain modules call is_frozen synchronously and fail closed"
+    abuse_controls:
+      - "At most 20 open conflicts per author per tenant; the 21st detection puts the author's further envelopes in author-level quarantine with no peer health signal."
+      - "Commitment freezes can always be lifted locally by the vault principal choosing drop_all, so no counterparty can lock a vault indefinitely."
+  observability_performance:
+    requirements:
+      - Open conflicts, age and resolution decisions are measured on relays and kept as local diagnostics in the vault.
+      - Detect and resolve meet write budget p95 ≤ 300 ms.
+      - An alert fires on a relay when any public_projection conflict is open longer than 8 days or more than 50 are open.
+    metrics:
+      - "classrup_federation_conflicts_total{outcome=detected|resolved|auto_resolved|superseded, class}"
+      - "classrup_federation_conflicts_open (gauge)"
+      - "classrup_federation_conflict_age_ms (gauge: oldest open)"
+      - "classrup_federation_conflict_check_unavailable_total"
+    logs:
+      - "warn federation.conflict.detected {conflictId, kind, statementClass, authorPrefix(16), correlationId} — IDs only, no payload or subject content."
+    budgets:
+      - "detect and resolve p95 ≤ 300 ms; list p95 ≤ 150 ms for ≤ 50 items; is_frozen p95 ≤ 2 ms."
+      - "Auto-resolution sweep of 1000 expired conflicts ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - A two-vault and two-relay harness reproduces fork, prev mismatch and commitment conflicts.
+      - Contract tests validate commands, events and ConflictRecord against the registry schemas.
+    fixtures: "Author X with chain seq 1..6 on (k1, pub); two seq-7 envelopes E7a (received from relay R listed in X's portable document) and E7b (from unlisted relay U); two consents C1 and C2 by signer S on proposal digest D with required signers S and T; reservations, deal and move pairs for every registry predicate; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R02 | detect with E7a and E7b | one open ConflictRecord with 2 candidates, claimed and receipt times stored separately"
+      - "T02 | unit | 02.R01,02.R03 | detect with an unsigned or role-less candidate; with 1 candidate | FED_SIGNATURE_INVALID or VALIDATION_FAILED; nothing opened"
+      - "T03 | property | 03.R01,03.R03 | random command sequences on one conflict | only declared transitions succeed; terminal states never change; candidates never altered"
+      - "T04 | integration | 03.R02,04.R03 | public conflict untouched for 7 days with E7a from listed relay R and E7b from unlisted U; second case with neither from a listed relay | auto_resolved origin_wins keeps E7a; second case resolves drop_all; events emitted"
+      - "T05 | integration | 03.R02,02.R04 | commitment conflict C1 vs C2 for 30 days, then resolve keep C1 | still open after 30 days; freezeScope contains the proposal; keep returns FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE"
+      - "T06 | integration | 03.R03,04.R01 | author publishes E8 with ext.supersedes naming both cids | conflict superseded with supersededByCid; resolved event emitted"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | detect, resolve and is_frozen | outputs and events validate against registry schemas; resolved carries candidateCids, statementClass and freezeScope"
+      - "T08 | integration | 04.R03 | account moved event and a new portable document for the author while a public conflict is open | listed relays recomputed before the 7-day decision"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | non-operator resolves on relay; external request calls detect; third party reads conflict | FORBIDDEN or NOT_FOUND; operator resolution logged with decidedBy"
+      - "T10 | abuse | 07.R03,01.R04 | attacker signs a statement as a non-participant for a victim's proposal | quarantined by F11.S01.M02 V14, no conflict opened, trade not frozen"
+      - "T11 | integration | 06.R01,06.R02,02.R02 | replay detect with same candidates; two concurrent resolves | same conflictId; one success and one CONFLICT_REVISION"
+      - "T12 | chaos | 06.R03,04.R04 | kill process between conflict write and event; consumer unavailable for 90 s; domain module tries to act during that window | freeze and candidate quarantine committed with the detection; the domain action is refused through is_frozen; event delivered after restart; UI warning shown above 60 s lag"
+      - "T13 | integration | 07.R02,02.R05 | relay harness: operator calls resolve on a public conflict and on a commitment conflict id injected into the relay store; inspect relay storage | first succeeds with audit; second FORBIDDEN; relay holds no commitment record and no plaintext"
+      - "T14 | load | 08.R01,08.R02 | 1000 conflicts detected and resolved in a minute | p95 ≤ 300 ms and gauges exported"
+      - "T15 | e2e | 01.R02,03.R02 | two vaults receive conflicting acceptances; user opens review screen | trade paused banner visible, labels claim vs evidence, only the owner sees the record, axe zero serious issues"
+      - "T16 | unit | 09.R01,09.R03 | traceability tool run | every PS-086 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault and relay restore | conflicts round trip with open ones still freezing; imported candidates re-verified"
+      - "T18 | unit | 02.R04 | commitment conflict on D: supersede with a renegotiated statement signed only by S; then signed by S and T; separately drop_all | first FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; second superseded; drop_all resolved and the freeze released locally only"
+      - "T19 | unit | 01.R04,04.R04 | each registry predicate: consents on one subject with different digests, overlapping reservations to different holders, two deal obligation digests, two moves with different toRelay, plus non-conflicting pairs | detect is called exactly for the conflicting pairs and freezeScope names the subject"
+      - "T20 | integration | 03.R04 | a domain module calls is_frozen while the conflict store is unavailable | DEPENDENCY_UNAVAILABLE and the domain action is refused (fail closed)"
+      - "T21 | integration | 08.R03 | relay with one public conflict open 8 days and 1 minute, then 51 open conflicts | both alerts fire"
+      - "T22 | abuse | 07.R05 | malicious author forks 21 times, each fork delivered through two honest relays | the 21st returns FEDERATION_CONFLICT_AUTHOR_LIMIT and quarantines the author's later envelopes; detected events carry no peer blame and no peer health changes"
+      - "T23 | unit | 07.R04,07.R01,04.R03 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone; log capture for a commitment conflict | sections and plans returned; the pseudonymize step replaces the author DID in retained records with exactly that pseudonym and a second run changes nothing; the purge step deletes the principal's open commitment records; privacy.deletion.completed changes no record; logs hold IDs only"
+      - "T24 | integration | 01.R05,02.R02 | F11.S01.M02 re-marks a consent signed during a claimed compromise and calls detect kind key_compromise with that one envelope; detect key_compromise with 2 envelopes; resolve keep; resolve with a consent re-signed by every required signer with current keys | record open with 1 candidate and freezeScope naming the proposal, is_frozen true; 2 envelopes VALIDATION_FAILED; keep FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; the re-signed consent supersedes it"
+    acceptance:
+      - All tests T01–T24 pass in CI.
+      - No commitment (consent, money, inventory, identity) conflict is ever resolved by keep, last-writer-wins, timeout or a unilateral supersede.
+      - Forged role-less statements cannot freeze a trade, and is_frozen fails closed (abuse and integration tests).
+  import_export_backup_rollback:
+    requirements:
+      - A vault export contains conflict records with candidate cids and decisions; the candidate envelopes themselves are exported by F11.S01.M02.
+      - Import re-verifies every candidate signature and keeps open conflicts open, restoring their freeze before any domain action is allowed.
+      - Schema changes follow expand/contract and v1 stays readable for 180 days.
+    export: "Section federation.conflicts in classrup-export/v1 through the ExportSectionPort, one line per ConflictRecord (schema classrup.federation.conflict/v1)."
+    import: "Candidates are re-verified; conflicts whose candidates fail verification import as resolved with decision drop_all and a warning in the import report; open conflicts re-emit federation.conflict.detected and is_frozen answers true for their subjects immediately."
+    backup: "Vault export is the primary backup (IOX-6); relay conflicts are covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1 (chainKey, requiredSigners, fromListedRelay are new optional members); rollback to the previous release is safe because new optional fields are ignored and open conflicts stay open."

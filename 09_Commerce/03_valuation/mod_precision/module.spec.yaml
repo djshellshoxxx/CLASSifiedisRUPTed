@@ -1,0 +1,171 @@
+# F09.S03.M03 Money precision (ADR-0015). Pure library implementing CTR-MNY-001.
+id: F09.S03.M03
+scope: MVP
+summary: >-
+  A dependency-free library that implements the Money type of CTR-MNY-001. It represents amounts as bigint
+  minor units, parses and serializes them without locale or floating point, rounds HALF_EVEN exactly once
+  per conversion, converts through rational FX quotes, and splits totals with the largest-remainder method so
+  allocations always sum exactly. Every commerce, barter and auction module imports it; it has no storage,
+  network or clock access.
+responsibilities:
+  - Define Money { amount, currency } with a bigint core and the canonical JSON form (decimal integer string of minor units plus currency code).
+  - Provide exact add, subtract, negate, compare, sign and sum with currency-mismatch protection.
+  - Provide rational conversion using FX quote {num, den} and minor-unit exponents with HALF_EVEN rounding applied once at the end, plus FLOOR for fee caps.
+  - Provide allocation by integer weights (largest remainder) and even split so that parts sum exactly to the total.
+  - Provide neutral decimal-string parse and format for a given decimals count, never locale aware.
+  - Provide the pure per-currency cap maxAmount(currencyDef) = 10^(10 + decimals) minor units (10^10 major units), bounded by the 38-digit limit, used by every module that caps a Money amount.
+non_responsibilities:
+  - Currency definitions, decimals and the allowed-currency list (F09.S03.M01 currency registry).
+  - Obtaining, storing or expiring FX quotes (F09.S03.M02 rates).
+  - Locale-aware display of amounts, grouping separators and symbols (F14 localization).
+  - "Future: pluggable rounding modes beyond HALF_EVEN and FLOOR, and arbitrary-precision decimal types for non-monetary quantities."
+depends_on: [CTR-MNY-001, CTR-ERR-001, CTR-TST-001]
+user_stories:
+  - As a developer, I can add, compare and convert Money values knowing that no floating point value is ever involved.
+  - As a barter participant, I see a fair split of a compensation amount among several parties that adds up to exactly the agreed total.
+  - As an auditor, I can recompute any displayed conversion from the pinned quote and get the identical minor-unit result.
+edge_cases:
+  - Conversion of 1 JPY (0 decimals) to BTC (8 decimals) with a tiny rate rounds to 0 and is reported as rounded to zero, not as an error.
+  - Exactly half-way values (x.5 minor units) round to the nearest even integer, both for positive and negative amounts.
+  - An amount string with a leading plus, leading zeros, a decimal point or exponent notation is rejected as invalid input.
+  - Operands with different currencies passed to add or compare throw a programmer error and never coerce silently.
+  - Allocation of 100 minor units over weights [1, 1, 1] returns [34, 33, 33] in a stable index order; allocation over all-zero weights is refused.
+  - A product that exceeds the 38-digit bound after multiplication in intermediate bigint arithmetic is computed exactly and only the final result is bound-checked.
+ux:
+  notes: "Headless library. No screens; the neutral formatter output is consumed by F14 localized components. Formatter output is ASCII digits with '.' as decimal separator and never rounds."
+processes:
+  domain_schema:
+    requirements:
+      - "Money is { amount: decimal integer string of minor units with optional leading '-', currency: registry code } on the wire and a bigint plus currency code in memory (MNY-1)."
+      - The absolute value of any amount is limited to 38 decimal digits (fits an unsigned 128-bit integer) so storage in SQLite text columns and cross-language vectors stay unambiguous.
+      - The library owns no persistent entity; it defines the value types Money, Rational, RoundingMode and AllocationResult only.
+      - "maxAmount(currencyDef) returns Money { amount: 10^(10 + decimals), currency: code } - 10^10 major units in minor units - from the caller-supplied F09.S03.M01 CurrencyDef { code, decimals }, because this library has no registry access and F09.S03.M01 depends on it; when decimals exceeds 27 the result is the 38-digit bound 10^38 - 1, and amounts are capped with amount <= maxAmount."
+    entities: []
+    note: "Library module. It owns no entity; value types are Money, Rational {num, den as positive bigint}, RoundingMode (HALF_EVEN or FLOOR) and AllocationResult {parts: Money[], remainderIndexes: int[]}."
+  validation_rules:
+    requirements:
+      - Parsing accepts only the canonical grammar and rejects everything else with COMMERCE_MONEY_INVALID, including whitespace, plus signs, leading zeros, decimal points and exponents.
+      - Conversion and allocation validate their rational and weight inputs before computing.
+      - Mixed-currency arithmetic is a programmer error that throws (MNY-6) rather than returning a Result.
+    rules:
+      - "V01 | amount string is an optional '-' then 1 to 38 digits without leading zeros (a lone 0 is allowed) and is not '-0' | COMMERCE_MONEY_INVALID"
+      - "V02 | rate num and den are positive integers of at most 40 digits each | COMMERCE_MONEY_INVALID"
+      - "V03 | allocation weights are non-negative integers, at most 1000 entries, with sum greater than 0 | COMMERCE_MONEY_ALLOCATION_INVALID"
+      - "V04 | decimal-string parse has at most the currency decimals fractional digits unless an explicit rounding mode is given | COMMERCE_MONEY_PRECISION_LOSS"
+      - "V05 | result magnitude is at most 38 digits | COMMERCE_MONEY_OVERFLOW"
+      - "V06 | rounding mode is HALF_EVEN, or FLOOR only for fee-cap operations | COMMERCE_MONEY_INVALID"
+      - "V07 | maxAmount receives a currencyDef whose code is a non-empty registry code and whose decimals is an integer from 0 to 36 (the F09.S03.M01 range) | COMMERCE_MONEY_INVALID"
+  workflow_state_machine:
+    requirements:
+      - The library is stateless and pure; every function returns the same output for the same input with no clock, random or I/O access.
+      - Rounding happens exactly once, at the end of a conversion or percentage computation, never between intermediate steps (MNY-3).
+      - Operations never mutate their inputs; Money values are immutable.
+    machines: []
+    note: "Pure functions only; no lifecycle. Behavior is specified by the property tests in process 09."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - The public API is the TypeScript package surface listed in the note; there are no relay commands, queries or events.
+      - Error codes returned by Result-style functions are stable and listed in the errors table; mismatched currencies throw.
+      - The package exposes language-neutral test vectors (JSON) so non-TypeScript clients can verify identical results.
+    commands: []
+    queries: []
+    note: >-
+      Library module. Package surface (packages/commerce/src/valuation/precision): money(amount, currency), parseMinor(str),
+      parseDecimal(str, decimals, mode?), formatDecimal(money, decimals), add, sub, neg, cmp, sum, convert(money, quote, dbExp, dqExp, mode?),
+      percentBps(money, bps, mode?), capFee(money, capMoney) (FLOOR), allocate(money, weights), splitEven(money, n),
+      maxAmount(currencyDef: {code, decimals}) -> Result<Money> (10^(10 + decimals) minor units, at most 10^38 - 1; callers pass the
+      F09.S03.M01 CurrencyDef and cap with amount <= maxAmount).
+      No relay commands, queries or events exist for this module.
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "COMMERCE_MONEY_INVALID | 422 | no | amount, rate or rounding input is malformed"
+      - "COMMERCE_MONEY_ALLOCATION_INVALID | 422 | no | weights are empty, negative, oversize or sum to zero"
+      - "COMMERCE_MONEY_PRECISION_LOSS | 422 | no | decimal input has more fractional digits than the currency allows"
+      - "COMMERCE_MONEY_OVERFLOW | 422 | no | result exceeds 38 digits"
+    example: |
+      convert({ amount: "12345", currency: "EUR" }, { base: "EUR", quote: "JPY", rate: { num: "16312", den: "100" } }, 2, 0)
+      => { amount: "20137", currency: "JPY" }   // 12345 * 16312 * 10^0 / (100 * 10^2) = 20137.164, HALF_EVEN once
+      allocate({ amount: "100", currency: "EUR" }, [1, 1, 1]) => parts ["34", "33", "33"]
+      maxAmount({ code: "EUR", decimals: 2 }) => { amount: "1000000000000", currency: "EUR" }   // 10^12 minor units = 10^10 EUR
+      maxAmount({ code: "ETH", decimals: 18 }) => { amount: "10000000000000000000000000000", currency: "ETH" }   // 10^28
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization; callers authorize before using it.
+      - It has no network access, no storage access and no ambient authority, so it cannot leak data by construction.
+      - Importing the package into a client bundle adds no more than 12 KiB gzip.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - All functions are deterministic and idempotent; repeated calls with the same input return identical results.
+      - There is no shared mutable state, so concurrent callers cannot interfere.
+      - Failure is signalled with Result errors for input problems and thrown errors only for programmer mistakes.
+    idempotency: "Pure functions; any call is trivially idempotent."
+    concurrency: "No shared state. Safe from any number of workers and the UI thread."
+    retries: "Not applicable; callers never retry a deterministic failure."
+    offline: "Fully offline; runs in the browser, service worker and relay identically."
+    partial_failure: "No partial results: a function either returns a complete value or an error."
+  privacy_retention_abuse:
+    requirements:
+      - The library holds no personal data and never logs inputs.
+      - Error messages carry only the error code and the offending argument position, never amounts.
+      - Oversized inputs are bounded (38 digits, 1000 weights) so hostile payloads cannot cause denial of service through bigint growth.
+    data:
+      - "No data stored. Money values passed in are owned and classified by calling modules."
+    retention:
+      - "None; no persistence."
+    threats:
+      - "T01 | Hostile huge numbers cause CPU exhaustion | Input digit limit 38, rate digit limit 40, weights limit 1000; limits checked before arithmetic"
+      - "T02 | Silent float coercion changes amounts | Lint rule bans Number, parseFloat and Math in the package; property tests compare against an independent bigint oracle"
+      - "T03 | Cross-language rounding divergence | Shared JSON vectors executed in every client implementation"
+    abuse_controls:
+      - "Digit and weight bounds enforced at the boundary; callers apply request rate limits (CTR-OBS-001 budgets)."
+  observability_performance:
+    requirements:
+      - The library emits no metrics itself; callers measure around it.
+      - Single conversion or allocation of 1000 weights completes within the stated budgets on a mid-range phone.
+      - Test and vector counts are reported by CI.
+    metrics:
+      - "classrup_commerce_precision_vectors_total (CI gauge: number of golden vectors executed)"
+    logs:
+      - "No runtime logs. CI logs the seed of every failing property test."
+    budgets:
+      - "convert p99 ≤ 0.05 ms; allocate over 1000 weights p99 ≤ 2 ms on a 2022 mid-range Android device."
+      - "Package size ≤ 12 KiB gzip."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Property tests run at least 10 000 cases per property with a recorded seed.
+      - Golden vectors are shared between implementations and checked in CI.
+    fixtures: "packages/commerce/test/vectors/money.json with at least 300 vectors: half-way cases, negative amounts, zero-decimal, 18-decimal, 40-digit rates, allocation ties."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | parse valid and invalid strings including '+1', '01', '1.0', '1e3', '-0' and a 39-digit value | valid values round-trip; each invalid input returns COMMERCE_MONEY_INVALID or COMMERCE_MONEY_OVERFLOW"
+      - "T02 | unit | 02.R02,02.R03,01.R03 | invalid rate, empty weights, all-zero weights, mixed currencies | documented error returned or programmer error thrown"
+      - "T03 | property | 03.R02,04.R02 | 10 000 random (amount, rate, exponents) conversions compared with an independent oracle using exact fractions | results identical and rounding applied exactly once"
+      - "T04 | property | 03.R02 | conversion round trip A to B to A with the same quote | absolute error ≤ floor(1/(2r) + 1/2) minor units where r is the effective minor-unit rate"
+      - "T05 | property | 03.R03 | 10 000 random allocations over random weights | parts sum exactly to total, each part within 1 minor unit of the ideal share, ties resolved to lowest index"
+      - "T06 | property | 03.R02 | HALF_EVEN symmetry | round(-x) equals -round(x) and half-way values go to the even neighbour"
+      - "T07 | unit | 03.R01,06.R01,06.R02 | same input executed twice, inputs frozen and compared after the call | identical outputs, inputs unmodified"
+      - "T08 | contract | 04.R01,04.R03,09.R03 | run the 300 JSON vectors in TypeScript and in the reference Python checker | all outputs identical"
+      - "T09 | unit | 04.R02 | trigger each error path | code and HTTP mapping match the errors table"
+      - "T10 | unit | 05.R01,05.R02,07.R01 | static analysis of the package imports and call graph | no fetch, fs, Date or Math.random usage and no logging calls"
+      - "T11 | property | 06.R03,07.R02,07.R03 | oversized inputs of 5 000 digits and 100 000 weights | rejected within 1 ms with documented error and no amounts in the message"
+      - "T12 | load | 08.R02,05.R03 | 1 000 weights allocation and bundle size check | p99 ≤ 2 ms and gzip size ≤ 12 KiB"
+      - "T13 | unit | 08.R01,08.R03,09.R01 | CI report generation | vector count and seeds are present in the CI artifact; traceability tool maps every requirement to a passing test"
+      - "T14 | unit | 01.R01,09.R02 | lint rule run on a file using parseFloat | lint fails the build"
+      - "T15 | unit | 10.R01,10.R02,10.R03 | publish vectors file and load it from a fresh checkout and the previous major | vectors load, versions are recorded and backward compatible"
+      - "T16 | property | 01.R04,02.R01 | maxAmount for decimals 0 to 36 including EUR 2, JPY 0, BTC 8, ETH 18, USDC 6 and a 36-decimal asset, plus decimals -1, 37 and 2.5 | 10^(10 + decimals) for decimals up to 27 and 10^38 - 1 above, always a canonical amount of at most 38 digits that parseMinor accepts; out-of-range decimals return COMMERCE_MONEY_INVALID; identical results in the shared JSON vectors"
+    acceptance:
+      - Every property test passes with at least 10 000 cases and the shared vectors give identical results in all implementations.
+      - Allocation never produces parts that fail to sum to the total in any generated case.
+      - No floating point type, function or literal is present in the package (lint and static analysis).
+  import_export_backup_rollback:
+    requirements:
+      - The library has no data to export or import; the canonical Money JSON form is the interchange format used by other modules' export sections.
+      - The package version and golden vector file are versioned together and published with each release.
+      - A rounding behavior change is a breaking major change and requires a new vector set and an ADR.
+    export: "No data. Money values are exported by owning modules as { amount: string, currency: string } per CTR-MNY-001 and re-parsed with parseMinor on import."
+    import: "Import of Money values from other modules calls parseMinor and rejects invalid strings with COMMERCE_MONEY_INVALID."
+    backup: "Nothing to back up; source and vectors live in the repository."
+    migration_rollback: "Semantic versioning; any change to rounding results is a major version. Rollback is a dependency pin to the previous release because there is no stored state."

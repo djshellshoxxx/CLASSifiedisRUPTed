@@ -1,35 +1,42 @@
-# PS-069-08 — observability performance
+# PS-069-08 — Observability and performance: Noncustodial payment claims
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-08. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M01 Noncustodial payment claims](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/noncustodial` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the observability performance process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-069-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-069-08.R01** The PWA sends no telemetry (OBS-7); counters and error logs stay in local diagnostics that the user can export.
+- **PS-069-08.R02** Local command latency meets the budgets below on a mid-range phone.
+- **PS-069-08.R03** Quarantine and fork counts are visible to the user in local diagnostics.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- Local diagnostics: classrup_commerce_deals_total{outcome=opened|completed|cancelled|expired|expired_partial}
+- Local diagnostics: classrup_commerce_claims_total{method,status}
+- Local diagnostics: classrup_commerce_statements_total{outcome=applied|dispatched|buffered|quarantined|duplicate|dropped|fork}
+- Local diagnostics: classrup_commerce_quarantine_entries (gauge) and classrup_commerce_quarantine_bytes (gauge)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- info claim.acknowledged {claimId, dealId, correlationId} — no amounts, notes or txRef.
+- warn statement.quarantined {cid, reason, correlationId}.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- open, claim, acknowledge p95 ≤ 120 ms local commit on a 2022 mid-range Android device.
+- Ingest of a statement batch of 100 ≤ 2 s including signature verification (Ed25519 verify ≤ 5 ms each) and ContextTermsPort checks.
+- Expiry sweep over 10 000 claims ≤ 1 s.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-069-09.T15 | load | PS-069-08.R02 | 10 000 claims and a batch of 100 statements | p95 ≤ 120 ms commit; batch ≤ 2 s; sweep ≤ 1 s |
+| TEST-PS-069-09.T16 | integration | PS-069-08.R01, PS-069-09.R01 | local diagnostics and traceability run | no network telemetry sent; every PS-069 requirement maps to a passing test |
+| TEST-PS-069-09.T32 | integration | PS-069-08.R03 | quarantined, buffered and forked statements produced, then diagnostics opened | commerce.statement.diagnostics and the diagnostics screen show counts by reason |
+
+## Dependencies
+
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

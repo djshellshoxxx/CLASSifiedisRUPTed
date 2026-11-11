@@ -1,35 +1,114 @@
-# PS-102-01 — domain schema
+# PS-102-01 — Domain schema: Email delivery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-01. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F13.S01.M02 Email delivery](SPEC.md) · **Scope:** MVP · **Code:** `packages/notify/src/delivery/email` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the domain schema process for email within 01_delivery. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-102-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-102-01.R01** A relay EmailAddress service copy stores the normalized address encrypted at rest with a lookup hash, the locale, status, verification token hash and expiry, bounce counters, the creating device key and the registered consent reference; under the CTR-PRV-001 PRV-10 notification channel exception only the channel identifiers (address and locale) reach the single relay named in the granted notify_email consent (F10.S01.M01), which stores them P3-equivalent, uses them only for the verification email and content-free notifications (CTR-EVT-001 EVT-4), never federates or exports them, and erases both within 24 h of removal or a registered withdrawal.
+- **PS-102-01.R02** An EmailDelivery stores the delivery kind, the template key from the fixed email registry, status, attempts, the transport Message-ID, the VERP tag and times, never the address in clear, never a notification category and never any user content.
+- **PS-102-01.R03** Emails carry a generic subject and body from the fixed email template registry (notify.tpl.email.verify, notify.tpl.email.notice, notify.tpl.email.security_notice, notify.tpl.email.activity and notify.tpl.email.digest, at most 12 templates), a link to the app origin without identifiers, and RFC 8058 one-click unsubscribe headers whose URL comes from UnsubscribeTokenPort of F13.S02.M03.
+- **PS-102-01.R04** The vault email target is the authoritative user-owned record - the cleartext normalized address (P3), locale, relayId, the relay emailAddressId and a status mirror - while the relay copy is a disclosed service copy, sealed to the relay key in transit, never authoritative, and rebuilt from the vault record after a relay loss or a vault import.
+- **PS-102-01.R05** The locale in notify.email.add is a copy of F15.S04.M03 LocalSettings.defaultLocale taken by notify.email.enable and sent only inside the sealed add body after privacy.consent.check {purpose notify_email, relayId} returned granted (N6), and every email template declares only the parameters app origin link, verification link and unsubscribe URL, never a parameter carrying user content or Money.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### EmailAddress
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.notify.email_address/v1` · storage **relay** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — emailAddressId, primary key |
+| tenantId | uuidv7 — relay tenant scope |
+| userDid | did:key — owner principal |
+| createdByKeyId | string — device key ID that signed the add request |
+| addressCipher? | bytes — AES-256-GCM encrypted normalized address, ≤ 254 characters plaintext; absent after erasure |
+| addressHash | bytes — HMAC-SHA256 with a relay secret, for per-(user, address) limits and uniqueness |
+| locale? | string — BCP 47 locale from the sealed add request (the vault's copy of LocalSettings.defaultLocale), used only to render the generic templates; a PRV-10 channel identifier, absent after erasure |
+| status | enum — unverified \| verified \| bouncing \| removed |
+| consentId | uuidv7 — email ChannelConsent registered at this relay (F13.S02.M03); must be granted |
+| consentStatementCid | string — cid of the registered channel consent statement |
+| verifyTokenHash? | bytes — SHA-256 of a 128-bit token |
+| verifyExpiresAt? | timestamp — issued time + 24 h |
+| hardBounces72h | int — authenticated hard bounces in the last 72 hours |
+| softBounces7d | int — authenticated soft bounces in the last 7 days |
+| verifiedAt? | timestamp — relay clock |
+| removedAt? | timestamp — relay clock |
+| createdAt | timestamp — relay clock, RFC 3339 UTC |
+| revision | int — CTR-ID-001 ID-4 |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most one non-removed address per user and relay.
+- status verified implies verifiedAt is set and a granted email ChannelConsent is registered at this relay.
+- The cleartext address is never returned by a query, event or log; the owner sees only a masked form such as a***@example.org.
+- status removed implies addressCipher and locale are absent within 24 hours of removedAt (CTR-PRV-001 PRV-10).
+
+### EmailAddress
+
+Schema `classrup.notify.email_target/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
+
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — emailTargetId, primary key |
+| vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot) |
+| userDid | did:key — local principal |
+| relayId | string — canonical self-certifying relayId (F15.S02.M01) of the email relay |
+| relayHost | string — display hint only |
+| address | string — normalized address, ≤ 254 characters, P3, vault only |
+| locale | string — BCP 47 copy of F15.S04.M03 LocalSettings.defaultLocale taken at enable; sent to the relay only in the sealed add after notify_email consent |
+| emailAddressId? | uuidv7 — relay copy once accepted |
+| status | enum — pending \| unverified \| verified \| bouncing \| removed (mirror of the relay copy) |
+| consentId | uuidv7 — local email ChannelConsent for relayId |
+| lastStatusSyncAt? | timestamp — local clock of the last notify.email.get_mine result |
+| endedAt? | timestamp — local clock of removal |
+| revision | int — CTR-ID-001 ID-4 |
+
+**Invariants**
+- At most one non-removed email target per relayId.
+- status mirrors the relay copy only as last synced; the UI labels it with lastStatusSyncAt.
+- status other than pending implies privacy.consent.check for notify_email at relayId returned granted when the address was sent.
+
+### EmailDelivery
+
+Schema `classrup.notify.email_delivery/v1` · storage **relay** · privacy **P2** · retention **RET-SHORT**
+
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — deliveryId, primary key |
+| emailAddressId | uuidv7 — ref EmailAddress relay copy |
+| userDid | did:key — recipient |
+| kind | enum — verify \| notice \| security_notice \| activity \| digest |
+| templateKey | string — notify.tpl.email.<kind> from the fixed email registry |
+| dispatchRef? | string — gate deferred ID or dispatch ID, for dedupe |
+| status | enum — queued \| sent \| settled \| bounced \| failed \| cancelled |
+| attempts | int — 0..3 |
+| transportMessageId? | string — Message-ID header value, ≤ 255 characters |
+| verpTag | string — first 16 characters of base64url(HMAC-SHA256(relay VERP key, deliveryId)) in the return path |
+| bounceKind? | enum — hard \| soft \| complaint |
+| bounceSource? | enum — dsn \| provider_webhook \| feedback_loop |
+| cancelReason? | enum — address_removed \| consent_withdrawn \| deletion |
+| queuedAt | timestamp — relay clock |
+| sentAt? | timestamp — relay clock |
+| revision | int — CTR-ID-001 ID-4 |
+
+**Invariants**
+- A delivery references only an address with status verified (kind verify excepted) and never contains the address in clear.
+- status bounced implies bounceKind and bounceSource are set.
+- At most 3 attempts per delivery.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-102-09.T01 | unit | PS-102-01.R01, PS-102-01.R02, PS-102-02.R01 | add valid, invalid and disposable-domain addresses through vault enable and the relay | valid stored encrypted at the relay with masked output and locale; invalid refused NOTIFY_EMAIL_ADDRESS_INVALID in the vault and at the relay |
+| TEST-PS-102-09.T03 | contract | PS-102-01.R03, PS-102-04.R04, PS-102-09.R02 | send every template kind through the fake SMTP server | subject and body generic with the app origin link only; List-Unsubscribe URL from UnsubscribeTokenPort works on POST; List-Unsubscribe-Post and VERP Return-Path present; DKIM-signed; no user content |
+| TEST-PS-102-09.T09 | abuse | PS-102-07.R01, PS-102-07.R02, PS-102-07.R03, PS-102-09.R03, PS-102-01.R01 | inspect vault, relay database, field classification, logs, events, federation outbox and exports | address only in the vault target and relay ciphertext; the relay copy is classified P3 (CTR-PRV-001 PRV-10) and absent from federation and exports; no content in emails; consent text names what the operator learns |
+| TEST-PS-102-09.T13 | integration | PS-102-10.R01, PS-102-10.R02, PS-102-10.R03, PS-102-01.R04 | export from the vault; restore the relay from a backup that lacks the address; import the export into a fresh vault | export holds the email target with the cleartext address and no relay copy; restore fails stale queued deliveries; the vault offers re-add from its target and re-verification after confirmation |
+| TEST-PS-102-09.T18 | integration | PS-102-04.R05, PS-102-01.R04 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; enable with privacy.consent.check not granted | purge deletes the vault targets; section notify.email exported; delivery rows purged after 30 days; enable refused PRECONDITION_FAILED before anything is sealed |
+| TEST-PS-102-09.T20 | contract | PS-102-01.R05, PS-102-02.R03 | LocalSettings.defaultLocale de-AT; enable with and without notify_email consent and capture every outgoing request; lint every email template declaration; verify add, remove and get_mine signatures against the F11.S01.M03 RFC 9421 vectors with a key that KeyStatusPort reports revoked | with consent only the sealed add carries locale de-AT; without consent nothing is sent; no template declares a parameter other than app origin link, verification link and unsubscribe URL and none carries user content or Money; valid signatures verify with tag classrup/relay-request/v1 and the revoked key is refused UNAUTHENTICATED |
+
+## Dependencies
+
+Module depends on: F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

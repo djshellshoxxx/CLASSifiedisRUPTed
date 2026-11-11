@@ -1,35 +1,39 @@
-# PS-132-03 — workflow state machine
+# PS-132-03 — Workflow state machine: Incident response
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-132-03. **Owner:** [16_Security/03_assurance/mod_response](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_response. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M03 Incident response](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/response` · **Contracts:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for response within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-132-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-132-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-132-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-132-03.R01** RB-01 key compromise. User device key - from another device or the root device the user runs identity.device_key.revoke (F07.S01.M01; the key itself or the root key revoke at once, another device key starts a 7-day pending period), then rotates with the F16.S02.M01 device rotation, and the new root-signed identity document carries the revocation to contacts as they sync; consents received in the clamped claimed-compromise window are labelled, and a lost root key goes through recovery (F07.S01.M03). Relay identity key - within 15 minutes of confirmation run platform.relay_identity.revoke (relay identity revoke --reason compromised) from the relay CLI; while the compromised key file is still readable and passes checkSecretFile, revoke with that live key (useCertificate absent), so the CLI first writes the pending successor genesis key and the revocation signed by the compromised key itself names successorRelayId; only when the key file is missing or unreadable revoke with the pre-signed revocation certificate (useCertificate true), which predates any successor and carries no successorRelayId, so the link then rests on the new identity's classrup.platform.relay_restore/v1 announcement naming predecessorRelayId plus the out-of-band fingerprint check; then run relay identity init --new-identity, which activates that successor (or a fresh genesis key on the certificate path) as a new relayId whose first statements are the restore announcement and the incident notice naming the old relayId, re-sign the active role statements and the tenant configuration with the new key, within 60 minutes confirm the new fingerprint through at least two out-of-band channels on either path, and within 24 hours review the audit log chain for the exposure window; the compromised key signs only its own revocation, never a rotation. Relay-owned VAPID keys - security.keyrecord.revoke and register a new one.
+- **PS-132-03.R02** RB-02 relay breach. Within 15 minutes open a SEV1 or SEV2 incident (F16.S03.M02), within 30 minutes apply the read-only switch (RB-04), preserve disk and logs as read-only copies, rotate all relay secrets (F16.S01.M02) and follow RB-01 for the relay identity key within 4 hours, rebuild from a clean image and restore data from the last verified backup within 24 hours, then verify audit chain anchors; users are told that vault data was never on the relay, and the notice lists each data class this relay held according to the generated inventory - for example public projections and media (P0), role and key records (P1), bids and results of hosted auctions, push subscriptions, email addresses, mailbox ciphertext with routing metadata and moderation reports and cases (P2), audit, incident and rate records (P3), session token hashes and login challenges (P4) - plus the relay secrets.
+- **PS-132-03.R03** RB-03 data leak notification. Within 24 hours determine data classes and the approximate number of affected users from the audit log and relay storage; record the notification decision in the incident; where personal-data breach notification may apply, prepare the regulator notice within the jurisdiction due time (default target 72 hours after awareness, F18.S01.M01) and send the signed user notice through mailboxes within 24 hours of the decision; the notice lists data classes, actions (rotate keys if keys could be affected, treat reports and metadata as exposed) and a contact route.
+- **PS-132-03.R04** RB-04 relay-wide read-only switch. Run classrup-relay containment read-only on --reason (security.containment.set by a relay_operator or admin, or --local from the host when the database is down); within 5 seconds the command bus rejects non-exempt mutating relay commands with SECURITY_READ_ONLY_MODE and Retry-After 300, using the exemption list by exact command ID; vault outboxes keep statements prepared and the UI shows the relay as read-only; to lift, run containment read-only off, verify with the readiness check and drain outboxes at a rate of at most 50 statements per second per key.
+- **PS-132-03.R05** RB-05 federation kill switch. Run classrup-relay containment federation off --reason; within 60 seconds POST /fed/v1/inbox requests signed by peer relay keys receive FEATURE_DISABLED with params.reason federation_killed, F11.S02.M01 outbound delivery to peers pauses, in-flight batches abort or finish, and queued deliveries remain in the outbox up to 7 days; requests from vaults hosted on this relay, mailboxes, consent and publishing keep working because only relay-to-relay traffic is gated and no feature flag changes; peers may also be suspended one by one (federation.peer.suspend, F11.S03.M01); to restore, turn it on, verify peer signatures on the first 100 inbound envelopes and re-enable peers one at a time.
+- **PS-132-03.R06** RB-06 distributor or release key compromise. Publish a hold statement signed by the release key under context classrup/release-hold/v1 (F16.S02.M03) if that key is still trusted, otherwise a relay-signed incident notice as advice only, instructing users not to activate updates; compare served bundle hashes with the signed release manifest; rotate the release signing key held offline, publish the new key fingerprint through at least three independent channels, release a rebuilt version with published reproducible hashes, and tell users how to verify the build hash shown in the app; users who updated during the window are advised to rotate their device key.
+- **PS-132-03.R07** RB-07 postmortem. Blameless, due 7 days after resolution for SEV1 and SEV2: timeline, impact, detection, what went well and badly, root causes, contributing factors, action items each with owner and due date within 30 days, and threat register updates (F16.S03.M01); the summary is published to affected users in plain language.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** No entity lifecycle. Runbook procedures are the workflows and are specified in the requirements below as numbered, time-targeted steps.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-132-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Relay identity key revocation within 15 minutes of confirmation; read-only propagation within 5 seconds; federation kill within 60 seconds; sentinels are polled every second.
+- Tabletop drill at least every 6 months and before first public launch.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-132-09.T03 | integration | PS-132-01.R02, PS-132-01.R04, PS-132-03.R04, PS-132-04.R02, PS-132-09.R02 | set read-only; submit listing publish, offer make, identity.session.revoke, security.keyrecord.revoke, security.incident.open, security.roleassignment.revoke, platform.relay_identity.revoke, federation.peer.suspend and several queries | non-exempt commands return SECURITY_READ_ONLY_MODE within 5 s with retryAfterMs 300000; every exempt command ID succeeds; queries unaffected |
+| TEST-PS-132-09.T04 | integration | PS-132-03.R05, PS-132-06.R01, PS-132-09.R02 | federation off then on twice; a request from peer P and one from hosted vault V to /fed/v1/inbox; a mailbox put and a consent statement during the kill | P gets FEATURE_DISABLED with reason federation_killed within 60 s; V's request accepted; outbound to peers paused; mailbox delivery and consent keep working; repeated toggles are no-ops with audit notes; no module flag changes |
+| TEST-PS-132-09.T06 | integration | PS-132-03.R01 | simulate relay identity key compromise with RB-01 on a staging relay with the key file readable, then again with the key file deleted | first run: the revocation is signed by the compromised key and names successorRelayId equal to the relayId that --new-identity activates; second run: the revocation uses the pre-signed certificate (useCertificate true) and has no successorRelayId; both runs: the new identity's restore announcement and notice name the old relayId, role statements are re-signed by the new key, no rotation is signed by the compromised key, the vault shows the new relay as unverified until the fingerprint is confirmed, durations within targets |
+| TEST-PS-132-09.T07 | manual | PS-132-03.R02, PS-132-03.R03, PS-132-03.R06, PS-132-03.R07 | tabletop drill of RB-02, RB-03, RB-06 and RB-07 with two maintainers before each release | drill record with date, participants, gaps and action items; last drill date updated |
+| TEST-PS-132-09.T10 | integration | PS-132-03.R04, PS-132-06.R01 | outbox of 1 000 statements during read-only then lift | statements stay prepared; drained at 50 per second per key; none lost or duplicated |
+| TEST-PS-132-09.T16 | unit | PS-132-02.R04, PS-132-03.R02, PS-132-01.R03 | RB-02 template inventory against the generated inventory; template without push subscriptions; template without contact route | match; SECURITY_RUNBOOK_INVENTORY_MISMATCH; SECURITY_RUNBOOK_INCOMPLETE |
+
+## Dependencies
+
+Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, F15.S02.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

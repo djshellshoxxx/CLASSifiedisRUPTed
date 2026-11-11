@@ -1,0 +1,321 @@
+# F15.S03.M02 Relay backups (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S03.M02
+scope: MVP
+summary: >-
+  A relay operator's backups: full SQLite snapshots every 6 h taken with the node:sqlite online backup API on the
+  relay's writer connection (page-exact, consistent as of the completion of the final step), continuous WAL
+  archiving in the Litestream style (this module is the only checkpointer: automatic checkpoints are off, a read
+  transaction is held between archive runs, frames are copied up to mxFrame and fsynced before a checkpoint), and a
+  tombstone ledger so that no restore ever resurrects deleted public content. Every artifact is encrypted with its
+  own key derived from an operator-supplied backup key, every manifest is authenticated and chained to the previous
+  one, retention rotates to 30 daily and 12 monthly copies, and an automated restore check verifies each snapshot
+  (CTR-IOX-001 IOX-3, IOX-7). Under ADR-0016 these backups cover only what a relay holds: signed public
+  projections, end-to-end encrypted envelopes, P0 media and relay-local operational data; the encrypted attachment
+  MediaBlobs of F08.S01.M03 are excluded and only their attachment rows are backed up. The user's own vault
+  export is the primary backup of private records (IOX-6) and is not handled here; losing a relay loses no
+  user-owned private data. The relay never holds funds and backups never contain vault keys.
+responsibilities:
+  - Take a full snapshot of the relay SQLite database every 6 h with node:sqlite backup() on the relay's writer connection in steps of 100 pages, record its true consistency point (consistentAt, the completion of the final step) and walPosition {salt1, salt2, mxFrame} read on the same connection right after, write it encrypted to the configured backup directory and record a BackupRecord; VACUUM INTO is not used because it renumbers pages and WAL frames could not be applied to its output.
+  - Archive WAL frames continuously as the only checkpointer of the relay database - connections run with PRAGMA wal_autocheckpoint=0, a read transaction is held between archive runs, every 5 min or when the WAL reaches 64 MiB the frames up to mxFrame are copied into an encrypted segment and fsynced, then the read transaction is released, wal_checkpoint(RESTART) runs and a new read transaction starts - and register a pre-checkpoint hook with F15.S02.M01 so the WAL is archived before the shutdown TRUNCATE.
+  - Encrypt every artifact with AES-256-GCM in 1 MiB chunks under a per-artifact key HKDF-SHA256(backupKey, salt = 32 random bytes stored in the manifest, info = "classrup-backup:v1:" + backupId), with a 96-bit chunk-counter nonce and AAD backupId ‖ chunkIndex ‖ finalFlag; the backup key comes from RELAY_BACKUP_KEY_FILE and is never stored in the repository or next to the artifacts.
+  - Authenticate every manifest with HMAC-SHA256 under a subkey derived from the backup key over its facts and the hash of the previous manifest, so relabelled, spliced or out-of-chain manifests are rejected by catalog import and restore planning.
+  - Keep a tombstone ledger - every tombstone the relay received, appended at each run to an encrypted ledger artifact retained for at least the maximum snapshot age plus 180 days (546 days) - that restore re-applies before serving traffic.
+  - Rotate retention to 8 six-hourly, 30 daily and 12 monthly full snapshots, 7 days of WAL segments and 546 days of ledger, deleting a completed or verified artifact only after a newer verified snapshot covers its tier and a failed record's artifact when its tier retention ends.
+  - Verify each snapshot right after writing it (key fingerprint, manifest MAC and chain, decrypt, checksum, PRAGMA integrity_check, foreign_key_check, row-count comparison) and provide the verification command used by quarterly restore drills.
+  - Emit platform.backup.completed and platform.backup.failed for operators and the observability module.
+  - Exclude encrypted MediaBlobs (encrypted true, the F08.S01.M03 attachment ciphertext) from every snapshot, WAL segment and archive - the backup set is schema main of the relay database, where the attachment rows and blob metadata (ref, size, encrypted, holders) live, while the ciphertext bytes live in the separate attached store blobs_enc of the F15.S02.M03 relay adapter, which this module never snapshots, archives or checkpoints - and record how many were left out.
+non_responsibilities:
+  - Restore tooling, runbook, RPO/RTO drills and dead-letter replay (F15.S03.M03 mod_recovery).
+  - Opening relay SQLite connections with wal_autocheckpoint=0 and keeping encrypted MediaBlob bytes in the separate attached store blobs_enc (F15.S02.M03 relay adapter options this module requires) and the shutdown sequence (F15.S02.M01 runs the registered pre-checkpoint hook).
+  - Attachment slots, rows and their expiry after a restore (F08.S01.M03, whose reconciliation sweep marks rows without ciphertext as expired).
+  - Tombstone verification and the tombstone records themselves (F11.S01.M02 registers a TombstoneSourcePort with the relay process; no depends_on edge).
+  - The user's vault export and its 30-day reminder (F10.S01.M03 and F15.S01.M01); this module never reads vaults.
+  - Backup of the relay identity key file and the backup key; the operator stores them separately.
+  - "Offsite transport beyond a mounted filesystem path. Future: native S3-compatible and SFTP targets; Future: incremental block-level snapshots."
+depends_on: [F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-OBS-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001]
+user_stories:
+  - As a relay operator, I get an encrypted verified backup every 6 hours and WAL segments every 5 minutes without stopping the relay, and an alert if one fails or none succeeded in 7 hours.
+  - As a relay operator, I can run a verification that restores the latest backup into a temporary directory and proves it opens and passes integrity checks.
+  - As a relay operator, I know that someone with write access to my backup directory cannot pass off an older backup as the latest or splice artifacts together.
+  - As a member who selected this relay, I know that losing it never loses my private records, because those are in my own vault export, and that restoring it never brings back a listing I deleted.
+  - As a member who deleted a photo attachment, I know this relay's backups never held its ciphertext, so a restore cannot bring it back.
+edge_cases:
+  - The backup directory is full or free space is below 2 times the database size; the run fails fast with PLATFORM_BACKUP_NO_SPACE, emits platform.backup.failed and leaves earlier backups untouched.
+  - The relay is writing heavily during a snapshot; backup() runs in steps of 100 pages on the writer connection with 5 ms pauses, writes made through that connection between steps are copied too, so writers are never blocked for more than 50 ms and the snapshot is consistent as of the completion of its final step (consistentAt), not of its start.
+  - Something other than the archiver checkpoints the WAL (an operator running the sqlite3 CLI, a misconfigured connection); the archiver sees new salts without a checkpoint it recorded, marks the segment gap, and requests a full snapshot at most once per 30 min, so recovery falls back to the last snapshot (RPO bound 6 h) until it is taken.
+  - The WAL reaches 64 MiB between two 5-minute runs under load; an archive run and checkpoint are forced at once, so the WAL never resets past unarchived frames.
+  - SIGTERM arrives; F15.S02.M01 runs this module's pre-checkpoint hook, which archives the frames up to mxFrame before the TRUNCATE; if the hook fails, the TRUNCATE is skipped and the next start archives the WAL first.
+  - The backup key is wrong or missing at verification time; the fingerprint check fails with PLATFORM_BACKUP_DECRYPT_FAILED, the record stays completed and unverified with that errorCode, the artifact is untouched and an alert fires.
+  - Two backup runs overlap (manual run during the schedule); the second is refused with CONFLICT_STATE.
+  - A backup artifact is truncated, modified or has a chunk spliced in from another artifact; checksum or chunk authentication fails with the correct key, the record becomes failed and an extra snapshot is taken.
+  - An older authentic artifact and manifest are copied or renamed to look like the latest; the manifest chain does not link, catalog import and restore planning reject it with PLATFORM_BACKUP_MANIFEST_INVALID.
+  - Clock jumps backward; scheduling uses a monotonic timer for intervals and stamps records with wall time only for labeling.
+  - The storage adapter is misconfigured and encrypted MediaBlob bytes sit in schema main; the run refuses with PLATFORM_BACKUP_CONFIG_INVALID before writing anything, because a snapshot or WAL segment would otherwise copy attachment ciphertext.
+ux:
+  notes: "Headless operator service with CLI: relay backup run, relay backup list, relay backup verify <id|latest> [--drill], relay backup prune --dry-run, relay backup import-catalog <dir>. Backup status appears in the operator status query and metrics; the PWA shows only relay reachability, never relay backup data."
+processes:
+  domain_schema:
+    requirements:
+      - A BackupRecord stores kind (full, wal, outbox_archive or tombstone_ledger), tier, timing, consistency point, WAL position or frame range, size, checksums, schema version, encryption parameters (salt, key fingerprint) and the manifest chain hash, but never key material.
+      - A manifest JSON file next to every artifact holds the same facts so that restore works without a readable database, authenticated by an HMAC under a key derived from the backup key and chained to the previous manifest, so relabelled or out-of-chain manifests are refused.
+      - Records are relay-local operational data (P1) retained under RET-AUDIT rules for 1 year, longer than the artifacts they describe, except tombstone ledger records which live as long as their 546-day artifacts.
+      - A full BackupRecord records consistentAt and walPosition {salt1, salt2, mxFrame} at the true consistency point of the snapshot, and a WAL record the salts and frame range it covers, so the restore point and the data-loss window can be computed from records and manifests alone.
+      - A full snapshot covers schema main only and records excludedBlobs, the number of encrypted MediaBlobs left out, so backups hold the F08.S01.M03 attachment rows and blob metadata but never attachment ciphertext.
+    entities:
+      - name: BackupRecord
+        schema: classrup.platform.backup_record/v1
+        storage: relay
+        privacy: P1
+        retention: RET-AUDIT
+        fields:
+          - "id: uuidv7 — primary key (backupId)"
+          - "kind: enum — full | wal | outbox_archive | tombstone_ledger"
+          - "tier: enum — six_hourly | daily | monthly | wal | archive | ledger"
+          - "status: enum — running | completed | verified | failed | expired"
+          - "startedAt: timestamp — RFC 3339 UTC"
+          - "finishedAt?: timestamp — RFC 3339 UTC"
+          - "consistentAt?: timestamp — full only: completion of the final backup() step, the point the snapshot reflects"
+          - "walPosition?: json — full only: { salt1, salt2, mxFrame } read on the writer connection right after the final step"
+          - "walFrames?: json — wal only: { salt1, salt2, fromFrame, toFrame, checkpointedAfter: boolean, gap: boolean }"
+          - "ledgerRange?: json — tombstone_ledger only: { fromSeq, toSeq, count }"
+          - "sizeBytes?: int — encrypted artifact size"
+          - "sha256?: string — hex SHA-256 of the encrypted artifact"
+          - "plainSha256?: string — hex SHA-256 of the plaintext database snapshot (full only)"
+          - "schemaVersion: string — migration id of the database at snapshot time"
+          - "eventWatermark?: string — eventId of the newest outbox row included"
+          - "excludedBlobs?: int — full only: number of encrypted MediaBlobs (F08.S01.M03 attachment ciphertext in the attached store blobs_enc) left out of the snapshot; their attachment rows and blob metadata are included"
+          - "salt: string — base64url of the 32 random bytes used to derive this artifact's key"
+          - "keyFingerprint: string — first 16 hex of SHA-256 of the backup key; never the key"
+          - "prevManifestHash?: string — hex SHA-256 of the previous manifest in this relay's chain"
+          - "manifestMac: string — HMAC-SHA256 under HKDF(backupKey, info 'classrup-backup-manifest:v1') over the JCS manifest without this field"
+          - "artifactPath: string — relative path under RELAY_BACKUP_DIR"
+          - "verifiedAt?: timestamp — set when restore verification passed"
+          - "drillAt?: timestamp — set when a quarterly restore drill used this snapshot"
+          - "errorCode?: string — stable code when failed, or PLATFORM_BACKUP_DECRYPT_FAILED on a completed record verified with a wrong or missing key"
+          - "expiresAt: timestamp — end of the tier retention"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - verified implies verifiedAt is set and integrity_check returned ok.
+          - A full snapshot is never deleted while it is the newest verified snapshot or required as the base of retained WAL segments.
+          - keyFingerprint is present on every record and the key itself is never stored in records, manifests, logs or events.
+          - No two artifacts share a derived key, because every artifact has its own random salt and backupId, so a (key, nonce) pair is never reused.
+          - Every manifest except the first carries prevManifestHash of the previous manifest, and its MAC verifies.
+          - No artifact contains the ciphertext bytes of an encrypted MediaBlob.
+    sql: |
+      CREATE TABLE platform_backup_record (
+        id TEXT PRIMARY KEY, kind TEXT NOT NULL, tier TEXT NOT NULL, status TEXT NOT NULL,
+        started_at TEXT NOT NULL, finished_at TEXT, consistent_at TEXT, size_bytes INTEGER, sha256 TEXT,
+        schema_version TEXT NOT NULL, artifact_path TEXT NOT NULL, verified_at TEXT,
+        expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX platform_backup_status ON platform_backup_record(status, started_at);
+      CREATE INDEX platform_backup_kind ON platform_backup_record(kind, started_at);
+  validation_rules:
+    requirements:
+      - Backup configuration is validated at startup, and a run refuses to start when preconditions fail.
+      - Verification checks every integrity property before a snapshot may be marked verified.
+      - Every violation maps to one stable error code with a messageKey for the operator tool.
+      - Manifests and artifacts are accepted for verification, catalog import and restore planning only when their MAC verifies and they link into the chain.
+      - A run refuses to start when encrypted MediaBlob bytes would be inside the backed-up database, and verification fails when a snapshot contains any.
+    rules:
+      - "V01 | RELAY_BACKUP_DIR set, writable, not inside RELAY_DATA_DIR, and RELAY_BACKUP_KEY_FILE holds 32 bytes of base64 | PLATFORM_BACKUP_CONFIG_INVALID"
+      - "V02 | free space in backup dir ≥ 2 x current database size | PLATFORM_BACKUP_NO_SPACE"
+      - "V03 | no other backup run is in status running | CONFLICT_STATE"
+      - "V04 | the supplied backup key's fingerprint equals the record's keyFingerprint | PLATFORM_BACKUP_DECRYPT_FAILED"
+      - "V05 | PRAGMA integrity_check returns ok and PRAGMA foreign_key_check returns no rows | PLATFORM_BACKUP_VERIFY_FAILED"
+      - "V06 | row counts of platform_backup_record, outbox and relay identity tables match the manifest | PLATFORM_BACKUP_VERIFY_FAILED"
+      - "V07 | a WAL segment continues the previous one (same salts and fromFrame = previous toFrame + 1), or starts at frame 1 with new salts after a checkpoint the previous segment recorded as checkpointedAfter | PLATFORM_BACKUP_WAL_GAP"
+      - "V08 | manual run rate: at most 1 per 10 minutes | RATE_LIMITED"
+      - "V09 | artifact SHA-256 equals the recorded sha256 and every chunk authenticates under the per-artifact key with nonce = chunk index and AAD backupId ‖ chunkIndex ‖ finalFlag, with finalFlag set on the last chunk only | PLATFORM_BACKUP_VERIFY_FAILED"
+      - "V10 | manifest MAC verifies under the manifest subkey and prevManifestHash equals SHA-256 of the previous manifest of this relay's chain | PLATFORM_BACKUP_MANIFEST_INVALID"
+      - "V11 | a gap-triggered full snapshot starts only if none started in the last 1800000 ms (30 min) | RATE_LIMITED"
+      - "V12 | the snapshot source is schema main, the archiver reads only the main database WAL, and no row of main.blobs with encrypted = 1 holds ciphertext bytes (the F15.S02.M03 relay adapter keeps them in the attached store blobs_enc) | PLATFORM_BACKUP_CONFIG_INVALID"
+      - "V13 | the verification copy contains no ciphertext of an encrypted MediaBlob: every main.blobs row with encrypted = 1 has zero-length bytes and no blobs_enc schema is present | PLATFORM_BACKUP_VERIFY_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A backup moves from running to completed only after the encrypted artifact and manifest are fsynced and renamed into place.
+      - completed becomes verified only through a passing verification; a failed verification never deletes the artifact before its tier retention ends, and a verification attempted with a wrong or missing key leaves the record completed with errorCode PLATFORM_BACKUP_DECRYPT_FAILED and raises an alert.
+      - Expiry is the only way an artifact is removed - a completed or verified artifact only when its retention elapsed and a newer verified snapshot covers the tier, a failed artifact when its tier retention elapsed - and the record is always kept.
+    machines:
+      - entity: BackupRecord
+        initial: running
+        terminal: [expired]
+        transitions:
+          - "running -> completed | artifact written, encrypted, fsynced, manifest with MAC and chain hash renamed into place | emits no event until verification passes"
+          - "running -> failed | any error (no space, IO, snapshot error) | partial files removed; emits platform.backup.failed"
+          - "completed -> verified | verification passes V04, V05, V06, V09, V10 and V13 (V07 for WAL segments) | verifiedAt set; emits platform.backup.completed"
+          - "completed -> failed | verification with the correct key fails V05, V06, V09, V10 or V13 | errorCode set; emits platform.backup.failed; an extra snapshot is scheduled"
+          - "completed -> completed | verification attempted with a wrong or missing key (V04 fails) | errorCode PLATFORM_BACKUP_DECRYPT_FAILED, verifiedAt unset, artifact untouched, alert raised"
+          - "verified -> failed | later periodic re-verification fails (weekly checksum scan) | emits platform.backup.failed"
+          - "verified -> expired | retention elapsed and a newer verified snapshot covers the tier | artifact deleted, record kept"
+          - "completed -> expired | retention elapsed and a newer verified snapshot covers the tier | artifact deleted, record kept"
+          - "failed -> expired | tier retention elapsed | artifact deleted, record kept"
+    timeouts:
+      - "Full snapshot every 21600000 ms (6 h) at offsets derived from the relayId (so relays do not all run at the same minute); WAL archive every 300000 ms (5 min) or at once when the WAL reaches 67108864 bytes (64 MiB, checked every 10000 ms); ledger appended at every run."
+      - "A gap-triggered full snapshot at most once per 1800000 ms (30 min)."
+      - "A run exceeding 1800000 ms (30 min) is aborted as failed with errorCode INTERNAL; the shutdown archive hook has a 5000 ms budget."
+      - "Alert if no verified snapshot exists in the last 25200000 ms (7 h); weekly checksum and manifest-chain re-verification of all retained artifacts."
+  commands_queries_events:
+    requirements:
+      - The module exposes relay commands for an on-demand run and a verification, and queries for listing and status, all for the relay_operator or admin role of the relay hosting them.
+      - Scheduled runs use the same code path as the manual run command and emit the same events.
+      - platform.backup.completed and platform.backup.failed are emitted in the same transaction as the BackupRecord status change.
+      - The platform.backup.completed payload carries consistentAt and walPosition so the restore point is known; WAL segments and ledger appends emit no event, and F15.S03.M03 builds its recovery plan from BackupRecords and authenticated manifests rather than from events.
+    commands:
+      - name: platform.backup.run
+        capability: platform.backup.run
+        input: "{ kind?: full (default) } — relay command, relay_operator or admin"
+        output: "{ backupId, status: running }"
+        errors: [FORBIDDEN, CONFLICT_STATE, RATE_LIMITED, PLATFORM_BACKUP_CONFIG_INVALID, PLATFORM_BACKUP_NO_SPACE]
+        emits: [platform.backup.failed]
+        idempotent: false
+      - name: platform.backup.verify
+        capability: platform.backup.verify
+        input: "{ backupId | 'latest', drill?: boolean } — relay command, relay_operator or admin; restores into a temporary directory and checks V04-V06, V09, V10, V13"
+        output: "{ backupId, status, checks: { keyFingerprint, manifest, checksum, decrypt, integrity, foreignKeys, rowCounts, noEncryptedBlobs }, excludedBlobs?, durationMs }"
+        errors: [FORBIDDEN, NOT_FOUND, PLATFORM_BACKUP_DECRYPT_FAILED, PLATFORM_BACKUP_VERIFY_FAILED, PLATFORM_BACKUP_MANIFEST_INVALID]
+        emits: [platform.backup.completed, platform.backup.failed]
+        idempotent: true
+    queries:
+      - name: platform.backup.list
+        capability: platform.backup.read
+        input: "{ status?, kind?, cursor?, limit ≤ 100 } — relay query, relay_operator or admin"
+        output: "{ items: BackupRecord[], nextCursor? }"
+        errors: [FORBIDDEN]
+      - name: platform.backup.get_status
+        capability: platform.backup.read
+        input: "{ } (no input) — relay query, relay_operator or admin"
+        output: "{ lastVerifiedAt?, lastDrillAt?, rpoEstimateMs, rpoTargetMs: 21600000, walLagMs, walBytes, walGaps24h, bytesUsed, nextRunAt }"
+        errors: [FORBIDDEN]
+    events_produced:
+      - {type: platform.backup.completed, privacy: P1, payload: "{ backupId, kind, tier, sizeBytes, finishedAt, consistentAt?, walPosition?: { salt1, salt2, mxFrame }, schemaVersion, eventWatermark?, excludedBlobs? }"}
+      - {type: platform.backup.failed, privacy: P1, payload: "{ backupId, kind, errorCode, failedAt }"}
+    events_consumed: []
+    errors:
+      - "PLATFORM_BACKUP_CONFIG_INVALID | 500 | no | backup directory or key file missing or invalid"
+      - "PLATFORM_BACKUP_NO_SPACE | 507 | no | free space below 2 times the database size"
+      - "PLATFORM_BACKUP_DECRYPT_FAILED | 422 | no | the supplied backup key is wrong or missing (fingerprint mismatch); the artifact is untouched"
+      - "PLATFORM_BACKUP_VERIFY_FAILED | 422 | no | checksum, chunk authentication, integrity, foreign key or row-count check failed with the correct key"
+      - "PLATFORM_BACKUP_WAL_GAP | 409 | no | WAL segment sequence has a gap; recovery falls back to the last snapshot"
+      - "PLATFORM_BACKUP_MANIFEST_INVALID | 422 | no | manifest MAC does not verify or the manifest does not link into the chain; it is not trusted for import or restore"
+    example: |
+      $ relay backup run
+      POST /api/v1/cmd/platform.backup.run  { "kind": "full" }   (signed request by a relay_operator key)
+      202 { "backupId": "0192f500-0000-7000-8000-000000000001", "status": "running" }
+      ... backup() steps on the writer connection complete at 06:17:40.910Z; walPosition read; verification passes ...
+      event platform.backup.completed { "backupId": "0192f500-…", "kind": "full", "tier": "six_hourly", "sizeBytes": 18734592,
+        "finishedAt": "2026-11-04T06:17:41.220Z", "consistentAt": "2026-11-04T06:17:40.910Z",
+        "walPosition": { "salt1": 2894121, "salt2": 991, "mxFrame": 4410 }, "schemaVersion": "0007" }
+      artifact: backups/2026/11/04/full-20261104T061700Z.sqlite.enc  + full-20261104T061700Z.manifest.json { ..., "salt": "…", "prevManifestHash": "…", "manifestMac": "…" }
+  authorization_capabilities:
+    requirements:
+      - Relay policy applies, and only a key holding the relay-scope relay_operator or admin role of this relay (an F16.S01.M01 RoleAssignment) may run, verify or read backups; tenant-scoped operator roles grant nothing here.
+      - The module has no vault access and handles no user credentials; requests are signed by a device key with an active F16.S01.M01 RoleAssignment, or come from the local CLI with filesystem access.
+      - Backup artifacts are readable only with the operator-supplied key, and the key never passes through the API.
+    capabilities:
+      - "platform.backup.run | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment, or local CLI; max 1 per 10 minutes"
+      - "platform.backup.verify | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment, or local CLI; restores only into RELAY_DATA_DIR/tmp-verify-<id> and deletes it afterwards"
+      - "platform.backup.read | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment, or local CLI"
+  failure_recovery_idempotency:
+    requirements:
+      - A scheduled run that crashes leaves no partial artifact visible and is retried at the next slot; a manual rerun after failure starts a new record.
+      - Backups never block relay writes beyond 50 ms and never run concurrently with each other.
+      - A missing or failing backup is loud, with failure events, an alert after 7 h without a verified snapshot, and an extra snapshot after any integrity failure.
+    idempotency: "Artifacts are written to a .partial name and renamed only after fsync, so a rerun never exposes partial data. The run command is not idempotent by design (it creates a new snapshot), but a second call while one is running returns CONFLICT_STATE with the running backupId. Verification is idempotent and read-only except for verifiedAt and errorCode. A WAL archive run that crashes before fsync is repeated from the last recorded toFrame because no checkpoint ran."
+    concurrency: "A single-flight lock row (local to this relay, IDM-8) allows one running backup. The archiver holds its own read transaction between runs, and because relay connections run with wal_autocheckpoint=0 and only the archiver checkpoints, the WAL never resets past unarchived frames; the archiver releases its read transaction only for its own wal_checkpoint(RESTART) after fsync. Snapshot steps of 100 pages run on the writer connection with 5 ms pauses, so writes through that connection are copied and never stall more than 50 ms."
+    retries: "A failed snapshot is retried once after 5 minutes, then at the next 6 h slot; failure events fire on each failure. IO errors use IDM-4 backoff (base 500 ms, cap 30 s, 6 attempts) inside a run. A failed checkpoint after a successful archive is retried at the next run; frames are never lost because the read transaction is reacquired first."
+    offline: "Backups need no network; a missing mount of the backup directory fails the run with PLATFORM_BACKUP_CONFIG_INVALID. The relay continues serving while backups fail, and the alert makes the operator act. While the backup directory is missing the archiver keeps its read transaction and skips checkpoints, so the WAL grows instead of losing frames, and the WAL-size alert fires."
+    partial_failure: "If the manifest rename fails after the artifact is written, the artifact is deleted and the run is failed. If rotation deletes fail midway, records keep their status and the next rotation retries; a completed or verified artifact is never deleted unless a newer verified snapshot exists. If the shutdown hook cannot archive, F15.S02.M01 skips TRUNCATE and the next start archives first."
+  privacy_retention_abuse:
+    requirements:
+      - Backups contain only data the relay holds (signed public projections, ciphertext envelopes, P0 media, operational records) and are encrypted at rest with AES-256-GCM under per-artifact keys; plaintext P2 or higher and vault keys never exist on the relay and so never in backups.
+      - Retention is 8 six-hourly, 30 daily, 12 monthly snapshots, 7 days of WAL segments and 546 days of tombstone ledger, and expired artifacts, including those of failed records, are deleted from disk.
+      - Signed tombstones (CTR-PRV-001 PRV-6, CTR-FED-001 FED-4) survive restore - every tombstone the relay received is in the ledger, kept at least the maximum snapshot age plus 180 days and written by every run, and restore re-applies the newest ledger in its replaying phase - so restoring any retained snapshot, including a 12-month-old monthly one, never resurrects deleted public content.
+      - Nonces never repeat under one key, chunks cannot be moved between artifacts, and manifests are authenticated and chained, so someone with write access to the backup directory cannot splice artifacts or relabel an older authentic backup as the latest.
+      - Encrypted attachment MediaBlobs of F08.S01.M03 are never in a backup artifact, only their attachment rows and blob metadata are, so a deleted attachment cannot be recovered from this module's backups, and after a restore F08.S01.M03 marks the rows without ciphertext expired.
+    data:
+      - "Full snapshots and WAL segments: relay database content of schema main (public projections P0, P0 media, ciphertext envelopes, F08.S01.M03 attachment rows and blob metadata, relay operational data P1); never the encrypted attachment MediaBlobs of the attached store blobs_enc."
+      - "Tombstone ledger: P0 tombstone cids, target cids and receipt times."
+      - "Manifests: P1 metadata with salt, MAC and chain hash, without keys."
+    retention:
+      - "six_hourly 48 h (8 snapshots); daily 30 copies; monthly 12 copies; WAL segments 7 days; tombstone ledger 546 days (366 days maximum snapshot age plus 180 days); BackupRecord rows 1 year (RET-AUDIT), ledger records as long as their artifacts."
+      - "Tombstoned public projections remain in older snapshots until those expire; restore re-applies the ledger before the relay serves traffic."
+    threats:
+      - "T01 | Backup theft exposes relay data | AES-256-GCM per 1 MiB chunk under a per-artifact HKDF key, backup key never stored with artifacts, relay holds no plaintext private data to begin with"
+      - "T02 | Backup tampering, substitution or chunk splicing | per-artifact key with random salt and backupId in info, 96-bit chunk-counter nonce, AAD backupId ‖ chunkIndex ‖ finalFlag, per-artifact SHA-256 in the authenticated manifest, weekly re-verification"
+      - "T03 | Key loss makes backups unreadable | key fingerprint recorded, quarterly drill proves the operator can decrypt, runbook requires two offline copies of the key held by different people"
+      - "T04 | Resurrection of deleted public data after restore of an old snapshot | tombstone ledger retained 546 days and re-applied before serving; deletion statements are signed and replayed"
+      - "T05 | Backup job used to exhaust disk | free-space precheck (2 x database size), retention rotation, max one run at a time, manual runs limited to 1 per 10 minutes, gap snapshots at most every 30 min"
+      - "T06 | Rollback attack: an older authentic artifact and manifest relabelled as the latest | MAC over backupId, startedAt, eventWatermark, walPosition and prevManifestHash; catalog import and restore plan accept only the authenticated chain"
+      - "T07 | Silent RPO loss through WAL resets | archiver is the only checkpointer, autocheckpoint off, forced archive at 64 MiB, archive before shutdown TRUNCATE, gap counter alert"
+      - "T08 | A deleted attachment is recovered from a relay backup | encrypted MediaBlobs are outside schema main and never snapshotted or archived (V12), verification rejects a snapshot holding ciphertext (V13), and only attachment rows are backed up"
+    abuse_controls:
+      - "Operator-only capabilities with signed requests by relay_operator or admin keys; every run and verify is audit-logged by the bus (CTR-CAP-001 CAP-7)."
+      - "Manual run rate limit of 1 per 10 minutes, single-flight lock, gap-triggered snapshots at most every 30 min."
+  observability_performance:
+    requirements:
+      - Backup health is exposed as metrics and events per CTR-OBS-001 with alerting thresholds that map to the RPO of 6 h and the typical data loss of 5 min.
+      - Backups must not degrade relay latency beyond the OBS-4 budget while running.
+      - Verification time and restore time are measured so that the RTO of 4 h is evidenced by drills.
+      - WAL gaps are an anomaly that must stay at zero under the reference load, and WAL size and archive lag are observable.
+    metrics:
+      - "classrup_platform_backup_total{outcome=completed|failed|verified}"
+      - "classrup_platform_backup_last_verified_age_seconds (alert at 25200)"
+      - "classrup_platform_backup_duration_ms{kind=full|wal|tombstone_ledger}"
+      - "classrup_platform_backup_wal_lag_ms (alert at 900000)"
+      - "classrup_platform_backup_wal_bytes (alert at 67108864 when the forced archive did not shrink it)"
+      - "classrup_platform_backup_wal_gaps_total (alert when it increases)"
+      - "classrup_platform_backup_bytes (encrypted bytes on disk)"
+      - "classrup_platform_backup_last_restore_drill_age_days (alert at 100)"
+    logs:
+      - "info backup.completed {backupId, kind, sizeBytes, durationMs}; error backup.failed {backupId, errorCode}; warn backup.wal_gap {backupId}; never key material, paths outside RELAY_BACKUP_DIR or database content."
+    budgets:
+      - "Full snapshot of a 1 GiB database ≤ 120 s; write latency p95 during backup ≤ 300 ms at 50 req/s (OBS-4)."
+      - "Verification of a 1 GiB snapshot ≤ 180 s; WAL archive run ≤ 2 s; checkpoint after archive ≤ 500 ms."
+      - "RPO: worst-case data loss ≤ 21600000 ms (6 h); typical ≤ 300000 ms (5 min) with WAL segments, with zero gaps under 50 req/s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Encryption, rotation and verification are tested with real node:sqlite databases and the real backup API in CI.
+      - A restore drill test restores a generated database with 100 000 rows and proves equality of content hashes.
+    fixtures: "Temp relay data dir with a 100 000-row database opened with wal_autocheckpoint=0 and the attached store blobs_enc holding 3 encrypted attachment blobs with a canary byte pattern next to 2 P0 blobs in main, backup dir on a separate tmpfs, 32-byte test key and a second wrong key, tombstone fixtures over 14 months, fixed clock 2026-11-04T00:00:00Z advanced by the test."
+    tests:
+      - "T01 | integration | 01.R01,01.R02,01.R03 | run a full backup and read record plus manifest | record and manifest agree, contain keyFingerprint, salt, MAC and chain hash and no key bytes"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01-V11 violated in turn | documented error code returned, previous backups untouched"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of run, verify with right and wrong key, tamper, expire | only declared transitions occur; newest verified snapshot never expires; expired is the only terminal state"
+      - "T04 | integration | 03.R01,06.R01 | kill the process during a snapshot and during a WAL archive run | no visible partial artifact, next run succeeds, record is failed or absent, WAL archive resumes from the last toFrame"
+      - "T05 | contract | 04.R01,04.R03 | run and verify commands | outputs and platform.backup.completed/failed payloads validate against the registry; event written in the same transaction as the status change"
+      - "T06 | integration | 04.R02,06.R03 | scheduled and manual runs overlap | second refused with CONFLICT_STATE; scheduled run uses the same code path and events"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | member key, tenant-scoped operator key and expired relay_operator assignment call run, verify, list; artifact read without key | FORBIDDEN for all three; ciphertext does not decrypt without key; key never in API output"
+      - "T08 | integration | 06.R02,08.R02 | 50 req/s write load while a 1 GiB snapshot runs | writer stall ≤ 50 ms, write p95 ≤ 300 ms"
+      - "T09 | chaos | 06.R03,02.R01 | backup dir full, then unmounted, then verification with the wrong key | PLATFORM_BACKUP_NO_SPACE and PLATFORM_BACKUP_CONFIG_INVALID with failed events; wrong key leaves the record completed with errorCode PLATFORM_BACKUP_DECRYPT_FAILED and the alert metric increases"
+      - "T10 | integration | 07.R02 | rotation over simulated 14 months including failed records | exactly 8 six-hourly, 30 daily, 12 monthly, WAL 7 days and ledger 546 days remain; expired artifacts, including those of failed records, deleted from disk"
+      - "T11 | integration | 07.R03,02.R03 | tombstone recorded after the snapshot, restore of the latest snapshot | tombstone re-applied from the ledger before serving"
+      - "T12 | abuse | 07.R01,07.R02 | flip one byte in an artifact and truncate another (correct key) | checksum and chunk authentication fail with PLATFORM_BACKUP_VERIFY_FAILED, record failed, extra snapshot scheduled"
+      - "T13 | integration | 08.R01,08.R02 | scrape metrics after success and failure | metrics per CTR-OBS-001 present, alert thresholds fire on simulated 8 h without verified backup"
+      - "T14 | load | 08.R03,08.R02 | 1 GiB database snapshot and verify | snapshot ≤ 120 s, verify ≤ 180 s"
+      - "T15 | unit | 09.R01 | traceability tool run | every PS-120 requirement maps to a passing test"
+      - "T16 | integration | 09.R02,09.R03,10.R03 | restore drill of the 100 000-row database to a fresh directory plus WAL segments | content hashes equal, integrity ok, procedure time recorded"
+      - "T17 | integration | 10.R01,10.R02 | export manifest list and check that vault data is absent; attempt to restore on a different relay key | manifests list only relay data; restore without the identity key file refused"
+      - "T18 | manual | 06.R03,08.R03 | quarterly restore drill by the operator on a clean machine | drill recorded with drillAt, elapsed time below 4 h, checklist signed off"
+      - "T19 | load | 08.R04,08.R01 | 1 h at 50 req/s with 5-minute archive runs, then a burst that grows the WAL past 64 MiB | zero WAL gaps; forced archive and checkpoint at 64 MiB; typical data loss window ≤ 5 min"
+      - "T20 | integration | 01.R04,04.R04 | full snapshot under write load, then WAL segments; restore snapshot plus frames after walPosition; inspect the platform.backup.completed payload | restored content equals the live database at the target; consistentAt equals completion of the final step; page numbers identical to the source (no VACUUM INTO); payload carries consistentAt and walPosition and no event exists for WAL segments"
+      - "T21 | abuse | 07.R04,02.R02 | splice chunk 3 of artifact A into artifact B, reorder two chunks of B, drop B's final chunk; derive keys for 1 000 artifacts | each splice fails chunk authentication; no (key, nonce) pair repeats across the 1 000 artifacts"
+      - "T22 | abuse | 02.R04,07.R04 | copy an older authentic artifact and manifest under the latest name; delete a manifest from the middle of the chain; forge a manifest without the backup key; run import-catalog and the F15.S03.M03 plan | all rejected with PLATFORM_BACKUP_MANIFEST_INVALID; the catalog keeps the authenticated chain head"
+      - "T23 | integration | 07.R03 | restore the 6-month-old monthly snapshot after 40 tombstones were applied since then | every tombstoned projection stays deleted after restore; ledger applied before readyz returns 200"
+      - "T24 | integration | 03.R02,03.R03 | failed record reaches its tier expiry; completed record reaches retention with and without a newer verified snapshot | failed artifact deleted, record kept; completed expires only when a newer verified snapshot covers the tier"
+      - "T25 | integration | 06.R03,08.R04 | SIGTERM with 900 unarchived frames; then an external sqlite3 checkpoint twice within 30 min | shutdown hook archives the 900 frames before TRUNCATE; first external checkpoint marks a gap and triggers one full snapshot; second gap within 30 min triggers no further snapshot"
+      - "T26 | abuse | 01.R05,02.R05,07.R05 | full snapshot and 10 min of WAL segments while attachments are uploaded and one is deleted; restore; scan every artifact for the canary; then a run with an adapter that keeps encrypted bytes in main, and verify of a planted snapshot holding ciphertext | P0 blobs, attachment rows and blob metadata restored; no canary in any artifact; excludedBlobs 3 in the record and event; the misconfigured run refused with PLATFORM_BACKUP_CONFIG_INVALID; the planted snapshot fails with PLATFORM_BACKUP_VERIFY_FAILED"
+    acceptance:
+      - All tests T01-T26 pass in CI and a restore drill is performed at least every 100 days.
+      - A verified encrypted snapshot exists at least every 6 hours or an alert fires within 7 hours, and WAL archiving keeps the typical data-loss window at 5 minutes with zero gaps under the reference load.
+      - No backup artifact contains plaintext private data, key material or encrypted attachment MediaBlobs, and no spliced or relabelled artifact or manifest is accepted.
+      - A restored relay reproduces the database content hash of the snapshot and re-applies every ledger tombstone, whatever the age of the snapshot.
+  import_export_backup_rollback:
+    requirements:
+      - The operator export is the list of BackupRecords and manifests, not user data; user exports are produced by vaults (CTR-IOX-001 IOX-6) and never by this module.
+      - A snapshot restores only into a new relay instance (IOX-4) and the identity key file must be provided separately, otherwise the instance has a different identity.
+      - Backup schema changes follow expand/contract and manifests stay readable for at least 400 days.
+    export: "JSON Lines of BackupRecord (schema classrup.platform.backup_record/v1) via relay backup list --json; manifests are standalone JSON files next to artifacts."
+    import: "relay backup import-catalog <dir> rebuilds BackupRecords from manifests after a restore, accepting only manifests whose MAC verifies with the backup key and which link into the chain (V10); artifacts are never decrypted by the import."
+    backup: "This module is the relay backup. The backup key and relay identity key file are backed up by the operator separately and never inside backup artifacts. Encrypted attachment MediaBlobs are not backed up; senders keep their own local ciphertext (F08.S01.M03). Vault export remains the primary backup of private records."
+    migration_rollback: "Manifest format carries formatVersion 2 (per-artifact salt, MAC and chain hash); formatVersion 1 manifests from before this change are readable for verification only and never accepted as a chain head; unknown future versions are skipped with a warning. Rolling back the relay release leaves artifacts untouched; restore always creates a new instance and never downgrades data in place."

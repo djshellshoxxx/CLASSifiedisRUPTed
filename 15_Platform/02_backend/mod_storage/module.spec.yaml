@@ -1,0 +1,409 @@
+# F15.S02.M03 — Storage (kernel). Rows use "a | b | c" cells. Keep IDs stable once published (ADR-0015).
+id: F15.S02.M03
+scope: MVP
+summary: >-
+  The kernel storage port used by every module in the vault and on relays (ADR-0016). One unit-of-work API
+  (transaction(fn) committing on ok, rolling back on err or exception) over a single row model with three adapters
+  that pass one contract suite: IndexedDB for the browser vault (one database per vault whose version is bumped only
+  for object-store or index changes), node:sqlite (WAL, BEGIN IMMEDIATE, busy_timeout 5000, and the
+  walAutocheckpoint 0 option that leaves checkpoints to the F15.S03.M02 archiver) for relays, and memory for tests.
+  It provides typed repositories with optimistic concurrency and up to four indexed fields, the local transactional
+  outbox with an at-least-once dispatcher and per-consumer inbox, dead letters with replay counters and the list,
+  requeue and purge primitives behind F15.S03.M03 replay, local leases, content-addressed media blobs with reference
+  counting, tenant upload limits and relay-side verifyImageClean (on a relay the ciphertext of encrypted blobs lives
+  in the separate attached store blobs_enc while blob metadata stays in schema main, so F15.S03.M02 backups of main
+  never hold attachment ciphertext), and forward-only recorded migrations (CTR-SCH-001). It is only the persistence primitive of the vault sync outbox: F15.S01.M01 OutboxEntry rows are
+  ordinary records of type platform.outbox_entry written inside the caller's transaction(fn), and storage has no
+  sync outbox table, state machine or sender of its own (N24).
+responsibilities:
+  - Persist StoredRecord rows keyed (tenantId, type, id) with revision compare-and-set and index queries with opaque cursors.
+  - Commit records (including F15.S01.M01 OutboxEntry records of type platform.outbox_entry), outbox events, inbox entries, idempotency records, leases and blob references atomically in one transaction(fn).
+  - Deliver local outbox events to registered consumers in (aggregate, revision) order with inbox dedupe, full-jitter backoff and dead letters after 8 attempts.
+  - Provide the dead-letter primitives behind F15.S03.M03 replay - list, requeue with replay_count and last_replayed_at kept across requeue and re-dead-lettering, return of a requeued event to dead when its consumer is disabled or after 7 days without delivery, and purge 30 days after dead_at.
+  - Store MediaBlob bytes by content address (blob:sha256-<base64url>, at most 5 MiB and at most the tenant limit read through the TenantPort that F15.S04.M03 registers), run verifyImageClean on relay receipt, store exactly the received bytes and delete a blob with its last referencing record.
+  - Provide local leases (acquire compare-and-set, renew, release, expiry, fencing counter) inside one vault or relay (IDM-3, IDM-8).
+  - Apply and record forward-only migrations, refuse to start when a recorded kernel migration checksum differs, and bump the IndexedDB version only for object-store or index changes with a pre-upgrade snapshot that N-1 code can restore after a VersionError.
+  - Offer the SQLite adapter option walAutocheckpoint 0 and the writer connection to the registered F15.S03.M02 checkpointer so that only the backup archiver checkpoints the WAL of the relay's main database.
+  - Keep, in the relay SQLite adapter, the ciphertext of every encrypted MediaBlob in the separate database attached as schema blobs_enc, with metadata rows and holders in schema main, so that F15.S03.M02 can back up schema main without attachment ciphertext.
+non_responsibilities:
+  - The idempotency rules and dispatch pipeline (F15.S02.M02); storage only persists IdempotencyRecord rows.
+  - Statement signing, verification and peer acknowledgement validation (F11.S01.M02, F16.S02.M03); storage has no sync sender, SyncTransport port or recordPeerAck primitive.
+  - The vault sync outbox - OutboxEntry records, their single state machine, per-destination delivery, peer acknowledgements, the PWA outbox UI, conflict prompts and persistence requests (F15.S01.M01, N24); storage persists those records like any other.
+  - Metadata stripping and re-encoding of media and the verifyImageClean implementation (F10.S02.M03) and encryption of private media (F08.S01.M03); storage receives prepared bytes, calls the verifier registered on a relay and never re-encodes or substitutes bytes.
+  - Relay backups, WAL archiving, checkpoints of schema main and restore drills (F15.S03.M02, F15.S03.M03), which never snapshot, archive or checkpoint blobs_enc; dead-letter replay as an operator command and the 3-replay limit (F15.S03.M03).
+  - Expiring attachment rows whose ciphertext is absent after a relay restore or crash (F08.S01.M03 reconciliation sweep, using blobs.info bytesPresent).
+  - Bundle-level checks of the vault restore flow (IOX-2) - manifest signature and section hashes, multi-part set linkage by setId and the part-1 manifest hash, and the F10.S01.M04 privacy.deletion.ledger_check guard - which run before any owning module calls repo.restore; repo.restore is a per-record primitive that knows no bundle, manifest or principal.
+  - Tenant status, tenant limits and LocalSettings (F15.S04.M03 registers TenantPort with storage at composition; no depends_on edge, because F15.S04.M03 depends on this module).
+  - The canonical relayId, keyId and destination strings (defined by F15.S02.M01; storage treats them as opaque strings, with no depends_on edge because F15.S02.M01 depends on this module).
+depends_on: [F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-IOX-001, CTR-FLG-001, CTR-OBS-001, CTR-TST-001, CTR-FED-001]
+user_stories:
+  - As a feature developer, I declare a repository with a zod schema and indexes and get get, put with expectedRevision, remove and paginated index queries that behave the same in the vault, on a relay and in tests.
+  - As a vault user, my edits are either fully saved with their events and outgoing outbox entries or not saved at all, even if the browser refuses the write.
+  - As a vault user who removes a listing, its photos are deleted from my device unless another of my records still uses them.
+  - As a relay operator, a consumer that keeps failing parks its events in dead letters instead of blocking other aggregates, and replayed events keep their replay count when they fail again.
+  - As a relay operator, my WAL archive has no gaps because storage never checkpoints the relay database while the backup archiver is registered.
+  - As a vault user who rolls the app back after an update, the older app never opens my vault half-way and offers to restore the copy taken before the update.
+edge_cases:
+  - Two transactions update the same record with the same expectedRevision; the second gets CONFLICT_REVISION with params.currentRevision.
+  - The IndexedDB write fails (quota exceeded) after the handler succeeded; the working set is restored and the command fails without partial state.
+  - The SQLite database is locked by another process for longer than busy_timeout; DEPENDENCY_UNAVAILABLE (retryable) is returned.
+  - A consumer fails on event revision 2 of an aggregate; revision 3 of that aggregate waits while other aggregates continue.
+  - The same event is delivered twice after a crash between handler commit and acknowledgement; the inbox row makes the second delivery a no-op.
+  - A requeued dead letter's consumer module is disabled before delivery; the event returns to dead with FEATURE_DISABLED and its replay_count and last_replayed_at are kept instead of pausing like a first delivery.
+  - Two listings share one photo; deleting the first keeps the blob and deleting the second deletes it.
+  - A plaintext P2 blob is offered to relay storage; it is rejected because a relay stores only P0 blobs and ciphertext.
+  - A relay tenant has maxUploadBytes 3 MiB and a 4 MiB P0 photo is put; PAYLOAD_TOO_LARGE is returned although the platform maximum is 5 MiB.
+  - An old client uploads a photo that still carries GPS tags; the relay verifier reports it as not clean, storage returns PRIVACY_METADATA_GPS_PRESENT, stores nothing and never re-encodes the bytes.
+  - App release N-1 opens a vault that release N upgraded with a new object store; IndexedDB throws VersionError, storage opens nothing and returns UNSUPPORTED_SCHEMA_VERSION with the pre-upgrade snapshot offered for restore.
+  - A relay is restored from an F15.S03.M02 backup of schema main, so its encrypted attachment blobs have metadata rows but no ciphertext in blobs_enc; get returns NOT_FOUND and info reports bytesPresent false, and F08.S01.M03 expires those attachment rows.
+  - A relay SQLite adapter is opened without encryptedBlobsPath or the blobs_enc attach fails; encrypted blob puts are refused with INTERNAL and no ciphertext is ever written into schema main, while P0 puts still work.
+  - Power is lost while a transaction writes an encrypted blob to both database files, and only blobs_enc keeps the change; the orphan sweep deletes the blobs_enc row that has no main.blobs row.
+ux:
+  notes: >-
+    Headless kernel module. Sync states shown in the PWA come from F15.S01.M01 OutboxEntry records, which storage
+    persists like any other record. The only user-facing storage outcome is the restore offer that N-1 code shows
+    after a VersionError on open (copy taken before the update, newer database left untouched).
+processes:
+  domain_schema:
+    requirements:
+      - A StoredRecord holds the key (tenantId, type, id), a revision starting at 1 and incremented by exactly 1 per accepted write, JSON data, up to four indexed text values and createdAt and updatedAt timestamps.
+      - An OutboxEvent stores the CTR-EVT-001 envelope with a strictly increasing sequence, and an InboxEntry records the delivery status, attempts and next attempt time per (consumer, eventId).
+      - The memory, IndexedDB and SQLite adapters share one row model so data round-trips identically, including JSON normalization and UTF-8 binary ordering of index values.
+      - A MediaBlob is stored by content address blob:sha256-<base64url> with size, content type, privacy class and encryption flag, and its holders are the records that reference it.
+      - A dead_letter row holds consumer, eventId, tenant, type, the envelope, attempts, the error code, dead_at, replay_count (INTEGER NOT NULL DEFAULT 0) and last_replayed_at (nullable), and replay_count and last_replayed_at are kept across requeue (dead to retry) and re-dead-lettering until the row is deleted on delivery or purge.
+      - The relay SQLite adapter attaches the database file named by its option encryptedBlobsPath (the relay composition passes <RELAY_DATA_DIR>/blobs_enc.sqlite) as schema blobs_enc on every connection and keeps the ciphertext of every encrypted MediaBlob (encrypted true) in blobs_enc.blob_bytes keyed (tenant, ref), while its main.blobs row holds ref, size, content type, privacy, encrypted = 1 and createdAt with zero-length bytes and its holders stay in main.blob_refs; P0 plaintext blobs stay entirely in main, and the IndexedDB and memory adapters keep all bytes in their blobs store.
+    entities:
+      - name: StoredRecord
+        schema: classrup.platform.stored_record/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "tenantId: uuidv7 — LocalSettings.vaultId (F15.S04.M03) in the vault, relay tenant on a relay"
+          - "type: string — <slug>.<entity> declared by defineRepo, for example platform.outbox_entry for F15.S01.M01 OutboxEntry rows"
+          - "id: string — record ID, UUIDv7 for domain records"
+          - "revision: int — starts at 1, +1 per accepted write (ID-4)"
+          - "data: json — owning module's schema; class and retention set by that module"
+          - "idx1?: string — first declared index value"
+          - "idx2?: string — second declared index value"
+          - "idx3?: string — third declared index value"
+          - "idx4?: string — fourth declared index value"
+          - "createdAt: timestamp — RFC 3339 UTC, kept across updates and restores"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one row per (tenantId, type, id).
+          - A write with expectedRevision n succeeds only when the stored revision is n (0 means absent) and stores n + 1.
+          - Index slots follow declaration order and are never reordered for an existing type.
+      - name: OutboxEvent
+        schema: classrup.platform.outbox_event/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "seq: int — strictly increasing per vault or relay"
+          - "eventId: uuidv7 — envelope eventId, unique"
+          - "tenantId: uuidv7 — envelope tenant"
+          - "type: string — <slug>.<entity>.<past_tense_verb>"
+          - "aggregateType: string — envelope aggregate.type"
+          - "aggregateId: string — envelope aggregate.id"
+          - "revision: int — aggregate revision"
+          - "occurredAt: timestamp — envelope occurredAt"
+          - "envelope: json — full CTR-EVT-001 envelope"
+        invariants:
+          - Written in the same transaction as the state change it describes (EVT-2, EVT-8).
+          - Never leaves the device or relay by itself; cross-party facts travel as signed statements queued by F15.S01.M01 as OutboxEntry records (EVT-9).
+      - name: InboxEntry
+        schema: classrup.platform.inbox_entry/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-SHORT
+        fields:
+          - "consumer: string — subscriber name <slug>.<consumer>"
+          - "eventId: uuidv7 — delivered event"
+          - "aggregateId: string — used to hold back later events of the same aggregate"
+          - "status: enum — done | retry | dead"
+          - "attempts: int — failed or successful handler runs"
+          - "nextAttemptAt?: timestamp — set while status is retry"
+          - "lastError?: string — error code only"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one row per (consumer, eventId); a done or dead row makes redelivery a no-op.
+          - status done is written in the same transaction as the consumer's side effects.
+          - A row with status retry whose dead_letter row exists is a requeued dead letter; its dead_letter row keeps replay_count and last_replayed_at until delivery or purge.
+      - name: MediaBlob
+        schema: classrup.platform.media_blob/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "tenantId: uuidv7 — vault or relay tenant"
+          - "ref: string — blob:sha256-<base64url of SHA-256 of bytes>"
+          - "bytes: bytes — metadata stripped by F10.S02.M03 in the vault; ciphertext when encrypted, which a relay keeps in blobs_enc.blob_bytes with zero-length main.blobs.bytes; stored exactly as received, never re-encoded"
+          - "size: int — ≤ 5 242 880 bytes and ≤ the TenantPort limit (maxUploadBytes on a relay, LocalSettings.localLimits.maxLocalAttachmentBytes in the vault)"
+          - "contentType: string — lowercase type/subtype"
+          - "privacy: enum — P0 | P1 | P2 | P3; a relay accepts P0 plaintext or ciphertext only"
+          - "encrypted: boolean — true for P2 media encrypted by F08 before upload"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "holders: set — record holders <type>/<id> in blob_refs"
+        invariants:
+          - The ref equals the SHA-256 content address of the stored bytes; identical bytes are stored once per tenant.
+          - The blob is deleted in the transaction that removes its last holder; an encrypted blob deletion reports shred so the owner deletes the per-object key.
+          - Storing identical bytes with a more public class lowers the stored class; it is never raised implicitly.
+          - On a relay a plaintext image blob is stored only after the registered verifyImageClean reported it clean, and the stored bytes are byte-identical to the received bytes whose hash the signed listing references.
+          - On a relay no main.blobs row with encrypted = 1 holds bytes of non-zero length; its ciphertext exists at most once, in blobs_enc.blob_bytes under the same (tenant, ref).
+    sql: |
+      CREATE TABLE records (tenant TEXT NOT NULL, type TEXT NOT NULL, id TEXT NOT NULL,
+        revision INTEGER NOT NULL CHECK (revision >= 1), data TEXT NOT NULL,
+        idx1 TEXT, idx2 TEXT, idx3 TEXT, idx4 TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY (tenant, type, id)) WITHOUT ROWID;
+      CREATE INDEX records_idx1 ON records(tenant, type, idx1, id);  -- likewise idx2..idx4
+      CREATE TABLE outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, tenant TEXT NOT NULL,
+        type TEXT NOT NULL, aggregate_type TEXT NOT NULL, aggregate_id TEXT NOT NULL, revision INTEGER NOT NULL,
+        occurred_at TEXT NOT NULL, envelope TEXT NOT NULL);
+      CREATE TABLE inbox (consumer TEXT NOT NULL, event_id TEXT NOT NULL, aggregate_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('done','retry','dead')), attempts INTEGER NOT NULL,
+        next_attempt_at TEXT, last_error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (consumer, event_id)) WITHOUT ROWID;
+      CREATE TABLE leases (tenant TEXT NOT NULL, resource_id TEXT NOT NULL, holder TEXT NOT NULL, expires_at TEXT NOT NULL,
+        acquired_at TEXT NOT NULL, fence INTEGER NOT NULL, PRIMARY KEY (tenant, resource_id)) WITHOUT ROWID;
+      CREATE TABLE dead_letter (consumer TEXT NOT NULL, event_id TEXT NOT NULL, tenant TEXT NOT NULL, type TEXT NOT NULL,
+        envelope TEXT NOT NULL, attempts INTEGER NOT NULL, error_code TEXT NOT NULL, dead_at TEXT NOT NULL,
+        replay_count INTEGER NOT NULL DEFAULT 0, last_replayed_at TEXT,
+        PRIMARY KEY (consumer, event_id)) WITHOUT ROWID;
+      CREATE INDEX dead_letter_dead_at ON dead_letter(dead_at);
+      CREATE TABLE blobs (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL CHECK (size <= 5242880),
+        content_type TEXT NOT NULL, privacy TEXT NOT NULL, encrypted INTEGER NOT NULL, created_at TEXT NOT NULL,
+        PRIMARY KEY (tenant, ref)) WITHOUT ROWID;
+      CREATE TABLE blob_refs (tenant TEXT NOT NULL, ref TEXT NOT NULL, holder TEXT NOT NULL, PRIMARY KEY (tenant, ref, holder)) WITHOUT ROWID;
+      -- relay SQLite adapter only: ATTACH DATABASE '<encryptedBlobsPath>' AS blobs_enc on every connection, PRAGMA blobs_enc.journal_mode=WAL
+      CREATE TABLE blobs_enc.blob_bytes (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL CHECK (length(bytes) <= 5242880),
+        PRIMARY KEY (tenant, ref));
+      -- main.blobs rows with encrypted = 1 hold X'' as bytes on a relay; their ciphertext is the blobs_enc.blob_bytes row with the same key.
+      CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL) WITHOUT ROWID;
+      -- kernel:0003_dead_letter_replay: ALTER TABLE dead_letter ADD COLUMN replay_count INTEGER NOT NULL DEFAULT 0;
+      --   ALTER TABLE dead_letter ADD COLUMN last_replayed_at TEXT; CREATE INDEX dead_letter_dead_at ON dead_letter(dead_at);
+      -- kernel:0004_drop_sync_outbox: DROP TABLE sync_outbox (created by kernel:0001_base, no longer read or written;
+      --   shipped one release after the last release that used it, SCH-5 contract step).
+      -- kernel:0005_encrypted_blob_store: CREATE TABLE blobs_enc.blob_bytes; then in batches of 100 rows, each one transaction with
+      --   PRAGMA main.secure_delete=ON: INSERT INTO blobs_enc.blob_bytes SELECT tenant, ref, bytes FROM main.blobs WHERE encrypted = 1
+      --   AND length(bytes) > 0; UPDATE main.blobs SET bytes = X'' for the same rows (zeroes the freed main pages).
+      -- F15.S01.M01 OutboxEntry rows are records rows (type 'platform.outbox_entry'); storage has no sync outbox table.
+      -- idempotency table: see F15.S02.M02. IndexedDB uses one object store per table with the same row shapes.
+  validation_rules:
+    requirements:
+      - A put whose expectedRevision differs from the stored revision returns CONFLICT_REVISION with params.currentRevision; expectedRevision 0 creates and fails when the record exists.
+      - Updating or removing a missing record returns NOT_FOUND; repository definitions declare a type named <slug>.<entity> and at most four indexes, and queries accept limit 1 to 500 and only declared index names.
+      - Acquiring a lease held by another holder until expiresAt returns PRECONDITION_FAILED, and renewing an expired lease returns EXPIRED.
+      - A blob larger than its effective limit returns PAYLOAD_TOO_LARGE, where the limit is 5 MiB lowered by the TenantPort that F15.S04.M03 registers (limits(tenantId).maxUploadBytes on a relay, LocalSettings.localLimits.maxLocalAttachmentBytes in the vault, both at most 5242880) and is 5 MiB when no TenantPort is registered; a malformed content type or ref returns VALIDATION_FAILED, and relay storage rejects non-P0 plaintext blobs.
+      - On a relay every plaintext image blob put (content type image/*) runs the verifyImageClean verifier that the relay composition registers for F10.S02.M03 and is refused with the verifier's PRIVACY_METADATA_GPS_PRESENT (defined by F10.S02.M03) when not clean, a put whose bytes do not hash to the caller's expectedRef (the ref the signed listing references) returns VALIDATION_FAILED, and a relay adapter without a registered verifier refuses image puts with INTERNAL (fail closed); storage never re-encodes or substitutes bytes.
+      - A relay SQLite adapter opened without encryptedBlobsPath, or whose blobs_enc attach or schema check failed, refuses every encrypted blob put with INTERNAL (fail closed) and never writes ciphertext into schema main, while P0 plaintext puts and all other storage operations keep working.
+    rules:
+      - "V01 | expectedRevision equals the stored revision (0 when absent) | CONFLICT_REVISION"
+      - "V02 | the record exists for update or remove with expectedRevision ≥ 1 | NOT_FOUND"
+      - "V03 | the lease is not held by another holder until expiresAt | PRECONDITION_FAILED"
+      - "V04 | a lease is renewed by its holder before expiresAt | EXPIRED"
+      - "V05 | a requeue names a dead letter whose inbox row is dead; an event that is already requeued is not requeued again before it returns to dead | CONFLICT_STATE"
+      - "V06 | each recorded kernel migration checksum equals the code's checksum | PLATFORM_STORE_MIGRATION_DRIFT"
+      - "V07 | query limit is 1..500, index names are declared and the cursor decodes | VALIDATION_FAILED"
+      - "V08 | blob size ≤ min(5 MiB, TenantPort maxUploadBytes on a relay or LocalSettings.localLimits.maxLocalAttachmentBytes in the vault) | PAYLOAD_TOO_LARGE"
+      - "V09 | blob content type is type/subtype, ref is blob:sha256-<43 base64url chars>, relay blobs are P0 or encrypted | VALIDATION_FAILED"
+      - "V10 | the SQLite write lock is obtained within busy_timeout | DEPENDENCY_UNAVAILABLE"
+      - "V11 | when the caller names expectedRef, SHA-256 of the received bytes equals it; storage never substitutes other bytes | VALIDATION_FAILED"
+      - "V12 | a relay image blob put finds a registered verifyImageClean verifier (the verifier's own not-clean code passes through unchanged) | INTERNAL"
+      - "V13 | the IndexedDB database version on disk is at most the code's version; a VersionError opens nothing | UNSUPPORTED_SCHEMA_VERSION"
+      - "V14 | an encrypted blob put on the relay SQLite adapter finds schema blobs_enc attached with table blob_bytes; ciphertext is never written to main.blobs.bytes | INTERNAL"
+  workflow_state_machine:
+    requirements:
+      - Outbox delivery per consumer follows the InboxEntry machine; a failure schedules a retry after random(0, min(30 s, 500 ms × 2^(attempt-1))) and the eighth failure moves the event to dead_letter.
+      - A dead letter requeued by the replay primitive goes from dead to retry with inbox attempts reset and its dead_letter row kept with replay_count + 1 and last_replayed_at = now, is delivered like any retry (its dead_letter row deleted in the transaction that marks it done), and returns to dead with replay_count and last_replayed_at kept after 8 more failures, when its consumer module is disabled (FEATURE_DISABLED) or 7 days after last_replayed_at without delivery (EXPIRED).
+      - Leases follow acquire by compare-and-set, renew by the holder, release by the holder and automatic expiry at expiresAt, with a fencing counter that increases on every new acquisition (IDM-3, IDM-8).
+    machines:
+      - entity: InboxEntry
+        initial: pending
+        terminal: [done, purged]
+        transitions:
+          - "pending -> done | consumer handler returned ok | inbox row written in the handler transaction"
+          - "pending -> retry | handler failed and attempts < 8 | nextAttemptAt = now + full-jitter backoff; later events of the aggregate wait"
+          - "pending -> dead | handler failed and attempts reached maxAttempts | event copied to dead_letter with its error code, replay_count 0"
+          - "retry -> done | redelivery succeeded | inbox row marked done; a requeued event's dead_letter row is deleted in the same transaction"
+          - "retry -> retry | handler failed again and attempts < 8 | backoff ceiling doubles up to 30 s"
+          - "retry -> dead | eighth failed attempt | event copied to dead_letter with its error code; a requeued event updates its existing row (attempts, error_code, dead_at) and keeps replay_count and last_replayed_at"
+          - "dead -> retry | dead letter requeued by the replay primitive | inbox attempts reset to 0, due immediately; dead_letter row kept with replay_count + 1 and last_replayed_at = now"
+          - "retry -> dead | requeued event whose consumer module is disabled (FLG-3) | dead_letter error_code FEATURE_DISABLED and dead_at = now; replay_count and last_replayed_at kept"
+          - "retry -> dead | requeued event not delivered within 7 days of last_replayed_at | dead_letter error_code EXPIRED and dead_at = now; replay_count and last_replayed_at kept"
+          - "dead -> purged | purge primitive called by F15.S03.M03 for dead_at older than 30 days | dead_letter and inbox rows deleted in one transaction"
+      - entity: MediaBlob
+        initial: stored
+        terminal: [deleted]
+        transitions:
+          - "stored -> referenced | first holder attached by a repository put or attach | holder row written"
+          - "referenced -> referenced | another holder attached or a non-last holder detached | holder rows updated"
+          - "referenced -> deleted | last holder detached by record update or removal | blob row deleted in the same transaction; shred reported when encrypted"
+          - "stored -> deleted | orphan sweep for blobs never referenced | blob row deleted"
+    timeouts:
+      - "Inbox retry: nextAttemptAt = now + random(0, min(30 s, 500 ms × 2^(attempt-1))); dead letter after 8 attempts."
+      - "Disabled consumer modules (FLG-3) are paused 60 s at a time without consuming attempts and their events stay in the outbox; a requeued dead letter of a disabled consumer returns to dead with FEATURE_DISABLED instead."
+      - "Requeued dead letters return to dead with EXPIRED 604800000 ms (7 days) after last_replayed_at without delivery; dead letters are purged 2592000000 ms (30 days) after dead_at by the purge primitive that F15.S03.M03 schedules."
+      - "Leases expire at expiresAt (default TTL 15 min, maximum 24 h); expired leases are free without cleanup."
+      - "Orphan blob sweep deletes blobs without holders older than the cutoff chosen by the caller (default one day after upload)."
+  commands_queries_events:
+    requirements:
+      - Storage exposes transaction(fn) that commits records (including OutboxEntry records of F15.S01.M01), outbox events, inbox entries, idempotency records, leases, dead-letter changes and blob references atomically when fn returns ok and rolls back on err or exception.
+      - Repo<T> per type offers get, require, put with expectedRevision, remove, restore and query by up to four indexed fields with equality and range filters, ordering and opaque cursors.
+      - The outbox dispatcher delivers to subscribers registered per event type in (aggregate, revision) order per aggregate and deduplicates by (consumer, eventId) in the inbox.
+      - Storage holds no sync outbox - no sync_outbox table or object store, SyncOutboxEntry machine, sync sender, SyncTransport port or recordPeerAck - and F15.S01.M01 keeps OutboxEntry rows as records of type platform.outbox_entry in the vault's single IndexedDB database, enqueued inside the caller's transaction(fn) so they commit or roll back with the domain record (N24).
+      - Blob storage offers put (with optional expectedRef), get, info, attach and detach, applies the TenantPort size limit and the relay image verifier on put, and repositories that declare blob refs keep reference counts in step with record writes.
+      - Dead letters offer list(consumer?, limit), requeue(consumer, eventId), the 7-day and disabled-consumer return to dead run by the dispatcher, and purge(before) that deletes dead letters whose dead_at is before the cutoff and whose event is not currently requeued; F15.S03.M03 platform.deadletter.replay and its purge schedule use them.
+      - Storage treats relayId and destination values as opaque strings in the canonical form F15.S02.M01 defines (relayId 'relay:' plus 26 lowercase base32 characters of SHA-256 of the genesis key; destinations '<relayId>', '<relayId>/mailbox/<mailboxId>', '<relayId>/index/<indexName>', '<relayId>/auction/<auctionId>' or 'direct:<did>') and never derives, normalizes or rewrites them in data or index values.
+      - On a relay, blob get of an encrypted blob reads blobs_enc.blob_bytes and returns NOT_FOUND when the ciphertext is absent there (after a restore from an F15.S03.M02 backup of schema main, or a power loss between the two file commits), info then reports bytesPresent false, a put of the same ciphertext writes it again instead of counting a duplicate, and detaching the last holder deletes the main.blobs row and the blobs_enc.blob_bytes row in the same transaction(fn).
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "PLATFORM_STORE_MIGRATION_DRIFT | 500 | no | a recorded kernel migration checksum differs from the code; the relay refuses to start"
+    note: >-
+      Library module with no commands of its own. Every caller is a vault command, a relay command or a consumer
+      running through the F15.S02.M02 bus. F15.S01.M01 owns the vault sync outbox (OutboxEntry records of type
+      platform.outbox_entry, their state machine, sender and peer acknowledgements, N24) and uses only repositories
+      and transaction(fn) from storage. Dead-letter replay is platform.deadletter.replay owned by F15.S03.M03 using
+      the list, requeue and purge primitives. TenantPort (F15.S04.M03) and the relay image verifier (F10.S02.M03
+      verifyImageClean) reach storage by inverted registration at composition; their error codes
+      (PRIVACY_METADATA_GPS_PRESENT of F10.S02.M03) pass through unchanged.
+    example: |
+      const offers = defineRepo({ type: 'bazaar.offer', schema: Offer, indexes: { listing: (o) => o.listingId, status: (o) => o.status } });
+      await storage.transaction(async (tx) => {
+        const r = scope(tx).repo(offers).put(id, offer, { expectedRevision: 0 });   // revision 1
+        if (!r.ok) return r;                                                       // CONFLICT_REVISION / NOT_FOUND
+        tx.outbox.append(envelope);                                               // same transaction
+        outboxPort.enqueue(tx, entry);   // F15.S01.M01 writes a platform.outbox_entry record, destination 'relay:7k3mqxw2a9b4c5d6e7f8g9h0jk/mailbox/mbx_9f2'
+        return ok(r.value);
+      });
+      repo.query({ where: { listing: lid, status: 'made' }, orderBy: 'status', limit: 50, cursor })
+      → ok { items: StoredRecord[], nextCursor? }
+      relay: scope(tx).blobs.put(bytes, { contentType: 'image/webp', privacy: 'P0', expectedRef })
+      → ok { ref: 'blob:sha256-Qm3…' } | err PAYLOAD_TOO_LARGE (tenant maxUploadBytes) | err PRIVACY_METADATA_GPS_PRESENT
+      relay: scope(tx).blobs.put(ciphertext, { contentType: 'application/octet-stream', privacy: 'P2', encrypted: true, expectedRef })
+      → main.blobs row (bytes X'') + blobs_enc.blob_bytes row; blobs.info(ref) → { size, encrypted: true, bytesPresent: true }
+      F15.S03.M03: tx.deadLetters.requeue('search.indexer', eventId) → replay_count 1, last_replayed_at now
+  authorization_capabilities:
+    requirements:
+      - Storage performs no authorization itself and is reached only through the bus, the dispatcher or modules running inside a bus transaction, which scope every repository, lease, blob and dead letter to the context tenantId.
+      - A repository, lease, blob or dead-letter scope bound to one tenant cannot read or write another tenant's rows.
+      - Lease holders are proposal, cycle or auction IDs, never session tokens, and release or renewal by a non-holder returns PRECONDITION_FAILED.
+    capabilities: []
+    notes: >-
+      Vault policy: only the local principal's commands write the vault. Relay policy: relay commands are
+      authorized by the bus before storage is touched; relay tenants isolate hosted data per relay tenant. The
+      checkpointer registration and writer connection are available only on the Node subpath to the relay process
+      composition, never to feature modules.
+  failure_recovery_idempotency:
+    requirements:
+      - Writes are serialized per vault or relay (SQLite BEGIN IMMEDIATE with WAL and busy_timeout 5000; IndexedDB one readwrite transaction per commit), and a busy database maps to DEPENDENCY_UNAVAILABLE.
+      - A failed IndexedDB commit restores the in-memory working set so the vault state equals the last committed state.
+      - Consumer failures are retried with backoff and dead-lettered after 8 attempts, and a duplicate delivery is acknowledged without re-running side effects.
+      - The SQLite adapter option walAutocheckpoint 0 runs PRAGMA wal_autocheckpoint=0 on every relay connection it opens, and while F15.S03.M02 is the checkpointer registered through registerCheckpointer the adapter never checkpoints schema main by itself (no wal_checkpoint pragma on main or without a schema name, no checkpoint on close before the F15.S02.M01 shutdown sequence ran the pre-checkpoint hook) and exposes its writer connection through writerConnection() for node:sqlite backup() of schema main.
+      - The attached schema blobs_enc runs in WAL mode and is checkpointed only by storage, with the schema-qualified PRAGMA blobs_enc.wal_checkpoint(PASSIVE) after a commit leaves its WAL above 1000 frames and blobs_enc.wal_checkpoint(TRUNCATE) at close, so the WAL of schema main that F15.S03.M02 archives is never touched by these checkpoints.
+      - Because SQLite keeps each attached database file atomic but not the pair across a power loss, the orphan blob sweep also deletes blobs_enc.blob_bytes rows that have no main.blobs row, and a main.blobs encrypted row without ciphertext is read as absent bytes (04.R08), so neither state serves wrong bytes or keeps unreferenced ciphertext.
+    idempotency: "Inbox rows make consumers idempotent per (consumer, eventId); blob put is idempotent by content address; restore of an identical record is a no-op; requeue of an already requeued event is refused with CONFLICT_STATE so replay_count counts each replay once."
+    concurrency: "Single writer per store with a transaction mutex; optimistic concurrency by revision for records; leases with compare-and-set and fencing for local reservations; no distributed lock (IDM-8). On a relay the registered checkpointer is the only connection that checkpoints schema main and storage checkpoints only blobs_enc; backup() steps run on the writer connection between transactions."
+    retries: "The dispatcher uses full jitter, base 500 ms, cap 30 s and dead-letters after 8 attempts; requeued dead letters get 8 new attempts and return to dead after 7 days without delivery or when their consumer is disabled."
+    offline: "The vault works with no relay: commits are local, consumers run locally and F15.S01.M01 OutboxEntry records stay in the vault until its sender delivers them; nothing is lost when a relay is unreachable."
+    partial_failure: "A handler exception, an err result or a failed IndexedDB write rolls back every table touched; SQLite COMMIT failure triggers ROLLBACK before the error is rethrown. An IndexedDB upgrade that fails after the pre-upgrade snapshot leaves the snapshot and the old database intact. A relay transaction that writes both main and blobs_enc is atomic per file; a power loss between the two file commits is repaired by the orphan sweep or read as absent ciphertext."
+  privacy_retention_abuse:
+    requirements:
+      - Storage copies record data only into its own row; logs, metrics labels, inbox rows and dead-letter rows carry IDs, types and error codes, never record data beyond the event envelope itself.
+      - Outbox rows are pruned after 7 days and idempotency rows after 24 h; dead letters are purged 30 days after dead_at (RET-SHORT) by the purge primitive that F15.S03.M03 schedules, and a requeued event is not purged until it is delivered or dead again.
+      - Dead letters and inbox rows store the error code only, never exception messages with payload content.
+      - Relay blob storage accepts only P0 plaintext that the registered verifyImageClean reported clean (for images) or ciphertext, stores exactly the received bytes, and deletes a blob with its last reference so removed listings do not leave photos behind.
+      - Attachment ciphertext on a relay exists only in blobs_enc, which storage never hands to the backup archiver (writerConnection() backups copy schema main, the only schema whose WAL the F15.S03.M02 checkpointer archives), so a deleted attachment cannot return from a relay backup, and the kernel:0005 move runs with PRAGMA main.secure_delete=ON so later snapshots of main hold none of the moved ciphertext in freed pages.
+    data:
+      - "StoredRecord: class of the owning module (up to P3 in the vault; relays hold only public projections, ciphertext and relay-local data)."
+      - "OutboxEvent: class declared per event type; local to one vault or relay."
+      - "InboxEntry and dead letters: IDs, types, attempts, error codes, replay_count and last_replayed_at."
+      - "MediaBlob: P0 public media, P2 as ciphertext, P3 only in the vault; metadata stripped before storage."
+      - "blobs_enc.blob_bytes: ciphertext of encrypted MediaBlobs only, relay-local in a separate database file, never in a backup snapshot or WAL segment."
+      - "IndexedDB pre-upgrade snapshot: a copy of the vault database on the same device with the same classes; never uploaded."
+    retention:
+      - "OutboxEvent: 7 days after occurredAt (FLG-3 window), RET-SHORT."
+      - "Dead letters: purged 30 days after dead_at, RET-SHORT; InboxEntry done rows pruned with their events."
+      - "MediaBlob: RET-STANDARD, deleted with the last referencing record; encrypted blobs are crypto-shredded by the key owner."
+      - "IndexedDB pre-upgrade snapshot: kept until the next version bump replaces it or the vault is erased."
+    threats:
+      - "T01 | Partial writes leaving events without state or state without events | one transaction for records (including OutboxEntry records), outbox and inbox rows; rollback on any failure"
+      - "T02 | Cross-tenant reads on a multi-tenant relay | every scope is bound to the context tenantId; tenant is part of every primary key"
+      - "T03 | Poison event blocking a consumer forever | per-aggregate hold only, dead letter after 8 attempts, requeue primitive with replay_count"
+      - "T04 | Private photos leaking through a relay | relay accepts P0 plaintext or ciphertext only; verifyImageClean on receipt rejects GPS and metadata; bytes stored exactly, never re-encoded"
+      - "T05 | Lease theft by a stale holder | compare-and-set on holder and expiry; fencing counter for downstream checks"
+      - "T06 | Silent loss of WAL frames before archiving | wal_autocheckpoint=0 on every relay connection and no storage checkpoint while F15.S03.M02 is the registered checkpointer"
+      - "T07 | Substituted media bytes under a signed listing ref | expectedRef check against SHA-256 of the received bytes; no re-encode path exists on a relay"
+      - "T08 | Attachment ciphertext copied into relay backups or WAL segments | ciphertext only in the attached blobs_enc file, zero-length main bytes for encrypted rows, fail closed without blobs_enc (V14), no storage checkpoint of main, secure_delete during the kernel:0005 move"
+    abuse_controls:
+      - "Blob size cap 5 MiB lowered by the tenant limit, and query limit 500, bound per-request work."
+      - "Orphan blob sweep removes uploads that were never attached to a record."
+  observability_performance:
+    requirements:
+      - The dispatcher records classrup_outbox_lag_ms per consumer module and classrup_outbox_deliveries_total{module, outcome} including requeued and returned-to-dead outcomes, blob puts are counted in classrup_platform_blob_puts_total{outcome, code}, and storage records no sync metrics because the sync outbox belongs to F15.S01.M01.
+      - On SQLite with 5 000 records a get-and-put transaction has p95 at or below 5 ms and a 50-item index query has p95 at or below 20 ms.
+      - Dead-lettering logs one warn line with consumer, eventId, type and code and nothing from the payload.
+    metrics:
+      - "classrup_outbox_lag_ms{module} gauge"
+      - "classrup_outbox_deliveries_total{module, outcome=delivered|duplicate|retry|dead|paused|requeued}"
+      - "classrup_platform_blob_puts_total{outcome=stored|duplicate|rejected, code}"
+    logs:
+      - "warn outbox.dead_lettered {module, consumer, eventId, type, code, correlationId}."
+      - "error outbox.consumer_threw {module, consumer, eventId, correlationId, error}."
+      - "warn blob.rejected {code, size, contentType} — never bytes, refs of rejected uploads or tenant identifiers."
+      - "warn storage.idb_version_ahead {dbVersion, codeVersion, snapshotAvailable} in the vault ring buffer."
+    budgets:
+      - "SQLite get+put transaction p95 ≤ 5 ms; 50-item index query p95 ≤ 20 ms with 5 000 records."
+      - "Outbox lag below 60 s in steady state (readiness threshold, OBS-6)."
+  contract_and_acceptance_tests:
+    requirements:
+      - One storage contract suite runs unchanged against the memory, SQLite and IndexedDB (fake-indexeddb) adapters.
+      - Outbox ordering, inbox dedupe, backoff, dead letters, requeue timeouts and lease expiry are covered by deterministic tests with an injected clock and random source.
+      - Every requirement of PS-119 is covered by a test whose title starts with its TEST-PS-119-09 identifier.
+    fixtures: "storageContractSuite(adapter, factory) in packages/kernel/src/storage/contract-suite.ts; fake clock 2026-11-04T10:00:00.000Z; seeded IDs; sample module F99.S01.M01; fake-indexeddb 6.2.6 IDBFactory per test; TenantPort stub with relay tenant limits and vault localLimits; verifyImageClean stub returning clean or not clean with PRIVACY_METADATA_GPS_PRESENT; recording checkpointer stub; canonical relayId relay:7k3mqxw2a9b4c5d6e7f8g9h0jk; temp relay data dir with relay.sqlite and blobs_enc.sqlite (encryptedBlobsPath) and ciphertext fixtures carrying a canary byte pattern."
+    tests:
+      - "T01 | contract | 01.R01,01.R03,02.R01,02.R02,04.R02,09.R01 | create, duplicate create, stale update, remove, equality, range, ordered and cursor queries on memory, SQLite and IndexedDB | identical results; CONFLICT_REVISION with currentRevision; NOT_FOUND; VALIDATION_FAILED for bad cursor or limit"
+      - "T02 | contract | 04.R01 | err and exception after writing records, a platform.outbox_entry record, outbox, idempotency and lease rows and a dead-letter requeue, then a commit | nothing persists after err or exception; everything persists after ok"
+      - "T03 | contract | 02.R03,03.R03,05.R03 | acquire, competing acquire, non-holder release, renew, expiry, late renew, re-acquire | PRECONDITION_FAILED, EXPIRED, fence 1 then 2 then 3"
+      - "T04 | integration | 01.R02,03.R01,04.R03,06.R03,09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered"
+      - "T05 | contract | 01.R05,03.R02,04.R06,07.R02 | dead-letter an event, requeue it, fail 8 more times, requeue again, requeue twice in a row, disable the consumer of a third requeued event, leave a fourth undelivered 7 days, deliver a fifth, purge at dead_at + 30 days | replay_count 1 then 2 with last_replayed_at kept on re-dead-lettering; second requeue CONFLICT_STATE; FEATURE_DISABLED and EXPIRED returns keep replay_count; delivered row deleted; purge removes only dead rows older than 30 days"
+      - "T06 | unit | 05.R01,05.R02 | tenant B reads, queries, updates, leases, blob gets and dead-letter lists on tenant A's rows | nothing visible; NOT_FOUND on update; independent leases, records, blobs and dead letters"
+      - "T07 | integration | 06.R01 | pragmas on a file database; another connection holds BEGIN IMMEDIATE | journal_mode wal, busy_timeout 5000 by default; DEPENDENCY_UNAVAILABLE through storage and bus"
+      - "T08 | integration | 06.R02 | reopen an IndexedDB vault; inject a QuotaExceededError on commit | data and outbox sequence survive reopen; failed commit leaves no trace; next commit persists"
+      - "T09 | contract | 07.R02 | idempotency rows before, at and after expiry, an outbox row older than 7 days, a dead letter 30 days after dead_at and a requeued one with an old dead_at | expired and old rows purged; current and requeued rows kept"
+      - "T10 | integration | 07.R01,07.R03,08.R03 | consumer fails 8 times for an event with a private name | inbox dead with code only; one warn log with consumer, type and code; no payload text in outbox logs"
+      - "T11 | unit | 08.R01 | delivery failure then success with the clock advanced 5 s, then a requeue, an accepted and a rejected blob put | classrup_outbox_lag_ms 5000 then 0; deliveries counted by outcome including requeued; blob puts counted stored and rejected with code; no sync metric registered"
+      - "T12 | load | 08.R02 | 5 000 records, 200 get+put transactions and 100 index queries on SQLite WAL | p95 ≤ 5 ms and ≤ 20 ms"
+      - "T13 | integration | 10.R01 | export 120 records from memory by cursor scan and restore into SQLite, then restore identical and forged copies | identical export; identical restore skipped; forged copy CONFLICT_REVISION"
+      - "T14 | integration | 10.R02,10.R03 | reopen a database, run data migrations twice and a failing one, tamper with a kernel checksum, then upgrade a database created at kernel:0002 through kernel:0003 and kernel:0004 | kernel migrations recorded once; data migrations once; failing one not recorded; PLATFORM_STORE_MIGRATION_DRIFT on open; replay columns added with default 0; sync_outbox dropped"
+      - "T15 | unit | 09.R03 | traceability scan of kernel test titles | every PS-119 test ID T01–T26 appears in a test title"
+      - "T16 | unit | 03.R01,03.R02 | compare inboxMachine and blobMachine with this file's InboxEntry and MediaBlob machines | identical initial, terminal and transition rows; no sync machine exported"
+      - "T17 | contract | 01.R04,02.R04,04.R05,05.R02,07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2"
+      - "T18 | contract | 04.R04 | enqueue a platform.outbox_entry record inside a domain transaction that then fails, then one that commits; inspect adapter tables, object stores and the storage public API | entry and domain record roll back and commit together; no sync_outbox table or object store, no sync sender, SyncTransport or recordPeerAck exported"
+      - "T19 | contract | 02.R04,02.R05,04.R05,07.R04 | relay tenant maxUploadBytes 3 MiB with a 4 MiB P0 photo, vault maxLocalAttachmentBytes 1 MiB with a 2 MiB photo, no TenantPort with a 5 MiB photo; relay image puts that the verifier reports clean and not clean, a put whose bytes differ from expectedRef, an image put with no verifier registered | PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE, stored; clean bytes stored byte-identical with ref equal to expectedRef; PRIVACY_METADATA_GPS_PRESENT with nothing stored; VALIDATION_FAILED; INTERNAL; no re-encode call exists"
+      - "T20 | integration | 06.R04 | open a relay file database with walAutocheckpoint 0 and a registered recording checkpointer, write 20 000 rows, open a second connection, close the store, then take node:sqlite backup() of writerConnection() | PRAGMA wal_autocheckpoint is 0 on both connections; WAL salts unchanged by storage; no checkpoint before the pre-checkpoint hook; backup copy passes integrity_check with every committed row"
+      - "T21 | integration | 10.R04 | release N adds an object store (bump) and an optional record field (no bump); N-1 code then opens the vault; restore from the snapshot; redeploy N | no bump for the field change; pre-upgrade snapshot written before the bump; N-1 gets VersionError mapped to UNSUPPORTED_SCHEMA_VERSION with no store opened; restore yields every snapshot record; newer database untouched and readable again by N"
+      - "T22 | contract | 04.R07 | store records whose data and index values hold canonical relayId and destination strings on each adapter, query by destination and round-trip through export and restore | byte-identical strings, UTF-8 binary order kept, nothing derived or rewritten"
+      - "T23 | integration | 01.R06,07.R05 | relay SQLite adapter with encryptedBlobsPath puts 3 encrypted blobs carrying the canary and 2 P0 blobs, then node:sqlite backup() of writerConnection() runs; scan relay.sqlite, its WAL, the backup copy and blobs_enc.sqlite; repeat the puts on IndexedDB and memory | canary only in blobs_enc.sqlite and its WAL; every main.blobs row with encrypted = 1 has zero-length bytes; refs, sizes, privacy and holders in main; P0 bytes in main; IndexedDB and memory keep all bytes in their blobs store"
+      - "T24 | contract | 02.R06,04.R08 | relay SQLite adapter without encryptedBlobsPath puts an encrypted and a P0 blob; with blobs_enc, copy only relay.sqlite to a new data dir, open it, get and info the encrypted blob, put the same ciphertext again, then detach its last holder | INTERNAL for the encrypted put with nothing written to main and the P0 blob stored; NOT_FOUND and bytesPresent false after the main-only copy; the re-put writes the ciphertext and get returns it byte-identical; the last detach deletes both rows in one transaction with shred true"
+      - "T25 | chaos | 06.R04,06.R05,06.R06 | registered recording checkpointer; write 2 000 encrypted blobs; create directly a blobs_enc row without a main.blobs row and a main.blobs encrypted row without ciphertext (the two states a power loss between file commits can leave); run the orphan sweep; close the store | main WAL salts unchanged by storage; only schema-qualified blobs_enc checkpoints issued and the blobs_enc WAL stays below 1000 frames after each commit; orphan ciphertext row deleted; the row without ciphertext reads NOT_FOUND with bytesPresent false"
+      - "T26 | integration | 10.R05 | database at kernel:0004 holding 3 encrypted blobs with the canary in main.blobs.bytes; run kernel:0005, stop it after the first batch and run it again; scan relay.sqlite including free pages; open the migrated database with the F15.S03.M02 V12 check | ciphertext moved byte-identical into blobs_enc; main bytes zero-length; kernel:0005 recorded once and the rerun idempotent; no canary anywhere in relay.sqlite; V12 passes"
+    acceptance:
+      - All tests T01–T26 pass in CI for memory, SQLite and IndexedDB adapters.
+      - No failure path leaves records, events, OutboxEntry records, dead letters or blob references inconsistent (T02, T08, T17, T18).
+      - A poison event never blocks other aggregates, lands in dead letters after 8 attempts and keeps its replay_count across requeue and re-dead-lettering (T04, T05, T10).
+      - Relays store only clean or encrypted media byte-identical to the signed ref within the tenant limit, and storage never checkpoints schema main while the archiver is registered (T19, T20, T25).
+      - On a relay no attachment ciphertext exists in schema main, its WAL or a backup copy of it (T23, T24, T26).
+  import_export_backup_rollback:
+    requirements:
+      - Records are exported by their owning modules (IOX-5); storage provides an ordered cursor scan per tenant and type and a restore that keeps IDs, revisions and timestamps and rejects conflicting copies.
+      - Relay SQLite schema changes are forward-only kernel migrations recorded in schema_migrations, and data migrations run once each in their own transaction.
+      - Rollback to N-1 is safe because kernel schema changes are additive and a structure is dropped only one release after the last release that used it (SCH-5 contract step, as for sync_outbox), and drift between code and recorded kernel migrations stops startup with PLATFORM_STORE_MIGRATION_DRIFT.
+      - The IndexedDB database version is bumped only for object-store or index changes, record-level additive changes go through lazy SCH-4 migrations without a bump, a pre-upgrade snapshot of the database is written before any bump, and N-1 code catches VersionError on open, opens nothing partially, returns UNSUPPORTED_SCHEMA_VERSION and offers restore from that snapshot while leaving the newer database untouched (CTR-IOX-001 IOX-4; tested by F17.S03.M03 06.R02 and V08).
+      - Relay migration kernel:0005_encrypted_blob_store creates blobs_enc.blob_bytes and moves any ciphertext still held in main.blobs.bytes into it in idempotent batches of 100 rows (one transaction each, PRAGMA main.secure_delete=ON), reads fall back to non-empty main bytes only for rows a stopped move has not reached, and it ships with the first release that accepts relay attachment uploads (F08.S01.M03), so N-1 code never reads encrypted blobs and a rollback leaves every table it reads intact while it simply does not attach blobs_enc.
+    export: "No section of its own; owning modules page through repo.query (cursor scan) and write classrup-export/v1 lines; blobs referenced by exported records are exported by the owning module with their refs."
+    import: "repo.restore writes absent records as-is, skips identical ones and returns CONFLICT_REVISION for conflicting copies (IOX-2); blob refs of restored records are re-attached."
+    backup: "Relay: SQLite online backup with node:sqlite backup() on the writer connection and WAL archiving by F15.S03.M02, the only checkpointer (walAutocheckpoint 0, IOX-3). Encrypted MediaBlob ciphertext lives in the attached blobs_enc file, which F15.S03.M02 never snapshots or archives; only blob metadata and holders in schema main are backed up, and after a restore those blobs read as absent ciphertext. Vault: the user's export is the primary backup (IOX-6); IndexedDB itself is not backed up by the relay; the pre-upgrade snapshot is a local rollback aid, not a backup."
+    migration_rollback: "Kernel migrations kernel:0001_base, kernel:0002_media_blobs and kernel:0003_dead_letter_replay are additive; kernel:0004_drop_sync_outbox drops the unused sync_outbox table one release after the last release that used it; kernel:0005_encrypted_blob_store adds the attached blobs_enc store and moves ciphertext out of main.blobs.bytes, shipping with the first release that accepts relay attachment uploads. The IndexedDB vault bumps its version only for object-store or index changes (the sync_outbox object store removal is one), writes the pre-upgrade snapshot first, and N-1 code restores from that snapshot after a VersionError instead of downgrading in place; data rollback only by restore to a new instance (IOX-4)."

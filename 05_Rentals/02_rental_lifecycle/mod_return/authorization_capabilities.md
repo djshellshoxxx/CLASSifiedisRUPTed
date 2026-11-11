@@ -1,35 +1,36 @@
-# PS-043-05 — authorization capabilities
+# PS-043-05 — Authorization and capabilities: Rental return
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-05. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S02.M02 Rental return](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_lifecycle/return` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-043-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-043-05.R01** Vault policy - only the local principal who is the renter reports a return; only the owner attests, contests, records receipt, adjusts the late fee, waives damage claims or declares non-return; either party signs the completion and renegotiates a frozen return.
+- **PS-043-05.R02** Inbound statements are accepted only when the signer's key matches the role rule for that statement in this reservation; otherwise they are quarantined with a reason code.
+- **PS-043-05.R03** No relay role is involved; relays carry ciphertext and sign transport receipts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| rentals.return.report | principal | local principal is the renter of the reservation; handoff attested |
+| rentals.return.attest | principal | local principal is the owner of the reservation; return not yet attested (attest, record_received and contest) |
+| rentals.return.adjust_fee | principal | local principal is the owner of the reservation; adjustments only lower the fee; waivers of damage claims only re-evaluate closure |
+| rentals.return.declare | principal | local principal is the owner; overdue or contested at least 30 days after dueAt with no receipt or attestation held and no uncontested renter report |
+| rentals.return.complete | principal | local principal is owner or renter; the closure rule holds in this vault |
+| rentals.return.renegotiate | principal | local principal is owner or renter; state frozen |
+| rentals.return.receive | principal | any envelope; acceptance depends on signature and signer role |
+| rentals.return.read_own | principal | local principal is owner or renter of the reservation |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-043-09.T10 | abuse | PS-043-05.R01, PS-043-05.R02, PS-043-05.R03 | inbound attestation signed by the renter; local adjust_late_fee by the renter; statement by a third-party key; owner raises a fee | each inbound statement quarantined with RENTALS_STATEMENT_INVALID; the local command returns FORBIDDEN; the raise returns RENTALS_FEE_ADJUST_INVALID; no state change |
+
+## Dependencies
+
+Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

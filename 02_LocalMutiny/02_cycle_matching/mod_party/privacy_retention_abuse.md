@@ -1,35 +1,52 @@
-# PS-019-07 — privacy retention abuse
+# PS-019-07 — Privacy, retention and abuse: Matching participant eligibility
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-019-07. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M04 Matching participant eligibility](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/party` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for party within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-019-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-019-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-019-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-019-07.R01** Exclusions, pause reasons and block interactions never leave the vault in any event, log, projection or request.
+- **PS-019-07.R02** The published projection contains exactly four coarse fields plus region at L1 and the author DID, nothing finer than L2 location.
+- **PS-019-07.R03** Opt-in is explicit, versioned and withdrawable, and the UI states that already fetched copies cannot be recalled (PRV-6).
+- **PS-019-07.R04** Projections are published only after privacy.consent.check(federation_publish) per relay and assertPublicCell on regionL1; the module registers ExportSectionPort (section mutiny.matching_profile), DeletionPort and RetentionPurgePort with F10 (N6), annotates fields per F10.S02.M02, and its opt-in disclosure states the relay matching limit: a relay that computes suggestions knows each ring composition it computed and learns from mailbox metadata which participants fetched it.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- MatchingProfile local record: P3; field classes annotated per F10.S02.M02 (excludedActorIds and includeUnknownIdentities P3, published fields P0).
+- Public projection: P0 fields {optedIn, maxCycleLength, maxDistanceBucket, acceptsCompensation, regionL1}.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Local profile: RET-STANDARD, deleted with the vault or on user request; tombstone kept 180 days by relays (PRV-6).
+- Peer mirrors: kept while the projection is not older than 180 days and not tombstoned.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-019-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Inference of who a member excludes | exclusions never published; relay matching cannot apply them and recipient vaults drop suggestions silently |
+| T02 | Forged projection opts a victim in to matching | signature must verify against the DID in the envelope; suggestions involving a victim still require the victim's own signed consent |
+| T03 | Replay of an old projection to resurrect an opted-out member | seq and prev chain; tombstone with higher seq wins |
+| T04 | Location inference from region and distance bucket | regionL1 only (about 39 km by 19.5 km, assertPublicCell) and bucket ordinal; no finer cell published by this module |
+| T05 | Publishing without the member's federation consent | privacy.consent.check per relay before every projection; withdrawal sends a tombstone |
+
+**Abuse controls**
+- Local rate limit of 20 profile updates per day to bound relay write abuse.
+- Peer projections from an author that exceed 5 seq increments per hour are quarantined for 24 h.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-019-09.T02 | contract | PS-019-01.R02, PS-019-04.R02, PS-019-07.R02, PS-019-09.R02, PS-019-09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs |
+| TEST-PS-019-09.T08 | abuse | PS-019-05.R01, PS-019-05.R02, PS-019-07.R01 | other actor updates profile; projection signed by wrong DID; request logs inspected | FORBIDDEN or quarantine; no exclusion in any log |
+| TEST-PS-019-09.T10 | abuse | PS-019-07.R03, PS-019-07.R01 | opt-in without confirmation; replay of old projection after tombstone | MUTINY_OPTIN_REQUIRED; old projection ignored |
+| TEST-PS-019-09.T15 | e2e | PS-019-07.R03 | mobile user opts in and out | disclosure shown with the relay matching limit, fetched-copy warning shown, axe zero serious issues |
+| TEST-PS-019-09.T20 | integration | PS-019-07.R04, PS-019-07.R02 | federation_publish granted for relay A only; regionL1 of 5 characters; consent withdrawn for A; vault erased | projection sent to A only; DISCOVERY_PRECISION_FORBIDDEN; tombstone queued to A; local profile purged after the tombstone |
+
+## Dependencies
+
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

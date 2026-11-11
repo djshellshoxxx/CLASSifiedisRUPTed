@@ -1,35 +1,36 @@
-# PS-128-08 — observability performance
+# PS-128-08 — Observability and performance: Key lifecycle
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-08. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S02.M01 Key lifecycle](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/cryptography/key` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the observability performance process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-128-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-128-08.R01** The PWA sends no telemetry; the library records local diagnostics (unlock duration, failures count, lock reason) in the vault, exportable by the user per OBS-7.
+- **PS-128-08.R02** Unlock completes within 3 s p95 on a desktop-class device and within 8 s p95 on a Moto G-class device, running in a worker so the main thread stays responsive (INP ≤ 200 ms).
+- **PS-128-08.R03** Sign and agree complete within 5 ms p95 desktop and 25 ms p95 Moto G.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- Local diagnostic counters: unlock_ms, unlock_failures, auto_locks, device_rotations (vault-local, exportable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- local vault log key.unlocked {durationMs} and key.locked {reason}; never passphrases, keys or blobs.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- unlock p95 ≤ 3 s (desktop) and ≤ 8 s (Moto G profile); sign and agree p95 ≤ 5 ms and ≤ 25 ms; library bundle ≤ 40 KiB gzip.
+- Main-thread blocking during unlock ≤ 50 ms per task.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-128-09.T13 | load | PS-128-08.R02, PS-128-08.R03 | unlock under Moto G throttling; 1 000 signs and 1 000 agrees | unlock p95 ≤ 8 s with main-thread tasks ≤ 50 ms; sign and agree p95 ≤ 25 ms |
+| TEST-PS-128-09.T14 | unit | PS-128-08.R01, PS-128-09.R01 | traceability tool run; telemetry scan of network calls | every PS-128 requirement maps to a passing test; zero network calls from the library |
+
+## Dependencies
+
+Module depends on: F16.S02.M02, F16.S02.M03, F15.S01.M01, F07.S01.M01, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

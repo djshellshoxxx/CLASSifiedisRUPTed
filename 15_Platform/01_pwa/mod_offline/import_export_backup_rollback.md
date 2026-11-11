@@ -1,35 +1,30 @@
-# PS-116-10 — import export backup rollback
+# PS-116-10 — Import, export, backup and rollback: Offline outbox
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-10. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M01 Offline outbox](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/offline` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-116-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-116-10.R01** The outbox is device-local transient state; its ExportSectionPort contributes section platform.outbox with counts per state and destination and no payloads (CTR-IOX-001 IOX-1, IOX-6), and the export contains the signed statements already committed in the domain records.
+- **PS-116-10.R02** Outbox entries are never imported; after an import the user sees imported records only, and unsent statements must be re-created from the records.
+- **PS-116-10.R03** Storage schema upgrades are forward-only through F15.S02.M03 migrations with data kept, and a downgrade of the app leaves the database untouched and ignores entries it cannot read.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Section platform.outbox in classrup-export/v1 holds counts per state and destination only, so a restored vault shows that queued work existed; the Outbox sheet offers 'Copy as JSON' of the user's own unsent entries for support, payloads included only after a confirmation dialog. The storage panel's Export now action calls F10.S01.M03 and then platform.storage.record_export.
+- **import:** Not applicable: import (CTR-IOX-001 IOX-2) creates vault records and never writes outbox entries; an imported platform.outbox section is informational only.
+- **backup:** The vault export is the primary backup (IOX-6) and the PWA warns after 30 days without one (7 days without persistent storage). The outbox itself is not backed up: unsent actions are lost if the browser profile is wiped, which the pending help text states. Relays never store the outbox.
+- **migration rollback:** Outbox records follow F15.S02.M03 forward-only migrations (expand/contract); on a schema version greater than the app supports, the module opens read-only, refuses enqueue with UNSUPPORTED_SCHEMA_VERSION and keeps entries intact so rolling back the app release is safe.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-116-09.T20 | integration | PS-116-09.R02, PS-116-10.R01, PS-116-10.R02, PS-116-10.R03 | upgrade the F15.S02.M03 schema with entries present; export vault; erase vault | entries preserved on upgrade; export section platform.outbox has counts and no payloads; erase removes them; suite identical on fake-indexeddb, Chromium, WebKit, Firefox |
+
+## Dependencies
+
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S02.M01, F15.S04.M03, F11.S01.M01, F10.S02.M02, F14.S02.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

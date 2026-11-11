@@ -1,35 +1,30 @@
-# PS-011-10 — import export backup rollback
+# PS-011-10 — Import, export, backup and rollback: Purchase offers
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-011-10. **Owner:** [01_LocalBazaar/04_pricing/mod_offers](SPEC.md). **Implementing module:** 01_LocalBazaar/04_pricing/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S04.M01 Purchase offers](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/pricing/offers` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for offers within 04_pricing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-011-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-011-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-011-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-011-10.R01** A user's export contains offers they made and offers on their listings.
+- **PS-011-10.R02** Import verifies statement signatures and that the importing principal is buyerId or sellerId, with no relay lookup; records that fail are quarantined and other principals' offers are never imported as editable.
+- **PS-011-10.R03** Schema changes to Offer follow expand/contract and keep v1 readable for 180 days.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Section bazaar.offers in classrup-export/v1; one line per Offer (schema classrup.bazaar.offer_record/v1) followed by its signed statements (offer, decision, withdrawal and acceptance consent).
+- **import:** Signatures are re-verified locally and the importing principal must be buyerId or sellerId; no relay is consulted. Terminal offers import as read-only history; open offers import as expired with reason superseded to avoid stale commitments; hidden below-minimum offers stay hidden.
+- **backup:** Vault export is the primary backup (IOX-6); relays hold only encrypted mailbox envelopes under their retention policy (IOX-7).
+- **migration rollback:** Additive fields only in v1; records written under the earlier record name classrup.bazaar.offer/v1 are read as classrup.bazaar.offer_record/v1 for 180 days; rollback to the previous release is safe because new optional fields are ignored by older readers.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-011-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-011-09.T16 | integration | PS-011-10.R01, PS-011-10.R02, PS-011-10.R03 | export from S, import into a fresh vault of the same principal, import by a principal that is neither buyer nor seller, import with a bad signature | offers and statements round-trip identical with no relay lookup; open offers import as expired superseded; foreign principal rejected; bad signature quarantined |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

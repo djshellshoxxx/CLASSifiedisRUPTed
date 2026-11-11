@@ -1,35 +1,60 @@
-# PS-119-09 — contract and acceptance tests
+# PS-119-09 — Contract and acceptance tests: Storage
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-09. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M03 Storage](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/storage` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for storage within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-119-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-119-09.R01** One storage contract suite runs unchanged against the memory, SQLite and IndexedDB (fake-indexeddb) adapters.
+- **PS-119-09.R02** Outbox ordering, inbox dedupe, backoff, dead letters, requeue timeouts and lease expiry are covered by deterministic tests with an injected clock and random source.
+- **PS-119-09.R03** Every requirement of PS-119 is covered by a test whose title starts with its TEST-PS-119-09 identifier.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** storageContractSuite(adapter, factory) in packages/kernel/src/storage/contract-suite.ts; fake clock 2026-11-04T10:00:00.000Z; seeded IDs; sample module F99.S01.M01; fake-indexeddb 6.2.6 IDBFactory per test; TenantPort stub with relay tenant limits and vault localLimits; verifyImageClean stub returning clean or not clean with PRIVACY_METADATA_GPS_PRESENT; recording checkpointer stub; canonical relayId relay:7k3mqxw2a9b4c5d6e7f8g9h0jk; temp relay data dir with relay.sqlite and blobs_enc.sqlite (encryptedBlobsPath) and ciphertext fixtures carrying a canary byte pattern.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-119-09.T01 | contract | PS-119-01.R01, PS-119-01.R03, PS-119-02.R01, PS-119-02.R02, PS-119-04.R02, PS-119-09.R01 | create, duplicate create, stale update, remove, equality, range, ordered and cursor queries on memory, SQLite and IndexedDB | identical results; CONFLICT_REVISION with currentRevision; NOT_FOUND; VALIDATION_FAILED for bad cursor or limit |
+| TEST-PS-119-09.T02 | contract | PS-119-04.R01 | err and exception after writing records, a platform.outbox_entry record, outbox, idempotency and lease rows and a dead-letter requeue, then a commit | nothing persists after err or exception; everything persists after ok |
+| TEST-PS-119-09.T03 | contract | PS-119-02.R03, PS-119-03.R03, PS-119-05.R03 | acquire, competing acquire, non-holder release, renew, expiry, late renew, re-acquire | PRECONDITION_FAILED, EXPIRED, fence 1 then 2 then 3 |
+| TEST-PS-119-09.T04 | integration | PS-119-01.R02, PS-119-03.R01, PS-119-04.R03, PS-119-06.R03, PS-119-09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered |
+| TEST-PS-119-09.T05 | contract | PS-119-01.R05, PS-119-03.R02, PS-119-04.R06, PS-119-07.R02 | dead-letter an event, requeue it, fail 8 more times, requeue again, requeue twice in a row, disable the consumer of a third requeued event, leave a fourth undelivered 7 days, deliver a fifth, purge at dead_at + 30 days | replay_count 1 then 2 with last_replayed_at kept on re-dead-lettering; second requeue CONFLICT_STATE; FEATURE_DISABLED and EXPIRED returns keep replay_count; delivered row deleted; purge removes only dead rows older than 30 days |
+| TEST-PS-119-09.T06 | unit | PS-119-05.R01, PS-119-05.R02 | tenant B reads, queries, updates, leases, blob gets and dead-letter lists on tenant A's rows | nothing visible; NOT_FOUND on update; independent leases, records, blobs and dead letters |
+| TEST-PS-119-09.T07 | integration | PS-119-06.R01 | pragmas on a file database; another connection holds BEGIN IMMEDIATE | journal_mode wal, busy_timeout 5000 by default; DEPENDENCY_UNAVAILABLE through storage and bus |
+| TEST-PS-119-09.T08 | integration | PS-119-06.R02 | reopen an IndexedDB vault; inject a QuotaExceededError on commit | data and outbox sequence survive reopen; failed commit leaves no trace; next commit persists |
+| TEST-PS-119-09.T09 | contract | PS-119-07.R02 | idempotency rows before, at and after expiry, an outbox row older than 7 days, a dead letter 30 days after dead_at and a requeued one with an old dead_at | expired and old rows purged; current and requeued rows kept |
+| TEST-PS-119-09.T10 | integration | PS-119-07.R01, PS-119-07.R03, PS-119-08.R03 | consumer fails 8 times for an event with a private name | inbox dead with code only; one warn log with consumer, type and code; no payload text in outbox logs |
+| TEST-PS-119-09.T11 | unit | PS-119-08.R01 | delivery failure then success with the clock advanced 5 s, then a requeue, an accepted and a rejected blob put | classrup_outbox_lag_ms 5000 then 0; deliveries counted by outcome including requeued; blob puts counted stored and rejected with code; no sync metric registered |
+| TEST-PS-119-09.T12 | load | PS-119-08.R02 | 5 000 records, 200 get+put transactions and 100 index queries on SQLite WAL | p95 ≤ 5 ms and ≤ 20 ms |
+| TEST-PS-119-09.T13 | integration | PS-119-10.R01 | export 120 records from memory by cursor scan and restore into SQLite, then restore identical and forged copies | identical export; identical restore skipped; forged copy CONFLICT_REVISION |
+| TEST-PS-119-09.T14 | integration | PS-119-10.R02, PS-119-10.R03 | reopen a database, run data migrations twice and a failing one, tamper with a kernel checksum, then upgrade a database created at kernel:0002 through kernel:0003 and kernel:0004 | kernel migrations recorded once; data migrations once; failing one not recorded; PLATFORM_STORE_MIGRATION_DRIFT on open; replay columns added with default 0; sync_outbox dropped |
+| TEST-PS-119-09.T15 | unit | PS-119-09.R03 | traceability scan of kernel test titles | every PS-119 test ID T01–T26 appears in a test title |
+| TEST-PS-119-09.T16 | unit | PS-119-03.R01, PS-119-03.R02 | compare inboxMachine and blobMachine with this file's InboxEntry and MediaBlob machines | identical initial, terminal and transition rows; no sync machine exported |
+| TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
+| TEST-PS-119-09.T18 | contract | PS-119-04.R04 | enqueue a platform.outbox_entry record inside a domain transaction that then fails, then one that commits; inspect adapter tables, object stores and the storage public API | entry and domain record roll back and commit together; no sync_outbox table or object store, no sync sender, SyncTransport or recordPeerAck exported |
+| TEST-PS-119-09.T19 | contract | PS-119-02.R04, PS-119-02.R05, PS-119-04.R05, PS-119-07.R04 | relay tenant maxUploadBytes 3 MiB with a 4 MiB P0 photo, vault maxLocalAttachmentBytes 1 MiB with a 2 MiB photo, no TenantPort with a 5 MiB photo; relay image puts that the verifier reports clean and not clean, a put whose bytes differ from expectedRef, an image put with no verifier registered | PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE, stored; clean bytes stored byte-identical with ref equal to expectedRef; PRIVACY_METADATA_GPS_PRESENT with nothing stored; VALIDATION_FAILED; INTERNAL; no re-encode call exists |
+| TEST-PS-119-09.T20 | integration | PS-119-06.R04 | open a relay file database with walAutocheckpoint 0 and a registered recording checkpointer, write 20 000 rows, open a second connection, close the store, then take node:sqlite backup() of writerConnection() | PRAGMA wal_autocheckpoint is 0 on both connections; WAL salts unchanged by storage; no checkpoint before the pre-checkpoint hook; backup copy passes integrity_check with every committed row |
+| TEST-PS-119-09.T21 | integration | PS-119-10.R04 | release N adds an object store (bump) and an optional record field (no bump); N-1 code then opens the vault; restore from the snapshot; redeploy N | no bump for the field change; pre-upgrade snapshot written before the bump; N-1 gets VersionError mapped to UNSUPPORTED_SCHEMA_VERSION with no store opened; restore yields every snapshot record; newer database untouched and readable again by N |
+| TEST-PS-119-09.T22 | contract | PS-119-04.R07 | store records whose data and index values hold canonical relayId and destination strings on each adapter, query by destination and round-trip through export and restore | byte-identical strings, UTF-8 binary order kept, nothing derived or rewritten |
+| TEST-PS-119-09.T23 | integration | PS-119-01.R06, PS-119-07.R05 | relay SQLite adapter with encryptedBlobsPath puts 3 encrypted blobs carrying the canary and 2 P0 blobs, then node:sqlite backup() of writerConnection() runs; scan relay.sqlite, its WAL, the backup copy and blobs_enc.sqlite; repeat the puts on IndexedDB and memory | canary only in blobs_enc.sqlite and its WAL; every main.blobs row with encrypted = 1 has zero-length bytes; refs, sizes, privacy and holders in main; P0 bytes in main; IndexedDB and memory keep all bytes in their blobs store |
+| TEST-PS-119-09.T24 | contract | PS-119-02.R06, PS-119-04.R08 | relay SQLite adapter without encryptedBlobsPath puts an encrypted and a P0 blob; with blobs_enc, copy only relay.sqlite to a new data dir, open it, get and info the encrypted blob, put the same ciphertext again, then detach its last holder | INTERNAL for the encrypted put with nothing written to main and the P0 blob stored; NOT_FOUND and bytesPresent false after the main-only copy; the re-put writes the ciphertext and get returns it byte-identical; the last detach deletes both rows in one transaction with shred true |
+| TEST-PS-119-09.T25 | chaos | PS-119-06.R04, PS-119-06.R05, PS-119-06.R06 | registered recording checkpointer; write 2 000 encrypted blobs; create directly a blobs_enc row without a main.blobs row and a main.blobs encrypted row without ciphertext (the two states a power loss between file commits can leave); run the orphan sweep; close the store | main WAL salts unchanged by storage; only schema-qualified blobs_enc checkpoints issued and the blobs_enc WAL stays below 1000 frames after each commit; orphan ciphertext row deleted; the row without ciphertext reads NOT_FOUND with bytesPresent false |
+| TEST-PS-119-09.T26 | integration | PS-119-10.R05 | database at kernel:0004 holding 3 encrypted blobs with the canary in main.blobs.bytes; run kernel:0005, stop it after the first batch and run it again; scan relay.sqlite including free pages; open the migrated database with the F15.S03.M02 V12 check | ciphertext moved byte-identical into blobs_enc; main bytes zero-length; kernel:0005 recorded once and the rerun idempotent; no canary anywhere in relay.sqlite; V12 passes |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01–T26 pass in CI for memory, SQLite and IndexedDB adapters.
+- No failure path leaves records, events, OutboxEntry records, dead letters or blob references inconsistent (T02, T08, T17, T18).
+- A poison event never blocks other aggregates, lands in dead letters after 8 attempts and keeps its replay_count across requeue and re-dead-lettering (T04, T05, T10).
+- Relays store only clean or encrypted media byte-identical to the signed ref within the tenant limit, and storage never checkpoints schema main while the archiver is registered (T19, T20, T25).
+- On a relay no attachment ciphertext exists in schema main, its WAL or a backup copy of it (T23, T24, T26).
+
+## Dependencies
+
+Module depends on: F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-IOX-001, CTR-FLG-001, CTR-OBS-001, CTR-TST-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

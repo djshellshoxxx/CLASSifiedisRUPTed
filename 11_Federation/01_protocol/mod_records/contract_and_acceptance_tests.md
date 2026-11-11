@@ -1,35 +1,79 @@
-# PS-084-09 — contract and acceptance tests
+# PS-084-09 — Contract and acceptance tests: Federated records
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-09. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M02 Federated records](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/records` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for records within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-084-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-084-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-084-09.R02** An adversarial suite covers forged provenance, replay, flood, fork, pre-emptive tombstones, relay takedown attempts and metadata leakage against a two-relay, two-vault test harness.
+- **PS-084-09.R03** Contract tests validate envelopes, results, events and mirror views against the schema registry, the CTR-FED-001 vectors and the shared golden envelopes of F11.S01.M03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Two in-memory relays A and B with allowlist A<->B, author principals X and Y with device keys from fixed seeds (Y's portable document lists only relay C), seller S with 56 earlier statements on a thread stream, vaults V1 and V2, shared golden envelopes, fixed clock 2026-11-04T10:00:00Z, blocklist empty unless stated.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-084-09.T01 | contract | PS-084-01.R01, PS-084-01.R03, PS-084-04.R01 | ingest valid public listing envelope from peer B | FederatedRecord accepted with sourceKind peer_relay, receivedFromRelay B, via [B], verifiedAt and signerKey set, schema valid; the relay has no participants rows |
+| TEST-PS-084-09.T02 | unit | PS-084-02.R03, PS-084-02.R01 | each rule V01–V21 violated in turn | documented code per rule; nothing beyond a cid stub stored; V14 and V15 quarantine instead of rejecting |
+| TEST-PS-084-09.T03 | integration | PS-084-02.R01, PS-084-02.R02 | reject rules on an author, a cid and a peer; then a tombstone and a move statement by the blocked author through an allowed peer and through the blocked peer | stored count unchanged and FEDERATION_NOT_ACCEPTED with the same shape for the three blocked envelopes; the tombstone and move bypass the author rule and are applied via the allowed peer and refused via the blocked peer |
+| TEST-PS-084-09.T04 | property | PS-084-03.R01, PS-084-03.R03 | random sequences of arrivals, gaps, forks, tombstones, hide and reject rules, discards and releases | only declared transitions occur; terminal states never change; only accepted records are readable; hidden records return to accepted with their envelope when rules are removed |
+| TEST-PS-084-09.T05 | integration | PS-084-01.R05, PS-084-03.R02 | anchored public chain: seq 7 before seq 6, then seq 6 | seq 7 buffered and not served, then both accepted in order; events emitted in seq order |
+| TEST-PS-084-09.T06 | integration | PS-084-03.R04 | seq 7 buffered and 24 h pass without seq 6 | one catch-up fetch attempted, then seq 7 accepted with chainGap true and never dropped |
+| TEST-PS-084-09.T07 | integration | PS-084-01.R02, PS-084-03.R03, PS-084-07.R03 | valid owner tombstone for an accepted record | content purged within 1 h, tombstone applied with stubUntil ≥ appliedAt + max(180 days, target maxAge), event emitted |
+| TEST-PS-084-09.T08 | abuse | PS-084-07.R03 | resend the tombstoned envelope; a listing envelope dated 121 days ago; a profile envelope dated 200 days ago | FEDERATION_TOMBSTONED; FEDERATION_RECORD_TIME_INVALID for the listing (maxAge 120 days); the profile accepted (maxAge 400 days) |
+| TEST-PS-084-09.T09 | integration | PS-084-03.R05, PS-084-01.R02 | author tombstone arrives before its target, 25 h pass, then the target signed by the same author arrives | tombstone still pending_target after 24 h (never applied unchecked); on arrival the target is rejected FEDERATION_TOMBSTONED and the tombstone becomes applied |
+| TEST-PS-084-09.T10 | abuse | PS-084-03.R05, PS-084-02.R01 | third party signs a pre-emptive tombstone for X's record not yet seen; X's record arrives 2 days later; one issuer sends 51 tombstones for unseen targets | tombstone rejected on arrival and X's record accepted; the 51st refused with RATE_LIMITED |
+| TEST-PS-084-09.T11 | abuse | PS-084-02.R04 | relay B sends Y's listing although Y's portable document lists only relay C; relay D then sends the same cid; Y later publishes via C | accepted from B on its signature, via [B, D], no binding to B and no FEDERATION_ORIGIN_MISMATCH; the later record via C accepted |
+| TEST-PS-084-09.T12 | abuse | PS-084-02.R01 | 7000 valid envelopes from one peer within an hour and 11 batches in a minute | FEDERATION_QUOTA_EXCEEDED with retryAfterMs; stored count capped at 6000 |
+| TEST-PS-084-09.T13 | integration | PS-084-03.R04, PS-084-07.R01 | two envelopes with the same chain key and seq and different cids, then seq + 1 chaining from one of them, then the conflict resolved keeping that one | both quarantined and hidden; the successor held_on_fork beyond 24 h; after resolution the successor accepted and the other candidate dropped |
+| TEST-PS-084-09.T14 | abuse | PS-084-02.R05 | public payload with homeAddress, lat/lon, geohash 7 and a script tag; control tombstone with an extra member; participants ciphertext of 12289 bytes; participants statement without opt-in | FEDERATION_PAYLOAD_INVALID for the first three, nothing stored; the participants statement is accepted without any opt-in check |
+| TEST-PS-084-09.T15 | integration | PS-084-04.R01, PS-084-04.R02, PS-084-06.R02 | batch of 100 with 3 invalid envelopes | 97 accepted, 3 rejected with codes, results in request order, 97 accepted events and 3 rejected events |
+| TEST-PS-084-09.T16 | contract | PS-084-04.R02, PS-084-04.R03, PS-084-09.R02, PS-084-09.R03 | each command and event; every consumed event per the effect table; shared golden envelopes | payload and results validate against registry schemas; golden cids and signatures verify; consumed events handled per effect table |
+| TEST-PS-084-09.T17 | abuse | PS-084-05.R01, PS-084-05.R02, PS-084-05.R03 | unsigned and unknown-peer requests to the relay inbox; relay reads provenance without operator role; vault publish with a key not in the principal's document; relay operator tries to issue an author tombstone | FEDERATION_PEER_NOT_ALLOWED or FEDERATION_REQUEST_SIGNATURE_INVALID, FORBIDDEN, FEDERATION_AUTHOR_NOT_OWNED, FEDERATION_TOMBSTONE_UNAUTHORIZED |
+| TEST-PS-084-09.T25 | integration | PS-084-03.R04, PS-084-05.R01 | vault receives an accept-offer statement signed by a key that is not the listing author; the user discards it; a second one is left untouched for 30 days | quarantined signer_role_invalid with no domain event; discard moves it to dropped; the second is dropped by the quarantine sweep |
+| TEST-PS-084-09.T26 | integration | PS-084-06.R05 | publish while relay is down, then relay returns receipt, then peer acknowledgement | UI states local committed, relay received and peer accepted in order and never more than reached |
+| TEST-PS-084-09.T18 | integration | PS-084-05.R02, PS-084-06.R01 | local publish with own key, then with another principal's did; relay ingest batch replayed with the same Idempotency-Key | first accepted, second FEDERATION_AUTHOR_NOT_OWNED, replay returns original response |
+| TEST-PS-084-09.T19 | chaos | PS-084-06.R02, PS-084-06.R03 | kill relay mid-batch; blocklist service down; consent check down; portable-document resolver down; media fetch fails | restart leaves each envelope committed or absent; DEPENDENCY_UNAVAILABLE stores nothing and publishes nothing; user-role statements are not accepted unchecked; record accepted with mediaStatus pending |
+| TEST-PS-084-09.T20 | integration | PS-084-07.R02 | media from the source relay with hot-link URL and 6 MiB image | fetched by relay only, oversize skipped, no client request reaches the source relay |
+| TEST-PS-084-09.T21 | load | PS-084-08.R01, PS-084-08.R02, PS-084-08.R03 | 10 batches/s of 100 envelopes for 5 minutes | batch p95 ≤ 800 ms, metrics exported |
+| TEST-PS-084-09.T22 | integration | PS-084-08.R04, PS-084-03.R03 | 10 000 tombstoned mirrors and delayed purge | sweep ≤ 10 s; purge_lag alert fires when lag exceeds 1 h |
+| TEST-PS-084-09.T23 | unit | PS-084-09.R01 | traceability tool run | every PS-084 requirement maps to a passing test |
+| TEST-PS-084-09.T24 | integration | PS-084-10.R01, PS-084-10.R02, PS-084-10.R03 | export, import to fresh relay, restore backup; own-vault restore containing own statements 300 days old | records and tombstones round trip; imported records are re-verified; tombstones remain effective; the own restore is exempt from the age limit and loses nothing |
+| TEST-PS-084-09.T27 | integration | PS-084-01.R06 | fresh vault V2 with no head for seller S receives S's offer decision at seq 57 of thread stream thr:A, then seq 58 | seq 57 accepted as anchor (chainAnchor true, anchoredAt set); seq 58 accepted as next |
+| TEST-PS-084-09.T28 | integration | PS-084-01.R05, PS-084-06.R04, PS-084-04.R05 | two offline devices of principal P publish public statements; two producers in one vault publish concurrently through the StatementPublisherPort | different chain keys and no fork; in one vault seq n+1 and n+2 are allocated in their storing transactions and a duplicate head+1 insert fails the unique index |
+| TEST-PS-084-09.T29 | abuse | PS-084-07.R03, PS-084-03.R03 | relay R1's operator issues relay_removal (moderation_removed) with a statement of reasons for X's listing that R2 and vault V1 also hold | R1's index drops it; R2's mirror stays accepted and only enters R2's review queue; V1 keeps it with a removal notice; X's own vault ignores it and X republishes on another relay without FEDERATION_TOMBSTONED |
+| TEST-PS-084-09.T30 | integration | PS-084-01.R07 | vault receives two verified consents by signer S on one subject key with different digests | federation.conflict.detect called inside the receive transaction; both quarantined in that same transaction; promise index holds both digests |
+| TEST-PS-084-09.T31 | integration | PS-084-04.R04 | seller vault accepts a participants offer whose ext.recipients names the seller; the ack reaches the buyer vault | ack signed over the exact cid on the same thread stream and stored; record.accepted for the ack in the buyer vault reaches F11.S02.M01; a statement not addressed to the principal gets no ack |
+| TEST-PS-084-09.T32 | integration | PS-084-04.R05 | bazaar.listing.unpublished with tombstoneCid; bazaar.listing.expired after F01.S01.M03 already issued a tombstone through the port; services.offering.withdrawn with tombstoneReason owner_withdrawn, the same event replayed, and one with listing_expired for another offering | no second tombstone and no extra seq for the first two; exactly one tombstone per offering targeting projectionCid with the event's tombstoneReason, none for the replay |
+| TEST-PS-084-09.T33 | integration | PS-084-07.R04, PS-084-04.R08 | consent federation_publish withdrawn then public publish; consent service unavailable; export, deletion and retention ports called by F10 in step order; privacy.deletion.requested then privacy.deletion.completed | publish refused FEDERATION_NOT_OPTED_IN, then DEPENDENCY_UNAVAILABLE; each port returns its section, plan or purge counts; the sign step signs one account_deleted tombstone per own record (idempotent on resume) and the pseudonymize step pseudonymizes provenance; nothing is signed on requested and nothing is signed or pseudonymized on completed |
+| TEST-PS-084-09.T34 | abuse | PS-084-07.R05 | principal blocks DID B, then B's offer statement arrives by mailbox | dropped silently: no row beyond a stub, no ack, no event, generic outcome identical to an unanswered statement |
+| TEST-PS-084-09.T35 | integration | PS-084-03.R02, PS-084-03.R03 | personal hide rule on author Z then undo; reject rule on author Z; peer reject rule on relay B for records whose only provenance is B | hidden then accepted with envelope intact; reject purges to dropped; only B-only records dropped |
+| TEST-PS-084-09.T36 | abuse | PS-084-07.R01, PS-084-01.R03 | send a participants statement through relay A's mailbox and inspect A's storage, logs and events | relay holds only the sealed wrapper {v, mailboxId, ciphertext, size, sentAt}; no author DID, type or seq appears anywhere on A |
+| TEST-PS-084-09.T37 | integration | PS-084-02.R06, PS-084-03.R06 | statement signed by a revoked key with a backdated createdAt received after the revocation; revocation with effectiveFrom 3 days back learned after acceptance of a consent first received 2 days ago and one received 4 days ago; a revocation whose claim F16.S02.M02 clamped | first refused FEDERATION_SIGNER_ROLE_INVALID and listed in the quarantine list with reason signer_key_revoked; the 2-day consent re-marked signed_during_claimed_compromise, quarantined and its proposal frozen by a key_compromise conflict in the same transaction; the 4-day one stays accepted with signer_later_revoked; the clamped effectiveFrom is used as reported, never earlier |
+| TEST-PS-084-09.T38 | integration | PS-084-01.R06, PS-084-01.R04 | vault V2 joins after author X has published 200 public records, some older than 180 days but within maxAge and some tombstoned | V2 anchors at the first record it receives, tombstone stubs satisfy chain continuity, every live record is accepted and the final state equals V1's |
+| TEST-PS-084-09.T39 | unit | PS-084-01.R04 | purge an accepted record after an author tombstone | the stored row keeps only cid, recordKey, author, chain key, seq and purgedAt; envelope null |
+| TEST-PS-084-09.T40 | e2e | PS-084-07.R03 | owner presses 'Withdraw from federation' | the confirmation dialog shows the no-recall notice before any tombstone is signed; cancelling signs nothing |
+| TEST-PS-084-09.T41 | integration | PS-084-02.R07 | hosted vault batch: listing without a registered consent statement; listing in a removed currency; 6th index write of a new key in a day; listing that the spam evaluator throttles; a tombstone and a move by the same author; consent service unavailable | FEDERATION_NOT_OPTED_IN, FEDERATION_CURRENCY_NOT_ALLOWED, MODERATION_ACCOUNT_LIMIT_REACHED, RATE_LIMITED with retryAfterMs; tombstone and move accepted; DEPENDENCY_UNAVAILABLE and nothing stored for the affected envelopes |
+| TEST-PS-084-09.T42 | integration | PS-084-02.R08 | containment sentinel federation_off created, then a peer relay batch and a hosted vault batch; sentinel removed | peer batch FEATURE_DISABLED with params.reason federation_killed and nothing stored; hosted batch accepted; peer batch accepted after removal; flag F11 configuration unchanged |
+| TEST-PS-084-09.T43 | contract | PS-084-04.R06, PS-084-01.R08 | buyer vault mirrors listingRevision 3, then receives revision 4 at seq n+1, then revision 5 from the seller's second device with a lower chain seq; an ack accepted for an outbox entry | three federation.record.accepted events with recordKey, version and supersededRecordId; older rows supersededBy by version only; the ack event carries verification {signerDid, keyId, keyStatus, checkedAt} |
+| TEST-PS-084-09.T44 | contract | PS-084-04.R07 | inbox batch of 3 public envelopes; TombstoneSourcePort.listSince with an empty cursor and with the returned cursor after two more tombstones | each stored envelope has a classrup.platform.relay_receipt/v1 from the ReceiptPort stub with digest over its own bytes and its cid; listSince returns tombstones in receipt order and then only the two new ones |
+| TEST-PS-084-09.T45 | abuse | PS-084-02.R04, PS-084-07.R03 | relay key signs classrup.federation.tombstone/v1 for X's listing held by R2 and V1; X's own tombstone afterwards | relay-signed one refused FEDERATION_TOMBSTONE_UNAUTHORIZED, nothing purged anywhere; X's tombstone applied with issuerKind author, signerKey and targetAuthor X; a relay_removal advisory event carries issuerKind origin_relay and advisory true |
+| TEST-PS-084-09.T46 | contract | PS-084-05.R01, PS-084-02.R04 | vault receive with an F16.S01.M01 authorizeStatement stub returning Accept, Quarantine(signer_role_invalid) and Quarantine(signer_key_revoked); quarantine list and export | the stub is the only predicate called (no expected-role argument); quarantined rows are stored, listed and exported only by this module with their reasons |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01–T46 pass in CI.
+- The adversarial suite shows forged provenance, author capture, replay, flood, fork, pre-emptive tombstones, cross-relay takedown and participant metadata leakage are each blocked.
+- No record above P0 or finer than L2 is ever stored or served by a relay (privacy suite), and no relay stores author, type or seq of participant traffic.
+- Tombstoned content is gone from reads within 1 h and from storage within 24 h in the chaos test.
+
+## Dependencies
+
+Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F16.S01.M01, F15.S02.M01, F15.S04.M02, F15.S04.M03, F12.S02.M02, F12.S03.M03, F12.S03.M04, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

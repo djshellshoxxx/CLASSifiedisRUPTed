@@ -1,0 +1,430 @@
+id: F01.S04.M02
+scope: MVP
+summary: >-
+  Counteroffer chains between a buyer and a seller, up to 10 rounds, each round an immutable signed statement
+  (classrup.bazaar.negotiation_round/v1) published through the StatementPublisherPort (F11.S01.M02
+  federation.record.publish, audience participants) and sealed end to end to the counterparty on the root offer's
+  thread stream; before acting each vault asks federation.conflict.is_frozen (F11.S02.M03). Round zero is the buyer's
+  Offer (F01.S04.M01), which the first counter closes with reason countered (N10); every round keeps the root
+  offer's currency and quantity. The chain closes on acceptance, rejection, withdrawal or expiry. Consent is always
+  given on the exact round and the exact listing revision through the shared consent API (comms.consent.sign with
+  subjectType bazaar_negotiation over the round digest, N13). Because there is no shared server, each party's vault
+  keeps its own copy and agreement exists only when the seller's vault has taken a Deal-linked inventory hold and
+  signed a confirmation. Expiry is judged by each vault's clock with a 24 h grace for a decision in transit, after
+  which the waiting side sends a signed timeout close. Forked or conflicting signed rounds freeze the negotiation for
+  explicit discarding; the app never picks a winner by timestamp.
+responsibilities:
+  - Own Negotiation (the chain) and NegotiationRound (immutable signed round) records in each party's vault.
+  - Create, verify and store counter, reject, withdraw, close and confirm statements and sign acceptances through F08.S02.M02; quarantine statements with bad signatures, wrong roles or unknown negotiations.
+  - Enforce 10 rounds, the root offer's currency and quantity, a convergence rule (each counter moves toward the other side), per-round expiry (default 48 h, range 1 h to 7 days) and an overall 14-day limit.
+  - On acceptance, have the seller's vault take a Deal-linked inventory hold (bazaar.inventory.hold), open the Deal (F09.S01.M01), and send the signed confirmation; cancel that Deal when a late timeout close arrives.
+  - Close the root offer with reason countered in the same transaction as the first counter.
+  - React to listing changes, depletion, hold forks and blocks by closing or freezing the chain.
+  - Register the F10 privacy ports and pseudonymize retained chains after principal deletion (N6).
+  - Register the ConsentSubjectPort of F08.S02.M02 for subjectType bazaar_negotiation and echo every received consent statement to the other participant before committing on it (N13).
+  - Register the NegotiationTermsPort with F01.S04.M01 so its ContextTermsPort for context type offer can verify Deals opened on an accepted round (inverted registration, no reverse edge).
+  - Consume federation.conflict.detected and federation.conflict.resolved and call federation.conflict.is_frozen synchronously before acting on a chain (F11.S02.M03).
+non_responsibilities:
+  - The first offer, its expiry and its direct accept/reject path (F01.S04.M01).
+  - Inventory quantities and holds (F01.S03.M01) and Deal, payment claims and receipts (F09).
+  - Consent signing and verification primitives (F08.S02.M02) and mirror verification of listing projections (F11.S01.M02).
+  - Messaging threads (F08); rounds are referenced from threads as structured cards, not copied.
+  - Signing, seq allocation, mailbox routing and transport acknowledgements of statements (F11.S01.M02, F11.S02.M01, F08.S01.M01 mailboxes) and conflict records (F11.S02.M03).
+  - Multi-party barter revisions (F02.S01.M04).
+  - "Future: automated counter rules such as auto-accept above a threshold, and bundle negotiations over several listings."
+depends_on: [F01.S04.M01, F01.S03.M01, F01.S01.M01, F01.S02.M01, F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F08.S02.M02, F11.S01.M01, F11.S01.M02, F11.S02.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001]
+user_stories:
+  - As a seller, I answer a buyer's offer with a counter price and a note, and see whether the buyer has received and accepted it.
+  - As a buyer, I accept a seller's counter and see clearly that the deal is agreed only after the seller's confirmation arrives.
+  - As either party, I can walk away, and I can see the full list of rounds with who proposed what.
+edge_cases:
+  - Both parties counter at the same time (each on round n+1); the second statement to arrive fails the turn check, both vaults freeze the chain on detecting two signed rounds with the same number, and both are asked to discard the chain and start again with a new offer.
+  - Buyer accepts a seller round after the round expiry according to the seller's clock; the seller's vault refuses with EXPIRED and sends a signed close; the buyer's clock is only a claim.
+  - The seller confirms 5 minutes before expiry on its clock and the confirmation reaches the buyer 2 hours after expiry; the buyer applies it inside the 24 h grace. After the grace the buyer sends a signed timeout close and the seller cancels the Deal and releases the hold.
+  - Seller edits the price materially after sending a counter; the buyer's accept is refused with BAZAAR_NEGOTIATION_LISTING_CHANGED and the buyer must review the new revision.
+  - The last unit is held for another buyer while the first buyer's acceptance is in transit; the seller vault returns a signed close with outcome superseded and no hold is taken.
+  - A counter moves away from the other side (seller raises above the buyer, or buyer lowers below their earlier amount); BAZAAR_NEGOTIATION_NOT_CONVERGING is returned.
+  - The offer is in EUR and the seller counters in USD, or with another quantity; VALIDATION_FAILED is returned because the chain is pinned to the root offer's currency and quantity.
+  - The 11th round is attempted; BAZAAR_NEGOTIATION_ROUND_LIMIT is returned and only accept, reject or withdraw remain.
+  - Statement arrives with a valid signature from a key that is not the stated buyer or seller; it is quarantined with reason role_mismatch.
+  - Either vault is offline for days; the other side sees prepared or transport_acknowledged, never accepted, and the round expiry keeps running.
+  - The buyer withdraws the root offer while the seller's first counter is in transit; when round 1 arrives the buyer vault closes the chain as withdrawn and sends a signed close.
+  - A chain stays frozen and nobody decides; it expires at its hard deadline.
+  - F11.S02.M03 detects two acceptance consents of the buyer over different round digests of one chain; federation.conflict.detected freezes the chain in both vaults, and counter, accept, reject and withdraw return CONFLICT_STATE; if the conflict store cannot be read they return DEPENDENCY_UNAVAILABLE.
+ux:
+  screens:
+    - "Negotiation thread card (also embedded in F08 conversation): round list with proposer, amount, note, expiry, listing revision, and sync state chips (prepared, relay received, peer accepted)."
+    - "Counter sheet: amount input in the chain currency, optional note (up to 280 characters), expiry selector, convergence hint, summary of the exact listing revision."
+    - "Accept confirmation dialog: states exactly which round and amount is accepted and that the deal is agreed only after the seller's confirmation."
+  states: [loading, awaiting-me, awaiting-them, pending-offline, accept-sent, expiring-grace, accepted, rejected, withdrawn, expired, frozen-conflict]
+  a11y:
+    - Round list is an ordered list; each round has a text summary readable by screen readers.
+    - Status and sync-state changes are announced in an aria-live polite region.
+    - Accept and Reject buttons are at least 44x44 px and have names that include the amount and round number.
+processes:
+  domain_schema:
+    requirements:
+      - "A Negotiation links a buyer, a seller, a listing, an optional variant and the root Offer; each NegotiationRound is immutable and stores the signed statement digest."
+      - "Negotiation data is P2 and visible only to the two parties; rounds travel only as end-to-end encrypted envelopes and are never federated or sent to notification channels in plain form."
+      - "Timestamps in rounds are the signer's claims; ordering uses roundNo and the hash chain (prev), not clocks."
+      - "Each chain is pinned to the root offer's currency and quantity, recorded on the Negotiation; every round uses them, so the convergence rule compares amounts in one currency (MNY-6)."
+      - "The vault records Negotiation (classrup.bazaar.negotiation/v1) and NegotiationRound (classrup.bazaar.negotiation_round_record/v1) are distinct from the round statement classrup.bazaar.negotiation_round/v1 they store."
+    entities:
+      - name: Negotiation
+        schema: classrup.bazaar.negotiation/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, generated by the seller vault at the first counter"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing (seller) or verified mirror (buyer)"
+          - "variantId?: uuidv7 — ref F01.S03.M02 Variant"
+          - "buyerId: did:key — offer maker"
+          - "sellerId: did:key — listing owner, author of the verified projection"
+          - "localRole: enum — buyer | seller (which side this vault holds)"
+          - "rootOfferId: uuidv7 — ref F01.S04.M01 Offer, round zero"
+          - "streamId: string — the root offer's thr: stream; every round, close and confirmation of the chain is published on it"
+          - "currency: string — the root offer's currency; every round uses it"
+          - "quantity: int — the root offer's quantity, 1..100; every round uses it"
+          - "status: enum — open | frozen | accept_sent | accepted | rejected | withdrawn | expired"
+          - "frozenReason?: enum — conflicting_rounds | hold_fork"
+          - "awaiting: did:key — principal whose turn it is"
+          - "lastRoundNo: int — 0..10, 0 means only the root offer exists"
+          - "listingRevision: int — listing revision bound in the latest round"
+          - "closeOutcome?: enum — accepted | rejected | withdrawn | expired | superseded | listing_unavailable | blocked | frozen_discarded | timeout"
+          - "acceptanceConsentCid?: string — consent statement (comms.consent.sign) accepting the latest round"
+          - "dealId?: uuidv7 — ref F09.S01.M01 Deal, deterministic from contextRef {offer, rootOfferId}, set on acceptance"
+          - "holdId?: uuidv7 — ref F01.S03.M01 InventoryHold, set on acceptance (seller vault)"
+          - "confirmationCid?: string — sha256- of the seller's signed confirmation"
+          - "expiresAt: timestamp — expiry of the latest round, claim of the proposer"
+          - "graceUntil?: timestamp — expiresAt + 24 h while this vault waits for the other side's decision on its own round or acceptance"
+          - "hardDeadline: timestamp — createdAt + 14 d"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most 10 rounds beyond the root offer and at most one non-terminal Negotiation per (buyerId, sellerId, listingId, variantId).
+          - status accepted implies dealId, confirmationCid and a verified seller confirmation exist; in the seller vault it also implies holdId with a Deal-linked hold taken at acceptance; later state is the Deal's.
+          - buyerId differs from sellerId and awaiting is always the party that did not make the latest round.
+          - Field classes are annotated per F10.S02.M02 (all P2).
+      - name: NegotiationRound
+        schema: classrup.bazaar.negotiation_round_record/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "negotiationId: uuidv7 — ref Negotiation"
+          - "roundNo: int — 1..10; round 0 is the root Offer"
+          - "proposerId: did:key — signer, buyer or seller"
+          - "amount: Money — CTR-MNY-001; > 0; <= maxAmount(currency); currency equals Negotiation.currency"
+          - "quantity: int — equals Negotiation.quantity"
+          - "note?: string — <= 280 code points, plain text"
+          - "listingRevision: int — listing revision the proposer saw"
+          - "claimedAt: timestamp — proposer clock, a claim"
+          - "expiresAt: timestamp — claimedAt + 1 h..7 d, a claim"
+          - "prev: string — sha256- of the previous round statement or of the root offer statement"
+          - "statementCid: string — sha256- over JCS of the signed envelope"
+          - "receiptAt?: timestamp — local arrival time in this vault"
+          - "createdAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - A round is never modified or deleted while its negotiation exists.
+          - Unique (negotiationId, roundNo); a second different statement with the same number and signer marks the negotiation frozen.
+          - Rounds alternate proposers starting with the seller at round 1 when the root offer is the buyer's.
+    sql: |
+      CREATE TABLE bazaar_negotiation (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, buyer_id TEXT NOT NULL, seller_id TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_negotiation_live ON bazaar_negotiation(tenant_id, buyer_id, seller_id, listing_id, ifnull(json_extract(data,'$.variantId'),''))
+        WHERE status IN ('open','frozen','accept_sent');
+      CREATE TABLE bazaar_negotiation_round (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, negotiation_id TEXT NOT NULL, round_no INTEGER NOT NULL,
+        statement_cid TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_negotiation_round_no ON bazaar_negotiation_round(tenant_id, negotiation_id, round_no, statement_cid);
+  validation_rules:
+    requirements:
+      - "Every outgoing command and every incoming statement is validated for roles, turn, convergence, currency, listing revision and expiry before it changes state, in the vault each rule names: the buyer vault against the verified listing projection (F11.S01.M02 mirror view), the seller vault against its own listing and sell terms."
+      - "Statements that fail verification are quarantined with a reason and never change a negotiation."
+      - "Every violation maps to one stable error code."
+      - "A round in another currency or quantity than the root offer is refused with VALIDATION_FAILED."
+      - "Before counter, accept, reject, withdraw, discard_frozen and keep_frozen, and before applying an inbound round, close, confirmation or acceptance consent, the vault calls federation.conflict.is_frozen (F11.S02.M03) synchronously for consent:bazaar_negotiation:<negotiationId>; frozen refuses with CONFLICT_STATE (params.state frozen) except for discard_frozen and keep_frozen, and a store that cannot answer refuses with DEPENDENCY_UNAVAILABLE."
+    rules:
+      - "V01 | both vaults: signature verifies over JCS bytes, author is the stated buyer or seller key, schema version supported | VALIDATION_FAILED"
+      - "V02 | both vaults: it is the actor's turn (awaiting equals the actor) and status is open | CONFLICT_STATE"
+      - "V03 | both vaults: roundNo = lastRoundNo + 1 and roundNo <= 10 | BAZAAR_NEGOTIATION_ROUND_LIMIT"
+      - "V04 | both vaults: seller counter amount >= buyer's previous amount and <= seller's previous amount (or asking price at round 1); buyer counter symmetric; amounts compared in the chain currency | BAZAAR_NEGOTIATION_NOT_CONVERGING"
+      - "V05 | amount is a positive integer string <= maxAmount(currency) in a currency the listing accepts (seller vault: bazaar.sell_terms.accepts; buyer vault: acceptedCurrencies of the verified projection) | VALIDATION_FAILED"
+      - "V06 | listing is negotiable and published (seller vault: own Listing and SellTerms; buyer vault: verified projection, not tombstoned), and the cited listingRevision equals the current revision for accept | BAZAAR_NEGOTIATION_LISTING_CHANGED"
+      - "V07 | round expiry between 1 h and 7 days and not later than hardDeadline | VALIDATION_FAILED"
+      - "V08 | seller vault: accept or acceptance consent is applied before the round expiresAt according to the seller's clock; buyer vault: a confirmation is applied until expiresAt + 24 h on the buyer's clock | EXPIRED"
+      - "V09 | both vaults: neither party blocks the other (F07.S02.M02 isBlockedEither); statements from blocked DIDs are dropped silently (N7) | BLOCKED_PARTY"
+      - "V10 | note <= 280 code points | VALIDATION_FAILED"
+      - "V11 | seller vault: inventory check (bazaar.inventory.check) succeeds before confirmation | BAZAAR_NEGOTIATION_HOLD_FAILED"
+      - "V12 | expectedRevision matches | CONFLICT_REVISION"
+      - "V13 | both vaults: round currency equals Negotiation.currency and quantity equals Negotiation.quantity (the root offer's) | VALIDATION_FAILED"
+      - "V14 | both vaults: an acceptance counts only when comms.consent.verify returns valid for the accepting party (signerDid = buyer or seller as stated) over subjectRevisionHash = the round statementCid (ID-3 cid of ConsentSubjectPort.canonicalBytes) under statementKey consent.bazaar.negotiation.accept.v1; conflicted freezes the chain | VALIDATION_FAILED"
+      - "V15 | both vaults: a close or confirmation binds the negotiationId and the cid of the round it answers | VALIDATION_FAILED"
+      - "V16 | both vaults: federation.conflict.is_frozen({subjectRef: consent:bazaar_negotiation:<negotiationId>}) returns frozen false, except for discard_frozen and keep_frozen | CONFLICT_STATE"
+      - "V17 | both vaults: federation.conflict.is_frozen answers; a store that cannot be read refuses the action (fail closed) | DEPENDENCY_UNAVAILABLE"
+  workflow_state_machine:
+    requirements:
+      - "Negotiation follows the declared machine; rejected, withdrawn and expired are terminal, accepted is left only through a late timeout close or a hold-fork freeze in the seller vault, and any other transition is refused with CONFLICT_STATE."
+      - "Agreement is reached only when the seller's vault has taken the hold, opened the Deal handoff and signed the confirmation; a buyer's acceptance alone leaves the chain in accept_sent."
+      - "Two different signed statements for the same round number, or an acceptance and a counter for the same round, freeze the chain; frozen chains are never resolved automatically and leave only by discard, by an explicit keep after a hold fork, or at the hard deadline."
+      - "A vault waiting for the other side's decision on its own round or acceptance applies a verified confirmation or acceptance until expiresAt + 24 h; after that grace it sends a signed timeout close, and a seller vault that had confirmed cancels the Deal (commerce.deal.cancel) so the hold is released."
+      - "The first seller counter moves the root offer to rejected with reason countered through bazaar.offer.reject in the same transaction (N10); a buyer vault that receives round 1 for a root offer it already withdrew closes the chain as withdrawn with a signed close."
+    machines:
+      - entity: Negotiation
+        initial: open
+        terminal: [rejected, withdrawn, expired]
+        transitions:
+          - "open -> open | counter statement accepted from the party whose turn it is | new round stored in the chain currency and quantity, awaiting flips; the first seller counter also calls bazaar.offer.reject {reason countered} in the same transaction; emits bazaar.negotiation.countered"
+          - "open -> accepted | seller vault: the seller accepts the buyer's latest round, or a buyer acceptance consent is verified valid (V14) before the round's expiresAt on the seller clock | Deal-linked hold (holder {negotiation, id}, ttl 7 d, maxExpiresAt = Deal expiry), commerce.deal.open {contextRef {offer, rootOfferId}} and the signed confirmation in one transaction; emits bazaar.negotiation.closed (accepted)"
+          - "open -> accept_sent | buyer vault signs acceptance of the seller's latest round with comms.consent.sign | consent queued; graceUntil = round expiresAt + 24 h; waits for the seller's confirmation"
+          - "accept_sent -> accepted | seller confirmation statement verified (signer seller, binds the round cid) no later than graceUntil | records holdId, dealId; emits bazaar.negotiation.closed (accepted)"
+          - "accept_sent -> rejected | seller close statement (superseded, listing_unavailable, hold failed, expired) | emits bazaar.negotiation.closed"
+          - "accept_sent -> expired | graceUntil passes without a verified confirmation, or the hard deadline | signed timeout close queued; emits bazaar.negotiation.closed (expired)"
+          - "open -> rejected | reject by the party whose turn it is, or block, or listing unavailable, or depletion | signed close queued; emits bazaar.negotiation.closed"
+          - "open -> withdrawn | either party withdraws, or the buyer vault receives round 1 for a root offer it already withdrew | signed close queued; emits bazaar.negotiation.closed (withdrawn)"
+          - "open -> expired | round expiresAt passes (the proposer waiting on its own round keeps it until graceUntil) or hardDeadline passes | emits bazaar.negotiation.closed (expired)"
+          - "open -> frozen | conflicting signed statements detected, federation.conflict.detected whose freezeScope names consent:bazaar_negotiation:<negotiationId>, or comms.consent.verify returns conflicted | frozenReason conflicting_rounds; no further commands except discard"
+          - "accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this chain's hold (acceptance on a forked device) | frozenReason hold_fork; the Deal does not proceed"
+          - "accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | commerce.deal.cancel in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired)"
+          - "frozen -> accepted | bazaar.negotiation.keep_frozen by the seller for a hold_fork chain | the competing holder is dropped by its owner module; hold active again"
+          - "frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork commerce.deal.cancel and a signed close to the buyer; a new offer is needed"
+          - "frozen -> expired | hardDeadline reached, or for hold_fork the frozen hold's maxExpiresAt | emits bazaar.negotiation.closed (expired)"
+    timeouts:
+      - "Sweep every 60 s while the app is open and at app start: open chains whose latest round expiresAt <= now become expired, except that the proposer of that round keeps it until graceUntil; accept_sent chains expire at graceUntil and queue a signed timeout close."
+      - "Hard deadline 14 days after creation closes any open, accept_sent or frozen chain."
+      - "accept_sent waits until the accepted round's expiresAt + 24 h for the seller confirmation."
+  commands_queries_events:
+    requirements:
+      - "counter, accept, reject, withdraw, discard and keep are vault commands; counter, reject and withdraw produce signed statements (classrup.bazaar.negotiation_round/v1, classrup.bazaar.negotiation_close/v1); acceptance is a consent statement signed through comms.consent.sign; receive handles inbound rounds, closes and confirmations; confirm is produced by the seller vault as classrup.bazaar.negotiation_confirm/v1."
+      - "Sync state of every outbound statement is prepared, transport_acknowledged (relay receipt) or peer_accepted (classrup.federation.ack/v1 signed by the peer's F11.S01.M02); the UI shows no more than the reached state."
+      - "Events are emitted in each vault from local state changes after verification; the two vaults emit equivalent events independently."
+      - "Statements and signer roles are registered with F11.S01.M01 (N2): classrup.bazaar.negotiation_round/v1 signed by the proposer (buyer or seller of the chain), classrup.bazaar.negotiation_close/v1 signed by the closing party, classrup.bazaar.negotiation_confirm/v1 signed by the seller; the earlier name classrup.bazaar.negotiation_accept/v1 is an alias of the consent statement."
+      - "Acceptance is signed with comms.consent.sign {subjectType bazaar_negotiation, subjectRef negotiationId, subjectRevision roundNo, subjectRevisionHash (ID-3 cid sha256-<base64url> of ConsentSubjectPort.canonicalBytes, which equals the round statementCid), statementKey consent.bazaar.negotiation.accept.v1, statementLocale (BCP 47 locale of the wording shown), statementTextHash} and verified with comms.consent.verify; the module registers the ConsentSubjectPort for bazaar_negotiation, a conflicted status (decline, revocation after commit or peer-reported invalidity) freezes the chain, and every received consent statement is echoed to the other participant before the vault commits on it (N13)."
+      - "Round, close and confirmation statements are published only through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, recipients [{did, mailboxId}], ext.stream = streamId, sealed ciphertext of at most 12288 bytes) and acknowledged by the receiving vault's F11.S01.M02 with classrup.federation.ack/v1; this module signs no acknowledgement and declares no relay capability."
+      - "The module registers the NegotiationTermsPort {roundTerms(rootOfferId, roundCid) -> {buyerId, sellerId, amount, quantity, accepted}} with F01.S04.M01, whose ContextTermsPort for context type offer verifies Deals opened on an accepted round; bazaar.negotiation.countered carries rootOfferId so consumers need no lookup."
+    commands:
+      - name: bazaar.negotiation.counter
+        capability: bazaar.negotiation.counter
+        input: "[vault-local + statement classrup.bazaar.negotiation_round/v1 published with federation.record.publish {audience participants, recipients [{did: counterparty, mailboxId}], stream streamId}] { offerId | negotiationId, expectedRevision?, amount (chain currency), note?, expiresInMs? (default 172800000) }"
+        output: "{ negotiationId, roundNo, revision, statementCid, syncState: prepared }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BLOCKED_PARTY, BAZAAR_NEGOTIATION_ROUND_LIMIT, BAZAAR_NEGOTIATION_NOT_CONVERGING, BAZAAR_NEGOTIATION_LISTING_CHANGED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+        emits: [bazaar.negotiation.countered]
+        idempotent: true
+      - name: bazaar.negotiation.accept
+        capability: bazaar.negotiation.decide
+        input: "[vault-local; produces classrup.comms.consent/v1 through comms.consent.sign (statementKey consent.bazaar.negotiation.accept.v1); in the seller vault also classrup.bazaar.negotiation_confirm/v1, classrup.commerce.deal/v1 and classrup.bazaar.reservation/v1] { negotiationId, expectedRevision, roundNo, roundCid, listingRevision }"
+        output: "{ negotiationId, revision, status: accept_sent|accepted, consentCid, dealId?, holdId? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, BLOCKED_PARTY, BAZAAR_NEGOTIATION_LISTING_CHANGED, BAZAAR_NEGOTIATION_HOLD_FAILED, DEPENDENCY_UNAVAILABLE, COMMS_CONSENT_SUBJECT_MISMATCH]
+        emits: [bazaar.negotiation.closed]
+        idempotent: true
+      - name: bazaar.negotiation.reject
+        capability: bazaar.negotiation.decide
+        input: "[vault-local + statement classrup.bazaar.negotiation_close/v1 published with federation.record.publish] { negotiationId, expectedRevision }"
+        output: "{ negotiationId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [bazaar.negotiation.closed]
+        idempotent: true
+      - name: bazaar.negotiation.withdraw
+        capability: bazaar.negotiation.withdraw
+        input: "[vault-local + statement classrup.bazaar.negotiation_close/v1 published with federation.record.publish] { negotiationId, expectedRevision }"
+        output: "{ negotiationId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [bazaar.negotiation.closed]
+        idempotent: true
+      - name: bazaar.negotiation.discard_frozen
+        capability: bazaar.negotiation.decide
+        input: "[vault-local + statement classrup.bazaar.negotiation_close/v1 published with federation.record.publish] { negotiationId, expectedRevision }"
+        output: "{ negotiationId, revision, cancelledDealId? }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [bazaar.negotiation.closed]
+        idempotent: true
+      - name: bazaar.negotiation.keep_frozen
+        capability: bazaar.negotiation.decide
+        input: "[vault-local in the seller vault] { negotiationId, expectedRevision }"
+        output: "{ negotiationId, revision, status: accepted }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_NEGOTIATION_HOLD_FAILED, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: bazaar.negotiation.receive
+        capability: bazaar.negotiation.receive
+        input: "[vault-local, inbound statement] { envelope: classrup.bazaar.negotiation_round/v1 | classrup.bazaar.negotiation_close/v1 | classrup.bazaar.negotiation_confirm/v1, provenance }"
+        output: "{ negotiationId?, accepted: boolean, quarantineReason?, replyStatementCid? }"
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [bazaar.negotiation.countered, bazaar.negotiation.closed]
+        idempotent: true
+    note: >-
+      Statements (N2, registered with F11.S01.M01): classrup.bazaar.negotiation_round/v1 {negotiationId, rootOfferId,
+      roundNo, amount, quantity, note?, listingRevision, claimedAt, expiresAt, prev}, signer role proposer (buyer or
+      seller of the chain); classrup.bazaar.negotiation_close/v1 {negotiationId, answersCid, outcome: rejected|withdrawn|
+      expired|superseded|listing_unavailable|frozen_discarded|timeout}, signer role the closing party;
+      classrup.bazaar.negotiation_confirm/v1 {negotiationId, roundCid, acceptanceConsentCid, dealId}, signer role seller;
+      acceptance classrup.comms.consent/v1 (F08.S02.M02, subjectType bazaar_negotiation, statementKey
+      consent.bazaar.negotiation.accept.v1), signer role the accepting party; plus classrup.commerce.deal/v1 and
+      classrup.bazaar.reservation/v1 from the seller vault. All are published through the StatementPublisherPort
+      (federation.record.publish, audience participants, ext.stream = streamId) and acknowledged by the recipient's
+      F11.S01.M02 with classrup.federation.ack/v1. ConsentSubjectPort (F08.S02.M02) for bazaar_negotiation:
+      canonicalBytes(negotiationId, roundNo) = JCS of the stored round envelope without sig and cid (its ID-3 cid equals
+      the round statementCid), currentRevision = lastRoundNo, partyRole = buyer or seller of the chain
+      (consent.bazaar.negotiation.accept.v1 requires the party awaiting a decision on that round), isCommitted = status
+      accepted. Commitment conflicts on acceptances are the classrup.comms.consent/v1 entry of F08.S02.M02, confirmed for
+      bazaar_negotiation. NegotiationTermsPort registered with F01.S04.M01 as stated in the requirements. Privacy ports (N6): the module registers ExportSectionPort
+      (sections bazaar.negotiations and bazaar.negotiation_rounds), DeletionPort (plan: pseudonymize the deleted party in
+      retained chains, purge notes of non-evidence chains) and RetentionPurgePort with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
+    queries:
+      - name: bazaar.negotiation.get
+        capability: bazaar.negotiation.read
+        input: "{ negotiationId }"
+        output: "{ negotiation: Negotiation, rounds: NegotiationRound[] }"
+        errors: [NOT_FOUND]
+      - name: bazaar.negotiation.list_mine
+        capability: bazaar.negotiation.read
+        input: "{ status?, listingId?, cursor?, limit <= 50 }"
+        output: "{ items: Negotiation[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: bazaar.negotiation.countered, privacy: P2, payload: "{ negotiationId, rootOfferId, listingId, variantId?, roundNo, proposerId, recipientId, amount, listingRevision, expiresAt }"}
+      - {type: bazaar.negotiation.closed, privacy: P2, payload: "{ negotiationId, listingId, variantId?, buyerId, sellerId, outcome: accepted|rejected|withdrawn|expired|superseded|listing_unavailable|blocked|frozen_discarded|timeout, finalAmount?, quantity, dealId?, holdId?, localRole }"}
+    events_consumed:
+      - {type: bazaar.listing.edited, effect: "seller vault: when material, mark open chains listingChangedSinceRound; accept is then refused until the proposer sends a new round on the new revision"}
+      - {type: bazaar.listing.unpublished, effect: "seller vault: close open chains with outcome listing_unavailable and queue a signed close"}
+      - {type: bazaar.listing.expired, effect: "seller vault: close open chains with outcome listing_unavailable and queue a signed close"}
+      - {type: bazaar.listing.closed, effect: "seller vault: close open chains with outcome listing_unavailable and queue a signed close"}
+      - {type: bazaar.inventory.depleted, effect: "seller vault: close open chains on that variant with outcome superseded unless this chain holds the stock"}
+      - {type: bazaar.inventory.conflict_detected, effect: "seller vault: an accepted chain whose holdId is named moves to frozen with frozenReason hold_fork"}
+      - {type: identity.block.added, effect: "both vaults: close chains between the two parties with outcome blocked and send no revealing notification; the close statement reads rejected"}
+      - {type: federation.record.accepted, effect: "buyer vault: a newer verified projection of the chain's listing with a higher listingRevision and material changes marks the chain listingChangedSinceRound"}
+      - {type: federation.tombstone.applied, effect: "buyer vault: a tombstone of the chain's listing projection marks the listing unavailable; the chain waits for the seller's close or expiry"}
+      - {type: comms.consent.received, effect: "for subjectType bazaar_negotiation and this negotiationId: echo the received consent statement to the other participant first; seller vault then verifies the buyer's acceptance with comms.consent.verify and runs the accept transaction; buyer vault records the seller's consent next to the confirmation; conflicted freezes the chain"}
+      - {type: federation.conflict.detected, effect: "both vaults: freezeScope naming consent:bazaar_negotiation:<negotiationId> moves an open, accept_sent or accepted chain to frozen with frozenReason conflicting_rounds"}
+      - {type: federation.conflict.resolved, effect: "both vaults: drop_all moves the frozen chain to rejected (frozen_discarded) with commerce.deal.cancel where a Deal exists; superseded by a consent both parties signed keeps the chain frozen until keep_frozen or discard"}
+      - {type: commerce.deal.cancelled, effect: "a frozen hold_fork chain whose dealId matches moves to expired"}
+      - {type: privacy.deletion.completed, effect: "replace the deleted principal's DID with the payload pseudonym in chains and rounds retained under RET-EVIDENCE and purge notes of non-evidence chains"}
+    errors:
+      - "BAZAAR_NEGOTIATION_ROUND_LIMIT | 409 | no | the chain already has 10 rounds"
+      - "BAZAAR_NEGOTIATION_NOT_CONVERGING | 422 | no | the counter moves away from the other side's last amount"
+      - "BAZAAR_NEGOTIATION_LISTING_CHANGED | 409 | no | the listing changed materially since the round; review and send a new round"
+      - "BAZAAR_NEGOTIATION_HOLD_FAILED | 409 | no | seller could not reserve the item; chain closed as superseded"
+    example: |
+      seller vault: vault.dispatch("bazaar.negotiation.counter", { "offerId": "0192f3a5-...", "amount": { "amount": "4800", "currency": "EUR" }, "note": "Includes helmet" })
+      => { "negotiationId": "0192f3b0-...", "roundNo": 1, "revision": 1, "statementCid": "sha256-Zm9v...", "syncState": "prepared" }
+         same transaction: bazaar.offer.reject { offerId, reason: "countered" }
+      buyer vault: vault.dispatch("bazaar.negotiation.accept", { "negotiationId": "0192f3b0-...", "expectedRevision": 2, "roundNo": 1, "roundCid": "sha256-Zm9v...", "listingRevision": 5 })
+      => { "negotiationId": "0192f3b0-...", "revision": 3, "status": "accept_sent", "consentCid": "sha256-Cns..." }
+         comms.consent.sign { subjectType: "bazaar_negotiation", subjectRef: "0192f3b0-...", subjectRevision: 1, subjectRevisionHash: "sha256-Zm9v...", statementKey: "consent.bazaar.negotiation.accept.v1", statementLocale: "de-DE" }
+      seller vault: comms.consent.received → comms.consent.verify valid → hold (ttl 7 d, maxExpiresAt = Deal expiry), commerce.deal.open, signed confirmation => buyer vault shows accepted with dealId.
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal acting as buyer or seller of the chain may counter, accept, reject or withdraw, and only on its own turn for counter and accept."
+      - "Inbound statements are accepted only when signed by the stated buyer or seller key and consistent with the chain; otherwise quarantined (CAP-8)."
+      - "Relay policy for the sealed envelopes is F08.S01.M01's comms.mailbox.put, fetch and ack (put proof by the sender's device key, fetch and ack by the recipient), reached through F11.S02.M01 routing; this module declares no relay capability and relays cannot read or alter rounds."
+    capabilities:
+      - "bazaar.negotiation.counter | owner | local principal is buyer or seller of the chain and awaiting = local principal; not blockedWith(counterparty)"
+      - "bazaar.negotiation.decide | owner | local principal is a party of the chain; accept requires awaiting = local principal; keep_frozen only for the seller of a hold_fork chain"
+      - "bazaar.negotiation.withdraw | owner | local principal is a party of the chain"
+      - "bazaar.negotiation.receive | peer | statement signed by the stated counterparty key; signature, role and chain consistency verified"
+      - "bazaar.negotiation.read | owner | local principal is buyer or seller of the chain; F01.S01.M04 may read counts on the owner's behalf for the evidence check"
+  failure_recovery_idempotency:
+    requirements:
+      - "Commands are idempotent per CTR-IDM-001; inbound statements are idempotent by statementCid."
+      - "In the seller vault, the Deal-linked hold (ttl 7 d, maxExpiresAt = Deal expiry), the Deal handoff, the Negotiation update and the signed confirmation commit in one transaction; if the hold or the handoff fails, nothing is confirmed and a signed close is sent instead."
+      - "Conflicting signed promises are detected and frozen; no last-writer-wins for consent, money or inventory."
+    idempotency: "Idempotency-Key required on every command, kept 24 h in the vault; inbound statements deduplicated by cid; replayed accept returns the stored confirmation or accept_sent state."
+    concurrency: "expectedRevision on every command; turn check by awaiting; unique live-chain index; the hold is serialized by the inventory module; simultaneous counters from both sides produce two signed rounds with the same number and freeze the chain in both vaults on exchange."
+    retries: "Transport retries follow IDM-4: base 500 ms, cap 30 s, 6 attempts per burst; quarantined statements and signed closes are not retried against a closed chain."
+    offline: "Counter and withdraw can be prepared offline; accept can be signed offline but the UI keeps it at accept_sent and states that the seller has not confirmed; expiry keeps running by each vault's own clock, with the 24 h grace for a decision in transit."
+    partial_failure: "If the confirmation cannot be delivered after the seller committed, the seller vault retries and the buyer sees accept_sent until a verified confirmation or graceUntil; the seller's hold lives as long as the Deal, and a buyer timeout close after the grace makes the seller cancel the Deal, which releases the hold."
+  privacy_retention_abuse:
+    requirements:
+      - "Amounts and notes are P2 and never appear in public projections, relay indexes, federation or notification payloads; relays see ciphertext and routing metadata only."
+      - "Negotiations are retained RET-EVIDENCE; on principal deletion (privacy.deletion.completed) the deleting vault replaces the party with the pseudonym and the counterparty keeps its own copy."
+      - "Notes are plain text; links are rendered as text and can be reported."
+      - "The module registers ExportSectionPort, DeletionPort and RetentionPurgePort with F10 (N6), annotates every Negotiation and NegotiationRound field with its F10.S02.M02 class, and pseudonymizes retained chains on privacy.deletion.completed."
+    data:
+      - "Negotiation and NegotiationRound: P2 (buyer, seller); field classes annotated per F10.S02.M02."
+      - "Notes: P2 free text scanned locally by spam heuristics; never federated."
+    retention:
+      - "Terminal negotiations: RET-EVIDENCE (2 years after last related activity)."
+      - "Quarantined statements: RET-SHORT 30 days."
+    threats:
+      - "T01 | Forged counter or acceptance to trick a party | signatures over JCS, role and chain checks, acceptance through comms.consent.verify bound to the round digest and listingRevision"
+      - "T02 | Replay of an old acceptance | consent binds the round digest, prev hash chain, expiry and idempotency by statementCid; closes and confirmations bind the round cid"
+      - "T03 | Bait-and-switch: seller changes listing after buyer commits | accept binds listingRevision; stale revision refused; material edits flag the chain"
+      - "T04 | Inventory double-sell via concurrent accepts | hold taken in the seller vault before confirmation; no confirmation without hold; honest limit: only this seller vault prevents double-sell, forks are frozen"
+      - "T05 | Fork and equivocation by a malicious party signing two rounds | detection by same roundNo, chain frozen, both signed statements kept as evidence"
+      - "T06 | Harassment through endless counters | 10-round and 14-day limits, rate limit 20 counters per hour, block list"
+      - "T07 | Mixed-currency rounds breaking the convergence rule | chain pinned to the root currency and quantity (V13)"
+    abuse_controls:
+      - "At most 20 counter commands per hour per vault and 50 open chains per listing in the seller vault."
+      - "Report action on any round stores the signed statements as evidence for the relay moderator or local block."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Local command latency and statement verification meet budgets on Moto G-class hardware."
+      - "Sweep lag and frozen-chain counts are visible in diagnostics."
+    metrics:
+      - "classrup_bazaar_negotiations_total{outcome} (local)"
+      - "classrup_bazaar_negotiation_quarantined_total{reason} (local)"
+      - "classrup_bazaar_negotiation_frozen_total (local)"
+      - "classrup_bazaar_negotiation_expiry_lag_ms (local gauge)"
+    logs:
+      - "info negotiation.closed {negotiationId, outcome, correlationId} in local diagnostics; no amounts or notes."
+    budgets:
+      - "counter and receive p95 <= 100 ms including Ed25519 verify or sign on Moto G-class hardware."
+      - "accept in the seller vault (hold + deal handoff + consent + sign) p95 <= 200 ms."
+      - "list_mine of 50 chains p95 <= 100 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate statements, commands and events against the registry and verify signatures."
+      - "Race, fork and expiry scenarios are covered by deterministic two-vault tests with injected clocks and ids."
+      - "The negotiation card and accept dialog pass automated accessibility checks with zero serious or critical issues and keyboard-only operation."
+    fixtures: "Two vaults: seller S with published listing L (EUR 50.00, quantity 1, negotiable) and buyer B with Offer EUR 40.00 and the verified projection of L; a third buyer B2; relay stub with a moderator; clocks 2026-11-04T10:00:00Z with injectable skew; policy of 10 rounds."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | S counters EUR 48.00 then B counters EUR 44.00 | rounds stored immutable with prev chain; ordering by roundNo not clock"
+      - "T02 | unit | 01.R02,07.R01 | inspect projection, relay payload, logs and notifications | no amounts or notes outside encrypted statements"
+      - "T03 | unit | 02.R02,02.R03 | violate each rule V01-V17 in turn in the vault the rule names | documented error code returned or statement quarantined with reason; state unchanged"
+      - "T04 | property | 03.R01 | random statements in random order and duplicated | only declared transitions; terminal states never regress; same final state in both vaults when all delivered"
+      - "T05 | integration | 03.R02,06.R02 | B accepts S's round 1; S vault holds and confirms | B shows accept_sent then accepted only after verified confirmation; S has a Deal-linked hold (ttl 7 d, maxExpiresAt = Deal expiry) and the Deal"
+      - "T06 | integration | 03.R03,06.R03 | S and B counter simultaneously | both vaults freeze on exchange, no hold taken, discard needed to continue"
+      - "T07 | integration | 03.R02,02.R03 | last unit held for B2 while B's acceptance is in transit | S sends signed close superseded; B shows rejected superseded; no double hold"
+      - "T08 | contract | 04.R01,04.R03,09.R02 | each command and inbound statement | statements validate and verify; countered and closed payloads contain no notes"
+      - "T09 | integration | 04.R02,06.R03 | statements sent with relay down then up | states move prepared to transport_acknowledged to peer_accepted only on receipts; UI never shows more"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | non-party counters; statement signed by a third key; relay reads the F08.S01.M01 mailbox; capability list inspected | FORBIDDEN or quarantined role_mismatch; relay sees ciphertext; no bazaar.negotiation.relay_mailbox capability exists"
+      - "T11 | integration | 04.R03 | seller vault: listing edited materially, unpublished, depleted, blocked; buyer vault: newer verified projection | chain flagged or closed with documented outcomes; buyer flag set from the mirror event"
+      - "T12 | chaos | 06.R01,06.R03 | replay accept with same key; crash after hold before confirmation | one confirmation; hold and Negotiation consistent after restart"
+      - "T13 | integration | 03.R03 | a frozen chain without any decision until the hard deadline; a hold_fork chain kept with keep_frozen | first expires at hardDeadline with bazaar.negotiation.closed (expired); second returns to accepted"
+      - "T14 | abuse | 02.R03 | 21 counters in an hour; 11th round | RATE_LIMITED; BAZAAR_NEGOTIATION_ROUND_LIMIT"
+      - "T15 | integration | 07.R02 | principal deletion of the buyer (privacy.deletion.completed in B) | B's retained chains carry the pseudonym; S's copy keeps amounts; retention evidence respected"
+      - "T16 | load | 08.R01,08.R02,08.R03 | 50 chains, 500 statements on Moto G profile | counter and receive p95 <= 100 ms, accept p95 <= 200 ms, no telemetry"
+      - "T17 | unit | 09.R01,09.R03 | traceability tool run, seed replay | every PS-010 requirement maps to a passing test; seeds printed on failure"
+      - "T18 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import chain with invalid signature | chains round-trip; open chains import as expired; invalid signature quarantined"
+      - "T19 | a11y | 09.R04 | axe run on negotiation card and accept dialog | zero serious or critical issues; keyboard-only counter works"
+      - "T20 | abuse | 07.R03 | a round note containing a URL is shown in both vaults, then reported | URL rendered as plain text without a link; the report stores the signed round statements and their cids as evidence"
+      - "T21 | unit | 01.R04,02.R04 | EUR root offer, then a USD counter, then a EUR counter with quantity 2 | both refused with VALIDATION_FAILED; chain currency and quantity unchanged"
+      - "T22 | integration | 03.R04 | two vaults with clocks skewed +10 and -10 min; S confirms 5 min before expiry and delivery is delayed 3 h, then a second chain with delivery delayed 25 h | first: B applies the confirmation inside the grace and both show accepted; second: B expires, sends a timeout close, S moves accepted to expired and calls commerce.deal.cancel, and the hold is released"
+      - "T23 | integration | 03.R05 | S counters B's offer; separately B withdraws the root offer while round 1 is in transit | root offer rejected countered in the counter transaction; in the crossing case B closes the chain as withdrawn and S closes it on the signed close"
+      - "T24 | integration | 04.R05 | accept in both directions and a conflicted consent | consents signed with subjectType bazaar_negotiation, statementKey consent.bazaar.negotiation.accept.v1, statementLocale and subjectRevisionHash equal to the round statementCid (ID-3 cid) through the registered ConsentSubjectPort, which passes the F08.S02.M02 conformance suite; the receiving vault echoes each received consent before committing; verified with comms.consent.verify; conflicted freezes the chain"
+      - "T25 | contract | 01.R05,04.R04 | inspect stored records and the F11.S01.M01 registry | records validate as classrup.bazaar.negotiation/v1 and classrup.bazaar.negotiation_round_record/v1; statements as negotiation_round/v1, negotiation_close/v1 and negotiation_confirm/v1 with registered signer roles; negotiation_accept/v1 resolves to the consent statement"
+      - "T26 | integration | 07.R04 | export sections, deletion plan and retention purge through the F10 ports | sections present with field classes; deletion plan pseudonymizes retained chains and purges notes of non-evidence chains"
+      - "T27 | contract | 04.R07 | S counters, then B counters, then F01.S04.M01's ContextTermsPort asks the registered NegotiationTermsPort for an accepted round | each bazaar.negotiation.countered payload validates and carries rootOfferId equal to the chain's root offer; roundTerms returns buyer, seller, amount and quantity of the accepted round and accepted false for an unaccepted one"
+      - "T28 | contract | 04.R06 | counter, close and confirm through the StatementPublisherPort test double; B's vault receives round 1 | every statement is created by federation.record.publish with audience participants, recipients [{did, mailboxId}], ext.stream equal to streamId and a ciphertext of at most 12288 bytes; the module calls no signing primitive; B's F11.S01.M02 signs classrup.federation.ack/v1 and S's entry reaches peer_accepted"
+      - "T29 | integration | 02.R05 | federation.conflict.detected freezes consent:bazaar_negotiation for an open chain, then counter, accept and an inbound round are attempted, then discard_frozen; a second chain while the conflict store fails; a third chain frozen and resolved drop_all | CONFLICT_STATE for counter, accept and the inbound round, discard_frozen allowed; DEPENDENCY_UNAVAILABLE with the failing store; drop_all closes the chain frozen_discarded"
+    acceptance:
+      - All tests T01-T29 pass in CI.
+      - An acceptance is never shown as agreed until the seller's signed confirmation with hold and Deal reference is verified, and a late confirmation never leaves an open Deal behind an expired chain.
+      - Conflicting signed rounds freeze the chain and never resolve by timestamp or last writer; amounts and notes never leave the two parties' encrypted channel.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains all Negotiations and NegotiationRounds the user is a party to, with the signed statements."
+      - "Import re-verifies every signature and the hash chain; open chains import as expired and accepted chains import read-only with their evidence."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Sections bazaar.negotiations and bazaar.negotiation_rounds in classrup-export/v1, one line per record (schemas classrup.bazaar.negotiation/v1 and classrup.bazaar.negotiation_round_record/v1) plus the signed statements and acceptance consents."
+    import: "Chains where the importing principal is not a party are rejected; broken hash chains or bad signatures are quarantined; open chains become expired so stale promises are never revived."
+    backup: "Vault export is the primary backup (IOX-6); relays keep only encrypted mailbox envelopes under their retention policy."
+    migration_rollback: "Additive optional fields only in v1; round records written under the earlier record name classrup.bazaar.negotiation_round/v1 are read as classrup.bazaar.negotiation_round_record/v1 for 180 days; rollback is by reinstalling the previous release; sent statements remain valid because their schemas are unchanged."

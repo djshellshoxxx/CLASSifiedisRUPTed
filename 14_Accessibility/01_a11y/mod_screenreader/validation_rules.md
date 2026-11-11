@@ -1,35 +1,37 @@
-# PS-110-02 — validation rules
+# PS-110-02 — Validation rules: Screen reader support
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-02. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M02 Screen reader support](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/screenreader` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the validation rules process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-110-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-110-02.R01** Lint and unit checks reject markup that breaks screen reader structure.
+- **PS-110-02.R02** Each failure has one stable code printed in CI and in the development overlay.
+- **PS-110-02.R03** Rules run on every pull request and waivers require an expiring entry in tests/a11y/waivers.yaml (schema owned by F14.S01.M03) whose single target is the file glob or component that fails; the lint runner of this module reads that same file.
+- **PS-110-02.R04** The <Photo> runtime contract is checked in end-to-end tests, not at build time; a received photo without alt text and not marked decorative is announced as 'Photo n of m, no description', the add-description prompt appears only on the user's own listings, and refusing to publish such a photo belongs to the F01.S01.M03 publish rule with that module's error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | each page has exactly one main landmark and one h1, headings do not skip levels, and repeated landmark types have unique accessible names | I18N_A11Y_LANDMARKS |
+| V02 | every form control has an accessible name and errors are linked by aria-describedby with aria-invalid set | I18N_A11Y_FORM_LABEL |
+| V03 | icon-only buttons and links have an accessible name from visible text or aria-label | I18N_A11Y_NAME_MISSING |
+| V04 | lint: every <Photo> call site passes alt and decorative props, and a literal alt string in source is at most 140 characters and empty only when decorative is true (alt values from records are checked by the owning module at publish, not at build time) | I18N_A11Y_ALT_TEXT |
+| V05 | status changes use the announcer, assertive is used only for blocking errors, and no region announces more than once per 2 s | I18N_A11Y_LIVE_REGION |
+| V06 | Money, distance, time and sync-state values rendered visually have a matching spoken name from the helpers | I18N_A11Y_SPOKEN_VALUE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-110-09.T01 | unit | PS-110-01.R01, PS-110-02.R01, PS-110-09.R02 | lint fixtures with 2 main landmarks, skipped heading, duplicate nav names | V01 raised; compliant page passes |
+| TEST-PS-110-09.T02 | unit | PS-110-02.R02, PS-110-03.R01 | form fixtures without labels or error associations; submit with 3 errors | V02 raised; compliant form focuses the first invalid field and announces 3 errors |
+| TEST-PS-110-09.T03 | unit | PS-110-02.R03, PS-110-07.R02 | icon-only button without name; Photo call site without alt prop; alt of 141 characters; decorative photo with empty alt; V04 violation under a valid component-target waiver | V03 and V04 raised; decorative accepted; waiver honoured from tests/a11y/waivers.yaml; no links rendered from alt text |
+| TEST-PS-110-09.T10 | a11y | PS-110-01.R01, PS-110-02.R01, PS-110-09.R02 | axe via Playwright on every screen with screen reader rule set | zero serious or critical findings |
+| TEST-PS-110-09.T16 | e2e | PS-110-02.R04 | render a received listing with 5 photos, photo 2 without alt and not decorative, and the user's own listing with the same media | received listing announces 'Photo 2 of 5, no description' with no prompt; own listing shows the add-description prompt; publish refusal is asserted in the F01.S01.M03 suite |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F14.S02.M01, F14.S02.M02, F09.S03.M01, F09.S03.M03, F06.S02.M01, F15.S01.M01, CTR-UX-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

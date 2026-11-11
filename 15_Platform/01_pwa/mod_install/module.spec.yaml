@@ -1,0 +1,229 @@
+# F15.S01.M03 PWA install (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S01.M03
+scope: MVP
+summary: >-
+  The installable PWA is the product (ADR-0016): after install the vault, drafting, local search and export work
+  with no server. This module owns the web app manifest, the install prompt experience, and the update-available
+  flow in which a waiting service worker is activated only after the user consents with a live gesture, and only
+  when the waiting build's release manifest verifies under the release key pinned in the running build and no
+  valid release hold (classrup/release-hold/v1, signed by that same pinned key) covers it. It states
+  the limit plainly: whoever controls the static origin controls the code at the next cold start, so consent
+  protects live tabs only, and the real controls are the signed release manifest check, a loud warning for an
+  unverified build, and reproducible builds with published checksums. Install is also the moment to ask the
+  browser for persistent storage and to explain that data lives on this device, so the user knows to export.
+  Nothing here contacts a relay, collects analytics or depends on a relay.
+responsibilities:
+  - Generate and validate the manifest (vite-plugin-pwa 2.0.0, Vite 8.3.5) with id, name, short_name, start_url, scope, display standalone, icons 192, 512 and maskable 512, theme and background colors, shortcuts (at most 4) and lang.
+  - Capture beforeinstallprompt and show a custom install card only after the user has completed a meaningful action, at most once per session, with dismissal back-off (30 days, then never after 3 dismissals); show Add to Home Screen instructions on iOS Safari.
+  - Run the update-available flow with registerType prompt, hourly and on-foreground update checks, verification of the waiting build's signed release manifest, a banner with Update now and Later, and SKIP_WAITING (with the waiting worker's one-time nonce) only after a live user gesture and a safe point (no unsaved draft, outbox idle).
+  - Show the warning "Unverified build: do not close this app or update" when the waiting build's release manifest does not verify, and publish release checksums and reproducible build instructions with every release.
+  - After install or first successful unlock, request persistent storage through F15.S01.M01 and show a short explanation that data stays on this device and should be exported regularly (every 30 days, or every 7 days when persistent storage is denied).
+  - Before offering or activating an update, read the release hold /release-hold.json from the app's own origin, verify it through F16.S02.M03 as an envelope of context classrup/release-hold/v1 signed by the release key pinned in the running build, keep a verified hold on the device until its expiresAt, and pause activation of every waiting build it covers while it is valid.
+non_responsibilities:
+  - Service worker routing, cache versioning, nonce issuing and the kill switch (F15.S01.M02 mod_cache).
+  - Vault storage status panel, export-overdue threshold and sync outbox (F15.S01.M01 mod_offline).
+  - Static host configuration and headers (deployment docs; ADR-0016 allows any static host), and holding the release signing key (release process of the maintainers, offline key).
+  - Deciding and signing release holds (F16.S03.M03 runbook RB-06) and the envelope format and verification primitive (F16.S02.M03); this module only checks and obeys them.
+  - "Future: push notification permission prompt flow (owned by the notify feature); Future: store listing for app stores via Trusted Web Activity."
+depends_on: [F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001]
+user_stories:
+  - As a member, I can install ClassRup to my home screen and open it with no connection, with my vault intact.
+  - As a member, I am told clearly when a new version is ready and I choose when to restart; my open drafts are never lost.
+  - As a member, I am warned loudly when the app's host offers a build that is not signed by the release key, and told not to close or update the app.
+  - As an iPhone user, I get step-by-step instructions to add the app to my Home Screen because the browser has no install button for web apps.
+  - As a member, when the ClassRup release team pauses updates with a signed hold, I am told why and until when, and the app does not offer or activate the held version.
+edge_cases:
+  - The browser never fires beforeinstallprompt (iOS, Firefox desktop, already installed); the card is replaced by manual instructions or hidden when display-mode standalone is detected.
+  - The user dismisses the install card three times; it never appears again, but Install remains available in Settings.
+  - An update is waiting while a form has unsaved text or the outbox has an entry in sending; the Update now button first saves the draft to the vault and waits up to 10 s for the sending entry, otherwise offers Later.
+  - Two tabs are open and one accepts the update; the other tab shows "Updated in another tab, reload" after controllerchange instead of reloading mid-edit.
+  - The manifest or icons fail the build checks (missing 512 icon, start_url outside scope); the build fails with a stable code instead of shipping a non-installable app.
+  - The user declines persistent storage or the browser denies it; the app continues, shows the non-persistent warning in the storage panel, and F15.S01.M01 lowers the export-overdue threshold to 7 days so the reminder appears weekly.
+  - The waiting build's release manifest is missing, unsigned or signed by another key; Update is hidden and the unverified-build warning is shown; if every tab is then closed the browser activates that build at the next cold start anyway, which the warning text says.
+  - A page script calls applyUpdate() or posts SKIP_WAITING without a live user gesture; applyUpdate() refuses and the worker ignores a message without the waiting worker's nonce.
+  - After a kill-switch unregistration by F15.S01.M02 with no known-good build, the installed app needs the network once for its next start; the vault in IndexedDB is untouched.
+  - A signed release hold covering the waiting build is published; Update is hidden and the paused notice is shown until expiresAt even if the host later deletes /release-hold.json, because the verified hold is kept on the device; a hold signed by any key other than the pinned release key is ignored and counted.
+  - A compromised host withholds /release-hold.json; the module cannot learn of a hold it never receives, which the threat model states, and V07 still blocks every build that the pinned release key did not sign.
+ux:
+  screens:
+    - "Install card: dismissible card on the home screen with title 'Install ClassRup', one sentence 'Works offline and keeps your data on this device', buttons Install and Not now."
+    - "iOS instructions sheet: three steps with Share icon, Add to Home Screen and Add, with illustrations that have text alternatives."
+    - "Update banner: 'A new version is ready' with Update now and Later, shown above the bottom navigation and not covering form fields."
+    - "Unverified build warning: 'The app host offers a version that is not signed by the ClassRup release key. Do not close this app or update; export your vault and report it.' with Export now and Learn more; no Update button."
+    - "Updates paused notice: 'Updates are paused by the ClassRup release team until <date and time>: <reason>. Keep using this version and do not close every tab to update.' with Learn more; no Update button while the signed hold is valid."
+    - "Settings > App: install state, version (buildId and releaseSeq), release checksum, Check for updates, and the persistent storage explanation."
+  states: [not-installable, installable, ios-instructions, installed, update-available, update-unverified, update-held, updating, update-deferred, updated-elsewhere]
+  a11y:
+    - Install card and update banner use role=region with aria-label and announce through aria-live polite; the unverified-build warning uses role=alert and the updates paused notice role=status; none of them traps focus.
+    - Buttons are at least 44x44 px, labelled by text, and Later/Not now are reachable by keyboard before the page content flow continues.
+    - iOS instruction images have alt text and the steps are real ordered list text.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no persisted entity; install state, local session and action counters, dismissal counters, the last session in which the card was shown, update deferral and the unverified-build flag are per-device preferences stored in localStorage under the key classrup.install.v1.
+      - The manifest is a build artifact validated against fixed field rules; its id is stable forever so reinstalls keep the same app identity.
+      - Preferences contain no personal data and are safe to lose; the module renders correctly when storage is unavailable.
+    entities: []
+    note: "Configuration and UI module: no domain entities. Device preferences classrup.install.v1 { version: 1, sessions:int (incremented once per app start), completedActions:int (incremented on each committed vault command reported by the shell), dismissals:int, lastDismissedAt?:timestamp, lastShownSession?:int, deferredUntil?:timestamp, installedAt?:timestamp, unverifiedBuildId?:string, releaseHold?: { envelope, releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt } } live in localStorage, are P0, and are not part of the vault export. Release manifest /release-manifest.json { buildId, releaseSeq, files: { path: sha256 }, sig } is a build artifact; the release hold /release-hold.json is a classrup.security.envelope/v1 of context classrup/release-hold/v1 (F16.S02.M03) with payload { releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt }; an empty heldBuildIds holds every update."
+  validation_rules:
+    requirements:
+      - The build fails if the manifest violates installability rules, so a broken app is never published.
+      - The install prompt is shown only when its gating rules hold, so it never interrupts first-time use and appears at most once per session.
+      - Update activation is allowed only at a safe point.
+      - An update is offered only for a waiting build whose signed release manifest verifies under the release key pinned in the running build, and activation requires a live user gesture checked in the page (navigator.userActivation.isActive) plus the waiting worker's one-time nonce.
+      - Before an update is offered and again immediately before activation, the module checks for a release hold that verifies through F16.S02.M03 under context classrup/release-hold/v1 and the release key pinned in the running build, and refuses activation of a covered build while the hold is valid.
+    rules:
+      - "V01 | manifest has id '/', name ≤ 45 chars, short_name ≤ 12 chars, start_url inside scope, display standalone | PLATFORM_INSTALL_MANIFEST_INVALID"
+      - "V02 | icons include 192x192 and 512x512 PNG plus a 512x512 maskable icon, each ≤ 100 KiB | PLATFORM_INSTALL_MANIFEST_INVALID"
+      - "V03 | shortcuts ≤ 4, each with name, url inside scope and icon | PLATFORM_INSTALL_MANIFEST_INVALID"
+      - "V04 | install card gate: sessions ≥ 2 and completedActions ≥ 1 in classrup.install.v1, not installed, dismissals < 3, lastDismissedAt absent or older than 30 days, and lastShownSession differs from the current session | PLATFORM_INSTALL_NOT_ELIGIBLE"
+      - "V05 | update activation requires no unsaved draft, outbox entry in sending absent or finished within 10 s | PLATFORM_UPDATE_NOT_SAFE"
+      - "V06 | applyUpdate() proceeds only while navigator.userActivation.isActive is true in the page, and the SKIP_WAITING it posts carries the nonce the waiting worker issued through GET_VERSION (F15.S01.M02 V07) | FORBIDDEN"
+      - "V07 | the waiting build's /release-manifest.json has an Ed25519 signature under context classrup-release:v1 by the release key pinned in the running build (or by a successor key endorsed by it), its buildId equals the waiting worker's GET_VERSION buildId and its releaseSeq is greater than the running build's | PLATFORM_UPDATE_UNVERIFIED"
+      - "V08 | no valid release hold covers the waiting build: a hold is valid when the envelope from /release-hold.json (fetched network-only with cache no-store from the app's own origin) or the stored releaseHold verifies through F16.S02.M03 with ctx classrup/release-hold/v1, kid equal to the release key pinned in the running build and payload.releaseKeyId equal to that key, and issuedAt ≤ now < expiresAt; it covers the waiting build when heldBuildIds is empty or contains its buildId; envelopes that fail verification are ignored | PLATFORM_UPDATE_HELD"
+  workflow_state_machine:
+    requirements:
+      - Install and update each follow explicit states and the UI shows only the state reached.
+      - While a client of the running build is open, a waiting worker is activated only after consent with a live user gesture, never by automatic skipWaiting; once every client is closed the browser activates a waiting worker at the next cold start, so consent covers live tabs only and the spec does not claim more.
+      - Deferral is time-boxed so the user is asked again after 24 hours but never forced.
+      - A waiting build whose release manifest fails V07 is never offered for update; the unverified-build warning is shown and persisted so that the next start, if the browser activated that build anyway, still shows the warning.
+      - While a valid release hold covers the waiting build (V08) the attempt is held - Update is hidden, the paused notice names the reason and expiresAt, consent cannot override it, and the hold ends only at expiresAt - and, as with an unverified build, the browser may still activate the waiting build at a cold start once every client is closed, which the notice tells the user to avoid.
+    machines:
+      - entity: UpdateAttempt
+        initial: update_available
+        terminal: [activated, superseded]
+        transitions:
+          - "update_available -> updating | user taps Update now with a live gesture, V05, V06, V07 and V08 pass (the hold is re-read just before activation) | draft saved, nonce fetched through GET_VERSION, SKIP_WAITING posted"
+          - "update_available -> held | a valid release hold covers the waiting build (V08) | Update hidden, updates paused notice shown with reason and expiresAt, releaseHold persisted in classrup.install.v1"
+          - "deferred -> held | a valid release hold covering the waiting build is found at a check | paused notice replaces the deferral"
+          - "held -> update_available | now reaches the hold's expiresAt and no other valid hold covers the build | V07 re-checked; banner shown again; releaseHold cleared"
+          - "held -> superseded | a newer waiting worker replaces the held one | V07 and V08 checked again for the newer build"
+          - "held -> activated | every client closed and the browser activated the waiting build at a cold start | not preventable by consent; the next start shows the paused notice from the stored releaseHold while it is valid"
+          - "update_available -> deferred | user taps Later | deferredUntil = now + 86400000 ms"
+          - "update_available -> unverified | the waiting build's release manifest fails V07 | Update hidden, unverified-build warning shown, unverifiedBuildId persisted"
+          - "deferred -> update_available | deferredUntil reached or app restarted | banner shown again after V07 is re-checked"
+          - "updating -> activated | controllerchange received | page reloaded once"
+          - "updating -> update_available | V05 fails or activation does not complete within 10000 ms | message states why and offers retry"
+          - "update_available -> superseded | a newer waiting worker replaces this one | banner now refers to the newer build"
+          - "deferred -> superseded | a newer waiting worker replaces this one | banner now refers to the newer build"
+          - "unverified -> superseded | a newer waiting worker replaces the unverified one | V07 checked again for the newer build"
+          - "unverified -> activated | every client closed and the browser activated the waiting build at a cold start | not preventable by consent; the next start shows the unverified-build warning from unverifiedBuildId"
+    timeouts:
+      - "Update check on app start, on visibilitychange to visible and every 3600000 ms; /release-hold.json is fetched with every update check and again immediately before activation."
+      - "A stored release hold is kept until its expiresAt and then removed; it is never extended beyond the signed expiresAt."
+      - "Deferral lasts 86400000 ms; install card back-off 2592000000 ms (30 days)."
+      - "Activation wait after SKIP_WAITING is 10000 ms; the nonce is valid for 60000 ms."
+  commands_queries_events:
+    requirements:
+      - The module has no vault commands, relay commands, queries or events; its interface is UI components, the manifest and a small local API (install(), applyUpdate(), getInstallState()).
+      - Nothing in the module calls a relay or any network origin other than the app's own static files, including the waiting build's /release-manifest.json.
+      - Local state is exposed to other modules only through getInstallState(), a pure read.
+    commands: []
+    queries: []
+    note: "UI and build module: no vault commands, statements or relay commands. Local API: install() calls the deferred beforeinstallprompt; applyUpdate() refuses unless navigator.userActivation.isActive, runs the V05, V07 and V08 checks, gets the nonce through GET_VERSION from the waiting worker and posts SKIP_WAITING { nonce } (F15.S01.M02); getInstallState() returns { installed, installable, platform, updateAvailable, updateVerified, updateHeld, holdExpiresAt?, buildId, releaseSeq }. Release holds are verified with the F16.S02.M03 verify function for context classrup/release-hold/v1."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "PLATFORM_INSTALL_MANIFEST_INVALID | 422 | no | build-time failure, manifest violates installability rules"
+      - "PLATFORM_INSTALL_NOT_ELIGIBLE | 409 | no | install card gating rules not satisfied"
+      - "PLATFORM_UPDATE_NOT_SAFE | 409 | yes | unsaved draft or sending outbox entry blocks activation; retry after saving"
+      - "PLATFORM_UPDATE_UNVERIFIED | 422 | no | the waiting build's release manifest is missing or not signed by the pinned release key; update not offered"
+      - "PLATFORM_UPDATE_HELD | 409 | no | a valid release hold signed by the pinned release key covers the waiting build; activation is paused until the hold's expiresAt"
+    example: |
+      manifest.webmanifest
+      { "id": "/", "name": "ClassRup", "short_name": "ClassRup", "start_url": "/?source=pwa", "scope": "/",
+        "display": "standalone", "theme_color": "#0b5d5b", "background_color": "#ffffff", "lang": "en",
+        "icons": [ {"src":"/icons/192.png","sizes":"192x192","type":"image/png"}, {"src":"/icons/512.png","sizes":"512x512","type":"image/png"},
+                   {"src":"/icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"} ],
+        "shortcuts": [ {"name":"New listing","url":"/new"}, {"name":"My trades","url":"/trades"} ] }
+      update: waiting worker -> /release-manifest.json verified (V07) -> banner 'A new version is ready' -> user taps Update now (userActivation.isActive)
+        -> draft saved -> GET_VERSION -> { nonce } -> SKIP_WAITING { nonce } -> controllerchange -> reload
+  authorization_capabilities:
+    requirements:
+      - The module performs only local UI actions by the person holding the device and defines no relay capabilities.
+      - Installing or updating changes code, never vault data, and requires an explicit user gesture checked in the page.
+      - No relay or remote party can trigger install or update; the update source is only the app's own origin, which the user chose by opening it, and an update is offered only when signed by the pinned release key; a compromised origin can still run its code at the next cold start, which the warning and published checksums expose.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Repeated install() or applyUpdate() calls are safe and have the effect of one call.
+      - A failed activation leaves the previous version running and the banner available.
+      - Everything works with no connectivity; update checks simply fail silently and retry at the next trigger.
+    idempotency: "install() uses the single deferred prompt event and clears it after use; applyUpdate() posts SKIP_WAITING at most once per waiting worker because each nonce works once. Preferences writes are last-value."
+    concurrency: "Several tabs use BroadcastChannel classrup-install to share dismissal, update and unverified-build state; the first tab to accept performs the update and others show the updated-elsewhere state."
+    retries: "Update checks retry at the next trigger (hourly, foreground); there is no tight retry loop. A stuck activation after 10 s returns to update_available."
+    offline: "Install card and update banner logic work offline; an update is only detected when the static host is reachable. The installed app never needs the network to start, except once after a kill-switch unregistration of F15.S01.M02 without a known-good build."
+    partial_failure: "If the reload after controllerchange is interrupted, the next start runs the new worker with the new shell; state in the vault is not affected. If the manifest is cached stale, the browser refreshes it on its own schedule and no data is lost. If the release manifest cannot be fetched, the update is treated as unverified, not as verified."
+  privacy_retention_abuse:
+    requirements:
+      - The module collects no analytics and sends nothing to any server (CTR-OBS-001 OBS-7); install and update counters remain on the device.
+      - The persistent-storage explanation says that data lives on this device, that clearing site data or browser eviction can delete it, and that export is the backup, with a reminder after 30 days, or after 7 days when persistent storage is denied (F15.S01.M01 exportOverdueThresholdDays).
+      - The install prompt must not nag or dark-pattern the user.
+    data:
+      - "classrup.install.v1 in localStorage: P0 counters and timestamps."
+      - "Manifest, icons and release manifest: P0 public static files."
+    retention:
+      - "Preferences kept until site data is cleared; reset when the user chooses Reset app settings."
+    threats:
+      - "T01 | Malicious update from a compromised static host | Limit stated: whoever controls the origin controls the code at the next cold start, and Later only defers benign updates in live tabs. Controls: release manifest signed by a release key pinned in the installed build and checked before Update is offered (V07), the 'Unverified build, do not close or update' warning persisted across restarts, and reproducible builds with published checksums that self-hosters and users can compare"
+      - "T02 | Phishing clone of the install card or fake update banner | banner is rendered by the app shell only, never from remote content; no external links or scripts in the component"
+      - "T03 | Repeated install prompts used as a nuisance | gating V04, at most once per session, and the 3-dismissal cap"
+      - "T04 | Page script activates a waiting worker without the user | applyUpdate() requires navigator.userActivation.isActive; SKIP_WAITING needs the waiting worker's one-time nonce; a same-origin script can still call the browser APIs directly, which is why V07 and the warning exist"
+      - "T05 | A signed release must be stopped while a distributor compromise is investigated | release hold signed by the pinned release key (V08), re-read before activation and kept on the device until expiresAt so deleting the file does not lift it; forged holds are ignored; limit stated: a host that withholds the hold file cannot be detected by this check, and a cold start with every tab closed is browser behavior"
+    abuse_controls:
+      - "Install card is capped at once per session and 3 lifetime dismissals; update banner at most once per 24 h after Later."
+      - "No remote content is rendered by the install or update components."
+  observability_performance:
+    requirements:
+      - Install and update outcomes and the local session and action counters are counted locally and viewable in the diagnostics panel; no telemetry is sent.
+      - The install card and update banner must not worsen CLS (≤ 0.1) or INP (≤ 200 ms) per CTR-OBS-001 OBS-5.
+      - The module adds at most 6 KiB gzip to the initial bundle.
+    metrics:
+      - "local counters sessions, completedActions, install_prompt_shown, install_accepted, install_dismissed, update_prompted, update_accepted, update_deferred, update_unverified, update_held, hold_rejected (never transmitted)"
+    logs:
+      - "Local diagnostic log lines install.state {state} and update.state {state, verified}; exportable by the user, never uploaded."
+    budgets:
+      - "Initial bundle contribution ≤ 6 KiB gzip; banner render ≤ 16 ms; layout reserves space so CLS contribution is 0."
+      - "Update now to reloaded app ≤ 3 s on a Moto G-class device with warm cache; release manifest verification ≤ 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Manifest and gating logic are unit tested; the install and update flows are tested end to end in Chromium, WebKit and Firefox where each supports them.
+      - A Lighthouse installability check runs in CI on the built app.
+    fixtures: "Built PWA builds A and B (B signed by the test release key) and B' (unsigned) served by a static server; release holds signed by the test release key (heldBuildIds [B] and empty, expiresAt 2026-11-05T10:00:00Z) and one signed by another key; Playwright with beforeinstallprompt and user-activation simulation; localStorage seeded with counters; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R02,02.R01 | manifest validated with each defect (missing 512 icon, long short_name, start_url outside scope, 5 shortcuts) | each defect fails with PLATFORM_INSTALL_MANIFEST_INVALID; the valid manifest passes"
+      - "T02 | unit | 01.R03,02.R02,07.R03 | install gate with sessions 1 and 2, completedActions 0 and 1, dismissals 0 to 3, lastDismissedAt 10 d and 31 d, card already shown this session, storage unavailable | card shown only when all V04 conditions hold; otherwise PLATFORM_INSTALL_NOT_ELIGIBLE; no exception without storage"
+      - "T03 | property | 03.R01,03.R03 | random sequences of waiting-worker, verification results, Later, Update now and timer events | only declared transitions occur; deferral always 24 h"
+      - "T04 | e2e | 03.R02,02.R03,06.R01 | signed build B deployed while A is open with an unsaved draft | banner appears; Update now saves the draft first then activates; reload shows B with draft restored; no update without a click"
+      - "T05 | e2e | 03.R02,06.R02 | activation does not complete within 10 s (simulated) | state returns to update_available with explanation; A still works"
+      - "T06 | unit | 04.R01,04.R03 | getInstallState across installed, installable, ios and unsupported platforms | returns the documented shape and performs no network call"
+      - "T07 | abuse | 04.R02,07.R01 | record all network requests during install and update flows | only same-origin static GETs (including /release-manifest.json); no analytics or relay requests"
+      - "T08 | abuse | 05.R01,05.R02,05.R03,02.R04 | applyUpdate() called from a timer without user activation; a script posts SKIP_WAITING without a nonce and with a stale nonce; a foreign origin messages the worker | applyUpdate refuses with FORBIDDEN; the worker ignores every message without a valid nonce; version unchanged"
+      - "T09 | e2e | 06.R03,01.R03 | open the installed app offline with localStorage blocked | app starts, card hidden, no exception, update check fails silently"
+      - "T10 | e2e | 07.R02 | install on a browser that grants and one that denies persist(), with the last export 8 days old | explanation text shown in both; on denial F15.S01.M01 get_status reports exportOverdueThresholdDays 7 and exportOverdue true and the reminder is shown; on grant the threshold is 30 and no reminder"
+      - "T11 | a11y | 08.R02 | install card, iOS sheet, update banner and unverified-build warning scanned with axe | zero serious issues; targets ≥ 44 px; CLS contribution 0"
+      - "T12 | load | 08.R01,08.R03 | Lighthouse CI installability and bundle check | installable, module ≤ 6 KiB gzip, LCP ≤ 2.5 s, INP ≤ 200 ms"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-115 requirement maps to a passing test"
+      - "T14 | e2e | 09.R02,09.R03 | full flow suite on Chromium, WebKit, Firefox | passes on each engine for the flows each supports; Lighthouse installable"
+      - "T15 | integration | 10.R01,10.R03 | roll back to build A and reset app settings | A installs and runs, preferences cleared on reset, vault untouched, export bundle contains no install state"
+      - "T16 | unit | 01.R01,08.R01 | three app starts and two committed vault commands, then open diagnostics while recording network | sessions 3 and completedActions 2 stored in classrup.install.v1 and shown in diagnostics; zero network requests"
+      - "T17 | e2e | 10.R02 | install, create a vault, uninstall the app (site data kept) and reinstall on the same origin; then clear site data | after reinstall the IndexedDB vault marker of F15.S01.M01 is present and the vault opens; after clearing site data the data-loss warning appears"
+      - "T18 | e2e | 02.R02,07.R03 | eligible user starts one session and navigates through 10 screens, dismissing nothing | install card shown exactly once in the session; shown again only in a later session"
+      - "T19 | abuse | 02.R04,03.R02,03.R04,05.R03 | unsigned build B' deployed while A is open; then all tabs closed and the app reopened | no Update button, warning shown with PLATFORM_UPDATE_UNVERIFIED in diagnostics; after the cold start B' runs (browser behavior) and the warning is shown again from unverifiedBuildId"
+      - "T20 | e2e | 02.R05,03.R05 | signed build B waiting while A is open; hold for [B] published; the host then deletes /release-hold.json; the clock passes expiresAt; separately a hold with empty heldBuildIds and a hold signed by another key | Update hidden and paused notice shown with reason and expiry; applyUpdate refuses with PLATFORM_UPDATE_HELD; the stored hold still applies after deletion; after expiresAt the banner returns; the empty list holds B; the forged hold is ignored and counted as hold_rejected"
+      - "T21 | property | 03.R05,03.R01 | random sequences of waiting builds, holds (valid, expired, forged, covering or not), deferrals and Update now taps | activation never happens through applyUpdate while a valid covering hold exists; held always returns to update_available exactly at expiresAt or is superseded; only declared transitions occur"
+    acceptance:
+      - All tests T01-T21 pass in CI.
+      - The built app is installable (Lighthouse) and starts offline after install with the vault intact.
+      - A new version never replaces the running one in a live tab without a user gesture and never loses a draft, an unsigned build is never offered for update, and no build covered by a valid signed release hold is activated through the update flow.
+      - No network request other than same-origin static assets occurs during install and update flows.
+  import_export_backup_rollback:
+    requirements:
+      - Install state and dismissal counters are device preferences and are excluded from the vault export.
+      - Reinstalling the app on the same origin keeps the vault in IndexedDB; uninstalling or clearing site data deletes it, which the install explanation states before the first export reminder.
+      - Rolling back to an earlier build is a static redeploy and needs no data migration in this module.
+    export: "No section in classrup-export/v1; install preferences are not user data. The Settings > App page links to Export vault (F10.S01.M03)."
+    import: "Not applicable."
+    backup: "Not backed up. The vault export is the user's backup (CTR-IOX-001 IOX-6); the explanation text shown at install recommends exporting at least every 30 days, or every 7 days when persistent storage is denied."
+    migration_rollback: "classrup.install.v1 carries a version field; unknown versions are ignored and replaced with defaults. Manifest id is never changed so that rollback or re-release keeps the installed app identity. A rollback build carries a higher releaseSeq than the build it replaces so V07 accepts it."

@@ -1,35 +1,61 @@
-# PS-077-09 — contract and acceptance tests
+# PS-077-09 — Contract and acceptance tests: Account and data deletion
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-09. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S01.M04 Account and data deletion](SPEC.md) · **Scope:** MVP · **Code:** `packages/privacy/src/data_controls/delete` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-077-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-077-09.R01** Every requirement is covered by at least one automated test.
+- **PS-077-09.R02** Execution is tested with a controllable clock and stub DeletionPorts for every module including failing ones.
+- **PS-077-09.R03** The no-resurrection property is tested by restoring an old export after completion.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Seeded vault with listings, messages, deals, receipts, an open committed cycle, two device keys, a recovery kit and two relays (one offline); stub DeletionPorts for every module including F11.S01.M02, F10.S01.M01 and F07.S01.M01 that record call order; relay double with a key registry; fixed clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-077-09.T01 | unit | PS-077-02.R01, PS-077-07.R03 | request deletion with wrong then right confirmation text and stale unlock | right text with fresh unlock creates pending_grace; others return documented errors |
+| TEST-PS-077-09.T02 | unit | PS-077-03.R01, PS-077-03.R04 | cancel at day 13; try to cancel while executing | cancelled with salt destroyed and privacy.deletion.cancelled emitted; executing refuses with CONFLICT_STATE |
+| TEST-PS-077-09.T03 | unit | PS-077-02.R02, PS-077-03.R02 | commitments open at day 14, then clear at day 20, then limit reached | deferred then executing; at day 44 execution proceeds with notices sent |
+| TEST-PS-077-09.T04 | integration | PS-077-03.R03, PS-077-06.R02, PS-077-06.R03 | kill the app after each step and reopen | execution resumes from persisted state; keys destroyed only after all earlier steps done |
+| TEST-PS-077-09.T05 | property | PS-077-03.R01 | random event and time sequences | only declared transitions succeed; completed and cancelled have no exits |
+| TEST-PS-077-09.T06 | contract | PS-077-01.R01, PS-077-01.R05, PS-077-04.R01, PS-077-04.R02, PS-077-09.R02 | execute request and execution; ingest relay_apply on a relay double | entity, statements, tombstones and events validate against registry schemas; deletion_statement and deletion_notice payloads contain exactly the allowlisted fields |
+| TEST-PS-077-09.T07 | integration | PS-077-07.R01, PS-077-01.R04 | complete deletion with keepEvidence true then false | true keeps a pseudonymized evidence-only vault in the residue store and deletes content; false also purges own evidence copies; pseudonym stable across modules |
+| TEST-PS-077-09.T08 | abuse | PS-077-02.R03, PS-077-05.R01, PS-077-05.R02, PS-077-05.R03 | relay_apply with a statement signed by another did; operator tries to start deletion; suspended on a relay; user reads the relay result | rejected or FORBIDDEN; deletion by owner still allowed; result carries someRetained without a count |
+| TEST-PS-077-09.T09 | integration | PS-077-06.R01 | replay same command ID; offline execution with an offline relay | original result; completion with relay shown prepared |
+| TEST-PS-077-09.T10 | integration | PS-077-01.R02, PS-077-07.R02 | after completion inspect storage and UI summary | content gone, salt destroyed, did removed, pseudonym recorded, this-device-only notice, recovery-kit warning, cannot-recall notice and relay-hold notice displayed |
+| TEST-PS-077-09.T11 | chaos | PS-077-01.R03 | restore an old export into this browser profile after completion and inspect the ledger | restore flow refuses the deleted principal via privacy.deletion.ledger_check unless the user overrides with a new identity; the ledger entry holds only ledgerKey and ledgerUntil |
+| TEST-PS-077-09.T12 | abuse | PS-077-02.R04 | publish a listing, open a deal, commit a cycle, book a service and reserve a rental during grace through module doubles that call the guard | each refused with PRIVACY_DELETION_PENDING |
+| TEST-PS-077-09.T13 | load | PS-077-08.R01, PS-077-08.R02, PS-077-08.R03 | 10 000 records and 200 MB blobs; 100-tombstone relay batch | ≤ 120 s; relay p95 ≤ 500 ms; main-thread block ≤ 50 ms; no telemetry sent |
+| TEST-PS-077-09.T14 | unit | PS-077-09.R01, PS-077-09.R03, PS-077-02.R02, PS-077-04.R04 | traceability tool run and the DeletionPort CI conformance check with a module without a port and one whose execute differs between runs | every PS-077 requirement maps to a passing test; build fails for a module without a plan or with non-idempotent steps |
+| TEST-PS-077-09.T15 | e2e | PS-077-07.R02 | user flow on two devices with banner, cancel and final summary | banner and summary shown with the this-device limit and the other-device warning; axe zero serious issues |
+| TEST-PS-077-09.T16 | integration | PS-077-10.R01, PS-077-10.R02, PS-077-10.R03 | export before deletion, import into fresh vault, roll back one release | export contains the request metadata only; ledger survives rollback |
+| TEST-PS-077-09.T17 | abuse | PS-077-02.R03 | relay_apply with a statement signed 31 days ago, a replayed batch with changed content, a statement signed by a key revoked for compromise, and a valid statement delivered on day 3 after the account_deleted revocation | first three PRIVACY_DELETION_STATEMENT_INVALID; an exact replay is a no-op; the day-3 statement is accepted because the revocation lists its cid |
+| TEST-PS-077-09.T18 | integration | PS-077-01.R03 | clock advanced 181 days after completion | ledger entry and ledger salt purged by the RetentionPurgePort; ledger_check returns deleted false and the UI no longer warns |
+| TEST-PS-077-09.T19 | integration | PS-077-04.R03, PS-077-04.R05 | deferred request with each of the nine commitment events; consumer doubles of requested that try to purge and of completed that try to sign; cancel during grace | blockers re-evaluated on each event; the purging and signing doubles fail the conformance check; after cancel privacy.deletion.cancelled undoes hide and pause, consents are unchanged and no outbox entry exists for any relay or counterparty |
+| TEST-PS-077-09.T20 | integration | PS-077-03.R03, PS-077-04.R04 | execution with recording stub ports for F11.S01.M02, F10.S01.M01, F07.S01.M01 and a blob module | every sign step (tombstones, consent withdrawals, deletion statements, notices) runs before revoke_keys, nothing is signed after it, destroy_keys runs last, and F11.S01.M02 issues tombstones only at execution |
+| TEST-PS-077-09.T21 | integration | PS-077-01.R04, PS-077-01.R03 | inspect the residue store and every vault database after completion | only the residue request without did or salt, ledger entries keyed by HMAC, pending outbox entries and, with keepEvidence, the pseudonymized evidence vault remain; no record joins the did and the pseudonym |
+| TEST-PS-077-09.T22 | e2e | PS-077-07.R02, PS-077-01.R04 | restore the pre-deletion export on a fresh device after completion | restore succeeds on that device, documenting the limit that the UI and completion summary stated |
+| TEST-PS-077-09.T23 | integration | PS-077-01.R04, PS-077-06.R01 | relay offline at execution returns on day 3, a second relay returns on day 29, a third never returns | residue outbox delivers on day 3 and day 29 and both relays accept; the third entry is dropped after 30 days and the summary shows it never acknowledged |
+| TEST-PS-077-09.T24 | contract | PS-077-01.R05 | deletion notice for an open cycle captured at a relay double and opened by counterparty doubles | relay sees only ciphertext, mailbox ID and size; counterparties decrypt, verify signer role principal and see exactly the allowlisted fields |
+| TEST-PS-077-09.T25 | integration | PS-077-01.R06, PS-077-02.R05, PS-077-04.R02 | deletion with 40 threads and 63 thread counterparties listed by an F08.S01.M02 plan double, one open cycle and a notice addressed to a did that no plan listed | one departure notice signed once and sealed to 63 mailboxes under one cid, payload {requestId, signedAt, kind, effectiveAt, recourse}; the cycle gets a commitment notice; the unlisted recipient is refused with VALIDATION_FAILED; the account_deleted revocation lists the departure cid |
+| TEST-PS-077-09.T26 | integration | PS-077-04.R06, PS-077-04.R07, PS-077-03.R03 | execution with stub registrants in the kernel port registry for F07.S01.M01, F08.S01.M01, F08.S01.M03, F15.S01.M01 and F15.S04.M03 and recording order | F07 handle releases, identity document tombstone and relay session revocations, F08 message and attachment deletes and mailbox closes all run in sign before revoke_keys and destroy_keys; F15.S01.M01 moves pending signed entries to the residue outbox; F15.S04.M03 local settings are purged; no registrant needs a depends_on edge to this module |
+| TEST-PS-077-09.T27 | e2e | PS-077-02.R05, PS-077-07.R02 | tap Erase vault in the PWA, then lock the vault and switch principal with queued entries | the export prompt is shown before anything is deleted and the deletion request starts grace only after confirmation; lock and switch keep every record and entry and never call DeletionPort |
+| TEST-PS-077-09.T28 | integration | PS-077-04.R08, PS-077-03.R03 | execution with recording stub registrants for F18.S02.M01 (3 own policy comments) and F18.S01.M01 (a profile selection with an age declaration) registered from the vault composition root | 3 comment tombstones are signed in sign before revoke_keys and listed by the account_deleted revocation; the selection and age declaration are gone after purge; neither module has a depends_on edge to this module and the depends_on graph stays acyclic |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01 to T28 pass in CI.
+- After completion no module on this device retains content or recoverable keys for the principal, retained evidence carries only the pseudonym, and no record joins the did and the pseudonym.
+- The grace period of 14 days cannot be shortened by any API.
+- The completion summary always states what cannot be recalled and that the guarantee covers this device only.
+
+## Dependencies
+
+Module depends on: F10.S01.M02, F10.S01.M03, F07.S01.M01, F16.S02.M02, F11.S01.M01, F15.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,40 @@
-# PS-035-05 — authorization capabilities
+# PS-035-05 — Authorization and capabilities: Auction setup and reserve
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-05. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S01.M01 Auction setup and reserve](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_lifecycle/reserve` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-035-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-035-05.R01** Vault policy - only the unlocked local principal who is the seller creates, schedules or cancels the auction; the seller also reads the reserve.
+- **PS-035-05.R02** Relay policy - the host accepts terms only when signed by the seller key named in the terms, at or before acceptBy and within its hosting policy; open, adjust_end, mark_closed and freeze are host-internal and callable only by the host's own scheduler, its restore hook and sibling modules holding a current fence token.
+- **PS-035-05.R03** Host moderators may cancel an auction on that host with a stated reason; this affects only that host. Bidders and viewers read the public projection with no capability beyond a signed or anonymous request.
+- **PS-035-05.R04** Vaults accept host_acceptance, auction_opened and host_cancel only when signed by the host key named in the seller's own terms and bound to termsCid, and a restore announcement only when signed by a non-revoked key of the host relay (V13); anything else is quarantined.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| auctions.auction.create | principal | local principal; a supplied listing is owned by the principal; host selected in local relay list |
+| auctions.auction.schedule | principal | auction.sellerId = local principal; state draft |
+| auctions.auction.cancel | principal | auction.sellerId = local principal; state draft, proposed, scheduled, open or frozen (reason host_restore) |
+| auctions.auction.host_cancel | moderator, system | system for a seller-signed auction_cancel with bidCount 0 or on a frozen auction, a host refusal, or the 72 h restore deadline of a frozen auction; host moderator under hosting policy with a stated reason; affects only this host |
+| auctions.auction.host_accept | host-operator, system | terms signed by seller key; host time at or before acceptBy; host hosting policy and quotas satisfied |
+| auctions.auction.run | system | host scheduler, the restore hook (auctions.auction.freeze through AuctionHostPort) or a sibling module inside a host transaction holding the auction lease with a current fence token |
+| auctions.auction.receive | principal | any envelope; acceptance depends on the host key in the local terms |
+| auctions.auction.read_public | anonymous, principal | published projection only |
+| auctions.auction.read_own | principal, system | auction.sellerId = local principal; edit_lock also callable in-process by F01.S01.M02 in the same vault |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-035-09.T08 | abuse | PS-035-05.R01, PS-035-05.R02, PS-035-05.R03 | non-seller cancels; terms signed by wrong key; non-moderator cancels on host | FORBIDDEN or rejected; no state change |
+| TEST-PS-035-09.T21 | contract | PS-035-04.R04, PS-035-05.R04 | F11.S01.M01 registry entries for the five statements; host statement signed by another key | roleFor returns seller key or host key as declared; wrong key quarantined with AUCTIONS_HOST_STATEMENT_INVALID |
+| TEST-PS-035-09.T26 | integration | PS-035-04.R07, PS-035-04.R05, PS-035-05.R04 | seller vault receives host_acceptance, a seller copy of a bid receipt, a host_cancel, and a restore announcement signed by a key outside the host key history | auctions.auction.scheduled and auctions.auction.cancelled carry listingId with actor.kind federated; bidCount folded from auctions.bid.placed and edit_lock locked; the forged announcement quarantined with AUCTIONS_HOST_STATEMENT_INVALID and nothing frozen |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

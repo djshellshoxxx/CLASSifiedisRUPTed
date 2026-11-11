@@ -1,35 +1,30 @@
-# PS-091-10 — import export backup rollback
+# PS-091-10 — Import, export, backup and rollback: Peer trust
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-091-10. **Owner:** [11_Federation/03_interop/mod_trust](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_trust. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S03.M01 Peer trust](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/interop/trust` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for trust within 03_interop. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-091-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-091-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-091-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-091-10.R01** A vault export contains the user's selected relays and their listing choice without secrets; an operator export contains peers with keys and quotas.
+- **PS-091-10.R02** Imported peers never become active automatically; they import as proposed or suspended and need fresh opt-in confirmation.
+- **PS-091-10.R03** Schema changes follow expand/contract and v1 stays readable for 180 days.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Section federation.peers in classrup-export/v1 through the ExportSectionPort, one line per Peer (schema classrup.federation.peer/v1), without health history.
+- **import:** Active and suspended peers import as suspended with reason operator until a human reinstates them after re-checking the fingerprint; proposed peers import as proposed; expired inbound offers are not imported.
+- **backup:** Vault export is the primary backup (IOX-6); relay peers are covered by relay SQLite backup (CTR-IOX-001 IOX-3).
+- **migration rollback:** Additive fields only in v1 (origin, fingerprintConfirmedAt, peerStatement, offerExpiresAt, listInIdentityDoc); rollback is safe because unknown optional fields are ignored and pinned keys are unchanged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-091-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-091-09.T17 | integration | PS-091-10.R01, PS-091-10.R02, PS-091-10.R03 | export peers, import into fresh relay, restore backup | peers import as proposed or suspended and require re-confirmation; no active peer is created by import |
+
+## Dependencies
+
+Module depends on: F11.S01.M01, F11.S01.M03, F15.S04.M02, F07.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

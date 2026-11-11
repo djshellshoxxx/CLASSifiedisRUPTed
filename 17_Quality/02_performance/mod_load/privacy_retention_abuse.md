@@ -1,35 +1,44 @@
-# PS-139-07 — privacy retention abuse
+# PS-139-07 — Privacy, retention and abuse: Load testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-07. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for load within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-139-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-139-07.R01** Load data are synthetic P0; the report contains no listing text or IDs of real users.
+- **PS-139-07.R02** Relay logs captured during load are scanned for P2–P4 canaries.
+- **PS-139-07.R03** Reports are retained 90 days as CI artifacts to allow trend comparisons.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Synthetic seeded listings and edges (P0/P1).
+- Reports: latency numbers, environment descriptors, no payloads.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Reports 90 days as CI artifacts; local reports git-ignored.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Load test pointed at a production relay | host allow list in code and CI egress rules; run refuses with QUALITY_LOAD_HOST_FORBIDDEN |
+| T02 | Budgets quietly relaxed to pass | budgets read from CTR-OBS-001 constants file; changes need a contract change reviewed by the architecture owner |
+| T03 | Report leaks sensitive data | report schema whitelists fields; relay logs scanned for canaries |
+
+**Abuse controls**
+- Per-run relay access tokens and the separate scraper operator token are minted for the throwaway test relay and revoked at the end.
+- The soak profile is allowed only in the weekly workflow of F17.S03.M01 with timeout-minutes 90; nightly runs standard and the release workflow runs smoke then standard.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-139-09.T12 | abuse | PS-139-07.R01, PS-139-07.R02, PS-139-07.R03 | scan report and relay logs for canaries and retention config | no canary; reports kept 90 days |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, F17.S01.M01, F15.S02.M01, F15.S02.M03, F12.S03.M03, F11.S01.M02, F08.S01.M01, F04.S01.M02, F07.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

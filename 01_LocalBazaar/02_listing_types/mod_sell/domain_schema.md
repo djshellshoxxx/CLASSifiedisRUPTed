@@ -1,35 +1,66 @@
-# PS-006-01 — domain schema
+# PS-006-01 — Domain schema: Sell listing type
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-006-01. **Owner:** [01_LocalBazaar/02_listing_types/mod_sell](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_sell. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S02.M01 Sell listing type](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listing_types/sell` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the domain schema process for sell within 02_listing_types. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-006-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-006-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-006-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-006-01.R01** SellTerms stores the asking price as Money (integer minor units string), accepted currencies, payment methods, negotiable flag, minimum offer and fulfilment options for one listing.
+- **PS-006-01.R02** SellTerms is P3 while the listing is a draft and P0 inside the signed projection once published; payment instructions are never stored.
+- **PS-006-01.R03** Free-text fields are short, plain text and screened so no account number, wallet address or contact detail becomes public.
+- **PS-006-01.R04** SellTerms carries the public barterAcceptable flag (default false), exposed in the projection and in bazaar.sell_terms.set so barter matching and discovery filters can use it (N15).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### SellTerms
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.bazaar.sell_terms/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-006-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
+| listingId | uuidv7 — ref F01.S01.M01 Listing of kind sell; unique |
+| ownerId | did:key — local principal |
+| askingPrice | Money — CTR-MNY-001; > 0; <= maxAmount(currency) = 10^(10 + registry decimals) minor units (F09.S03.M03) |
+| acceptedCurrencies | string[] — 1..5 registered currency codes, includes askingPrice.currency |
+| paymentMethods | string[] — 1..3 of cash \| crypto \| external |
+| cryptoAssets? | string[] — 1..5 registry codes (for example BTC, USDC); required when crypto is accepted |
+| negotiable | boolean — default true |
+| barterAcceptable | boolean — default false; public in the projection (N15) |
+| minOffer? | Money — same currency as askingPrice; > 0 and <= askingPrice; never published, only used locally |
+| pickup | boolean — default true |
+| delivery | boolean — default false |
+| deliveryNote? | string — <= 280 code points, plain text, no payment details |
+| priceChangeCount24h | int — derived counter, 0..10 |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- Exactly one SellTerms exists per sell listing and it cannot exist for other kinds.
+- askingPrice.currency is in acceptedCurrencies and every code is registered in F09.S03.M01.
+- minOffer is never part of any event, projection or statement.
+- Field classes are annotated per F10.S02.M02 (minOffer P3; askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets, negotiable, barterAcceptable, pickup, delivery and deliveryNote P0 once projected).
+
+### Storage DDL
+
+```sql
+CREATE TABLE bazaar_sell_terms (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+  asking_amount TEXT NOT NULL, asking_currency TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX bazaar_sell_terms_listing ON bazaar_sell_terms(tenant_id, listing_id);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-006-09.T01 | unit | PS-006-01.R01, PS-006-02.R01, PS-006-02.R02 | define valid terms; send amount 49.99 as float; unknown currency | stored with integer string; float and unknown currency rejected with documented codes |
+| TEST-PS-006-09.T10 | abuse | PS-006-01.R02, PS-006-01.R03, PS-006-07.R01, PS-006-07.R02 | scan projection, events and logs; note with IBAN; schema search for payment instruction fields | no minOffer or drafts leave device; projected subset only after publish; note rejected; no payment instruction field exists |
+| TEST-PS-006-09.T17 | contract | PS-006-01.R04 | define with barterAcceptable true on published P | bazaar.sell_terms.set carries barterAcceptable true and the projection preview of F01.S01.M03 exposes it; minOffer still absent |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

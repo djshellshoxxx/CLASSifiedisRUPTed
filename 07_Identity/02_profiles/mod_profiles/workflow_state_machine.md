@@ -1,35 +1,67 @@
-# PS-056-03 — workflow state machine
+# PS-056-03 — Workflow state machine: Profiles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-056-03. **Owner:** [07_Identity/02_profiles/mod_profiles](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_profiles. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F07.S02.M02 Profiles](SPEC.md) · **Scope:** MVP · **Code:** `packages/identity/src/profiles/profiles` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for profiles within 02_profiles. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-056-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-056-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-056-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-056-03.R01** A profile record in the vault is active, hidden by the local user, or deleted by a tombstone authored by its own DID, the owner's erase or contact removal; a relay's hosting action changes only that relay's copy.
+- **PS-056-03.R02** A block is active until removed; removal is permanent for that entry and a re-block creates a new entry.
+- **PS-056-03.R03** Hidden profiles return to active only by an explicit local unhide; relay hosting actions and their reversal never change vault records.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Profile lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **active**; terminal **deleted**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-056-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| active -> hidden | local hide by the user | stop showing the profile, keep data |
+| hidden -> active | local unhide by the user | show again |
+| active -> deleted | tombstone whose author equals did, erase cleanup, or contact removal | delete content, keep tombstone id |
+| hidden -> deleted | tombstone whose author equals did, erase cleanup, or contact removal | delete content, keep tombstone id |
+| active -> active | identity.profile.unpublish on the own profile | publishState withdrawn, tombstone queued per relay, emit identity.profile.updated with changedFields [withdrawn] |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> hidden: local hide by the user
+  hidden --> active: local unhide by the user
+  active --> deleted: tombstone whose author equals did, erase cleanup, or contact removal
+  hidden --> deleted: tombstone whose author equals did, erase cleanup, or contact removal
+  active --> active: identity.profile.unpublish on the own profile
+  deleted --> [*]
+```
+
+### BlockEntry lifecycle
+
+Initial **active**; terminal **removed**.
+
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| active -> removed | identity.block.remove | emit identity.block.removed; statements from the DID are accepted again from now on |
+
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> removed: identity.block.remove
+  removed --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Removed BlockEntry rows are purged 30 days after removal.
+- Received profiles not viewed for 180 days are evicted from the cache (RET-STANDARD, least recently viewed first).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-056-09.T04 | property | PS-056-03.R01, PS-056-03.R02, PS-056-03.R03 | random sequences of hide, unhide, tombstone, unpublish, block, unblock and relay hosting events | only declared transitions succeed; deleted and removed are final; relay hosting events never change a vault record |
+| TEST-PS-056-09.T17 | integration | PS-056-04.R05, PS-056-03.R01 | moderation.action.applied and moderation.action.reverted delivered to a vault and to the relay runtime | the relay stops and then resumes serving its copy; the vault Profile is unchanged except an optional notServedBy provenance entry |
+
+## Dependencies
+
+Module depends on: F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

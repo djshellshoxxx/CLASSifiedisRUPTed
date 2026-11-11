@@ -1,35 +1,60 @@
-# PS-007-03 — workflow state machine
+# PS-007-03 — Workflow state machine: Wanted listing type
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-007-03. **Owner:** [01_LocalBazaar/02_listing_types/mod_wanted](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_wanted. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S02.M02 Wanted listing type](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listing_types/wanted` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for wanted within 02_listing_types. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-007-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-007-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-007-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-007-03.R01** WantSpec follows the declared machine; fulfilled and withdrawn are terminal.
+- **PS-007-03.R02** A want becomes open only when its listing is published and pauses when the listing is unpublished or expired or when neededBy is more than 7 days past; the matching engine treats only open wants as matchable.
+- **PS-007-03.R03** Owner actions and listing events race safely: the first committed transition wins and the other receives CONFLICT_STATE.
+- **PS-007-03.R04** Closing the listing moves an open or paused want to fulfilled when closeReason is fulfilled and to withdrawn otherwise; listing expiry pauses rather than withdraws, so a want whose listing is published again is matchable again.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### WantSpec lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **draft**; terminal **fulfilled**, **withdrawn**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-007-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| draft -> open | consumes bazaar.listing.published for the listing and neededBy is not more than 7 days past | emits bazaar.want.declared |
+| open -> paused | consumes bazaar.listing.unpublished or bazaar.listing.expired, or the neededBy + 7 d sweep | pauseReason set; no event; matching engines see the unpublish or expiry through the listing tombstone or projection expiresAt |
+| paused -> open | consumes bazaar.listing.published again (the listing is published again), or bazaar.want.define extends neededBy while the listing is published | emits bazaar.want.declared |
+| open -> fulfilled | bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled | emits bazaar.want.fulfilled |
+| paused -> fulfilled | bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled | emits bazaar.want.fulfilled |
+| open -> withdrawn | bazaar.want.withdraw by owner, or consumes bazaar.listing.closed with closeReason other than fulfilled, or bazaar.listing.archived | emits bazaar.want.withdrawn with reason |
+| paused -> withdrawn | bazaar.want.withdraw by owner, or consumes bazaar.listing.closed with closeReason other than fulfilled, bazaar.listing.archived or bazaar.listing.deleted | emits bazaar.want.withdrawn |
+| draft -> withdrawn | bazaar.want.withdraw by owner or listing deleted | no event because the want was never declared |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> open: consumes bazaar.listing.published for the listing and neededBy is not more than 7 days past
+  open --> paused: consumes bazaar.listing.unpublished or bazaar.listing.expired, or the neededBy + 7 d sweep
+  paused --> open: consumes bazaar.listing.published again (the listing is published again), or bazaar.want.define extends neededBy while the listing is published
+  open --> fulfilled: bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled
+  paused --> fulfilled: bazaar.want.mark_fulfilled by owner, or consumes bazaar.listing.closed with closeReason fulfilled
+  open --> withdrawn: bazaar.want.withdraw by owner, or consumes bazaar.listing.closed with closeReason other than fulfilled, or bazaar.listing.archived
+  paused --> withdrawn: bazaar.want.withdraw by owner, or consumes bazaar.listing.closed with closeReason other than fulfilled, bazaar.listing.archived or bazaar.listing.deleted
+  draft --> withdrawn: bazaar.want.withdraw by owner or listing deleted
+  fulfilled --> [*]
+  withdrawn --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- neededBy sweep daily and at app start: an open want whose neededBy is more than 7 days past moves to paused (needed_by_passed) and the owner is asked to extend or withdraw.
+- Listing expiry pauses the want (listing_expired); it reopens when the listing is published again.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-007-09.T03 | property | PS-007-01.R03, PS-007-03.R01, PS-007-03.R02, PS-007-03.R03 | random owner commands and duplicated listing events | only declared transitions; terminal states never regress; open implies listing published |
+| TEST-PS-007-09.T15 | property | PS-007-03.R04, PS-007-03.R02 | event orders unpublished -> closed(fulfilled), unpublished -> closed(sold), expired -> published again, and the neededBy + 7 d sweep followed by define extending neededBy | paused want becomes fulfilled or withdrawn without CONFLICT_STATE; expiry pauses and publishing again reopens with bazaar.want.declared; the sweep pauses and the extension reopens |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

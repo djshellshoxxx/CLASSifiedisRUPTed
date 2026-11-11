@@ -1,35 +1,35 @@
-# PS-138-03 — workflow state machine
+# PS-138-03 — Workflow state machine: Chaos testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-03. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M02 Chaos testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/chaos` · **Contracts:** [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-138-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-138-03.R01** There is no entity lifecycle; a scenario runs phases arrange, inject, observe, recover, assert.
+- **PS-138-03.R02** Recovery is time-boxed per scenario on the FakeClock (06.R04): 60 s for local faults (db_busy, idb_abort, consumer_crash, duplicate_delivery, combined_busy_crash); for peer_outage the next scheduled F11.S02.M01 round plus one IDM-4 cycle (about 16 min of fake time) or 60 s after federation.peer.reinstated; otherwise the scenario fails.
+- **PS-138-03.R03** Scenarios are independent: each starts from a fresh relay and database.
+- **PS-138-03.R04** Trust-fault scenarios are mandatory reruns of the F17.S01.M03 suites with the same names and that module's oracle, which owns the expected outcomes: relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate, each with 3 seeds in the PR profile and 30 seeds nightly of randomised fault timing.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-03`; scenarios and fixtures to be detailed in Prompt 3.
+_None._
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-138-09.T04 | chaos | PS-138-03.R01, PS-138-03.R02, PS-138-06.R03 | consumer_crash - crash before and after ack on a cycle execution | no duplicate effect; no hold past expiresAt in any participant vault reservation store; no stuck vault saga; recovery within 60 s |
+| TEST-PS-138-09.T05 | chaos | PS-138-03.R03, PS-138-04.R02 | run each scenario twice in sequence | each starts from a fresh relay and database |
+| TEST-PS-138-09.T16 | chaos | PS-138-03.R04 | fork_conflict: conflicting signed reservations delivered in both orders | both vaults freeze; no last-writer-wins; renegotiation required |
+| TEST-PS-138-09.T17 | chaos | PS-138-03.R04 | reruns of relay_tamper and revocation_lag with random timing - (a) received before the revocation arrives and before revocationEffectiveFrom; (b) received after it arrives with a backdated createdAt; (c) received inside [effectiveFrom, arrival]; (d) effectiveFrom 31 days back | tampered statement rejected with FED_SIGNATURE_INVALID and quarantined; (a) valid; (b) refused with FEDERATION_SIGNER_ROLE_INVALID and listed in quarantine; (c) re-marked signed during claimed compromise with the dependent coordination frozen; (d) VALIDATION_FAILED; lag reported as arrival minus effectiveFrom, at most 30 days; same verdicts as the F17.S01.M03 oracle |
+| TEST-PS-138-09.T18 | chaos | PS-138-03.R04 | relay_down mid-flow rerun with random timing | local records intact; OutboxEntry prepared; no claim of delivery; same verdict as the F17.S01.M03 oracle |
+| TEST-PS-138-09.T21 | chaos | PS-138-03.R04 | reruns of signer_role_mismatch, relay_replay and relay_withhold_equivocate with 3 seeds each | each passes the F17.S01.M03 oracle; a missing rerun fails with QUALITY_CHAOS_TRUST_SCENARIO_MISSING |
+
+## Dependencies
+
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

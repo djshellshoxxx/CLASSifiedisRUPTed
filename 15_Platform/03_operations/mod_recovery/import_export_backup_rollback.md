@@ -1,35 +1,32 @@
-# PS-122-10 — import export backup rollback
+# PS-122-10 — Import, export, backup and rollback: Disaster recovery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-10. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M03 Disaster recovery](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/recovery` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-122-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-122-10.R01** The restore report is exportable and contains no content; user data export remains the vault's responsibility (CTR-IOX-001 IOX-6).
+- **PS-122-10.R02** Restore is the only data rollback path and always produces a new instance with event replay, never an in-place downgrade (IOX-4).
+- **PS-122-10.R03** Application rollback uses the previous release and requires N-1 compatible schemas, verified by opening restored data with the previous binary.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** restore-report.json plus relay deadletter list --json (metadata only).
+- **import:** Not applicable: restore reads backup artifacts of F15.S03.M02; the operator may import a restore report into the drill log only.
+- **backup:** Covered by F15.S03.M02; this module has no state to back up besides reports, which the operator archives with the drill record.
+- **migration rollback:** Runbook step 9 rolls back by pointing traffic to the previous instance if it still exists; otherwise redeploy N-1 against the restored data. Schema expand/contract keeps N-1 readable for at least 180 days.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-122-09.T15 | integration | PS-122-09.R02, PS-122-09.R03, PS-122-10.R03 | CI restore drill against fixture set with rpo and rto assertion | achieved data loss ≤ 6 h, elapsed time recorded in the report, N-1 binary opens the restored data |
+| TEST-PS-122-09.T16 | integration | PS-122-10.R01, PS-122-10.R02 | export restore report, restore with --new-identity | report exportable without payloads; new identity creates a new genesis key and a new relayId, prints a fingerprint warning and records newIdentity in the report |
+| TEST-PS-122-09.T19 | integration | PS-122-06.R01, PS-122-10.R02 | restore with --to pointing at RELAY_DATA_DIR and at a directory on the live volume | refused with PLATFORM_RECOVERY_TARGET_INVALID; live database byte-identical afterwards |
+
+## Dependencies
+
+Module depends on: F15.S03.M02, F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-EVT-001, CTR-IDM-001, CTR-OBS-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

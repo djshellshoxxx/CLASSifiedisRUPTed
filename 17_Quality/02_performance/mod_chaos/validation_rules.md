@@ -1,35 +1,35 @@
-# PS-138-02 — validation rules
+# PS-138-02 — Validation rules: Chaos testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-02. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M02 Chaos testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/chaos` · **Contracts:** [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-138-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-138-02.R01** Every scenario must assert the full invariant set after recovery, not only that the process stays alive.
+- **PS-138-02.R02** Fault parameters are bounded: BUSY duration at most 30 s, clock skew at most 24 h, peer outage at most 10 min, crashes at most 5 per scenario.
+- **PS-138-02.R03** A scenario without a seed or without recovery step is rejected with a typed error.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | Scenario has seed, fault type, bounded parameters and a recovery step | QUALITY_CHAOS_SCENARIO_INVALID |
+| V02 | After recovery every committed command appears exactly once and revisions are strictly increasing | QUALITY_CHAOS_INVARIANT_VIOLATED |
+| V03 | Within the scenario recovery bound (06.R04) no participant vault holds a classrup.bazaar.reservation/v1 hold past expiresAt, no vault saga is stuck, every OutboxEntry is in a documented F15.S01.M01 state, and relay-hosted leases and mailbox and federation queues are drained | QUALITY_CHAOS_RECOVERY_TIMEOUT |
+| V04 | Production relay and vault (PWA) builds contain no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD |
+| V05 | Fault parameters do not exceed bounds: BUSY 30 s, skew 24 h, outage 10 min, 5 crashes | QUALITY_CHAOS_SCENARIO_INVALID |
+| V06 | Every F17.S01.M03 trust-fault suite (relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay, relay_withhold_equivocate) is rerun with seeded random fault timing and passes that module's oracle | QUALITY_CHAOS_TRUST_SCENARIO_MISSING |
+| V07 | Under clock skew ordering never depends on wall time, an expired entity never comes back, each expiry event fires exactly once, and relay-hosted leases use only the relay clock | QUALITY_CHAOS_INVARIANT_VIOLATED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-138-09.T01 | unit | PS-138-01.R01, PS-138-01.R02, PS-138-02.R03 | validate a scenario file without seed or recovery | rejected with QUALITY_CHAOS_SCENARIO_INVALID |
+| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan the production relay bundle and the vault (PWA) bundles, and run with out-of-bound parameters | no chaos hooks in either; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
+| TEST-PS-138-09.T03 | chaos | PS-138-02.R01, PS-138-06.R01 | db_busy: SQLITE_BUSY for 12 s during accept commands | commands retried or DEPENDENCY_UNAVAILABLE; no half-commit; exactly-once after replay |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

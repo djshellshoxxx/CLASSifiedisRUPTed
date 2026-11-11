@@ -1,35 +1,38 @@
-# PS-087-08 — observability performance
+# PS-087-08 — Observability and performance: Federated dedup
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-08. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S02.M02 Federated dedup](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/relay_sync/dedup` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the observability performance process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-087-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-087-08.R01** Decision counts are exposed per kind so operators can see duplicate ratios and buffer pressure.
+- **PS-087-08.R02** decide() has a p95 budget of 0.2 ms excluding storage lookups.
+- **PS-087-08.R03** Buffer occupancy is a gauge and alerts when above 80 percent of 5000.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_federation_dedup_decisions_total{outcome=duplicate|anchor|next|backfill|buffer|reanchor|fork|held}
+- classrup_federation_gap_buffer_size (gauge)
+- classrup_federation_gap_buffer_age_ms (gauge: age of oldest buffered envelope)
+- classrup_federation_gap_buffer_evictions_total{reason=source_cap|fresh_share}
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- debug federation.dedup.decision {kind, authorPrefix(16), seq, correlationId} — no payload; the PWA writes this only to local diagnostics.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- decide() p95 ≤ 0.2 ms; drain() of 100 buffered envelopes ≤ 5 ms.
+- expired() over 5000 buffered envelopes ≤ 10 ms; evict() ≤ 1 ms.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-087-09.T10 | load | PS-087-08.R01, PS-087-08.R02, PS-087-08.R03 | 100 000 decisions and 5000-row expiry scan | decide p95 ≤ 0.2 ms, expired ≤ 10 ms, metrics exported, alert at 80 percent occupancy |
+
+## Dependencies
+
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ERR-001, CTR-OBS-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

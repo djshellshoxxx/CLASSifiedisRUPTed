@@ -1,0 +1,356 @@
+id: F07.S02.M02
+scope: MVP
+summary: >-
+  The user's own public profile (pseudonym, avatar, bio, languages and an L1 or L2 region) with per-field visibility
+  (public, contacts, private), published as the signed statement classrup.identity.profile/v1 by a device key that the
+  identity document lists as active, plus cached profiles of other people received as signed statements. The owner can
+  withdraw a published profile with a signed tombstone. It also owns the block list, a private P3 vault list of DIDs the
+  user refuses to interact with. Blocks are enforced inside the user's vault - blocked DIDs' statements are dropped
+  silently, and every module checks the block port before acting - and are never sent to relays or to the blocked
+  person. Relays may stop serving their own copy of a profile under hosting policy, which never changes a vault record.
+responsibilities:
+  - Own Profile records for the local principal and for received profiles (read-only mirrors with provenance), applying per-field visibility when composing statements, with field-level privacy classes registered with F10.S02.M02.
+  - Compose and sign the profile statement with only fields marked public (published to selected relays after federation_publish consent) or contacts (sent end-to-end encrypted to conversation participants), and withdraw it with a signed tombstone on unpublish.
+  - Own BlockEntry records and expose the block port isBlockedEither(a, b) and filterBlocked(list of up to 500 DIDs) used by every module before acting and by search for result filtering, and implement BlockFilterPort for F07.S02.M01.
+  - Drop statements from blocked DIDs silently at intake so the sender cannot learn of the block from this vault.
+  - Publish the mailbox IDs that comms.mailbox.register created and the replacement ID after comms.mailbox.rotate (F08.S01.M01 through MailboxHintPort) in the profile statement, so contacts can reach the owner end to end (N15).
+  - Sign and store profile statements and withdrawal tombstones only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02).
+  - Keep avatar and bio within strict size and content limits (avatar WebP at most 128 by 128 px and 24 KiB, metadata stripped by F10.S02.M03 and stored as a MediaBlob of F15.S02.M03) and check the region with F06.S02.M01 assertPublicCell.
+non_responsibilities:
+  - Reputation and reviews (F07.S03.M01) and attestations (F07.S03.M02).
+  - The signed identity document and device keys (F07.S02.M01, F07.S01.M01).
+  - Global bans or relay-wide takedown; relay operators may stop serving a profile copy on their relay under hosting policy (F12 and F11 relay storage), and users may subscribe to advisory feeds (Future).
+  - Media storage itself (F15.S02.M03) and location settings (F06.S02.M02, which this module hears only through discovery.location.updated).
+  - "Future: shared block lists via signed advisory feeds, verified-link fields, profile themes."
+depends_on: [F07.S01.M01, F07.S02.M01, F11.S01.M01, F06.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F10.S02.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001]
+user_stories:
+  - As a user, I write a short bio, add an avatar and choose which fields are public, shared with my conversation partners only, or private.
+  - As a user, I block someone and they can no longer message me, make offers or appear in my search results, and they are not told.
+  - As a buyer, I view a seller's public profile as a signed statement with its provenance.
+  - As a user, I can export my blocks to move to a new device.
+  - As a user, I can withdraw my public profile from my relays and see per relay whether the withdrawal arrived.
+edge_cases:
+  - Avatar upload is a 3 MB JPEG with GPS EXIF; it is re-encoded to WebP 128 by 128 under 24 KiB and metadata is stripped; if the result is still too large it is rejected.
+  - Bio contains links; allowed as plain text but rendered without auto-linking, and the UI shows a warning on tap-out.
+  - Profile statement from a blocked DID arrives; dropped silently with no quarantine entry visible to the sender.
+  - A user blocks someone mid-conversation; open drafts and pending outbox statements to that DID are cancelled with reason blocked, and active shares end (events consumed elsewhere).
+  - The user blocks 1 001 DIDs; the 1 001st is refused with IDENTITY_BLOCK_LIMIT.
+  - A received profile claims a pseudonym that is confusable with a known contact; shown with the confusable warning from F07.S01.M01.
+  - Two devices edit the profile concurrently; revision conflict surfaces CONFLICT_REVISION and the user chooses; no last-writer-wins.
+  - A relay stops serving a profile copy under its hosting policy; the copy is unavailable via that relay, the owner's other relays and direct peers still serve it, and a vault that learns of it only records 'not served by relay X' in provenance.
+  - The user blocks themselves or a DID that is not a valid did:key; rejected.
+  - A relay signs a tombstone for someone's profile; receiving vaults keep the profile and only drop that relay from its provenance, because only the profile's own DID can withdraw it.
+  - A profile is signed by a device key that the DID's document had revoked before this vault first saw the profile; rejected with IDENTITY_PROFILE_INVALID.
+  - The owner unpublishes while one relay is offline; the tombstone waits in the outbox for that relay and the UI shows it as not yet delivered.
+ux:
+  screens:
+    - "Edit profile: pseudonym (read-only, change in Identity), avatar picker with crop, bio (500 chars with counter), languages, region level selector linked to location settings, per-field visibility segmented control (Public, Contacts, Private) with a preview 'what a stranger sees' and 'what a contact sees', and Unpublish with per-relay delivery state."
+    - "Blocked people: list with pseudonym, DID fingerprint, date, optional private note, Unblock."
+    - "Other person's profile: pseudonym with DID fingerprint, avatar, bio, region badge, provenance line ('from relay X, received <time>', 'not served by relay Y'), Hide for me, Block and Report-to-relay actions."
+  states: [loading, empty, saved, pending-offline, conflict, withdrawn, not-served-by-relay, hidden, blocked, error]
+  a11y:
+    - Avatar has alt text field and fallback initials; bio counter announces remaining characters politely at 450, 490 and 500.
+    - Visibility controls are radio groups with 44 by 44 px targets and a text description of each level.
+    - Block and Unblock require an accessible confirmation dialog naming the person.
+processes:
+  domain_schema:
+    requirements:
+      - A Profile stores the display data and per-field visibility; the record is classed P3 as a whole with field-level classes registered with F10.S02.M02 (public fields P0 once published, contacts fields P2, private fields P3), own profiles are editable and received profiles are read-only mirrors with provenance and the original signature.
+      - A BlockEntry is a P3 vault-only record of blockerDid and blockedDid with an optional private note and is excluded from every statement, relay payload, log and event with class below P3.
+      - Avatar and bio have hard size limits so signed statements stay under 32 KiB.
+    entities:
+      - name: Profile
+        schema: classrup.identity.profile/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "did: did — profile subject (P0)"
+          - "origin: enum — own | received"
+          - "seq: int — profile statement sequence, increments by 1 per published version"
+          - "displayPseudonym: string — copy of the Account pseudonym, 3..32 code points (P0)"
+          - "bio?: string — 0..500 code points, plain text; class follows its visibility"
+          - "avatar?: object — { ref: blob:sha256-<base64url> MediaBlob of F15.S02.M03, mime: image/webp, widthPx: 128, heightPx: 128, bytes at most 24 576, sha256 }; class follows its visibility"
+          - "languages?: array — at most 5 BCP 47 tags; class follows its visibility"
+          - "regionCell?: string — geohash of 4 or 5 characters, never longer (CTR-PRV-001 L1 or L2), equal to the last publicCell from discovery.location.updated"
+          - "mailboxes?: array — own profile; at most 5 { relayId, mailboxId (128-bit base64url) } set through MailboxHintPort by F08.S01.M01 after comms.mailbox.register, the old ID replaced after comms.mailbox.rotate; class follows its visibility; part of the F11.S01.M01 profile allowlist"
+          - "visibility: object — per field bio, avatar, languages, region, mailboxes: public | contacts | private; default private for region and public for others"
+          - "fieldClasses: object — F10.S02.M02 class per field derived from visibility - public P0, contacts P2, private P3"
+          - "publishState?: enum — never | published | withdrawn (own profile)"
+          - "cid?: string — cid of the signed statement for published or received versions, per F11.S01.M03 (computed by the StatementPublisherPort for own versions)"
+          - "signerKey?: string — ext.signerKey, the device key that signed the statement, not revoked in the DID's latest verified document at receipt (F07.S02.M01 key_status at receiver time)"
+          - "firstSeenAt?: timestamp — received profiles; local clock when this vault first saw the statement, used when a revocation is learned later"
+          - "sig?: string — Ed25519 signature by signerKey over JCS(envelope minus sig) per F11.S01.M03"
+          - "provenance?: object — { originRelay?, via, receivedAt, verifiedAt, notServedBy?: relay ids } for received profiles"
+          - "syncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "status: enum — active | hidden | deleted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - regionCell has 4 or 5 characters or is absent, and is present in a statement only when its visibility is public or contacts.
+          - A signed statement never includes fields whose visibility is private, and contacts fields appear only in end-to-end encrypted statements.
+          - A received profile is never edited locally; only status can change (hidden, deleted), and only the local user or a tombstone authored by the profile's own DID changes it.
+          - No field with visibility private appears in logs, events below P3 or relay payloads.
+      - name: BlockEntry
+        schema: classrup.identity.block_entry/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "blockerDid: did — the local principal"
+          - "blockedDid: did — valid did:key different from blockerDid"
+          - "note?: string — 0..140 code points, private to the user"
+          - "status: enum — active | removed"
+          - "removedAt?: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one active BlockEntry exists per (blockerDid, blockedDid).
+          - blockerDid differs from blockedDid.
+          - A vault holds at most 1 000 active block entries.
+    sql: |
+      CREATE TABLE identity_block_entry (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, blocker_did TEXT NOT NULL, blocked_did TEXT NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX identity_block_active ON identity_block_entry(tenant_id, blocker_did, blocked_did) WHERE status = 'active';
+      CREATE TABLE identity_profile (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, origin TEXT NOT NULL, seq INTEGER NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX identity_profile_did ON identity_profile(tenant_id, did, origin);
+  validation_rules:
+    requirements:
+      - Profile input is validated strictly with exact limits, and avatars are re-encoded, stripped of metadata and size-checked on the device.
+      - Visibility and region rules guarantee that no private field and no location finer than L2 enter a statement, and the region passes F06.S02.M01 assertPublicCell (N8).
+      - Block input validates DIDs and the cap, and intake of received profiles verifies signatures before storage.
+    rules:
+      - "V01 | bio is at most 500 code points of plain text after NFC and control character removal | VALIDATION_FAILED"
+      - "V02 | avatar is WebP, exactly 128 by 128 px, at most 24 576 bytes, with EXIF, XMP and GPS metadata stripped by F10.S02.M03 before it is stored as a MediaBlob (F15.S02.M03, N9) | IDENTITY_AVATAR_INVALID"
+      - "V03 | F06.S02.M01 assertPublicCell(regionCell) passes and regionCell equals the last publicCell received via discovery.location.updated | IDENTITY_REGION_INVALID"
+      - "V04 | languages has at most 5 valid BCP 47 tags | VALIDATION_FAILED"
+      - "V05 | blockedDid is a valid did:key, differs from the principal, and fewer than 1 000 active blocks exist | IDENTITY_BLOCK_LIMIT"
+      - "V06 | received profile statement is at most 32 KiB, its envelope signature verifies per F11.S01.M03 with ext.signerKey a device key that the DID's latest verified document does not mark revoked at receipt, whatever createdAt claims (F07.S02.M01 key_status at receiver time), and seq is greater than the stored seq | IDENTITY_PROFILE_INVALID"
+      - "V07 | expectedRevision equals the current revision on profile update | CONFLICT_REVISION"
+      - "V08 | unpublish targets an own profile with publishState published | CONFLICT_STATE"
+      - "V09 | privacy.consent.check(federation_publish, relayId) is granted for each target relay before a public statement is queued; relays without consent are skipped and a publish with no remaining relay is refused; tombstones are always sent | PRECONDITION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A profile record in the vault is active, hidden by the local user, or deleted by a tombstone authored by its own DID, the owner's erase or contact removal; a relay's hosting action changes only that relay's copy.
+      - A block is active until removed; removal is permanent for that entry and a re-block creates a new entry.
+      - Hidden profiles return to active only by an explicit local unhide; relay hosting actions and their reversal never change vault records.
+    machines:
+      - entity: Profile
+        initial: active
+        terminal: [deleted]
+        transitions:
+          - "active -> hidden | local hide by the user | stop showing the profile, keep data"
+          - "hidden -> active | local unhide by the user | show again"
+          - "active -> deleted | tombstone whose author equals did, erase cleanup, or contact removal | delete content, keep tombstone id"
+          - "hidden -> deleted | tombstone whose author equals did, erase cleanup, or contact removal | delete content, keep tombstone id"
+          - "active -> active | identity.profile.unpublish on the own profile | publishState withdrawn, tombstone queued per relay, emit identity.profile.updated with changedFields [withdrawn]"
+      - entity: BlockEntry
+        initial: active
+        terminal: [removed]
+        transitions:
+          - "active -> removed | identity.block.remove | emit identity.block.removed; statements from the DID are accepted again from now on"
+    timeouts:
+      - "Removed BlockEntry rows are purged 30 days after removal."
+      - "Received profiles not viewed for 180 days are evicted from the cache (RET-STANDARD, least recently viewed first)."
+  commands_queries_events:
+    requirements:
+      - update, publish, unpublish, block add and block remove are vault commands; publish produces the signed statement classrup.identity.profile/v1 and unpublish produces classrup.federation.tombstone/v1, both signed by a device key active in the owner's document and both signed and stored only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02, which allocates seq and prev); receive is the vault intake of someone else's profile statement.
+      - Block commands emit local P3 events that other modules consume to cancel work; block data is never placed in a statement.
+      - Reads of profiles apply the viewer's perspective - strangers see public fields, conversation participants see contacts fields, the owner sees all.
+      - A tombstone withdraws a received profile only when its author equals the profile's DID and its signer key is active in that DID's document; a tombstone signed by an origin relay only removes that relay from the profile's provenance.
+      - Relay hosting actions (moderation.action.applied and moderation.action.reverted) are consumed only by the relay runtime for the relay's own copy and never change vault records.
+      - F08.S01.M01 calls MailboxHintPort.set(relayId, mailboxId, previousMailboxId?) after comms.mailbox.register and comms.mailbox.rotate; the own profile keeps at most 5 mailbox IDs, and when the profile is published a new version with seq plus 1 carrying the new or replacement ID is published to the relays that hold the current version, with federation_publish consent re-checked (N15).
+    commands:
+      - name: identity.profile.update
+        capability: identity.profile.write_own
+        input: "{ bio?, avatar?, languages?, visibility?, expectedRevision }"
+        output: "{ profileId, revision }"
+        errors: [VALIDATION_FAILED, IDENTITY_AVATAR_INVALID, IDENTITY_REGION_INVALID, CONFLICT_REVISION]
+        emits: [identity.profile.updated]
+        idempotent: true
+      - name: identity.profile.publish
+        capability: identity.profile.publish_own
+        input: "{ audience: public|contacts, targetRelays?: array, threadIds?: array, expectedRevision }"
+        output: "{ profileId, seq, cid, statement: classrup.identity.profile/v1, syncState: local_committed, skippedRelays: array }"
+        errors: [CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_REGION_INVALID, PRECONDITION_FAILED]
+        emits: [identity.profile.updated]
+        idempotent: true
+      - name: identity.profile.unpublish
+        capability: identity.profile.unpublish_own
+        input: "{ targetRelays?: array (default every relay that received it), expectedRevision }"
+        output: "{ profileId, revision, tombstone: classrup.federation.tombstone/v1, syncStates: [{ relayId, syncState }] }"
+        errors: [CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [identity.profile.updated]
+        idempotent: true
+      - name: identity.profile.receive
+        capability: identity.profile.receive
+        input: "{ statement: classrup.identity.profile/v1, provenance }"
+        output: "{ profileId, seq, status }"
+        errors: [IDENTITY_PROFILE_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        emits: [identity.profile.updated]
+        idempotent: true
+      - name: identity.block.add
+        capability: identity.block_entry.write_own
+        input: "{ blockedDid, note? }"
+        output: "{ blockId, revision: 1 }"
+        errors: [VALIDATION_FAILED, IDENTITY_BLOCK_LIMIT, CONFLICT_STATE]
+        emits: [identity.block.added]
+        idempotent: true
+      - name: identity.block.remove
+        capability: identity.block_entry.write_own
+        input: "{ blockId, expectedRevision }"
+        output: "{ blockId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [identity.block.removed]
+        idempotent: true
+    note: "Statements and signer roles (N2): classrup.identity.profile/v1 - a device key active in the owner's portable document (author the principal did:key, ext.signerKey the device key, CTR-FED-001 FED-7); classrup.federation.tombstone/v1 for unpublish (CTR-FED-001 FED-4 and FED-9, the format owned by F11.S01.M02) - a device key of the profile's DID. Both are signed and stored through the StatementPublisherPort declared in F11.S01.M01 and implemented by F11.S01.M02 (wired at composition, since F11.S01.M02 depends on this module), delivered by the sync outbox, and applied by F11.S01.M02 on relays and in receiving vaults. Port provided to F08.S01.M01: MailboxHintPort.set(relayId, mailboxId, previousMailboxId?). A received statement from a blocked DID is dropped silently - receive returns no error the sender could observe. Ports provided: isBlockedEither(a, b), filterBlocked(dids up to 500), and BlockFilterPort.isBlocked(did) for F07.S02.M01 (N7)."
+    queries:
+      - name: identity.profile.get
+        capability: identity.profile.read_view
+        input: "{ did, viewerContext?: stranger|contact }"
+        output: "{ profile: Profile with fields filtered by visibility, provenance?, blockedByMe: boolean }"
+        errors: [NOT_FOUND]
+      - name: identity.block.list
+        capability: identity.block_entry.read_own
+        input: "{ cursor?, limit? (1..100) }"
+        output: "{ items: BlockEntry[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: identity.profile.updated, privacy: P0, payload: "{ did, origin: own|received, seq, changedFields: array (field names only, for example withdrawn or mailboxes) }"}
+      - {type: identity.block.added, privacy: P3, payload: "{ blockId, blockerDid, blockedDid }"}
+      - {type: identity.block.removed, privacy: P3, payload: "{ blockId, blockerDid, blockedDid }"}
+    events_consumed:
+      - {type: identity.account.created, effect: "create the default own Profile with the pseudonym, visibility region private, no bio"}
+      - {type: identity.pseudonym.changed, effect: "refresh displayPseudonym on the own profile and mark it unpublished-changes"}
+      - {type: discovery.location.updated, effect: "set regionCell to publicCell after F06.S02.M01 assertPublicCell, or clear it at L0, still subject to the region visibility"}
+      - {type: identity.portable_doc.published, effect: "origin received - re-verify quarantined profile statements of that DID whose signer key was unknown; for each newly revoked key, profiles first seen at or after its clamped revokesEffectiveAt are quarantined and earlier ones stay valid with a revoked-signer marker"}
+      - {type: moderation.action.applied, effect: "relay runtime only - the relay stops serving its own copy of the targeted profile statement under its hosting policy; vault records are never changed"}
+      - {type: moderation.action.reverted, effect: "relay runtime only - the relay serves its copy of the profile statement again; vault records are never changed"}
+      - {type: federation.tombstone.applied, effect: "delete the received profile only when the tombstone author equals Profile.did and its signer key was active in that DID's document; a tombstone signed by an origin relay only drops that relay from provenance and the profile stays"}
+      - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already sent the own profile tombstone and deleted profiles and blocks"}
+    errors:
+      - "IDENTITY_AVATAR_INVALID | 422 | no | avatar is not a 128 by 128 WebP under 24 KiB without metadata"
+      - "IDENTITY_REGION_INVALID | 422 | no | region cell fails assertPublicCell or differs from the public cell of the location settings"
+      - "IDENTITY_BLOCK_LIMIT | 409 | no | 1 000 active blocks already exist"
+      - "IDENTITY_PROFILE_INVALID | 422 | no | received profile signature, signer key status, size or sequence check failed"
+    example: |
+      vault command: identity.profile.update { "bio": "Fixes bikes on weekends.", "visibility": { "bio": "public", "region": "contacts" }, "expectedRevision": 2 }
+      -> { "profileId": "0192f440-…", "revision": 3 }
+      vault command: identity.profile.unpublish { "expectedRevision": 3 }
+      -> { "profileId": "0192f440-…", "revision": 4, "tombstone": { "type": "classrup.federation.tombstone/v1", "author": "did:key:z6Mk…", "payload": { "target": "sha256-…", "reason": "withdrawn" }, "sig": "…" }, "syncStates": [ { "relayId": "relay.example.org", "syncState": "prepared" } ] }
+      vault command: identity.block.add { "blockedDid": "did:key:z6Mk…", "note": "spam offers" }
+      -> { "blockId": "0192f441-…", "revision": 1 }
+      port: isBlockedEither("did:key:z6MkA…", "did:key:z6MkB…") -> true
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked principal edits, publishes or unpublishes its profile and edits its block list; received profiles are accepted only with a valid signature by a device key that the profile DID's latest verified document does not mark revoked at receipt, and are quarantined when a revocation learned later took effect before this vault first saw them.
+      - Visibility is enforced at composition and at read; a stranger can never read contacts or private fields because those never leave the vault in a public statement.
+      - Relay policy - a relay may host profile statements and stop serving its copy under its policy; it has no access to blocks and cannot change a vault's records.
+    capabilities:
+      - "identity.profile.write_own | principal | unlocked local principal"
+      - "identity.profile.publish_own | principal | unlocked local principal; audience contacts requires an existing thread; federation_publish consent per relay"
+      - "identity.profile.unpublish_own | principal | unlocked local principal; own profile is published"
+      - "identity.profile.receive | principal | signature verifies with an active signer key; signer DID not blocked (otherwise dropped silently)"
+      - "identity.profile.read_view | principal, anonymous | vault - unlocked principal; relay copies - public read of public fields only"
+      - "identity.block_entry.write_own | principal | unlocked local principal"
+      - "identity.block_entry.read_own | principal | unlocked local principal"
+  failure_recovery_idempotency:
+    requirements:
+      - Vault commands are idempotent through the local command log and use expectedRevision; a profile publish or unpublish is queued through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted.
+      - Blocking is effective locally the moment it commits, independent of any network.
+      - Receiving the same profile statement twice is a no-op keyed by cid.
+    idempotency: "Idempotency-Key per command in the vault log for 24 h; receive keyed by cid; block add for an existing active pair returns the existing blockId; unpublish twice returns the same tombstone."
+    concurrency: "expectedRevision on profile and block mutations; the partial unique index prevents duplicate active blocks; Web Locks serialize tabs; two devices of the same principal reconcile profile edits as CONFLICT_REVISION with a resolve-or-discard prompt (IDM-5)."
+    retries: "Outbox retries follow base 500 ms, cap 30 s, full jitter, max 6 attempts per window; local commands are not retried."
+    offline: "Profile editing, publishing and unpublishing to the outbox and blocking all work offline; the UI shows 'not yet delivered' until transport_acknowledged and 'accepted by peer' only after a signed acknowledgement."
+    partial_failure: "If avatar re-encoding or metadata stripping fails the update is rejected as a whole; if a relay rejects the published statement or the tombstone, the local profile remains and the per-relay state shows the error."
+  privacy_retention_abuse:
+    requirements:
+      - The block list is P3 and never leaves the vault, never appears in statements, logs, relay requests or events below P3, and the blocked person receives no notification.
+      - Public profile fields are exactly what the user marked public; a published profile and copies other vaults fetched cannot be recalled, only superseded or tombstoned, and the UI says so before first publication.
+      - Region never exceeds L2 and is off by default.
+      - The module meets the N6 privacy duties - it registers ExportSectionPort (sections identity.profiles and identity.blocks), DeletionPort (tombstone the own published profile, delete profiles and blocks) and RetentionPurgePort, registers field classes with F10.S02.M02, calls privacy.consent.check(federation_publish, relayId) before every public relay publication, and treats privacy.deletion.completed only as final cleanup.
+    data:
+      - "Profile: P3 record with field classes - public fields P0 once published; contacts fields P2 end-to-end encrypted to participants; private fields stay P3 in the vault."
+      - "BlockEntry: P3, device only; note is a private free text."
+      - "Profile mailboxes: P0 once published with visibility public (the N15 mailbox hint), P2 for contacts, never sent when private."
+    retention:
+      - "Own profile and blocks until the user deletes them or vault erase (RET-STANDARD); removed blocks purged after 30 days; received profiles evicted after 180 days unviewed; tombstones kept 180 days (FED-4)."
+    threats:
+      - "T01 | Blocked person learns of the block | statements from the blocked DID are dropped silently, no error identifies the block, the outbox of the sender shows at most transport_acknowledged and never peer_accepted; honest limit - repeated failure of acknowledgement can hint at it"
+      - "T02 | Bio or avatar used for phishing or doxxing | plain text only, links not auto-linked, avatar re-encoded without metadata, report goes to the relay's hosting policy and local hide is available"
+      - "T03 | Fake profile impersonating a known contact | profile signature by an active device key binds content to the DID, DID fingerprint always shown next to the pseudonym, confusable warning from F07.S01.M01"
+      - "T04 | Region leak through visibility mistakes | region defaults to private, preview of 'what a stranger sees', statement composer drops private fields, assertPublicCell and a contract test for L2 maximum"
+      - "T05 | Mass profile spam from throwaway DIDs | vault intake limit of 50 profiles per hour per transport source, unknown DIDs shown as strangers, relay quotas apply"
+      - "T06 | Relay deletes or hides a user's profile in other people's vaults | relay hosting actions affect only the relay copy, and relay-signed tombstones only drop that relay from provenance"
+      - "T07 | Private field values leak through the record class | the record is P3 with per-field classes; logs, events below P3 and relay payloads carry only public fields"
+      - "T08 | A published mailbox ID is harvested to flood the owner's mailbox | F08.S01.M01 put proofs and quotas apply; the owner rotates the mailbox and the next profile version publishes only the replacement ID"
+    abuse_controls:
+      - "Intake limits - 50 received profiles per hour per source, 32 KiB per statement, quarantine beyond."
+      - "Block cap 1 000; block and unblock actions limited to 60 per hour to avoid accidental loops; limits run through the bus RateLimitPort (F12.S03.M03, N18)."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry; local diagnostics keep counters without DIDs or content.
+      - Block checks used by other modules cost at most 1 ms p95 for a single lookup and 5 ms for a list of 500 DIDs on a Moto G-class device.
+      - Profile view renders within the PWA budget (LCP at most 2.5 s on the 4G profile).
+    metrics:
+      - "local counter block_check_total{result=allowed|blocked}"
+      - "local counter profile_statements_total{event=published|withdrawn|received|rejected}"
+    logs:
+      - "info profile.event {event, correlationId} in the local diagnostics log - no DIDs, bios or notes."
+    budgets:
+      - "isBlockedEither p95 <= 1 ms; filterBlocked(500) p95 <= 5 ms; profile update p95 <= 100 ms excluding avatar encoding (<= 400 ms)."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with fixed key pairs and an injected clock.
+      - Privacy tests prove that private fields and blocks never appear in statements, logs or events below P3.
+      - Block enforcement is tested end to end across a consumer module fake.
+      - Accessibility and UI copy tests check the profile, blocked people and other-profile screens, including the no-recall notice before first publication.
+    fixtures: "Principal P with DID and device keys P1 (active) and P2 (revoked at 09:00), strangers S1, S2 (S2 blocked), contact C, relays R1 (consented) and R2 (no consent), avatar fixtures (3 MB JPEG with GPS EXIF, valid WebP), F06.S02.M01 and F10.S02.M03 stubs, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03 | update bio and visibility then compose the public statement | statement contains only public fields, signed by P1; private fields absent; size under 32 KiB; field classes registered"
+      - "T02 | unit | 02.R01,01.R03 | upload 3 MB JPEG with GPS EXIF and an oversized WebP | re-encoded WebP 128 by 128 under 24 KiB, stripped by F10.S02.M03 and stored as a MediaBlob, or IDENTITY_AVATAR_INVALID"
+      - "T03 | unit | 02.R01,02.R02 | bio 501 code points, 6 languages, region cell with 6 characters, region differing from the last publicCell, stale expectedRevision | VALIDATION_FAILED, IDENTITY_REGION_INVALID (assertPublicCell called) or CONFLICT_REVISION each time"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of hide, unhide, tombstone, unpublish, block, unblock and relay hosting events | only declared transitions succeed; deleted and removed are final; relay hosting events never change a vault record"
+      - "T05 | integration | 01.R02,04.R02 | block S2 then deliver a profile, an offer card and a message from S2 | all dropped silently; S2 gets no error; isBlockedEither is true both ways"
+      - "T06 | contract | 04.R01,04.R03 | every command, query and event run | outputs, statements and payloads validate against registry schemas; signatures verify; a stranger view has only public fields"
+      - "T07 | integration | 04.R02,09.R03 | consumer fakes subscribe to identity.block.added | open offers, drafts, shares and outbox items to the blocked DID are cancelled with reason blocked"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | stranger requests contacts fields; forged profile for a known DID; locked vault edits; relay asks for the block list | only public fields served; signature fails; FORBIDDEN; the relay has no block data"
+      - "T09 | chaos | 06.R01,06.R02,06.R03 | replay of the same key and the same statement; offline publish; avatar encoder failure | one result; outbox states shown honestly; blocking works offline; whole update rejected on failure"
+      - "T10 | abuse | 07.R01,07.R03,09.R02 | inspect statements, relay requests, logs and events for blocks, private fields and region precision; 51 profiles per hour from one source | none present; region at most 5 characters and private by default; excess quarantined"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 10 000 block lookups and filterBlocked(500) on emulated Moto G; profile view on the 4G profile | p95 <= 1 ms and <= 5 ms; LCP <= 2.5 s; counters carry no DIDs"
+      - "T12 | a11y | 09.R04 | edit profile, blocked people and other-profile screens with axe-core | zero serious or critical issues; counter and dialogs announced"
+      - "T13 | unit | 09.R01 | traceability run over PS-056 | every requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import in a fresh vault, vault erase, and a statement with an unknown ext field | profile and blocks round-trip; received profiles re-verified; erase removes all; older reader ignores the ext field"
+      - "T15 | integration | 04.R01 | unpublish a profile published to R1 while R1 is offline, then online | tombstone signed by P1 queued with per-relay sync state; identity.profile.updated with changedFields [withdrawn]; after delivery a viewer vault deletes the profile"
+      - "T16 | abuse | 04.R04 | a tombstone for P's profile signed by origin relay R1, then one signed by P1 | after the relay tombstone the profile stays active with R1 removed from provenance; the author tombstone deletes it"
+      - "T17 | integration | 04.R05,03.R01 | moderation.action.applied and moderation.action.reverted delivered to a vault and to the relay runtime | the relay stops and then resumes serving its copy; the vault Profile is unchanged except an optional notServedBy provenance entry"
+      - "T18 | abuse | 05.R01,02.R03 | a profile signed by P2 with a backdated createdAt arriving after the revoking document; P2's revocation learned later for a profile first seen after its effective time and one first seen before it | the first rejected with IDENTITY_PROFILE_INVALID; on learning, the later-seen one quarantined and the earlier-seen one kept with a revoked-signer marker"
+      - "T19 | abuse | 01.R01,07.R04 | contacts and private field values with their F10 classes; scan logs, events below P3 and relay payloads | no private-visibility field anywhere; contacts fields only inside end-to-end encrypted statements"
+      - "T20 | integration | 07.R04 | publish to R1 and R2 where only R1 has federation_publish consent; publish with no consented relay; F10 export, deletion and retention sweep | R1 queued and R2 skipped and shown; PRECONDITION_FAILED; sections exported; deletion tombstones the own profile"
+      - "T21 | e2e | 07.R02,09.R04 | UI copy check before first publication and on unpublish | no-recall notice shown before the first publication; unpublish explains that fetched copies cannot be recalled"
+      - "T22 | integration | 04.R06 | F08.S01.M01 stub calls MailboxHintPort.set after register on R1, then after rotate with a new ID, with the profile published to R1 and mailboxes visibility public; then with mailboxes private | the own profile holds the ID, then the replacement; a new version with seq plus 1 carrying only the replacement is published to R1 after the consent check; identity.profile.updated lists mailboxes; private mailboxes never enter a statement"
+      - "T23 | contract | 04.R01 | publish and unpublish with a StatementPublisherPort spy | publish calls StatementPublisherPort.publish and unpublish calls issueTombstone; seq and prev come from the port; no other signing path is used"
+    acceptance:
+      - All tests T01-T23 pass in CI.
+      - The block list never appears in any statement, relay payload, log or event class below P3 (privacy suite).
+      - A blocked DID's statements are dropped on intake in every module that consumes the block port.
+      - No relay action or relay-signed tombstone changes or deletes a profile record inside a vault.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the own profile, received profile cache entries the user kept (contacts), and the block list.
+      - Import revalidates avatar and statement limits and signatures of received profiles, and restores blocks as active entries up to the 1 000 cap.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Sections identity.profiles and identity.blocks in classrup-export/v1 (schemas classrup.identity.profile/v1 and classrup.identity.block_entry/v1); blocks are included only in the owner's own export; avatar MediaBlobs are included by reference and bytes."
+    import: "Received profiles are re-verified and skipped if invalid; blocks beyond the cap are reported and skipped; own profile replaces the default only when seq is higher; publishState and tombstones are restored."
+    backup: "The vault export is the primary backup (IOX-6); relays hold public profile statements and P0 avatar blobs only (IOX-7) and never blocks."
+    migration_rollback: "Additive optional fields only in v1 (under ext for signed statements); rollback is safe because older readers ignore unknown fields."

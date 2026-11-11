@@ -1,35 +1,64 @@
-# PS-109-04 — commands queries events
+# PS-109-04 — Commands, queries and events: Keyboard operability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-04. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M01 Keyboard operability](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/keyboard` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the commands queries events process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-109-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-109-04.R01** The module exposes component APIs and CSS tokens, not vault or relay commands or queries.
+- **PS-109-04.R02** Components emit DOM events only (for example close and reorder) and no domain events.
+- **PS-109-04.R03** Errors are developer-facing lint and test failures with stable codes and never reach end users.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| I18N_A11Y_TABINDEX_POSITIVE | 400 | no | build failure for tabindex greater than 0 |
+| I18N_A11Y_NON_INTERACTIVE_HANDLER | 400 | no | build failure for handlers on non-interactive elements |
+| I18N_A11Y_TARGET_SIZE | 400 | no | interactive element not sized with the token (lint) or measured smaller than 44 by 44 CSS px (end-to-end) |
+| I18N_A11Y_NO_DRAG_ALTERNATIVE | 400 | no | drag interaction without a single-pointer alternative |
+| I18N_A11Y_KEYBOARD_TRAP | 400 | no | focus cannot leave a component by keyboard |
+| I18N_A11Y_FOCUS_OBSCURED | 400 | no | focused element is hidden behind a sticky element |
+| I18N_A11Y_SINGLE_KEY_SHORTCUT | 400 | no | single-character shortcut without off switch |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** API: <SkipLink/>, useRouteFocus(), openDialog(options) -> Promise<result>, createRovingList(), createReorderList({ items, onMove }) with move-up and move-down buttons, createSlider() with arrow keys and numeric input, setMotionPreference(system|reduced) called by the PWA shell with the F15.S04.M03 LocalSettings value, tokens in css/a11y-tokens.css.
+
+### Example
+
+```
+const result = await openDialog({ title: t("listing.delete.title"), confirmLabel: t("common.delete"), destructive: true });
+// focus moves to the dialog heading, Tab cycles inside, Escape resolves { confirmed: false }, focus returns to the trigger button
+createReorderList({ items: photos, onMove: (from, to) => reorder(from, to) }); // renders "Move earlier" and "Move later" buttons beside every drag handle
+setMotionPreference(settings.a11yMotion ?? "system"); // called by the PWA shell after reading F15.S04.M03 LocalSettings; the library never reads the vault
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-109-09.T08 | unit | PS-109-04.R01, PS-109-04.R02, PS-109-04.R03, PS-109-05.R01, PS-109-05.R02 | inspect module exports, DOM events, storage and network calls | no domain events, no vault, IndexedDB or network access, preference only via setMotionPreference parameter, errors are lint codes |
+
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

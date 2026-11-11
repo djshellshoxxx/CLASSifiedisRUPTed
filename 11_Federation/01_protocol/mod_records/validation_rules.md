@@ -1,35 +1,62 @@
-# PS-084-02 — validation rules
+# PS-084-02 — Validation rules: Federated records
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-02. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M02 Federated records](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/records` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the validation rules process for records within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-084-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-084-02.R01** Checks run cheapest first and blocklists run before anything is persisted, so a blocked peer, author or cid never reaches storage.
+- **PS-084-02.R02** Inbound responses to peers never reveal which block rule matched; every blocklist hit returns the generic FEDERATION_NOT_ACCEPTED while the internal reason is logged and evented.
+- **PS-084-02.R03** Every rule violation maps to exactly one stable code and the per-envelope outcome is returned in a results array in request order.
+- **PS-084-02.R04** Authorship is proven by the signature and the registry role alone; no relay is bound to an author, the sending relay is provenance for display, and where to fetch an author's records comes from the relays listed in the author's portable identity document.
+- **PS-084-02.R05** Payload checks depend on the audience; the portable allowlist and federation opt-in apply only to audience public portable types, control types use their registry schema, and participant statements are checked for ciphertext shape and size.
+- **PS-084-02.R06** Revocation lag is judged by this vault's receipt time and never by createdAt; a statement received after the revocation arrived is refused with FEDERATION_SIGNER_ROLE_INVALID and kept in the quarantine list with reason signer_key_revoked, and accepted statements this vault first received inside [revocationEffectiveFrom, arrival of the revocation] are re-marked signed during claimed compromise and quarantined, with the effectiveFrom exactly as F07.S02.M01 reports it after the F16.S02.M02 clamp to at most 30 days before the earliest evidence.
+- **PS-084-02.R07** Relay intake from a hosted vault key runs relay-local admission before indexing, in this order, failing closed with DEPENDENCY_UNAVAILABLE when a dependency cannot answer; privacy.consent.relay_check (F10.S01.M01) for the author's public portable records, tenant allowedCurrencies from F15.S04.M03 TenantPort, F12.S03.M04 moderation.accountlimit.check with limitKey index_writes_per_day, then F12.S02.M02 moderation.spam.evaluate in mode relay_intake over the projection text; tombstone, move and move_cancel statements are exempt so withdrawals always propagate.
+- **PS-084-02.R08** Relay-to-relay inbox requests honour the F16.S03.M03 containment sentinel federation_off; a request whose keyid resolves to a peer relay receives FEATURE_DISABLED with params.reason federation_killed while requests from vault device keys hosted on the relay continue, and the sentinel is not a feature flag, so CTR-FLG-001 FLG-2 does not apply.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | relay-to-relay requests: federation flag F11 is on (off by default) and the containment sentinel <RELAY_DATA_DIR>/containment/federation_off (F16.S03.M03, read through ContainmentPort) is absent, otherwise FEATURE_DISABLED with params.reason federation_killed; vault to relay requests: the relay hosting policy accepts the signing device key, and they are never gated by the sentinel | FEATURE_DISABLED |
+| V02 | relay: sender is an active allowlisted peer relay or a device key registered with this relay, and the RFC 9421 request signature verifies (F11.S03.M01, F11.S01.M03) | FEDERATION_PEER_NOT_ALLOWED |
+| V03 | batch has 1..100 envelopes and body ≤ 4194304 bytes; each envelope ≤ 262144 bytes; participants envelopes ≤ 12288 bytes so their sealed wrapper fits an F08 mailbox blob | FEDERATION_BATCH_TOO_LARGE |
+| V04 | peer quota available: 6000 envelopes/hour and 10 batches/minute (F11.S03.M01) | FEDERATION_QUOTA_EXCEEDED |
+| V05 | envelope shape: v = 1, author is a did:key, ext.stream is pub or thr:<id>, ext.audience matches the registry audience of the type, participants envelopes carry ext.recipients, seq ≥ 1 and prev present iff seq > 1 | VALIDATION_FAILED |
+| V06 | peer, author did, cid and content hash are not matched by an active reject rule (F11.S03.M02 evaluate, which exempts tombstone, move and move_cancel statements from author and cid rules); a hide match stores the record hidden | FEDERATION_NOT_ACCEPTED |
+| V07 | strict parse and Ed25519 signature over JCS(envelope minus sig) verify with ext.signerKey or the author key (F11.S01.M03 V01–V04, V07); a wrong cid is refused with FEDERATION_CID_MISMATCH | FED_SIGNATURE_INVALID |
+| V08 | createdAt is no more than 10 minutes in the future and no older than the registry maxAge of the type (types without maxAge have no age limit); the owner's own vault import and restore are exempt from the age limit, and a catch-up predecessor that fails only the age limit is kept as a continuity stub (cid, seq, prev; no content) per F11.S02.M02 | FEDERATION_RECORD_TIME_INVALID |
+| V09 | no applied author tombstone targets this cid, or this author principal and recordKey; relay_removal advisories trigger this rule only in the issuing relay's own index; a pending_target tombstone counts only after V12 matched its issuer to the arriving record | FEDERATION_TOMBSTONED |
+| V10 | relay ingest from a peer relay: only audience public signed envelopes are accepted; authorship is proven by the signature alone, the sender is recorded as receivedFromRelay for display and never binds the author to a relay (no trust on first use) | FEDERATION_ORIGIN_MISMATCH |
+| V11 | audience public portable types: payload passes F11.S01.M01 V06, V07 and V09 (allowlist, 65536 bytes, L2); control types: their registry schema; participants: ciphertext shape and size only (F11.S01.M01 V11) | FEDERATION_PAYLOAD_INVALID |
+| V14 | F16.S01.M01 authorizeStatement(statement, context), the single vault-policy predicate with no expected-role parameter, returns Accept: the type is registered and the signer holds the role from F11.S01.M01 roleFor (RoleResolverPort; user roles need ext.signerKey active per F07.S02.M01 key_status at receiver time, relay roles a pinned or self-certifying relay key); Quarantine(signer_role_invalid) quarantines the statement | FEDERATION_SIGNER_ROLE_INVALID |
+| V12 | tombstone: signed by a device key of the target's author principal (targetRecordKey tombstones bind to the issuer did), and a classrup.federation.tombstone/v1 signed by any relay key is refused and never purges (FED-9 supersedes the origin-relay clause of FED-4); relay_removal: signed by the pinned key of a relay that hosts the item, carries a statement of reasons, and is stored as an advisory; reason in the enum for the kind | FEDERATION_TOMBSTONE_UNAUTHORIZED |
+| V13 | local publish: author is the local principal and ext.signerKey is this device's key listed active in the principal's portable document (F07.S02.M01); relay publish: the relay key signs only relay types; audience public portable types also need the source record opted in (F11.S01.M01 V02) and privacy.consent.check(federation_publish) granted, failing closed with DEPENDENCY_UNAVAILABLE | FEDERATION_AUTHOR_NOT_OWNED |
+| V15 | the signer key is not revoked as of this receiver's receipt time per F07.S02.M01 key status, whatever createdAt claims; authorizeStatement returns Quarantine(signer_key_revoked) and the statement is refused with this code, kept in the quarantine list with reason signer_key_revoked and never acted on | FEDERATION_SIGNER_ROLE_INVALID |
+| V16 | vault receive: the author principal is not blocked in either direction (F07.S02.M02 isBlockedEither); a blocked author's statements are dropped silently with no ack, no event and the generic outcome (N7) | BLOCKED_PARTY |
+| V17 | pending_target tombstones: at most 50 per issuer and 1000 per tenant, kept at most 180 days; excess tombstones for unseen targets are refused | RATE_LIMITED |
+| V18 | relay intake from a hosted vault key, audience public portable types: F10.S01.M01 privacy.consent.relay_check {authorDid, recordKind} returns granted; tombstone, move and move_cancel are exempt | FEDERATION_NOT_OPTED_IN |
+| V19 | relay intake from a hosted vault key: every currency code in the projection (listing askingPrice and acceptedCurrencies, offering rate, rental offering rates) is in the tenant allowedCurrencies from F15.S04.M03 TenantPort limits | FEDERATION_CURRENCY_NOT_ALLOWED |
+| V20 | relay intake from a hosted vault key: F12.S03.M04 moderation.accountlimit.check {subjectKey: author, limitKey: index_writes_per_day} returns allowed; tombstone, move and move_cancel are exempt | MODERATION_ACCOUNT_LIMIT_REACHED |
+| V21 | relay intake from a hosted vault key: F12.S02.M02 moderation.spam.evaluate {mode: relay_intake, subjectKey: author, targetType: type, targetCid: cid, text: the projection title and description, receivedAt} returns no throttle; a throttle refuses the envelope with retryAfterMs = its ttl, and the score alone never rejects | RATE_LIMITED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-084-09.T02 | unit | PS-084-02.R03, PS-084-02.R01 | each rule V01–V21 violated in turn | documented code per rule; nothing beyond a cid stub stored; V14 and V15 quarantine instead of rejecting |
+| TEST-PS-084-09.T03 | integration | PS-084-02.R01, PS-084-02.R02 | reject rules on an author, a cid and a peer; then a tombstone and a move statement by the blocked author through an allowed peer and through the blocked peer | stored count unchanged and FEDERATION_NOT_ACCEPTED with the same shape for the three blocked envelopes; the tombstone and move bypass the author rule and are applied via the allowed peer and refused via the blocked peer |
+| TEST-PS-084-09.T10 | abuse | PS-084-03.R05, PS-084-02.R01 | third party signs a pre-emptive tombstone for X's record not yet seen; X's record arrives 2 days later; one issuer sends 51 tombstones for unseen targets | tombstone rejected on arrival and X's record accepted; the 51st refused with RATE_LIMITED |
+| TEST-PS-084-09.T11 | abuse | PS-084-02.R04 | relay B sends Y's listing although Y's portable document lists only relay C; relay D then sends the same cid; Y later publishes via C | accepted from B on its signature, via [B, D], no binding to B and no FEDERATION_ORIGIN_MISMATCH; the later record via C accepted |
+| TEST-PS-084-09.T12 | abuse | PS-084-02.R01 | 7000 valid envelopes from one peer within an hour and 11 batches in a minute | FEDERATION_QUOTA_EXCEEDED with retryAfterMs; stored count capped at 6000 |
+| TEST-PS-084-09.T14 | abuse | PS-084-02.R05 | public payload with homeAddress, lat/lon, geohash 7 and a script tag; control tombstone with an extra member; participants ciphertext of 12289 bytes; participants statement without opt-in | FEDERATION_PAYLOAD_INVALID for the first three, nothing stored; the participants statement is accepted without any opt-in check |
+| TEST-PS-084-09.T37 | integration | PS-084-02.R06, PS-084-03.R06 | statement signed by a revoked key with a backdated createdAt received after the revocation; revocation with effectiveFrom 3 days back learned after acceptance of a consent first received 2 days ago and one received 4 days ago; a revocation whose claim F16.S02.M02 clamped | first refused FEDERATION_SIGNER_ROLE_INVALID and listed in the quarantine list with reason signer_key_revoked; the 2-day consent re-marked signed_during_claimed_compromise, quarantined and its proposal frozen by a key_compromise conflict in the same transaction; the 4-day one stays accepted with signer_later_revoked; the clamped effectiveFrom is used as reported, never earlier |
+| TEST-PS-084-09.T41 | integration | PS-084-02.R07 | hosted vault batch: listing without a registered consent statement; listing in a removed currency; 6th index write of a new key in a day; listing that the spam evaluator throttles; a tombstone and a move by the same author; consent service unavailable | FEDERATION_NOT_OPTED_IN, FEDERATION_CURRENCY_NOT_ALLOWED, MODERATION_ACCOUNT_LIMIT_REACHED, RATE_LIMITED with retryAfterMs; tombstone and move accepted; DEPENDENCY_UNAVAILABLE and nothing stored for the affected envelopes |
+| TEST-PS-084-09.T42 | integration | PS-084-02.R08 | containment sentinel federation_off created, then a peer relay batch and a hosted vault batch; sentinel removed | peer batch FEATURE_DISABLED with params.reason federation_killed and nothing stored; hosted batch accepted; peer batch accepted after removal; flag F11 configuration unchanged |
+| TEST-PS-084-09.T45 | abuse | PS-084-02.R04, PS-084-07.R03 | relay key signs classrup.federation.tombstone/v1 for X's listing held by R2 and V1; X's own tombstone afterwards | relay-signed one refused FEDERATION_TOMBSTONE_UNAUTHORIZED, nothing purged anywhere; X's tombstone applied with issuerKind author, signerKey and targetAuthor X; a relay_removal advisory event carries issuerKind origin_relay and advisory true |
+| TEST-PS-084-09.T46 | contract | PS-084-05.R01, PS-084-02.R04 | vault receive with an F16.S01.M01 authorizeStatement stub returning Accept, Quarantine(signer_role_invalid) and Quarantine(signer_key_revoked); quarantine list and export | the stub is the only predicate called (no expected-role argument); quarantined rows are stored, listed and exported only by this module with their reasons |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F07.S02.M02, F16.S01.M01, F15.S02.M01, F15.S04.M02, F15.S04.M03, F12.S02.M02, F12.S03.M03, F12.S03.M04, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

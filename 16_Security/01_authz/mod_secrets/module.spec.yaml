@@ -1,0 +1,189 @@
+id: F16.S01.M02
+scope: MVP
+summary: >-
+  Secrets handling for relay processes and the build pipeline. Relay secrets that this module's manifest owns (relay
+  data key, audit pepper, push VAPID private key, SMTP credentials) are read only from RELAY_SECRET_* environment
+  variables or files with strict permissions, held in a Secret wrapper that cannot be logged or serialized, compared
+  in constant time, and stored as hashes where a token must be verified. The relay signing key is owned by
+  F15.S02.M01, which keeps it in its own key file; this module supplies only the Secret wrapper and the file checks
+  that F15.S02.M01 applies to that file. There are no server-held user secrets: user keys live only in the user's
+  vault (F16.S02.M01). Keys that wrap stored data keep their old version until every object is re-wrapped. The CI
+  pipeline scans every change and the full history for committed secrets.
+responsibilities:
+  - Provide loadSecret(name) reading RELAY_SECRET_<NAME> from the environment or RELAY_SECRET_<NAME>_FILE from a file, with file permission and size checks, and checkSecretFile(path) for key files owned by other modules (the F15.S02.M01 relay key file).
+  - Provide the Secret wrapper whose string, JSON, inspect and error forms always render as [REDACTED] and whose raw value is reachable only through reveal() at the use site.
+  - Provide constant-time comparison (equalConstantTime) and token hashing (SHA-256 of a 256-bit random token) for relay access tokens.
+  - Provide log and error redaction - a deny-list of key names and a pattern scanner applied before any log line is emitted.
+  - Provide the secret-scanning CI step - pattern rules plus entropy rules, run on each pull request diff and weekly on full history, failing the build on a match.
+non_responsibilities:
+  - User device keys and vault encryption (F16.S02.M01).
+  - The relay signing key, its key file, rotation and revocation certificates (F15.S02.M01), which uses checkSecretFile and the Secret wrapper from this module.
+  - Key registry and revocation (F16.S02.M02) and signature formats (F16.S02.M03).
+  - Hosting provider secret stores or hardware security modules; the module reads what the process environment provides.
+  - "Future: pluggable secret backends (HashiCorp Vault, cloud KMS) behind the same loadSecret interface; HSM-backed relay keys."
+depends_on: [CTR-OBS-001, CTR-PRV-001, CTR-CAP-001]
+user_stories:
+  - As a relay operator, I configure secrets by environment or mounted files and the relay refuses to start if a required secret is missing or a secret file is world-readable.
+  - As a developer, my pull request fails if it contains something that looks like a key or token, with a message naming the rule and file but not echoing the value.
+  - As a relay operator, I can rotate the relay data key and see which wrapped objects remain on the old key, and the relay never lets me remove the old key while objects still depend on it.
+edge_cases:
+  - Both RELAY_SECRET_X and RELAY_SECRET_X_FILE are set; startup fails with SECURITY_SECRET_AMBIGUOUS rather than picking one.
+  - Secret file has mode 0644 or is a symlink to another path; startup fails with SECURITY_SECRET_PERMISSIONS and names the file path but not its content.
+  - A secret appears in a stack trace via string interpolation; the Secret wrapper renders [REDACTED] and the redaction scanner removes any 43-character base64url or 64-character hex run labelled by a deny-listed key.
+  - A comparison secret (SMTP password, audit pepper) is rotated while requests are in flight; a reload signal (SIGHUP) swaps in the new value for new requests and the old value is valid for a configurable overlap of at most 300 seconds.
+  - CI scanner false positive on a test vector; the rule allows an allow-list entry only through a reviewed file listing path and hash, never by inline comment.
+  - Secret committed historically; weekly full-history scan fails the pipeline, and the runbook F16.S03.M03 for key compromise requires rotation, not history rewrite alone.
+  - The operator removes the old data key version while 1 200 objects are still wrapped by it; startup refuses with SECURITY_SECRET_MISSING naming the key version and the count of objects that depend on it.
+ux:
+  notes: "Headless tooling. Operator-visible surfaces are the relay startup log (secret names and source, never values), the /readyz detail for secret loading status, the data-key rotation progress report, and the CI report listing rule ID, file and line."
+  screens:
+    - "Relay startup summary: table of required secrets with source (env, file) and status loaded or missing, without values; data-key versions with the number of objects still wrapped by each."
+    - "CI scan report: rule ID, file path, line number, redacted match fingerprint (first 4 characters of a hash), suggested action."
+  states: [loaded, missing, permission-error, ambiguous, rotating, rewrap-pending]
+  a11y:
+    - CI and startup reports are plain text with one finding per line so screen readers and terminals handle them.
+    - Status is conveyed by words (loaded, missing) rather than color.
+    - The operator documentation pages follow the WCAG 2.2 AA requirements of F14.
+processes:
+  domain_schema:
+    note: "No catalog entities. Secrets are process configuration and are never persisted by the product. Relay access tokens are hashed by this module's helper and stored by the owning session module, not here. The data-key re-wrap progress is a relay-local table (security_rewrap_progress: objectId, keyVersion) of the owning storage, not a catalog entity."
+    entities: []
+    requirements:
+      - The module owns no persistent entities and never writes secret values to the database, to logs or to exports.
+      - Token hashes use SHA-256 over 256-bit random tokens, which is sufficient because the input has full entropy; low-entropy secrets are never accepted as tokens.
+      - Secret names follow RELAY_SECRET_[A-Z0-9_]+ and each has a declared purpose, kind (comparison or data-wrapping), minimum length and rotation period in the secret manifest - DATA_KEY (data-wrapping), AUDIT_PEPPER, VAPID_PRIVATE_KEY and SMTP_PASSWORD (comparison or signing) - and the relay signing key is not in the manifest because F15.S02.M01 owns its key file.
+  validation_rules:
+    requirements:
+      - Startup validates that every secret in the manifest is present exactly once with correct size and permissions, and that every data-key version still wrapping stored objects is loaded.
+      - Token and secret formats are validated before use, and failures return generic errors that do not reveal which character differed.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | each required secret in the manifest is present and non-empty, and every data-key version that still wraps at least one object is present | SECURITY_SECRET_MISSING"
+      - "V02 | not both the variable and the _FILE form are set | SECURITY_SECRET_AMBIGUOUS"
+      - "V03 | secret file (and the F15.S02.M01 key file through checkSecretFile) has mode 0400 or 0600, owner is the process user, not a symlink, size at most 4096 bytes | SECURITY_SECRET_PERMISSIONS"
+      - "V04 | secret length meets manifest minimum (32 bytes for keys and the pepper, 16 characters for passwords) | SECURITY_SECRET_WEAK"
+      - "V05 | relay access token is exactly 43 base64url characters (256 bits) before hashing | UNAUTHENTICATED"
+      - "V06 | CI scanner finds no unallowed secret pattern in the diff or history | SECURITY_SECRET_LEAK_DETECTED"
+  workflow_state_machine:
+    note: "No entity lifecycle. Secret loading is a startup and reload procedure, not a stateful entity; data-key rotation is a resumable batch procedure."
+    machines: []
+    requirements:
+      - Startup is all-or-nothing, so if any required secret fails validation the relay does not open its listener.
+      - Reload on SIGHUP loads new values atomically and keeps the previous value of a comparison secret valid for the configured overlap of at most 300 seconds; data-wrapping keys are exempt from this overlap.
+      - Rotation of the relay data key re-wraps stored per-object keys in batches of 1 000 and records progress so it is resumable, and the previous data-key version stays loaded until a verify pass reports zero objects left on it.
+      - A data-key version may be removed only after the verify pass reports zero objects on it, re-wrapping must finish within 30 days of rotation (after which startup warns daily), and startup refuses with SECURITY_SECRET_MISSING if a version still in use was removed early.
+    timeouts:
+      - "Overlap window for comparison secrets after reload: configurable 0..300 s, default 120 s; not applied to data-wrapping keys."
+      - "Data-key re-wrap target: complete within 30 days of rotation; the old version is kept until the verify pass reports zero objects."
+      - "Weekly full-history secret scan every Monday 02:00 UTC in CI."
+  commands_queries_events:
+    note: "Library module with no commands, queries or events. API is loadSecret, checkSecretFile, Secret.reveal, equalConstantTime, hashToken, redact, the data-key rotation CLI (relay secrets rotate-data-key, relay secrets verify-rewrap) and the CI scanner CLI."
+    commands: []
+    queries: []
+    requirements:
+      - loadSecret returns a Secret or a typed error and never returns the raw string to callers outside reveal().
+      - equalConstantTime compares byte arrays of equal length in time independent of content and returns false immediately only for length mismatch.
+      - The scanner CLI exits 0 with no findings and 1 with findings, printing rule ID, path and line but not the matched value.
+      - The verify-rewrap CLI reports the number of objects per data-key version and exits non-zero while any object remains on a version marked for removal.
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "SECURITY_SECRET_MISSING | 500 | no | a required secret or a data-key version still in use is not configured; relay refuses to start"
+      - "SECURITY_SECRET_AMBIGUOUS | 500 | no | both environment and file forms are set for one secret"
+      - "SECURITY_SECRET_PERMISSIONS | 500 | no | secret file permissions, ownership or type are unsafe"
+      - "SECURITY_SECRET_WEAK | 500 | no | secret shorter than the manifest minimum"
+      - "SECURITY_SECRET_LEAK_DETECTED | 500 | no | CI scan found a secret-like value in the change set"
+    example: |
+      RELAY_SECRET_DATA_KEY_V2_FILE=/run/secrets/data_key_v2 RELAY_SECRET_DATA_KEY_V1_FILE=/run/secrets/data_key_v1 node apps/relay/dist/main.js
+      -> startup: data_key v2 loaded (file, 32 bytes); data_key v1 loaded (file, 32 bytes; 1 200 objects still wrapped)   [values never printed]
+      $ relay secrets verify-rewrap -> v1: 0 objects, v2: 48 211 objects; v1 may be removed
+      logger.info("session", { token: secret })           -> {"msg":"session","token":"[REDACTED]"}
+      pnpm secrets:scan  -> SECURITY_SECRET_LEAK_DETECTED rule=classrup-secret-literal path=apps/relay/.env.example line=3 fingerprint=4f2a
+  authorization_capabilities:
+    note: "No capabilities: the library is in-process and exposes nothing over the command bus."
+    capabilities: []
+    requirements:
+      - Only the relay process user can read secret files, and the library enforces owner and mode checks at load time.
+      - Operators access secrets through the hosting environment, never through the product's API.
+      - The CI scan runs with read-only repository access and cannot publish artifacts on failure.
+  failure_recovery_idempotency:
+    requirements:
+      - loadSecret is idempotent and side-effect free apart from caching the loaded value in memory.
+      - Reload is atomic; a failed reload keeps the previous values and logs SECURITY_SECRET_MISSING or PERMISSIONS without values.
+      - Data-key rotation is resumable and idempotent per object.
+    idempotency: "loadSecret and hashToken are pure given the same environment; key re-wrapping records (objectId, keyVersion) so repeated runs skip finished objects."
+    concurrency: "Secret cache is swapped by replacing one immutable object reference, so readers see either the old or the new set; rotation batches use transactions of 1 000 objects."
+    retries: "File reads retry up to 3 times with 100 ms spacing for transient IO errors; permission and ambiguity errors are never retried."
+    offline: "Not applicable to vaults; relay secrets load from local files and need no network."
+    partial_failure: "If rotation stops midway, objects wrapped under either key version stay readable because both versions stay loaded until the verify pass reports zero objects on the old version; there is no time-based overlap for data-wrapping keys, and removing the old version early makes startup refuse with SECURITY_SECRET_MISSING."
+  privacy_retention_abuse:
+    requirements:
+      - Secret values are P4 and are never logged, never serialized, never in metrics labels, never in error messages, and never in crash reports.
+      - Secret metadata (name, source, length, loaded time, objects per data-key version) is not secret and may be logged.
+      - Leak attempts through logs, errors, process listings, core dumps and repository history are addressed by redaction, file loading, disabled core dumps and scanning.
+    data:
+      - "Secret values: P4 in process memory only."
+      - "Secret metadata: P1 operational."
+    retention:
+      - "Secrets are not stored by the product; the hosting environment owns their lifecycle."
+      - "CI scan reports: 90 days."
+    threats:
+      - "T01 | Secret leaks through logs or exceptions | Secret wrapper redacts on toString, JSON, inspect and error causes; logger applies key deny-list and pattern scanner; tests inject known secrets and assert absence"
+      - "T02 | Timing attack on token comparison | equalConstantTime used for all token and MAC comparisons; direct equality on secrets is a lint error"
+      - "T03 | Secret committed to the repository | pre-merge diff scan, weekly full-history scan, forbidden filename patterns (.env, *.pem, *.key) in CI"
+      - "T04 | Environment variables exposed via process listing or crash dump | file-based loading recommended and default in container manifests; core dumps disabled; /proc access restricted by deployment guide"
+      - "T05 | Stolen token database | only SHA-256 hashes of 256-bit tokens stored; tokens are never recoverable"
+      - "T06 | Weak operator-chosen secrets | manifest minimum lengths enforced at startup (32 bytes for keys)"
+      - "T07 | Data loss from removing a data key too early | old data-key versions stay loaded until verify-rewrap reports zero objects; startup refuses if a version in use is missing"
+    abuse_controls:
+      - "Failed secret loads do not retry in a loop: the relay exits non-zero after one attempt so orchestrators surface the failure."
+      - "Scanner rules are versioned and a rule can only be removed through a reviewed change."
+  observability_performance:
+    requirements:
+      - Startup and reload emit one log line per secret with name, source and status but no values, per CTR-OBS-001 OBS-1.
+      - equalConstantTime and hashToken add at most 0.05 ms p95 per call and the redaction scanner adds at most 0.2 ms per log line under 4 KiB.
+      - The CI scan completes within 60 seconds for a diff and 10 minutes for full history of 10 000 commits.
+    metrics:
+      - "classrup_security_secrets_loaded{source=env|file} (gauge)"
+      - "classrup_security_secret_reload_total{outcome=ok|failed}"
+      - "classrup_security_log_redactions_total"
+      - "classrup_security_data_key_objects{version} (gauge)"
+    logs:
+      - "info secret.loaded {name, source, bytes} — never the value."
+      - "error secret.invalid {name, code} — never the value."
+    budgets:
+      - "hashToken p95 ≤ 0.05 ms; redaction ≤ 0.2 ms per line; loadSecret at startup ≤ 10 ms per secret."
+      - "CI diff scan ≤ 60 s; full-history scan ≤ 10 minutes for 10 000 commits."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Redaction is covered by property tests that inject random secrets into every logging path.
+      - The CI scanner has a corpus of positive and negative samples with expected findings.
+    fixtures: "Temp directory with secret files of modes 0400, 0600, 0644 and a symlink; a fixture relay key file for checkSecretFile; environment set; 2 000 objects wrapped by data-key v1; corpus of 60 positive and 60 negative scanner samples; fixed clock."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | manifest with all secrets present once | all loaded; names match RELAY_SECRET_ pattern; relay signing key absent from the manifest; nothing written to the database"
+      - "T02 | unit | 02.R01,02.R03,04.R01,05.R01 | missing, ambiguous, permissive, symlinked, short secrets; checkSecretFile on a 0644 relay key file | documented SECURITY_SECRET_* code each; relay does not start"
+      - "T03 | property | 01.R02,07.R01,07.R03 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms"
+      - "T04 | unit | 04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch"
+      - "T05 | unit | 01.R02,02.R02 | hashToken for 43-character token and malformed tokens | SHA-256 of decoded bytes for valid; UNAUTHENTICATED for malformed"
+      - "T06 | integration | 03.R02,06.R01,06.R02 | SIGHUP reload of SMTP_PASSWORD with overlap 120 s; failed reload | atomic swap; old value valid within overlap only; failed reload keeps previous values"
+      - "T07 | integration | 04.R03,09.R03 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | attempt to read secrets via any command or query; scanner run with write token | no route exposes secrets; scanner cannot publish"
+      - "T09 | chaos | 03.R01,06.R03,08.R01,07.R02 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; resumed run skips finished objects; one log line per secret without values"
+      - "T10 | load | 08.R02,08.R03 | 100 000 hashToken calls and 100 000 log lines; scan of 10 000-commit repository | latency budgets met; full-history scan ≤ 10 minutes"
+      - "T11 | unit | 09.R01,09.R02 | traceability tool run; redaction property suite present | every PS-127 requirement maps to a passing test"
+      - "T12 | integration | 10.R01,10.R02,10.R03 | export operator configuration, import to fresh relay, restore backup | exports contain secret names and sources but no values; restore requires secrets re-provided"
+      - "T13 | integration | 03.R03,03.R04,04.R04 | rotate data key with 2 000 objects, interrupt at 1 200, SIGHUP after 301 s, remove v1 before verify reports zero, finish and verify | v1 stays loaded beyond 300 s; startup refuses with SECURITY_SECRET_MISSING naming v1 and 800 objects; verify-rewrap exits 1 then 0; v1 removable afterwards"
+    acceptance:
+      - All tests T01–T13 pass in CI.
+      - No secret value appears in any log, error, metric, export or backup artifact (property and integration tests).
+      - The CI scan blocks a pull request that adds a secret-like value and passes the corpus of negative samples, and no data-key version still wrapping objects can be removed without the relay refusing to start.
+  import_export_backup_rollback:
+    requirements:
+      - Operator configuration exports contain secret names, sources and rotation dates but never values, and backups never contain secret files.
+      - Restoring a relay from backup requires the operator to provide secrets again, including every data-key version that still wraps restored objects, and the relay refuses to start without them.
+      - Scanner rules and the secret manifest are versioned; rule changes keep the previous rule set available for 180 days for comparison.
+    export: "Relay configuration export lists the secret manifest (name, purpose, kind, minimum size, source kind, last rotation date, objects per data-key version); values are never included."
+    import: "Manifest import validates names and minimums; unknown or malformed entries are rejected with VALIDATION_FAILED at configuration load."
+    backup: "Secrets are excluded from relay backups by design (CTR-IOX-001 IOX-3 covers data, not credentials); operators back up secrets, including old data-key versions until verify-rewrap reports zero, in their own secret store."
+    migration_rollback: "Manifest changes are additive; rollback to the previous release ignores new optional secrets; removing a secret requires a documented deprecation of one release; the variable prefix is RELAY_SECRET_ to match the RELAY_* configuration of F15.S02.M01."

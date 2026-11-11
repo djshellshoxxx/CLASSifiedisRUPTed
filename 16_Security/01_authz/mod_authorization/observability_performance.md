@@ -1,35 +1,40 @@
-# PS-126-08 — observability performance
+# PS-126-08 — Observability and performance: Authorization policy
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-126-08. **Owner:** [16_Security/01_authz/mod_authorization](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_authorization. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M01 Authorization policy](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/authorization` · **Contracts:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the observability performance process for authorization within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-126-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-126-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-126-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-126-08.R01** Authorization outcomes and latency are measured per CTR-OBS-001 with labels limited to module, code and outcome and no keys.
+- **PS-126-08.R02** authorize adds at most 0.2 ms p95 in a vault and 0.5 ms p95 on a relay, excluding fact lookups.
+- **PS-126-08.R03** Audit append lag, anchor publication lag and chain verification time are observable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_security_authorize_total{outcome=allow|deny|quarantine,code}
+- classrup_security_authorize_us (histogram)
+- classrup_security_audit_append_lag_ms
+- classrup_security_audit_entries_since_anchor (gauge)
+- classrup_security_role_assignments{role,status} (gauge)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- relay info authz.deny {capability, reason, correlationId} — no key, no payload.
+- relay warn roles.bootstrap {via, osUser, correlationId} — reason text stays in the audit entry.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-126-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- authorize p95 ≤ 0.5 ms (relay) and ≤ 0.2 ms (vault); role commands p95 ≤ 300 ms.
+- Chain verification of 100 000 entries completes in ≤ 10 s; anchor signing ≤ 20 ms.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-126-09.T13 | load | PS-126-08.R01, PS-126-08.R02, PS-126-08.R03 | 5 000 authorize calls per second for 5 minutes; verify 100 000 entries; 1 000 entries to trigger an anchor | p95 targets met; verification ≤ 10 s; anchor published and the entries-since-anchor gauge resets |
+
+## Dependencies
+
+Module depends on: F16.S01.M02, F10.S02.M02, CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

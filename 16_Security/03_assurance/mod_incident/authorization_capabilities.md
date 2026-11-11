@@ -1,35 +1,38 @@
-# PS-131-05 — authorization capabilities
+# PS-131-05 — Authorization and capabilities: Incident records
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-05. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M02 Incident records](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/incident` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-131-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-131-05.R01** Relay policy: relay_operators and admins of the relay (relay-scope F16.S01.M01 roles) open, triage, contain, resolve and close incidents, admins notify and redact timeline entries, moderators and tenant operators have no access, and members never read incident records.
+- **PS-131-05.R02** Vault policy: a vault accepts an incident notice only when signed by the key of a relay it uses, shows it with the relay name and never changes local data because of it; a notice from a successor relayId that the old relay's key revocation or restore announcement names is shown as 'unverified until confirmed out of band', never silently quarantined and never acted on.
+- **PS-131-05.R03** Detection hooks run as actor kind system with a restricted capability to open incidents only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| security.incident.open | relay_operator, admin | relay-scope role; hooks run as system with open only |
+| security.incident.triage | relay_operator, admin | relay-scope role |
+| security.incident.annotate | relay_operator, admin | relay-scope role |
+| security.incident.contain | relay_operator, admin | relay-scope role |
+| security.incident.resolve | relay_operator, admin | relay-scope role |
+| security.incident.notify | admin | relay-scope admin; notification decision recorded with reason |
+| security.incident.redact | admin | relay-scope admin; one redaction per timeline row; reason recorded; audit entry written |
+| security.incident.close | relay_operator, admin | relay-scope role; SEV1 and SEV2 need postmortem and notification decision; pending notices need an override reason |
+| security.incident.read | relay_operator, admin | relay-scope role |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-131-09.T07 | abuse | PS-131-05.R01, PS-131-05.R03 | moderator M, tenant operator T and a member read incidents; the system hook actor tries triage | FORBIDDEN or NOT_FOUND; FORBIDDEN |
+| TEST-PS-131-09.T17 | abuse | PS-131-05.R02 | vault receives a notice signed by an unknown key; by a successor relayId named in its relay's key revocation; by a successor relayId known only through a restore announcement naming the old relayId after a certificate-only revocation; by the key of the relay it uses | first quarantined by F11.S01.M02; second and third shown as unverified until confirmed out of band and not acted on; fourth shown with the relay name and no local data change |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S01.M02, F16.S02.M02, F16.S02.M03, F16.S03.M01, F18.S01.M01, F08.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

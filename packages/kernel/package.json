@@ -1,0 +1,22 @@
+{
+  "name": "@classrup/kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared runtime for ClassRup feature packages: ids, clock, errors, validation, events, command bus, storage ports and adapters, observability (ADR-0002, ADR-0016).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts",
+    "./browser": "./src/browser.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6"
+  }
+}

@@ -1,0 +1,188 @@
+id: F17.S03.M01
+scope: MVP
+summary: 'GitHub Actions workflows for ClassRup using only first-party actions (actions/checkout, actions/setup-node, actions/cache, actions/upload-artifact, actions/download-artifact). One fast Linux gate runs on every push and pull request: a changes job diffs against the fetched base commit, then install from a cached pnpm 10.28.0 store on Node 22, spec:check, typecheck, unit, property (200 runs), integration (multi-vault with optional relay), offline (fake network), PWA build once, offline browser when apps/pwa changed, then e2e smoke against the built artifact with no relay configured, and an always-run gate-summary. A nightly schedule runs long property (10 000 runs), load standard, chaos (30 seeds), compatibility and the browser matrix; a weekly schedule runs the load soak; a release workflow regenerates every piece of evidence on the release commit before gates:release. Workflows default to read-only permissions with a per-job write allowlist and no secrets on pull requests.'
+responsibilities:
+- 'Provide .github/workflows/ci.yml: triggers push and pull_request, concurrency group ci-${{ github.workflow }}-${{ github.ref }} with cancel-in-progress true, permissions contents: read, timeout 15 min, runs-on ubuntu-24.04.'
+- 'Skip documentation-only work without workflow-level paths-ignore: a first-party first job changes (actions/checkout with fetch-depth 0, or git fetch --depth=1 origin of github.event.pull_request.base.sha) computes the changed files with git diff against the base and exposes outputs docs_only, spec_changed and pwa_changed; test jobs carry if: on those outputs, spec-check runs whenever spec_changed (any module.spec.yaml, planning/modules.yaml, planning/contracts/*.md or tools/specgen) or code changed, and gate-summary always runs.'
+- Build the PWA once in a build job (pnpm build:pwa), upload it with actions/upload-artifact (retention 7 days) and have the e2e job download and reuse that artifact instead of rebuilding.
+- 'Provide .github/workflows/nightly.yml on cron 0 2 * * * running long property (10 000 runs), load (standard), chaos (30 seeds), compatibility (data, schema diff and browser matrix) and the offline browser suite, uploading reports with 30-day retention, plus a nightly-report job, the only job with issues: write, that opens or updates issues for failures, property counterexamples and flake quarantine proposals; and .github/workflows/weekly.yml on a weekly cron running pnpm load:soak with timeout-minutes 90.'
+- 'Use actions/checkout with fetch-depth 1 in test jobs and the base-commit fetch only in the changes job, and cache the pnpm store with actions/setup-node cache: pnpm or actions/cache keyed by hashFiles of pnpm-lock.yaml.'
+- 'Provide .github/workflows/release.yml, triggered by a pushed v* tag and by workflow_dispatch on the release commit: it runs the fast suites, the property nightly profile, load smoke then standard (budgets are release-gated), chaos smoke, compatibility (data, schema diff and browser matrix), e2e full with axe and pnpm test:e2e:budgets, and node tools/specgen/specgen.mjs check --strict --report; every job uploads its reports, a collect job downloads them into one reports/ directory and runs pnpm gates:release, and only after GO the release-publish job (contents: write) attaches reports/gates.md to the release.'
+- 'Maintain the per-job permission allowlist in tools/ci-lint: issues: write only on the schedule-triggered nightly-report job of nightly.yml, contents: write only on the release-publish job of release.yml that needs the gates job; no write permission on any job reachable from a pull_request trigger, and no workflow opens pull requests (a pull request created with GITHUB_TOKEN would not trigger CI).'
+non_responsibilities:
+- The content of the release gates (F17.S03.M02), which is invoked from the release workflow here.
+- The tests themselves (F17.S01 and F17.S02).
+- Deployment and hosting of relays (F15.S03); the PWA is static and relays are self-hosted.
+- 'Future: self-hosted runners, macOS and Windows runners and required-reviewer deployment environments.'
+- Manual release checklists (gates/manual/<version>/ of F17.S03.M02, including the real Safari and iOS cells of F17.S03.M03) are signed by people; CI only uploads them with the other evidence.
+depends_on:
+- CTR-TST-001
+- CTR-OBS-001
+- F17.S01.M01
+- F17.S01.M02
+- F17.S01.M03
+- F17.S01.M04
+- F17.S02.M01
+- F17.S02.M02
+- F17.S02.M03
+- F17.S03.M02
+- F17.S03.M03
+- F16.S01.M02
+user_stories:
+- As a developer, I push a commit and get a pass or fail from the fast gate within 10 minutes with the failing job and log linked.
+- As a documentation writer, a pull request that only changes prose does not consume the test pipeline and its required check reports success, yet a spec YAML or contract change still runs spec:check.
+- As a release manager, I tag a release and the release workflow produces fresh evidence for that exact commit before the gates run.
+- As a maintainer, I find the nightly long-run reports as artifacts every morning.
+edge_cases:
+- Two pushes to the same branch arrive within a minute; the older run is cancelled by the concurrency group so only the newest finishes.
+- A pull request from a fork must not receive secrets; workflows need none and use read-only permissions, with no pull_request_target usage.
+- The pnpm cache misses after a lockfile change; install takes longer but still succeeds, and the cache is saved under the new key.
+- 'A docs-only pull request still starts the workflow (there is no workflow-level paths-ignore); the changes job sets docs_only, the test jobs are skipped by their if:, and gate-summary (if: always()) reports success because every skip came from a changes output, so the required check never stays pending.'
+- A pull request touches only planning/contracts/CTR-IDM-001.md; spec_changed is true and spec-check runs although the file is markdown.
+- The base commit is absent from a shallow clone; the changes job fetches github.event.pull_request.base.sha before git diff, and if the diff still cannot be computed it fails with QUALITY_CI_PATH_FILTER_WRONG instead of treating the change as docs-only.
+- A release tag points at a commit whose nightly evidence is older than 24 h or from another SHA; the release workflow regenerates every report on that commit before gates:release.
+- The build artifact upload fails; the e2e job fails explicitly with QUALITY_CI_ARTIFACT_MISSING instead of rebuilding silently.
+- 'A third-party action is added to a workflow; the workflow lint rejects any uses: outside the actions/ organization with QUALITY_CI_ACTION_FORBIDDEN.'
+ux:
+  notes: Headless. Results appear as GitHub check runs and a job summary with timings, coverage and links to artifacts.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; its files are workflow YAML under .github/workflows and a lint script tools/ci-lint.
+    - 'Workflow artifacts are named pwa-dist, reports-fast, reports-nightly, reports-weekly and reports-release with defined retention: 7, 14, 30, 30 days and, for reports-release, attached to the release and kept 1 year.'
+    - 'Environment pins are declared once as env at workflow level: NODE_VERSION 22, PNPM_VERSION 10.28.0, with actions pinned to a full commit SHA or an exact major tag.'
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - 'The workflow lint rejects: any uses: outside actions/*, missing permissions block, permissions broader than contents: read except the per-job allowlist (issues: write only on the nightly-report job of nightly.yml; contents: write only on the release-publish job of release.yml, which needs the gates job; never a write permission on a job reachable from pull_request), pull_request_target triggers, workflow-level paths-ignore or paths filters on ci.yml, missing concurrency cancel-in-progress, and missing timeout-minutes.'
+    - The fast gate must contain jobs changes, install, spec-check, typecheck, test (unit, property, integration), offline (pnpm test:offline, fake network, under 30 s, on every pull request), build-pwa, offline-browser (pnpm test:offline:browser after build-pwa when pwa_changed), e2e-smoke and gate-summary, where every job after changes depends on changes and install.
+    - 'Branch protection requires the single check gate-summary, which runs with if: always() and passes only when every job succeeded or was skipped because of a changes output; it fails if any job failed, was cancelled or was skipped for any other reason.'
+    rules:
+    - 'V01 | Every uses: references an action in the actions/ organization | QUALITY_CI_ACTION_FORBIDDEN'
+    - 'V02 | Workflow has default permissions contents: read, any write permission only on an allowlisted job (nightly-report issues: write, release-publish contents: write) and none on a pull_request-reachable job, concurrency with cancel-in-progress true and timeout-minutes | QUALITY_CI_WORKFLOW_INVALID'
+    - V03 | e2e job downloads the pwa-dist artifact and never runs the build | QUALITY_CI_ARTIFACT_MISSING
+    - V04 | ci.yml has no workflow-level paths-ignore; the changes job diffs against the fetched base; a docs-only change skips test jobs with gate-summary success; a change to any module.spec.yaml, planning/modules.yaml, planning/contracts/*.md or tools/specgen runs spec-check; secret scanning uses the same diff | QUALITY_CI_PATH_FILTER_WRONG
+    - V05 | Fast gate p95 duration is at most 10 min on a warm cache | QUALITY_CI_GATE_TOO_SLOW
+    - V06 | The fast gate runs pnpm test:offline on every pull request and pnpm test:offline:browser after build-pwa when pwa_changed, both counted by gate-summary, and weekly.yml runs load soak with timeout-minutes 90 on schedule only | QUALITY_CI_JOB_MISSING
+    - V07 | release.yml runs every evidence suite on the release commit, downloads all reports into one directory before gates:release, and runs release-publish only after GO | QUALITY_CI_RELEASE_EVIDENCE_MISSING
+  workflow_state_machine:
+    requirements:
+    - A workflow run moves through queued, in progress, then success, failure or cancelled; cancelled by newer push is a normal outcome.
+    - 'The nightly-report job, the only job holding issues: write, opens or updates one issue labelled nightly-failure when a long run fails and closes it when the next run passes; it also files property counterexamples and flake quarantine proposals as issues and never commits or opens pull requests.'
+    - 'Job dependency graph: changes, then install, then parallel spec-check, typecheck, unit-property-integration, offline and build-pwa, then e2e-smoke and offline-browser (if pwa_changed) after build-pwa, then gate-summary with if: always().'
+    - 'Release job graph on the tagged commit: install, then parallel fast suites, property-nightly, load (smoke then standard), chaos-smoke, compat (data, schema diff, browser matrix), e2e-full (with axe and test:e2e:budgets) and spec-report (specgen check --strict --report), then collect (download all reports into reports/ and run pnpm gates:release), then release-publish only when collect returned GO.'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - 'The module exposes workflow triggers: push, pull_request (opened, synchronize, reopened), workflow_dispatch, schedule for nightly and weekly, and push of a v* tag for release.'
+    - Reusable scripts are pnpm ci:fast, pnpm ci:nightly, pnpm ci:weekly and pnpm ci:release so that developers can reproduce a gate locally; the YAML only calls these scripts.
+    - The release workflow first regenerates all evidence on the release commit (fast suites, property nightly profile, load smoke and standard, chaos smoke, compatibility data, schema diff and browser matrix, e2e full with axe and test:e2e:budgets, specgen check --strict --report), downloads every report into one reports/ directory, then calls pnpm gates:release from F17.S03.M02 and fails on a non-zero exit; release-publish runs only after GO.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_CI_ACTION_FORBIDDEN | 422 | no | workflow uses a non first-party action (lint exit 3)
+    - QUALITY_CI_WORKFLOW_INVALID | 422 | no | workflow lacks permissions, concurrency or timeout (lint exit 3)
+    - QUALITY_CI_ARTIFACT_MISSING | 422 | no | pwa-dist artifact missing in e2e job (job fails)
+    - QUALITY_CI_PATH_FILTER_WRONG | 422 | no | path filter does not match the documented rule (lint exit 3)
+    - QUALITY_CI_GATE_TOO_SLOW | 422 | no | fast gate p95 exceeded 10 min (reported, exit 1 in the weekly check)
+    - QUALITY_CI_JOB_MISSING | 422 | no | a required job (offline, offline-browser, weekly soak) is missing, wrongly triggered or not counted by gate-summary (lint exit 3)
+    - QUALITY_CI_RELEASE_EVIDENCE_MISSING | 422 | no | the release workflow does not regenerate an evidence report on the release commit before gates:release, or publishes before GO (lint exit 3)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm ci:fast
+        changes (base 3f2a9c1..HEAD): docs_only=false spec_changed=true pwa_changed=true
+        install 41 s (cache hit) | spec:check 0 errors | typecheck 38 s | unit/property/integration 3 min 12 s | offline 21 s | build-pwa 74 s
+        offline-browser 2 min 10 s | e2e-smoke (pwa-dist, no relay) 82 s  | gate-summary OK  total 7 min 4 s
+      $ pnpm ci:fast   # docs-only pull request
+        changes: docs_only=true -> test jobs skipped by changes output | gate-summary OK
+      $ node tools/ci-lint .github/workflows
+        ci.yml OK  nightly.yml OK (nightly-report: issues write allowlisted)  weekly.yml OK  release.yml OK (release-publish: contents write allowlisted, needs collect)
+  authorization_capabilities:
+    requirements:
+    - 'Workflows default to permissions contents: read and no secrets on pull requests; the per-job allowlist grants issues: write only to the schedule-triggered nightly-report job and contents: write only to release-publish in release.yml after gates:release returns GO; no job reachable from pull_request holds any write permission, and no workflow opens pull requests (one created with GITHUB_TOKEN would not trigger CI, so nightly findings become issues and artifacts).'
+    - No workflow uses long-lived credentials or deploys; the PWA is static and relays are operated by their hosts.
+    - Secret scanning (F16.S01.M02) runs in the fast gate on the diff computed by the changes job against the fetched base commit and fails on a finding.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Re-running a failed job is safe because every job is a pure function of the commit; artifacts are overwritten by name.
+    - Cache and artifact steps use continue-on-error false for artifacts and true for cache restore, so cache outages slow the build but do not fail it.
+    - Infrastructure failures (runner lost, cache service error) are retried once automatically by re-run; assertion failures are never retried.
+    idempotency: Jobs are pure functions of the commit; re-runs produce the same result and overwrite artifacts of the same name.
+    concurrency: concurrency group ci-<workflow>-<ref> with cancel-in-progress true for the gate; nightly uses a separate group without cancellation.
+    retries: Only infrastructure failures (runner loss, cache service) are re-run once; test failures are never retried at job level.
+    offline: CI has network access to the registry only through pnpm install; tests themselves run with network egress denied by the test guards.
+    partial_failure: If any job fails the gate-summary fails and artifacts of earlier jobs remain available for debugging; a skipped job counts as success only when it was skipped because of a changes job output.
+  privacy_retention_abuse:
+    requirements:
+    - Fork pull requests run with read-only tokens and no secrets; logs are scanned for token patterns by the secrets step before upload.
+    - Artifacts contain test reports and the static build only, with no user data (the PWA sends no telemetry per OBS-7).
+    - 'Retention: PWA artifact 7 days, fast reports 14 days, nightly reports 30 days.'
+    data:
+    - Source code, lockfile hashes, test reports.
+    - No user data and no secrets in artifacts.
+    retention:
+    - pwa-dist 7 days; fast reports 14 days; nightly reports 30 days; check run history per GitHub defaults.
+    threats:
+    - 'T01 | Malicious pull request exfiltrates secrets or writes to the repository | no secrets on pull requests, default contents: read, write permissions only on the allowlisted schedule and release jobs, no pull_request_target, first-party actions only pinned to a SHA or exact tag'
+    - T02 | Supply-chain action compromise | only actions/* allowed; lint enforces; pnpm install uses --frozen-lockfile and lockfile hash cache key
+    - T03 | Cache poisoning across branches | cache keys contain the lockfile hash and runner OS; caches from forks are not restored into protected branches
+    abuse_controls:
+    - Resource abuse by pull request spam is bounded by concurrency cancel-in-progress and a 15 min timeout.
+    - Workflow edits require code-owner review of .github/.
+  observability_performance:
+    requirements:
+    - The fast gate completes in at most 10 min p95 on ubuntu-24.04 (2 vCPU) with a warm cache; install at most 60 s warm; PWA build at most 90 s.
+    - Each workflow writes a job summary with per-job durations and the cache hit ratio; a cache hit ratio under 80 percent over 20 runs is flagged.
+    - Initial JS size of the built PWA is reported (budget 150 KiB gzip) and fails the build job when exceeded.
+    metrics:
+    - classrup_quality_ci_duration_ms{job}
+    - classrup_quality_ci_cache_hit_ratio
+    - classrup_quality_ci_runs_total{outcome}
+    logs:
+    - Job summary lines with job, duration, outcome; secrets masked by GitHub; no payloads.
+    budgets:
+    - Fast gate at most 10 min p95; install warm at most 60 s; PWA build at most 90 s; e2e smoke at most 90 s.
+    - Nightly workflow at most 60 min total; weekly soak at most 90 min; release workflow at most 90 min.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - The workflow lint is unit-tested with good and bad workflow fixtures, and dry-run in CI on every change to .github.
+    - A canary pull request fixture proves that docs-only changes skip tests and spec YAML changes run spec:check.
+    fixtures: Workflow fixtures under tools/ci-lint/fixtures (good ci.yml, nightly.yml with an allowlisted nightly-report job, weekly.yml, release.yml with an allowlisted release-publish job, and 11 bad variants), base and head commits for changes-job checks (docs-only, planning/contracts only, module.spec.yaml, apps/pwa, code), a recorded timing set of 20 runs.
+    tests:
+    - T01 | unit | 01.R01,01.R02,01.R03 | lint good workflow fixtures and check artifact names, retention and env pins | all accepted; names and pins verified
+    - 'T02 | unit | 02.R01 | lint the good fixtures and 11 bad fixtures - third-party action, missing permissions, broad workflow permissions, issues: write on a pull_request job, contents: write outside release-publish, pull-requests: write anywhere, release-publish without needs on the gates job, workflow-level paths-ignore, pull_request_target, no concurrency, no timeout | good fixtures (nightly-report issues: write, release-publish contents: write) accepted; each bad fixture rejected with its code'
+    - 'T03 | unit | 02.R02,03.R03,04.R01 | parse ci.yml job graph and triggers | changes precedes all; install precedes test jobs; offline runs on every pull request; offline-browser and e2e-smoke need build-pwa; gate-summary has if: always(); triggers include push, pull_request, workflow_dispatch, schedules for nightly and weekly, and v* tags for release'
+    - T04 | integration | 02.R03,03.R01 | simulate runs with one failed job, one job skipped by a changes output and one job skipped for another reason | gate-summary fails for the failure and for the unexplained skip, and passes for the changes skip
+    - T05 | integration | 03.R02 | nightly failure then success | one nightly-failure issue opened, updated, then closed by the nightly-report job; nothing committed and no pull request opened
+    - T06 | unit | 04.R02,04.R03 | read package scripts and release workflow | ci:fast, ci:nightly, ci:weekly, ci:release exist; release regenerates every report on the release commit, downloads them before gates:release and propagates its exit code
+    - T07 | abuse | 05.R01,05.R02,05.R03 | scan workflows for secrets, deploy steps, credentials and write permissions; plant a secret in a pull request diff | no secrets or deploys; write permissions only on allowlisted jobs; the secrets step scans the diff against the fetched base and the planted secret fails it
+    - T08 | integration | 06.R01,06.R02,06.R03 | re-run a job; simulate cache outage, an artifact upload failure and runner loss | same result; cache restore failure slows but passes (continue-on-error true); artifact upload failure fails the job (continue-on-error false); infrastructure failure re-run once
+    - T09 | abuse | 07.R01,07.R02,07.R03 | review fork run logs and artifact contents; check retention config | tokens masked; no user data; retention 7, 14, 30 days
+    - T10 | load | 08.R01,08.R02 | timings of 20 recorded fast-gate runs | p95 at most 10 min; cache hit ratio reported
+    - T11 | unit | 08.R03 | build artifact exceeding 150 KiB gzip initial JS | build job fails
+    - 'T12 | integration | 09.R01,09.R02,09.R03 | canary pull requests - docs-only, planning/contracts/*.md only, spec YAML change, apps/pwa change, code change | docs-only skips tests and gate-summary reports success (no pending check); contracts-only and spec change run spec-check; apps/pwa change runs offline-browser; code change runs everything'
+    - T14 | integration | 03.R04,04.R03 | release workflow dry run on a tag | every evidence job runs on the tagged commit, collect downloads all reports into one directory and runs gates:release, release-publish runs only after GO; a fixture missing the load job fails lint with QUALITY_CI_RELEASE_EVIDENCE_MISSING
+    - T15 | unit | 02.R02 | lint fixtures without the offline job, with offline-browser not counted by gate-summary, and with soak scheduled nightly at 60 min | each fails with QUALITY_CI_JOB_MISSING; the good weekly.yml with timeout-minutes 90 passes
+    - T13 | integration | 10.R01,10.R02,10.R03 | introduce a new workflow in a branch and revert | lint validates before merge; revert restores prior behavior
+    acceptance:
+    - The fast gate runs changes, install, spec:check, typecheck, unit, property, integration, offline, a single PWA build, offline browser when apps/pwa changed and e2e smoke without a relay, and finishes in at most 10 min p95.
+    - A docs-only pull request skips the test jobs with gate-summary success, while a spec YAML or contract change still runs spec:check.
+    - Only first-party actions are used and no pull request workflow has secrets or write permissions.
+    - The nightly workflow runs long property, load, chaos and compatibility jobs and publishes reports, the weekly workflow runs the soak, and the release workflow regenerates all evidence on the release commit before gates:release.
+  import_export_backup_rollback:
+    requirements:
+    - Workflow files and the lint script are the only exports; there is no user data.
+    - A new workflow is introduced by pull request and validated by the lint before merge; branch protection settings are documented in the repository settings file.
+    - Rollback is a git revert of the workflow change; in-flight runs finish with their previous definition.
+    export: Workflow YAML in git; run reports as CI artifacts.
+    backup: Repository hosting provides history; no module-specific backup.
+    migration_rollback: Revert the workflow commit; branch protection continues to require gate-summary.
+    import: 'Not applicable: workflows import no data; actions and dependencies come only from the lockfile and first-party actions.'

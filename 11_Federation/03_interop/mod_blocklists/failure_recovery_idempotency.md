@@ -1,35 +1,33 @@
-# PS-089-06 — failure recovery idempotency
+# PS-089-06 — Failure recovery and idempotency: Federation blocklists
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-089-06. **Owner:** [11_Federation/03_interop/mod_blocklists](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_blocklists. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S03.M02 Federation blocklists](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/interop/blocklists` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for blocklists within 03_interop. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-089-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-089-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-089-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-089-06.R01** All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+- **PS-089-06.R02** Imports are all-or-nothing so a failed import leaves no partial pending rules.
+- **PS-089-06.R03** Evaluation uses an in-memory snapshot refreshed in the same transaction as every rule change, so a restart cannot lose an active rule.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Idempotency-Key on all commands (24 h replay); importing the same list cid twice returns the first result; a second identity.block.added for the same DID keeps the existing personal_block rule.
+- **concurrency:** expectedRevision per rule; unique index on (tenant, type, value); a batch uses one rule snapshot taken at its start.
+- **retries:** Local commands are not retried automatically; the sync of a published list is delivery's concern.
+- **offline:** All rule management works offline in the vault; relay policy changes need the relay to be reachable.
+- **partial failure:** If purging or hiding mirrors after a rule change fails, the rule keeps its new state, federation.block_rule.changed is re-delivered from the outbox, and the sweep in F11.S01.M02 retries until the 24 h purge deadline; hide and unhide never purge, so a failed unhide leaves records hidden rather than lost.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-089-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-089-09.T05 | integration | PS-089-04.R04, PS-089-04.R02, PS-089-06.R03 | reject rule on author Bad with 5 mirrors present; hide rule on author Z with 3 mirrors, disabled an hour later; later tombstone and move statements from Bad | Bad's mirrors purged within 1 h (dropped); Z's mirrors hidden then accepted with envelopes intact; Bad's tombstone and move are processed |
+| TEST-PS-089-09.T09 | integration | PS-089-06.R01, PS-089-06.R02 | replay import with same key; kill import midway | first response replayed; no partial pending rules |
+| TEST-PS-089-09.T10 | integration | PS-089-06.R03 | rule added while a batch is in flight | batch uses start snapshot; next batch applies the rule |
+
+## Dependencies
+
+Module depends on: F11.S01.M01, F11.S01.M03, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

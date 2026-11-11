@@ -1,35 +1,71 @@
-# PS-142-04 — commands queries events
+# PS-142-04 — Commands, queries and events: Compatibility
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-142-04. **Owner:** [17_Quality/03_release/mod_compatibility](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_compatibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M03 Compatibility](SPEC.md) · **Scope:** MVP · **Code:** `tests/compat` · **Contracts:** [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the commands queries events process for compatibility within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-142-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-142-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-142-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-142-04.R01** The module exposes pnpm test:compat (N-1 data and API), pnpm test:compat:browsers (automated matrix, nightly and release), pnpm compat:schema-diff and pnpm compat:checklist <version>, which merges the signed manual cells from gates/manual/<version>/ into reports/compat.json.
+- **PS-142-04.R02** Exit codes: 0 pass, 1 compatibility failure, 2 matrix cell failure, 3 configuration failure.
+- **PS-142-04.R03** The OpenAPI diff compares the generated relay spec of the previous release tag with the working tree and fails on removed paths, removed fields or changed types.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-142-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| QUALITY_COMPAT_N1_READ_FAILED | 422 | no | current release cannot read an N-1 fixture (exit 1) |
+| QUALITY_COMPAT_BREAKING_CHANGE | 422 | no | schema change breaks N-1 compatibility (exit 1) |
+| QUALITY_COMPAT_SIGNATURE_BROKEN | 422 | no | N-1 signature no longer verifies (exit 1) |
+| QUALITY_COMPAT_UPGRADE_UNSAFE | 422 | no | vault upgrade lost or duplicated records (exit 1) |
+| QUALITY_COMPAT_BROWSER_FAILED | 422 | no | a browser matrix cell failed (exit 2) |
+| QUALITY_COMPAT_API_BREAKING | 422 | no | relay API diff shows a breaking change (exit 1) |
+| QUALITY_COMPAT_EXT_UNSAFE | 422 | no | a reader drops unknown payload keys, alters or over-admits ext, or accepts an unknown critical ext key (exit 1) |
+| QUALITY_COMPAT_ROLLBACK_UNSAFE | 422 | no | N-1 rollback after an IndexedDB version bump loses records, opens partially or offers no restore (exit 1) |
+| QUALITY_COMPAT_MATRIX_MISLABELED | 422 | no | a matrix cell lacks its engine source and version or an automated cell is labelled as a real Safari or Firefox stable release (exit 3) |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.
+
+### Example
+
+```
+$ pnpm test:compat
+  fixtures 0.2.x -> 0.3.0: 842 records upgraded, 842 valid, 311 signatures verified  OK
+  schema diff: 1 additive field (mutiny.proposal.note)  OK
+  openapi diff: 0 breaking  OK
+$ pnpm test:compat:browsers
+  automated: chrome 150 (Chrome for Testing) OK | chrome 149 (Chrome for Testing) OK | chrome-beta 151 (Playwright channel) OK
+             firefox-engine Gecko 142.0 (Playwright build) OK | webkit-engine WebKit 26.0 (Playwright build, Safari-engine proxy) OK
+             webkit-engine push: feature-detect and content-free payload format OK
+  manual (gates/manual/0.3.0/): firefox 142, 141 | safari 26, 18 (macOS) | ios-safari 26, 18 | iOS 16.4+ installed-PWA push  -> pending checklist
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-142-09.T07 | unit | PS-142-04.R01, PS-142-04.R02, PS-142-04.R03 | run scripts; diff OpenAPI of previous tag and working tree with a removed field | documented exit codes; QUALITY_COMPAT_API_BREAKING for removed field |
+
+## Dependencies
+
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03, F11.S01.M02, F11.S01.M03, F10.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

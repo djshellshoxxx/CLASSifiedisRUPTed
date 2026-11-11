@@ -1,0 +1,344 @@
+id: F11.S01.M01
+scope: MVP
+summary: >-
+  Library that maps locally owned P0 records (listings, public profiles, service offerings, rental offerings and
+  rental busy blocks) to unsigned federation envelope drafts and maps verified inbound envelope payloads back to
+  read-only mirror views. Every timestamp of a public draft, including the envelope createdAt, is floored to the UTC
+  hour with F10.S02.M03 publicTime, and readers order records by version member or per-chain seq, never by time.
+  Each portable record type has a field allowlist; anything not on the allowlist and anything above class P0 is
+  refused, and location is snapped to its L2 cell (geohash 5) and checked with F06.S02.M01 assertPublicCell on the
+  way out and on the way in. Signing, seq allocation and storage are done by F11.S01.M02 through the
+  StatementPublisherPort declared here. It runs in the user's browser vault (ADR-0016) and in relays for validating
+  inbound public projections. It also holds the statement-type registry (N2): for every envelope type the audience,
+  the signer role a receiver must verify, how that role is resolved (user roles only through the author's portable
+  identity document, delegated governance roles additionally through the publisher's verified authority list, relay
+  roles only through pinned or self-certifying relay keys), the payload schema, the optional
+  subject key and commitment predicate, the maximum age, the acknowledger and the privacy class. Its roleFor is the
+  implementation of the F16.S01.M01 RoleResolverPort that the vault composition root injects into authorizeStatement.
+responsibilities:
+  - Define versioned field allowlists for classrup.bazaar.listing/v1, classrup.identity.profile/v1, classrup.services.offering/v1, classrup.rentals.offering/v1 and classrup.rentals.busy_blocks/v1 payloads, taking each closed key set from the record's owning module (F01.S01.M03, F07.S02.M01, F03.S01.M01, F05.S01.M01).
+  - Build an unsigned envelope draft (v, type, author, createdAt, payload, ext) from a local record, with every payload timestamp and the envelope createdAt floored to the UTC hour by F10.S02.M03 publicTime; seq and prev are allocated by F11.S01.M02 publish in the transaction that stores the signed envelope.
+  - Reject export of portable public records whose owner has not enabled federation for that record (opt-in flag from F01.S01.M03 or profile setting) and of any field classified above P0; participant statements need no federation opt-in.
+  - Maintain the statement-type registry mapping each envelope type to {audience, signerRole, roleResolution, payloadSchema, subjectKey?, version?, commitment?, maxAge, acknowledger, privacyClass}, expose entryFor(type), roleFor(type, context) (the F16.S01.M01 RoleResolverPort implementation), subjectKeyOf(type, payload) and maxAgeOf(type), and export the compiled registry as machine-readable data.
+  - Validate inbound payloads against the same allowlist and location rules and map them to a mirror view that the UI marks as remote and read-only and that exposes every allowlisted member readers need (for listings the author, listingRevision, expiresAt, inStock, variants, acceptedCurrencies, mailboxHints and the giveaway closesAt).
+  - Own the payload, opt-in and signer-role error codes (FEDERATION_PAYLOAD_INVALID, FEDERATION_NOT_OPTED_IN, FEDERATION_EXPORT_FORBIDDEN_FIELD, FEDERATION_SIGNER_ROLE_INVALID) referenced by other F11 modules through depends_on (N1).
+non_responsibilities:
+  - Signing and verification (F11.S01.M03 mod_signatures).
+  - Persisting, deduplicating or ordering envelopes and allocating seq and prev (F11.S01.M02 mod_records, F11.S02.M02 mod_dedup).
+  - Choosing which peers receive a record (F11.S02.M01 mod_delivery and F11.S03.M01 mod_trust).
+  - Geohash encoding and the L2 cell check itself (F06.S02.M01 assertPublicCell).
+  - "Resolving keys: user roles are resolved by an injected portable-document resolver (F07.S02.M01), relay roles by injected relay-key resolvers (pinned keys in F11.S03.M01, relay key history of F15.S02.M01), delegated governance roles by the delegations resolver over verified authority lists (registered by F18.S02.M01) and relay operator context roles by the operatorKeys resolver over the relay's latest verified tenant_config (registered by F15.S04.M03), all bound at composition by inverted registration so this library has no dependency cycle."
+  - Deciding whether an incoming statement is acted on (F16.S01.M01 authorizeStatement, called by F11.S01.M02); this module only supplies roleFor through the RoleResolverPort bound at vault composition.
+  - "Future: ActivityPub Note/Offer and AT Protocol lexicon mappings (documented in F11.S03.M03, not implemented)."
+  - "Future: federating reviews, offers, proposals or any P1-P4 data relay to relay; participant statements travel only as sealed mailbox envelopes and are never mapped here."
+depends_on: [F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001]
+user_stories:
+  - As a seller, I can opt one listing in to federation and see exactly which fields will be shared before confirming.
+  - As a service provider, I can federate my public offering with a coarse region only, never my address.
+  - As a remote reader, I see a mirrored listing labelled with the relay it came from and a notice that it cannot be edited here.
+  - As a vault, I can tell for any received statement type which role must have signed it and whether that role is a user role or a relay role, and I quarantine anything I cannot resolve.
+  - As a test generator (F17.S01.M03), I can read the compiled registry as data and produce one contract row and one wrong-role negative case per statement type.
+edge_cases:
+  - Listing contains a photo with GPS EXIF still present; export is refused with FEDERATION_EXPORT_FORBIDDEN_FIELD and nothing is drafted.
+  - Listing location is stored at geohash 7; the draft carries the containing L2 cell (the first 5 characters), records locationLevel L2 and passes assertPublicCell; a record that carries latitude and longitude members is refused with FEDERATION_EXPORT_FORBIDDEN_FIELD.
+  - Inbound payload carries an extra field "homeAddress"; the whole payload is rejected rather than silently trimmed.
+  - Inbound listing payload carries regionCell "u33dbc" (length 6); rejected with FEDERATION_PAYLOAD_INVALID and never mirrored into a public index.
+  - Seller revokes opt-in after drafting but before F11.S01.M02 signs; publish refuses with FEDERATION_NOT_OPTED_IN and nothing is signed.
+  - Payload exceeds 65536 bytes after serialization; rejected with PAYLOAD_TOO_LARGE only.
+  - Record type version unknown (classrup.bazaar.listing/v2); rejected with UNSUPPORTED_SCHEMA_VERSION.
+  - A listing statement whose author is a pinned relay key, or a peer_accept signed by a user device key; roleFor finds no matching key class and the receiver quarantines it with FEDERATION_SIGNER_ROLE_INVALID.
+  - Statement type classrup.federation.unknown/v1 is not registered; receivers quarantine it with FEDERATION_SIGNER_ROLE_INVALID rather than storing it as accepted.
+  - A listing is published at 10:47:12.345 with expiresAt 2026-12-04T10:47:12.345Z; the draft carries createdAt and publishedAt 10:00:00.000Z and expiresAt 2026-12-04T10:00:00.000Z, and two drafts inside the same hour are ordered by listingRevision and seq only.
+  - A rental busy block runs 10:20 to 11:40; the busy-blocks draft carries 10:00 to 12:00 (start floored, end raised to the next full hour) so a published busy interval never shrinks.
+  - A service offering carries a credential with evidenceAttachmentId; the projection omits the member and keeps label, issuer and year, while providerTimeZone, the projection seq, prev and publishedAt are exported.
+  - A vault receives classrup.bazaar.negotiation_accept/v1; the registry resolves it as an alias of classrup.comms.consent/v1 and verifies it with the consent entry's role, schema and predicate.
+  - A classrup.governance.policy_decision/v1 is signed by a key that the publisher's authority list first named as decider 10 days before the proposal's relay receipt, or by the publisher's own key, or arrives in a vault where no delegations resolver is registered; roleFor resolves no delegated role and the receiving path quarantines it with FEDERATION_SIGNER_ROLE_INVALID.
+  - A classrup.governance.transparency_report/v1 is signed by the operator key that also compiled the embedded transparency_draft/v1, or by a key missing from operatorKeys of the relay's latest verified tenant_config; roleFor resolves no reviewer role and the report is quarantined with FEDERATION_SIGNER_ROLE_INVALID.
+  - A peer relay offers a classrup.governance.policy_comment/v1 (audience community) on POST /fed/v1/inbox; F11.S01.M02 V10 refuses it because only audience public envelopes travel relay to relay, and the comment stays readable only to members of its hosting relay.
+ux:
+  notes: "Headless library. The consent preview screen that shows the allowlisted fields is owned by F10.S01.M01 and F01.S01.M03 and calls previewDraft(record) from this module."
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; it defines allowlist tables, the statement-type registry and draft value types keyed by envelope type string.
+      - Allowed payload fields per type are listed in code and in the schema registry and each is annotated P0 by F10.S02.M02; a field without an annotation is not exportable.
+      - Location is carried only as a geohash string of length ≤ 5 plus locationLevel L1 or L2, never coordinates; finer cells are snapped to their containing L2 cell before the F06.S02.M01 assertPublicCell check.
+      - The statement-type registry is static versioned data that names, for every registered envelope type, the audience, the signer role a receiving vault must verify before acting on the statement, how that role is resolved, the payload schema, the optional subject key and commitment predicate used by F11.S02.M03, and the maximum age used by F11.S01.M02 V08.
+      - Relay roles resolve only through relay keys pinned in F11.S03.M01 or, for relay_identity roles, through the self-certifying relay key history of F15.S02.M01, and user roles only through the author principal's portable identity document (F07.S02.M01), so a relay key never satisfies a user role and a user key never satisfies a relay role.
+      - Unregistered types, and registered types whose role cannot be resolved, are quarantined by receivers with FEDERATION_SIGNER_ROLE_INVALID; the registry check (V01) is separate from the portable-allowlist check (V08), which applies only to audience public portable types.
+      - The StatementPublisherPort (publish and issueTombstone) is declared here and implemented by F11.S01.M02, so every producer (F01, F03, F07, F11.S03.*) signs through the single F11.S01.M02 path that allocates seq and prev, without a dependency cycle.
+      - Every timestamp member of a public portable payload and the envelope createdAt are floored to the UTC hour with F10.S02.M03 publicTime (busy-block interval ends are raised to the next full hour so a busy interval never shrinks), and an author's records are ordered by the registry version member or the per-chain seq, never by time.
+      - Every registry entry also names its acknowledger (counterparty, destination_relay or none) and the privacy class F10.S02.M02 registers for its payload schema, both read through entryFor(type) by the F15.S01.M01 sync outbox, and the compiled registry is exported as machine-readable data with one row per type.
+      - roleFor(type, context) is the implementation of the F16.S01.M01 RoleResolverPort; the vault composition root injects it into F16.S01.M01 authorizeStatement, so F16.S01.M01 needs no dependency on this module and F11.S01.M02 calls only authorizeStatement.
+      - Audience community addresses a statement to one hosting relay that serves it only to that relay's authenticated members; it is never indexed publicly, never sent relay to relay and never routed by F11.S02.M01, its owner module sends it to the hosting relay as a relay command, and its registry defaults are acknowledger destination_relay and privacy class P1.
+      - Delegated roles resolve only through the injected delegations resolver over the publisher's verified authority lists (registered by F18.S02.M01) and relay operator context roles only through the injected operatorKeys resolver over the relay's latest verified tenant_config (registered by F15.S04.M03), both by inverted registration at composition without a depends_on edge, and a missing resolver, list or tenant_config resolves no role so the statement is quarantined with FEDERATION_SIGNER_ROLE_INVALID.
+    entities: []
+    note: |
+      Pure mapping library; allowlists and the registry are static data versioned with the schema registry and nothing is persisted here.
+      Statement-type registry (F11 types, the five portable types and the entries other modules contributed per N2, compiled into one registry at build time and exported as statement-registry.json). Each entry is {type, owner, audience, signerRole, roleResolution, payloadSchema, subjectKey?, version?, commitment?, maxAge, acknowledger, privacyClass, aliasOf?}.
+      Role resolution kinds: "principal" means the envelope author is a principal did:key and ext.signerKey is a device key active in that principal's latest verified portable document (F07.S02.M01 key_status at receiver time); "relay" means the author is a relay did:key pinned in F11.S03.M01 (current key, or previous key inside the 7-day rotation overlap); "relay_identity" means a key in the self-certifying key history of the relayId (F15.S02.M01: relayId derived from the genesis key, every rotation signed by the previous key), active or retired and not revoked at receipt; "named relay" means a relay or relay_identity key that also equals the relay or key the statement's context names (payload relayId, the hostKeyId of verified auction terms, the relay where a consent was registered); "subscription" means the publisher key (principal or relay) of an advisory feed the vault subscribed to. Context roles (party, participant, giver, opener, mediator) are evaluated by roleFor from the context the caller supplies (subject record, terms, head revision) on top of the key resolution. "delegated" (delegated by publisher authority_list) means principal resolution of the author plus a delegation returned by the injected delegations resolver: the author is listed with the role the row names in the latest verified classrup.governance.authority_list/v1 of payload.publisherId, under the row's anchoring condition, and the author differs from payload.publisherId; the delegations resolver is registered by F18.S02.M01 at vault composition (inverted registration, because F18.S02.M01 depends on this module). The context role "relay operator" means principal resolution of the author plus membership of the author in operatorKeys of the latest verified classrup.platform.tenant_config/v1 of the relay the statement names, read through the injected operatorKeys resolver registered by F15.S04.M03 at composition. A missing resolver, authority list or tenant_config resolves no role.
+      Defaults for every entry unless its row overrides them: audience participants gives acknowledger counterparty (a recipient signs classrup.federation.ack/v1) and privacy class P2; audience relay (addressed to one named relay) gives acknowledger destination_relay (that relay signs classrup.federation.ack/v1 or the owner's named acknowledgement) and P1; audience community (addressed to one hosting relay that serves it only to its authenticated members; never indexed publicly, never sent relay to relay through /fed/v1/inbox and never routed by F11.S02.M01; the owner module sends it to the hosting relay as a relay command through the F15.S01.M01 outbox) gives acknowledger destination_relay (the hosting relay's acceptance receipt named by the owner module) and P1; audience public, relay to relay and relay-local give acknowledger none and P0 (relay-local statements are never queued). The privacy class is the class F10.S02.M02 registers for the payload schema, and the CI registry check fails on a mismatch with the default. maxAge is none unless stated (F11.S01.M02 V08 then checks only the future skew).
+
+      F11 and portable entries:
+
+      | Type | Audience | Signer role (resolution) | Payload schema | Subject key and version | Class | Ack | Privacy | maxAge |
+      |---|---|---|---|---|---|---|---|---|
+      | classrup.bazaar.listing/v1 | public | author: listing author (principal) | listing allowlist | recordKey payload.listingId; version payload.listingRevision | public_projection | none | P0 | 120 d |
+      | classrup.identity.profile/v1 | public | author: profile owner, author = payload.did (principal) | profile allowlist | recordKey payload.did | public_projection | none | P0 | 400 d |
+      | classrup.services.offering/v1 | public | author: provider = payload.providerId (principal) | offering allowlist | recordKey payload.offeringId; version payload.seq | public_projection | none | P0 | 400 d |
+      | classrup.rentals.offering/v1 | public | author: owner = payload.ownerId (principal) | rental offering allowlist | recordKey payload.offeringId; version payload.revision | public_projection | none | P0 | 400 d |
+      | classrup.rentals.busy_blocks/v1 | public | owner of the offering (principal) | busy-blocks allowlist | recordKey busy:payload.offeringId; readers keep the union of unexpired summaries | public_projection | none | P0 | 24 h |
+      | classrup.federation.tombstone/v1 | audience of the target | target author: author equals the target record's author principal (principal); binding deletion; never a relay key | {target: cid or recordKey, reason} | target | control | as target | P0 | none |
+      | classrup.federation.relay_removal/v1 | public | hosting relay whose index held the item (relay); advisory only | {target, relayId, reasonCode, statementOfReasons ≤ 2000 chars} | target | advisory | none | P0 | none |
+      | classrup.federation.ack/v1 | participants | recipient: a principal named in ext.recipients of the acknowledged statement (principal); for an audience relay statement the addressed relay (named relay) | {ackedCid, ackedType} | ackedCid | control | none | P2 | 60 d |
+      | classrup.federation.peer_offer/v1 | relay to relay | proposing relay, self-certifying key confirmed by fingerprint (relay) | {relayId, baseUrl, relayKey, direction, targetRelayId} | none | control | none | P0 | 14 d |
+      | classrup.federation.peer_accept/v1 | relay to relay | accepting relay: key pinned for the offer target (relay) | {offerCid, relayId, relayKey} | none | control | none | P0 | none |
+      | classrup.federation.key_rotation/v1 | public | current pinned relay key (old key) (relay) | {relayId, newKey, effectiveAt} | none | control | none | P0 | none |
+      | classrup.federation.relay_identity/v1 | public | the relay key named in the payload (relay, self-certifying) | {relayId, baseUrl, relayKey, hostingPolicy} | none | control | none | P0 | 30 d |
+      | classrup.federation.blocklist/v1 | public | any publisher, advisory, never applied without review (principal or relay) | {title, entries ≤ 10000} | none | advisory | none | P0 | 180 d |
+      | classrup.federation.move/v1 | public | account move: device key of the subject (principal); relay move: pinned relay key (relay) | {subject, kind, fromRelay, toRelay, announcedAt} | move:subject | commitment (identity) | none | P0 | 210 d |
+      | classrup.federation.move_cancel/v1 | public | device key of the subject; a veto needs a key other than the move signer (principal) | {moveCid, subject} | move:subject | control | none | P0 | 210 d |
+
+      Allowlists (closed key sets; every member classified P0 by F10.S02.M02; every timestamp member floored with publicTime):
+      - classrup.bazaar.listing/v1 (F01.S01.M03): listingId, kind, title, description, categoryId, condition?, mediaRefs, tags, locale, regionCell (length 4 or 5), subtypeRef? (service, rental, auction), listingRevision, publishedAt, expiresAt, inStock (boolean from F01.S03.M01 at signing), barterAcceptable, mailboxHints [1..3 {relayId, mailboxId}], federationOptIn, variants? [{variantId, label, attributes, price?, inStock}] (F01.S03.M02), and one kind subset: sell {askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets?, negotiable, pickup, delivery, deliveryNote?}; want {categoryId, keywords, minCondition, quantityWanted, barterAcceptable, barterNote?, maxDistanceBucket?, neededBy?, maxBudget? only when the WantSpec has budgetVisible true}; giveaway {selectionMode, queueLimit, closesAt?}. Never minOffer, pickupNote, quantities, holds, status, closeReason, drafts, offers or any P1 to P4 field.
+      - classrup.identity.profile/v1: the profile allowlist of F07.S02.M01.
+      - classrup.services.offering/v1 (F03.S01.M01): offeringId, providerId, listingId, skillCodes, rateType, rate, minBillableMinutes, serviceAreaCell (L2), providerTimeZone, remoteCapable, credentials [{label, issuer, year?, attestation}] (evidenceAttachmentId and every other evidence reference excluded), seq and prev (the offering's own projection sequence, separate from the envelope chain seq and prev), publishedAt.
+      - classrup.rentals.offering/v1 (F05.S01.M01): offeringId, ownerId, listingId, rates, quantity, durations, buffers, leadTimeMinutes, horizonDays, timeZone, blackoutDates, lateFee, cancellationPolicy, declaredValue, checklistTemplate labels only, pickupAreaCell (L2), revision.
+      - classrup.rentals.busy_blocks/v1 (F05.S01.M01): offeringId, fromUtc, toUtc (≤ 365 days apart), intervals [{start, end, unitsBusy}] (≤ 500, no identities); interval starts floored and ends raised to the full hour.
+
+      Contributed entries (N2), registered on request of their owner modules; payload schemas are owned there and defaults above apply unless stated:
+
+      | Owner | Types | Audience | Signer role (resolution) | maxAge |
+      |---|---|---|---|---|
+      | F01 | classrup.bazaar.promotion/v1 | public | operator key of payload.relayId (named relay) | none |
+      | F01 | classrup.bazaar.offer/v1, offer_withdrawal/v1 | participants | buyer (principal) | none |
+      | F01 | classrup.bazaar.offer_decision/v1 | participants | listing author (principal) | none |
+      | F01 | classrup.bazaar.negotiation_round/v1 | participants | proposer, buyer or seller of the chain (principal) | none |
+      | F01 | classrup.bazaar.negotiation_close/v1 | participants | closing party (principal) | none |
+      | F01 | classrup.bazaar.negotiation_confirm/v1 | participants | seller (principal) | none |
+      | F01 | classrup.bazaar.negotiation_accept/v1 | as consent | alias of classrup.comms.consent/v1 (F08.S02.M02): verified with that entry's audience, role, schema and predicate (aliasOf) | as consent |
+      | F01 | classrup.bazaar.giveaway_request/v1, giveaway_withdrawal/v1 | participants | requester (principal) | none |
+      | F01 | classrup.bazaar.giveaway_selection/v1, giveaway_decision/v1 | participants | listing author (principal) | none |
+      | F01 | classrup.bazaar.reservation/v1 | participants | listing author, owner of the listed items; with holder.type cycle also a giver in the head revision (principal; head revision checked by F02.S03.M02) | none |
+      | F01 | classrup.bazaar.reservation_release/v1 | participants | signer of the released reservation (principal) | none |
+      | F02 | classrup.mutiny.proposal_revision/v1 | participants | party of the subject; coordinator for cycles (principal) | none |
+      | F02 | classrup.mutiny.proposal_response/v1 | participants | head author, decision withdraw (principal) | none |
+      | F02 | classrup.mutiny.reservation_release/v1 | participants | signer of the released reservation (principal) | none |
+      | F02 | classrup.mutiny.cycle_withdrawal/v1 | participants | withdrawing participant (principal) | none |
+      | F02 | classrup.mutiny.handover_attestation/v1 | participants | by kind: the leg's giver (handed_over, returned), receiver (received, issue_reported) or original giver (return_confirmed) (principal) | none |
+      | F02 | classrup.mutiny.recovery_action/v1 | participants | participant of the case; an accept counts only from requiredSignerIds (principal) | none |
+      | F02 | classrup.mutiny.matching_profile/v1 | public | the DID the projection describes (principal) | none |
+      | F02 | classrup.mutiny.cycle_suggestion/v1 | participants | the relay that computed it (relay); evidence of a relay assertion only | none |
+      | F02 | classrup.mutiny.item_valuation_projection/v1 | public | item owner (principal) | none |
+      | F02 | classrup.mutiny.valuation_flag/v1 | participants | kind flag: participant of the named subject; kind ack: item owner (principal) | none |
+      | F04 | classrup.auctions.auction/v1, auction_cancel/v1 | public | seller key sellerId (principal) | none |
+      | F04 | classrup.auctions.bid/v1, bid_retraction/v1 | relay (host) | bidder key bidderId (principal) | none |
+      | F04 | classrup.auctions.non_payment_report/v1 | relay (host) | seller key sellerId (principal) | none |
+      | F04 | classrup.auctions.second_chance_offer/v1 | participants | seller key sellerId (principal) | none |
+      | F04 | classrup.auctions.second_chance_response/v1 | participants | nominated candidate key (principal) | none |
+      | F04 | classrup.auctions.host_acceptance/v1, auction_opened/v1, host_cancel/v1, result/v1 | public | host key named in the auction terms (named relay: hostKeyId of the verified auction/v1) | none |
+      | F04 | classrup.auctions.bid_receipt/v1, retraction_receipt/v1, bid_outbid/v1, extension/v1, result_disclosure/v1, second_chance_candidates/v1, void/v1, void_rescission/v1 | participants | host key named in the auction terms (named relay) | none |
+      | F05 | classrup.rentals.offering/v1, busy_blocks/v1 | public | owner (principal); rows in the table above | 400 d, 24 h |
+      | F05 | classrup.rentals.rental_request/v1, return_report/v1, forfeit_response/v1, damage_response/v1 | participants | renter (principal) | none |
+      | F05 | classrup.rentals.rental_confirmation/v1, deposit_terms/v1, deposit_release_attestation/v1, forfeit_claim/v1, return_attestation/v1, owner_receipt/v1, late_fee_adjustment/v1, return_waiver/v1, not_returned_declaration/v1, damage_claim/v1, damage_counter_acceptance/v1, damage_withdrawal/v1 | participants | owner (principal) | none |
+      | F05 | classrup.rentals.rental_cancellation/v1 | participants | renter or owner (principal) | none |
+      | F05 | classrup.rentals.reservation_frozen/v1 | participants | owner for forks and equivocation; renter for a held late confirmation (principal) | none |
+      | F05 | classrup.rentals.deposit_withdrawal/v1 | participants | owner for a withdrawal, renter for a decline (principal) | none |
+      | F05 | classrup.rentals.deposit_dispute_notice/v1, damage_escalation/v1 | participants | the designated opener, owner or renter (principal) | none |
+      | F05 | classrup.rentals.handoff_report/v1 | participants | owner or renter of the reservation (principal) | none |
+      | F05 | classrup.rentals.handoff_changes_request/v1, handoff_attestation/v1 | participants | the party that did not author the named report (principal) | none |
+      | F05 | classrup.rentals.reservation_renegotiation/v1, deposit_renegotiation/v1, return_renegotiation/v1, damage_renegotiation/v1, rental_completion/v1 | participants | owner and renter, each signing a statement over the same cid (principal) | none |
+      | F06 | classrup.discovery.location_share/v1, location_share_revoke/v1 | participants | sharer = payload.sharerDid (principal) | none |
+      | F06 | classrup.discovery.ranking_config/v1 | public | relay key (relay) | none |
+      | F09 | classrup.commerce.deal/v1 | participants | opener role of the context type (principal; openerRole from the F09.S01.M01 ContextTermsPort) | none |
+      | F09 | classrup.commerce.deal_cancel/v1 | participants | each party for a mutual cancel, the context owner for a unilateral one (principal) | none |
+      | F09 | classrup.commerce.deal_completion/v1, dispute_mediator_accept/v1, dispute_outcome_accept/v1 | participants | each party (principal) | none |
+      | F09 | classrup.commerce.payment_claim/v1, cash_terms_accept/v1, cash_terms_decline/v1 | participants | payer (principal) | none |
+      | F09 | classrup.commerce.payment_ack/v1 | participants | payee; the relay operator DID for context listing_fee (principal) | none |
+      | F09 | classrup.commerce.payment_dispute/v1, cash_terms/v1, crypto_request/v1, crypto_request_cancel/v1 | participants | payee (principal) | none |
+      | F09 | classrup.commerce.receipt/v1 | participants | payer or payee of the claim by statementType, through a linked device key (principal) | none |
+      | F09 | classrup.commerce.dispute/v1, dispute_withdraw/v1 | participants | opener (principal) | none |
+      | F09 | classrup.commerce.dispute_evidence/v1 | participants | the authoring party (principal) | none |
+      | F09 | classrup.commerce.dispute_response/v1 | participants | respondent (principal) | none |
+      | F09 | classrup.commerce.dispute_mediator/v1 | participants | a party (principal) | none |
+      | F09 | classrup.commerce.dispute_outcome/v1 | participants | a party or the active mediator (principal) | none |
+      | F09 | classrup.commerce.fx_quote_revocation/v1 | participants | issuerRef of the manual quote (principal) | none |
+      | F10 | classrup.privacy.consent_statement/v1, consent_withdrawal/v1 | relay (payload relayId) | principal | none |
+      | F10 | classrup.privacy.deletion_statement/v1 | relay (one relay, payload relayId) | principal | none |
+      | F10 | classrup.privacy.deletion_notice/v1 | participants (commitment counterparties) | principal | none |
+      | F12 | classrup.moderation.report/v1, reportwithdrawal/v1, appeal/v1, appealwithdrawal/v1 | relay (addressed relay) | reporter or appellant device key (principal) | none |
+      | F12 | classrup.moderation.reportreceipt/v1, reportlinked/v1, reportoutcome/v1, reasons/v1, reversal/v1, appealreceipt/v1, appealstatus/v1, appealdecision/v1 (relay key only, no reviewer signature), appealmoot/v1 | participants | addressed relay key (named relay) | none |
+      | F12 | classrup.moderation.policy/v1 | public | addressed relay key (relay) | none |
+      | F12 | classrup.moderation.advisory/v1, advisoryretraction/v1 | public | subscribed publisher key (subscription) | none |
+      | F13 | classrup.notify.channel_consent_statement/v1, channel_withdrawal/v1, quiet_hours_mirror/v1, preference_mirror/v1 | relay (payload relayId) | principal | 400 d |
+      | F13 | classrup.notify.channel_withdrawal_receipt/v1 | participants (the consenting principal) | relay where the consent was registered (named relay, pinned key chain) | 400 d |
+      | F15 | classrup.platform.relay_receipt/v1 | participants (the sender, returned in the response; acknowledger none) | relay_identity | none |
+      | F15 | classrup.platform.relay_rotation/v1, relay_key_revocation/v1, relay_restore/v1, tenant_config/v1 | public | relay_identity | none |
+      | F16 | classrup.security.role_statement/v1, audit_anchor/v1 | public | relay: the relay's current key (relay) | none |
+      | F16 | classrup.security.role_approval/v1 | relay-local | principal whose device key is active and who holds an active relay-scope admin role on payload.relayId, confirmed by F16.S01.M01 (principal) | none |
+      | F16 | classrup.security.incident_notice/v1 | participants | relay (relay); optional successorOf | none |
+      | F16 | classrup.security.keyrevocation/v1 | public | the revoked key itself or the DID root key (immediate), another active device key of the same principal (7-day pending period), the relay key for relay-owned keys (principal or relay; semantics owned by F16.S02.M02) | none |
+      | F18 | classrup.governance.policy_proposal/v1, policy_withdrawal/v1, authority_list/v1 | public | publisher, author = payload.publisherId (principal) | none |
+      | F18 | classrup.governance.taxonomy_pack/v1, rule_pack/v1, jurisdiction_profile/v1, jurisdiction_profile_retirement/v1 | public | publisher, author = payload.publisherId (principal); versioned configuration superseded by version | none |
+      | F18 | classrup.governance.policy_decision/v1 | public | delegated decider (delegated): listed with role decider in the publisher's latest verified authority list anchored no later than payload.decidedAt, first listed at least 14 d before the proposal's relay receipt (payload.proposalReceipt), author differs from payload.publisherId | none |
+      | F18 | classrup.governance.policy_cosign/v1 | public | delegated co-signer (delegated): listed with role cosigner or decider in the publisher's latest verified authority list, author equals the coSignerId of the cosigned proposal (context supplied by the caller) and differs from payload.publisherId | 60 d |
+      | F18 | classrup.governance.policy_comment/v1 | community (members of the hosting relay; acknowledger destination_relay, P1) | comment author (principal) | 45 d |
+      | F18 | classrup.governance.transparency_counts/v1 | participants (sealed to the requesting operator key and returned in the relay_counter_snapshot response; acknowledger none) | relay named in payload.relayId (named relay: relay_identity key history of F15.S02.M01, current key or previous key inside the 7-day rotation overlap) | 30 d |
+      | F18 | classrup.governance.transparency_draft/v1 | participants (sealed to the reviewer) | compiler (principal, context relay operator of payload.relayId) | 30 d |
+      | F18 | classrup.governance.transparency_report/v1 | public | reviewer (principal, context relay operator of the embedded draft's relayId), different from the author of the embedded transparency_draft/v1 | none |
+
+      Commitment predicates (subject key and conflict test used by F11.S01.M02 and F11.S02.M03; owning modules confirm their entries): classrup.federation.move/v1 conflicts when two verified moves of one subject are open with different toRelay; classrup.comms.consent/v1 (F08.S02.M02) conflicts when one signer signs the same subjectType, subjectRef and statementKey over different subjectRevisionHash values, which covers two acceptances of one offer and two consents on one proposal; classrup.bazaar.reservation/v1 (F01.S03.M01) conflicts when one signer reserves overlapping items of the same listing to different holders with overlapping unexpired windows; classrup.commerce.deal/v1 (F09.S01.M01) conflicts when one signer signs two different obligation digests for one dealId. Registered ext members: stream, signerKey, audience, recipients [{did, mailboxId}], supersedes, crit (critical-extension list, F11.S01.M03 V08); unknown non-critical ext members are preserved byte-exact within the 4 KiB ext cap and never added by buildDraft.
+  validation_rules:
+    requirements:
+      - Outbound mapping is default-deny, so a new local field is never exported until it is added to an allowlist and reviewed.
+      - Inbound payload validation uses the same allowlist and location rules and rejects unknown fields and any location finer than L2 instead of ignoring or trimming them.
+      - Every rejection returns a stable code that the calling module surfaces without echoing field values.
+      - Location precision is enforced on both paths through F06.S02.M01 assertPublicCell; outbound cells are snapped to L2 before the check (PRV-1) and inbound payloads with a cell longer than 5 characters or with coordinate members are rejected.
+      - Outbound portable drafts carry no timestamp finer than the UTC hour, checked with F10.S02.M03 assertCoarseTime over the draft's declared timestamp members and createdAt after publicTime has floored them.
+    rules:
+      - "V01 | envelope type is registered in the statement-type registry; receivers quarantine unregistered types | FEDERATION_SIGNER_ROLE_INVALID"
+      - "V02 | audience public portable types only: source record has federation opt-in true for this record at draft time and again when F11.S01.M02 signs; participant and control statements need no federation opt-in | FEDERATION_NOT_OPTED_IN"
+      - "V03 | every outbound field is on the allowlist for the type and classified P0 | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V04 | outbound: the location cell is snapped to its containing L2 cell (length ≤ 5) and passes F06.S02.M01 assertPublicCell; a latitude or longitude member anywhere in payload or ext refuses the export | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V05 | media references are content hashes of metadata-stripped images; no image reports GPS tags | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V06 | inbound payload has no members outside the allowlist, members have the declared types and strings are ≤ 10000 code points | FEDERATION_PAYLOAD_INVALID"
+      - "V07 | inbound payload does not exceed 65536 bytes | PAYLOAD_TOO_LARGE"
+      - "V08 | audience public portable types only: the type is one of the five portable allowlist types (listing, profile, service offering, rental offering, rental busy blocks) and its version major is supported | UNSUPPORTED_SCHEMA_VERSION"
+      - "V09 | inbound location: the type's location cell member (listing regionCell, offering serviceAreaCell, rental offering pickupAreaCell, profile region.geohash) has length ≤ 5 and passes F06.S02.M01 assertPublicCell, and no latitude or longitude member is present | FEDERATION_PAYLOAD_INVALID"
+      - "V10 | role resolution keeps key classes apart: relay roles resolve only through relay-key resolvers (keys pinned in F11.S03.M01, or the self-certifying key history of F15.S02.M01 for relay_identity roles, in both cases equal to the relay a named-relay role names) and user roles only through the injected portable-document resolver (F07.S02.M01); a key of the other class never matches | FEDERATION_SIGNER_ROLE_INVALID"
+      - "V11 | control types validate against their per-type payload schema in the registry; participant statements carry a ciphertext payload {alg, ciphertext, recipientsKeyIds} of at most 12288 bytes, checked for shape and size only | FEDERATION_PAYLOAD_INVALID"
+      - "V12 | outbound portable drafts: every declared timestamp member and createdAt equals its F10.S02.M03 publicTime value (busy-block ends raised to the next full hour) and the draft passes assertCoarseTime for those members; a draft that still fails is refused and nothing is published | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V13 | delegated and relay operator roles: the author is listed with the row's role in the publisher's latest verified authority list returned by the delegations resolver (policy_decision: anchored no later than decidedAt and first listed at least 14 d before the proposal relay receipt) and never equals payload.publisherId, or is in operatorKeys of the named relay's latest verified tenant_config returned by the operatorKeys resolver (transparency_report: never the author of the embedded draft); a missing resolver, list or tenant_config resolves no role | FEDERATION_SIGNER_ROLE_INVALID"
+  workflow_state_machine:
+    requirements:
+      - The mapper is stateless and the draft/mirror conversion is a pure function of its inputs.
+      - The only sequencing rule is that a draft must be signed and stored through the F11.S01.M02 publish path (StatementPublisherPort) before it is visible to any peer.
+      - No lifecycle is stored here, so there is no state machine.
+    machines: []
+    timeouts: []
+    note: "Stateless mapper; record lifecycle states belong to F11.S01.M02 (FederatedRecord) and the source modules."
+  commands_queries_events:
+    requirements:
+      - The module exposes TypeScript functions only and no network commands or queries.
+      - Functions return Result<T, AppError> and never include rejected field values in error params.
+      - The module emits no events; draft building is a local pure step.
+      - F11's own statement types and their signer roles are listed in the registry table of the domain schema (N2); other modules contribute entries for their own types, and every entry has an audience, signer role, role resolution, payload schema and maximum age.
+      - The compiled registry is exported as machine-readable data (statement-registry.json) with one row per type {type, owner, audience, signerRole, roleResolution, payloadSchema, subjectKey?, version?, commitment?, maxAge, acknowledger, privacyClass, aliasOf?}, from which F17.S01.M03 generates one contract row per entry plus a wrong-role negative case.
+      - roleFor(type, context) implements the F16.S01.M01 RoleResolverPort and is bound by the vault composition root; this module never calls authorizeStatement and stores no decision.
+    commands: []
+    queries: []
+    note: "API: buildDraft(record, now) -> UnsignedDraft (no seq or prev; F11.S01.M02 allocates them; createdAt and every declared payload timestamp floored with F10.S02.M03 publicTime); previewDraft(record) -> {fields[], excluded[]}; toMirrorView(verifiedEnvelope) -> MirrorView {type, cid, author, recordKey, version?, remote: true, readOnly: true, fields} where fields are the allowlisted payload members (for classrup.bazaar.listing/v1 including listingRevision, expiresAt, inStock, variants, acceptedCurrencies, mailboxHints and giveaway closesAt); allowlistFor(type) -> string[]; validateInbound(envelope) -> Result<void> (V06, V07, V09, V11); entryFor(type) (alias registryEntry) -> {type, owner, audience, signerRole, roleResolution, payloadSchema, subjectKey?, version?, commitment?, maxAge, acknowledger, privacyClass, aliasOf?} or none; exportRegistry() -> rows of entryFor for every registered type (statement-registry.json); roleFor(type, context) -> RoleRule, the F16.S01.M01 RoleResolverPort implementation with resolvers {portableDoc, pinnedRelayKey, relayKeyHistory, subscriptions, delegations, operatorKeys} bound at composition (delegations.listed(publisherId, key) -> {role, firstListedReceiptAt, anchoredAt, listVersion} or none, registered by F18.S02.M01; operatorKeys.of(relayId) -> did:key[] or none, registered by F15.S04.M03), used by F16.S01.M01 authorizeStatement for F11.S01.M02 V14 and V15; subjectKeyOf(type, payload) -> string or none; conflictsWith(a, b) -> boolean (commitment predicate); maxAgeOf(type) -> ms or none. StatementPublisherPort { publish({type, audience, payload, recipients[{did, mailboxId}]}) -> {cid, seq, chainKey}; issueTombstone({targetCid?, targetRecordKey?, reason}) -> {tombstoneCid} } is implemented by F11.S01.M02. Participant-audience statements are encrypted by their source modules and only shape-checked, never mapped, here."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "FEDERATION_NOT_OPTED_IN | 403 | no | the owner has not enabled federation for this public record"
+      - "FEDERATION_EXPORT_FORBIDDEN_FIELD | 422 | no | the record contains a field or precision that must not be exported"
+      - "FEDERATION_PAYLOAD_INVALID | 422 | no | inbound payload has unknown members, wrong types, a location finer than L2 or coordinates, or exceeds string limits"
+      - "FEDERATION_SIGNER_ROLE_INVALID | 422 | no | the type is unregistered or the signer key does not hold the role the type requires; the statement is quarantined"
+    example: |
+      buildDraft({ type: "classrup.bazaar.listing/v1", listingId: "0192f3a4-...", title: "Road bike", geohash: "u33dbcx", publishedAt: "2026-11-04T10:37:21.410Z", federate: true }, now = 2026-11-04T10:37:22Z)
+      -> { v: 1, type: "classrup.bazaar.listing/v1", author: "did:key:z6MkRoot...", createdAt: "2026-11-04T10:00:00.000Z", payload: { listingId: "0192f3a4-...", title: "Road bike", regionCell: "u33db", listingRevision: 3, publishedAt: "2026-11-04T10:00:00.000Z" }, ext: { stream: "pub", audience: "public" } }
+      entryFor("classrup.bazaar.offer_decision/v1") -> { owner: "F01.S04.M01", audience: "participants", signerRole: "listing author", roleResolution: "principal", acknowledger: "counterparty", privacyClass: "P2", maxAge: null }
+      roleFor("classrup.federation.peer_accept/v1", { author: "did:key:z6MkUserDevice..." }, resolvers) -> { ok: false, code: "FEDERATION_SIGNER_ROLE_INVALID" }  // user key cannot hold a relay role
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization; callers (listing publication, profile settings, delivery) decide who may federate which record.
+      - The opt-in flag is read from the source record at draft time and re-checked by F11.S01.M02 publish inside the signing transaction; an opt-in revoked after drafting refuses the publish with FEDERATION_NOT_OPTED_IN, and one revoked after signing cancels still-prepared deliveries through F11.S02.M01.
+      - Mirror views contain only P0 data and may be shown to anonymous readers when the tenant has public browse enabled.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Draft building is deterministic for identical record and clock, so retries cannot create divergent drafts.
+      - A failed draft leaves no state; the caller retries after fixing the record.
+      - This module never allocates seq or prev; F11.S01.M02 publish allocates them in the transaction that stores the envelope, so a lost response never skips or duplicates a sequence number.
+    idempotency: "buildDraft is a pure function; identical inputs give identical drafts (same payload and canonical bytes)."
+    concurrency: "No shared state. Two concurrent publishes of drafts by the same device are serialized by F11.S01.M02, which allocates seq n+1 and n+2 under its unique (author, signerKey, stream, seq) index."
+    retries: "Callers retry after fixing the record; no automatic retry inside the library."
+    offline: "Runs fully offline on-device; drafts are signed and stored locally by F11.S01.M02 and queued in the F15.S01.M01 outbox when the device key is available."
+    partial_failure: "A draft either validates entirely or returns an error; there is no partially mapped payload."
+  privacy_retention_abuse:
+    requirements:
+      - Only owner-opted-in P0 data at maximum precision L2 can leave the vault as a public projection; every other field is refused or the export refused.
+      - Exact home address (P3), contact details and anything P1-P4 can never appear in a draft; tests assert this on every release.
+      - Pseudonymity is not anonymity, so the consent preview states that all records of one did:key are linkable and that deletion propagates by tombstone but cannot recall copies.
+    data:
+      - "Drafts: P0 only, transient, not stored by this module."
+      - "Mirror views: P0 copies of remote content; stored by F11.S01.M02."
+      - "Registry: static P0 configuration."
+    retention:
+      - "No retention in this module; stored mirrors follow F11.S01.M02 (RET-STANDARD with tombstone stubs kept at least as long as the target type's maxAge)."
+    threats:
+      - "T01 | New local field silently leaking into federation | default-deny allowlist; CI test fails if a record type has a field without a classification annotation"
+      - "T02 | Location refinement attack (geohash 7 or coordinates in payload or ext) | V04 snaps outbound cells to L2 and refuses coordinates anywhere in payload or ext; V09 rejects finer inbound cells; assertPublicCell on both paths; outbound drafts carry only registered ext members"
+      - "T03 | Metadata leakage through images (EXIF GPS, device serial) | V05 only references stripped media hashes; relay rejects GPS tags per PRV-4"
+      - "T04 | Remote payload with executable or HTML content | inbound strings are plain text; mirror view escapes at render; links shown as text"
+      - "T05 | Signer-role confusion: a relay key used as a user author, or a user key presented for a relay role | V10 resolves relay and user roles through separate resolvers; tests per registry entry include relay-key-as-author and user-key-as-relay negatives (T16, T19)"
+      - "T06 | Activity-pattern inference from exact public timestamps | publicTime floors every public payload timestamp and createdAt to the UTC hour (V12, F10.S02.M03); order inside the hour comes from version members and per-chain seq only"
+      - "T07 | Governance capture: a publisher decides its own proposal, adds a decider key just before deciding, or one operator compiles and reviews its own transparency report | delegated roles need an authority-list entry first listed at least 14 d before the proposal relay receipt and an author different from the publisher; the reviewer must be another operator key than the draft's compiler (V13)"
+    abuse_controls:
+      - "Per-author publish rate cap 60 statements/hour enforced by F11.S01.M02 through F12.S03.M03 rate limits."
+      - "Inbound payloads over 65536 bytes are rejected before parsing members."
+  observability_performance:
+    requirements:
+      - Mapping outcomes are counted per rejection code without recording field values.
+      - Building one draft takes under 1 ms p95 for a typical 4 KiB listing.
+      - Allowlist and registry coverage is reported as a build artifact on every CI run.
+    metrics:
+      - "classrup_federation_draft_total{outcome=ok|not_opted_in|forbidden_field|invalid}"
+      - "classrup_federation_inbound_payload_total{outcome=ok|invalid|too_large|precision}"
+      - "classrup_federation_role_resolution_total{outcome=ok|unregistered|role_invalid}"
+    logs:
+      - "info federation.draft.refused {type, code, correlationId} — never field values or record contents."
+    budgets:
+      - "buildDraft p95 ≤ 1 ms for records ≤ 4 KiB; ≤ 10 ms for 65536 byte payloads."
+      - "roleFor p95 ≤ 0.2 ms excluding resolver lookups; allowlist and registry coverage check completes in ≤ 5 s in CI."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - A privacy test suite enumerates every field of every source record type and proves non-allowlisted fields never appear in a draft.
+      - Round-trip tests prove that a draft payload maps back to an equal mirror view.
+    fixtures: "Listing, profile and offering fixtures with P0..P3 fields populated including a home address, exact lat/lon, geohash 7 and a GPS-tagged image; a pinned relay key R and a user principal U with device key D in a portable-document stub; shared golden envelopes from F11.S01.M03; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01,09.R02 | build drafts for the three record types | payload members equal the allowlist subset; classification annotations present; drafts carry no seq or prev"
+      - "T02 | property | 01.R03,02.R01,07.R01 | random records with random extra fields and outbound geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5 and equal to the prefix of the source cell (snapped); assertPublicCell called once per draft"
+      - "T03 | unit | 02.R04,07.R02 | outbound record with geohash 7 only; with exact lat/lon; with homeAddress and email | geohash 7 is snapped to its 5-character L2 cell with level L2 (export succeeds); lat/lon, homeAddress and email each refuse the export with FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "T04 | unit | 02.R03,02.R01 | record with opt-in false | FEDERATION_NOT_OPTED_IN; error params contain no field values"
+      - "T05 | unit | 02.R02,02.R03 | inbound payload with extra member, 65537 bytes, unknown type version listing/v2 | FEDERATION_PAYLOAD_INVALID, PAYLOAD_TOO_LARGE (and not PAYLOAD_INVALID), UNSUPPORTED_SCHEMA_VERSION"
+      - "T06 | unit | 01.R02,02.R01 | image referenced with GPS tag present | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "T07 | contract | 03.R01,03.R02,04.R01,04.R02 | exercise each exported function | signatures and Result shapes match the schema registry; error params contain no values; toMirrorView refuses envelopes that F11.S01.M02 has not stored"
+      - "T08 | unit | 03.R03,04.R03,05.R01 | inspect module for event emission, stored lifecycle state and authorization calls | none present"
+      - "T09 | integration | 03.R02,05.R03,09.R03 | draft then F11.S01.M02 publish then receive in a second vault then toMirrorView | mirror view equals source P0 fields, labelled remote, readable anonymously, no private fields"
+      - "T10 | unit | 06.R01,06.R02,06.R03 | identical inputs twice; failing draft; two concurrent publishes of drafts from one device | identical drafts; failure leaves no state; F11.S01.M02 assigns seq n+1 and n+2 and no caller-supplied seq exists in the API"
+      - "T11 | a11y | 07.R03 | open consent preview with screen reader and keyboard only | every field and the linkability notice are announced, controls ≥ 44 px"
+      - "T12 | abuse | 02.R02,07.R03 | inbound payload with script tag and long link text | stored as plain text and rendered escaped"
+      - "T13 | load | 08.R02,08.R01 | 10 000 draft builds of 4 KiB records | p95 ≤ 1 ms, counters exported"
+      - "T14 | unit | 08.R03,09.R01 | coverage and traceability tools run | allowlist and registry report produced; every PS-083 requirement maps to a passing test"
+      - "T16 | unit | 01.R04,04.R04 | roleFor for every registry row (three portable types and every F11 type) with the correct signer and with a wrong signer of the same key class | correct signer resolves its role; wrong signer yields a rule that makes F11.S01.M02 quarantine; every row has audience, role, resolution, schema and maxAge"
+      - "T15 | unit | 10.R01,10.R02,10.R03 | upgrade allowlist v1 to v1 plus optional field; read older drafts; downgrade | older mirror views still validate; rollback keeps v1 behavior and rejects newer members"
+      - "T17 | integration | 05.R02 | opt-in revoked between buildDraft and F11.S01.M02 publish; opt-in revoked after publish while deliveries are prepared | first refused with FEDERATION_NOT_OPTED_IN and nothing signed; second cancels the prepared deliveries and queues a tombstone for delivered copies"
+      - "T18 | unit | 07.R02,09.R02 | release privacy suite over every source record type with P1-P4 fields, home address and contact details | none appears in any draft"
+      - "T19 | unit | 01.R05,01.R06 | listing signed by pinned relay key R as author; peer_accept signed by user device key D; type classrup.federation.unknown/v1 | each quarantined with FEDERATION_SIGNER_ROLE_INVALID; V01 runs and fails independently of V08"
+      - "T20 | property | 02.R02,02.R04 | inbound payloads with geohash lengths 6-12 and with latitude or longitude members | every one rejected with FEDERATION_PAYLOAD_INVALID; assertPublicCell invoked on the inbound path"
+      - "T21 | contract | 01.R07 | producer stubs (listing publication, profile, offering, peer, blocklist, migration) call StatementPublisherPort.publish and issueTombstone | every call reaches the F11.S01.M02 implementation, which allocates seq; no producer signs through another path"
+      - "T22 | unit | 01.R06,02.R03 | tombstone, ack, peer_offer and move payloads, and a participants ciphertext payload of 12288 and 12289 bytes | per-type schemas checked; portable allowlist (V08) and opt-in (V02) never applied to them; 12289 bytes rejected with FEDERATION_PAYLOAD_INVALID"
+      - "T23 | unit | 01.R08,02.R05 | listing published at 10:47:12.345 with expiresAt 2026-12-04T10:47:12.345Z; busy block 10:20-11:40; two listing revisions inside one hour; a draft with an undeclared fine timestamp member | createdAt and publishedAt 10:00:00.000Z, expiresAt 2026-12-04T10:00:00.000Z; busy block 10:00-12:00; assertCoarseTime passes; revisions ordered by listingRevision and seq; the undeclared member refused with FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "T24 | unit | 01.R09,04.R05 | entryFor and exportRegistry over every F11 and contributed row | every row has owner, audience, signerRole, roleResolution, payloadSchema, maxAge, acknowledger and privacyClass; participants rows give counterparty and P2, relay-audience rows destination_relay and P1, public rows none and P0 unless the row overrides; aliases carry aliasOf; the export validates against its JSON schema"
+      - "T25 | contract | 01.R10,04.R06 | F16.S01.M01 authorizeStatement stub with RoleResolverPort bound to roleFor at composition; module import scan | authorizeStatement receives the role only from roleFor; this module never calls authorizeStatement and F16.S01.M01 has no import of it"
+      - "T26 | unit | 01.R02,02.R01 | build drafts for a listing with every kind subset and variants, a service offering with credential evidence, a rental offering and a busy-blocks summary | payload keys equal the closed key sets of the note; offering keeps providerTimeZone, seq, prev and publishedAt and drops evidenceAttachmentId; maxBudget only when budgetVisible; busy blocks carry intervals and unit counts only"
+      - "T27 | unit | 03.R01,05.R03 | toMirrorView of a verified listing (sell with variants, and giveaway) and of a rental offering | mirror exposes author, recordKey, version, listingRevision, expiresAt, inStock, variants, acceptedCurrencies, mailboxHints and giveaway closesAt, labelled remote and read-only; no member outside the allowlist"
+      - "T28 | unit | 01.R04,01.R05,04.R04 | roleFor for contributed rows: offer_decision by the buyer, bid_receipt by a relay key not named in the terms, tenant_config by a key outside the relay key history, an advisory by an unsubscribed publisher, negotiation_accept/v1 by the consenting party, reservation with holder cycle by an owner who is not a giver in the head revision | each wrong signer yields a quarantining rule, the correct signer resolves, the alias resolves through the consent entry"
+      - "T29 | unit | 01.R12,01.R04,02.R03,04.R04 | roleFor for F18 rows with delegations and operatorKeys resolver stubs: policy_decision by a decider first listed 15 d and 10 d before the proposal receipt, by the publisher's own key, and with no delegations resolver registered; policy_cosign by a listed cosigner and by an unlisted key; transparency_report by a second operator key, by the embedded draft's compiler and by a key outside operatorKeys; rule_pack by its publisher | the 15 d decider, the listed cosigner, the second operator and the publisher resolve; every other case yields a rule that makes the receiving path quarantine with FEDERATION_SIGNER_ROLE_INVALID"
+      - "T30 | unit | 01.R11,01.R09,04.R05 | entryFor and exportRegistry for policy_comment/v1, transparency_counts/v1, transparency_draft/v1, transparency_report/v1, policy_cosign/v1 and the publisher-signed F18 types | community row gives acknowledger destination_relay, P1 and maxAge 45 d; transparency_counts acknowledger none, P2, 30 d; transparency_draft counterparty, P2, 30 d; transparency_report none, P0, maxAge none; policy_cosign 60 d; publisher rows P0 and maxAge none; every F18 row is in the export"
+    acceptance:
+      - All tests T01–T30 pass in CI, including the signer-role tests T16, T19, T28 and T29.
+      - No P1-P4 field, exact coordinate or home address appears in any draft, and no inbound cell finer than L2 is accepted (privacy suite on fixtures).
+      - A public record whose owner has not opted in can never produce a signed statement.
+  import_export_backup_rollback:
+    requirements:
+      - The library stores nothing, so user export and import of federated content is handled by F11.S01.M02 and F11.S03.M03.
+      - Allowlists and registry rows are versioned data; adding a field is a schema minor change and removing one is a major change with a 180-day dual-read period.
+      - Rollback to a previous release must never widen an allowlist or relax a registry role, so a downgrade fails closed.
+    export: "Allowlist tables and the compiled statement-type registry are exported as build artifacts (allowlists.json, statement-registry.json with one row per type including owner, audience, signerRole, roleResolution, payloadSchema, maxAge, acknowledger and privacyClass) with each release for audit and test generation (F17.S01.M03); no user data."
+    import: "No user data is imported by this module; inbound payload validation uses the allowlist and registry bundled with the running release."
+    backup: "Nothing to back up; allowlists and the registry are versioned in source control with the schema registry."
+    migration_rollback: "Expand/contract: new optional fields are added to the allowlist in a release before any producer uses them; rollback restores the earlier narrower allowlist, which rejects newer payload members as FEDERATION_PAYLOAD_INVALID, and unknown newer statement types are quarantined."

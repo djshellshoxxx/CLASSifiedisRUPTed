@@ -1,35 +1,39 @@
-# PS-114-08 — observability performance
+# PS-114-08 — Observability and performance: PWA caching
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-08. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M02 PWA caching](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/cache` · **Contracts:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the observability performance process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-114-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-114-08.R01** Cache effectiveness and update adoption are measured only locally in the vault diagnostics view (the PWA sends no telemetry, CTR-OBS-001 OBS-7) and in CI runs.
+- **PS-114-08.R02** Cached shell navigation meets the PWA budgets of CTR-OBS-001 OBS-5 (LCP ≤ 2.5 s on Moto G-class with 4G profile).
+- **PS-114-08.R03** Precache size and entry count are tracked in CI per commit and fail the build on budget violations.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_platform_sw_cache_total{outcome=hit|miss|digest_mismatch} (local diagnostics counter, route class image|shell only, never transmitted)
+- classrup_platform_sw_update_total{outcome=prompted|accepted|deferred|killed}
+- classrup_platform_sw_precache_bytes (CI gauge per build)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- console.debug only in development builds; production worker logs nothing. Errors are counted, not described.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- Precache ≤ 1572864 bytes and ≤ 120 entries; initial JS ≤ 150 KiB gzip (OBS-5); service worker script itself ≤ 40 KiB gzip; the four production locale catalogs ≤ 120 KiB gzip together inside the precache.
+- Shell from cache: time to first render ≤ 300 ms after worker start on a Moto G-class device; image cache hit served in ≤ 20 ms; SHA-256 verification of a 1 MiB image ≤ 15 ms (SubtleCrypto).
+- Activation cleanup completes in ≤ 500 ms for 5 stale caches.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-114-09.T13 | load | PS-114-08.R03, PS-114-08.R02 | Lighthouse CI on Moto G-class 4G profile with warm and cold cache | LCP ≤ 2.5 s, precache within budget, initial JS ≤ 150 KiB gzip |
+| TEST-PS-114-09.T14 | integration | PS-114-08.R01 | run an offline session with 10 image hits and watch network traffic | local counters updated, no telemetry request is made, counters contain no URLs or identifiers |
+
+## Dependencies
+
+Module depends on: F15.S02.M01, F15.S02.M03, CTR-CAP-001, CTR-ID-001, CTR-OBS-001, CTR-PRV-001, CTR-UX-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

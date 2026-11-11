@@ -1,35 +1,57 @@
-# PS-060-02 — validation rules
+# PS-060-02 — Validation rules: Private messages
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-060-02. **Owner:** [08_Communications/01_messaging/mod_private](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_private. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M01 Private messages](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/private` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the validation rules process for private within 01_messaging. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-060-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-060-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-060-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-060-02.R01** Envelope input is validated strictly against the schema in the vault before signing and again by the receiving vault; sizes, lengths and encodings are checked before any decryption.
+- **PS-060-02.R02** Relay mailbox commands validate size, quota and request signatures without reading ciphertext.
+- **PS-060-02.R03** Every violation maps to one stable error code with a localized message key.
+- **PS-060-02.R04** Inbound acceptance runs the key commitment check, the per-device chain check and the counterparty key status check (F16.S02.M02 security.keyrecord.get_status with its freshness) before a message becomes active.
+- **PS-060-02.R05** Limits enforced in the sender's own vault are UX guards that a modified client can skip; the limits that bound abuse are enforced where an attacker cannot skip them, at the relay (RFC 9421 put signatures, tenant limits, per-mailbox and per-key quotas through RateLimitPort and the F12.S03.M04 limits check, N18) and in the receiving vault (caps on pending message requests).
+- **PS-060-02.R06** Blocks and thread archives filter only classrup.comms.message/v1 chat envelopes: sealed wrappers carrying any other statement are fetched, acknowledged and handed to F11.S01.M02 ingestion whatever the block or thread state, so lifecycle statements and evidence for a context confirmed before a block (N7a, for example a rental) keep flowing and only notifications are suppressed.
+- **PS-060-02.R07** A relay accepts a put only after, in this order, F11.S01.M03 verifyRequest of the RFC 9421 signature (@method, @target-uri, content-digest of the put body, created, keyid, nonce), the wrapper shape check, the tenant limits from TenantPort.limits(tenantId), RateLimitPort.consume per mailbox and request key and per mailbox for unknown keys, and - when that request key has never put to that mailbox on this relay - RateLimitPort.consume class write.mailbox.new_recipient and the F12.S03.M04 check with limitKey new_mailbox_recipients_per_day; the relay never knows the sender DID, so the request key stands for the sender in every relay limit.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | envelope fields have the exact encodings and lengths of the schema (nonce 24 B, ephemeralPub 32 B, wrappedKey 48 B, keyCommitment 32 B, signature 64 B) | VALIDATION_FAILED |
+| V02 | ciphertext length between 17 and 12 288 bytes (plaintext at most 8 192 bytes), a chat message wrapper at most 16 384 bytes, and every put wrapper at most maxEnvelopeBytes from TenantPort.limits(tenantId) (4 096..262 144, default 262 144) | PAYLOAD_TOO_LARGE |
+| V03 | thread exists in the vault, is active (or superseded less than 7 days ago), and the sender is a current participant | NOT_FOUND |
+| V04 | send: the local principal has not blocked the recipient in its own block list (F07.S02.M02 isBlockedEither over local data), and BLOCKED_PARTY is returned only when the actor blocked the other party; receive: envelopes from DIDs the local principal blocked are dropped silently (N7); whether the sender is blocked by someone else is unknown to the sender's vault and never checked; the filter applies only to classrup.comms.message/v1 chat envelopes, while sealed wrappers carrying other statements are fetched, acknowledged and handed to F11.S01.M02 ingestion, which applies the N7a exceptions | BLOCKED_PARTY |
+| V05 | senderSignature verifies (F16.S02.M03) against a device key of senderDid whose F16.S02.M02 status at the verifier receipt time is active; a revoked key quarantines with reason key_revoked, freshness unknown keeps the message active with a stale-key warning | COMMS_MESSAGE_SIGNATURE_INVALID |
+| V06 | wrappedKeys contains an entry for at least one device the recipient vault owns; otherwise the message is stored quarantined as undecryptable | COMMS_MESSAGE_NOT_FOR_DEVICE |
+| V07 | replyToId, when set, refers to a message of the same thread | VALIDATION_FAILED |
+| V08 | delete is requested by the author of the message and the message is not already deleted | FORBIDDEN |
+| V09 | UX guard in the sender vault: at most 60 messages per minute and 1 000 per day; enforced at the relay through RateLimitPort (F12.S03.M03): at most 120 puts per hour per mailbox and request key, at most 200 puts per day per mailbox in aggregate from request keys not on the owner's contact list, with 80 % of the mailbox capacity reserved for contacts | RATE_LIMITED |
+| V10 | mailbox fetch, ack, rotate and close requests carry an RFC 9421 request signature (F11.S01.M03 signRequest, request-signature tag classrup/relay-request/v1, not an F16.S02.M03 envelope) by a device key registered for the mailbox, with created within ±300 s of relay time and (keyid, nonce) unseen for 600 s; a close may instead carry a classrup.comms.mailbox_close/v1 statement signed by such a key within the last 30 days with an unused nonce | UNAUTHENTICATED |
+| V11 | mailbox put carries an RFC 9421 request signature made with F11.S01.M03 signRequest under the request-signature tag classrup/relay-request/v1 (never an F16.S02.M03 envelope) by a request key whose did:key is the keyid, covering @method, @target-uri, content-digest of the put body, created and nonce, with created within ±300 s and (keyid, nonce) unseen for 600 s; the body names no sender, and a put without a valid signature is refused | UNAUTHENTICATED |
+| V12 | keyCommitment equals HMAC-SHA256(K, 'classrup.comms.msg.commit.v1' + messageId) for the unwrapped K before the plaintext is accepted; on mismatch the message is quarantined with reason commitment_mismatch | COMMS_MESSAGE_COMMITMENT_MISMATCH |
+| V13 | receiving vault cap: at most 5 pending message requests per unknown sender DID and 100 in total; further envelopes from unknown senders are acknowledged at the mailbox and dropped without any reply | RATE_LIMITED |
+| V14 | a receipt's messageCid equals the stored messageCid and its signer is the recipient of that delivery row | COMMS_MESSAGE_RECEIPT_MISMATCH |
+| V15 | per-device chain: seq follows the highest stored seq of (threadId, senderDeviceId) and prev equals that device's previous cid, gaps are buffered 24 h; the same device and seq with a different messageCid is a fork | CONFLICT_STATE |
+| V16 | mailbox register carries an RFC 9421 request signature (F11.S01.M03) by an active device key of ownerDid registered at the relay, lists 1..10 device key IDs and the principal holds at most 3 active mailboxes at this relay | COMMS_MAILBOX_LIMIT |
+| V17 | recipient device agreement keys come only from F16.S02.M01 agreementPublicKeyOf applied to an Ed25519 device key that the recipient's root-signed portable identity document (F07.S02.M01) lists as active; an agreement key from a relay-served mailbox hint, a profile or a statement is refused | SECURITY_AGREEMENT_KEY_UNBOUND |
+| V18 | the put wrapper has exactly {v, mailboxId, ciphertext, size, sentAt}, v is 1, mailboxId equals the target mailbox and size equals the ciphertext length, a multiple of 256 bytes | VALIDATION_FAILED |
+| V19 | the mailbox's stored bytes plus the put stay within maxMailboxBytesPerRecipient from TenantPort.limits(tenantId) (1 MiB..1 GiB, default 50 MiB) and within 1 000 envelopes | COMMS_MAILBOX_FULL |
+| V20 | a request key that has not yet put to this mailbox on this relay passes RateLimitPort.consume class write.mailbox.new_recipient and the F12.S03.M04 check with limitKey new_mailbox_recipients_per_day and subjectKey the request key before its first put is stored | RATE_LIMITED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-060-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-060-09.T01 | unit | PS-060-01.R01, PS-060-01.R02, PS-060-01.R04, PS-060-02.R01 | encrypt 8 192-byte plaintext on A1, commit, wrap for A2 and B1, sign, decrypt on B1 | plaintext recovered; envelope fields have exact lengths; key commitment verifies; relay row contains no plaintext; createdAtClaim stored as claim |
+| TEST-PS-060-09.T04 | unit | PS-060-02.R02, PS-060-02.R03 | each rule V01 to V16 violated in turn | documented error code returned and nothing stored |
+| TEST-PS-060-09.T12 | abuse | PS-060-02.R05, PS-060-05.R01 | 61st send in a minute; B has blocked A and A sends in TH and TG | A sees the UX guard notice; A's vault state, responses and delivery rows equal a control run without the block; B's vault drops silently; C receives the TG message |
+| TEST-PS-060-09.T20 | abuse | PS-060-02.R04, PS-060-07.R03 | A sends the crafted two-key ciphertext to B and C; C reports it | at least one recipient quarantines with commitment_mismatch; the report with K lets the reviewer verify Dec(K, C) and the commitment |
+| TEST-PS-060-09.T21 | abuse | PS-060-01.R06, PS-060-02.R05, PS-060-05.R02, PS-060-02.R07 | 50 freshly generated request keys with valid signatures flood B's mailbox while A (a contact) keeps sending | unknown keys capped at 200 per day and 20 % capacity and each new key counted once against new_mailbox_recipients_per_day; A's puts still succeed; B's vault keeps at most 5 requests per DID and 100 in total |
+| TEST-PS-060-09.T28 | contract | PS-060-02.R07, PS-060-02.R02 | tenant limits maxEnvelopeBytes 65 536 and maxMailboxBytesPerRecipient 1 MiB; a 70 KiB wrapper; a put that would pass 1 MiB stored; a request key's 21st new mailbox of the day in tier new; a malformed wrapper | PAYLOAD_TOO_LARGE; COMMS_MAILBOX_FULL; RATE_LIMITED after RateLimitPort class write.mailbox.new_recipient and the limitKey new_mailbox_recipients_per_day check, while puts to mailboxes the key already wrote to are not counted again; VALIDATION_FAILED |
+| TEST-PS-060-09.T29 | abuse | PS-060-01.R02, PS-060-02.R04 | a relay-served mailbox hint for B carries a substituted X25519 key; B's document lists B1 active and B2 revoked | the hint key is refused with SECURITY_AGREEMENT_KEY_UNBOUND and every wrap and seal targets agreementPublicKeyOf(B1) only |
+| TEST-PS-060-09.T31 | integration | PS-060-02.R06, PS-060-04.R03 | owner O blocks renter R after a confirmed rental and O's direct thread with R is archived with reason blocked; R sends a chat message and a signed return report | the chat message is dropped silently; the return report is fetched, acknowledged and handed to F11.S01.M02 ingestion and stored with the notification suppressed; R's vault state equals an unblocked control run |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F08.S01.M02, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F12.S03.M04, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

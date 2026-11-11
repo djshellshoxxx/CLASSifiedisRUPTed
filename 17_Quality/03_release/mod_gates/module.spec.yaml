@@ -1,0 +1,231 @@
+id: F17.S03.M02
+scope: MVP
+summary: 'Release checklist automation (tools/gates). Before a release tag, one command evaluates the gates and prints a verdict with evidence: requirement-to-test traceability at 100 percent (tools/trace reads TEST-PS-NNN-PP.Tnn titles), no critical or high production vulnerabilities (pnpm audit --prod), accessibility with zero serious violations, performance budgets from the load and PWA budget reports, spec completeness (specgen check --strict --report GO), compatibility from reports/compat.json, the bundled governance seed packs (taxonomy core-1, the bundled rule pack and the generic jurisdiction profile) signed by the release-pinned project publisher key with a code-owner approved release review of their exact content identifiers, and a changelog entry for the version. Manual test rows count only through signed checklists, and a test-to-requirement mapping counts only when the test text shares a key term with the requirement or a code-owner approved mapping review is recorded for it. Any failed gate blocks the release; all evidence must come from the release commit, which the F17.S03.M01 release workflow regenerates before the gates run.'
+responsibilities:
+- Implement pnpm gates:release which runs the gates spec, traceability, audit, a11y, budgets, compat, governance and changelog, each producing a machine-readable result in reports/gates.json.
+- 'Traceability gate: tools/trace maps each requirement ID PS-NNN-PP.Rnn from module.spec.yaml to test titles in code and to passing results in the JUnit reports of the release commit; rows with level manual count through a signed checklist under gates/manual/<version>/ instead of JUnit; an active tests/quarantine.yaml entry (F17.S01.M01) counts as a waiver; any requirement without a passing test (and without a documented untested reason) fails the gate.'
+- 'Audit gate: run pnpm audit --prod --audit-level=high and fail on any critical or high finding; moderate and low findings are listed but do not fail.'
+- 'Budget gate: read reports/load.json (OBS-4 relay budgets, F17.S02.M01), reports/pwa-budgets.json (classrup-pwa-budget-report/v1 with commitSha, profile, lcpMs, inpMs, cls, initialJsGzipBytes from F17.S01.M04: LCP 2.5 s, INP 200 ms, CLS 0.1, initial JS 150 KiB gzip; OBS-5) and the axe report with zero serious or critical issues.'
+- 'Changelog gate: CHANGELOG.md contains a section for the version being released with at least one entry and a link to the release notes.'
+- 'Spec gate: run node tools/specgen/specgen.mjs check --strict --report for the release commit and pass only with 0 errors and GO in SPEC_COMPLETENESS_REPORT.md.'
+- 'Compat gate: read reports/compat.json (F17.S03.M03) for the release commit and pass only when it shows no QUALITY_COMPAT_* failure and every browser cell passes or is policy-unsupported, including the manual real-Safari and iOS checklist cells; a missing report fails closed.'
+- 'Mapping relevance check (finding 47): tools/trace accepts a covers entry of a test row only when the test text (scenario and expected cells plus the code test title after its ID) shares at least one key term with the requirement text, or when gates/mapping-reviews.yaml holds a code-owner approved review of that exact mapping whose text hash still matches; any other mapping is rejected with QUALITY_GATE_TRACE_MAPPING and does not count as coverage.'
+- 'Governance bundle gate (F18 request): F18.S01.M03, F18.S01.M02 and F18.S01.M01 apply the bundled seed packs without policy decisions (provenance bundled), so the release must prove them; the gate reads gates/governance-bundles.yaml and, for each of the three required packs (classrup.governance.taxonomy_pack/v1 core-1, classrup.governance.rule_pack/v1 and classrup.governance.jurisdiction_profile/v1 with code generic), loads the envelope file from the release commit, recomputes its cid and verifies its Ed25519 signature over JCS bytes (CTR-FED-001 FED-2 and FED-7), checks that author and payload.publisherId equal the release-pinned projectPublisherDid and that the cid equals the reviewed packCid recorded for this release version; any failure is QUALITY_GATE_GOVERNANCE_BUNDLE.'
+non_responsibilities:
+- Running the tests and generating reports (F17.S01, F17.S02); this module only reads their outputs.
+- Deployment of relays or hosting of the PWA.
+- 'Legal and policy review of governance content (F18); this module only checks that each bundled seed pack is signed by the release-pinned project publisher key and that a code-owner approved release review of its exact cid is recorded.'
+- 'Changes to the spec validator tools/specgen, which keeps checking only the covers syntax and existence; the semantic mapping check runs in tools/trace inside this release gate.'
+- 'Future: SBOM generation and signed release provenance.'
+depends_on:
+- CTR-TST-001
+- CTR-OBS-001
+- CTR-SCH-001
+- F17.S01.M01
+- F17.S01.M04
+- F17.S02.M01
+- F17.S03.M03
+- CTR-FED-001
+- F18.S01.M01
+- F18.S01.M02
+- F18.S01.M03
+user_stories:
+- As a release manager, I run one command and see which gate blocks the release and why.
+- As a developer, I add a test titled TEST-PS-142-09.T05 and the traceability report immediately shows the requirement covered.
+- As a security reviewer, I get the audit findings with severity and affected package in the report.
+- As a governance reviewer, I approve the bundled seed packs of a release once by their cid, and the gate blocks any pack bytes or signer key that differ from what I reviewed.
+edge_cases:
+- A requirement is listed untested with a reason in the spec; the trace gate accepts it and lists it in the report as waived.
+- A test title has a typo in the ID; the trace gate reports an unknown test ID and does not count it.
+- pnpm audit cannot reach the registry; the gate fails closed with QUALITY_GATE_AUDIT_UNAVAILABLE instead of passing.
+- A test is present but skipped or failing in the JUnit report; it does not count as passing.
+- A vulnerability is in a dev-only dependency; --prod excludes it and the report notes the scope.
+- Two modules reuse the same TEST ID; the trace gate fails with QUALITY_GATE_TRACE_DUPLICATE.
+- A test row with level manual has no signed checklist entry for this version and commit; it does not count and the gate fails with QUALITY_GATE_MANUAL_MISSING.
+- reports/compat.json is missing or from another commit; the compat gate fails closed with QUALITY_GATE_COMPAT.
+- The spec report says NO-GO or the strict check prints one error; the spec gate fails with QUALITY_GATE_SPEC.
+- A waiver or checklist file was committed without code-owner approval; the gate fails with QUALITY_GATE_WAIVER_UNAPPROVED and prints the committer.
+- A test listed in tests/quarantine.yaml has an active entry; the trace gate lists it as waived; once the entry is expired it fails as an expired waiver.
+- A test row lists 03.R02 in covers but its scenario and expected text share no key term with that requirement; the mapping is rejected with QUALITY_GATE_TRACE_MAPPING unless a matching approved mapping review exists.
+- A requirement text is rewritten after its mapping review was recorded; the stored text hash no longer matches, the review is stale and the mapping fails with QUALITY_GATE_TRACE_MAPPING until it is reviewed again.
+- The bundled rule pack is edited after its release review was recorded; its recomputed cid no longer equals the reviewed packCid and the governance gate fails with QUALITY_GATE_GOVERNANCE_BUNDLE until it is reviewed again.
+- The generic jurisdiction profile is signed by a developer key instead of the release-pinned project publisher key; the author check fails with QUALITY_GATE_GOVERNANCE_BUNDLE even though the signature itself is valid.
+- gates/governance-bundles.yaml is missing, has no review entry for the release version, or lists only two of the three required packs; the governance gate fails closed with QUALITY_GATE_GOVERNANCE_BUNDLE (exit 2).
+- A commit changes projectPublisherDid in gates/governance-bundles.yaml without code-owner approval; the gate fails with QUALITY_GATE_WAIVER_UNAPPROVED and prints the committer.
+ux:
+  notes: Headless CLI. Output is a table of gates with PASS or FAIL, evidence links and exit code; reports/gates.json and reports/gates.md are produced for the release notes.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; reports/gates.json (schema classrup-gates-report/v1) records each gate verdict, evidence and timestamp.
+    - The trace matrix reports/trace.json maps each requirement ID to test IDs and results, covering all modules with a module.spec.yaml.
+    - Evidence references are file paths and counts; reports contain no user data.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - 'Traceability is 100 percent: every requirement PS-NNN-PP.Rnn is covered by at least one passing test whose title starts with TEST-PS-NNN-PP.Tnn and whose spec row lists the requirement (for level manual rows, a signed checklist entry instead of a JUnit result), or by an active waiver or quarantine entry, or has a documented untested reason (CTR-TST-001 TST-4).'
+    - The audit gate fails on any critical or high production vulnerability reported by pnpm audit --prod and fails closed when the audit cannot run.
+    - The a11y, budget and compat gates fail when any report is missing, older than 24 hours, from another commit SHA, or shows a violation, exceeded budget or compatibility failure.
+    - 'The spec gate runs node tools/specgen/specgen.mjs check --strict --report for this commit and passes only with 0 errors and GO; the compat gate reads reports/compat.json for this commit and passes only when no QUALITY_COMPAT_* failure is present and every browser cell passes or is policy-unsupported, including the manual Safari and iOS checklist cells.'
+    - 'Manual tests count only through a signed checklist file gates/manual/<version>/<testId>.yaml with result pass, approver handle, date, device, OS and engine version, and the release commit SHA, committed with code-owner approval; it replaces JUnit only for rows with level manual, and waiver and checklist commits print their approver from git metadata.'
+    - 'Mapping relevance: each covers entry counts only when the test text (scenario and expected cells of the spec row plus the code test title after its ID) and the requirement text share at least one key term, where key terms are the lowercase tokens split on characters other than letters, digits and underscore, at least 4 characters long, not in the fixed stopword list tools/gates/stopwords.txt, with a trailing s, es, ed or ing removed; otherwise it counts only through an entry in gates/mapping-reviews.yaml with testId, requirementId, reviewer handle, date and the SHA-256 of both normalized texts, committed with code-owner approval; a review whose hash no longer matches is stale, and a mapping without overlap or a valid review fails with QUALITY_GATE_TRACE_MAPPING.'
+    - 'Governance bundles: gates/governance-bundles.yaml holds projectPublisherDid (the release-pinned project publisher did:key) and, per release version, one review entry for each of the three required bundled packs (taxonomy pack core-1, the bundled rule pack, the generic jurisdiction profile) with statement type, file path in the release commit, packCid, reviewer handle and date, committed with code-owner approval; the gate passes only when every required pack has an entry, its file exists, the recomputed cid equals the reviewed packCid, the Ed25519 signature over JCS bytes verifies (CTR-FED-001 FED-2, FED-7), and author and payload.publisherId equal projectPublisherDid; a missing manifest, entry or file fails closed.'
+    rules:
+    - V01 | Every requirement has a passing test with a matching title and covers entry, or a documented untested reason | QUALITY_GATE_TRACE_GAP
+    - V02 | No test ID is used twice and every test title refers to an existing requirement | QUALITY_GATE_TRACE_DUPLICATE
+    - V03 | pnpm audit --prod reports zero critical and zero high findings | QUALITY_GATE_VULNERABLE
+    - V04 | Audit can run and returns a result | QUALITY_GATE_AUDIT_UNAVAILABLE
+    - V05 | Accessibility report shows zero serious and zero critical violations and is under 24 h old for this commit | QUALITY_GATE_A11Y
+    - V06 | Load and PWA budgets from OBS-4 and OBS-5 are met in reports for this commit | QUALITY_GATE_BUDGET
+    - V07 | CHANGELOG.md has a non-empty section for the release version | QUALITY_GATE_CHANGELOG
+    - V08 | Waivers (gates/waivers.yaml and tests/quarantine.yaml entries) are unexpired and at most 14 days long | QUALITY_GATE_WAIVER_EXPIRED
+    - V09 | node tools/specgen/specgen.mjs check --strict --report reports GO with 0 errors for this commit | QUALITY_GATE_SPEC
+    - V10 | reports/compat.json for this commit shows no QUALITY_COMPAT_* failure and every browser cell passes or is policy-unsupported | QUALITY_GATE_COMPAT
+    - V11 | Every waiver, quarantine, manual checklist, mapping review and governance bundle manifest commit is approved by a code owner and its approver is printed from git metadata | QUALITY_GATE_WAIVER_UNAPPROVED
+    - V12 | Every level manual test row has a signed checklist entry with result pass, approver and this release commit SHA under gates/manual/<version>/ | QUALITY_GATE_MANUAL_MISSING
+    - V13 | Every covers entry shares a key term between test text and requirement text or has an approved mapping review with a matching text hash in gates/mapping-reviews.yaml | QUALITY_GATE_TRACE_MAPPING
+    - V14 | Each required bundled governance seed pack has a reviewed entry for this release version, a valid signature, author and publisherId equal to the release-pinned projectPublisherDid, and a cid equal to the reviewed packCid | QUALITY_GATE_GOVERNANCE_BUNDLE
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle; the release process is a sequence of gates, each pass or fail, with the final verdict GO only when all pass.
+    - Gates run in the order spec, traceability, audit, a11y, budgets, compat, governance, changelog and all run even after a failure so the report is complete.
+    - A waiver is a documented entry in gates/waivers.yaml with ID, reason, owner and expiry date at most 14 days away, and an active tests/quarantine.yaml entry of F17.S01.M01 is treated as a waiver under the same rules; expired waivers fail.
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm gates:release, pnpm gates:trace, pnpm gates:audit and pnpm gates:report.
+    - 'Exit codes: 0 GO, 1 at least one gate failed, 2 evidence missing or stale, 3 configuration failure.'
+    - 'The release workflow of F17.S03.M01 calls gates:release in its collect job after downloading every report of the release commit into one reports/ directory; its separate release-publish job (contents: write) attaches reports/gates.md only after GO, and the gates themselves never write to the repository.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_GATE_TRACE_GAP | 422 | no | requirement without a passing test (exit 1)
+    - QUALITY_GATE_TRACE_DUPLICATE | 422 | no | duplicate or dangling test ID (exit 1)
+    - QUALITY_GATE_VULNERABLE | 422 | no | critical or high production vulnerability (exit 1)
+    - QUALITY_GATE_AUDIT_UNAVAILABLE | 503 | yes | audit could not run; gate fails closed (exit 2)
+    - QUALITY_GATE_A11Y | 422 | no | serious or critical accessibility violation or stale report (exit 1)
+    - QUALITY_GATE_BUDGET | 422 | no | a performance budget was exceeded or its report is stale (exit 1)
+    - QUALITY_GATE_CHANGELOG | 422 | no | no changelog entry for the version (exit 1)
+    - QUALITY_GATE_WAIVER_EXPIRED | 422 | no | a waiver is expired or longer than 14 days (exit 1)
+    - QUALITY_GATE_SPEC | 422 | no | spec check has errors or NO-GO (exit 1)
+    - QUALITY_GATE_COMPAT | 422 | no | compat report missing, stale, from another commit or showing a QUALITY_COMPAT_* failure or failed browser cell (exit 1)
+    - QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine, manual checklist, mapping review or governance bundle manifest commit lacks code-owner approval (exit 1)
+    - QUALITY_GATE_MANUAL_MISSING | 422 | no | a level manual test row has no signed passing checklist for this release commit (exit 1)
+    - QUALITY_GATE_TRACE_MAPPING | 422 | no | a test-to-requirement mapping shares no key term with the requirement and has no valid approved mapping review (exit 1)
+    - QUALITY_GATE_GOVERNANCE_BUNDLE | 422 | no | a bundled governance seed pack has an invalid signature, a signer other than the release-pinned project publisher key or a cid other than its reviewed packCid (exit 1), or its manifest, review entry or file is missing (exit 2)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm gates:release --version 0.3.0
+        spec          specgen --strict --report: 0 errors, GO  PASS
+        traceability  1432/1432 requirements covered (2 waived, 1 quarantined, 4 manual checklists signed by @release-owner; 6 mappings by approved review, 0 rejected)  PASS
+        audit         0 critical, 0 high, 3 moderate  PASS
+        a11y          serious 0, critical 0  PASS
+        budgets       relay OBS-4 PASS (reports/load.json), PWA OBS-5 LCP 1.9 s INP 140 ms CLS 0.03 JS 131 KiB PASS (reports/pwa-budgets.json)
+        compat        0 QUALITY_COMPAT_* failures; automated cells pass; manual Safari and iOS checklist signed  PASS
+        governance    3/3 bundled packs (taxonomy core-1, rule pack, generic profile) signed by the project publisher key; cids match the 0.3.0 review by @governance-owner  PASS
+        changelog     0.3.0 present  PASS
+        verdict GO  (reports/gates.json)
+  authorization_capabilities:
+    requirements:
+    - 'Gates are read-only against the repository and run with contents: read; no token or secret is needed. Attaching reports/gates.md is done after GO by the separate release-publish job, the only job allowed contents: write by the F17.S03.M01 per-job allowlist.'
+    - Waivers, quarantine entries, manual checklists, mapping reviews and the governance bundle manifest (projectPublisherDid and release review entries) require a code-owner approved commit; the gate prints the approver from git metadata and fails an unapproved commit with QUALITY_GATE_WAIVER_UNAPPROVED.
+    - Audit calls use the public registry endpoint only and send no repository content.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Gates are idempotent and side-effect free apart from writing reports; re-running yields the same verdict for the same inputs.
+    - Stale evidence (older than 24 h or from a different commit SHA) is rejected so a green result from another commit cannot be reused.
+    - If a gate crashes it is reported as failed with the error message and the other gates still run.
+    idempotency: Gates only read inputs and write reports; re-running with the same inputs returns the same verdict.
+    concurrency: Gates run in parallel where independent (audit and trace) with a join before the verdict; the report is written atomically once.
+    retries: The audit call is retried 3 times with 2 s backoff for network errors, then fails closed; other gates are not retried.
+    offline: The audit gate needs the registry; offline it fails closed with QUALITY_GATE_AUDIT_UNAVAILABLE. Other gates work offline from local reports.
+    partial_failure: All gates always run; a crash in one is recorded as failed and does not hide results of others.
+  privacy_retention_abuse:
+    requirements:
+    - Reports contain package names and advisory IDs from the audit and test IDs; no user data.
+    - Waivers are public in the repository and carry no personal data beyond a GitHub handle.
+    - Gate reports are retained with the release artifacts for 1 year.
+    data:
+    - Package names, advisory IDs, test IDs, requirement IDs.
+    - No user data.
+    retention:
+    - Release reports kept with release artifacts for 1 year; CI copies 30 days.
+    threats:
+    - T01 | Release forced through by editing the gate or waivers | gates and waivers are code-owned, waivers expire in 14 days and are listed in the report
+    - T02 | Fake test titles to satisfy traceability | gate counts only tests present in a JUnit report as passed and whose spec row lists the requirement
+    - T03 | Stale green reports reused | evidence must match the commit SHA and be under 24 h old
+    - T04 | Coverage padded by listing unrelated requirements in a test row covers | a mapping counts only with a shared key term or a code-owner approved mapping review whose text hash still matches (QUALITY_GATE_TRACE_MAPPING)
+    - T05 | Unreviewed or tampered governance seed pack shipped as bundled, which F18 applies without policy decisions | signature by the release-pinned projectPublisherDid and a cid equal to the code-owner approved release review are required (QUALITY_GATE_GOVERNANCE_BUNDLE)
+    abuse_controls:
+    - A gate may not be disabled by environment variable in the release workflow; only waivers are allowed.
+    - 'The audit gate ignores nothing silently: ignored advisories need a waiver.'
+  observability_performance:
+    requirements:
+    - The module records gate durations and the trace coverage ratio in reports/gates.json.
+    - The complete gate run finishes in at most 60 s (excluding the audit network call, at most 30 s).
+    - Trace coverage ratio is reported per module and in total; the release requires 1.0.
+    metrics:
+    - classrup_quality_gates_verdict{gate,outcome}
+    - classrup_quality_trace_coverage_ratio{module}
+    - classrup_quality_gates_duration_ms
+    - classrup_quality_trace_mappings{outcome} (outcome is overlap, review or rejected)
+    logs:
+    - JSON line per gate {ts, level, msg, module, gate, outcome, durationMs, code?} with counts only.
+    budgets:
+    - Full gate run at most 60 s excluding audit; audit at most 30 s.
+    - Trace over 148 modules and 5 000 requirements at most 10 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - 'Gate logic is tested with synthetic repositories: full coverage, one missing test, one skipped test, a duplicate ID, an expired waiver.'
+    - The audit gate is tested with recorded audit JSON for critical, high, moderate and unavailable cases.
+    fixtures: 'Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); a test row whose covers lists a requirement it shares no key term with, with no review, with an approved review and with a review whose text hash is stale; governance bundle fixtures with project publisher key KP and developer key KD: the three bundled packs signed by KP with reviewed cids, a rule pack edited after review, a generic profile signed by KD, a pack with a broken signature, a manifest without the 0.3.0 review entry and a manifest listing two packs; fixed commit SHA a1b2c3d.'
+    tests:
+    - T01 | unit | 01.R01,01.R03,06.R01 | generate gates.json on the full-coverage repo | schema valid; no user data fields; verdict GO
+    - 'T02 | unit | 01.R02,02.R01,09.R02 | synthetic repos: gap, skipped test, duplicate ID | QUALITY_GATE_TRACE_GAP and QUALITY_GATE_TRACE_DUPLICATE; skipped test not counted'
+    - 'T03 | unit | 02.R02,09.R03 | recorded audit JSON: critical, high, moderate, unavailable | critical and high fail; moderate passes; unavailable fails closed'
+    - 'T04 | unit | 02.R03,06.R02 | a11y, load, pwa-budgets and compat reports - missing, 25 h old, other commit SHA, with violations (including INP 250 ms) | each fails with its code'
+    - T05 | unit | 03.R01,03.R02 | run all gates on a repo with two failures | all gates run; verdict fails; both failures listed
+    - T06 | unit | 03.R03,05.R02 | waiver 15 days long, expired, valid | long and expired fail QUALITY_GATE_WAIVER_EXPIRED; valid passes and is reported as waived
+    - T07 | integration | 04.R01,04.R02,04.R03 | run each script and the release workflow dry-run | documented exit codes; gates.md attached
+    - T08 | abuse | 05.R01,05.R03 | attempt to disable a gate by env var and inspect network calls | gate still runs; only registry audit endpoint is called
+    - T09 | integration | 06.R03 | crash one gate by injecting an exception | reported failed; others complete
+    - T10 | integration | 07.R01,07.R02,07.R03 | inspect reports for data and retention config | only package, advisory, test IDs; handles only in waivers; retention 1 year
+    - T11 | load | 08.R01,08.R02,08.R03 | trace 148 modules with 5 000 requirements | at most 10 s; whole run at most 60 s; coverage ratio per module printed
+    - T12 | integration | 09.R01 | traceability tool run on this module | every requirement of this module maps to a passing test
+    - T13 | unit | 10.R01,10.R02,10.R03 | feed unknown fields and unknown major versions; remove tools/gates in a branch | unknown fields ignored; unknown major rejected; release workflow fails closed
+    - T14 | unit | 06.R01 | same inputs run twice with a different clock | identical verdict and report body
+    - T15 | unit | 02.R04 | synthetic repo with one undefined error code, and a recorded SPEC_COMPLETENESS_REPORT.md saying NO-GO | spec gate fails with QUALITY_GATE_SPEC in both cases; the clean repo passes
+    - T16 | unit | 02.R04 | compat reports - QUALITY_COMPAT_BREAKING_CHANGE present, a failed automated cell, a missing manual Safari checklist cell, no compat.json at all | each fails with QUALITY_GATE_COMPAT; a clean report with a policy-unsupported cell passes
+    - T17 | unit | 02.R05 | a manual test row with a signed passing checklist for this commit, one with a checklist for another commit, and one without any | first counts as covered; the other two fail with QUALITY_GATE_MANUAL_MISSING
+    - T18 | abuse | 05.R02,02.R05 | a waiver commit and a checklist commit without code-owner approval, then the same with approval | unapproved commits fail with QUALITY_GATE_WAIVER_UNAPPROVED naming the committer; approved ones pass and the report prints the approver from git metadata
+    - T19 | unit | 02.R01,03.R03 | an active tests/quarantine.yaml entry for a failing test, then the same entry after its expiresAt | active entry listed as waived and the gate passes; expired entry fails with QUALITY_GATE_WAIVER_EXPIRED
+    - 'T20 | unit | 02.R06 | test rows covering a requirement with a shared key term, with no shared key term and no review, with no shared key term and an approved mapping review, and with a review whose text hash is stale after the requirement text changed | shared key term counts; no overlap without review and stale review fail with QUALITY_GATE_TRACE_MAPPING and do not count; approved matching review counts and is listed in the report'
+    - 'T21 | unit | 02.R06 | key term extraction on texts with stopwords, short tokens, plural and ing forms, error codes and mixed case | only tokens of 4 or more characters outside tools/gates/stopwords.txt remain, case-folded and with the trailing s, es, ed or ing removed; error codes stay single tokens; same input gives the same terms'
+    - T22 | abuse | 02.R06,05.R02 | mapping review commit without code-owner approval, then the same review with approval | unapproved review fails with QUALITY_GATE_WAIVER_UNAPPROVED and the mapping is not counted; approved review counts and its approver is printed from git metadata
+    - 'T23 | unit | 02.R07 | governance bundle fixtures: three packs signed by KP with reviewed cids, rule pack edited after review, generic profile signed by KD, broken signature, manifest without the release review entry, manifest listing two packs, no manifest | clean set passes and the report lists each pack with its cid and reviewer; every other case fails with QUALITY_GATE_GOVERNANCE_BUNDLE, the missing manifest, entry and pack cases with exit 2'
+    - T24 | abuse | 02.R07,05.R02 | a commit changing projectPublisherDid to KD and re-recording the review entries without code-owner approval, then the same commit with approval | unapproved commit fails with QUALITY_GATE_WAIVER_UNAPPROVED naming the committer and the packs are not accepted; the approved commit is printed with its approver from git metadata
+    acceptance:
+    - The release gate fails when any requirement lacks a passing test and passes at 100 percent traceability.
+    - A critical or high production vulnerability or an unavailable audit blocks the release.
+    - Any serious accessibility violation or exceeded budget blocks the release.
+    - The gate report is attached to every release and waivers expire within 14 days.
+    - A spec NO-GO, a compatibility failure, a missing compat report or a missing manual checklist blocks the release.
+    - A test-to-requirement mapping without a shared key term and without a valid approved mapping review does not count as coverage and blocks the release.
+    - A bundled governance seed pack that is not signed by the release-pinned project publisher key, or whose cid differs from the code-owner approved release review, blocks the release.
+  import_export_backup_rollback:
+    requirements:
+    - reports/gates.json, reports/trace.json and reports/gates.md are the exports and are attached to the release.
+    - Gate input formats are JUnit XML, load report v1 (reports/load.json), PWA budget report v1 (reports/pwa-budgets.json), axe JSON, compat report v1 (reports/compat.json), the specgen check --strict --report output (SPEC_COMPLETENESS_REPORT.md), signed manual checklists (gates/manual/<version>/), tests/quarantine.yaml, gates/waivers.yaml, gates/mapping-reviews.yaml, gates/governance-bundles.yaml with the bundled governance pack envelopes (CTR-FED-001) and the audit JSON; unknown fields are ignored and unknown major versions are rejected.
+    - Rollback is a git revert of tools/gates; the release workflow then fails closed on a missing command.
+    export: reports/gates.json, reports/trace.json and reports/gates.md attached to each release.
+    backup: Release artifacts retain reports for 1 year; sources in git.
+    migration_rollback: Report schema versioned; revert tools/gates by git revert and the release workflow fails closed.
+    import: Inputs are JUnit XML, load report v1, PWA budget report v1, axe JSON, compat report v1, the spec completeness report, signed manual checklists, quarantine, waiver, mapping review and governance bundle manifest files, the bundled governance pack envelopes and audit JSON from the release commit, all downloaded into one reports/ directory by the release workflow; other inputs are ignored and unknown major versions rejected.

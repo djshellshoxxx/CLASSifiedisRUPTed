@@ -1,35 +1,38 @@
-# PS-059-08 — observability performance
+# PS-059-08 — Observability and performance: Message attachments
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-08. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M03 Message attachments](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/attachments` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the observability performance process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-059-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-059-08.R01** Relay upload outcomes, bytes and sweep lag are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
+- **PS-059-08.R02** A 5 MiB upload completes within 20 s on a 2 Mbit/s link and server handling of each 64 KiB chunk stays under budget.
+- **PS-059-08.R03** Sweeps keep storage within quota and their lag is observable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_comms_attachments_total{outcome=uploaded|deleted|expired|rejected} (relay)
+- classrup_comms_attachment_bytes_total (relay)
+- classrup_comms_attachment_orphan_blobs_total (relay)
+- classrup_comms_attachment_sweep_lag_ms (gauge, relay)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- relay info attachment.uploaded {attachmentId, cipherSize, correlationId} — no filenames, no thread data, no media content.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- put_chunk p95 ≤ 100 ms; finalize p95 ≤ 300 ms including hash of 5 MiB; download first byte p95 ≤ 200 ms.
+- Relay storage overhead ≤ 2 percent over ciphertext size.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-059-09.T12 | load | PS-059-08.R01, PS-059-08.R02, PS-059-08.R03 | 20 concurrent 5 MiB uploads over simulated 2 Mbit/s links | each completes within 20 s, p95 budgets met, sweep lag recovers |
+
+## Dependencies
+
+Module depends on: F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

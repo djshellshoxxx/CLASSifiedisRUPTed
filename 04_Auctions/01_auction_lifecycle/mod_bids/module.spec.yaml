@@ -1,0 +1,386 @@
+id: F04.S01.M02
+scope: MVP
+summary: >-
+  Bidders place bids on an open auction through the auction's host relay. A bid is signed by the bidder (including an
+  explicit acceptance of that host for that auction and a validity window that ends at most 60 s after the bidder's createdAt
+  claim) and carries a visible amount and an optional proxy maximum; the maximum, the bidder key and the nonce travel only
+  inside an envelope end-to-end encrypted to the host key. The host serializes all bids of an auction under a per-auction lease,
+  assigns a strictly increasing sequence number and its own time, applies English ascending bidding and the numbered proxy rules
+  proxy-v1 against the bid increment table, and returns a host-signed bid receipt that links to the previous ledger entry by hash.
+  Outbid bidders receive a host-signed bid_outbid statement. Bidders keep their receipts as evidence; receipts show omission or
+  reordering of the holder's own bids and nothing more. The host is trusted for order and time and is named in the UI.
+responsibilities:
+  - Own the Bid record - on the host as the authoritative ledger entry, in the bidder vault as the bidder's copy of the signed bid and receipts.
+  - Validate each bid after the idempotency lookup in a fixed order - schema, signature, host acceptance, validity window, auction state and host time, minimum or max-only rule, eligibility and revoked keys from F04.S02.M01, rate limits through RateLimitPort and the F12.S03.M04 bids_per_day account limit - and apply proxy rules proxy-v1 deterministically.
+  - Maintain a hash-chained bid ledger per auction (hash of seq, auction id, bid cid, alias, kind, amount, host time and previous hash) and return host-signed receipts so bidders can detect omission or reordering of their own bids.
+  - Apply retraction rules - more than 12 h before the current end, at most 1 retraction per bidder per auction, only of the bidder's current leading bid - executed on the host by auctions.bid.apply_retraction with a host-signed retraction receipt, and recompute the leader and price.
+  - Deliver host-signed bid_outbid statements to outbid bidders and call the relay notification hook for content-free pushes.
+  - Return a relay receipt from F15.S02.M01 ReceiptPort.issue for every bid and retraction body the host accepts, deliver host-signed seller copies of bid receipts so the seller vault can derive auctions.bid.placed, and register the AuctionHostPort implementation that freezes auctions whose bids a host restore may have lost.
+non_responsibilities:
+  - Auction terms, hosting acceptance and opening (F04.S01.M01) and closing and winner determination (F04.S01.M03).
+  - Soft-close extension decisions (F04.S02.M02) and shill scoring and linkage (F04.S02.M01); this module only calls them inside the bid transaction.
+  - Payment, delivery and disputes (F09).
+  - Distributed bidding across multiple hosts; one auction has exactly one host.
+  - "Future: sealed maxima using threshold encryption so the host cannot read proxy maxima, and bid bots disclosure."
+depends_on: [F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a bidder, I see the host and its trust panel, accept the host for this auction, and place a bid at or above the next minimum.
+  - As a bidder, I set a maximum and the host bids for me in increments only as far as needed, and I see my receipt for every bid.
+  - As a bidder, I retract my leading bid more than 12 hours before the end, once per auction, and see the price fall to the next bidder's level.
+  - As any viewer, I see the bid history by auction-specific alias with host times, not by account keys.
+  - As an outbid bidder, I get a host-signed outbid notice in my vault and a content-free push if I opted in.
+edge_cases:
+  - Two bidders submit the same maximum within the same millisecond; the lease orders them, the bidder who held that maximum first keeps the lead at a price equal to the tied maximum (PX2), and the other is recorded outbid; two equal visible amounts without maxima - the second is refused with AUCTIONS_BID_TOO_LOW and params.minNextBid.
+  - A bid arrives at host time exactly equal to currentEndsAt; it is refused (the end is exclusive) with AUCTIONS_NOT_OPEN.
+  - Bidder's network drops after sending; the receipt is lost; on reconnect the bidder fetches the receipt by bid cid and the UI shows submitted until the receipt is held; with no receipt by notAfter plus 45 s and a final fetch the bid shows not placed, and the host refuses it after notAfter anyway.
+  - Leader raises their maximum while leading with a max-only update (kind proxy, amount absent); it is exempt from the minimum (V04), appends no visible ledger entry unless it triggers the reserve rule PX4, and lowering a maximum is refused with AUCTIONS_MAX_DECREASE.
+  - Bid amount is below the minimum because a faster bid arrived; refused with AUCTIONS_BID_TOO_LOW and params.minNextBid so the UI offers the new minimum.
+  - Seller or a linked key tries to bid; the answer is the generic AUCTIONS_BIDDER_NOT_ELIGIBLE (owned by F04.S02.M01) with no linkage detail.
+  - Retraction is requested 11 h 59 min before the end by host time; refused with AUCTIONS_RETRACT_NOT_ALLOWED.
+  - Host relay becomes unreachable; bidding is disabled with a clear message (no offline queue, because order and time are decided by the host).
+  - Proxy resolution reaches a currency exponent boundary (JPY); increments are whole yen and proxy prices never fall between minor units.
+  - A bid is delayed in transport or held back by the host and arrives after its signed notAfter; the host refuses it with EXPIRED, and a receipt whose hostTime is after notAfter is rejected by the vault as host misbehaviour evidence.
+  - A key the host knows is revoked (a classrup.security.keyrevocation/v1 statement, the single device revocation type owned by F16.S02.M02, or the identity document it holds) signs a bid; refused with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE.
+  - The leader of an auction whose reserve was not met is shown lost at close, never won; won comes only from auctions.auction.won naming this bidder.
+  - The host stops answering; with no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h the bidder's live bids show host did not report a result, and a later valid result still applies.
+  - The bidder has blocked the seller (or holds the seller's block); the bidder vault refuses to sign the bid with BLOCKED_PARTY and sends nothing.
+  - A new key places its 21st bid of the day on a host; the in-process F12.S03.M04 moderation.accountlimit.check for limitKey bids_per_day refuses it with MODERATION_ACCOUNT_LIMIT_REACHED and params.resetsAt, and nothing is stored.
+  - The first bid lands on an auction; the host sends a host-signed seller copy of its bid receipt to the seller's mailbox at once and later copies at most once per 60 s, so the seller vault derives auctions.bid.placed with listingId and bidCount but never learns a bidder key.
+  - The host restores an older backup whose lost window overlaps an open auction; the bidder's relay receipt shows its bid was received inside the lost window, the auction is frozen through AuctionHostPort, new bids are refused with AUCTIONS_NOT_OPEN, and the bid view shows frozen after host restore.
+ux:
+  screens:
+    - "Bid sheet: next minimum bid, bid amount field, optional maximum, host acceptance checkbox naming the host and its power - the host sees your key and maximum, orders bids and decides time; receipts show only omission or reordering of your own bids; if the winner does not pay, the host may disclose your key to the seller as one of up to 3 second-chance candidates - and a Place bid button with the exact amount."
+    - "Bid history: alias, amount, host time, kind (bid, proxy raise, retraction), and the user's own receipts with a Check against my receipts action whose result reads consistent with your receipts, never verified."
+    - "My bids: status per auction (leading, outbid, retracted, won, lost, not placed, host did not report) and receipt fingerprints."
+  states: [loading, host-unreachable, not-open, frozen, eligible, submitting, leading, outbid, rejected, not-placed, retracted, won, lost, void, host-silent]
+  a11y:
+    - Bid amount and maximum fields have visible labels with currency and inputmode=decimal; the next minimum is in the label text.
+    - Bid outcome (leading, outbid, rejected with reason) is announced through an aria-live assertive region once per submission.
+    - Place bid and Retract buttons are at least 44x44 px with accessible names including the amount and the auction title.
+processes:
+  domain_schema:
+    requirements:
+      - A Bid stores auction, terms cid, bidder, alias, kind, visible amount, optional proxy maximum, signed validity window, host sequence and time, ledger hashes, receipt and status, with revision per CTR-ID-001.
+      - The proxy maximum, bidderId and clientNonce are P3 in the bidder vault and P2 to the host, the only listed participant - they travel only inside the bid envelope end-to-end encrypted to hostKeyId (PRV-5) and the host holds them under its published retention - while public projections show only alias, amount, kind and host time.
+      - The visible amount and sequence are immutable once the host has assigned them; a change is a new bid or a retraction entry.
+      - The ledger hash input includes bidCid, so each held receipt binds the bidder-signed bid it acknowledges.
+    entities:
+      - name: Bid
+        schema: classrup.auctions.bid/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, generated by the bidder vault (auto entries by the host)"
+          - "tenantId: uuidv7 — host relay tenant scope"
+          - "auctionId: uuidv7 — ref F04.S01.M01 Auction"
+          - "termsCid: string — sha256- cid of the auction terms the bid was made against"
+          - "bidderId: actorId — did:key of the bidder; P3 in the bidder vault, P2 to the host inside the envelope encrypted to hostKeyId"
+          - "alias: string — 6 characters base32, HMAC of bidderId under a per-auction host secret; stable within one auction"
+          - "kind: enum — manual | proxy | auto | retraction; proxy with amount absent is a max-only update"
+          - "amount?: Money — visible amount; required except for a max-only update; CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units"
+          - "maxAmount?: Money — proxy maximum, >= amount when both are present, same currency; P3 in the bidder vault, P2 to the host only"
+          - "hostAck: object — {auctionTermsCid, hostKeyId, acceptedAtClaim}; signed inside the bid by the bidder"
+          - "clientNonce: string — 16 random bytes base64url; unique per bidder and auction; same classification as bidderId"
+          - "createdAtClaim: timestamp — bidder clock claim, RFC 3339 UTC"
+          - "notAfter: timestamp — signed; at most createdAtClaim plus 60 s; the host refuses the bid once its clock passes it"
+          - "mailboxHint: string — bidder mailbox for host statements (receipts, bid_outbid, result)"
+          - "pushOptIn: boolean — true only when privacy.consent.check(notify_push) for the host is granted"
+          - "bidCid: string — sha256- cid of the bidder-signed bid envelope; for auto and retraction entries the cid of the bid or retraction that caused them"
+          - "seq?: int — host ledger sequence >= 1, strictly increasing per auction; absent for a max-only update"
+          - "hostTime?: timestamp — host clock, non-decreasing, RFC 3339 UTC"
+          - "prevHash?: string — hash of the previous ledger entry"
+          - "hash?: string — sha256- over JCS of {seq, auctionId, bidCid, alias, kind, amount, hostTime, prevHash}"
+          - "receiptCid?: string — cid of the host-signed bid receipt"
+          - "relayReceipt?: object — classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue {relayId, keyId, destination '<relayId>/auction/<auctionId>', digest, receivedAt, epoch, seq, sig} without cid; transport acknowledged only - the host-signed receipt decides placement"
+          - "extensionCid?: string — cid of the host-signed extension this bid triggered (F04.S02.M02)"
+          - "status: enum — submitted | winning | outbid | retracted | rejected | won | lost | void | not_placed | host_silent"
+          - "rejectCode?: string — error code when rejected"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - seq values of the ledger entries of one auction are consecutive starting at 1 with no gaps, and hashes form an unbroken chain; max-only updates carry no seq.
+          - At most one Bid per auction has status winning.
+          - maxAmount, bidderId and clientNonce never appear in any public projection, log, error or export of another user, and maxAmount never in any event.
+          - The leader's latest ledger entry (its own bid or an auto entry) has amount equal to the auction currentPrice.
+          - The hostTime of every ledger entry is at or before the notAfter of the bid that caused it.
+    sql: |
+      CREATE TABLE auctions_bid (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, auction_id TEXT NOT NULL, bidder_id TEXT NOT NULL, kind TEXT NOT NULL,
+        amount_minor TEXT, seq INTEGER, host_time TEXT, not_after TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX auctions_bid_seq ON auctions_bid(tenant_id, auction_id, seq) WHERE seq IS NOT NULL;
+      CREATE UNIQUE INDEX auctions_bid_nonce ON auctions_bid(tenant_id, auction_id, bidder_id, json_extract(data,'$.clientNonce'));
+      CREATE TABLE auctions_lease (auction_id TEXT PRIMARY KEY, holder TEXT NOT NULL, fence INTEGER NOT NULL, expires_at TEXT NOT NULL);
+  validation_rules:
+    requirements:
+      - The host first looks up (bidder, auction, clientNonce) in the idempotency store - the same body returns the stored receipt and a different body returns IDEMPOTENCY_KEY_REUSED - and then validates in a fixed order - schema, signature, host acceptance, validity window, auction state and host time, minimum or max-only rule, eligibility and revoked keys, rate limits, the bids_per_day account limit - and the first failure decides the error.
+      - The bidder vault performs the same checks it can (schema, host acceptance, block check, minimum from the last known state) before sending, but only the host decision counts.
+      - Every violation maps to one stable error code; eligibility failures never reveal the linkage that caused them.
+      - Proxy resolution follows the numbered rules PX1 to PX5 (proxy-v1) below, which are the reference model for the property tests and for ledger replay.
+    rules:
+      - "V01 | bid contains hostAck naming this auction termsCid and the host key | AUCTIONS_HOST_NOT_ACCEPTED"
+      - "V02 | bid signature verifies against bidderId (nonce replay is decided by the idempotency lookup before validation) | VALIDATION_FAILED"
+      - "V03 | auction status is open and host time is before currentEndsAt | AUCTIONS_NOT_OPEN"
+      - "V04 | a bid with a visible amount has amount at least startPrice when no bid exists, otherwise currentPrice plus the increment of the tier containing currentPrice; a max-only update is exempt | AUCTIONS_BID_TOO_LOW"
+      - "V05 | maxAmount, when present, is at least amount when amount is present, in the auction currency and within limits; a max-only update carries maxAmount | VALIDATION_FAILED"
+      - "V06 | a new maxAmount for a bidder who already has a maximum is not lower than it | AUCTIONS_MAX_DECREASE"
+      - "V07 | F04.S02.M01 check returns allow for the bidder, including that the host holds no classrup.security.keyrevocation/v1 statement (single device revocation type, owned by F16.S02.M02) and no identity document marking the bidder key revoked | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V08 | RateLimitPort.consume (F12.S03.M03) allows the bid - at most 10 bids per minute per bidder per auction, 200 bids per bidder per auction, and 5 000 entries per auction | AUCTIONS_BID_LIMIT"
+      - "V09 | retraction is requested more than 12 hours before currentEndsAt, is the bidder's first retraction on this auction, and targets the bidder's winning bid | AUCTIONS_RETRACT_NOT_ALLOWED"
+      - "V10 | host time is at or before the signed notAfter, and notAfter is at most 60 s after createdAtClaim | EXPIRED"
+      - "V11 | a max-only update (kind proxy, amount absent) comes from the current leader | CONFLICT_STATE"
+      - "V12 | bidder vault only - the local principal and the seller are not blocked either way (F07.S02.M02 isBlockedEither) | BLOCKED_PARTY"
+      - "V13 | host statements (bid_receipt, retraction_receipt, bid_outbid) verify against hostKeyId in the terms and bind this auction and termsCid; in the bidder vault they also bind the bid's bidCid and carry hostTime at or before its notAfter; in the seller vault a seller copy of a bid_receipt binds the seller's own terms | AUCTIONS_RECEIPT_INVALID"
+      - "V14 | the F12.S03.M04 moderation.accountlimit.check { subjectKey: bidderId, limitKey: bids_per_day } called in-process after RateLimitPort.consume allows the bid (N18) | MODERATION_ACCOUNT_LIMIT_REACHED"
+    notes: "Proxy rules proxy-v1 (normative; applied only by the host inside the lease; the reference model of T03, T04 and T17). PX1 - a bidder's effective maximum is the larger of their highest accepted visible amount and their latest maxAmount; maxima never decrease (V06). PX2 - the leader is the bidder with the highest effective maximum; equal maxima go to the bidder who held that maximum first in host order (the lower seq of the entries that set them), so an existing leader keeps the lead against a new bid with the same maximum. PX3 - the visible price is max(leaderFloor, min(leaderMax, challengerMax + increment of the tier containing challengerMax)), where leaderFloor is the leader's highest accepted visible amount and challengerMax is the highest effective maximum of any other bidder; with no challenger the price is leaderFloor. PX4 (reserve rule) - when leaderMax >= reservePrice > the PX3 price, the price becomes min(leaderMax, max(reservePrice, challengerMax + increment)), and reservePrice alone when there is no challenger; a price set equal to reservePrice reveals the reserve, which the trust panel states (F04.S01.M01 07.R01). PX5 (ledger effect) - an accepted bid with a visible amount appends its own entry; when the resulting price or leader differs from that entry the host appends one auto entry for the leader's alias at the new price; a max-only update appends nothing unless PX4 changes the price, then one auto entry; a retraction appends a retraction entry followed by one auto entry for the recomputed leader and price with all amounts and the maximum of the retracting bidder excluded."
+  workflow_state_machine:
+    requirements:
+      - Bids follow submitted, then winning, outbid, rejected or not_placed, with retraction only from winning; won comes only from auctions.auction.won naming the bidder and can still become void; lost, retracted, rejected, not_placed and void are final, and host_silent covers a host that never reports.
+      - Leader changes are decided only inside the per-auction lease by the deterministic proxy algorithm, so replaying the ledger always reproduces the same prices.
+      - A retraction of the leader promotes the highest remaining maximum to leader at a recomputed price, using the same algorithm.
+      - At close the outcome decides - an unsold auction makes its leader lost, never won - and a bid without a receipt resolves to not_placed or lost rather than staying submitted.
+    machines:
+      - entity: Bid
+        initial: submitted
+        terminal: [lost, retracted, rejected, void, not_placed]
+        transitions:
+          - "submitted -> winning | host receipt shows this bidder leading | proxy rules leave this bidder leading; emits auctions.bid.placed"
+          - "submitted -> outbid | host receipt shows another leader | emits auctions.bid.placed and auctions.bid.outbid"
+          - "submitted -> rejected | host validation failure | rejectCode stored; no ledger entry"
+          - "submitted -> not_placed | vault finds no receipt by notAfter plus 45 s after a final receipt fetch | the host refuses the bid after notAfter, so it can never be placed later"
+          - "submitted -> won | auctions.auction.won names the local principal (winner vault) or this bidder key (host) | the receipt was lost but the result is held"
+          - "submitted -> lost | auctions.auction.closed consumed while no receipt is held and the won event does not name this bidder | treated as not placed"
+          - "submitted -> void | auctions.auction.cancelled consumed | auction cancelled"
+          - "winning -> outbid | later bid or proxy raise overtakes; in the vault a verified host-signed bid_outbid | emits auctions.bid.outbid"
+          - "winning -> retracted | retraction receipt from auctions.bid.apply_retraction | retraction rules satisfied; emits auctions.bid.retracted"
+          - "winning -> won | auctions.auction.won names this bidder by winnerAlias, winnerId or bidder key | host-signed result"
+          - "winning -> lost | auctions.auction.closed consumed with outcome unsold, or a won event naming another bidder | the leader of a reserve-not-met auction is not a winner"
+          - "winning -> void | auctions.auction.cancelled consumed | auction cancelled"
+          - "winning -> host_silent | vault sweep finds no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h | shows host did not report a result"
+          - "outbid -> winning | leader retracted and this bidder holds the highest remaining maximum | recomputed price from the retraction receipt or ledger head"
+          - "outbid -> won | auctions.auction.won names this bidder | the local view was stale"
+          - "outbid -> lost | auctions.auction.closed consumed and the won event does not name this bidder, or outcome unsold | auction closed without this bid winning"
+          - "outbid -> void | auctions.auction.cancelled consumed | auction cancelled"
+          - "outbid -> host_silent | vault sweep finds no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h | shows host did not report a result"
+          - "host_silent -> won | a later auctions.auction.won names this bidder | the late host result overrides the silence"
+          - "host_silent -> lost | a later auctions.auction.closed does not name this bidder | late result"
+          - "host_silent -> void | a later auctions.auction.cancelled | late host cancel"
+          - "won -> void | auctions.result.voided consumed | the host voided its result; F04.S01.M03 decides in the vault whether the sale record changes"
+    timeouts:
+      - "A bid in submitted state fetches its receipt by bid cid at 5 s, 15 s and 45 s; with no receipt by notAfter plus 45 s and a final fetch it becomes not_placed; the host keeps a 24 h idempotency record per clientNonce."
+      - "The bidder vault sweep at app start and every 60 s moves winning and outbid bids to host_silent at scheduledEndsAt plus 60 minutes plus 72 h without a verified result or cancel."
+  commands_queries_events:
+    requirements:
+      - The bidder vault command auctions.bid.submit signs the bid and sends it to the host; the host relay command auctions.bid.place validates, orders and receipts it; retraction mirrors this pair with auctions.bid.retract and auctions.bid.apply_retraction.
+      - Bid events are host-local events and are derived in participant vaults only from host-signed statements - bid_receipt, retraction_receipt and bid_outbid - ingested with auctions.bid.receive (actor.kind federated); max amounts are never in any event.
+      - Bidding has no offline queue; time and order are decided by the host.
+      - Statements are registered with F11.S01.M01 with their signer roles - classrup.auctions.bid/v1 and classrup.auctions.bid_retraction/v1 by the bidder key (bidderId), classrup.auctions.bid_receipt/v1, classrup.auctions.retraction_receipt/v1 and classrup.auctions.bid_outbid/v1 by the host key named in the terms - and vaults act only on records they accepted (N2).
+      - The host delivers bid_outbid to the outbid bidder's mailbox so its vault can derive auctions.bid.outbid, and calls the relay hook notify.notification.dispatch for a content-free push to that bidder when it set pushOptIn (N17).
+      - The host delivers a seller copy of the bid_receipt of each accepted bid with a visible amount to the seller's mailbox - the first at once, later ones coalesced to the newest at most once per 60 s - and the seller vault derives auctions.bid.placed from each verified copy with listingId, sellerId, seq and bidCount and without bidderId or bidId, so the seller vault's listing edit lock (F04.S01.M01 for F01.S01.M02) knows that bids exist (N11, N17).
+      - Bid intake - auctions.bid.place and auctions.bid.apply_retraction - returns with the host-signed receipt a classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue with destination '<relayId>/auction/<auctionId>', digest over the exact request bytes and no cid; the bidder vault verifies it against the host relay's published key set and records it as transport acknowledged only, because only the host-signed bid_receipt shows the bid placed.
+    note: "Statements: classrup.auctions.bid/v1 (bidder key) {auctionId, termsCid, kind, amount?, hostAck, createdAtClaim, notAfter, mailboxHint, pushOptIn} with {bidderId, maxAmount?, clientNonce} inside the part E2E-encrypted to hostKeyId; classrup.auctions.bid_receipt/v1 (host key) {auctionId, termsCid, bidCid, alias, kind, amount?, seq?, hostTime, currentPrice, leaderAlias, reserveMet, bidCount, currentEndsAt, prevHash?, hash?, head {seq, hash}, extension?: classrup.auctions.extension/v1 envelope}, E2E to the bidder and, as a seller copy of the same signed statement, E2E to the seller's mailbox named in the pinned listing projection (N15); classrup.auctions.bid_retraction/v1 (bidder key) {auctionId, bidCid, reason, notAfter}; classrup.auctions.retraction_receipt/v1 (host key) {auctionId, retractionCid, retractedBidCid, seq, hostTime, newPrice, newLeaderAlias?, head}; classrup.auctions.bid_outbid/v1 (host key, E2E to the outbid bidder) {auctionId, termsCid, outbidBidCid, newPrice, seq, headHash, currentEndsAt}. Bid intake responses also carry classrup.platform.relay_receipt/v1 (relay key, F15.S02.M01 ReceiptPort.issue), which is evidence of byte receipt by the host relay only."
+    commands:
+      - name: auctions.bid.submit
+        capability: auctions.bid.submit
+        input: "[vault command plus statement classrup.auctions.bid/v1 signed by bidder; bidderId, maxAmount and clientNonce E2E-encrypted to the host key; sent to host] { auctionId, amount?, maxAmount?, acceptHostKeyId }"
+        output: "{ bidId, status: submitted, notAfter, receipt?: host-signed bid_receipt, relayReceipt?: classrup.platform.relay_receipt/v1, minNextBid }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, EXPIRED, IDEMPOTENCY_KEY_REUSED, CONFLICT_STATE, BLOCKED_PARTY, AUCTIONS_HOST_NOT_ACCEPTED, AUCTIONS_NOT_OPEN, AUCTIONS_BID_TOO_LOW, AUCTIONS_MAX_DECREASE, AUCTIONS_BIDDER_NOT_ELIGIBLE, AUCTIONS_BID_LIMIT, MODERATION_ACCOUNT_LIMIT_REACHED, AUCTIONS_RECEIPT_INVALID, DEPENDENCY_UNAVAILABLE, RATE_LIMITED]
+        emits: [auctions.bid.placed, auctions.bid.outbid]
+        idempotent: true
+      - name: auctions.bid.place
+        capability: auctions.bid.place
+        input: "[relay command at the host, authorized by the bidder-signed bid; idempotency lookup by (bidder, auction, clientNonce) first; passes RateLimitPort.consume and the F12.S03.M04 moderation.accountlimit.check for bids_per_day in-process (N18)] { bidEnvelope }"
+        output: "{ receipt: statement classrup.auctions.bid_receipt/v1 signed by host key, relayReceipt: classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue (returned again on an idempotent replay), minNextBid }"
+        errors: [VALIDATION_FAILED, EXPIRED, IDEMPOTENCY_KEY_REUSED, CONFLICT_STATE, AUCTIONS_HOST_NOT_ACCEPTED, AUCTIONS_NOT_OPEN, AUCTIONS_BID_TOO_LOW, AUCTIONS_MAX_DECREASE, AUCTIONS_BIDDER_NOT_ELIGIBLE, AUCTIONS_BID_LIMIT, MODERATION_ACCOUNT_LIMIT_REACHED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+        emits: [auctions.bid.placed, auctions.bid.outbid]
+        idempotent: true
+      - name: auctions.bid.retract
+        capability: auctions.bid.retract
+        input: "[vault command plus statement classrup.auctions.bid_retraction/v1 signed by bidder, sent to host] { auctionId, bidId, reason }"
+        output: "{ retractionCid, syncState, receipt?: host-signed retraction_receipt }"
+        errors: [NOT_FOUND, CONFLICT_STATE, AUCTIONS_RETRACT_NOT_ALLOWED, AUCTIONS_NOT_OPEN, AUCTIONS_RECEIPT_INVALID, DEPENDENCY_UNAVAILABLE]
+        emits: [auctions.bid.retracted]
+        idempotent: true
+      - name: auctions.bid.apply_retraction
+        capability: auctions.bid.apply_retraction
+        input: "[relay command at the host, authorized by the bidder-signed retraction; runs under the auction lease] { retractionEnvelope }"
+        output: "{ receipt: statement classrup.auctions.retraction_receipt/v1 signed by host key, relayReceipt: classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_STATE, EXPIRED, IDEMPOTENCY_KEY_REUSED, AUCTIONS_RETRACT_NOT_ALLOWED, AUCTIONS_NOT_OPEN]
+        emits: [auctions.bid.retracted]
+        idempotent: true
+      - name: auctions.bid.receive
+        capability: auctions.bid.receive
+        input: "[vault-local ingestion per CTR-FED-001 of bid_receipt, retraction_receipt and bid_outbid envelopes in the bidder vault, and of seller copies of bid_receipt in the seller vault; a seller copy with a seq at or below the last held one is stored as history without an event] { envelope, via? }"
+        output: "{ bidId?, accepted: boolean, quarantined?: boolean, code?, status? }"
+        errors: [AUCTIONS_RECEIPT_INVALID, UNSUPPORTED_SCHEMA_VERSION, NOT_FOUND]
+        emits: [auctions.bid.placed, auctions.bid.outbid, auctions.bid.retracted]
+        idempotent: true
+      - name: auctions.bid.freeze_activity
+        capability: auctions.bid.freeze
+        input: "[relay internal; this module's AuctionHostPort.freezeActivityIn(lostWindow) implementation, registered with the relay process and called by F15.S03.M03 after a restore before the port opens; F04.S01.M03 registers the second implementation, F15.S03.M03 calls each with the same lostWindow and counts an auction frozen by both once] { lostWindow: { from, to } }"
+        output: "{ frozenAuctionIds: uuidv7[] } — every hosted scheduled or open auction whose startsAt to currentEndsAt overlaps lostWindow, frozen through F04.S01.M01 auctions.auction.freeze with cause bids_possibly_lost"
+        errors: [DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: auctions.bid.list_for_auction
+        capability: auctions.bid.read_public
+        input: "{ auctionId, cursor?, limit ≤ 100 } (relay query or vault cache of host-signed ledger)"
+        output: "{ items: [{ seq, alias, amount, kind, hostTime, bidCid, hash }], head: { seq, hash, hostSig }, nextCursor? } — no bidder keys and no maxima"
+        errors: [NOT_FOUND]
+      - name: auctions.bid.list_mine
+        capability: auctions.bid.read_own
+        input: "[vault-local] { status?, cursor?, limit ≤ 50 }"
+        output: "{ items: Bid[] with receipts and own maxima, nextCursor? }"
+        errors: []
+      - name: auctions.bid.verify_ledger
+        capability: auctions.bid.read_own
+        input: "[vault-local] { auctionId }"
+        output: "{ consistentWithReceipts: boolean, firstBrokenSeq?, receiptsChecked, scope: own_receipts_only } — shown as consistent with your receipts, never verified"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: auctions.bid.placed, privacy: P2, payload: "{ auctionId, listingId, sellerId, bidId?, bidCid, alias, bidderId?, kind, amount, newPrice, seq, bidCount, leaderChanged, reserveMet, hostTime } — host-local with every field; derived in the bidder's own vault from its receipt with bidderId the local principal and bidId; derived in the seller's vault from a verified seller copy of the receipt (N17) without bidderId and bidId; listingId comes from the verified terms"}
+      - {type: auctions.bid.outbid, privacy: P2, payload: "{ auctionId, outbidBidId, outbidderId, newPrice, seq } — host-local; derived in the outbid bidder's vault from the host-signed bid_outbid, with outbidderId the local principal"}
+      - {type: auctions.bid.retracted, privacy: P2, payload: "{ auctionId, bidId, bidderId, alias, newPrice, newLeaderAlias?, seq, hostTime } — host-local; derived in the retracting bidder's vault from the retraction receipt"}
+    events_consumed:
+      - {type: auctions.auction.opened, effect: "enable bidding for the auction in the vault view and on the host"}
+      - {type: auctions.auction.closed, effect: "with outcome unsold, winning and outbid bids become lost; with outcome won, bids not named by auctions.auction.won become lost; submitted bids without a receipt become lost"}
+      - {type: auctions.auction.won, effect: "the bid matching winnerAlias (non-party vaults), winnerId (winner vault) or the bidder key (host) becomes won from submitted, winning, outbid or host_silent"}
+      - {type: auctions.auction.cancelled, effect: "mark live bids void"}
+      - {type: auctions.auction.extended, effect: "update currentEndsAt shown in the bid sheet and in my bids"}
+      - {type: auctions.auction.frozen, effect: "bidder vault - show the live bids of the auction as frozen after host restore and, when a held relay receipt lies inside lostWindow, as possibly lost by the host; host - nothing more, bids are refused because the auction is not open (V03)"}
+      - {type: auctions.result.voided, effect: "won bids become void; the sale record stays with F04.S01.M03 and F09"}
+      - {type: privacy.deletion.completed, effect: "replace the erased principal's did in retained bids and receipts with the per-deletion pseudonym, delete own maxima and nonces of closed auctions, and keep signed envelopes marked unverifiable-after-pseudonymization"}
+    errors:
+      - "AUCTIONS_HOST_NOT_ACCEPTED | 409 | no | the bid does not carry the bidder's acceptance of this auction's host"
+      - "AUCTIONS_NOT_OPEN | 409 | no | auction is not open at host time (not started, frozen after a host restore, closed or past its end)"
+      - "AUCTIONS_BID_TOO_LOW | 409 | no | amount is below the next minimum bid; params.minNextBid gives it"
+      - "AUCTIONS_MAX_DECREASE | 409 | no | a proxy maximum cannot be lowered"
+      - "AUCTIONS_BID_LIMIT | 409 | no | per-bidder or per-auction bid limit reached"
+      - "AUCTIONS_RETRACT_NOT_ALLOWED | 409 | no | retraction window, count or target rule not satisfied"
+      - "AUCTIONS_RECEIPT_INVALID | 422 | no | a host receipt or outbid statement failed the signature, host key, binding or notAfter check; quarantined as evidence"
+    example: |
+      fixture increments: [{ fromMinor 1000, incrementMinor 50 }, { fromMinor 5000, incrementMinor 100 }], start 1000, reserve 5000 (EUR)
+      bidder vault B1: auctions.bid.submit { "auctionId": "0192f400-0002-…", "amount": { "amount": "1050", "currency": "EUR" },
+        "maxAmount": { "amount": "3000", "currency": "EUR" }, "acceptHostKeyId": "ed25519:hostkey1" } -> notAfter = createdAtClaim + 60 s
+      host: -> receipt { "bidCid": "sha256-Bc…", "seq": 3, "hostTime": "2026-11-05T12:00:01.204Z", "currentPrice": { "amount": "1050", "currency": "EUR" },
+        "leaderAlias": "K3QZ7A", "reserveMet": false, "currentEndsAt": "2026-11-12T10:00:00.000Z", "prevHash": "sha256-Pa…", "hash": "sha256-Hh…" }
+      later B2 bids 1100 with max 1500 -> PX3 price = max(1050, min(3000, 1500 + 50)) = 1550; ledger seq 4 = B2 at 1100, seq 5 = auto entry for K3QZ7A at 1550;
+        B2 is outbid and receives a host-signed bid_outbid; the host calls notify.notification.dispatch for B2 when B2 set pushOptIn
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked local principal can sign bids and retractions for its own key; no one can bid on behalf of another key.
+      - Relay policy - the host accepts a bid only when the bid signature verifies against the bidder key inside it, the host acceptance names this host, and hosting policy and quotas allow it; no relay access token substitutes for the bidder signature.
+      - Public ledger reads expose aliases only; the seller learns the winner's key only through the host-signed result disclosure, and a non-winning bidder's key only if the host lists it as a second-chance candidate after a seller-signed non-payment report, which the bidder trust panel discloses.
+    capabilities:
+      - "auctions.bid.submit | principal | local principal is not the seller and has not blocked the seller; host accepted for this auction by explicit user action; online"
+      - "auctions.bid.place | host-operator, system | bid signature verifies; host acceptance matches; notAfter not passed; relay quotas satisfied"
+      - "auctions.bid.retract | principal | bid.bidderId = local principal; retraction rules satisfied"
+      - "auctions.bid.apply_retraction | host-operator, system | bidder-signed retraction verifies against the bid's bidderId; runs under the auction lease"
+      - "auctions.bid.receive | principal | any envelope; acceptance depends on the host key in the terms and the bid it binds, or for a seller copy on the seller's own terms"
+      - "auctions.bid.read_public | anonymous, principal | ledger projection with aliases only"
+      - "auctions.bid.read_own | principal | bid.bidderId = local principal"
+      - "auctions.bid.freeze | system | relay restore hook only (AuctionHostPort registered with the relay process, called by F15.S03.M03); not routable over HTTP"
+  failure_recovery_idempotency:
+    requirements:
+      - Bids are idempotent by (bidder, auction, clientNonce) for 24 h on the host, looked up before validation; a replay with the same body returns the original receipt and a different body returns IDEMPOTENCY_KEY_REUSED.
+      - All bids of one auction are serialized by the per-auction lease (IDM-8) with a fencing token; ledger append, price projection and soft-close decision commit in one SQLite transaction.
+      - A crash before commit leaves no ledger entry and no receipt; a crash after commit and before reply is repaired by receipt fetch.
+      - A signed bid is valid only until its notAfter (at most 60 s after the bidder's createdAt claim), so neither the host nor delayed transport can place it later, and a bid with no receipt resolves to not_placed.
+      - After a host restore this module's AuctionHostPort implementation freezes, before the restored relay accepts a bid, every hosted auction whose bids may lie in the announced lost window, so the host never assigns a sequence number that a receipt it signed before the restore already holds; bidders keep their receipts and relay receipts as evidence.
+    idempotency: "Host stores (bidderId, auctionId, clientNonce) -> receiptCid for 24 h and looks it up before V02; replay with the same body returns the same receipt; a different body with the same nonce returns IDEMPOTENCY_KEY_REUSED; retractions dedupe on retraction cid; receive dedupes on statement cid."
+    concurrency: "Lease row auctions_lease with fencing token, TTL 5 s, taken with BEGIN IMMEDIATE; a holder that exceeds TTL loses the lease and its fence token is refused by later writes; the unique index on (auction, seq) prevents duplicate sequence numbers even under a bug. The lease is local to the host (IDM-8); no lock spans vaults."
+    retries: "Bidder vault retries only network errors and RATE_LIMITED with the same nonce at 1 s, 2 s, 4 s up to 3 attempts and never after notAfter; business rejections are never retried; the receipt-fetch fallback runs at 5 s, 15 s and 45 s."
+    offline: "Bidding and retraction are disabled offline with a visible reason because order and time are decided by the host; viewing history and checking held receipts works offline."
+    partial_failure: "If the soft-close port (F04.S02.M02) fails, or the eligibility port (F04.S02.M01) cannot run the seller-key equality check (port unreachable or host data unreadable), the bid is rejected with DEPENDENCY_UNAVAILABLE and nothing is stored. Stale F07 linkage data is not a port failure - the eligibility port uses its cache while it is at most 24 h old, and beyond that allows the bid while flagging linkage_stale for review, per F04.S02.M01. If the F12.S03.M04 limits check cannot answer, the bid is rejected with DEPENDENCY_UNAVAILABLE. The bid transaction is atomic."
+  privacy_retention_abuse:
+    requirements:
+      - Proxy maxima, bidder keys and nonces never appear in public projections, logs, errors or other users' exports, and maxima never in events; the host holds them, received only inside envelopes encrypted to hostKeyId, and the UI says so.
+      - Aliases are stable only within one auction and derived under a per-auction host secret, so they cannot be linked across auctions; this is pseudonymity, not anonymity, because the host sees keys.
+      - Bid spam, probing of proxy maxima and rapid retract abuse are limited by increments, rate limits, a single retraction and host quotas.
+      - The module registers ExportSectionPort (section auctions.bids), DeletionPort and RetentionPurgePort with F10 (N6), annotates Bid fields with their F10.S02.M02 class (maxAmount, bidderId and clientNonce P3 in the vault and P2 with the host as the only listed participant), consumes privacy.deletion.completed, and sets pushOptIn only after privacy.consent.check(notify_push) for the host is granted.
+    data:
+      - "Bid (bidder vault): maxAmount, bidderId and clientNonce P3; receipts P2."
+      - "Bid (host copy): maxAmount, bidderId and clientNonce P2 with the host as the only listed participant, received only inside the bid envelope E2E-encrypted to hostKeyId (PRV-5) and kept under the host's published retention; public projection P0 (alias, amount, kind, host time, hash)."
+      - "Bid receipt, retraction receipt and bid_outbid: P2 host-signed statements delivered end-to-end encrypted to the bidder."
+      - "Seller copy of a bid_receipt: P2 host-signed statement end-to-end encrypted to the seller; alias, amount, price, seq and bidCount only, no bidder key, nonce or maximum."
+      - "Relay receipt: classrup.platform.relay_receipt/v1 binding the destination and the digest of the request bytes; no cid, amount or bidder key."
+    retention:
+      - "Bids and receipts: RET-EVIDENCE (2 years) in the bidder vault; the host keeps the ledger for its published retention, default 90 days after close; idempotency records RET-SHORT (24 h)."
+      - "On account deletion: bidderId in retained bids and receipts is replaced with a per-deletion pseudonym."
+    threats:
+      - "T01 | Host reorders, omits or inserts bids | the hash chain over bidCid and host-signed receipts let a bidder detect omission or reordering of their own bids, and nothing more; entries inserted under fresh aliases, and different chains shown to different bidders, are not detectable without comparing ledger heads with other bidders, and the host trust panel says so; verify_ledger reports consistent with your receipts, never verified"
+      - "T02 | Probing for a proxy maximum by incremental bids | each probe is a real bid at a real increment, per-minute and per-auction bid limits, shill heuristics flag probe patterns"
+      - "T03 | Replay of a captured bid | the idempotency lookup by clientNonce returns the original receipt or IDEMPOTENCY_KEY_REUSED, the signed notAfter ends validity 60 s after the bid, and host acceptance is bound to the terms cid"
+      - "T04 | Retract-and-rebid to manipulate price | one retraction per bidder per auction, 12 h cutoff, retraction only of the leading bid, recorded in the ledger"
+      - "T05 | Alias deanonymization across auctions | per-auction HMAC secret held by the host; documented that the host can link keys"
+      - "T06 | Delayed or withheld bid placed later by the host or by slow transport | signed notAfter; the host refuses with EXPIRED after it; the vault shows not placed after notAfter plus 45 s; a receipt with hostTime after notAfter is rejected with AUCTIONS_RECEIPT_INVALID and kept as evidence"
+      - "T07 | Seller revokes a linked key and bids with it | revoked keys are rejected with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE and F04.S02.M01 keeps revoked keys linked to the seller"
+    abuse_controls:
+      - "10 bids per minute per bidder per auction and 200 per auction through RateLimitPort.consume (F12.S03.M03, N18); host-wide relay quota per key."
+      - "bids_per_day account limit through the in-process F12.S03.M04 moderation.accountlimit.check (N18) - 20, 100 or 500 bids per day by tier on the host."
+      - "Probe and retract patterns reach F04.S02.M01 scoring through the host-local auctions.bid.placed and auctions.bid.retracted events."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); the host relay exports metrics and logs per OBS-1 to OBS-6, without maxima or keys.
+      - Bid placement meets p95 ≤ 150 ms on the host at 50 bids per second across 500 auctions, and p99 ≤ 400 ms for one hot auction at 20 bids per second.
+      - Ledger verification of 5 000 entries in the vault completes in ≤ 500 ms.
+    metrics:
+      - "classrup_auctions_bids_total{outcome=placed|rejected|retracted|expired,code} (host)"
+      - "classrup_auctions_bid_lease_wait_ms (host histogram)"
+      - "classrup_auctions_bid_lease_expired_total (host)"
+      - "classrup_auctions_ledger_verify_failures_total and classrup_auctions_bids_not_placed_total (vault local counters)"
+    logs:
+      - "info bid.placed {auctionId, seq, correlationId} on the host - no bidder key, no amount, no maximum."
+    budgets:
+      - "host bid placement p95 ≤ 150 ms at 50 req/s; hot auction p99 ≤ 400 ms at 20 req/s; lease wait p95 ≤ 50 ms."
+      - "public ledger page of 100 entries p95 ≤ 100 ms; vault verification of 5 000 entries ≤ 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The proxy algorithm is covered by property tests on random bid sequences with a reference model, and the ledger by replay tests.
+      - Concurrency is covered by deterministic tests with an injected clock and lease, including expiry and fencing.
+    fixtures: "Host H with injectable clock and fixture increment table [{fromMinor 1000, incrementMinor 50}, {fromMinor 5000, incrementMinor 100}]; auction A (EUR, start 10.00, reserve 50.00, ends 2026-11-12T10:00:00Z); auction A2 on the same host; bidders B1, B2, B3 and seller S with separate keys; fixed clock 2026-11-05T12:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,01.R04,02.R01,02.R03 | place valid bid and read ledger entry | seq 1, hash chain starts with genesis and covers bidCid, amount immutable, receipt signature verifies"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V14 violated in turn | documented code returned, no ledger entry, no maximum echoed"
+      - "T03 | property | 03.R02,02.R04 | random bid, max-only and retraction sequences, with and without a reserve, compared with the proxy-v1 reference model (PX1–PX5) | price, leader and aliases equal the model; replaying the ledger reproduces the same result"
+      - "T04 | unit | 03.R03,02.R04 | B3 bids 1000 max 4000, B2 bids 1050 max 6000, B1 bids 5100 max 10000, then B1 retracts | B2 leads at 5000 after its bid (PX3 gives 4050, the reserve rule PX4 lifts it to 5000); B1 leads at 6100; after the retraction B2 is winning at 5000 again; retraction and auto entries appended; hashes stay chained"
+      - "T05 | property | 03.R01,03.R04 | random command sequences on one bid, including close with outcome unsold, close without a receipt, a won event naming another alias, and a void after won | only declared transitions succeed; the leader of an unsold auction becomes lost; submitted without receipt becomes lost; won becomes void on auctions.result.voided; terminal states never change"
+      - "T06 | integration | 06.R02,04.R02 | 20 bids submitted concurrently from 20 vaults to one auction | seq 1..20 without gaps or duplicates, one winning, lease wait metric recorded"
+      - "T07 | chaos | 06.R02,06.R03,09.R03 | lease expires mid-transaction; process killed before reply; eligibility port unreachable; F07 linkage cache 25 h old | stale fence refused; no half-written entry; receipt fetch by bid cid succeeds; unreachable port rejects the bid with DEPENDENCY_UNAVAILABLE and stores nothing; stale linkage accepts the bid and F04.S02.M01 records a linkage_stale flag"
+      - "T08 | contract | 04.R01,04.R02,09.R02 | submit, place, retract, apply_retraction, receive and queries | statements, events and projections validate against registry schemas; projection has no key and no maximum; a receipt of an extending bid carries the extension envelope"
+      - "T09 | integration | 06.R01,02.R01 | replay same bid body and replay same nonce with different body | original receipt; IDEMPOTENCY_KEY_REUSED from the lookup before validation, never VALIDATION_FAILED"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | bid signed by another key; bid without host acceptance; public query | VALIDATION_FAILED or AUCTIONS_HOST_NOT_ACCEPTED; public data contains aliases only"
+      - "T11 | abuse | 07.R03 | 11 bids in a minute; probing pattern of 5 minimum raises against one leader; seller bids | 11th AUCTIONS_BID_LIMIT through RateLimitPort; probing passed to scoring; seller AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail"
+      - "T12 | integration | 01.R02,07.R01 | inspect events, logs, errors, exports of other users and the F10.S02.M02 classification map | no maximum, bidder key or nonce anywhere outside the bidder vault and the host; the three fields annotated P3 in the vault and P2 with the host as only participant; the bid envelope part is encrypted to hostKeyId"
+      - "T13 | load | 08.R02,08.R03 | 500 auctions at 50 bids per second and one hot auction at 20 per second for 5 minutes | p95 ≤ 150 ms, hot p99 ≤ 400 ms, ledger verify 5 000 entries ≤ 500 ms"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-033 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export bidder vault, import into fresh vault, check the ledger against held receipts | receipts round-trip; verify_ledger consistent with receipts; tampered receipt detected at its seq"
+      - "T16 | e2e | 01.R02,04.R03 | mobile bidder accepts host, bids with max, is outbid by proxy, retracts a leading bid on another auction, goes offline | UI statuses correct; trust panel states key visibility to the host, receipt limits and possible second-chance key disclosure; offline shows bidding disabled with no queue; axe zero serious issues"
+      - "T17 | unit | 02.R04,03.R02 | ties, max-only updates and the reserve rule - B1 and B2 with equal maxima 2000; the leader raises its maximum with amount absent; sole bidder max 8000 with reserve 5000 | tie keeps the earlier leader at 2000; the max-only update is exempt from V04, needs the leader (V11) and appends no entry; the reserve rule appends one auto entry at 5000"
+      - "T18 | integration | 06.R04 | bid delivered to the host after notAfter; receipt lost and never fetched; host receipt with hostTime after notAfter | EXPIRED from the host; the vault shows not_placed after notAfter plus 45 s; the late receipt is rejected with AUCTIONS_RECEIPT_INVALID"
+      - "T19 | integration | 07.R02 | one bidder bids on auctions A and A2 on the same host | the two aliases differ and cannot be matched without the per-auction host secrets"
+      - "T20 | e2e | 08.R01 | network capture of the PWA while bidding, retracting and checking receipts | requests go only to the auction host; zero telemetry or analytics requests"
+      - "T21 | contract | 04.R04 | F11.S01.M01 registry entries for the five statements; receipt signed by a key other than the host key in the terms | roles resolve as declared; quarantined with AUCTIONS_RECEIPT_INVALID"
+      - "T22 | integration | 04.R05,04.R02 | B1 is outbid by B2's proxy | the host delivers bid_outbid to B1's mailbox and calls notify.notification.dispatch once with a template key only; B1's vault derives auctions.bid.outbid with actor.kind federated"
+      - "T23 | integration | 07.R04 | export, account deletion and push consent withdrawn | section auctions.bids present; bidderId pseudonymized; pushOptIn false and no host push"
+      - "T24 | abuse | 05.R02,07.R01 | a key revoked by a classrup.security.keyrevocation/v1 statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail"
+      - "T25 | integration | 03.R04 | host silent after the auction end | winning and outbid bids show host_silent after the deadline; a later result moves them to won or lost"
+      - "T26 | abuse | 02.R01,07.R03 | a key of tier new places its 21st bid of the day across auctions on host H; the limits check stub fails | MODERATION_ACCOUNT_LIMIT_REACHED with params.resetsAt from the in-process F12.S03.M04 check after RateLimitPort.consume; the failing stub gives DEPENDENCY_UNAVAILABLE; nothing stored"
+      - "T27 | integration | 04.R06,04.R02 | first bid and 30 more bids within 60 s on auction A; one seller copy replayed and one delivered out of order | the seller vault gets one copy at once and coalesced copies at most once per 60 s; it derives auctions.bid.placed with listingId, sellerId, seq and bidCount, without bidderId or bidId, actor.kind federated; the out-of-order copy is stored as history without an event; edit_lock answers locked"
+      - "T28 | contract | 04.R07 | place and apply_retraction responses; a replayed bid; a tampered relay receipt | each carries classrup.platform.relay_receipt/v1 with destination '<relayId>/auction/<auctionId>', digest over the request bytes and no cid; the replay returns the same relay receipt; the tampered one is rejected by the vault and the bid stays submitted until the host-signed receipt arrives"
+      - "T29 | integration | 06.R05 | restore host H from a backup whose lost window covers bids on open auction A and starts after auction B closed; bidder B1 holds a receipt for seq 9 that the restored ledger lacks | freeze_activity freezes A only, before the port opens; a new bid on A gets AUCTIONS_NOT_OPEN and no seq is assigned again; the vault of B1 shows A frozen and its bid possibly lost"
+    acceptance:
+      - All tests T01–T29 pass in CI.
+      - The proxy algorithm matches the proxy-v1 reference model on 100 000 random sequences and ledger replay reproduces every price.
+      - No proxy maximum or bidder key is visible to any party other than the bidder and the host, and both reach the host only encrypted to its key.
+      - No bid is shown as won unless auctions.auction.won names its bidder, and no bid stays submitted past notAfter plus 45 s.
+  import_export_backup_rollback:
+    requirements:
+      - The bidder's vault export contains their bids, receipts and own maxima; it does not contain other bidders' data.
+      - Import verifies receipt signatures and chain hashes against the stored host key; failures are kept as read-only history with a warning.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section auctions.bids in classrup-export/v1; one line per own Bid with bid, receipt, retraction and bid_outbid envelopes; the host's ledger export for sellers contains aliases and amounts only."
+    import: "Closed-auction bids import as history; bids on auctions still open import read-only until the host confirms its state; submitted bids without a receipt import as not_placed; no bid is ever re-sent on import."
+    backup: "The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and restoring it must keep the hash chain intact, verified by a post-restore chain check; auctions whose bids may lie in the lost window are frozen through AuctionHostPort before the restored relay accepts a bid (06.R05)."
+    migration_rollback: "Additive optional fields only in v1; the ledger hash input (including bidCid) is frozen for v1 so rollback never breaks chain verification."

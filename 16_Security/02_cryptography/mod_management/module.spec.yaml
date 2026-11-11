@@ -1,0 +1,355 @@
+id: F16.S02.M02
+scope: MVP
+summary: >-
+  A key registry in vaults and on relays with exactly one authority per key class. For user device keys (the
+  local principal's and every counterparty's) the single source of validity is F07: the account root key links
+  devices, and F07.S02.M01 answers key status through its KeyStatusPort. Here those keys are an ingest-only cache
+  fed by the own-key identity events and received identity documents, adding where and when the knowledge was last
+  confirmed (freshness) so callers can see revocation lag. Native records exist only for relay-owned keys (the relay
+  transport key mirrored from F15.S02.M01 and VAPID keys) and for peer relay keys pinned by F11.S03.M01. The module
+  owns classrup.security.keyrevocation/v1, the single revocation statement type for device keys, with the
+  F07.S01.M01 signer rules (an account_deleted revocation lists the final statements verifiers keep accepting),
+  a permanent minimal revoked-key
+  set that keeps a revoked key from ever returning after its record is purged, and relay-signed revocation list
+  heads with a monotonic sequence so that a relay replaying an old list is detected. A revocation is never dropped
+  because it arrives late, and offline revocation lag is reported, never hidden.
+responsibilities:
+  - Own the KeyRecord - public key, algorithm, purpose, owner, relationship, authority, status (active, revocation_pending, contested, revoked, expired), validity window, revocation details, identity document sequence and the freshness of the knowledge.
+  - Cache user device keys ingest-only from identity.device_key.added and identity.device_key.revoked (own keys) and identity.portable_doc.published (counterparty and relay-hosted keys), and answer get_status for user keys with one KeyStatusPort.keyStatus(did, publicKey, at) call of F07.S02.M01 plus freshness.
+  - Register and revoke relay-owned keys (VAPID) as relay commands, mirror the relay transport key from F15.S02.M01 and pin peer relay keys through F11.S03.M01, and record revocations of these keys from signed classrup.security.keyrevocation/v1 statements.
+  - Keep the permanent revoked-key set (key hash, revokedAt, revocation statement cid), and publish and ingest signed revocation list heads { relayId, listSeq, issuedAt, nextUpdateBy, headHash, entryCount } with freshness derived from issuedAt and at least two independent sources for high-stakes checks.
+  - Return status with freshness (freshnessIssuedAt, sources, class) so callers can require freshness for high-stakes actions and warn when it is stale, and poll relays for list heads on a schedule.
+  - Define classrup.security.keyrevocation/v1 as the single device-key revocation type with the F07.S01.M01 signer rules (the revoked key itself or the account root key at once, another device key pending 7 days unless the root key confirms, mutual revocations contested), treating the F07 account root key as its recovery-key role, including reason account_deleted with finalCids (at most 120) so the listed final statements stay acceptable after the revocation.
+  - Show every key with the F07.S01.M01 fingerprint (16 base58btc characters of SHA-256 over the raw public key, or its 8-word form).
+non_responsibilities:
+  - Generating, wrapping and rotating keys (F16.S02.M01) and the signature envelope (F16.S02.M03).
+  - User-key validity, device linking and the revocation rules for device keys (F07.S01.M01, F07.S02.M01); revoking a user device key is identity.device_key.revoke of F07.S01.M01, never a command of this module.
+  - Relay identity keys, their rotation and revocation certificates (F15.S02.M01), which this module only mirrors.
+  - Relay peer trust decisions and key pins (F11.S03.M01), which consume key status.
+  - "Future: key transparency log with signed tree heads; short-lived delegated signing keys; certificate-style attestations by third parties."
+depends_on: [F16.S01.M01, F16.S02.M03, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001]
+user_stories:
+  - As a user, I revoke a lost device's key from another device or my root device (F07), and my contacts' vaults learn of it from my next identity document, with this registry showing how recently each of them could know.
+  - As a user verifying a counterparty's consent, I see whether their key was revoked and how recently and from how many sources my vault confirmed it.
+  - As a relay operator, I publish a revocation list whose signed head has an increasing sequence number, so peers and vaults notice if anyone serves them an old one.
+  - As a relay that receives a deleted account's final deletion statements after its device keys were revoked, I still accept exactly the statements its account_deleted revocation lists and refuse every other statement by those keys.
+edge_cases:
+  - A revocation for a relay-owned or peer key arrives before the key itself; it goes straight into the permanent revoked-key set and is applied the moment the key appears, with the receipt time shown.
+  - A signature made by a key before its revocation is verified later; F07.S02.M01 judges it by this verifier's first-seen time of the statement against revokesEffectiveAt, and this module reports that status with its freshness.
+  - A revocation claims an effective date 60 days before its earliest evidence; it is recorded, and effectiveFrom is clamped to the earliest evidence minus 30 days and labelled 'claimed compromise window' rather than rejected.
+  - A vault that was offline meets a revocation 45 days after it was issued; it is recorded as revoked with revokedAt = receipt time and effectiveFrom from the evidence, and later statements by that key are refused.
+  - An attacker holding a stolen linked device key revokes the victim's other keys; as F07 reports it, those keys are revocation_pending for 7 days, a counter-revocation makes them contested, and only the DID root key decides.
+  - A relay serves an older signed revocation list head (lower listSeq) to hide a new revocation; the head is recorded as a replay with SECURITY_REVOCATION_LIST_STALE, freshness stays at the stored head, and high-stakes checks need a second source.
+  - Revocation sources unreachable for 8 days; keys from those sources show freshness unknown and high-stakes actions ask the user to refresh or proceed with a warning.
+  - A relay presents an X25519 agreement key for a counterparty device; agreement keys are never registered here, so it is refused and the sender derives the key from the listed Ed25519 device key instead.
+  - A KeyRecord for a revoked key is purged after its retention; a later attempt to register the same key is refused because the revoked-key set still holds its hash.
+  - A relay receives the account_deleted revocation of device key K1 before the final deletion statement it lists; get_status with that statement's cid reports revoked with finalListed true, so verification still accepts it, while a statement by K1 whose cid is not listed is refused.
+  - An account_deleted revocation lists 121 cids, or a revocation with reason lost carries finalCids; it is refused with VALIDATION_FAILED and nothing is recorded.
+  - A key revoked with reason account_deleted is also revoked by the account root key for compromise; F07.S02.M01 then reports reason compromised with its clamped effective time, and the finalCids are no longer honoured.
+  - A revocation is signed by the root key decrypted from the user's recovery kit on a new device; it is treated exactly as a root-key revocation (the recovery-key role is the F07 account root key) and takes effect at once.
+ux:
+  screens:
+    - "My keys: list of own device keys with label, created date, last used, fingerprint (F07.S01.M01 fingerprintOf - 16 base58btc characters of SHA-256 over the raw public key in groups of 4, with the 8-word form on request), status, and a revoke action that opens the F07 identity.device_key.revoke flow."
+    - "Counterparty key detail (vault): fingerprint (F07.S01.M01 fingerprintOf, 16 base58btc characters or the 8-word form), first seen, status as F07.S02.M01 reports it, freshness 'confirmed 3 hours ago by 2 sources (relay X, relay Y)', link to the identity document."
+    - "Relay operator: relay-owned and peer keys by purpose with their F07.S01.M01 fingerprints, revocation list head (sequence, issued, next update by), peer list freshness and detected list replays."
+  states: [loading, active, revocation-pending, contested, revoked, expired, freshness-unknown, list-replay-detected]
+  a11y:
+    - Status is conveyed by words and icons, not color alone.
+    - Revoke confirmation is a dialog with focus trap naming the key fingerprint, buttons at least 44 by 44 px.
+    - Freshness text is plain language and announced when it changes during verification.
+processes:
+  domain_schema:
+    requirements:
+      - A KeyRecord stores public key, algorithm, purpose, owner principal, relationship, authority (the module whose statement or record is the source of truth), status, validity window, revocation details, the identity document sequence it was taken from, provenance and the revocation freshness, with tenant and revision per CTR-ID-001.
+      - Key records are P1 public data once published; local notes on counterparty keys are P3 in the vault, and KeyRecords are retained under RET-EVIDENCE because signatures are verified against historical status.
+      - Key IDs are unique per public key, and every revoked key is also written to a permanent minimal revoked-key set (key hash, revokedAt, revocationStatementCid) that survives purging of its KeyRecord, so a revoked key is never registered or reactivated again.
+      - For user device keys F07.S02.M01 is the single source of validity; KeyRecords with relationship own, counterparty or relay_hosted are an ingest-only cache of its KeyStatusPort and identity documents, and native records exist only for relay_owned keys (relay transport, VAPID) and peer_relay keys.
+      - Agreement keys are never registered or stored; callers derive a device's X25519 key from its listed Ed25519 key with F16.S02.M01, so no relay or statement can introduce one.
+      - "classrup.security.keyrevocation/v1 is the single revocation statement for device keys, with payload { keyId, publicKey, ownerPrincipal, reason, effectiveFrom?, revokedByKey, finalCids? }, where finalCids (reason account_deleted only, at most 120 distinct cids) names the final statements signed in the F10.S01.M04 DeletionPort sign step that verifiers keep accepting after the revocation."
+      - Every key this module shows is displayed with the F07.S01.M01 fingerprint - 16 base58btc characters of SHA-256 over the raw public key, or its 8-word form - and never with keyId or the did:key prefix.
+    entities:
+      - name: KeyRecord
+        schema: classrup.security.keyrecord/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — store scope (vault or relay hosting scope)"
+          - "keyId: string — SHA-256 thumbprint of the raw public key, base64url, 43 chars"
+          - "publicKey: string — raw public key, base64url"
+          - "algorithm: enum — ed25519 | ecdsa_p256 (VAPID only)"
+          - "purpose: enum — device_signing | relay_transport | vapid | peer_relay"
+          - "ownerPrincipal: did:key — principal DID the key belongs to; for relay keys the relay did:key"
+          - "relationship: enum — own | counterparty | relay_hosted | relay_owned | peer_relay"
+          - "authority: enum — f07_identity (user keys) | f15_relay_identity | relay_config (VAPID) | f11_peer_pin"
+          - "status: enum — active | revocation_pending | contested | revoked | expired"
+          - "docSeq?: int — seq of the F07.S02.M01 identity document the status was taken from (user keys)"
+          - "docCid?: string — cid of that identity document"
+          - "notBefore: timestamp — RFC 3339 UTC, claimed by the linking statement or relay record"
+          - "notAfter?: timestamp — RFC 3339 UTC (relay_owned and retired relay transport keys)"
+          - "firstSeenAt: timestamp — RFC 3339 UTC, this store's clock"
+          - "pendingUntil?: timestamp — revocation_pending only, recorded time + 7 days"
+          - "revokedAt?: timestamp — RFC 3339 UTC, this store's clock when the revocation was first received"
+          - "revocationEffectiveFrom?: timestamp — claimed effective time, clamped to no earlier than earliestEvidenceAt minus 30 days and no later than revokedAt"
+          - "earliestEvidenceAt?: timestamp — earliest verified relay receipt time of the revoking statement or document, else this store's first receipt"
+          - "effectiveFromClamped?: boolean — true when the claim reached further back and was clamped"
+          - "revocationReason?: enum — compromised | lost | stolen | superseded | retired | recovery | account_deleted | administrative (relay_owned keys only)"
+          - "finalCids?: string[] — account_deleted only; at most 120 cids copied from the verified keyrevocation statement, honoured only while the key's authority reports it revoked with reason account_deleted"
+          - "revocationStatementCid?: string — content id of the verified revocation statement or identity document"
+          - "freshnessCheckedAt: timestamp — RFC 3339 UTC, when knowledge for this key was last refreshed"
+          - "freshnessIssuedAt?: timestamp — issuedAt of the newest verified list head or identity document confirming the status"
+          - "freshnessSources: string[] — relay IDs or peer IDs that confirmed the status at freshnessIssuedAt, or own"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - status revoked is permanent; a key whose hash is in the revoked-key set can never be active again, even after its KeyRecord is purged.
+          - revocationEffectiveFrom is never earlier than earliestEvidenceAt minus 30 days and never later than revokedAt.
+          - Own keys have freshnessSources [own] and are always fresh; counterparty keys carry the real age and number of sources of their knowledge.
+          - A KeyRecord with relationship own, counterparty or relay_hosted never has a status that F07.S02.M01 does not report for that key.
+          - finalCids is present only with revocationReason account_deleted and never makes a revoked key active; it only marks the listed statements as acceptable.
+    sql: |
+      CREATE TABLE security_key_record (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, key_id TEXT NOT NULL, algorithm TEXT NOT NULL, purpose TEXT NOT NULL,
+        owner_principal TEXT NOT NULL, relationship TEXT NOT NULL, authority TEXT NOT NULL, status TEXT NOT NULL, revoked_at TEXT,
+        freshness_checked_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX security_key_unique ON security_key_record(tenant_id, key_id) WHERE status != 'expired';
+      CREATE INDEX security_key_owner ON security_key_record(tenant_id, owner_principal, status);
+      CREATE TABLE security_revoked_key (
+        tenant_id TEXT NOT NULL, key_hash TEXT NOT NULL, revoked_at TEXT NOT NULL, revocation_statement_cid TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, key_hash));
+      CREATE TRIGGER security_revoked_key_permanent BEFORE DELETE ON security_revoked_key BEGIN SELECT RAISE(ABORT, 'permanent'); END;
+      CREATE TABLE security_revocation_list_head (
+        tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, list_seq INTEGER NOT NULL, issued_at TEXT NOT NULL, next_update_by TEXT NOT NULL,
+        head_hash TEXT NOT NULL, signature TEXT NOT NULL, fetched_at TEXT NOT NULL, PRIMARY KEY (tenant_id, relay_id));
+  validation_rules:
+    requirements:
+      - Revocation statements, list heads and relay-owned key registrations are validated for schema, signatures, signer authority and limits before storage, and user device keys are accepted only as F07.S02.M01 reports them.
+      - Revocation effective times are clamped so that a signer cannot reach back more than 30 days before the earliest evidence of the statement, and a revocation is never dropped because it arrives late.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | a statement matches classrup.security.keyrevocation/v1, a list head matches classrup/revocation-list/v1, and every public key is a valid point of the declared algorithm | VALIDATION_FAILED"
+      - "V02 | a user device key enters only through a root-signed classrup.identity.device_link/v1 listed in the owner's root-signed portable identity document as F07.S02.M01 reports it; a relay_owned key only through security.keyrecord.register by a relay_operator or admin of this relay; a peer_relay key only as pinned by F11.S03.M01; an agreement key never | SECURITY_KEY_UNAUTHORIZED"
+      - "V03 | keyrevocation signer, as in F07.S01.M01 V11 - the revoked key itself or the account root key (the recovery-key role, held on the root device or decrypted from the F07.S01.M03 recovery kit) take effect at once; another active device key of the same principal starts revocation_pending for 7 days unless the root key confirms; two device keys revoking each other become contested; reason recovery takes effect 72 hours after this store first saw the matching recovery notice; a revoked, pending or contested key cannot revoke; relay_owned keys are revoked only by the relay key | SECURITY_KEY_UNAUTHORIZED"
+      - "V04 | revocationEffectiveFrom is at most 10 minutes after this store's receipt time; an earlier claim is clamped to no earlier than earliestEvidenceAt (verified relay receipt, else first receipt; never the signedAt claim) minus 30 days and labelled, and the revocation is recorded whatever its age | VALIDATION_FAILED"
+      - "V05 | at most 10 active device keys per principal (the F07.S02.M01 document cap) and at most 20 active relay_owned keys per relay | SECURITY_KEY_LIMIT"
+      - "V06 | a key whose hash is in the revoked-key set is never registered, cached as active or reactivated | CONFLICT_STATE"
+      - "V07 | expectedRevision matches the stored KeyRecord revision | CONFLICT_REVISION"
+      - "V08 | a revocation list head is signed by the publishing relay's current key under classrup/revocation-list/v1, its listSeq is greater than and its issuedAt not earlier than the stored head for that relay, and nextUpdateBy is at most 24 hours after issuedAt; a regression is recorded as a replay and never refreshes freshness | SECURITY_REVOCATION_LIST_STALE"
+      - "V09 | finalCids appear only with reason account_deleted and hold at most 120 distinct cids in the CTR-ID-001 ID-3 form | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Key records follow the declared lifecycle, revoked and expired are final, and any other transition is refused with CONFLICT_STATE.
+      - A revocation by another device key waits 7 days as revocation_pending, ending in revoked at the timeout or on root confirmation and in contested on a counter-revocation, and a contested key leaves only by a decision of the account root key (the recovery-key role, from the root device or the recovery kit).
+      - Expiry is evaluated at verification time as well as by the sweep, so a missed sweep never extends a key.
+      - Transitions of cached user keys follow F07 events and identity documents only and never run ahead of or against them; native records follow this module's own commands and mirrored relay and peer events.
+    machines:
+      - entity: KeyRecord
+        initial: active
+        terminal: [revoked, expired]
+        transitions:
+          - "active -> revoked | keyrevocation by the key itself or the DID root key as F07 reports it; relay key revocation of a relay_owned key; F15.S02.M01 relay identity revocation mirrored | revokedAt = receipt time; effectiveFrom clamped per V04; finalCids stored for reason account_deleted; key hash added to the revoked-key set; emits security.key.revoked"
+          - "active -> revocation_pending | keyrevocation signed by another active device key of the same principal, as F07 reports it | pendingUntil = recorded time + 7 days; statements still verify with a pending warning"
+          - "active -> expired | notAfter passed at the sweep or at verification, peer removed, or relay transport key retired | local status only; signatures first seen before notAfter stay verifiable"
+          - "revocation_pending -> revoked | root key confirms, or pendingUntil passes without a counter-revocation or root decision | emits security.key.revoked"
+          - "revocation_pending -> active | root key rejects the revocation by revoking the revoking key | pending entry closed"
+          - "revocation_pending -> contested | this key revokes the revoking key, or two device keys revoke each other concurrently | both keys frozen for key management; routine statements verify with a contested warning"
+          - "contested -> revoked | account root key decision (root device or recovery kit) revokes this key | emits security.key.revoked"
+          - "contested -> active | account root key decision (root device or recovery kit) keeps this key | the other key's revocation stands"
+    timeouts:
+      - "Expiry sweep every 5 minutes on a relay and on app start plus hourly while open in a vault."
+      - "revocation_pending lasts 7 days (604 800 000 ms); a recovery-driven revocation waits 72 h from this store's first sight of the recovery notice (F07.S02.M01)."
+      - "Revocation list heads are published at least every 6 hours with nextUpdateBy at most 24 hours ahead; vaults poll the own relay and the counterparty's listed relays at most hourly while open; freshness is computed from issuedAt, older than 24 hours shows 'not recently checked' and older than 7 days shows unknown."
+  commands_queries_events:
+    requirements:
+      - Every command declares whether it is vault-local, a signed statement or a relay command, and the signatures below do so.
+      - Register, revoke, record_revocation and the event ingestion emit security.key.registered and security.key.revoked in the same transaction as the record.
+      - The module consumes own-key identity events, received identity documents, peer events and relay identity events to keep records current, and never decides user-key validity itself.
+      - security.keyrecord.get returns publicKey, algorithm and purpose for a keyId, and get_status for a user key is one call to F07.S02.M01 KeyStatusPort.keyStatus(did, publicKey, at) with this module's freshness added; F16.S02.M03 callers pass that result to verify.
+      - Relay revocation lists are a signed head { relayId, listSeq, issuedAt, nextUpdateBy, headHash, entryCount } under classrup/revocation-list/v1 plus entries that point to root-signed identity documents or relay-signed revocations, and a relay's signature is never the authority for a user key.
+      - security.key.registered and security.key.revoked carry keyId, purpose and relationship, so consumers such as F13.S01.M01 match VAPID keys (purpose vapid) and device keys without calling security.keyrecord.get_status.
+      - get_status called with the statementCid of a statement signed by a key revoked with reason account_deleted returns status revoked with finalListed true only when that cid is in the revocation's finalCids, and F16.S02.M03 verify accepts a revoked key only for such a listed statement.
+    note: "Statements (N2): classrup.security.keyrevocation/v1 (owned here; the single revocation type for device keys, F07.S01.M01 produces it with its identity rules) { keyId, publicKey, ownerPrincipal, reason: lost|stolen|retired|compromised|recovery|superseded|account_deleted (device keys) or retired|compromised|administrative (relay_owned keys), effectiveFrom?, revokedByKey, finalCids? (account_deleted only, at most 120 cids of the final statements signed in the F10.S01.M04 DeletionPort sign step) } signed by the revoked key itself or the account root key (immediate; the recovery-key role is the F07 account root key, from the root device or the recovery kit, with no separate recovery key in MVP), another active device key (pending 7 days unless the root key confirms; mutual revocations contested), or for relay_owned keys the relay key, registered in F11.S01.M01 with those signer roles; the revocation list head is an F16.S02.M03 envelope with context classrup/revocation-list/v1 signed by the relay key. Injected ports (wired by the composition roots because the implementers depend on this module): KeyStatusPort.keyStatus and IdentityRefreshPort.refresh(did, relays) of F07.S02.M01, PeerKeyPort.resolveKey(peerId) of F11.S03.M01 (read on federation.peer.added and at most 60 s cached on verification, so pinned-key rotations are picked up). Privacy duties (N6, N6a): fields carry F10.S02.M02 classification annotations; the vault registers ExportSectionPort (security.keys), DeletionPort (the vault erase step removes KeyRecords and the local revoked-key set; relay-native records are untouched) and RetentionPurgePort (RET-EVIDENCE purge that never touches the revoked-key set) with the F10.S01.M03, F10.S01.M04 and F10.S01.M02 registries injected by the composition root."
+    commands:
+      - name: security.keyrecord.register
+        mode: "relay command (relay_operator or admin) for relay_owned keys only; user device keys are never registered here"
+        capability: security.keyrecord.register
+        input: "{ purpose: vapid, publicKey, algorithm: ecdsa_p256, notAfter? }"
+        output: "{ keyRecordId, keyId, status, revision: 1 }"
+        errors: [VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, SECURITY_KEY_LIMIT, CONFLICT_STATE]
+        emits: [security.key.registered]
+        idempotent: true
+      - name: security.keyrecord.revoke
+        mode: "relay command for relay_owned VAPID keys; produces classrup.security.keyrevocation/v1 signed by the relay key and adds it to the relay revocation list; relay transport keys are revoked with platform.relay_identity.revoke and mirrored"
+        capability: security.keyrecord.revoke
+        input: "{ keyId, reason, effectiveFrom?, expectedRevision }"
+        output: "{ keyRecordId, revision, revocationStatementCid, listSeq }"
+        errors: [NOT_FOUND, SECURITY_KEY_UNAUTHORIZED, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [security.key.revoked]
+        idempotent: true
+      - name: security.keyrecord.record_revocation
+        mode: "vault-local or relay; ingests a received keyrevocation statement for a relay_owned or peer_relay key after verification; for a user device key it records a refresh hint through IdentityRefreshPort and, for reason account_deleted, the verified finalCids on the cached KeyRecord, and changes no status"
+        capability: security.keyrecord.record_revocation
+        input: "{ revocationStatement, signature, source, relayReceipt? }"
+        output: "{ keyRecordId?, applied: boolean, inRevokedSet: boolean, refreshHint: boolean, effectiveFromClamped: boolean, finalCidsRecorded: int }"
+        errors: [VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, CONFLICT_STATE]
+        emits: [security.key.revoked]
+        idempotent: true
+      - name: security.keyrecord.ingest_list
+        mode: "vault-local or relay; ingests a relay's signed revocation list head and entries"
+        capability: security.keyrecord.ingest_list
+        input: "{ relayId, head: classrup/revocation-list/v1 envelope, entries[] (≤ 500 per call), cursor? }"
+        output: "{ accepted: boolean, listSeq, replayDetected: boolean, applied: int, refreshHints: int }"
+        errors: [VALIDATION_FAILED, SECURITY_REVOCATION_LIST_STALE, SECURITY_SIGNATURE_INVALID]
+        emits: [security.key.revoked]
+        idempotent: true
+    queries:
+      - name: security.keyrecord.get_status
+        capability: security.keyrecord.read_public_status
+        input: "{ keyId } or { did, publicKey }, at? (the statement's first-seen time), statementCid? (the statement being verified), highStakes?: boolean"
+        output: "{ status, algorithm, purpose, relationship, authority, revokedAt?, revocationReason?, revocationEffectiveFrom?, effectiveFromClamped, finalListed: boolean (status revoked with reason account_deleted and statementCid in finalCids), freshnessCheckedAt, freshnessIssuedAt, freshnessAgeMs, independentSources, freshnessClass: fresh|stale|unknown }"
+        errors: [NOT_FOUND]
+      - name: security.keyrecord.get
+        capability: security.keyrecord.read_public_status
+        input: "{ keyId }"
+        output: "{ keyId, publicKey, algorithm, purpose, ownerPrincipal, relationship, status }"
+        errors: [NOT_FOUND]
+      - name: security.keyrecord.list_revocations
+        capability: security.keyrecord.read_public
+        input: "{ sinceSeq?, cursor?, limit ≤ 500 }"
+        output: "{ head: classrup/revocation-list/v1 envelope { relayId, listSeq, issuedAt, nextUpdateBy, headHash, entryCount }, items: [{ keyHash, did?, docSeq?, docCid?, revocationStatementCid?, reason, revokedAt, effectiveFrom }], nextCursor? }"
+        errors: []
+      - name: security.keyrecord.list_own
+        capability: security.keyrecord.read_own
+        input: "{ includeRevoked?: boolean }"
+        output: "{ items: KeyRecord[] }"
+        errors: []
+    events_produced:
+      - {type: security.key.registered, privacy: P1, payload: "{ keyRecordId, keyId, publicKey, algorithm, purpose, ownerPrincipal, relationship, authority, docSeq? }"}
+      - {type: security.key.revoked, privacy: P1, payload: "{ keyRecordId, keyId, ownerPrincipal, purpose, relationship, reason, revokedAt, revocationEffectiveFrom, effectiveFromClamped, source }"}
+    events_consumed:
+      - {type: identity.device_key.added, effect: "own keys only - cache the local principal's new device key as relationship own from its root-signed device link and emit security.key.registered"}
+      - {type: identity.device_key.revoked, effect: "own keys only - mark the local principal's key revoked as F07.S01.M01 decided, add its hash to the revoked-key set and emit security.key.revoked"}
+      - {type: identity.portable_doc.published, effect: "origin received (vault) or relay_stored (relay) - cache addedKeys as counterparty or relay_hosted keys and apply revokedKeys[].revokesEffectiveAt as revocations clamped per V04, record docSeq, docCid and the providing relay as a freshness source; status contested marks the DID's keys contested; origin own is ignored"}
+      - {type: federation.peer.added, effect: "read the pinned relay key through PeerKeyPort.resolveKey(peerId) and record it as peer_relay with freshness source the peer"}
+      - {type: federation.peer.removed, effect: "move the peer's key record to expired so it is no longer trusted for new statements"}
+      - {type: platform.relay_identity.rotated, effect: "mirror this relay's transport key history - a rotation records the new key as relay_owned relay_transport and expires the retired key at the rotation time; a revocation revokes the key with the given reason"}
+    errors:
+      - "SECURITY_KEY_UNAUTHORIZED | 403 | no | the signer is not authorized to register or revoke this key"
+      - "SECURITY_KEY_LIMIT | 409 | no | more than 10 active device keys for one principal or 20 relay-owned keys on this relay"
+      - "SECURITY_REVOCATION_LIST_STALE | 409 | no | the revocation list head is older than or replays the one already stored for that relay"
+    example: |
+      relay command security.keyrecord.revoke (relay_operator; produces statement signed by the relay key)
+      { "keyId": "Qm9b…43chars", "reason": "compromised", "expectedRevision": 3 }
+      -> { "keyRecordId": "0192f420-bbbb-7000-8000-00000000000b", "revision": 4, "revocationStatementCid": "sha256-ff90…", "listSeq": 812 }
+      vault query security.keyrecord.get_status { "did": "did:key:z6MkQ…", "publicKey": "…", "at": "2026-11-04T09:55:00Z", "highStakes": true }
+      -> calls KeyStatusPort.keyStatus(did, publicKey, at) once
+      -> { "status": "active", "relationship": "counterparty", "authority": "f07_identity", "freshnessIssuedAt": "2026-11-04T07:00:00Z", "freshnessAgeMs": 10500000, "independentSources": 2, "freshnessClass": "fresh" }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: user device keys enter only through F07 identity events and verified identity documents, counterparty status is F07.S02.M01's and is cached here with freshness, and no command of this module revokes a user key; the principal uses identity.device_key.revoke (F07.S01.M01)."
+      - "Relay policy: relay_operators and admins of the relay register and revoke relay_owned keys, which are signed by the relay key; peer keys come only from F11.S03.M01 pins; revocation lists are public."
+      - Status and public-key queries are read-only and public for published keys, and revocation and list ingestion need no session because they are authorized by signatures.
+    capabilities:
+      - "security.keyrecord.register | relay_operator, admin | relay-scope F16.S01.M01 role; purpose vapid only; at most 20 relay-owned keys"
+      - "security.keyrecord.revoke | relay_operator, admin | relay-scope role; relay_owned VAPID keys only; statement signed by the relay key"
+      - "security.keyrecord.record_revocation | local principal, relay process | statement signature authorizes under V03; source recorded; user-key revocations only produce a refresh hint"
+      - "security.keyrecord.ingest_list | local principal, relay process | head signed by the publishing relay's current key; V08 monotonic checks"
+      - "security.keyrecord.read_public_status | anonymous, member, local principal | status and public key of published keys; own vault always allowed"
+      - "security.keyrecord.read_public | anonymous | published revocation list and its signed head"
+      - "security.keyrecord.read_own | local principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and ingestion dedupes by statement content ID.
+      - Registration and revocation commit the record, the event, the revoked-key set entry and the revocation list entry in one transaction.
+      - A revocation received before its key is written to the revoked-key set at once and applied when the key is seen, so ordering never loses a revocation.
+    idempotency: "Idempotency-Key for relay commands; statement and list ingestion dedupe by statementCid and (relayId, listSeq); a repeated revocation returns the stored record."
+    concurrency: "Unique keyId index for live records and the revoked-key primary key; expectedRevision on revoke; two simultaneous revocations of the same key converge on the earliest revokedAt; list heads are compared and stored inside one transaction per relay."
+    retries: "Relay revocation statements are delivered via the sync outbox with CTR-IDM-001 backoff until peer_accepted or 30 days; list polling retries with jitter."
+    offline: "A vault keeps answering from its cache with the true freshness age; propagation to others waits for the network, and the UI states the lag."
+    partial_failure: "If publishing to the relay list fails, the local revocation stands and the sync outbox retries; if a source is unreachable freshness degrades honestly from the last head's issuedAt rather than treating keys as valid forever."
+  privacy_retention_abuse:
+    requirements:
+      - Public keys, status and revocations are P1 or P0 once published and contain no personal data beyond public DIDs, and the revocation list reveals only key hashes, DIDs of published identity documents, document references, reasons and times.
+      - KeyRecords are retained under RET-EVIDENCE (2 years after the last status change or verification that used them), and the permanent revoked-key set (key hash, revokedAt, revocationStatementCid) is kept as long as the store exists, recorded as an exception to CTR-PRV-001 because it holds no personal data and stops key resurrection.
+      - Abuse (false revocations, registry flooding, revocation suppression, list replay, rollback of revocation, agreement-key substitution) is limited by F07 signer rules, limits, signed monotonic list heads from at least two sources and the permanent revoked-key set.
+    data:
+      - "KeyRecord: P1 public key material and status."
+      - "Revoked-key set and list heads: P0 public hashes, sequence numbers and times."
+      - "Local notes on counterparty keys: P3 in the vault only."
+    retention:
+      - "KeyRecord: RET-EVIDENCE (2 years after the last status change or verification that used it), then purged."
+      - "Revoked-key set: permanent while the store exists (CTR-PRV-001 exception; key hash, revokedAt and statement cid only, as F07.S02.M01 keeps revokedKeyHashes)."
+      - "Revocation list heads: the newest per relay is kept; older heads are kept 30 days for replay comparison."
+    threats:
+      - "T01 | Attacker with a stolen linked device key revokes the victim's other keys | F07 rules apply - such revocations are pending for 7 days, a counter-revocation makes them contested, and only the DID root key or recovery kit decides"
+      - "T02 | Revocation suppression by a malicious relay | revocations travel inside root-signed identity documents any relay or peer can carry; vaults poll the own relay and the counterparty's listed relays and require two independent sources for fresh on high-stakes checks"
+      - "T03 | Backdated compromise date to invalidate old consents | effectiveFrom clamped to 30 days before the earliest evidence (never the signedAt claim), and affected consents are labelled rather than silently invalidated"
+      - "T04 | Registry flooding with junk keys | user keys only from root-signed identity documents with at most 10 active keys; relay-owned keys only by relay_operators; relay rate limits via F12.S03.M03 class key.register fail-closed"
+      - "T05 | Rollback of a revocation (key resurrection), including after the KeyRecord is purged | revoked status is permanent and the revoked-key set is never deleted; no command can set active again"
+      - "T06 | Stale knowledge treated as safe offline | freshness class from list head issuedAt shown on every verification result; high-stakes actions require fresh from two sources or an explicit user acknowledgement"
+      - "T07 | Freeze attack - a relay replays an older valid list head | listSeq must increase and issuedAt must not go back; a regression is recorded as a replay and never refreshes freshness"
+      - "T08 | Relay substitutes an agreement key | agreement keys are never registered; senders derive them from listed Ed25519 device keys (F16.S02.M01)"
+      - "T09 | Holder of a stolen device key signs an account_deleted revocation whose finalCids list statements it forged | finalCids only waive the revocation check for statements whose signature by that key verifies, are capped at 120, and are ignored once the account root key revokes the key for compromise"
+    abuse_controls:
+      - "Relay-owned key registration limited to 20 per day per relay and revocation recording to 50 per day per source via F12.S03.M03."
+      - "Relay refuses statements larger than 8 KiB and list pages larger than 500 entries."
+  observability_performance:
+    requirements:
+      - Relay registry operations and list polls are measured per CTR-OBS-001 without key material labels; the vault keeps local diagnostics only.
+      - get_status meets p95 ≤ 5 ms in a vault and ≤ 10 ms on a relay at 1 000 queries per second, including the KeyStatusPort call for user keys.
+      - Freshness age distribution and detected list replays are observable to spot stale or misbehaving revocation sources.
+    metrics:
+      - "classrup_security_key_registry_keys{status,relationship} (gauge, relay)"
+      - "classrup_security_key_revocations_total{reason,clamped}"
+      - "classrup_security_revocation_poll_age_ms{source_class=relay|peer} (gauge)"
+      - "classrup_security_revocation_list_replays_total"
+      - "classrup_security_key_status_queries_total{freshness=fresh|stale|unknown}"
+    logs:
+      - "relay info key.revoked {keyRecordId, reason, correlationId} — no public key bytes beyond ID."
+      - "relay warn revocation_list.replay {relayIdHash, storedSeq, receivedSeq} — no entries."
+    budgets:
+      - "get_status p95 ≤ 5 ms (vault) and ≤ 10 ms (relay); register and revoke p95 ≤ 300 ms."
+      - "Revocation list of 100 000 entries is served in ≤ 2 s using pagination of 500."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Revocation ordering, freshness and contested-key behavior are covered by property and chaos tests.
+      - Contract tests check statements and events against the schema registry.
+    fixtures: "Principal P with root key Pr and device keys K1, K2, K3, counterparty Q with key Kq, relays X and Y with signed list heads, peer relay Z, KeyStatusPort, IdentityRefreshPort and PeerKeyPort stubs, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R04,04.R02 | identity.portable_doc.published (received) adding Kq for Q; identity.device_key.added for own K2 | counterparty and own KeyRecords stored active with authority f07_identity, keyId equals thumbprint, security.key.registered carries publicKey"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01–V09 violated | documented error code and nothing stored"
+      - "T03 | property | 01.R03,03.R01,09.R02 | random sequences of revocations, pending periods, counter-revocations, root decisions, expiries and purges | revoked and expired never change; a revoked key never returns, also after its KeyRecord is purged"
+      - "T04 | integration | 03.R03,06.R03 | expiry sweep missed for a VAPID key; revocation of peer key Z arrives before federation.peer.added | verification refuses the expired key; Z's hash is in the revoked-key set and the key is recorded revoked when it appears"
+      - "T05 | integration | 03.R02,03.R04 | F07 reports K3 revoking K1 (pending), K1 counter-revoking K3 (contested) and a root decision; a test injects a revocation without any F07 event | the cache mirrors revocation_pending for 7 days, contested and the root outcome; the injected change is refused"
+      - "T06 | contract | 04.R01,04.R05,09.R03 | commands, queries, events and the revocation list head | validate against registry schemas; the head verifies with the relay key under classrup/revocation-list/v1 and its entries reference identity documents"
+      - "T07 | integration | 04.R03 | identity.device_key.added and revoked, identity.portable_doc.published received twice, federation.peer.added and removed, platform.relay_identity.rotated | one record each; statuses correct; peer key read through PeerKeyPort; retired relay key expired at the rotation time"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | vault principal calls security.keyrecord.revoke for an own device key; member registers a VAPID key; anonymous reads a status; stolen K3 tries to add a new device key K9 without a root-signed link | FORBIDDEN (identity.device_key.revoke is the path); FORBIDDEN; public status returned; SECURITY_KEY_UNAUTHORIZED"
+      - "T09 | abuse | 07.R03,02.R01 | 11th active device key in a document; 21st relay-owned key; 51st revocation from one source in a day; oversized statement; X25519 agreement key presented by a relay for a device | SECURITY_KEY_LIMIT; SECURITY_KEY_LIMIT; RATE_LIMITED; PAYLOAD_TOO_LARGE; SECURITY_KEY_UNAUTHORIZED with nothing stored"
+      - "T10 | chaos | 06.R01,06.R02,06.R03 | publish fails after a local VAPID revocation; replay of the same Idempotency-Key | local revocation stands; outbox retries; one record and one revoked-key entry"
+      - "T11 | integration | 02.R02 | revocation first received 45 days after issuance with a relay receipt at issuance; a revocation claiming effectiveFrom 60 days before its relay receipt; a statement by the revoked key first seen after the effective time | recorded revoked, never dropped; second effectiveFrom clamped to receipt minus 30 days and labelled; the later statement is refused"
+      - "T12 | abuse | 07.R03,02.R03 | relay X replays an older signed list head with lower listSeq; high-stakes get_status with only relay X confirming | SECURITY_REVOCATION_LIST_STALE recorded, freshness stays at the stored head; freshnessClass stale until relay Y confirms"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 1 000 status queries per second for 5 minutes; list of 100 000 revocations | p95 targets met; list served ≤ 2 s; replay and age metrics exported"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-129 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export key records, import into a fresh vault, restore relay backup | statuses, revoked-key set and statements preserved; imported counterparty freshness reset to unknown"
+      - "T16 | integration | 04.R04,01.R05 | get for a keyId; get_status for a user key; lookup of an agreement key | publicKey, algorithm and purpose returned; KeyStatusPort called exactly once with (did, publicKey, at) and freshness added; no agreement record exists"
+      - "T17 | unit | 07.R01 | content scan of a published revocation list | only key hashes, DIDs, document references, reasons and times; no IPs, handles, labels or notes"
+      - "T18 | integration | 07.R02 | purge a revoked KeyRecord after RET-EVIDENCE, then present the same key again | KeyRecord gone; revoked-key set entry kept; CONFLICT_STATE"
+      - "T19 | integration | 01.R06,04.R07 | relay records P's account_deleted revocation of K1 listing cids c1 and c2 through record_revocation, then receives statements c1 and c3 signed by K1; get_status with statementCid c1 and c3; F07 later reports K1 revoked by the root key for compromise | c1 finalListed true and accepted by F16.S02.M03 verify; c3 finalListed false and refused with SECURITY_KEY_REVOKED; after the compromise report c1 finalListed false"
+      - "T20 | unit | 01.R06,02.R01 | account_deleted revocation with 121 cids; finalCids on a revocation with reason lost; a valid one with 120 cids serialized as a CTR-FED-001 envelope | VALIDATION_FAILED twice; the 120-cid statement verifies and stays under the 8 KiB relay statement limit"
+      - "T21 | contract | 04.R06 | security.key.revoked for a VAPID key and for a device key; a consumer stub that matches on purpose | both payloads carry keyId, purpose and relationship; the stub expires the VAPID subscriptions without a get_status call"
+      - "T22 | unit | 01.R07 | own key list, counterparty key detail, relay operator view and revoke confirmation rendered for F07.S01.M01 fingerprint vectors | every fingerprint equals fingerprintOf (16 base58btc characters, or the 8-word form on request); no keyId or did:key prefix is shown"
+      - "T23 | unit | 02.R01,03.R02 | revocation signed by the root key decrypted from a recovery kit; by another active device key, then confirmed by the root key; by the revoked key itself; two device keys revoking each other | immediate; pending until the root confirmation, then revoked; immediate; both contested until a root-key decision"
+    acceptance:
+      - All tests T01–T23 pass in CI.
+      - A revoked key can never become active again, also after its record is purged, and verification always reports freshness of revocation knowledge from list issuedAt.
+      - User-key status never differs from F07.S02.M01, and a stolen linked device key cannot revoke or add keys on its own.
+  import_export_backup_rollback:
+    requirements:
+      - Vault export contains own and counterparty key records with revocation statements, freshness and the revoked-key set, and the relay export contains relay-owned and peer keys, the revoked-key set and the signed revocation list.
+      - Import re-verifies every statement signature, re-derives user-key status from the imported identity documents through F07.S02.M01, and resets freshness of imported counterparty keys to unknown so stale knowledge is never trusted.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section security.keys in classrup-export/v1: KeyRecord rows, the revoked-key set and the verified revocation statements; relay export adds the signed revocation list and its head history."
+    import: "Statements are re-verified; revoked stays revoked and the revoked-key set is merged as a union; unknown signers are refused; freshnessCheckedAt of imported counterparty keys is set to import time with class unknown until refreshed."
+    backup: "Vault export is the primary backup (IOX-6); relay SQLite backup (CTR-IOX-001 IOX-3) covers relay records; restore triggers an immediate revocation list refresh from all sources, and the restored list head keeps its listSeq so the next head is greater."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and treat unknown statuses as revoked (fail closed)."

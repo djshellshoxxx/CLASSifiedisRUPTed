@@ -1,35 +1,53 @@
-# PS-122-07 — privacy retention abuse
+# PS-122-07 — Privacy, retention and abuse: Disaster recovery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-07. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M03 Disaster recovery](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/recovery` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-122-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-122-07.R01** Restore handles only encrypted relay data and the operator's keys, produces a report without payload content, and leaves no plaintext snapshot outside the target directory.
+- **PS-122-07.R02** Temporary decrypted files are written only inside the restore target, mode 0600, and the target must be on encrypted or access-restricted storage per the runbook.
+- **PS-122-07.R03** Every tombstone in the authenticated ledger is re-applied before the restored relay serves public projections, so deleted content is not resurrected on this relay whatever the age of the base snapshot.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Restore report: P1 counters, backup ids, timestamps, lost window; no content.
+- Restore announcement: P0 relay-signed statement with timestamps, receipt sequence numbers and, for a new identity, the predecessor relayId only.
+- Dead-letter rows: event envelopes with IDs and minimal fields (P0 to P1) kept 30 days.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Restore reports kept by the operator for at least 1 year (drill evidence, RET-AUDIT); restore announcements served for the life of the relay (newest 10 in the well-known document).
+- Dead letters purged 30 days after dead-lettering.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Restore from a tampered or older malicious snapshot | checksums and GCM authentication, manifests accepted only when authenticated and in chain, signed relay announcements after restore show the same identity |
+| T02 | Replay storm overloads consumers or duplicates side effects | limits of 500 per call, 3 replays per event, 500 per minute, inbox idempotency, dry-run, externally side-effecting consumers excluded from restore re-delivery |
+| T03 | Unauthorized replay to trigger notifications or mutate indexes | relay_operator or admin capability with audit entry; replay never edits payloads |
+| T04 | Decrypted snapshot left on disk after restore | decrypt only into the target, wipe temp files, runbook step to restrict access, report lists files left |
+| T05 | Resurrected deleted content after restore | tombstone ledger re-application before readyz returns 200, refusal without a covering ledger (V09), and test for it |
+| T06 | Senders believe data was delivered that the restored relay lost | signed restore announcement with lostWindow and lastReceiptSeq; vault outboxes resend covered entries |
+| T07 | Restored auction host contradicts bid orders or results it already signed | auctions with activity in the lost window frozen for renegotiation through AuctionHostPort |
+| T08 | An attacker's relay claims to succeed a compromised one | the new identity's announcement names predecessorRelayId and the compromise revocation (signed by the old key) names successorRelayId; vaults reroute only after an out-of-band fingerprint confirmation (F16.S03.M03 RB-01) |
+
+**Abuse controls**
+- Rate limit 500 replays per minute and 1 restore per target directory.
+- Every replay and restore is written to the operator audit log (CTR-CAP-001 CAP-7) with actor, capability and counts only.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-122-09.T10 | abuse | PS-122-07.R03, PS-122-07.R01 | tombstone issued after the snapshot, restore then query the public projection | tombstone re-applied from the ledger before readyz 200; deleted projection not served |
+| TEST-PS-122-09.T11 | abuse | PS-122-07.R02, PS-122-07.R01 | restore then scan filesystem for plaintext snapshots and temp files | decrypted data only inside target, mode 0600, temp files wiped |
+| TEST-PS-122-09.T23 | abuse | PS-122-02.R01, PS-122-07.R03 | plan with a relabelled manifest, then with the tombstone ledger artifact removed | PLATFORM_BACKUP_MANIFEST_INVALID, then PLATFORM_RECOVERY_LEDGER_MISSING; nothing restored |
+
+## Dependencies
+
+Module depends on: F15.S03.M02, F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-EVT-001, CTR-IDM-001, CTR-OBS-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

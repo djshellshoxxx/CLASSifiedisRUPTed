@@ -1,35 +1,46 @@
-# PS-143-07 — privacy retention abuse
+# PS-143-07 — Privacy, retention and abuse: Release gates
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-07. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for gates within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-143-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-143-07.R01** Reports contain package names and advisory IDs from the audit and test IDs; no user data.
+- **PS-143-07.R02** Waivers are public in the repository and carry no personal data beyond a GitHub handle.
+- **PS-143-07.R03** Gate reports are retained with the release artifacts for 1 year.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Package names, advisory IDs, test IDs, requirement IDs.
+- No user data.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Release reports kept with release artifacts for 1 year; CI copies 30 days.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Release forced through by editing the gate or waivers | gates and waivers are code-owned, waivers expire in 14 days and are listed in the report |
+| T02 | Fake test titles to satisfy traceability | gate counts only tests present in a JUnit report as passed and whose spec row lists the requirement |
+| T03 | Stale green reports reused | evidence must match the commit SHA and be under 24 h old |
+| T04 | Coverage padded by listing unrelated requirements in a test row covers | a mapping counts only with a shared key term or a code-owner approved mapping review whose text hash still matches (QUALITY_GATE_TRACE_MAPPING) |
+| T05 | Unreviewed or tampered governance seed pack shipped as bundled, which F18 applies without policy decisions | signature by the release-pinned projectPublisherDid and a cid equal to the code-owner approved release review are required (QUALITY_GATE_GOVERNANCE_BUNDLE) |
+
+**Abuse controls**
+- A gate may not be disabled by environment variable in the release workflow; only waivers are allowed.
+- The audit gate ignores nothing silently: ignored advisories need a waiver.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-143-09.T10 | integration | PS-143-07.R01, PS-143-07.R02, PS-143-07.R03 | inspect reports for data and retention config | only package, advisory, test IDs; handles only in waivers; retention 1 year |
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F17.S03.M03, CTR-FED-001, F18.S01.M01, F18.S01.M02, F18.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

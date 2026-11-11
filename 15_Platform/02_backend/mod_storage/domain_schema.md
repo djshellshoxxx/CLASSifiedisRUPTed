@@ -1,35 +1,157 @@
-# PS-119-01 — domain schema
+# PS-119-01 — Domain schema: Storage
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-01. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M03 Storage](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/storage` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the domain schema process for storage within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-119-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-119-01.R01** A StoredRecord holds the key (tenantId, type, id), a revision starting at 1 and incremented by exactly 1 per accepted write, JSON data, up to four indexed text values and createdAt and updatedAt timestamps.
+- **PS-119-01.R02** An OutboxEvent stores the CTR-EVT-001 envelope with a strictly increasing sequence, and an InboxEntry records the delivery status, attempts and next attempt time per (consumer, eventId).
+- **PS-119-01.R03** The memory, IndexedDB and SQLite adapters share one row model so data round-trips identically, including JSON normalization and UTF-8 binary ordering of index values.
+- **PS-119-01.R04** A MediaBlob is stored by content address blob:sha256-<base64url> with size, content type, privacy class and encryption flag, and its holders are the records that reference it.
+- **PS-119-01.R05** A dead_letter row holds consumer, eventId, tenant, type, the envelope, attempts, the error code, dead_at, replay_count (INTEGER NOT NULL DEFAULT 0) and last_replayed_at (nullable), and replay_count and last_replayed_at are kept across requeue (dead to retry) and re-dead-lettering until the row is deleted on delivery or purge.
+- **PS-119-01.R06** The relay SQLite adapter attaches the database file named by its option encryptedBlobsPath (the relay composition passes <RELAY_DATA_DIR>/blobs_enc.sqlite) as schema blobs_enc on every connection and keeps the ciphertext of every encrypted MediaBlob (encrypted true) in blobs_enc.blob_bytes keyed (tenant, ref), while its main.blobs row holds ref, size, content type, privacy, encrypted = 1 and createdAt with zero-length bytes and its holders stay in main.blob_refs; P0 plaintext blobs stay entirely in main, and the IndexedDB and memory adapters keep all bytes in their blobs store.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### StoredRecord
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.platform.stored_record/v1` · storage **relay+device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| tenantId | uuidv7 — LocalSettings.vaultId (F15.S04.M03) in the vault, relay tenant on a relay |
+| type | string — <slug>.<entity> declared by defineRepo, for example platform.outbox_entry for F15.S01.M01 OutboxEntry rows |
+| id | string — record ID, UUIDv7 for domain records |
+| revision | int — starts at 1, +1 per accepted write (ID-4) |
+| data | json — owning module's schema; class and retention set by that module |
+| idx1? | string — first declared index value |
+| idx2? | string — second declared index value |
+| idx3? | string — third declared index value |
+| idx4? | string — fourth declared index value |
+| createdAt | timestamp — RFC 3339 UTC, kept across updates and restores |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most one row per (tenantId, type, id).
+- A write with expectedRevision n succeeds only when the stored revision is n (0 means absent) and stores n + 1.
+- Index slots follow declaration order and are never reordered for an existing type.
+
+### OutboxEvent
+
+Schema `classrup.platform.outbox_event/v1` · storage **relay+device** · privacy **P2** · retention **RET-SHORT**
+
+| Field | Type and constraints |
+|---|---|
+| seq | int — strictly increasing per vault or relay |
+| eventId | uuidv7 — envelope eventId, unique |
+| tenantId | uuidv7 — envelope tenant |
+| type | string — <slug>.<entity>.<past_tense_verb> |
+| aggregateType | string — envelope aggregate.type |
+| aggregateId | string — envelope aggregate.id |
+| revision | int — aggregate revision |
+| occurredAt | timestamp — envelope occurredAt |
+| envelope | json — full CTR-EVT-001 envelope |
+
+**Invariants**
+- Written in the same transaction as the state change it describes (EVT-2, EVT-8).
+- Never leaves the device or relay by itself; cross-party facts travel as signed statements queued by F15.S01.M01 as OutboxEntry records (EVT-9).
+
+### InboxEntry
+
+Schema `classrup.platform.inbox_entry/v1` · storage **relay+device** · privacy **P1** · retention **RET-SHORT**
+
+| Field | Type and constraints |
+|---|---|
+| consumer | string — subscriber name <slug>.<consumer> |
+| eventId | uuidv7 — delivered event |
+| aggregateId | string — used to hold back later events of the same aggregate |
+| status | enum — done \| retry \| dead |
+| attempts | int — failed or successful handler runs |
+| nextAttemptAt? | timestamp — set while status is retry |
+| lastError? | string — error code only |
+| updatedAt | timestamp — RFC 3339 UTC |
+
+**Invariants**
+- At most one row per (consumer, eventId); a done or dead row makes redelivery a no-op.
+- status done is written in the same transaction as the consumer's side effects.
+- A row with status retry whose dead_letter row exists is a requeued dead letter; its dead_letter row keeps replay_count and last_replayed_at until delivery or purge.
+
+### MediaBlob
+
+Schema `classrup.platform.media_blob/v1` · storage **relay+device** · privacy **P0** · retention **RET-STANDARD**
+
+| Field | Type and constraints |
+|---|---|
+| tenantId | uuidv7 — vault or relay tenant |
+| ref | string — blob:sha256-<base64url of SHA-256 of bytes> |
+| bytes | bytes — metadata stripped by F10.S02.M03 in the vault; ciphertext when encrypted, which a relay keeps in blobs_enc.blob_bytes with zero-length main.blobs.bytes; stored exactly as received, never re-encoded |
+| size | int — ≤ 5 242 880 bytes and ≤ the TenantPort limit (maxUploadBytes on a relay, LocalSettings.localLimits.maxLocalAttachmentBytes in the vault) |
+| contentType | string — lowercase type/subtype |
+| privacy | enum — P0 \| P1 \| P2 \| P3; a relay accepts P0 plaintext or ciphertext only |
+| encrypted | boolean — true for P2 media encrypted by F08 before upload |
+| createdAt | timestamp — RFC 3339 UTC |
+| holders | set — record holders <type>/<id> in blob_refs |
+
+**Invariants**
+- The ref equals the SHA-256 content address of the stored bytes; identical bytes are stored once per tenant.
+- The blob is deleted in the transaction that removes its last holder; an encrypted blob deletion reports shred so the owner deletes the per-object key.
+- Storing identical bytes with a more public class lowers the stored class; it is never raised implicitly.
+- On a relay a plaintext image blob is stored only after the registered verifyImageClean reported it clean, and the stored bytes are byte-identical to the received bytes whose hash the signed listing references.
+- On a relay no main.blobs row with encrypted = 1 holds bytes of non-zero length; its ciphertext exists at most once, in blobs_enc.blob_bytes under the same (tenant, ref).
+
+### Storage DDL
+
+```sql
+CREATE TABLE records (tenant TEXT NOT NULL, type TEXT NOT NULL, id TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK (revision >= 1), data TEXT NOT NULL,
+  idx1 TEXT, idx2 TEXT, idx3 TEXT, idx4 TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant, type, id)) WITHOUT ROWID;
+CREATE INDEX records_idx1 ON records(tenant, type, idx1, id);  -- likewise idx2..idx4
+CREATE TABLE outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, tenant TEXT NOT NULL,
+  type TEXT NOT NULL, aggregate_type TEXT NOT NULL, aggregate_id TEXT NOT NULL, revision INTEGER NOT NULL,
+  occurred_at TEXT NOT NULL, envelope TEXT NOT NULL);
+CREATE TABLE inbox (consumer TEXT NOT NULL, event_id TEXT NOT NULL, aggregate_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('done','retry','dead')), attempts INTEGER NOT NULL,
+  next_attempt_at TEXT, last_error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (consumer, event_id)) WITHOUT ROWID;
+CREATE TABLE leases (tenant TEXT NOT NULL, resource_id TEXT NOT NULL, holder TEXT NOT NULL, expires_at TEXT NOT NULL,
+  acquired_at TEXT NOT NULL, fence INTEGER NOT NULL, PRIMARY KEY (tenant, resource_id)) WITHOUT ROWID;
+CREATE TABLE dead_letter (consumer TEXT NOT NULL, event_id TEXT NOT NULL, tenant TEXT NOT NULL, type TEXT NOT NULL,
+  envelope TEXT NOT NULL, attempts INTEGER NOT NULL, error_code TEXT NOT NULL, dead_at TEXT NOT NULL,
+  replay_count INTEGER NOT NULL DEFAULT 0, last_replayed_at TEXT,
+  PRIMARY KEY (consumer, event_id)) WITHOUT ROWID;
+CREATE INDEX dead_letter_dead_at ON dead_letter(dead_at);
+CREATE TABLE blobs (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL CHECK (size <= 5242880),
+  content_type TEXT NOT NULL, privacy TEXT NOT NULL, encrypted INTEGER NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY (tenant, ref)) WITHOUT ROWID;
+CREATE TABLE blob_refs (tenant TEXT NOT NULL, ref TEXT NOT NULL, holder TEXT NOT NULL, PRIMARY KEY (tenant, ref, holder)) WITHOUT ROWID;
+-- relay SQLite adapter only: ATTACH DATABASE '<encryptedBlobsPath>' AS blobs_enc on every connection, PRAGMA blobs_enc.journal_mode=WAL
+CREATE TABLE blobs_enc.blob_bytes (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL CHECK (length(bytes) <= 5242880),
+  PRIMARY KEY (tenant, ref));
+-- main.blobs rows with encrypted = 1 hold X'' as bytes on a relay; their ciphertext is the blobs_enc.blob_bytes row with the same key.
+CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL) WITHOUT ROWID;
+-- kernel:0003_dead_letter_replay: ALTER TABLE dead_letter ADD COLUMN replay_count INTEGER NOT NULL DEFAULT 0;
+--   ALTER TABLE dead_letter ADD COLUMN last_replayed_at TEXT; CREATE INDEX dead_letter_dead_at ON dead_letter(dead_at);
+-- kernel:0004_drop_sync_outbox: DROP TABLE sync_outbox (created by kernel:0001_base, no longer read or written;
+--   shipped one release after the last release that used it, SCH-5 contract step).
+-- kernel:0005_encrypted_blob_store: CREATE TABLE blobs_enc.blob_bytes; then in batches of 100 rows, each one transaction with
+--   PRAGMA main.secure_delete=ON: INSERT INTO blobs_enc.blob_bytes SELECT tenant, ref, bytes FROM main.blobs WHERE encrypted = 1
+--   AND length(bytes) > 0; UPDATE main.blobs SET bytes = X'' for the same rows (zeroes the freed main pages).
+-- F15.S01.M01 OutboxEntry rows are records rows (type 'platform.outbox_entry'); storage has no sync outbox table.
+-- idempotency table: see F15.S02.M02. IndexedDB uses one object store per table with the same row shapes.
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-119-09.T01 | contract | PS-119-01.R01, PS-119-01.R03, PS-119-02.R01, PS-119-02.R02, PS-119-04.R02, PS-119-09.R01 | create, duplicate create, stale update, remove, equality, range, ordered and cursor queries on memory, SQLite and IndexedDB | identical results; CONFLICT_REVISION with currentRevision; NOT_FOUND; VALIDATION_FAILED for bad cursor or limit |
+| TEST-PS-119-09.T04 | integration | PS-119-01.R02, PS-119-03.R01, PS-119-04.R03, PS-119-06.R03, PS-119-09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered |
+| TEST-PS-119-09.T05 | contract | PS-119-01.R05, PS-119-03.R02, PS-119-04.R06, PS-119-07.R02 | dead-letter an event, requeue it, fail 8 more times, requeue again, requeue twice in a row, disable the consumer of a third requeued event, leave a fourth undelivered 7 days, deliver a fifth, purge at dead_at + 30 days | replay_count 1 then 2 with last_replayed_at kept on re-dead-lettering; second requeue CONFLICT_STATE; FEATURE_DISABLED and EXPIRED returns keep replay_count; delivered row deleted; purge removes only dead rows older than 30 days |
+| TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
+| TEST-PS-119-09.T23 | integration | PS-119-01.R06, PS-119-07.R05 | relay SQLite adapter with encryptedBlobsPath puts 3 encrypted blobs carrying the canary and 2 P0 blobs, then node:sqlite backup() of writerConnection() runs; scan relay.sqlite, its WAL, the backup copy and blobs_enc.sqlite; repeat the puts on IndexedDB and memory | canary only in blobs_enc.sqlite and its WAL; every main.blobs row with encrypted = 1 has zero-length bytes; refs, sizes, privacy and holders in main; P0 bytes in main; IndexedDB and memory keep all bytes in their blobs store |
+
+## Dependencies
+
+Module depends on: F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-IOX-001, CTR-FLG-001, CTR-OBS-001, CTR-TST-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

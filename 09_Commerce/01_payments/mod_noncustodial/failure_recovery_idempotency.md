@@ -1,35 +1,32 @@
-# PS-069-06 — failure recovery idempotency
+# PS-069-06 — Failure recovery and idempotency: Noncustodial payment claims
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-06. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S01.M01 Noncustodial payment claims](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/payments/noncustodial` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-069-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-069-06.R01** Commands are idempotent per CTR-IDM-001 using vault command IDs, and mutating commands require expectedRevision.
+- **PS-069-06.R02** Statement delivery uses the sync outbox with states prepared, transport_acknowledged and peer_accepted; the UI shows only the state reached (IDM-7).
+- **PS-069-06.R03** Conflicting signed statements are detected, frozen and surfaced; there is no last-writer-wins for money or consent.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Vault command ID recorded in the inbox for 24 h; replay returns the original result. Statements are deduplicated by cid, so redelivery is a no-op. dealId is the UUIDv8 of (contextRef, contextCid) and dealCid the cid of the canonical terms, so repeated or independent opens converge; the completion body is deterministic so every party signs the same completionCid.
+- **concurrency:** expectedRevision on acknowledge, dispute and cancel; unique index on (vault, context type, context id, context cid); multi-tab writers serialize through a Web Lock named commerce-deal. Cross-vault there is no lock: statements are ordered by the per-author seq and prev chain, unknown parents are buffered 24 h, and only two different statements by one author with the same prev or seq freeze the claim.
+- **retries:** Sync outbox retries delivery with backoff 5 s, 30 s, 5 min, 1 h, then every 6 h until the claim expires; receivers dedupe by cid. Held claims are never retried by the outbox because they are not in it.
+- **offline:** All commands commit locally while offline and show pending; statements wait in the sync outbox. Acknowledgement is allowed offline but the UI says the payer has not seen it until peer_accepted. A crypto claim made offline with a verifier configured stays held until the txid lookup succeeds.
+- **partial failure:** Local commit and outbox insert are one IndexedDB transaction, so no statement is prepared without its state change. If transport fails the state stays prepared and is retried; no automatic rollback of a signed statement. A ContextTermsPort failure on open stores nothing; on ingest it buffers the statement for 24 h.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-069-09.T12 | integration | PS-069-06.R01, PS-069-06.R02 | same command ID replayed; delivery interrupted at each sync state | original result returned; UI state equals the highest sync state reached |
+| TEST-PS-069-09.T13 | chaos | PS-069-06.R03, PS-069-07.R03, PS-069-09.R03, PS-069-02.R02, PS-069-02.R05 | vault B receives two different claims by the payer with the same prev | claim frozen with COMMERCE_STATEMENT_FORK, both retained, no auto-resolution; flood of 21 statements in an hour from a known party quarantines the 21st |
+
+## Dependencies
+
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

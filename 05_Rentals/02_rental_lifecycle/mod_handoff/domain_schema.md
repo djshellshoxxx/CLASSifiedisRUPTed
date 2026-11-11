@@ -1,35 +1,69 @@
-# PS-042-01 — domain schema
+# PS-042-01 — Domain schema: Rental handoff
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-042-01. **Owner:** [05_Rentals/02_rental_lifecycle/mod_handoff](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S02.M01 Rental handoff](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_lifecycle/handoff` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the domain schema process for handoff within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-042-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-042-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-042-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-042-01.R01** A RentalHandoff stores reservation, parties, checklist items, readings, photo references, notes, revision, signatures and state, with revision per CTR-ID-001.
+- **PS-042-01.R02** Handoffs are P2 and kept under RET-EVIDENCE; photos are encrypted F08.S01.M03 attachments referenced by MediaBlob id (blob:sha256-…) and attachment id, never embedded, and each vault keeps its own verified copy of every referenced photo as evidence.
+- **PS-042-01.R03** A report revision is immutable once signed; any change is a new revision with a new cid, and attestations bind to one cid.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### RentalHandoff
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.rentals.handoff/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-042-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — vault tenant scope |
+| reservationId | uuidv7 — ref F05.S01.M01 RentalReservation; unique |
+| ownerId | actorId — owner key |
+| renterId | actorId — renter key |
+| startsAt | timestamp — copied from rentals.reservation.confirmed; anchors the window |
+| reportRevision | int — 1..6; increments on each new signed report |
+| checklist | ChecklistItem[] — 1..30 items {id from the reservation checklistTemplate, label ≤ 80, condition: ok \| worn \| damaged \| missing \| na, note? ≤ 200, photoIds? ≤ 3} |
+| readings | Reading[] — 0..5 items {label ≤ 40, value: number, unit ≤ 10} |
+| photos | PhotoRef[] — 0..20 items {blobId: blob:sha256-<base64url> (F15.S02.M03 MediaBlob id), attachmentId: F08.S01.M03 attachment id, takenAtClaim?, heldLocally: boolean} |
+| notes? | string — ≤ 1000 code points, plain text |
+| reportCid? | string — sha256- cid of the latest signed report statement |
+| authorId? | actorId — signer of the latest report |
+| signedReportHeld | boolean — a report signed by either party is held in this vault |
+| attestations | Attestation[] — 0..2 items {signerId, reportCid, attestationCid, createdAtClaim, receivedAt} |
+| changeRounds | int — 0..5 |
+| attestedAt? | timestamp — local time when both signatures were first held |
+| expiryReason? | enum — no_report \| unattested |
+| state | enum — drafting \| awaiting_counterparty \| frozen \| attested \| expired \| cancelled |
+| syncState | map — per peer {state: prepared \| transport_acknowledged \| peer_accepted, at} |
+| revision | int — CTR-ID-001 ID-4 |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- state attested implies two attestations by owner and renter on the same reportCid and every referenced photo held and verified locally.
+- Every photo reference is a MediaBlob id with no embedded bytes.
+- A new reportRevision clears attestations that name an earlier cid.
+- expiryReason no_report implies no report signed by either party was held at startsAt plus 96 hours.
+
+### Storage DDL
+
+```sql
+CREATE TABLE rentals_handoff (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reservation_id TEXT NOT NULL, state TEXT NOT NULL,
+  report_revision INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX rentals_handoff_reservation ON rentals_handoff(tenant_id, reservation_id);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-042-09.T01 | unit | PS-042-01.R01, PS-042-01.R02, PS-042-01.R03, PS-042-02.R03 | build a report with 20 photos, strip metadata through F10.S02.M03 before encryption, sign it | MediaBlob ids computed over the stripped bytes; no metadata in stored or sent bytes; cid stable |
+| TEST-PS-042-09.T04 | integration | PS-042-03.R02, PS-042-01.R03 | attest revision 2 after revision 3 exists; request changes then re-attest | RENTALS_REPORT_STALE; new revision clears attestations; attested only on the exact cid |
+| TEST-PS-042-09.T15 | e2e | PS-042-01.R01, PS-042-04.R01 | mobile owner and renter complete a handoff in two browsers | both show attested with the same fingerprint; axe zero serious issues |
+| TEST-PS-042-09.T18 | integration | PS-042-07.R04, PS-042-01.R02, PS-042-04.R05 | relay blob of one photo expired before the renter fetched it; author deletes the thread message after the renter stored the other photos; no comms.attachment.deleted reaches the renter vault | the download returns NOT_FOUND, the photo is listed in missingPhotos[] and re-requested, and attest is refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify against their MediaBlob ids after the deletion |
+
+## Dependencies
+
+Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

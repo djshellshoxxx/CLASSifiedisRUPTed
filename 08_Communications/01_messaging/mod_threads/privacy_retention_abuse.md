@@ -1,35 +1,53 @@
-# PS-061-07 — privacy retention abuse
+# PS-061-07 — Privacy, retention and abuse: Conversation threads
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-061-07. **Owner:** [08_Communications/01_messaging/mod_threads](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_threads. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M02 Conversation threads](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/threads` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for threads within 01_messaging. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-061-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-061-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-061-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-061-07.R01** Thread membership exists only in vaults; the relay sees only per-message sender DID and recipient mailbox (F08.S01.M01), and this is disclosed.
+- **PS-061-07.R02** Archived threads and their messages are purged locally 30 days after archive and on vault wipe.
+- **PS-061-07.R03** Block enforcement uses only the local principal's own block list and never reveals to the blocked party that a block exists; the blocked party's vault state and responses are identical to the unblocked case.
+- **PS-061-07.R04** Privacy duties (N6): fields are classified per F10.S02.M02, ExportSectionPort, DeletionPort and RetentionPurgePort are registered, and a remote participant's departure is applied only from a verified deletion notice.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Thread: P2, vault only; the thread-open statement travels as an end-to-end encrypted envelope, so the relay sees only mailbox routing metadata.
+- Mute state: P3, visible to the owner only and to the notification router as a boolean.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Active threads: RET-STANDARD until the user deletes them; archived threads purged locally 30 days after archive.
+- When a participant erases their vault the others keep their copy; the roster shows the pseudonym last known or a deleted-member label after a verified notice, and no remote deletion is claimed.
+- Message requests: erased 30 days after archive like any archived thread.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-061-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Stalking through repeated new threads after block | the blocker's vault drops thread-open statements from DIDs it blocked silently so the sender learns nothing; receiving vaults cap requests at 5 per unknown DID; the 30 per day creator limit is only a UX guard |
+| T02 | Adding an unwanted person to a cycle thread | roster changes only follow mutiny.party.joined events derived from verified signed statements that carry that person's own consent in F02, and the entitlement table requires every listed participant to be on the roster |
+| T03 | Enumeration of who talks to whom | threads exist only in vaults; list and get are local; relay routing metadata is disclosed |
+| T04 | Thread spam to many members from one listing | receiving vaults put unknown-sender threads in message requests capped at 5 per DID and 100 in total; a relay may rate limit puts by its hosting policy |
+| T05 | Split conversation through diverging thread IDs | threadIds are derived from the context and generation, and a statement whose threadId does not match its derivation is rejected |
+
+**Abuse controls**
+- Local filtering: unknown-sender thread-open statements wait in message requests and the user can accept, decline, block or report; relays apply their own hosting policy.
+- Report thread action passes thread ID and participant DIDs to the chosen relay operator or advisory feed (F12.S01.M01); content is attached only by the reporter's decrypted export.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-061-09.T10 | abuse | PS-061-07.R01, PS-061-07.R03 | blocked party sends thread-open statements | blocker vault drops silently, sender sees no error or signal of a block |
+| TEST-PS-061-09.T11 | integration | PS-061-07.R02 | archive then advance clock 30 days | thread and messages purged locally; peers keep their copy |
+| TEST-PS-061-09.T12 | abuse | PS-061-07.R03, PS-061-02.R01 | 31st thread creation in a day; buyer B (not the listing author) opens a thread about A's listing; D (outside the cycle roster) opens a cycle thread | RATE_LIMITED as UX guard; B's thread is accepted in A's vault (request while B is unknown, active after accept); COMMS_THREAD_OPEN_REJECTED and quarantine for D |
+| TEST-PS-061-09.T19 | abuse | PS-061-02.R04, PS-061-07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent |
+| TEST-PS-061-09.T20 | integration | PS-061-04.R04, PS-061-04.R05, PS-061-07.R04 | A's account deletion runs DeletionPort.plan and execute; later B's departure notice (envelope author B, payload without any DID) reaches C once signed by an active key of B and once after B's account_deleted revocation listing its cid in finalCids; a notice correctly signed by B whose payload adds a did field; a commitment-kind notice from B | A's plan lists A's thread counterparties as noticeRecipients and A's threads are archived account_deleted before keys are destroyed; C sets leftAt and departedByNotice for B, read from the envelope author, on every thread where B is a current participant, with a deleted-member label, for both deliveries; the notice with a did field is rejected VALIDATION_FAILED; the commitment notice changes no thread; registry lists thread_open with signer role |
+
+## Dependencies
+
+Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

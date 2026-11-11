@@ -1,0 +1,302 @@
+id: F12.S03.M04
+scope: MVP
+summary: >-
+  Graduated per-key limits that a relay applies only to resources it can observe itself: index writes of signed
+  public projections it hosts (listings_per_day becomes index_writes_per_day), mailbox puts to recipient mailboxes the
+  sender has not written to before, bids on auctions it hosts, and governance comments it accepts for a policy
+  proposal (F18.S02.M01) from keys it first observed less than 7 days ago. Limits rise with the key's age since the relay's
+  own first observation of it and with completed dealings counted only from completion statements that both parties
+  voluntarily submit, drop by a fixed factor at medium or high risk and lift again as soon as the level drops
+  (friction, never a ban), go to 0 while a restrict_feature action covers them, and can be overridden by that relay's
+  moderators with a reason and an expiry. Offers and cycle proposals travel end to end encrypted between vaults, so
+  caps on them are vault-local UX guards in F12.S03.M03. Limits exist only per relay; a key's standing on one relay
+  says nothing about another, and the vault never reports limits to anyone.
+responsibilities:
+  - Own the AccountLimit record per (relay, key, limit key) with tier, base value, risk multiplier, action restriction, override and effective value.
+  - Derive tiers (new, established, trusted) from relay-clock time since first observation and completed dealings counted from voluntarily submitted two-party completion statements, using documented thresholds.
+  - Answer limit checks for the relay command bus in-process, using F12.S03.M03 flow buckets the relay itself consumed and never caller-supplied counts.
+  - Apply the risk multiplier (medium 0.75, high 0.5, never below 1) on every level rise and drop, action restrictions mapped from restricted capabilities, and moderator overrides with reason, bound and expiry, and emit moderation.limit.changed.
+  - Answer the new-key governance comment cap in-process for the relay bus before F18.S02.M01 governance.policy_comment.accept (N18): a key this relay first observed less than 7 days ago gets new_key_comments_per_proposal 1 per proposal, at most 25 comments per proposal are accepted from such keys, usage comes from F12.S03.M03 buckets the relay consumed itself, and denials are RATE_LIMITED as F18.S02.M01 V15 states.
+non_responsibilities:
+  - Rate limiting of requests and vault-local guards for open offers and open cycle proposals (F12.S03.M03), and risk scoring (F12.S03.M01).
+  - Suspension, removal and capability denial (F12.S02.M01 decides; F16.S01.M01 authorize() enforces suspensions).
+  - Reputation computation (F07.S03.M01); deals themselves (F09.S01.M01).
+  - "Future: limits negotiated between relays by signed attestation; per-category limits."
+depends_on: [F12.S03.M03, F07.S02.M01, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a new member of a relay, I see exactly how many listings I can index, how many new people I can message and how many bids I can place per day, and how I move up (for example 'after 7 days and 3 completed deals you chose to show this relay').
+  - As a relay moderator, I can raise a long-standing seller's limit for 30 days with a recorded reason.
+  - As a member whose limit was lowered by a risk level, I see the reason, and the limit returns as soon as the level drops.
+  - As a member, I may submit a completion statement both of us signed to count a deal towards my tier, knowing this tells the relay that we dealt.
+  - As a new member of a relay, I can comment once on each open policy proposal during my first 7 days there, and I see that this cap lifts when my key is 7 days old on that relay.
+edge_cases:
+  - Moderator lowers a limit below the member's usage today; existing items stay, new index writes are refused with MODERATION_ACCOUNT_LIMIT_REACHED until the window resets.
+  - Override expires while the member is above the lower limit; nothing is deleted, new writes are refused until the window resets.
+  - Member moves to a different relay; the new relay starts them at tier new, and says so on the limits screen.
+  - Risk level changes twice within a minute; the effective limit follows the latest event and emits one limit.changed event per distinct effective value.
+  - Tier thresholds change by operator policy; existing keys are re-tiered at the next daily sweep and never lose more than one tier per sweep.
+  - A key with no first-seen record (restored relay); the tier defaults to new and first-seen is set to restore time.
+  - A caller passes currentCount 0 for a key that already used its limit; the field is refused with VALIDATION_FAILED and only the relay's own count is used.
+  - Two keys of the same person sign completion statements to each other to farm tier; counting refuses counterparties linked to the submitter's principal, counterparties first seen less than 7 days ago and more than one counted completion per pair in 30 days.
+  - A restrict_feature action covering federation.record.ingest is overturned on appeal; moderation.action.reverted clears the restriction and the limit returns with cause action_reverted.
+  - A key first seen 2 days ago posts a second comment on the same proposal; it is refused with RATE_LIMITED and retryAfterMs up to the key's 7-day mark, while its first comment on another proposal is accepted.
+  - Thirty keys first seen today each comment once on one proposal; the first 25 are accepted, the 26th and later get RATE_LIMITED from the proposal-wide new-key cap, and a key first seen 8 days ago is neither counted nor capped by it.
+ux:
+  screens:
+    - "My limits (relay member): table of limit, used today, allowed, tier, active adjustments with reasons (risk level, action, override), and the next tier requirements."
+    - "Limit reached sheet: which limit, current usage, when it resets or what to do, no hidden penalty wording."
+    - "Count a completed deal (member): explanation that the relay learns the two keys dealt, preview of the completion statement fields sent (no amounts), submit."
+    - "Moderator limit override form: key, limit, value (0..10 000), reason (10..500 characters), expiry (max 90 days)."
+  states: [loading, within-limit, near-limit, at-limit, adjusted-by-risk, restricted-by-action, overridden]
+  a11y:
+    - Usage is shown as text 'used of allowed' plus a progress element with an accessible name.
+    - Limit reached messages are announced in an aria-live assertive region once.
+    - Override form fields have labels and errors linked with aria-describedby.
+processes:
+  domain_schema:
+    requirements:
+      - An AccountLimit stores key, limit key, tier, base value, risk multiplier, action restriction, override, effective value and the reasons for each adjustment, with tenant and revision per CTR-ID-001.
+      - Limits are P2 between the member and the relay's moderators and retained under RET-STANDARD with the membership record.
+      - Effective value is 0 while an action restriction is active, otherwise the override when active, otherwise floor(base × multiplier) with a minimum of 1 unless the base is 0.
+      - Limit keys cover only resources the relay itself observes (index writes of public projections it hosts, mailbox puts to new recipient mailboxes, bids on auctions it hosts and governance comments it accepts for a policy proposal), never offers, cycle proposals or other end-to-end encrypted statements.
+      - new_key_comments_per_proposal applies only while the key's firstSeenAt on this relay is less than 7 days ago, with base value 1 per proposal on every tier and a fixed proposal-wide cap of 25 accepted comments from such keys that no per-key override raises; from the 7-day mark the check answers allowed without consuming.
+    entities:
+      - name: AccountLimit
+        schema: classrup.moderation.accountlimit/v1
+        storage: relay
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "subjectKey: did:key — member key on this relay"
+          - "limitKey: enum — index_writes_per_day | new_mailbox_recipients_per_day | bids_per_day | new_key_comments_per_proposal"
+          - "tier: enum — new | established | trusted"
+          - "baseValue: int — from tier table, 0..10000"
+          - "riskLevel: enum — low | medium | high (latest from moderation.risk.elevated or lowered)"
+          - "riskMultiplier: number — 1.0, 0.75 or 0.5"
+          - "actionRestriction?: object — { actionId, until?: timestamp } from an active restrict_feature action mapped to this limit key; until absent only for an operator-applied permanent restriction"
+          - "overrideValue?: int — 0..10000 set by a moderator"
+          - "overrideReason?: string — 10..500 code points"
+          - "overrideBy?: did:key — moderator key"
+          - "overrideExpiresAt?: timestamp — RFC 3339 UTC, at most 90 days after setting"
+          - "effectiveValue: int — computed, ≥ 0"
+          - "firstSeenAt: timestamp — RFC 3339 UTC, relay clock at this relay's first observation of the key"
+          - "completedDeals: int — completions counted from submitted two-party statements, capped at 1000"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - effectiveValue is 0 while actionRestriction is set and its until is absent or in the future; otherwise overrideValue when overrideExpiresAt is in the future; otherwise max(1, floor(baseValue × riskMultiplier)) unless baseValue is 0.
+          - overrideValue requires overrideReason, overrideBy and overrideExpiresAt.
+          - At most one AccountLimit exists per (tenantId, subjectKey, limitKey).
+          - completedDeals counts each completionCid at most once per key and only completions whose every party signature verified.
+    note: "Store-local table moderation_counted_completion (tenantId, completionCid, subjectKey, counterpartyKey, countedAt) supports dedupe and the per-pair 30-day rule; P2, retained with the AccountLimit rows. Tier table: new (index_writes_per_day 5, new_mailbox_recipients_per_day 20, bids_per_day 20); established after 7 days since first seen and 3 counted completions (20, 60, 100); trusted after 90 days and 10 counted completions (100, 200, 500). Capability-to-limit table: federation.record.ingest from a hosted vault key -> index_writes_per_day; comms.mailbox.put to a recipient mailbox new for the sender -> new_mailbox_recipients_per_day; auctions.bid.place -> bids_per_day; any other restricted capability is enforced by F16.S01.M01 authorize() only (including governance.policy_comment.relay_accept). New-key comment cap (check only, not a restriction mapping): governance.policy_comment.accept from a key whose firstSeenAt is less than 7 days ago -> new_key_comments_per_proposal with scopeRef the proposal statement cid, base 1 per proposal on every tier and a proposal-wide cap of 25 from such keys; keys from the 7-day mark are not checked for it."
+    sql: |
+      CREATE TABLE moderation_account_limit (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, limit_key TEXT NOT NULL, tier TEXT NOT NULL,
+        effective_value INTEGER NOT NULL, restriction_action_id TEXT, restriction_until TEXT, override_expires_at TEXT,
+        first_seen_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_account_limit_key ON moderation_account_limit(tenant_id, subject_key, limit_key);
+      CREATE TABLE moderation_counted_completion (
+        tenant_id TEXT NOT NULL, completion_cid TEXT NOT NULL, subject_key TEXT NOT NULL, counterparty_key TEXT NOT NULL,
+        counted_at TEXT NOT NULL, PRIMARY KEY (tenant_id, completion_cid, subject_key));
+  validation_rules:
+    requirements:
+      - Override input is validated strictly with bounded value, reason and expiry.
+      - Limit checks validate the limit key and treat unknown keys as denied.
+      - Every violation maps to one stable error code.
+      - A check never accepts a caller-supplied count; usage comes only from F12.S03.M03 buckets the relay itself consumed for the subject key.
+      - The new-key governance comment cap reports denials as RATE_LIMITED with retryAfterMs, because F18.S02.M01 V15 reports every comment intake limit that way and cannot depend on this module, while the other limit keys report MODERATION_ACCOUNT_LIMIT_REACHED.
+    rules:
+      - "V01 | limitKey is in the enum and overrideValue is an integer 0..10000 | VALIDATION_FAILED"
+      - "V02 | overrideReason 10..500 code points and expiry between 1 hour and 90 days | VALIDATION_FAILED"
+      - "V03 | the overriding moderator's principal (F07.S02.M01 key set) is not the subject's principal | FORBIDDEN"
+      - "V04 | expectedRevision matches the AccountLimit revision | CONFLICT_REVISION"
+      - "V05 | check input has no currentCount or other usage field; usage is read only from the relay's own F12.S03.M03 buckets | VALIDATION_FAILED"
+      - "V06 | usage after the check would not exceed the effective value (limit keys other than new_key_comments_per_proposal, which follows V10) | MODERATION_ACCOUNT_LIMIT_REACHED"
+      - "V07 | submit_completion carries a classrup.commerce.deal_completion/v1 body with outcome completed and a valid signature from at least two distinct party keys, and the submitter is one of them | FORBIDDEN"
+      - "V08 | a counted completion needs a counterparty whose principal differs from the submitter's, first seen on this relay at least 7 days ago, and no other counted completion for the same pair in 30 days | PRECONDITION_FAILED"
+      - "V09 | a check for new_key_comments_per_proposal carries scopeRef, the sha256- statement cid of the proposal | VALIDATION_FAILED"
+      - "V10 | new_key_comments_per_proposal for a key first seen less than 7 days ago: its accepted comments on scopeRef stay within its effective value (1 unless overridden) and the proposal's accepted comments from such keys stay within 25; a denial carries retryAfterMs until firstSeenAt + 7 days (F18.S02.M01 V15) | RATE_LIMITED"
+  workflow_state_machine:
+    note: "Limits are recomputed values without lifecycle states; tier, risk, restriction and override changes recompute effectiveValue and emit events."
+    machines: []
+    requirements:
+      - Tier derives from relay-clock age since this relay's own first observation of the key and completed dealings counted from voluntarily submitted two-party completion statements, and promotion is evaluated by the daily sweep and by each counted submission.
+      - A risk level change recomputes the multiplier immediately, and recovery to low restores the base value immediately.
+      - Overrides expire automatically at overrideExpiresAt and the recompute emits a limit.changed event.
+      - An active restrict_feature action whose restricted capabilities map to a limit key sets that limit to 0 until the action expires or is reverted, which clears it and emits limit.changed with cause action_expired or action_reverted.
+    timeouts:
+      - "Daily tier sweep at 03:15 UTC re-tiers keys; override and action-restriction expiry check every 60 s."
+  commands_queries_events:
+    requirements:
+      - The module exposes override, clear-override and completion-submission relay commands, the member's own limits read, and the in-process check used by the relay bus.
+      - Every effective value change emits moderation.limit.changed in the same transaction as the row.
+      - The module consumes risk level rises and drops, enforcement action applied and reverted events and relay session starts to keep multiplier, restriction and first-seen current, and consumes no vault-local deal or account events.
+      - restrictedCapabilities of moderation.action.applied are mapped to limit keys by the documented capability-to-limit table (federation.record.ingest, comms.mailbox.put to a new recipient, auctions.bid.place), and other capabilities never change limits.
+      - Completion submission verifies every party signature on the deal_completion/v1 body, counts it once per key, and never learns amounts or obligations.
+      - "The relay bus calls moderation.accountlimit.check in-process before F18.S02.M01 governance.policy_comment.accept (N18) with limitKey new_key_comments_per_proposal and scopeRef the proposal statement cid; for a key first seen less than 7 days ago the check consumes F12.S03.M03 class governance.policy_comment.new_key (per key and proposal, limitOverride the effective value) and, only when that allows, governance.policy_comment.new_key.proposal (25 per proposal); F18.S02.M01 lists no depends_on edge to this module because the bus injects the check."
+    commands:
+      - name: moderation.accountlimit.override
+        mode: "relay command (moderator); audit-logged; no signed statement to others"
+        capability: moderation.accountlimit.override
+        input: "{ subjectKey, limitKey, overrideValue, reason, expiresInMs, expectedRevision? }"
+        output: "{ accountLimitId, effectiveValue, revision }"
+        errors: [VALIDATION_FAILED, CONFLICT_REVISION, FORBIDDEN]
+        emits: [moderation.limit.changed]
+        idempotent: true
+      - name: moderation.accountlimit.clear_override
+        mode: "relay command (moderator)"
+        capability: moderation.accountlimit.clear_override
+        input: "{ accountLimitId, expectedRevision }"
+        output: "{ accountLimitId, effectiveValue, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, FORBIDDEN]
+        emits: [moderation.limit.changed]
+        idempotent: true
+      - name: moderation.accountlimit.submit_completion
+        mode: "relay command (member, signed request); voluntary; carries the classrup.commerce.deal_completion/v1 body { dealId, dealCid, outcome } and the parties' signatures, never amounts"
+        capability: moderation.accountlimit.submit_completion
+        input: "{ completion: { dealId, dealCid, completionCid, outcome: completed }, signatures: { did, sig }[] (2..10) }"
+        output: "{ counted: boolean, reason?: counterparty_too_new|pair_counted_recently|same_principal, completedDeals, tier }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, PRECONDITION_FAILED]
+        emits: [moderation.limit.changed]
+        idempotent: true
+    queries:
+      - name: moderation.accountlimit.check
+        capability: moderation.accountlimit.check
+        input: "{ subjectKey, limitKey, cost?: 1, scopeRef?: proposal statement cid (required for new_key_comments_per_proposal) }"
+        output: "{ allowed, effectiveValue, used, resetsAt, retryAfterMs?, reasons[] }"
+        errors: [VALIDATION_FAILED, MODERATION_ACCOUNT_LIMIT_REACHED, RATE_LIMITED]
+      - name: moderation.accountlimit.list_mine
+        capability: moderation.accountlimit.read_own
+        input: "{ includeAdjustments?: boolean }"
+        output: "{ items: { limitKey, tier, effectiveValue, used, adjustments[], nextTier? }[] }"
+        errors: []
+    events_produced:
+      - {type: moderation.limit.changed, privacy: P2, payload: "{ accountLimitId, subjectKey, limitKey, previousValue, effectiveValue, cause: tier|risk|override|override_expired|policy|action_restriction|action_reverted|action_expired } — relay-local"}
+    events_consumed:
+      - {type: moderation.risk.elevated, effect: "relay, subjectType key: set riskLevel and riskMultiplier (medium 0.75, high 0.5) on the subject's limits at once"}
+      - {type: moderation.risk.lowered, effect: "relay, subjectType key: set riskLevel and riskMultiplier for the new level (medium 0.75, low 1.0) at once, restoring the base value immediately at low"}
+      - {type: moderation.action.applied, effect: "relay origin, kind restrict_feature: map each restrictedCapabilities entry through the capability-to-limit table and set actionRestriction { actionId, until: expiresAt } on the matching limits (effective value 0); unmapped capabilities and other kinds change nothing"}
+      - {type: moderation.action.reverted, effect: "relay origin: clear actionRestriction for that actionId and recompute; cause action_expired for reason expired, action_reverted otherwise"}
+      - {type: identity.session.started, effect: "relay, kind relay_token: set firstSeenAt for did if absent; the relay bus's in-process first-observation hook (LimitsPort.observe) does the same on the first verified signed request without a session"}
+      - {type: privacy.deletion.completed, effect: "vault: delete cached limit snapshots fetched from relays; relay rows of the subject are deleted 30 days after the relay applies the subject's signed deletion request (DeletionPort), override history stays in the audit log"}
+    errors:
+      - "MODERATION_ACCOUNT_LIMIT_REACHED | 429 | no | the key reached its limit; params.limitKey, params.effectiveValue and params.resetsAt"
+    note: "Statement registry (N2, F11.S01.M01): inbound classrup.commerce.deal_completion/v1 (F09.S01.M01 schema; signer role: each party listed in the completion, verified per signature); no statements are produced. Privacy ports (N6): ExportSectionPort (section moderation.limits, the vault's cached snapshots), DeletionPort and RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02. The relay never trusts counts supplied by the subject's vault; caps on open offers and open cycle proposals are F12.S03.M03 local guards."
+    example: |
+      query moderation.accountlimit.check  (in-process relay bus call before federation.record.ingest of a hosted vault's signed listing projection)
+      { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day" }
+      -> { "allowed": false, "effectiveValue": 5, "used": 5, "resetsAt": "2026-11-05T09:12:00Z", "reasons": ["tier new: 5 per day; becomes 20 after 7 days and 3 counted completed deals"] }
+      POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderator token)
+      { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day", "overrideValue": 30, "reason": "Shop with long trading history on this relay", "expiresInMs": 2592000000 }
+      -> 200 { "accountLimitId": "0192f410-aaaa-7000-8000-00000000000a", "effectiveValue": 30, "revision": 2 }
+      query moderation.accountlimit.check  (in-process relay bus call before governance.policy_comment.accept from a key first seen 2 days ago)
+      { "subjectKey": "did:key:z6MkNewMemberExample", "limitKey": "new_key_comments_per_proposal", "scopeRef": "sha256-Pr0p..." }
+      -> denied as 429 RATE_LIMITED { "retryAfterMs": 432000000, "reasons": ["new key: 1 comment per proposal until 7 days after first seen; 25 per proposal from new keys"] }
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: moderators set and clear overrides within bounds and members read their own limits; the check capability is for the relay bus only."
+      - "Vault policy: not applicable beyond showing the relay's limit statement; the vault never enforces another party's limits."
+      - A moderator cannot override limits on their own key, including any key linked to their principal.
+    capabilities:
+      - "moderation.accountlimit.override | moderator, operator | relay role; subject principal is not the actor's principal; value and expiry bounded"
+      - "moderation.accountlimit.clear_override | moderator, operator | relay role; override exists"
+      - "moderation.accountlimit.submit_completion | member | signed request by a key that is a party to the completion; rate limited by F12.S03.M03"
+      - "moderation.accountlimit.check | operator | in-process relay bus call; not routable over HTTP"
+      - "moderation.accountlimit.read_own | member | subjectKey = actor on this relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Overrides are idempotent per CTR-IDM-001 and use expectedRevision.
+      - Checks never mutate limit state and flow-limit consumption is atomic through F12.S03.M03.
+      - Recompute and event commit in one transaction.
+    idempotency: "Idempotency-Key required on override, clear and submit_completion; replay returns the stored response for 24 h; completion counting is idempotent on (completionCid, subjectKey) for as long as the row is retained."
+    concurrency: "expectedRevision on override; unique (tenant, key, limitKey) index; check reads the committed effective value; flow consumption is an atomic bucket consume; risk and action events are applied under BEGIN IMMEDIATE so the latest event wins per limit."
+    retries: "Callers retry DEPENDENCY_UNAVAILABLE; MODERATION_ACCOUNT_LIMIT_REACHED is not retried until resetsAt."
+    offline: "Vaults queue commands in the outbox; the relay applies limits on replay and returns MODERATION_ACCOUNT_LIMIT_REACHED, which the UI shows with the reset time."
+    partial_failure: "If the rate store is unavailable, flow limits use the failMode of the class from F12.S03.M03; an action restriction whose revert event is delayed still lapses at its until time; privacy ports (N6) run resumably per row."
+  privacy_retention_abuse:
+    requirements:
+      - Limits are P2 relay-side data visible to the member and the relay's moderators and never federated.
+      - Retention is RET-STANDARD with membership, and deletion removes the rows.
+      - Abuse (limit evasion by many keys, moderator favoritism) is limited by per-prefix rate scopes, bounded overrides and audit logs.
+      - Relay limits never depend on counts supplied by the subject's vault, and the relay learns of dealings only from completion statements the parties chose to submit, without amounts.
+      - The module meets N6 by registering ExportSectionPort, DeletionPort and RetentionPurgePort with F10, classifying every AccountLimit field per F10.S02.M02, and consuming privacy.deletion.completed.
+    data:
+      - "AccountLimit: P2 (member, relay moderators)."
+      - "Counted completions: P2 (completion cid and the two keys; no amounts or obligations)."
+      - "Override reasons: P2 free text, shown to the member."
+    retention:
+      - "Rows: RET-STANDARD, deleted 30 days after membership deletion."
+      - "Override history: kept in the audit log for RET-AUDIT (1 year)."
+    threats:
+      - "T01 | Sybil keys evade limits | new tier is deliberately low (5 index writes, 20 new recipients and 20 bids per day), prefix-scoped rate limits in F12.S03.M03 and tenant caps apply"
+      - "T02 | Moderator favoritism via unlimited overrides | override value bounded to 10 000, expiry max 90 days, reason required, weekly override report to operators, audit entries"
+      - "T03 | Hidden penalty via risk multiplier | multiplier visible on the member's limits screen with its reason; friction-only semantics, minimum limit 1"
+      - "T04 | Limit probing to learn thresholds of rivals | check capability not routable over HTTP; members read only their own limits"
+      - "T05 | Forged currentCount from the limited party's vault | checks take no counts; usage is the relay's own bucket state"
+      - "T06 | Tier farming with self-signed completions between own keys | principal linkage check, 7-day counterparty age and one counted completion per pair per 30 days"
+      - "T07 | Overturned restriction keeps a limit at 0 | revert and expiry clear actionRestriction; until lapses even without the event"
+      - "T08 | Sybil keys flood the comment period of a policy proposal | keys first seen less than 7 days ago get 1 comment per proposal and 25 per proposal in total, on top of the per-key and per-prefix comment classes of F12.S03.M03"
+    abuse_controls:
+      - "Override command limited to 30 per 24 h per moderator via F12.S03.M03."
+      - "Completion submissions limited to 20 per 24 h per key via F12.S03.M03."
+      - "Tier promotion requires both age and counted completions, so farming one is insufficient."
+      - "Governance comments from keys first seen less than 7 days ago: 1 per key per proposal and 25 per proposal (new_key_comments_per_proposal)."
+  observability_performance:
+    requirements:
+      - Check outcomes and tier distribution are measured per CTR-OBS-001 without keys.
+      - Check meets p95 ≤ 5 ms in-process on a relay.
+      - Override counts and denials are observable for abuse review.
+    metrics:
+      - "classrup_moderation_limit_checks_total{limit,outcome=allowed|denied}"
+      - "classrup_moderation_limit_keys{tier} (gauge)"
+      - "classrup_moderation_limit_overrides_total"
+      - "classrup_moderation_limit_completions_total{outcome=counted|not_counted|refused}"
+    logs:
+      - "relay info limit.changed {accountLimitId, limitKey, cause, correlationId} — no keys."
+    budgets:
+      - "check p95 ≤ 5 ms; override and submit_completion p95 ≤ 300 ms; list_mine p95 ≤ 100 ms."
+      - "Daily tier sweep of 100 000 keys completes in ≤ 60 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Tier tables and multiplier math are covered by deterministic and property tests.
+      - Authorization and non-disclosure are covered by abuse tests.
+    fixtures: "Relay X, keys A (first seen 2 days ago, 0 counted completions), B (40 days, 5), C (120 days, 12), D (second device key of A's principal), moderators M1 and M2 (M2 with a second key), completion statements signed by B and C, fixed clock 2026-11-04T10:00:00Z with an injectable clock."
+    tests:
+      - "T01 | unit | 01.R01,01.R04,02.R01 | tier table for A, B, C on the three limit keys; override for limitKey open_offers | A new (5, 20, 20), B established (20, 60, 100), C trusted (100, 200, 500); open_offers refused with VALIDATION_FAILED"
+      - "T02 | property | 01.R03,03.R02 | random tiers, multipliers, overrides and action restrictions | effective value follows the documented formula; 0 while a restriction is active; never below 1 otherwise unless base is 0 or the override sets 0"
+      - "T03 | unit | 02.R01,02.R03 | override with value 10001, short reason, expiry 91 days, M2 overriding its own second key | VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, FORBIDDEN"
+      - "T04 | integration | 03.R01,03.R03 | B submits completions until 3 are counted on day 8 then the daily sweep runs; an override expires | tier promoted once both conditions hold; limit.changed emitted for the promotion and on expiry"
+      - "T05 | integration | 03.R02,04.R03 | risk.elevated medium, then high, then risk.lowered medium, then risk.lowered low | 0.75×, 0.5×, 0.75× and base, each immediately on its event; one limit.changed per distinct value"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | commands, queries and event | validate against registry schemas; check output matches the example"
+      - "T07 | integration | 02.R02,02.R04,06.R02 | 6th index write in a day for tier new; check with an unknown limit key; check called with currentCount 0 for a key at its limit | MODERATION_ACCOUNT_LIMIT_REACHED with resetsAt; unknown key denied; VALIDATION_FAILED and no state change"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | member overrides own limit; member calls check over HTTP; moderator overrides a key linked to its own principal | FORBIDDEN, no route, FORBIDDEN"
+      - "T09 | integration | 06.R01,06.R03 | same Idempotency-Key replayed on override and on submit_completion; rate store down for a flow limit | original responses replayed; fail mode of class applies"
+      - "T10 | abuse | 07.R03 | 31 overrides by one moderator in 24 h | 31st RATE_LIMITED; weekly report lists all"
+      - "T11 | integration | 07.R02 | relay applies a member's signed deletion request; injected clock +30 days | rows and counted completions deleted after 30 days; audit history kept 1 year"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 checks per second for 5 minutes; sweep 100 000 keys | p95 ≤ 5 ms; sweep ≤ 60 s; denial and override metrics exported without keys"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-098 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export own limits, relay backup and restore; v1 row with limitKey listings_per_day | limits recomputed after restore; firstSeen set to restore time when absent; listings_per_day read as index_writes_per_day"
+      - "T15 | e2e | 01.R02,04.R01 | mobile member hits the daily index-write limit | limit sheet shows used, allowed, reset time and next tier; axe zero serious issues"
+      - "T16 | integration | 03.R04,04.R04 | restrict_feature with restrictedCapabilities [federation.record.ingest, auctions.bid.place, bazaar.offer.receive] for 7 days, overturned after 2 days; another such action reaches expiry | index_writes and bids 0 while active, new recipients unchanged, bazaar.offer.receive ignored; restored with cause action_reverted; second restored with cause action_expired"
+      - "T17 | abuse | 04.R05,07.R04 | submit_completion: valid B–C statement; same completionCid again; one signature invalid; submitter not a party; A with counterparty first seen 2 days ago; second B–C completion within 30 days; A–D completion | counted once; duplicate returns the stored result; FORBIDDEN twice; PRECONDITION_FAILED with counterparty_too_new, pair_counted_recently and same_principal; no amount ever stored"
+      - "T18 | integration | 07.R05 | ExportSectionPort run in a vault holding cached limit snapshots, then privacy.deletion.completed; relay DeletionPort plan | section moderation.limits exported; cached snapshots deleted; relay plan lists rows for deletion after 30 days"
+      - "T19 | integration | 04.R03 | identity.session.started relay_token for a new key delivered twice; a first verified signed request from another key without a session | firstSeenAt set once from the relay's own observation for each; no identity.account.created or commerce.deal.completed consumer exists"
+      - "T20 | abuse | 07.R01,07.R04 | F12 privacy suite: inspect federation payloads, public projections, relay logs, events and member exports after limit changes and counted completions | no AccountLimit field appears in federation payloads, public projections or logs; no amounts, obligations or deal context appear; limit.changed carries no counterparty key"
+      - "T21 | integration | 01.R05,02.R05,04.R06 | key A (first seen 2 days ago) comments twice on proposal P1 and once on P2; 30 keys first seen today comment once each on P3; key B (first seen 40 days ago) comments on P3; a check without scopeRef; clock advanced to A's 7-day mark | A: first on P1 allowed, second RATE_LIMITED with retryAfterMs to the 7-day mark, P2 allowed; P3: 25 allowed and the rest RATE_LIMITED; B neither counted nor capped; VALIDATION_FAILED; after the mark A is not capped by this module"
+      - "T22 | contract | 04.R06,01.R04 | F18.S02.M01 accept fixture through the relay bus: 200 fresh keys from one /24 each comment once on one proposal; F18.S02.M01 depends_on inspected | at most 25 accepted and every refusal is RATE_LIMITED; no depends_on edge from F18.S02.M01 to this module"
+    acceptance:
+      - All tests T01–T22 pass in CI.
+      - "No limit change is ever silent: each has a cause visible to the member on their limits screen."
+      - Effective values follow the published tier table, multipliers and restriction rule exactly, and no relay limit relies on a count the limited party supplied.
+  import_export_backup_rollback:
+    requirements:
+      - A member's export includes the limits the relay reports for them as read-only context, without moderator override identity.
+      - Relay import of limits is only from its own backups; imports from other relays are ignored because standing is relay-local.
+      - Tier tables are configuration versioned with the relay policy and validated against bounds on import.
+    export: "Section moderation.limits in classrup-export/v1 (vault, ExportSectionPort): last known limits per relay with fetched time; relay operator export lists AccountLimit rows without override reasons about others."
+    import: "Vault import stores limits as historical context only; relay restore recomputes tier, multiplier and restrictions from first-seen, counted completions, the latest risk event and active actions."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Expand step maps listings_per_day to index_writes_per_day and new_conversations_per_day to new_mailbox_recipients_per_day, and drops open_offers and open_cycle_proposals rows (now F12.S03.M03 local guards); new_key_comments_per_proposal is an additive limit key that needs no data migration; rollback is safe because older readers ignore new optional fields and unknown limit keys are not enforced but logged."

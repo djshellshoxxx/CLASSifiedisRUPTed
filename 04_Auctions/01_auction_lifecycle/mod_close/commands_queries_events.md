@@ -1,35 +1,101 @@
-# PS-034-04 — commands queries events
+# PS-034-04 — Commands, queries and events: Auction close
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-034-04. **Owner:** [04_Auctions/01_auction_lifecycle/mod_close](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_close. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S01.M03 Auction close](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_lifecycle/close` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the commands queries events process for close within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-034-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-034-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-034-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-034-04.R01** The host relay command auctions.result.determine runs from the close tick and produces the host-signed public result and disclosure; participant vaults ingest them with auctions.result.receive and the other parties' signed statements with auctions.result.receive_statement.
+- **PS-034-04.R02** Seller and candidate actions are vault commands that produce named signed statements and go through the sync outbox and the host.
+- **PS-034-04.R03** Auction closed, won and unsold events are host-local and are derived in each participant vault, the seller vault included, on receipt of the verified host-signed result (actor.kind federated, N17); auctions.auction.unsold carries listingId from the verified terms so the listing modules can follow it (N11).
+- **PS-034-04.R04** Statements are registered with F11.S01.M01 with their signer roles - result, result_disclosure and second_chance_candidates by the host key in the terms, non_payment_report and second_chance_offer by the seller key (sellerId), second_chance_response by the nominated candidate key - and vaults act only on statements they accepted (N2).
+- **PS-034-04.R05** Host-produced events call the relay hook notify.notification.dispatch for a content-free push - closed and unsold to the seller, won to the seller and winner, second_chance_offered to the candidate - for recipients who set pushOptIn (N17).
+- **PS-034-04.R06** This module registers an AuctionHostPort.freezeActivityIn(lostWindow) implementation with the relay process (inverted registration, no depends_on edge; F15.S03.M03 calls it and the F04.S01.M02 implementation after a restore before the port opens) that freezes, through F04.S01.M01 auctions.auction.freeze with cause close_possibly_lost, every hosted open auction whose currentEndsAt is at or before lostWindow.to and that has no result row; on auctions.auction.frozen a vault holding the verified result returns it, with the disclosure in the seller and winner vaults, once to auctions.result.readopt, which re-adopts the host's own signed statements and re-emits the host-local closed and won or unsold events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+| Command | Capability | Input | Output | Errors | Emits | Idempotent |
+|---|---|---|---|---|---|---|
+| `auctions.result.determine` | auctions.result.determine | [relay command, host close tick only] { auctionId, fenceToken } | { resultId, outcome, ledgerHeadSeq, ledgerHeadHash, result: classrup.auctions.result/v1, disclosure?: classrup.auctions.result_disclosure/v1 } | NOT_FOUND, AUCTIONS_NOT_CLOSABLE, PRECONDITION_FAILED, DEPENDENCY_UNAVAILABLE | auctions.auction.closed, auctions.auction.won, auctions.auction.unsold | yes (Idempotency-Key) |
+| `auctions.result.receive` | auctions.result.receive | [vault-local ingestion of the host-signed public result and, for seller and winner, the disclosure per CTR-FED-001; opens the local Deal through F09.S01.M01 unless blocked] { envelope, disclosure?, via? } | { resultId, role, accepted: boolean, quarantined?: boolean, code?, dealId? } | AUCTIONS_RESULT_INVALID, UNSUPPORTED_SCHEMA_VERSION, BLOCKED_PARTY, DEPENDENCY_UNAVAILABLE | auctions.auction.closed, auctions.auction.won, auctions.auction.unsold | yes (Idempotency-Key) |
+| `auctions.result.receive_statement` | auctions.result.receive | [vault-local ingestion with signer-role checks of classrup.auctions.non_payment_report/v1 (winner vault), second_chance_offer/v1 (candidate vault), second_chance_response/v1 (seller vault) and second_chance_candidates/v1 (seller vault)] { envelope, via? } | { resultId, accepted: boolean, quarantined?: boolean, code?, state } | NOT_FOUND, AUCTIONS_RESULT_INVALID, UNSUPPORTED_SCHEMA_VERSION, BLOCKED_PARTY, EXPIRED | auctions.result.non_payment, auctions.result.second_chance_offered | yes (Idempotency-Key) |
+| `auctions.result.report_non_payment` | auctions.result.report_non_payment | [statement classrup.auctions.non_payment_report/v1 signed by seller, sent to winner and host] { resultId, expectedRevision } | { resultId, revision, reportCid, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, AUCTIONS_NONPAYMENT_NOT_ALLOWED | auctions.result.non_payment | yes (Idempotency-Key) |
+| `auctions.result.record_non_payment` | auctions.result.record_non_payment | [relay command at the host, authorized by the seller-signed non-payment report] { reportEnvelope } | { resultId, recordedAt } | NOT_FOUND, AUCTIONS_RESULT_INVALID, AUCTIONS_NONPAYMENT_NOT_ALLOWED | auctions.result.non_payment | yes (Idempotency-Key) |
+| `auctions.result.nominate_second_chance` | auctions.result.nominate | [relay command at the host, after record_non_payment stored the seller-signed report for this result] { resultId, reportCid } | { candidates: statement classrup.auctions.second_chance_candidates/v1 signed by host key, E2E to the seller } | NOT_FOUND, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED, FORBIDDEN |  | yes (Idempotency-Key) |
+| `auctions.result.offer_second_chance` | auctions.result.offer_second_chance | [statement classrup.auctions.second_chance_offer/v1 signed by seller, E2E encrypted to the candidate, sent through the host; price equals the candidate's host-signed lastVisibleBid] { resultId, expectedRevision, candidatesCid, candidateId } | { resultId, revision, offerCid, expiresAt, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED, BLOCKED_PARTY | auctions.result.second_chance_offered | yes (Idempotency-Key) |
+| `auctions.result.respond_second_chance` | auctions.result.respond_second_chance | [statement classrup.auctions.second_chance_response/v1 signed by the candidate] { resultId, offerCid, accept: boolean } | { resultId, accepted, responseCid, dealId?, syncState } | NOT_FOUND, CONFLICT_STATE, EXPIRED, BLOCKED_PARTY, AUCTIONS_RESULT_INVALID |  | yes (Idempotency-Key) |
+| `auctions.result.freeze_closes` | auctions.result.freeze | [relay internal; this module's AuctionHostPort.freezeActivityIn(lostWindow) implementation, called by F15.S03.M03 after a restore before the port and the close tick start] { lostWindow: { from, to } } | { frozenAuctionIds: uuidv7[] } — open auctions with currentEndsAt at or before lostWindow.to and no result row, frozen through F04.S01.M01 auctions.auction.freeze with cause close_possibly_lost | DEPENDENCY_UNAVAILABLE |  | yes (Idempotency-Key) |
+| `auctions.result.readopt` | auctions.result.readopt | [relay command, authorized by the host's own signature over the returned result; frozen auctions only; calls F04.S01.M01 mark_closed with readoptedResultCid under the close lease] { resultEnvelope, disclosureEnvelope? } | { resultId, readopted: boolean, auctionStatus: closed } | NOT_FOUND, CONFLICT_STATE, AUCTIONS_RESULT_INVALID, PRECONDITION_FAILED | auctions.auction.closed, auctions.auction.won, auctions.auction.unsold | yes (Idempotency-Key) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-034-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Query | Capability | Input | Output | Errors |
+|---|---|---|---|---|
+| `auctions.result.get` | auctions.result.read_public | { auctionId } (relay query or vault cache of the host-signed result) | { result: public projection (outcome, finalPrice, winnerAlias, winnerCommitment, ledger head, closedAtHost); seller and winner also see winnerId, deals, local state and hostVoid } | NOT_FOUND |
+| `auctions.result.verify` | auctions.result.read_own | [vault-local] { auctionId } | { signatureOk: boolean, disclosureOk?: boolean, ledgerHeadConsistentWithMyReceipts: boolean, mismatchSeq? } | NOT_FOUND |
+
+### Events produced
+
+| Type | Privacy | Payload |
+|---|---|---|
+| `auctions.auction.closed` | P0 | { auctionId, resultId, sellerId, outcome, closedAtHost, ledgerHeadSeq, ledgerHeadHash } |
+| `auctions.auction.won` | P2 | { auctionId, resultId, sellerId, winnerId?, winnerAlias, finalPrice, winningBidId? } — winnerId and winningBidId only in host-local events and in the seller and winner vaults; a non-party vault derives it with winnerAlias only |
+| `auctions.auction.unsold` | P0 | { auctionId, listingId, resultId, sellerId, reason } — listingId from the verified terms; derived in the seller vault from the verified public result (N17) |
+| `auctions.result.non_payment` | P2 | { resultId, auctionId, sellerId, winnerId, reportCid } — host-local from record_non_payment; vault-local in the seller vault; derived in the winner vault |
+| `auctions.result.second_chance_offered` | P2 | { resultId, auctionId, sellerId, candidateId, price, offerCid, expiresAt } |
+
+### Events consumed
+
+| Type | Effect |
+|---|---|
+| `commerce.deal.opened` | for contextRef type auction_result whose id is this resultId or the uuid derived from this result's offerCid, store dealId for that buyer and move pending_deal to awaiting_payment |
+| `commerce.deal.completed` | for such a contextRef move awaiting_payment or non_payment to completed; on a voided result only record that the Deal completed |
+| `commerce.deal.cancelled` | for such a contextRef record the cancellation; a voided result shows that both parties cancelled the Deal |
+| `commerce.payment.expired` | for such a Deal show payment expired; the non-payment report window (day 3 to day 30) is unchanged |
+| `auctions.auction.frozen` | host - the close tick skips the frozen auction; vault - when a verified result of the auction is held whose closedAtHost lies inside lostWindow, send it, with the disclosure in the seller and winner vaults, once to auctions.result.readopt on the host |
+| `auctions.result.voided` | apply the host's void in this vault - when no Deal of this result has an acknowledged or final PaymentClaim (commerce.payment.list_for_deal), move to voided, keep the Deal and offer Cancel Deal; otherwise keep the state, set hostVoid.appliedAs void_after_payment, show voided by host after payment and link F09.S02.M02 disputes |
+| `privacy.deletion.completed` | replace the erased principal's did (sellerId, winnerId, candidateId, buyerId in deals) in retained results with the per-deletion pseudonym; envelopes are kept and marked unverifiable-after-pseudonymization |
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| AUCTIONS_NOT_CLOSABLE | 409 | no | auction is not open or has not reached its current end under the lease |
+| AUCTIONS_RESULT_INVALID | 422 | no | a result, disclosure, candidate list, report, offer, response, void or rescission statement failed the signature, signer role, host key or terms binding check; quarantined |
+| AUCTIONS_NONPAYMENT_NOT_ALLOWED | 409 | no | non-payment report is too early, too late, the result is not awaiting payment, or a payment is acknowledged or final |
+| AUCTIONS_SECOND_CHANCE_NOT_ALLOWED | 409 | no | no eligible candidate after the block filter, a second chance was already used, or a claim on the original Deal exists |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Statements: classrup.auctions.result/v1 (host key, public P0) {auctionId, termsCid, outcome, unsoldReason?, finalPrice?, winnerAlias?, winnerCommitment?, reserveReveal?, ledgerHeadSeq, ledgerHeadHash, closedAtHost}; classrup.auctions.result_disclosure/v1 (host key, P2, E2E to seller and winner) {resultCid, auctionId, winnerId, salt, winningBidCid, reserveReveal?}; classrup.auctions.non_payment_report/v1 (seller key) {resultCid, dealId, reportedAt}; classrup.auctions.second_chance_candidates/v1 (host key, E2E to seller) {resultCid, reportCid, entries: [{candidateId, lastVisibleBid}] ranked, at most 3}; classrup.auctions.second_chance_offer/v1 (seller key, E2E to the candidate, sent through the host) {resultCid, candidatesCid, candidateId, price, expiresAt}; classrup.auctions.second_chance_response/v1 (candidate key) {offerCid, accept}. The second-chance Deal uses contextRef {type: auction_result, id: first 16 bytes of sha256(offerCid) as a uuid} and contextCid = responseCid.
+
+### Example
+
+```
+host close tick at 2026-11-12T10:00:01.000Z -> auctions.result.determine { "auctionId": "0192f400-0002-…", "fenceToken": 812 }
+-> public result { "outcome": "won", "finalPrice": { "amount": "6100", "currency": "EUR" }, "winnerAlias": "K3QZ7A", "winnerCommitment": "sha256-Wc…", "ledgerHeadSeq": 42, "ledgerHeadHash": "sha256-Lh…" }
+   and disclosure { "winnerId": "did:key:z6Mk…", "salt": "q1…" } E2E to seller and winner
+seller and winner vaults: auctions.result.receive -> both verify result and disclosure; isBlockedEither false;
+  commerce.deal.open (contextRef { "type": "auction_result", "id": "0192f410-0001-…" }) -> awaiting_payment
+non-winning bidder vault: auctions.result.receive -> recorded (winnerAlias only)
+day 11: seller auctions.result.report_non_payment -> host record_non_payment -> nominate_second_chance -> candidate list (3 entries)
+  seller vault filters by blocks -> offer_second_chance to the first unblocked candidate at its last visible bid
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-034-09.T07 | contract | PS-034-04.R01, PS-034-04.R02, PS-034-09.R02, PS-034-01.R03 | each command, statement and event; public result verified by a non-winning bidder vault; disclosure verified by seller and winner | payloads and signatures validate; the public result has no winnerId; the disclosure's winnerId and salt match winnerCommitment |
+| TEST-PS-034-09.T17 | integration | PS-034-04.R03 | non-winning bidder vault receives the public result; seller vault receives result and disclosure | derived auctions.auction.closed and auctions.auction.won have actor.kind federated with verified provenance.sig; the non-party copy has no winnerId |
+| TEST-PS-034-09.T20 | contract | PS-034-04.R04 | statement registry entries; a non-payment report signed by the winner key | roleFor matches the declared roles; the report is quarantined with AUCTIONS_RESULT_INVALID |
+| TEST-PS-034-09.T21 | integration | PS-034-04.R05 | host close with a sale; second chance offered | dispatch called once per opted-in recipient (seller, winner, candidate) with a template key and reference only |
+| TEST-PS-034-09.T25 | integration | PS-034-06.R05, PS-034-04.R06 | restore host H from a backup taken before auction A closed with a sale; the seller vault holds result and disclosure; a bidder returns the public result first; a forged result signed by another key | freeze_closes freezes A before the close tick runs; readopt of the bidder copy stores the result and the seller's disclosure completes the host row; host-local closed and won re-emitted; the forged result AUCTIONS_RESULT_INVALID; determine never runs for A |
+| TEST-PS-034-09.T26 | integration | PS-034-04.R03 | seller vault receives a verified unsold result for auction listing L | auctions.auction.unsold derived once with listingId L from the verified terms, sellerId and actor.kind federated with verified provenance.sig |
+
+## Dependencies
+
+Module depends on: F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

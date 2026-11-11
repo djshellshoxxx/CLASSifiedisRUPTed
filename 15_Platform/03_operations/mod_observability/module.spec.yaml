@@ -1,0 +1,175 @@
+# F15.S03.M01 — Observability (kernel). Rows use "a | b | c" cells. Keep IDs stable once published (ADR-0015).
+id: F15.S03.M01
+scope: MVP
+summary: >-
+  Isomorphic observability primitives in the kernel (CTR-OBS-001 with the ADR-0016 amendment OBS-7): a structured
+  JSON-lines logger with redaction and IP truncation, a metrics registry (counter, gauge, histogram) with a label
+  allowlist and Prometheus text rendering, and a readiness probe. On a relay the node:http adapter serves /healthz,
+  /readyz and operator-only /metrics. In the vault (PWA) the same logger writes to a bounded in-memory ring buffer
+  that never leaves the device unless the user exports it; the PWA sends no telemetry.
+responsibilities:
+  - Emit one JSON line per log call with ts, level, msg, correlationId, module, code and durationMs first, after redaction.
+  - Drop sensitive keys (token, secret, password, privateKey, recoveryCode, email, address, lat, lon, note, body, ciphertext and suffix variants) at any depth.
+  - Truncate IP addresses to /24 (IPv4) and /48 (IPv6) both under IP keys and as bare string values.
+  - Register counters, gauges and histograms named classrup_<slug>_<name>_<unit> with labels limited to tenant, module, code and outcome, and render Prometheus text 0.0.4.
+  - Cap series per metric and count dropped label combinations.
+  - Report readiness from storage writability, current migrations and outbox lag below 60 s; report liveness without dependency checks.
+non_responsibilities:
+  - Log shipping, storage and retention on a relay (operator log pipeline; F15.S02.M01 wires the sink).
+  - Alerting rules and dashboards (relay operator, F15.S03.M03 runbooks).
+  - Authorization policy for /metrics (F16.S01.M01 implements AuthzPort; this module declares the capability).
+  - Load and chaos test harnesses (F17.S02).
+depends_on: [CTR-OBS-001, CTR-PRV-001, CTR-CAP-001, CTR-ERR-001, CTR-TST-001, CTR-SCH-001]
+user_stories:
+  - As a relay operator, I scrape /metrics with my operator token and see command outcomes and outbox lag without any user identifiers.
+  - As a vault user, I can export my local diagnostics for a support request, and nothing is sent anywhere unless I do.
+  - As a feature developer, I log with a child logger bound to my module and correlation ID and never have to remember which fields to scrub.
+edge_cases:
+  - A log field named sessionToken, contactEmail or pickup_address is dropped even though it is not an exact deny-list name.
+  - An X-Forwarded-For value lists several IPs; each one is truncated.
+  - A metric receives a 1 001st label combination; the series is dropped and classrup_metrics_dropped_series_total increments.
+  - The log sink throws (disk full); the caller continues and the dropped line is counted.
+  - The relay is shutting down; /readyz turns 503 before connections close while /healthz stays 200.
+  - A metric is registered twice with the same definition after a hot reload; the existing one is reused, a conflicting definition throws.
+ux:
+  notes: >-
+    Headless kernel module. The PWA settings screen (F15.S01) offers "Export diagnostics", which saves the ring
+    buffer as JSON Lines; there is no other user-facing surface.
+processes:
+  domain_schema:
+    requirements:
+      - A log line is one JSON object with ts, level and msg first, then correlationId, module, code and durationMs when present, then the remaining redacted fields.
+      - Metrics are counters, gauges and histograms named classrup_<slug>_<name>_<unit> with labels limited to tenant, module, code and outcome.
+      - A readiness report contains booleans for storage, migrations and outboxLag plus lagMs, and ready is true only when all three hold.
+    entities: []
+    note: >-
+      No persisted entities. Log lines go to an injected sink (relay stdout pipeline or the vault ring buffer);
+      metrics live in process memory and are rendered on demand; readiness is computed per request.
+  validation_rules:
+    requirements:
+      - Metric names must match classrup_<slug>_<name>_<unit> without reserved suffixes and label names must be in the allowlist; violations throw at registration as programmer errors.
+      - Series per metric are capped (default 1 000); extra label combinations are dropped and counted in classrup_metrics_dropped_series_total.
+      - Log levels below the configured level are discarded and unknown levels are rejected when the logger is created.
+    rules:
+      - "V01 | metric name matches ^classrup_<slug>(_<part>)+$ and does not end in _bucket, _count or _sum | INTERNAL"
+      - "V02 | metric label names ⊆ {tenant, module, code, outcome} and samples use only declared labels | INTERNAL"
+      - "V03 | histogram buckets are finite and strictly increasing | INTERNAL"
+      - "V04 | /metrics caller presents a relay access token | UNAUTHENTICATED"
+      - "V05 | /metrics caller holds platform.metrics.read under relay policy | NOT_FOUND"
+  workflow_state_machine:
+    requirements:
+      - GET /healthz returns 200 with status ok while the process serves requests and performs no dependency checks.
+      - GET /readyz returns 200 only when storage is writable, migrations are current and outbox lag is below 60 s, otherwise 503 with the per-check booleans.
+      - During graceful shutdown readiness turns unready before connections close so load balancers drain traffic.
+    machines: []
+    note: >-
+      No lifecycle entities. Readiness is a pure function of the current probes; the only stateful switch is the
+      HTTP adapter's draining flag set by graceful close (F15.S02.M01 shutdown sequence).
+    timeouts:
+      - "Readiness outbox-lag threshold: 60 s (OBS-6)."
+      - "Graceful close waits up to the configured grace period (default 10 s) for in-flight requests while /readyz reports draining."
+  commands_queries_events:
+    requirements:
+      - The kernel core exports createLogger, createRingBufferSink, consoleSink, redact, truncateIp, createMetricsRegistry and createReadiness, and all of them are isomorphic.
+      - GET /metrics renders Prometheus text format 0.0.4 and is reachable only by actors granted platform.metrics.read on that relay.
+      - The vault uses the in-memory ring-buffer sink and no metrics export, so nothing is sent off-device (OBS-7).
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors: []
+    note: >-
+      Library module with no commands. /healthz, /readyz and /metrics are relay HTTP endpoints served by the
+      F15.S02.M02 node:http adapter, not bus commands; nothing in the vault is exposed.
+    example: |
+      const log = createLogger({ sink: consoleSink, clock }).child({ module: 'F01.S04.M01', correlationId });
+      log.info('offer.accepted', { offerId, email: 'x@y.z', ip: '203.0.113.7' })
+      → {"ts":"2026-11-04T10:15:30.123Z","level":"info","msg":"offer.accepted","correlationId":"…","module":"F01.S04.M01","offerId":"…","ip":"203.0.113.0/24"}
+      GET /metrics  Authorization: Bearer <operator relay token>
+      → 200 text/plain; version=0.0.4
+        # TYPE classrup_command_total counter
+        classrup_command_total{module="F01.S04.M01",outcome="ok",code="OK"} 12
+      GET /readyz → 200 {"status":"ready","checks":{"storage":true,"migrations":true,"outboxLag":true},"lagMs":0}
+  authorization_capabilities:
+    requirements:
+      - GET /metrics requires a relay access token whose actor is granted platform.metrics.read by relay policy; others get UNAUTHENTICATED without a token or NOT_FOUND with one.
+      - /healthz and /readyz are unauthenticated and reveal only status booleans and lag, never versions, hostnames or per-tenant counts.
+      - Metric labels never contain actor, user or device identifiers; tenant is the only identity-bearing label and is relay-local.
+    capabilities:
+      - "platform.metrics.read | relay operator (relay policy, CAP-9) | actor authenticated with a relay access token; no vault capability exists because the PWA exports no metrics"
+  failure_recovery_idempotency:
+    requirements:
+      - A throwing log sink never fails the caller; the line is dropped and counted.
+      - Metrics rendering is a pure read of in-memory state and histogram bucket counts, sums and counts stay consistent.
+      - A readiness probe that throws reports unready for that check instead of failing the endpoint.
+    idempotency: "Metric registration is idempotent for identical definitions; rendering and readiness checks have no side effects except the storage ping transaction."
+    concurrency: "Single-threaded event loop per process; counters and histograms update synchronously so a render never sees half an observation."
+    retries: "No retries: a dropped log line is counted, a failed readiness check is reported and re-evaluated on the next probe."
+    offline: "Fully local: the vault logger works offline and keeps at most the configured number of lines (default 1 000) in memory."
+    partial_failure: "A failing sink or probe degrades only that signal; command processing continues and /healthz stays available."
+  privacy_retention_abuse:
+    requirements:
+      - Redaction drops keys token, secret, password, privateKey, recoveryCode, email, address, lat, lon, note, body and ciphertext case-insensitively, plus authorization, cookie, passphrase and names ending in token, secret, password, email, address, note or body, at any depth.
+      - IP addresses are truncated to /24 for IPv4 and /48 for IPv6 in logs, under IP keys and as bare values, including IPv4-mapped and compressed IPv6 forms.
+      - The PWA sends no telemetry; vault log lines stay in a bounded ring buffer until the user exports them as JSON Lines.
+    data:
+      - "Log lines: IDs, codes, durations and redacted fields only (no P2–P4 values, OBS-1)."
+      - "Metrics: aggregate counts with allowlisted labels; no user identifiers."
+      - "Readiness: booleans and lag in ms."
+    retention:
+      - "Relay logs: RET-AUDIT (1 year) in the operator's pipeline."
+      - "Vault diagnostics: in memory only, cleared on reload or by the user; exported files are the user's."
+    threats:
+      - "T01 | Secrets or contact data written to logs by careless fields | key deny list with suffix matching applied to every line before the sink"
+      - "T02 | IP-based tracking of users through relay logs | /24 and /48 truncation for IP keys and bare IP values"
+      - "T03 | Metric label cardinality used to fingerprint users or exhaust memory | label allowlist without user IDs; 1 000 series cap per metric with a dropped counter"
+      - "T04 | Public scraping of operational data | /metrics requires platform.metrics.read; health endpoints expose booleans only"
+    abuse_controls:
+      - "Strings longer than 2 048 characters are truncated in logs to bound line size."
+      - "Recursion depth is limited to 8 and circular references are replaced so hostile objects cannot stall logging."
+  observability_performance:
+    requirements:
+      - Child loggers carry module and correlationId bindings so one request can be traced across modules by correlation ID.
+      - Observability overhead is small; 10 000 redacted log lines and 100 000 metric updates complete in under 1 s.
+      - Histograms use default millisecond buckets aligned with the OBS-4 budgets (including 150 and 300 ms) so budget compliance is visible.
+    metrics:
+      - "classrup_metrics_dropped_series_total{module=<metric name>}"
+      - "Default histogram buckets: 5, 10, 25, 50, 100, 150, 250, 300, 500, 1000, 2500, 5000 ms"
+    logs:
+      - "Every line: {ts, level, msg, correlationId?, module?, code?, durationMs?, …redacted fields}."
+    budgets:
+      - "10 000 log lines plus 100 000 metric updates < 1 s on the reference relay."
+      - "/metrics render for 50 families and 1 000 series ≤ 50 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Redaction and IP truncation have unit tests covering nested objects, arrays, errors, suffix variants and compressed IPv6 forms.
+      - Prometheus rendering is tested against exact expected text including escaping and cumulative histogram buckets.
+      - Every requirement of PS-121 is covered by a test whose title starts with its TEST-PS-121-09 identifier.
+    fixtures: "Fake clock at 2026-11-04T10:15:30.123Z; ring-buffer sink; relay test server from packages/kernel/src/http/server.test.ts with member and operator tokens."
+    tests:
+      - "T01 | unit | 07.R01,09.R01 | object with every deny-listed key, suffix variants, nested arrays, an error, a cycle and a bigint | only safe keys remain; error keeps name, message and code; cycle marked"
+      - "T02 | unit | 07.R02,09.R01 | IPv4, full and compressed IPv6, IPv4-mapped, zone IDs, invalid strings, forwarded lists | /24 and /48 networks; invalid IP under an IP key redacted; non-IPs untouched"
+      - "T03 | unit | 01.R01,04.R01,08.R01,10.R02 | child loggers with module and correlationId log one line | exact JSON with ts, level, msg, correlationId, module, code, durationMs first; note dropped"
+      - "T04 | unit | 02.R03,06.R01 | warn level logger, invalid level, throwing sink | debug and info discarded; creation throws; no exception to the caller and dropped count 2"
+      - "T05 | unit | 01.R02,02.R01,05.R03,10.R03 | bad names, reserved suffixes, userId label, duplicate and conflicting registration | registration throws; identical re-registration shares the series; conflicting one throws"
+      - "T06 | unit | 02.R02 | four tenants into a metric capped at two series | two series kept; dropped counter 2"
+      - "T07 | unit | 06.R02,08.R03,09.R02 | counter with escaped labels, gauge, histogram with three observations | exact Prometheus text with cumulative buckets, sum and count; default buckets include 150 and 300"
+      - "T08 | integration | 01.R03,03.R02,06.R03 | pending migration, lag 60 s, throwing lag probe, failing ping, closed storage | unready with the failing check false; ready only when all pass"
+      - "T09 | integration | 03.R01,03.R03,05.R02 | GET /healthz and /readyz on a relay, then draining, then lag 61 s, then closed server | 200 ok; 200 ready with booleans; 503 draining; 503 outboxLag false; connection refused after close"
+      - "T10 | abuse | 04.R02,05.R01 | GET /metrics without token, with a member token and with an operator token | 401, 404, 200 text/plain 0.0.4 without principal IDs"
+      - "T11 | unit | 04.R03,07.R03,10.R01 | ring buffer of 3 receives 5 lines with an email field, export and clear | last 3 lines kept; JSON Lines export without the email; empty after clear"
+      - "T12 | load | 08.R02 | 10 000 log lines and 50 000 counter plus 50 000 histogram updates | total under 1 s"
+      - "T13 | unit | 09.R03 | traceability scan of kernel test titles | every PS-121 test ID T01–T13 appears in a test title"
+    acceptance:
+      - All tests T01–T13 pass in CI.
+      - No deny-listed key or untruncated IP appears in any log line produced by kernel tests (T01, T02, T19 of PS-117).
+      - /metrics is never reachable without platform.metrics.read (T10).
+  import_export_backup_rollback:
+    requirements:
+      - The vault diagnostics buffer exports as JSON Lines of already-redacted records on explicit user request only.
+      - The log line format is versioned by field names; additions are additive and ts, level and msg always come first so N-1 parsers keep working.
+      - Metric registration is idempotent for identical definitions so restarts and hot reloads do not duplicate series, and conflicting re-definitions fail fast.
+    export: "Vault: ring buffer export as JSON Lines (user-initiated, already redacted). Relay: no user export; logs belong to the operator."
+    import: "Nothing is imported; diagnostics are not restored."
+    backup: "Metrics and logs are not part of relay or vault backups; relay logs follow the operator's RET-AUDIT pipeline."
+    migration_rollback: "Metric names are stable; renaming a metric keeps the old name registered for one release so dashboards survive a rollback."

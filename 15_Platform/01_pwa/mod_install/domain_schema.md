@@ -1,35 +1,28 @@
-# PS-115-01 — domain schema
+# PS-115-01 — Domain schema: PWA install
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-01. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M03 PWA install](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/install` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the domain schema process for install within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-115-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-115-01.R01** The module owns no persisted entity; install state, local session and action counters, dismissal counters, the last session in which the card was shown, update deferral and the unverified-build flag are per-device preferences stored in localStorage under the key classrup.install.v1.
+- **PS-115-01.R02** The manifest is a build artifact validated against fixed field rules; its id is stable forever so reinstalls keep the same app identity.
+- **PS-115-01.R03** Preferences contain no personal data and are safe to lose; the module renders correctly when storage is unavailable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Configuration and UI module: no domain entities. Device preferences classrup.install.v1 { version: 1, sessions:int (incremented once per app start), completedActions:int (incremented on each committed vault command reported by the shell), dismissals:int, lastDismissedAt?:timestamp, lastShownSession?:int, deferredUntil?:timestamp, installedAt?:timestamp, unverifiedBuildId?:string, releaseHold?: { envelope, releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt } } live in localStorage, are P0, and are not part of the vault export. Release manifest /release-manifest.json { buildId, releaseSeq, files: { path: sha256 }, sig } is a build artifact; the release hold /release-hold.json is a classrup.security.envelope/v1 of context classrup/release-hold/v1 (F16.S02.M03) with payload { releaseKeyId, heldBuildIds, reason, issuedAt, expiresAt }; an empty heldBuildIds holds every update.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-115-09.T01 | unit | PS-115-01.R02, PS-115-02.R01 | manifest validated with each defect (missing 512 icon, long short_name, start_url outside scope, 5 shortcuts) | each defect fails with PLATFORM_INSTALL_MANIFEST_INVALID; the valid manifest passes |
+| TEST-PS-115-09.T02 | unit | PS-115-01.R03, PS-115-02.R02, PS-115-07.R03 | install gate with sessions 1 and 2, completedActions 0 and 1, dismissals 0 to 3, lastDismissedAt 10 d and 31 d, card already shown this session, storage unavailable | card shown only when all V04 conditions hold; otherwise PLATFORM_INSTALL_NOT_ELIGIBLE; no exception without storage |
+| TEST-PS-115-09.T09 | e2e | PS-115-06.R03, PS-115-01.R03 | open the installed app offline with localStorage blocked | app starts, card hidden, no exception, update check fails silently |
+| TEST-PS-115-09.T16 | unit | PS-115-01.R01, PS-115-08.R01 | three app starts and two committed vault commands, then open diagnostics while recording network | sessions 3 and completedActions 2 stored in classrup.install.v1 and shown in diagnostics; zero network requests |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F15.S01.M01, F15.S01.M02, F16.S02.M03, CTR-UX-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [module SPEC](SPEC.md).

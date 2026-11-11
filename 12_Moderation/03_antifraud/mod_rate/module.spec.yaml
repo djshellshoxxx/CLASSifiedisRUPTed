@@ -1,0 +1,319 @@
+id: F12.S03.M03
+scope: MVP
+summary: >-
+  Rate limiting through the RateLimitPort used by the kernel command bus. On a relay it enforces the relay's
+  hosting policy per actor key and capability, per IP prefix (/24 for IPv4, /48 for IPv6) for windows up to 24 h,
+  and per tenant, using GCRA for command capabilities, token buckets for burst-tolerant reads such as keyword
+  search, and window counters for long windows such as 20 appeals per 30 days. Every policy is { limit, periodMs,
+  burst } from 1 second to 30 days, optionally with a second, longer window (for example 20 per minute and 200 per
+  hour). It owns the per-tenant default request rate (class request.default, formerly the tenant record's
+  requestRatePerMinutePerKey) and the classes other modules register with their own defaults, such as the shared
+  proximity budget of F06.S02.M03. In a user's vault it provides local UX guards (for example a confirmation after
+  10 offers in an hour or above 10 open offers) that protect the user from their own mistakes and are not security
+  controls. Limits are configured per relay tenant, return RATE_LIMITED with retryAfterMs, survive salt rotation,
+  and degrade predictably when the counter store is unavailable.
+responsibilities:
+  - Provide RateLimitPort.consume(key, cost) returning allowed, remaining, limit, retryAfterMs and resetAt, in under 1 ms for in-memory state.
+  - Implement GCRA (emission interval periodMs / limit, burst tolerance), token bucket and sliding window counter algorithms with per-class policy.
+  - Key limits by (actor key, capability class), by (IP prefix, capability class) for windows up to 24 h and by tenant global caps, using HMAC hashes under per-class salt epochs so raw IPs and keys are never stored.
+  - Own the RateBucket state and a per-tenant RatePolicy configuration with built-in classes, and emit moderation.rate.exceeded at most once per key per minute.
+  - Select class report.receive.reduced for reporter keys with a report_dismissed_bad_faith signal recorded by F12.S03.M02 in the last 30 days, and apply spam velocity penalties to the posting key's write buckets.
+  - Provide vault-local UX guards from the same code (flow guards and stock guards such as open offers and open cycle proposals), configured by the user and never sent to anyone.
+  - Own the per-tenant default request rate policy (built-in class request.default, which replaces the requestRatePerMinutePerKey limit F15.S04.M03 dropped from the tenant record) and charge it once per relay request on top of the request's own class.
+  - Accept capability classes registered by their owner modules with defaults through RatePolicyRegistry.register (for example the shared proximity budget classes read.proximity.query.anonymous, read.proximity.query.token, read.proximity.center_seen and read.proximity.center_new, defined once in F06.S02.M03), seed tenant RatePolicy rows from those defaults and honour the fail mode each registration locks.
+  - Provide built-in classes for F18 relay intake charged by the relay bus (N18): governance comment acceptance per key and per network prefix, the new-key comment caps consumed only through the F12.S03.M04 limits check, operator uploads of prohibited-rule, taxonomy, jurisdiction-profile and transparency statements, and transparency counter snapshots.
+non_responsibilities:
+  - Deciding bans or suspensions after repeated violations (F12.S02.M01 decides from signals).
+  - Account-level quotas by tier and risk (F12.S03.M04), which call this module for flow limits.
+  - Command bus registration and HTTP mapping (F15.S02.M02 calls the port).
+  - Network-level DDoS protection, which belongs to the relay's hosting environment.
+  - The numbers and caller-class rules of module-registered classes (the owner module defines them once, for example F06.S02.M03 for the proximity budget); tenant limits other than request rates (F15.S04.M03 TenantPort.limits).
+  - "Future: distributed counters across relay replicas; adaptive limits driven by load."
+depends_on: [F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a relay operator, I set limits per capability class from per-second to per-30-days and see which keys hit them, without storing IP addresses.
+  - As a member, when I hit a limit I see how long to wait and why, and queued offline commands retry politely.
+  - "As a user, I get a gentle 'You made 10 offers in an hour, continue?' guard on my own device, and a reminder when I have more than 10 open offers."
+edge_cases:
+  - Many users share one NAT /24 prefix; the prefix limit is 5 times the actor limit so a household or campus is not blocked by one heavy user.
+  - IPv6 clients rotate addresses within a /64; limiting is by /48 so rotation inside the allocation does not evade the limit.
+  - Counter store is unavailable; read capabilities fail open with a local in-memory limit of half the normal rate, and sensitive capabilities (relay access challenge, report receive, key registration) fail closed with RATE_LIMITED for 30 seconds.
+  - Relay restarts; counters are persisted every 5 seconds, so at most 5 seconds of arrivals are forgotten and limits are never loosened by more than one burst.
+  - Clock moves backward; GCRA uses a monotonic clock and ignores wall-clock steps; window counters use the relay clock bucketed by minute, hour or day.
+  - A 20-per-30-days appeal window crosses a salt rotation; consume reads counters under the current and the previous epoch salt, so the 21st appeal in any 30 days is still refused.
+  - A spam velocity throttle arrives for a key; this module derives the key's bucket hash from the event's subjectKey and applies penalty factor 0.25 to its write buckets for at most 1 hour.
+  - A reporter key received a report_dismissed_bad_faith signal 10 days ago; its report.receive requests use class report.receive.reduced until 30 days pass, except minor_safety reports marked exempt.
+  - The counter store is down while a proximity search arrives; read.proximity.query.* fall back to the in-memory half rate like other read classes, but read.proximity.center_new is registered fail closed and returns RATE_LIMITED for 30 seconds, so a store outage never opens trilateration.
+  - A caller reaches 5 new search centers at 23:50 and the daily salt rotates at 00:00; the next new center at 00:10 is still refused because the 24 h window reads counters under the current and the previous salt, and the previous salt is kept 24 h after rotation.
+  - A relay migrates from a tenant record that held requestRatePerMinutePerKey 300; the expand step writes a request.default policy row with limit 300 and periodMs 60000, and later changes go through moderation.ratepolicy.set.
+  - 200 fresh keys from one /24 each comment once on one proposal within an hour; governance.policy_comment.accept.prefix admits at most 30 per 24 h for the prefix and the F12.S03.M04 new-key cap admits at most 25 per proposal, so at most 25 comments are accepted and the rest get RATE_LIMITED.
+  - An operator key uploads an 11th prohibited-rule pack in 24 h while its taxonomy and profile uploads are still below their limits; only governance.prohibited_rule.relay_upload refuses, because each upload type has its own class.
+ux:
+  screens:
+    - "Rate limit toast: 'Too many requests, try again in N seconds' with a countdown; queued commands show 'waiting' and retry automatically."
+    - "Settings > Safety > Guard rails (vault): thresholds for local confirmation prompts (offers per hour, reports per hour, open offers, open cycle proposals), with defaults and a reset button."
+    - "Operator configuration page: capability class table with algorithm, limit, period, burst, scopes, prefix multiplier, fail mode."
+  states: [idle, limited-countdown, retrying, local-guard-prompt]
+  a11y:
+    - Countdown text is announced at 10 second intervals through an aria-live polite region, not every second.
+    - Guard prompts are dialogs with focus trap and buttons of at least 44 by 44 px.
+    - Retry state is described in text.
+processes:
+  domain_schema:
+    requirements:
+      - A RateBucket stores key hash, scope, capability class, algorithm state (theoretical arrival time, token count or window sub-counters), penalty factor, salt epoch and update time, and is operational state kept for its policy window plus at most 24 h (RET-EPHEMERAL for windows up to 24 h, RET-SHORT for longer windows up to 30 days).
+      - A RatePolicy stores per-tenant limits per capability class with algorithm, limit, period, burst, allowed scopes, prefix multiplier, fail mode and version, and is retained as configuration under RET-STANDARD.
+      - Raw IP addresses and keys are never stored; they are hashed under a per-class salt whose epoch is at least the policy window, the previous epoch's salt is kept only until its last counter leaves the window, and IP-prefix scopes are limited to windows of at most 24 h so prefix salts are destroyed at most 48 h after creation.
+      - A policy expresses any limit from 1 per 30 days to 100 000 per second as { limit, periodMs, burst }, and GCRA uses the emission interval periodMs / limit.
+      - "A RatePolicy may carry one longWindow { limit, periodMs } so one class expresses two limits such as 20 per minute and 200 per hour, records the ownerModule of a class registered through RatePolicyRegistry.register and whether its fail mode is locked, and every tenant has a request.default policy row (the per-tenant default request rate per actor key formerly held as Tenant.limits.requestRatePerMinutePerKey)."
+    entities:
+      - name: RateBucket
+        schema: classrup.moderation.ratebucket/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-SHORT
+        fields:
+          - "keyHash: string — HMAC-SHA-256 under the class salt of saltEpoch over scope and key, 64 hex chars"
+          - "tenantId: uuidv7 — store scope"
+          - "scope: enum — actor | ip_prefix | tenant | local"
+          - "capabilityClass: string — policy class such as write.index, write.mailbox.new_recipient, read.search, relay.access, report.receive"
+          - "algorithm: enum — gcra | token_bucket | window_counter"
+          - "saltEpoch: int — epoch number of the class salt used for keyHash"
+          - "tat?: int — GCRA theoretical arrival time in monotonic milliseconds, when gcra"
+          - "tokens?: number — current tokens (0..capacity), when token_bucket"
+          - "windowCounters?: object — sub-bucket start to count (1 minute for windows ≤ 1 h, 1 hour for ≤ 24 h, 1 day above), when window_counter"
+          - "discriminatorHashed: boolean — true when keyHash also covers a caller-supplied discriminator such as a center cell (probe classes like read.proximity.center_seen)"
+          - "penaltyFactor: number — 0.25..1.0, default 1.0"
+          - "penaltyUntil?: timestamp — RFC 3339 UTC, at most 1 hour after setting"
+          - "reducedUntil?: timestamp — RFC 3339 UTC, only on marker rows of class report.receive.reduced: signal observedAt + 30 days"
+          - "expiresAt: timestamp — RFC 3339 UTC, last update + periodMs, at most 24 h beyond the window; reducedUntil for marker rows"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - tokens never exceeds capacity, tat never moves backward except by reset, and the sum of windowCounters inside any window never exceeds the limit plus the cost of the refused request.
+          - penaltyFactor below 1.0 requires penaltyUntil within 1 hour.
+          - No row contains an IP address, actor key or any value from which they can be read back, and scope ip_prefix exists only for classes with periodMs ≤ 86400000.
+      - name: RatePolicy
+        schema: classrup.moderation.ratepolicy/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — store scope"
+          - "capabilityClass: string — class name, unique per tenant"
+          - "algorithm: enum — gcra | token_bucket | window_counter"
+          - "limit: int — 1..100000 requests per period"
+          - "periodMs: int — 1000..2592000000 (1 second to 30 days)"
+          - "burst: int — 1..1000; gcra burst tolerance and token bucket capacity; unused by window_counter"
+          - "longWindow?: object — { limit 1..100000, periodMs greater than the class periodMs and at most 2592000000 }; a second window counted with window_counter sub-buckets in the same consume; a request is allowed only when both windows allow"
+          - "ownerModule?: string — module ID that registered the class through RatePolicyRegistry.register (absent for built-in classes)"
+          - "failModeLocked: boolean — true for built-in sensitive classes and for registered classes whose owner locked the fail mode"
+          - "scopes: string[] — subset of actor, ip_prefix, tenant, local"
+          - "prefixMultiplier: int — 1..20, default 5"
+          - "failMode: enum — open | closed"
+          - "kind: enum — flow | stock (stock only in scope local)"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - For gcra the emission interval is periodMs / limit and burst is at most limit; ip_prefix appears in scopes only when periodMs ≤ 86400000.
+          - Classes relay.access, report.receive, report.receive.reduced, key.register and every class with failModeLocked (read.proximity.center_new) always have failMode closed.
+          - Stock policies exist only in scope local and count the vault's own records; relays never receive their counts.
+    note: "Built-in classes (relay defaults): request.default gcra 120 per minute per actor key and the prefix multiplier per /24 or /48 (operator range 10..1200 per minute; charged once per relay request in addition to its own class; replaces Tenant.limits.requestRatePerMinutePerKey); relay.access gcra 5 per minute per key and 10 per minute per prefix (closed); key.register gcra 3 per hour (closed); report.receive window_counter 20 per 24 h per key and 60 per 24 h per /24 (closed); report.receive.reduced window_counter 3 per 24 h per key (closed); appeal.receive.day 5 per 24 h and appeal.receive.30d 20 per 30 days per key; evidence.capture 60 per hour; moderation.action.apply 50 per 24 h per moderator; policy.publish 20 per 24 h; accountlimit.override 30 per 24 h; signal.manual 10 per 24 h; risk.recompute 60 per hour; write.index gcra 20 per hour burst 5; write.mailbox.new_recipient and write.bid window_counter per key per 24 h with the per-key limit from F12.S03.M04; read.search token bucket 60 per minute per key and 120 per minute per /24. Vault local guards: local.offer.sent 10 per hour, local.report.filed 10 per hour, local.offer.open stock 10 and local.cycle_proposal.open stock 3, all confirmations only. Registered classes (RatePolicyRegistry.register by the owner module at relay composition; numbers defined once by the owner): read.proximity.query.anonymous and read.proximity.query.token (window_counter with longWindow, per caller key, read fail-open default), read.proximity.center_seen (probe keyed by caller key and center cell as discriminator) and read.proximity.center_new (window_counter with longWindow, failModeLocked closed: the documented exception to the fail-open default for read classes), all owned by F06.S02.M03. Built-in governance classes (F18 relay intake, charged by the relay bus, N18; all window_counter with failMode closed by default): governance.policy_comment.accept 10 per hour per actor key and governance.policy_comment.accept.prefix 30 per 24 h per /24 or /48 prefix (scopes ip_prefix, prefixMultiplier 1), both for F18.S02.M01 governance.policy_comment.accept; governance.policy_comment.new_key (per actor key with the proposal statement cid as discriminator, periodMs 2592000000 covering the 720 h maximum comment period, per-key limit from F12.S03.M04 limitKey new_key_comments_per_proposal) and governance.policy_comment.new_key.proposal (scope tenant with the proposal statement cid as discriminator, 25 per 2592000000 ms), both consumed only through the F12.S03.M04 limits check; governance.prohibited_rule.relay_upload, governance.category.relay_upload and governance.jurisdiction_profile.relay_upload 10 per 24 h per operator key each; governance.transparency.relay_upload 5 per 24 h per operator key; governance.transparency.relay_counter_snapshot 20 per 24 h per key."
+    sql: |
+      CREATE TABLE moderation_rate_policy (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, capability_class TEXT NOT NULL, algorithm TEXT NOT NULL,
+        limit_count INTEGER NOT NULL, period_ms INTEGER NOT NULL, burst INTEGER NOT NULL, scopes TEXT NOT NULL,
+        prefix_multiplier INTEGER NOT NULL, fail_mode TEXT NOT NULL, kind TEXT NOT NULL, long_window TEXT, owner_module TEXT,
+        fail_mode_locked INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, updated_at TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_rate_policy_class ON moderation_rate_policy(tenant_id, capability_class);
+      CREATE TABLE moderation_rate_bucket (
+        key_hash TEXT NOT NULL, tenant_id TEXT NOT NULL, capability_class TEXT NOT NULL, salt_epoch INTEGER NOT NULL, tat INTEGER, tokens REAL,
+        window_counters TEXT, penalty_factor REAL NOT NULL DEFAULT 1, penalty_until TEXT, expires_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY (key_hash, tenant_id, capability_class));
+      CREATE INDEX moderation_rate_bucket_expiry ON moderation_rate_bucket(tenant_id, expires_at);
+  validation_rules:
+    requirements:
+      - Policy input is validated against bounded ranges so an operator cannot set unlimited rates.
+      - The port validates its inputs and never throws; invalid input is treated as a denied request.
+      - Every violation maps to one stable error code.
+      - Registered classes and the request.default policy are validated against the same bounds as operator policies, a class has exactly one owner, and an owner's locked fail mode cannot be changed by an operator.
+    rules:
+      - "V01 | limit 1..100000, periodMs 1000..2592000000, burst 1..1000 and at most limit for gcra, prefixMultiplier 1..20 | VALIDATION_FAILED"
+      - "V02 | capabilityClass is a built-in class, a class registered through RatePolicyRegistry.register, or registered in the capability registry | VALIDATION_FAILED"
+      - "V03 | classes relay.access, report.receive, report.receive.reduced, key.register and every class registered with failModeLocked (read.proximity.center_new) keep failMode closed | MODERATION_RATE_POLICY_FAIL_MODE_LOCKED"
+      - "V04 | expectedRevision matches the stored policy revision | CONFLICT_REVISION"
+      - "V05 | bucket reset targets a key hash that exists and is requested by an operator | NOT_FOUND"
+      - "V06 | scope ip_prefix only with periodMs ≤ 86400000, window_counter only with periodMs ≥ 60000, and kind stock only with scope local | VALIDATION_FAILED"
+      - "V07 | longWindow, when set, has limit 1..100000 and limit ≥ the class limit, periodMs greater than the class periodMs and at most 2592000000, and at most 86400000 when ip_prefix is in scopes | VALIDATION_FAILED"
+      - "V08 | request.default keeps algorithm gcra, periodMs 60000 and limit 10..1200 per actor key | VALIDATION_FAILED"
+      - "V09 | RatePolicyRegistry.register comes from the relay composition for the named ownerModule, the class is not built-in or registered by another module, and its defaults pass V01, V06 and V07 | VALIDATION_FAILED"
+  workflow_state_machine:
+    note: "Buckets and policies have no lifecycle states; a bucket is either present with arithmetic state or expired and recreated at full capacity."
+    machines: []
+    requirements:
+      - Bucket state evolves only by the GCRA, token bucket or window counter arithmetic, and a bucket idle for its full window is equivalent to a new bucket.
+      - Penalties from spam throttles expire after at most 1 hour and never accumulate beyond factor 0.25.
+      - Policy changes take effect for new consume calls within 5 seconds without resetting buckets.
+      - Counting survives salt rotation, because consume looks a key up under the current and the previous epoch salt and sums window counters across both until the previous epoch has left the window, after which the previous salt is destroyed.
+      - A class with a longWindow allows a request only when both windows allow and counts it in both, its salt epoch lasts max(24 h, longWindow periodMs), and for 24 h windows such as read.proximity.center_new the previous salt is kept 24 h after rotation and checked together with the current one.
+    timeouts:
+      - "Idle bucket eviction every 60 s removes buckets whose state equals full capacity or whose expiresAt has passed."
+      - "Counter snapshots are persisted every 5 s."
+      - "Class salt epochs rotate every max(24 h, the class's longest window); the previous salt is destroyed when the oldest counter keyed under it is older than that window (24 h after rotation for 24 h windows)."
+  commands_queries_events:
+    requirements:
+      - The port RateLimitPort.consume is in-process and used by the kernel command bus before each handler; it is not an HTTP endpoint.
+      - Operators change policy and reset buckets through two relay commands; the vault changes local thresholds through the same policy command in local scope.
+      - moderation.rate.exceeded is emitted at most once per key per minute with a count, so denial storms do not create event storms.
+      - Consuming moderation.spam.detected derives the bucket key from the payload subjectKey with this module's own HMAC and applies the penalty to that key's write buckets.
+      - For class report.receive, consume uses class report.receive.reduced while the key carries a reduced marker, which this module sets from moderation.signal.recorded of kind report_dismissed_bad_faith (F12.S03.M02) for 30 days from the signal's observedAt, unless the caller marks the request exempt (minor_safety).
+      - Vault scope local provides flow guards (offers and reports per hour) and stock guards (open offers, open cycle proposals) counted from the vault's own records; they are UX confirmations, never security controls, and relays never receive their counts.
+      - "RatePolicyRegistry.register({ capabilityClass, ownerModule, algorithm, limit, periodMs, burst?, longWindow?, scopes, failMode, failModeLocked }) is the in-process registration port owner modules call at relay composition (F06.S02.M03 registers read.proximity.query.anonymous, read.proximity.query.token, read.proximity.center_seen and read.proximity.center_new with its own numbers); this module seeds a tenant RatePolicy row from the defaults when none exists, and owners depend on this module, never the reverse."
+      - "Every relay-scope consume also charges the actor key's request.default bucket once per request (the first consume carrying the request's correlationId), so the per-tenant default request rate applies to every relay command and query without a second bus call; anonymous requests charge it by IP prefix."
+      - "Built-in governance classes for F18 relay intake are charged by the relay bus in-process (N18): governance.policy_comment.accept (10 per hour per key) and governance.policy_comment.accept.prefix (30 per 24 h per /24 or /48 prefix) for F18.S02.M01 governance.policy_comment.accept; governance.policy_comment.new_key and governance.policy_comment.new_key.proposal only through the F12.S03.M04 limits check; governance.prohibited_rule.relay_upload, governance.category.relay_upload and governance.jurisdiction_profile.relay_upload (10 per 24 h per operator key each); governance.transparency.relay_upload (5 per 24 h per operator key, the F18.S02.M02 value); and governance.transparency.relay_counter_snapshot (20 per 24 h per key); all are window_counter classes with failMode closed by default."
+    commands:
+      - name: moderation.ratepolicy.set
+        mode: "relay command (operator) or vault-local (local principal, scope local); no signed statement"
+        capability: moderation.ratepolicy.set
+        input: "{ capabilityClass, algorithm, limit, periodMs, burst?, scopes?, prefixMultiplier?, failMode?, kind?, expectedRevision? }"
+        output: "{ policyId, revision, emissionIntervalMs? }"
+        errors: [VALIDATION_FAILED, CONFLICT_REVISION, MODERATION_RATE_POLICY_FAIL_MODE_LOCKED, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: moderation.ratebucket.reset
+        mode: "relay command (operator); audit-logged"
+        capability: moderation.ratebucket.reset
+        input: "{ capabilityClass, keyHash }"
+        output: "{ reset: true }"
+        errors: [NOT_FOUND, FORBIDDEN]
+        emits: []
+        idempotent: true
+    queries:
+      - name: moderation.ratepolicy.list
+        capability: moderation.ratepolicy.read
+        input: "{ cursor?, limit ≤ 100 }"
+        output: "{ items: RatePolicy[], nextCursor? }"
+        errors: []
+      - name: moderation.ratebucket.get_status_own
+        capability: moderation.ratebucket.read_own
+        input: "{ capabilityClass }"
+        output: "{ limit, periodMs, remaining, resetAt, penaltyUntil?, reducedClass?: boolean } for the caller's own key"
+        errors: []
+    events_produced:
+      - {type: moderation.rate.exceeded, privacy: P2, payload: "{ actorKeyHash?, ipPrefixHash?, capabilityClass, scope, deniedCount, windowMs, observedAt }"}
+    events_consumed:
+      - {type: moderation.spam.detected, effect: "when the payload carries a throttle, compute the bucket hash of subjectKey under the current class salts and set penaltyFactor 0.25 on that key's write buckets for min(ttlMs, 3600000)"}
+      - {type: moderation.signal.recorded, effect: "relay, kind report_dismissed_bad_faith only: write or extend a reduced marker row (class report.receive.reduced, reducedUntil = observedAt + 30 days) for the bucket hash of subjectKey; other kinds are ignored"}
+      - {type: moderation.limit.changed, effect: "refresh the cached per-key limit used by consume for the matching limit class (write.index, write.mailbox.new_recipient, write.bid, governance.policy_comment.new_key) within 5 s"}
+    errors:
+      - "MODERATION_RATE_POLICY_FAIL_MODE_LOCKED | 422 | no | security-sensitive classes must fail closed"
+    note: "RateLimitPort.consume({ tenantId, capabilityClass, actorKey?, ipPrefix?, discriminator?, cost, exempt?, limitOverride?, correlationId? }) receives the actor key, the truncated prefix and any discriminator (for example the center cell of read.proximity.center_seen) in memory only and hashes them before any state access; limitOverride is accepted only from the in-process F12.S03.M04 limits check; correlationId lets request.default be charged once per request. RatePolicyRegistry.register is called only from the relay composition root; F12.S03.M03 depends on no module that registers classes."
+    example: |
+      RateLimitPort.consume({ tenantId, capabilityClass: "write.index", actorKey: "did:key:z6MkPosterExample", ipPrefix: "192.0.2.0/24" }, cost=1)
+      policy write.index: gcra, limit 20, periodMs 3600000, burst 5 (emission interval 180000 ms); 5 calls already made in the last second
+      -> { allowed: false, limit: 20, remaining: 0, retryAfterMs: 179000, resetAt: "2026-11-04T10:03:00Z" }  -> bus returns 429 RATE_LIMITED { retryAfterMs: 179000 }
+      POST https://relay.example/api/v1/cmd/moderation.ratepolicy.set  (relay command, operator token)
+      { "capabilityClass": "appeal.receive.30d", "algorithm": "window_counter", "limit": 20, "periodMs": 2592000000, "scopes": ["actor"] }  -> 200 { "policyId": "0192f400-9999-7000-8000-000000000009", "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: only relay operators change policy and reset buckets; any caller can read the status of their own bucket."
+      - "Vault policy: only the local principal changes local UX guards, and local guards never apply to or report on other parties."
+      - The consume port runs for every request including anonymous ones, keyed by IP prefix only for anonymous requests.
+    capabilities:
+      - "moderation.ratepolicy.set | operator, local principal | relay role operator, or vault unlocked for scope local"
+      - "moderation.ratebucket.reset | operator | relay role operator; audit entry written"
+      - "moderation.ratepolicy.read | operator, local principal | relay role operator, or vault unlocked"
+      - "moderation.ratebucket.read_own | member, anonymous | caller's own key hash or IP prefix hash only"
+  failure_recovery_idempotency:
+    requirements:
+      - consume is atomic per key so concurrent requests never exceed the configured burst.
+      - Policy writes are idempotent per CTR-IDM-001 and use expectedRevision.
+      - Store outages follow the policy fail mode, open for reads at half rate, closed for sensitive classes.
+    idempotency: "Policy set replays by Idempotency-Key for 24 h; consume is not idempotent by design and a retried request spends tokens again, which clients avoid by honoring retryAfterMs."
+    concurrency: "In-memory buckets are updated with a per-key critical section (single-threaded relay event loop or compare-and-swap on persisted rows); persisted updates use UPDATE with a tat monotonic guard and window sub-counter increments in the same statement."
+    retries: "Clients honor retryAfterMs and CTR-IDM-001 backoff with full jitter (base 500 ms, cap 30 s, max 6 attempts)."
+    offline: "The vault queues commands in the outbox and local guards are advisory; relay limits apply when the outbox replays, and replay uses jitter to avoid synchronized bursts."
+    partial_failure: "If snapshot persistence fails, in-memory limits continue and an alert fires; after restart buckets restart from the last snapshot, which can loosen limits by at most one burst or 5 seconds of arrivals per key; reduced markers are persisted rows and survive restarts; a missed signal event is redelivered by the outbox (EVT-2)."
+  privacy_retention_abuse:
+    requirements:
+      - No raw IP address, actor key or user identifier is stored; keys are HMAC hashes under per-class salts destroyed once the previous epoch leaves the window (at most 48 h for windows up to 24 h, at most 60 days for 30-day windows), and logs contain at most /24 or /48 truncated prefixes per CTR-OBS-001.
+      - Bucket state is kept for its window plus at most 24 h (RET-EPHEMERAL for windows up to 24 h, RET-SHORT for longer ones up to 30 days) and never exported.
+      - Abuse (distributed low-rate attacks, limit evasion by key rotation, limit-based harassment) is addressed by layered scopes and tenant caps.
+    data:
+      - "RateBucket: P3 hashed operational state."
+      - "RatePolicy: P1 configuration visible to operators and, as published limits, to members."
+      - "Class salts: P4 relay or vault secrets, never exported."
+    retention:
+      - "Buckets: window plus at most 24 h; RET-EPHEMERAL for windows up to 24 h, RET-SHORT for windows over 24 h (at most 30 days)."
+      - "Salts: until the previous epoch's last counter leaves the window."
+      - "Policies: RET-STANDARD with revision history kept 1 year in the audit log."
+    threats:
+      - "T01 | Credential-stuffing or challenge flooding on relay access | relay.access class: 10 per minute per IP prefix, 5 per minute per key, failMode closed"
+      - "T02 | Evasion by creating many new keys | per-IP-prefix scope with multiplier 5, tenant global cap per class, and tier limits from F12.S03.M04"
+      - "T03 | Proximity query trilateration | proximity budget classes registered by F06.S02.M03 (query volume per minute and per hour, distinct new centers per hour and per 24 h), read.proximity.center_new fail closed, dual-salt counting across rotation, minimum search radius enforced elsewhere (CTR-PRV-001 PRV-2)"
+      - "T04 | Privacy leak through rate-limit logs | only hashed keys and truncated prefixes; salts destroyed with their epoch; no raw IPs in storage"
+      - "T05 | Operator disables limits | bounded ranges (V01), locked fail modes (V03), all policy changes audit-logged and visible in the public relay policy"
+      - "T06 | Long-window limits reset at salt rotation | dual-epoch lookup until the previous epoch leaves the window"
+      - "T07 | Vault-supplied counts used to bypass relay limits | relay limits count only requests the relay itself received; stock guards exist only in scope local"
+      - "T08 | Sybil keys flood a governance comment period or an operator key floods statement uploads | per-key and per-prefix comment classes, the F12.S03.M04 new-key caps (1 comment per key and 25 per proposal from keys first seen less than 7 days ago), per-type upload classes and failMode closed for all governance classes"
+    abuse_controls:
+      - "Tenant-wide cap per capability class (default 2 000 requests per minute per class on a 2 vCPU relay) protects availability when many keys act together."
+      - "Spam velocity penalties apply factor 0.25 for at most 1 hour and are labelled automated."
+  observability_performance:
+    requirements:
+      - Consume outcomes and latency are measured per CTR-OBS-001 with labels limited to tenant, module, code and outcome.
+      - Consume adds at most 1 ms p95 per request on a relay and at most 0.2 ms in a vault.
+      - Persisted snapshots and denial rates are alerting metrics.
+    metrics:
+      - "classrup_moderation_rate_decisions_total{outcome=allowed|denied}"
+      - "classrup_moderation_rate_denied_total{code=RATE_LIMITED,class}"
+      - "classrup_moderation_rate_consume_us (histogram)"
+      - "classrup_moderation_rate_snapshot_age_ms (gauge)"
+    logs:
+      - "relay warn rate.exceeded {capabilityClass, scope, prefix (/24 or /48), count, correlationId} — no actor key."
+    budgets:
+      - "consume p95 ≤ 1 ms on a relay at 5 000 consumes per second; ≤ 0.2 ms in a vault; dual-epoch lookup adds ≤ 0.1 ms."
+      - "100 000 live buckets use at most 64 MiB of memory; snapshot of 100 000 buckets completes in ≤ 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - GCRA, token bucket and window counter arithmetic are covered by property tests against a reference model.
+      - Fail modes, privacy of keys and event throttling are covered by integration and abuse tests.
+    fixtures: "Policy write.index gcra limit 20 periodMs 3600000 burst 5; read.search token bucket capacity 60 refill 1 per second; appeal.receive.30d window_counter limit 20 periodMs 2592000000; fixed monotonic clock and injectable wall clock; IPv4 192.0.2.10 and IPv6 2001:db8:1:1::5 for prefix tests."
+    tests:
+      - "T01 | unit | 01.R04,04.R01 | GCRA 20 per hour burst 5: 5 immediate calls then more | first 5 allowed, 6th denied with retryAfterMs = 180000 minus elapsed"
+      - "T02 | property | 01.R01,03.R01 | random arrival sequences against reference GCRA, token bucket and window counter models | decisions identical; tokens within [0, capacity]; tat monotonic; window sums never exceed the limit"
+      - "T03 | unit | 02.R01,02.R02,02.R03 | policy with limit 0, burst 2000, periodMs of 31 days, ip_prefix scope on a 7-day window, fail open on relay.access; port called with malformed input | VALIDATION_FAILED four times, MODERATION_RATE_POLICY_FAIL_MODE_LOCKED; the port denies without throwing"
+      - "T04 | unit | 01.R03,07.R01 | /24 and /48 keys: 192.0.2.10 and 192.0.2.200; two addresses in one /48; daily prefix salt rotation | same prefix hash within an epoch; prefix salt destroyed by 48 h; no raw IP or key in rows or logs"
+      - "T05 | integration | 03.R02,04.R03,04.R04 | spam.detected with subjectKey and throttle ttl 2 hours; denial storm of 1 000 calls | the key's write buckets found through this module's own HMAC get factor 0.25 for 1 hour only; one rate.exceeded event per key per minute"
+      - "T06 | contract | 04.R01,09.R02 | port, commands and event | validate against registry schemas; bus maps denial to RATE_LIMITED with retryAfterMs; port has no HTTP route"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | member sets policy; reset by member; anonymous consume | FORBIDDEN, FORBIDDEN, keyed by IP prefix only"
+      - "T08 | integration | 03.R03,04.R02 | operator policy change at runtime; vault sets a local guard through the same command; idle eviction | takes effect ≤ 5 s without resetting buckets; local guard stored in scope local; full-capacity buckets evicted"
+      - "T09 | chaos | 06.R01,06.R02,06.R03 | concurrent consumes on one key; counter store down for reads and for relay.access; restart mid-run | never above burst; reads fail open at half rate; relay.access closed 30 s; loosening ≤ one burst"
+      - "T10 | abuse | 07.R03 | 20 keys from one /24 hammering write.index; attacker rotates 50 keys | prefix limit reached at 5× actor limit; tenant cap holds"
+      - "T11 | integration | 07.R02,01.R01 | injected clock: a 24 h class bucket 25 h after its last update; a 30-day class bucket 31 days after its last update | both purged; export contains none"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 5 000 consumes per second for 5 minutes with 100 000 live buckets; snapshot persistence failure | p95 ≤ 1 ms, memory ≤ 64 MiB, snapshot ≤ 500 ms, snapshot age alert fires"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-099 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export policy, import with an out-of-bounds row, restore backup; v1 policy row with ratePerMinute 30 | valid policies round-trip and the invalid row is rejected; the expand step stores limit 30 periodMs 60000; buckets absent and recreated empty"
+      - "T15 | e2e | 04.R06 | mobile user sends the 11th offer in an hour with the local guard at 10 and opens an 11th open offer | confirmation dialogs appear; no count is sent to any relay; axe zero serious issues"
+      - "T16 | property | 03.R04,01.R03 | 20-per-30-days window_counter with arrivals spread over 60 days and a salt rotation on day 15 | at most 20 allowed in any 30-day window across the rotation; previous salt destroyed once its last counter leaves the window"
+      - "T17 | integration | 04.R05 | moderation.signal.recorded report_dismissed_bad_faith observed 10 days ago (delivered twice) for reporter key R; R files 4 reports in 24 h; one more marked exempt (minor_safety); clock advanced 21 more days | one marker row; 4th RATE_LIMITED under report.receive.reduced; exempt one allowed under report.receive; after the marker expires report.receive applies again"
+      - "T18 | unit | 01.R02,01.R04 | ratepolicy.set for 5 per 24 h, 20 per hour, 50 per 24 h and 20 per 30 days | all accepted and stored with limit and periodMs; GCRA emission interval reported as periodMs / limit"
+      - "T19 | contract | 04.R07,01.R05,02.R04 | F06.S02.M03 contract fixture registers the four proximity classes with its v1 numbers (20 per minute and 200 per hour, 60 per minute and 600 per hour, a center_seen probe of 1 per 24 h, 2 new centers per hour and 5 per 24 h with failModeLocked); a second module registers read.proximity.center_new again; an operator sets failMode open on it | tenant rows seeded with ownerModule F06.S02.M03 and longWindow; VALIDATION_FAILED for the duplicate owner; MODERATION_RATE_POLICY_FAIL_MODE_LOCKED"
+      - "T20 | property | 03.R05,03.R04 | random arrivals against a class with 20 per minute and longWindow 200 per hour, and against center_new over 3 days with a salt rotation at each midnight; center_seen probes for repeated and new cells | never more than 20 in any minute or 200 in any hour; never more than 5 new centers in any 24 h across rotations; previous salt kept 24 h then destroyed; a repeated cell is refused by the probe and costs nothing in center_new"
+      - "T21 | chaos | 06.R03 | counter store down during proximity searches | read.proximity.query.* allowed at half rate in memory; read.proximity.center_new returns RATE_LIMITED for 30 seconds"
+      - "T22 | integration | 04.R08,01.R05,02.R04 | request.default at 120 per minute; one request consuming three classes; anonymous caller; set request.default to 5 and to 1500; tenant migration with requestRatePerMinutePerKey 300 | the request charges request.default once; the 121st request in a minute is RATE_LIMITED whatever its class; anonymous charged by prefix; VALIDATION_FAILED twice; expand step writes limit 300 periodMs 60000"
+      - "T23 | contract | 04.R09,01.R04 | F18.S02.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03 and F18.S02.M02 contract fixtures through the relay bus: 11 comments in an hour from one key first seen 40 days ago, spread over three proposals; 31 comments in 24 h from 31 such keys of one /24; an 11th prohibited-rule upload in 24 h with taxonomy and profile uploads below 10; a 6th transparency upload; a 21st counter snapshot; counter store down during comment intake | 11th RATE_LIMITED; 31st RATE_LIMITED for the prefix; only the prohibited-rule upload refused; 6th upload and 21st snapshot RATE_LIMITED; comment intake RATE_LIMITED for 30 seconds while the store is down"
+    acceptance:
+      - All tests T01–T23 pass in CI.
+      - Concurrent requests never exceed burst plus rate × elapsed time, and window counters never exceed their limit across salt rotations (property tests).
+      - No raw IP address or actor key is ever persisted or logged by this module.
+  import_export_backup_rollback:
+    requirements:
+      - Rate buckets are ephemeral and excluded from exports and backups; policies are exported with relay configuration.
+      - Policy import validates all bounds and locked fail modes before applying.
+      - Policy schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.ratepolicy in the relay configuration export and in the vault export for local guards; buckets and salts not exported."
+    import: "Policies import after bounds validation; invalid rows are rejected with VALIDATION_FAILED and the rest are applied; local guard import affects only the importing vault."
+    backup: "Policies covered by relay SQLite backup (CTR-IOX-001 IOX-3); buckets and salts excluded and recreated empty after restore."
+    migration_rollback: "Expand step converts v1 ratePerMinute rows to limit = ratePerMinute and periodMs 60000 and keeps ratePerMinute readable for 180 days; a second expand step writes one request.default row per tenant from the former F15.S04.M03 Tenant.limits.requestRatePerMinutePerKey value (default 120, clamped to 10..1200); rollback is safe because older readers ignore new optional fields and unknown classes use the default policy."

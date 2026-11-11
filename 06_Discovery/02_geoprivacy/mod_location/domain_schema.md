@@ -1,35 +1,99 @@
-# PS-048-01 — domain schema
+# PS-048-01 — Domain schema: User location settings
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-01. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S02.M02 User location settings](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/geoprivacy/location` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the domain schema process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-048-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-048-01.R01** LocationSetting stores only cells at precision 4 or 5 and a public level; it has no address field and no raw coordinates.
+- **PS-048-01.R02** LocationShare is P3 on the sharer's device and a time-boxed encrypted copy on the recipient's device; its expiry is at most 24 hours after creation and uses the holder's local clock.
+- **PS-048-01.R03** The exact coordinates or the L3 cell of a share are stored only encrypted under a per-share key, and that key is deleted in the same transaction that ends the share (crypto-shredding), so the remaining ciphertext cannot be decrypted; no overwrite or erasure timing of storage or memory is claimed.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### LocationSetting
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.discovery.location_setting/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — tenant scope |
+| ownerDid | did — local principal |
+| homeCell5? | string — geohash of exactly 5 characters (L2); null means L0 none |
+| publicLevel | enum — L0 \| L1 \| L2; default L0; publicCell is homeCell5 truncated to the level |
+| entryMode | enum — map_tile \| gazetteer \| device_gps_once |
+| changeCount24h | int — home changes in the rolling 24 hours, used only to ask for confirmation from the 4th change |
+| lastChangedAt? | timestamp — local clock |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- homeCell5 is null or exactly 5 geohash characters; publicLevel L1 publishes only its first 4 characters.
+- publicLevel is never finer than L2 and is L0 when homeCell5 is null.
+- Every publicCell placed in an event or projection has passed F06.S02.M01 assertPublicCell.
+
+### LocationShare
+
+Schema `classrup.discovery.location_share/v1` · storage **device** · privacy **P3** · retention **RET-EPHEMERAL**
+
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — shareId, primary key, generated by the sharer |
+| tenantId | uuidv7 — tenant scope |
+| direction | enum — outgoing \| incoming |
+| sharerDid | did — the signer of the share statement |
+| recipientDid | did — exactly one counterparty |
+| contextRef? | object — { type: thread\|meetup\|deal, id: uuidv7 } the share is bound to |
+| precision | enum — L3 \| L4 |
+| shareKeyId? | string — reference to the per-share 256-bit key in the vault keystore; deleted when the share ends |
+| cell6Ciphertext? | bytes — 6-character cell (L3) encrypted with XChaCha20-Poly1305 under the per-share key, only while active |
+| positionCiphertext? | bytes — { lat, lon } with 5 decimals (L4) encrypted under the per-share key, only while active |
+| claimedIssuedAt | timestamp — sender's claim; at most 10 minutes ahead of the recipient's receipt |
+| claimedExpiresAt | timestamp — sender's claim, at most 24 h after claimedIssuedAt and after receipt |
+| effectiveExpiresAt | timestamp — holder's local anchor, min(claimedExpiresAt, localReceiptOrCreation + 24 h) |
+| statementCid | string — sha256-base64url cid of the signed statement |
+| recordCid? | string — cid of the F11.S01.M02 accepted record the incoming copy was taken from |
+| syncState | enum — local_committed \| prepared \| transport_acknowledged \| peer_accepted |
+| status | enum — active \| revoked \| expired |
+| endReason? | enum — revoked \| expired \| blocked \| context_cancelled \| erased |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
+
+**Invariants**
+- effectiveExpiresAt minus the local creation time is at most 86 400 000 ms.
+- Exactly one of cell6Ciphertext and positionCiphertext is present while status is active, and neither, nor the per-share key, exists after the share ends.
+- Per (sharerDid, recipientDid, contextRef) at most one share is active.
+- sharerDid differs from recipientDid and the pair is not blocked.
+- An incoming share exists only for a record F11.S01.M02 accepted with signer role sharer.
+
+### Storage DDL
+
+```sql
+CREATE TABLE discovery_location_share (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, direction TEXT NOT NULL, sharer_did TEXT NOT NULL,
+  recipient_did TEXT NOT NULL, context_type TEXT, context_id TEXT, status TEXT NOT NULL,
+  effective_expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX discovery_location_share_active ON discovery_location_share(tenant_id, sharer_did, recipient_did, ifnull(context_id,''), direction)
+  WHERE status = 'active';
+-- replay markers (ids only), kept 8 days so they outlive any relay mailbox copy
+CREATE TABLE discovery_location_share_marker (
+  share_id TEXT NOT NULL, statement_cid TEXT, sharer_did TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('ended','pending_revoke')),
+  until TEXT NOT NULL, PRIMARY KEY (share_id, kind));
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-048-09.T01 | unit | PS-048-01.R01, PS-048-02.R01 | set home from GPS once with level L1 and consent granted | stored homeCell5 u4pru, publicCell u4pr (assertPublicCell passed), raw coordinates absent from storage |
+| TEST-PS-048-09.T03 | unit | PS-048-01.R02, PS-048-02.R02, PS-048-03.R01 | grant share ttl 2 h, then ttl 25 h, 20 min, and a blocked recipient | first succeeds; others return DISCOVERY_SHARE_TTL_INVALID or BLOCKED_PARTY |
+| TEST-PS-048-09.T04 | property | PS-048-01.R03, PS-048-03.R01, PS-048-03.R02, PS-048-03.R03 | random sequences of grant, revoke, block, expiry on one share | only declared transitions succeed; ciphertext and per-share key are absent in every ended state |
+| TEST-PS-048-09.T21 | unit | PS-048-01.R03, PS-048-07.R01 | end a share, then try to decrypt the stored ciphertext; scan IndexedDB, logs and events after a GPS-once | per-share key absent from the keystore and decryption fails; no raw point stored or logged |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [module SPEC](SPEC.md).

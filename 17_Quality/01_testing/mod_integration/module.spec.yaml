@@ -1,0 +1,233 @@
+id: F17.S01.M03
+scope: MVP
+summary: 'Integration tests simulate several participants: one in-memory vault per participant (storage/memory adapter, local principal with its own Ed25519 key) plus an optional in-process relay (SQLite in-memory) that indexes public projections and forwards end-to-end encrypted envelopes. Under ADR-0016 the 12 reference flows (paid classified listing, ordinary local sale, two-party barter, three-party cycle, four-party cycle, generalized N-party cycle, mixed-value barter compensation, cancellation and dispute, fraud and moderation, private messages, payments with cash and crypto claim including a simulated reorg, federation and vault portability) map one to one to FLOW-01..FLOW-12 of planning/FLOWS.md and run with a relay and, unless the flow mode table marks them relay-only, relay-less through direct envelope exchange. This module owns the trust-fault suites and their single oracle (relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay, relay_withhold_equivocate) and the statement contract tests; F17.S02.M02 reruns the trust faults with seeded random timing. Fakes replace the chain (FakeChainVerifierPort with the BTC finality policy of 6 confirmations), clock and push. No relay ever receives private user data or a vault export bundle.'
+responsibilities:
+- Provide a harness that creates N memory vaults (one per participant) and an optional in-process relay with in-memory SQLite plus fake ports and a fixed clock, ready in under 2 s per test file; a DirectTransport lets vaults exchange envelopes with no relay.
+- Implement the 12 reference flows as integration suites mapped one to one to FLOW-01..FLOW-12 (04.R04), each asserting final state, emitted events and audit entries.
+- 'Provide contract tests: every command input and output and every emitted event payload validates against the schema registry (CTR-SCH-001), every error matches CTR-ERR-001 shapes, and every signed statement type sent in a flow is registered in the F11.S01.M01 statement registry (N2) with its signer role, its payload validates against its classrup.<slug>.<entity>/vN schema, its cid matches CTR-FED-001 FED-7 and its ext is at most 4 KiB (CTR-SCH-001 SCH-2), with one generated row per registry entry plus a negative case signed by the wrong role.'
+- Provide the FakeChainVerifierPort, scripted with the BTC finality policy of 6 confirmations (CTR-COM-001 COM-5), able to simulate confirmation progress, a reorg of depth 2 and RPC outage, plus a vault with no verifier configured, so the crypto claim flow is proven without a chain.
+- Run each reference flow in two modes, relay and relay-less (DirectTransport), except the steps the flow mode table (04.R04) marks relay-only (FLOW-01 listing_paid, FLOW-09 fraud_moderation and the federation step of FLOW-12); assert that every vault reaches the same final state in both modes.
+- 'Own the trust-fault suites and their oracle (one name and one expected outcome each, 02.R04): relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate; F17.S02.M02 imports the same scenario definitions and oracle and reruns them with seeded random fault timing.'
+non_responsibilities:
+- Browser-level flows (F17.S01.M04).
+- Throughput and latency (F17.S02.M01); infrastructure fault injection (DB busy, consumer crash, duplicate delivery, clock skew, peer outage) and seeded random-timing reruns of this module's trust-fault suites (F17.S02.M02, which reuses this module's oracle instead of defining its own).
+- The business logic under test; each owning module implements it.
+- 'Future: multi-relay federation topologies of more than 3 relays.'
+depends_on:
+- CTR-TST-001
+- CTR-EVT-001
+- CTR-ERR-001
+- CTR-SCH-001
+- CTR-IDM-001
+- CTR-COM-001
+- CTR-FED-001
+- CTR-ID-001
+- CTR-PRV-001
+- CTR-CAP-001
+- CTR-IOX-001
+- F17.S01.M01
+- F15.S02.M02
+- F15.S02.M03
+- F15.S01.M01
+- F11.S01.M01
+- F11.S01.M02
+- F11.S01.M03
+- F11.S02.M01
+- F11.S02.M03
+- F09.S01.M01
+- F09.S01.M03
+- F16.S02.M02
+- F07.S02.M01
+- F10.S01.M03
+- F06.S02.M01
+user_stories:
+- As a developer, I run one command and see the 12 reference flows pass or fail with the event trail of the failing step.
+- As a release manager, I can see that each flow passes before release and which requirement IDs they cover.
+- As a contract owner, I learn immediately when an event payload drifts from its registered schema.
+edge_cases:
+- Two flows write to the same tenant concurrently; each test uses its own tenant ID and in-memory database so no cross-talk occurs.
+- A command is replayed with the same Idempotency-Key mid-flow; the harness asserts the original response and no duplicate events.
+- The fake chain verifier reorgs a confirmed payment claim at 3 of 6 confirmations; the claim returns to pending_confirmation, the deal does not complete at 5 of 6, and it completes only when both vaults' verifiers report final and the payee-signed classrup.commerce.payment_ack/v1 with verification.source chain arrives.
+- A vault has no chain verifier configured; its crypto claim stays claimed (unverified) and is never auto-confirmed.
+- A consumer fails after an event is written; the outbox redelivers and the flow still ends in the expected final state.
+- An event type is emitted that is not in the catalog; the contract suite fails with QUALITY_IT_EVENT_UNREGISTERED.
+- Clock jumps across an expiry boundary mid-flow; the FakeClock advance triggers the sweeps and the flow ends expired exactly once.
+- The relay is stopped mid-flow; local records stay intact, status for undelivered statements stays prepared (delivery unknown), and the flow completes after direct exchange or relay restart.
+- Two vaults sign conflicting classrup.bazaar.reservation/v1 statements for the same item after a fork (fork_conflict); both receivers detect the fork, freeze the coordination and require renegotiation, with no last-writer-wins.
+- 'A key is revoked while a vault is offline (revocation_lag), judged by the verifier''s own receipt time against revocationEffectiveFrom (F16.S02.M02), never by the signer''s createdAt: a statement received before the revocation arrives and before effectiveFrom stays valid; one received after the revocation arrives with a backdated createdAt is refused with FEDERATION_SIGNER_ROLE_INVALID and listed in quarantine with reason signer_key_revoked; one received inside [effectiveFrom, arrival] is re-marked signed during claimed compromise and its dependent coordination is frozen; a revocation whose effectiveFrom is more than 30 days back is refused with VALIDATION_FAILED; the lag reported is arrival minus effectiveFrom, at most 30 days.'
+- A malicious relay alters one byte of an envelope (relay_tamper); the receiver rejects it with FED_SIGNATURE_INVALID and quarantines it with provenance.
+- A correctly signed acceptance arrives from a key that is not the listing author (signer_role_mismatch); it is quarantined with its reason and causes no state change.
+- A relay re-delivers an old valid envelope, replays it into another context or after its expiresAt (relay_replay); re-delivery has a single effect by cid, the other two are rejected.
+- A relay serves divergent index views to two vaults, withholds a seq or drops a tombstone (relay_withhold_equivocate); the vaults detect the gap, release it with chainGap after 24 h and never claim more than the reached state.
+- The relay-mode run of the portability step is watched by the in-process relay; it receives no classrup-export/v1 bundle.
+ux:
+  notes: Headless. Output is vitest JUnit and a flow report reports/integration.json listing each flow, steps, events seen and requirement IDs covered.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; it creates throwaway in-memory vaults (one per participant), an optional in-memory relay database and destroys them on exit.
+    - Seed data is built through public commands where possible and through fixtures only for actors and listings, never by writing rows directly in flow suites.
+    - Flow reports store step names, event types and IDs only; no payload content of P2–P4 data is written to the report.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - Each flow suite must assert the final state, the ordered list of emitted event types and that no unexpected event types appear.
+    - The harness rejects a flow that makes a real network call, writes outside the temp directory or uses a real clock with QUALITY_IT_ISOLATION.
+    - Contract validation fails with a typed code when a command, event or error does not match its registered schema or CTR-ERR-001 shape.
+    - 'Trust-fault suites are mandatory and this module owns their single oracle: relay_down (local records intact, the OutboxEntry stays prepared until a verified receipt, the flow completes after direct exchange or relay restart); fork_conflict (fork detected, coordination frozen, no last-writer-wins); revocation_lag (receipt-time cases of the revocation edge case, F11.S01.M02 and F16.S02.M02); relay_tamper (FED_SIGNATURE_INVALID, quarantined with provenance, no state change); signer_role_mismatch (quarantined with reason signer_role_invalid, no state change); relay_replay (one effect by cid; other context or after expiresAt rejected); relay_withhold_equivocate (gap detected, chainGap after 24 h, dropped tombstone applied once fetched from the author). In every suite no sync state or label exceeds the state reached.'
+    - 'Statement contract checks run per F11.S01.M01 registry entry: required signer role, payload schema classrup.<slug>.<entity>/vN, cid per FED-7, ext at most 4 KiB with unknown payload keys outside ext rejected (SCH-2), and a negative case signed by the wrong role that must be quarantined.'
+    - Flow reports and UI-facing statuses never use verified or paid as a state; payment steps use only CTR-COM-001 COM-3 states and catalog payment events, and a report that contains either word as a state fails the lint.
+    rules:
+    - V01 | Each of the 12 reference flows exists, runs and asserts final state, events and drained outbox | QUALITY_IT_FLOW_MISSING
+    - V02 | Flow makes no outbound network call, uses only the injected clock and writes only to its temp dir | QUALITY_IT_ISOLATION
+    - V03 | Every emitted event type is registered in the catalog and its payload validates against its schema | QUALITY_IT_EVENT_UNREGISTERED
+    - V04 | Every command output and error response validates against the registry and CTR-ERR-001 | QUALITY_IT_CONTRACT_MISMATCH
+    - V05 | Outbox and inbox are empty at the end of each flow | QUALITY_IT_OUTBOX_NOT_DRAINED
+    - V06 | Each flow runs in relay mode and, unless the flow mode table (04.R04) marks the flow or step relay-only, in direct mode with identical final states per vault | QUALITY_IT_MODE_DIVERGENCE
+    - V07 | Trust-fault suites relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate exist and pass with the oracle of 02.R04 | QUALITY_IT_FAULT_SUITE_MISSING
+    - V08 | Every statement type sent in any flow is registered in the statement registry with its required signer role, its payload validates against classrup.<slug>.<entity>/vN, its cid matches FED-7 and ext is at most 4 KiB | QUALITY_IT_STATEMENT_UNREGISTERED
+    - V09 | No flow report or UI-facing status uses verified or paid as a state and no sync state is reported above the state reached | QUALITY_IT_OVERCLAIM
+    - V10 | No relay ever receives a classrup-export/v1 bundle or P2+ plaintext; after every flow relay storage holds only signed P0 projections, ciphertext envelopes, receipts and relay-local data | QUALITY_IT_RELAY_PRIVATE_DATA
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle for the module; each flow drives the lifecycles of the entities it exercises (Offer, Proposal, Cycle, Deal, Receipt).
+    - A flow is complete only when its terminal state is reached or its documented timeout fires on the FakeClock.
+    - 'Every flow ends by asserting outbox drained: zero undelivered events and zero stuck inbox entries.'
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:integration, pnpm test:integration --flow <name> and pnpm test:contract.
+    - The 12 flows are named listing_paid, sale_local, barter_two, cycle_three, cycle_four, cycle_n, barter_mixed, dispute_cancel, fraud_moderation, messages_private, payments_claims, federation_io (two steps, federation and portability), each runnable with --mode relay or --mode direct.
+    - 'Exit codes: 0 pass, 1 assertion failure, 2 contract mismatch, 3 isolation violation.'
+    - 'Flow mode table (FLOW id, suite, mode, reason): FLOW-01 listing_paid relay-only (promotion fee and the Promoted label are relay R hosting policy); FLOW-02 sale_local both; FLOW-03 barter_two both; FLOW-04 cycle_three both; FLOW-05 cycle_four both; FLOW-06 cycle_n both (direct is O(N^2) envelopes, relay is O(N) mailbox fan-out); FLOW-07 barter_mixed both; FLOW-08 dispute_cancel both (the mediator outcome is a signed statement that travels either way); FLOW-09 fraud_moderation relay-only (report review and index removal are relay R hosting policy); FLOW-10 messages_private both (relay mailbox, or a sealed envelope file in direct mode); FLOW-11 payments_claims both (chain verifiers are per-vault ports); FLOW-12 federation_io federation step relay-only (relay-to-relay federation by definition) and portability step both (vault A to vault A'' with no relay contacted in either mode).'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_IT_FLOW_MISSING | 422 | no | a reference flow has no passing suite (exit 1)
+    - QUALITY_IT_ISOLATION | 422 | no | flow performed network, real clock or out-of-sandbox write (exit 3)
+    - QUALITY_IT_EVENT_UNREGISTERED | 422 | no | emitted event type is not registered (exit 2)
+    - QUALITY_IT_CONTRACT_MISMATCH | 422 | no | payload or error does not match its registered schema (exit 2)
+    - QUALITY_IT_OUTBOX_NOT_DRAINED | 422 | no | undelivered outbox events at flow end (exit 1)
+    - QUALITY_IT_MODE_DIVERGENCE | 422 | no | relay and direct runs ended in different vault states (exit 1)
+    - QUALITY_IT_FAULT_SUITE_MISSING | 422 | no | a mandatory trust-fault suite is missing or failing (exit 1)
+    - QUALITY_IT_STATEMENT_UNREGISTERED | 422 | no | a statement type sent in a flow is not registered with its signer role, or its payload, cid or ext violates the contract (exit 2)
+    - QUALITY_IT_OVERCLAIM | 422 | no | a flow report or status uses verified or paid as a state or claims more than the reached sync state (exit 1)
+    - QUALITY_IT_RELAY_PRIVATE_DATA | 422 | no | a relay received an export bundle or P2+ plaintext during a flow (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:integration --flow payments_claims
+        TEST-PS-135-09.T17 crypto claim reorg depth 2 returns to pending_confirmation   OK  (1.4 s)
+        steps: commerce.payment.claimed -> commerce.payment.confirming -> commerce.payment.confirmed -> commerce.payment.reorged -> commerce.payment.confirming (pending) -> commerce.payment.finalized
+        deal: completed only after final per both verifiers (6/6) and payee-signed payment_ack (verification.source chain)
+        outbox drained: yes
+      $ pnpm test:integration --flow federation_io --mode direct
+        federation step: relay-only (skipped in direct mode per flow mode table)
+        portability step: vault A -> vault A' dry-run 214 records, 0 conflicts; relay received 0 export bundles  OK
+      $ pnpm test:contract
+        412 commands/events/errors and 96 statement registry entries (plus 96 wrong-role negatives) validated  OK
+  authorization_capabilities:
+    requirements:
+    - Flows act through each vault's command bus as its local principal; incoming statements are accepted only when signed by a key authorized for the role (CTR-CAP-001 CAP-8, N2 registry), a correctly signed statement from a key without that role is quarantined with its reason and changes nothing, and relay requests use signed requests or relay access tokens.
+    - Each flow includes at least one negative authorization step (wrong actor gets FORBIDDEN or NOT_FOUND per CTR-ERR-001 ERR-4).
+    - Fake ports have no capabilities of their own and cannot be reached from production code paths.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Idempotency is tested in every flow by replaying the first mutating command with the same key and asserting identical response and no new events.
+    - Concurrent steps use deterministic scheduling (explicit awaits on a controlled executor) so the same interleaving runs on every execution.
+    - After a simulated consumer crash, redelivery produces a single net effect (CTR-EVT-001 at-least-once with idempotent consumers).
+    - After a relay outage or tampering, each domain record is local committed and its OutboxEntry moves only along the F15.S01.M01 states prepared, sending, transport_acknowledged, peer_accepted (or conflict, failed, expired) per CTR-IDM-001 IDM-7, and the harness asserts after every step that the UI-facing label never exceeds the state reached.
+    idempotency: The harness re-runs any flow in a fresh database, so flows are repeatable; the first mutating command of each flow is replayed to prove idempotency (CTR-IDM-001).
+    concurrency: Flows run in parallel across test files, each with its own database and tenant; within a flow, concurrency is simulated with a deterministic scheduler.
+    retries: No retries on assertion failures. The fake ChainVerifierPort supports scripted RPC failures so retry logic of the system under test is exercised, not the test itself.
+    offline: Everything runs offline by construction; flows needing the network use fake ports.
+    partial_failure: A failed step stops its flow and dumps the event trail, state snapshot and seed to reports/integration.json; other flows still run and the exit code is the worst code seen.
+  privacy_retention_abuse:
+    requirements:
+    - Integration data is synthetic and actors are generated pseudonyms; public locations are L2 cells, and synthetic L3 cells and L4 points marked P3 (meetup point, home address) are seeded into participant vaults so canary-leak checks prove they never reach public views, search documents, federation envelopes, relay storage or logs.
+    - The suite asserts that private-message payloads and P3 fields never appear in public views, federation exports or event payloads marked P0.
+    - 'Logs from the relay in tests are captured and scanned: a canary P3 value must never appear.'
+    data:
+    - Synthetic P0–P3 test data inside in-memory vaults only, including P3-marked L3 and L4 canaries; relays hold only P0 projections, ciphertext and receipts.
+    - 'Reports: step names, event types, IDs.'
+    retention:
+    - In-memory databases die with the process; reports kept 14 days as CI artifacts.
+    threats:
+    - T01 | Test data accidentally includes real personal data | fixtures are generated; the same lint as F17.S01.M01 runs on the integration folder
+    - T02 | Flow leaks a P3 or message payload into a report or log | report writer whitelists fields (step name, event type, IDs); canary P3 value scanned in captured logs
+    - T03 | Fake port reused in production by mistake | fake ports live only under tests/integration and the production dependency rule forbids importing from tests/
+    abuse_controls:
+    - The harness forbids sleeping on real time (setTimeout over 50 ms) in flow code.
+    - Disabling a flow requires editing the flow list in code-owned config and fails the QUALITY_IT_FLOW_MISSING rule.
+  observability_performance:
+    requirements:
+    - The harness reports per-flow duration and event counts in reports/integration.json.
+    - Each flow completes in at most 5 s and the whole integration suite in at most 120 s on 2 vCPU.
+    - Relay startup in the harness takes at most 2 s per test file.
+    metrics:
+    - classrup_quality_integration_flows_total{outcome=pass|fail}
+    - classrup_quality_integration_duration_ms{flow}
+    - classrup_quality_integration_contract_checks_total{outcome}
+    logs:
+    - JSON line per flow {ts, level, msg, module, flow, durationMs, code?} without payload data (CTR-OBS-001 OBS-1).
+    budgets:
+    - Each flow at most 5 s; entire suite at most 120 s on 2 vCPU.
+    - Contract validation of all registered schemas at most 20 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Each of the 12 flows has at least one dedicated test row and the flow list is asserted against the reference list in this spec.
+    - Contract tests are generated from the schema registry so a new registered command or event is covered automatically.
+    fixtures: Vaults for Alice, Bob, Carol, Dave, Erin (one memory vault each, seeded Ed25519 keys) plus a fresh vault Alice' on a second simulated device, optional in-process relays R1 and R2 (R2 peers with R1), DirectTransport, FakeClock 2026-11-04T10:00:00Z, FakeChainVerifierPort script under the BTC finality policy of 6 confirmations (1 to 3 confirmations, reorg depth 2, then 1 to 6 again), one vault with no verifier configured, P3-marked canaries (L4 point 52.51630,13.37770 and L3 cell u33dbf), a malicious relay wrapper (tamper, replay, withhold, equivocate, drop tombstone), EUR and BTC test amounts.
+    tests:
+    - T01 | integration | 01.R01,03.R03 | boot harness and tear down 20 times | each database is isolated and removed; outbox drained assertion runs
+    - T02 | integration | 01.R02,01.R03,07.R01 | run flows and inspect reports | no row writes by fixtures in flow files; report holds only step names, types, IDs
+    - T03 | integration | 02.R01,04.R02,04.R04 | list flows from the harness | exactly the 12 documented flow names exist, each mapped to its FLOW-nn ID and mode exactly as the flow mode table, and each asserts state, ordered events and no unexpected events
+    - T04 | integration | 02.R02 | flow attempts fetch to a public URL and Date.now | QUALITY_IT_ISOLATION raised, exit 3
+    - T05 | contract | 02.R03,09.R03 | validate every registered command, event and error | all validate; a mutated schema produces QUALITY_IT_CONTRACT_MISMATCH
+    - T06 | integration | 03.R01,03.R02,04.R01 | run barter_two, cycle_three, cycle_four, cycle_n, barter_mixed to completion and to expiry | terminal states reached or expired exactly once
+    - T07 | integration | 04.R03,06.R03 | run with scripted consumer crash and redelivery | single net effect and outbox drained
+    - T08 | integration | 05.R02 | each flow performs a wrong-actor vault command step | FORBIDDEN or NOT_FOUND per ERR-4
+    - T09 | abuse | 05.R03,07.R02,07.R03 | import fake port from production code; capture relay logs during every flow and scan them for the P3 canary | import rejected; canary absent from captured relay logs, exports and P0 payloads
+    - T10 | integration | 06.R01 | replay first mutating command in each flow | identical response and zero new events
+    - T11 | integration | 06.R02 | two concurrent offer acceptances with the deterministic scheduler | same interleaving every run; exactly one accepted
+    - T12 | integration | 08.R01,08.R02 | run full suite with timing report | each flow at most 5 s, whole suite at most 120 s, report lists durations
+    - T13 | integration | 08.R03 | boot relay harness 50 times | startup at most 2 s each
+    - T14 | integration | 09.R01,09.R02,04.R04 | assert the flow list and the flow mode table equal the reference in this spec and every spec requirement maps to a test | no missing flow, no mode mismatch and no uncovered requirement
+    - 'T15 | integration | 10.R01,10.R02 | federation_io - (a) federation step: vault Alice publishes P0/L2 envelopes to R1, R1 federates signed batches of at most 100 to R2, then a duplicate cid, an author tombstone and a forged envelope are sent; (b) portability step: export classrup-export/v1 from memory vault Alice and import into the fresh vault Alice'' | (a) R2 holds read-only mirrors with provenance, the duplicate is deduped by cid, the tombstone is applied within 24 h of FakeClock, the forged envelope is rejected with FED_SIGNATURE_INVALID; (b) IOX-2 dry-run report before commit, identical records skipped, conflicting IDs rejected, records and signatures intact in Alice''; no relay ever received the IOX-1 bundle; report contains no user data'
+    - T16 | integration | 10.R03 | revert harness commit in a branch | production tests unaffected
+    - 'T17 | integration | 03.R02,02.R06 | payments_claims - cash claim acknowledged by the payee; crypto claim under the BTC 6-confirmation policy with reorg depth 2 at 3 of 6; a vault with no verifier configured | events follow commerce.payment.claimed, confirming, confirmed, reorged, confirming, finalized; after the reorg the claim returns to pending_confirmation; the deal does not complete at 5 of 6; it completes only when both vaults'' verifiers report final and the payee-signed payment_ack with verification.source chain is received; the unverified vault shows claimed (unverified); no step is named verified or paid; platform never holds funds'
+    - T18 | integration | 02.R01 | fraud_moderation and messages_private flows | moderation action recorded with audit entry; message payloads absent from public views
+    - T19 | integration | 04.R04 | run all flows with --mode relay and --mode direct | same final vault state in both modes except the flows and steps the flow mode table marks relay-only; QUALITY_IT_MODE_DIVERGENCE otherwise
+    - 'T20 | integration | 02.R04,06.R04 | relay_down - stop relay between prepared and transport_acknowledged | local records intact; OutboxEntry stays prepared (Saved on this device); completes via direct exchange; after every step no vault label exceeds the reached state (no Reached relay before a verified receipt, no Confirmed by peer before peer_accepted)'
+    - 'T21 | integration | 02.R04 | fork_conflict - two signed conflicting classrup.bazaar.reservation/v1 statements delivered in both orders | fork detected and coordination frozen in both vaults; no resolve option picks a winner; no last-writer-wins'
+    - 'T22 | integration | 02.R04 | revocation_lag with FakeClock - (a) statement received before the revocation arrives and before revocationEffectiveFrom; (b) received after the revocation arrives with a backdated createdAt; (c) received inside [effectiveFrom, arrival]; (d) revocation whose effectiveFrom is 31 days back | (a) stays accepted and valid; (b) refused with FEDERATION_SIGNER_ROLE_INVALID and listed in quarantine with reason signer_key_revoked; (c) re-marked signed during claimed compromise and its dependent coordination frozen; (d) VALIDATION_FAILED; the reported lag is arrival minus effectiveFrom and at most 30 days'
+    - 'T23 | abuse | 02.R04 | relay_tamper - relay flips one byte of an envelope | FED_SIGNATURE_INVALID, statement quarantined with provenance, no state change'
+    - 'T24 | contract | 02.R05 | one generated row per statement registry entry, plus per entry a case signed by the wrong role, a payload with an unknown key outside ext and an ext of 5 KiB; then a flow sending an unregistered type | every registered type validates (signer role, payload schema, FED-7 cid, ext at most 4 KiB); wrong-role cases quarantined; unknown key gives VALIDATION_FAILED; oversize ext rejected; the unregistered type fails with QUALITY_IT_STATEMENT_UNREGISTERED'
+    - 'T25 | abuse | 05.R01,02.R04 | signer_role_mismatch - a correctly signed classrup.bazaar.offer_decision/v1 acceptance made by a key that is not the listing author is delivered to the buyer vault | quarantined with reason signer_role_invalid; no Deal, no hold and no state change'
+    - 'T26 | abuse | 02.R04 | relay_replay - re-deliver an old accepted offer envelope 3 times, replay it into another listing context, and deliver it after its expiresAt | one effect (dedupe by cid); the other-context replay is rejected; after expiry it is rejected with EXPIRED; no state change'
+    - 'T27 | abuse | 02.R04,06.R04 | relay_withhold_equivocate - the relay serves vaults Bob and Carol different index views of one author chain, withholds seq 4 and drops an author tombstone | the gap is detected and released with chainGap after 24 h of FakeClock; the tombstone is applied once fetched from the author; no vault shows more than its reached sync state'
+    - 'T28 | abuse | 02.R06,06.R04 | overclaim lint - a flow report fixture using verified and paid as state names, and a vault label planted as Confirmed by peer while the entry is transport_acknowledged | each fails with QUALITY_IT_OVERCLAIM'
+    - 'T29 | abuse | 07.R01,07.R02 | canary leak - P3-marked L4 meetup point and L3 cell seeded in vaults during sale_local and cycle_three | public views, search documents, federation envelopes, relay storage and logs hold only cells of at most 5 characters; the canaries are absent'
+    - 'T30 | integration | 10.R02 | run every flow in both modes and scan relay storage and every request body the relays received | no classrup-export/v1 bundle and no P2+ plaintext reached any relay; a planted upload fails with QUALITY_IT_RELAY_PRIVATE_DATA'
+    acceptance:
+    - All 12 reference flows pass with outbox drained and zero unexpected events.
+    - Contract tests validate every registered command, event and error against the schema registry.
+    - The crypto claim flow demonstrates a simulated reorg returning the claim to pending_confirmation, and the deal completes only after final per both vaults' verifiers and the payee-signed payment_ack.
+    - Every trust-fault suite passes with its single oracle, every sent statement type passes the registry contract, and no relay ever receives an export bundle or P2+ plaintext.
+    - The full integration suite finishes within 120 s on 2 vCPU.
+  import_export_backup_rollback:
+    requirements:
+    - The flow report reports/integration.json is the only export; it contains no user data.
+    - 'The federation_io flow proves two different things in two steps: federation (a vault publishes P0/L2 envelopes to relay R1, R1 federates signed batches of at most 100 to R2, and R2 holds read-only mirrors with provenance, CTR-FED-001) and vault portability (a classrup-export/v1 bundle exported from memory vault A is imported into a fresh memory vault A'' on another simulated device under the IOX-2 dry-run and collision rules, CTR-IOX-001); no relay ever receives an IOX-1 bundle.'
+    - Rollback is a git revert; harness changes never alter production code.
+    export: reports/integration.json (flows, steps, event types, requirement IDs) and JUnit XML; no user data.
+    backup: Harness code is in git; reports kept 14 days.
+    migration_rollback: Revert the harness commit; flows are versioned with the modules they test and updated in the same pull request as behavior changes.
+    import: "The portability step of federation_io imports a CTR-IOX-001 classrup-export/v1 bundle into a fresh memory vault A' (dry-run report, then commit; identical records skipped, conflicting IDs rejected, another user's private data never imported). Relays receive only signed P0 envelopes through federation and never an export bundle. The harness itself imports no external data."

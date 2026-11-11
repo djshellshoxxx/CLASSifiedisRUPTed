@@ -1,35 +1,30 @@
-# PS-098-10 — import export backup rollback
+# PS-098-10 — Import, export, backup and rollback: Account limits
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-10. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S03.M04 Account limits](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/antifraud/limits` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-098-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-098-10.R01** A member's export includes the limits the relay reports for them as read-only context, without moderator override identity.
+- **PS-098-10.R02** Relay import of limits is only from its own backups; imports from other relays are ignored because standing is relay-local.
+- **PS-098-10.R03** Tier tables are configuration versioned with the relay policy and validated against bounds on import.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Section moderation.limits in classrup-export/v1 (vault, ExportSectionPort): last known limits per relay with fetched time; relay operator export lists AccountLimit rows without override reasons about others.
+- **import:** Vault import stores limits as historical context only; relay restore recomputes tier, multiplier and restrictions from first-seen, counted completions, the latest risk event and active actions.
+- **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3).
+- **migration rollback:** Expand step maps listings_per_day to index_writes_per_day and new_conversations_per_day to new_mailbox_recipients_per_day, and drops open_offers and open_cycle_proposals rows (now F12.S03.M03 local guards); new_key_comments_per_proposal is an additive limit key that needs no data migration; rollback is safe because older readers ignore new optional fields and unknown limit keys are not enforced but logged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-098-09.T14 | integration | PS-098-10.R01, PS-098-10.R02, PS-098-10.R03 | export own limits, relay backup and restore; v1 row with limitKey listings_per_day | limits recomputed after restore; firstSeen set to restore time when absent; listings_per_day read as index_writes_per_day |
+
+## Dependencies
+
+Module depends on: F12.S03.M03, F07.S02.M01, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

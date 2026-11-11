@@ -1,35 +1,50 @@
-# PS-127-07 — privacy retention abuse
+# PS-127-07 — Privacy, retention and abuse: Secrets handling
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-07. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M02 Secrets handling](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/secrets` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-127-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-127-07.R01** Secret values are P4 and are never logged, never serialized, never in metrics labels, never in error messages, and never in crash reports.
+- **PS-127-07.R02** Secret metadata (name, source, length, loaded time, objects per data-key version) is not secret and may be logged.
+- **PS-127-07.R03** Leak attempts through logs, errors, process listings, core dumps and repository history are addressed by redaction, file loading, disabled core dumps and scanning.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Secret values: P4 in process memory only.
+- Secret metadata: P1 operational.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Secrets are not stored by the product; the hosting environment owns their lifecycle.
+- CI scan reports: 90 days.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Secret leaks through logs or exceptions | Secret wrapper redacts on toString, JSON, inspect and error causes; logger applies key deny-list and pattern scanner; tests inject known secrets and assert absence |
+| T02 | Timing attack on token comparison | equalConstantTime used for all token and MAC comparisons; direct equality on secrets is a lint error |
+| T03 | Secret committed to the repository | pre-merge diff scan, weekly full-history scan, forbidden filename patterns (.env, *.pem, *.key) in CI |
+| T04 | Environment variables exposed via process listing or crash dump | file-based loading recommended and default in container manifests; core dumps disabled; /proc access restricted by deployment guide |
+| T05 | Stolen token database | only SHA-256 hashes of 256-bit tokens stored; tokens are never recoverable |
+| T06 | Weak operator-chosen secrets | manifest minimum lengths enforced at startup (32 bytes for keys) |
+| T07 | Data loss from removing a data key too early | old data-key versions stay loaded until verify-rewrap reports zero objects; startup refuses if a version in use is missing |
+
+**Abuse controls**
+- Failed secret loads do not retry in a loop: the relay exits non-zero after one attempt so orchestrators surface the failure.
+- Scanner rules are versioned and a rule can only be removed through a reviewed change.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-127-09.T03 | property | PS-127-01.R02, PS-127-07.R01, PS-127-07.R03 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms |
+| TEST-PS-127-09.T09 | chaos | PS-127-03.R01, PS-127-06.R03, PS-127-08.R01, PS-127-07.R02 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; resumed run skips finished objects; one log line per secret without values |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

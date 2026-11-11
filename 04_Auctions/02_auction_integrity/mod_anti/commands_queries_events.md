@@ -1,35 +1,82 @@
-# PS-036-04 — commands queries events
+# PS-036-04 — Commands, queries and events: Anti-shill controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-04. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S02.M01 Anti-shill controls](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_integrity/anti` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the commands queries events process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-036-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-036-04.R01** The host relay exposes auctions.shill.check as an internal synchronous command called inside the bid transaction and auctions.shill.score as an asynchronous job command.
+- **PS-036-04.R02** Moderators read the review queue through a relay query; the public policy query describes the controls and their limits in words.
+- **PS-036-04.R03** The module consumes host-local bid and result events, identity events and review events on the host; nothing here runs in participant vaults.
+- **PS-036-04.R04** auctions.shill.check also answers whether the bidder key is revoked as known to the host, so the bid path rejects revoked keys with the same generic error (F04.S01.M02 V07).
+- **PS-036-04.R05** Linkage is read only through the in-process F07 reads on the host - identity.portable_doc.key_set, identity.portable_doc.find_by_key and identity.portable_doc.key_status (F07.S02.M01), identity.attestation.list_linkage for kind same_owner signed by both DIDs (F07.S03.M02) and identity.session.linked_keys (F07.S01.M02) - cached at most 24 h; no rotation chain is read until account key rotation leaves Future in F07 (N11 as narrowed by F07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+| Command | Capability | Input | Output | Errors | Emits | Idempotent |
+|---|---|---|---|---|---|---|
+| `auctions.shill.check` | auctions.shill.check | [relay internal, called by F04.S01.M02 inside the bid transaction] { auctionId, bidderId } | { verdict: allow \| deny, checkId?, flags?: [linkage_stale] } | NOT_FOUND, DEPENDENCY_UNAVAILABLE |  | yes (Idempotency-Key) |
+| `auctions.shill.score` | auctions.shill.score | [relay job, triggered by auctions.bid.placed or auctions.bid.retracted] { auctionId, bidderId, triggerBidSeq } | { score, flagged: boolean, checkId?, scoringVersion: shill-v1 } | NOT_FOUND, DEPENDENCY_UNAVAILABLE | auctions.shill.suspected | yes (Idempotency-Key) |
+| `auctions.shill.allow_pair` | auctions.shill.allow_pair | [relay command by host operator, signed request] { auctionId, bidderId, coveredReasons: [linked_host_registration \| linked_attestation], reason } | { allowListId, expiresAt } | NOT_FOUND, FORBIDDEN, VALIDATION_FAILED |  | yes (Idempotency-Key) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Query | Capability | Input | Output | Errors |
+|---|---|---|---|---|
+| `auctions.shill.list_for_review` | auctions.shill.read_review | [relay query] { status?: flagged\|under_review, reason?: linkage_stale, minScore?, cursor?, limit ≤ 50 } | { items: ShillCheck[] ordered by score desc, nextCursor? } |  |
+| `auctions.shill.get_policy` | auctions.shill.read_public | { hostRelayId } | { controls: [string], limits: [string], scoringVersion: shill-v1, thresholds: { flag: 60, highPriority: 85 }, appealContact } | NOT_FOUND |
+
+### Events produced
+
+| Type | Privacy | Payload |
+|---|---|---|
+| `auctions.shill.suspected` | P3 | { checkId, auctionId, subjectId, score, reasons[], triggerBidSeq, scoringVersion } — host-local only; never emitted for linkage_stale flags |
+
+### Events consumed
+
+| Type | Effect |
+|---|---|
+| `auctions.bid.placed` | append alias, bidderId, kind, amount, newPrice, seq and leaderChanged to the scoring projection and enqueue the scoring job for the bidder and trigger bid |
+| `auctions.bid.outbid` | append the outbid entry to the scoring projection (price_pump, probing) |
+| `auctions.bid.retracted` | append the retraction and enqueue scoring of the retracting bidder |
+| `auctions.auction.closed` | close the auction in the scoring projection |
+| `auctions.auction.won` | record the winner key for never_wins and price_pump |
+| `auctions.auction.scheduled` | record the scheduling time used by the revocation rule (01.R04) |
+| `auctions.review.opened` | move each flagged check listed in triggers to under_review, on open and on merge |
+| `auctions.review.closed` | move checks listed in confirmedCheckIds to confirmed and the other checks of the review to dismissed |
+| `identity.attestation.added` | when the attestation is of kind same_owner, re-read identity.attestation.list_linkage for both DIDs and cache only links signed by both DIDs |
+| `identity.attestation.revoked` | mark the attestation revoked with its time and keep the link per 01.R04 |
+| `identity.portable_doc.published` | re-read identity.portable_doc.key_set for the DID (activeKeys, revokedKeys, removedKeys and revocationCids of the classrup.security.keyrevocation/v1 statements) and keep keys that left the document as revoked links per 01.R04; no rotation chain is read |
+| `privacy.deletion.completed` | host relay, when the relay applies the deletion - replace the erased principal's did in retained ShillChecks with the per-deletion pseudonym |
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| AUCTIONS_BIDDER_NOT_ELIGIBLE | 403 | no | bidder cannot bid on this auction; no reason is disclosed |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+### Example
+
+```
+bid transaction on host: auctions.shill.check { "auctionId": "0192f400-0002-…", "bidderId": "did:key:z6Mk…" } -> { "verdict": "allow" }
+after bid seq 17: auctions.shill.score -> concentration 0.9 (35) + probing 5 bids (30) = 65 -> { "score": 65, "flagged": true, "checkId": "0192f420-0001-…", "scoringVersion": "shill-v1" }
+event auctions.shill.suspected { "checkId": "0192f420-0001-…", "auctionId": "0192f400-0002-…", "score": 65, "reasons": ["concentration", "probing"], "scoringVersion": "shill-v1" }
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-036-09.T05 | unit | PS-036-04.R01, PS-036-02.R02 | shill-v1 totals - alternation only; concentration 0.6 plus alternation plus new_key; damped concentration 0.9 plus damped price_pump plus probing 5; concentration 0.9 plus probing 5 plus price_pump; every feature at its maximum | 25 no flag; 60 flag; 17 + 12 + 30 = 59 no flag; 35 + 30 + 25 = 90 flag at high priority; 135 capped at 99 |
+| TEST-PS-036-09.T06 | contract | PS-036-04.R02, PS-036-04.R03, PS-036-09.R02 | check, score, allow_pair, queries and the event | payloads validate against registry schemas; no check data in bid errors; no event for linkage_stale flags |
+| TEST-PS-036-09.T20 | integration | PS-036-04.R04 | bid with a key revoked by a classrup.security.keyrevocation/v1 statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE |
+| TEST-PS-036-09.T21 | contract | PS-036-04.R05, PS-036-02.R04 | linkage reads against F07 conformance stubs for key_set, find_by_key, key_status, list_linkage and linked_keys; a same_owner attestation with only one signature; a stub that also offers a rotation chain | the check calls exactly the named in-process reads; only links signed by both DIDs count; no rotation-chain read is made |
+
+## Dependencies
+
+Module depends on: F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

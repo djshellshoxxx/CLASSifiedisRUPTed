@@ -1,35 +1,55 @@
-# PS-102-09 — contract and acceptance tests
+# PS-102-09 — Contract and acceptance tests: Email delivery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-09. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F13.S01.M02 Email delivery](SPEC.md) · **Scope:** MVP · **Code:** `packages/notify/src/delivery/email` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for email within 01_delivery. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-102-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-102-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-102-09.R02** Contract tests use the dev log adapter and a fake SMTP server and verify headers, bodies and bounce handling.
+- **PS-102-09.R03** Privacy tests assert that no address appears outside the vault target and encrypted relay storage and no user content appears in any email.
+- **PS-102-09.R04** The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues, a keyboard and screen-reader walk-through and a no-JavaScript run of the verification page.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Relay R with EmailTransportPort (fake SMTP, log adapter, VERP key, one configured feedback-loop source and a provider webhook key), F16.S02.M02 registry double, users U and V with registered email consent, addresses alex@example.org and a blocked disposable domain, a /24 with 50 fresh DIDs, fixed clock 2026-11-04T10:00:00Z.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-102-09.T01 | unit | PS-102-01.R01, PS-102-01.R02, PS-102-02.R01 | add valid, invalid and disposable-domain addresses through vault enable and the relay | valid stored encrypted at the relay with masked output and locale; invalid refused NOTIFY_EMAIL_ADDRESS_INVALID in the vault and at the relay |
+| TEST-PS-102-09.T02 | unit | PS-102-02.R03, PS-102-02.R02 | each rule V01 to V11 violated in turn | documented error code returned and nothing sent |
+| TEST-PS-102-09.T03 | contract | PS-102-01.R03, PS-102-04.R04, PS-102-09.R02 | send every template kind through the fake SMTP server | subject and body generic with the app origin link only; List-Unsubscribe URL from UnsubscribeTokenPort works on POST; List-Unsubscribe-Post and VERP Return-Path present; DKIM-signed; no user content |
+| TEST-PS-102-09.T04 | property | PS-102-03.R01, PS-102-03.R02, PS-102-03.R03 | random sequences of add, verify, authenticated bounces, remove, withdrawal and expiry | terminal states never change; queued deliveries cancel on removal and withdrawal; ciphertext and locale erased within 24 h |
+| TEST-PS-102-09.T05 | contract | PS-102-04.R01, PS-102-04.R02, PS-102-09.R02 | each command and query executes in its environment | outputs and event payloads validate against registry schemas; relay events in the SQLite transaction and the vault event in the IndexedDB transaction of the change |
+| TEST-PS-102-09.T06 | integration | PS-102-04.R03, PS-102-03.R03 | relay-local notify.channel.opted_out for email to the relay instance; vault-local opted_out, privacy.deletion.requested and privacy.deletion.completed to the vault instance | relay cancels queued deliveries and erases ciphertext; vault target removed; deletion request only shows paused and erases nothing; completed signs nothing |
+| TEST-PS-102-09.T07 | abuse | PS-102-05.R01, PS-102-05.R02, PS-102-05.R03 | add by unknown key; add and remove signed by a device key revoked in F16.S02.M02; verify with guessed token; external call to send; operator query for cleartext | UNAUTHENTICATED for unknown and revoked keys and the address unchanged; other calls refused or masked; no cleartext available except in the adapter at send time |
+| TEST-PS-102-09.T08 | integration | PS-102-06.R01, PS-102-06.R02, PS-102-06.R03 | verify twice, retry on 4xx, crash after SMTP accept, dispatchRef repeated | one verified transition, 3 attempts max, one repeated submission with the same Message-ID, one delivery per dispatchRef |
+| TEST-PS-102-09.T09 | abuse | PS-102-07.R01, PS-102-07.R02, PS-102-07.R03, PS-102-09.R03, PS-102-01.R01 | inspect vault, relay database, field classification, logs, events, federation outbox and exports | address only in the vault target and relay ciphertext; the relay copy is classified P3 (CTR-PRV-001 PRV-10) and absent from federation and exports; no content in emails; consent text names what the operator learns |
+| TEST-PS-102-09.T10 | integration | PS-102-03.R05, PS-102-02.R04 | one authenticated hard bounce, a second within 72 h, 3 authenticated soft bounces, one signed provider event, a complaint from the configured feedback loop, a bounce for a settled delivery | bouncing only after the thresholds; complaint registers a withdrawal via unsubscribe_link; settled row unchanged while the address becomes bouncing and notify.email.bounced is emitted |
+| TEST-PS-102-09.T11 | load | PS-102-08.R01, PS-102-08.R02, PS-102-08.R03 | 50 emails per second for 5 minutes with 6 percent injected bounces | latency within budget and bounce alert fires |
+| TEST-PS-102-09.T12 | unit | PS-102-09.R01 | traceability tool run | every PS-102 requirement maps to a passing test |
+| TEST-PS-102-09.T13 | integration | PS-102-10.R01, PS-102-10.R02, PS-102-10.R03, PS-102-01.R04 | export from the vault; restore the relay from a backup that lacks the address; import the export into a fresh vault | export holds the email target with the cleartext address and no relay copy; restore fails stale queued deliveries; the vault offers re-add from its target and re-verification after confirmation |
+| TEST-PS-102-09.T14 | a11y | PS-102-09.R04 | settings screen and verification page with screen reader, keyboard and without JavaScript | labelled input, page works, zero serious axe issues |
+| TEST-PS-102-09.T15 | integration | PS-102-03.R04 | relay copy becomes bouncing; vault runs sync_status at app open | vault target becomes bouncing and vault-local notify.email.bounced is emitted once; the inbox shows notify.tpl.security.email_stopped |
+| TEST-PS-102-09.T16 | abuse | PS-102-07.R04, PS-102-02.R02 | one DID loops add and remove over 10 addresses; 50 DIDs from one /24 each add an address; a victim V verifies alex@example.org after attacker U requested 5 links for it | per-user and per-prefix limits return RATE_LIMITED; relay-wide cap alert at 80 percent; V still receives its verification mail |
+| TEST-PS-102-09.T17 | abuse | PS-102-07.R05, PS-102-05.R04 | forged DSN at the plain bounce address quoting a real Message-ID; DSN with a wrong VERP tag; ARF report from an unknown source; unsigned webhook | each refused NOTIFY_EMAIL_REPORT_UNVERIFIED; address stays verified; consent unchanged |
+| TEST-PS-102-09.T19 | e2e | PS-102-07.R03, PS-102-05.R03, PS-102-07.R02 | open the email settings, the opt-in sheet and the example email preview | text says the relay operator can read the address it sends to, that email links the address to the pseudonym at that operator, and the preview shows only the generic subject and app link |
+| TEST-PS-102-09.T18 | integration | PS-102-04.R05, PS-102-01.R04 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; enable with privacy.consent.check not granted | purge deletes the vault targets; section notify.email exported; delivery rows purged after 30 days; enable refused PRECONDITION_FAILED before anything is sealed |
+| TEST-PS-102-09.T20 | contract | PS-102-01.R05, PS-102-02.R03 | LocalSettings.defaultLocale de-AT; enable with and without notify_email consent and capture every outgoing request; lint every email template declaration; verify add, remove and get_mine signatures against the F11.S01.M03 RFC 9421 vectors with a key that KeyStatusPort reports revoked | with consent only the sealed add carries locale de-AT; without consent nothing is sent; no template declares a parameter other than app origin link, verification link and unsubscribe URL and none carries user content or Money; valid signatures verify with tag classrup/relay-request/v1 and the revoked key is refused UNAUTHENTICATED |
+| TEST-PS-102-09.T21 | chaos | PS-102-06.R04, PS-102-04.R03 | restore the relay from a backup taken before an email withdrawal, with archived notify.channel.opted_out events in the replay range; then dispatch to the user | the restore report lists this module's consumers as excluded; nothing is re-delivered to them and no email is sent twice; the withdrawn address is removed, its ciphertext erased and its queued deliveries cancelled before the first send |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01 to T21 pass in CI.
+- No email is sent without a verified address and a granted registered consent, and each email carries one-click unsubscribe headers and a VERP return path.
+- Emails contain no listing, message, name or amount content in any test.
+- Addresses never appear in logs, events, relay exports or query results, and no unauthenticated report changes an address or a consent.
+
+## Dependencies
+
+Module depends on: F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

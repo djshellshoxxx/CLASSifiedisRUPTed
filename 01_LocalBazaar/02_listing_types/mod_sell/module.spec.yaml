@@ -1,0 +1,242 @@
+id: F01.S02.M01
+scope: MVP
+summary: >-
+  Defines the commercial terms of a sell listing: asking price in Money, accepted currencies, accepted payment
+  methods (cash, crypto, external), negotiable flag, barter-acceptable flag, minimum offer threshold and pickup or
+  delivery options. The public part of the terms is embedded in the signed listing projection (F01.S01.M03). There
+  is no checkout and no custody: buying always ends in a noncustodial Deal with payment claims (F09). Payment
+  instructions such as account numbers are never stored here or published; they are exchanged privately after a
+  deal is opened. Money caps are per currency so assets with many decimals can be priced.
+responsibilities:
+  - Own SellTerms, one record per sell listing, with strict Money validation (CTR-MNY-001), a per-currency maximum from F09.S03.M03 and currency checks against the currency registry.
+  - Enforce price-change discipline on published listings (at most 10 changes per 24 h) and report each change to F01.S01.M02 as a material revision.
+  - Publish the terms to other modules through the query bazaar.sell_terms.get and the event bazaar.sell_terms.set.
+  - Provide the seller's minimum offer threshold to F01.S04.M01, which applies it on receipt in the seller vault and never tells the buyer (F01.S04.M01 V12).
+  - Carry the public barterAcceptable flag that the projection exposes for barter matching and discovery filters (N15).
+  - Register the F10 privacy ports for SellTerms and classify every field (N6).
+non_responsibilities:
+  - Taking payment, escrow, checkout or receipts (F09); crypto addresses are exchanged only inside a Deal.
+  - Offers and counteroffers (F01.S04.M01, F01.S04.M02), including the auto-rejection of offers below minOffer.
+  - Currency registry and FX (F09.S03.M01, F09.S03.M02); this module only checks that a currency is registered and reads its decimals through F09.S03.M03.
+  - Shipping carriers and tracking.
+  - "Future: tiered pricing for quantity and scheduled sales."
+depends_on: [F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a seller, I set an asking price, say I accept cash or Bitcoin, and mark the price negotiable.
+  - As a seller, I set a minimum offer so very low offers never reach me.
+  - As a buyer, I can see clearly which payment methods the seller accepts and that the app does not handle my money.
+  - As a trader, I mark my sell listing barter-acceptable so swap matching and the barter filter can find it.
+edge_cases:
+  - Price amount is sent as a floating-point number; rejected with VALIDATION_FAILED because Money is an integer string.
+  - Currency is not in the registry (for example a typo XAU1); rejected with BAZAAR_SELL_CURRENCY_UNKNOWN.
+  - Seller enables crypto but names no asset; BAZAAR_SELL_CRYPTO_ASSET_REQUIRED is returned.
+  - Seller changes price an 11th time in 24 h; RATE_LIMITED with retryAfterMs set.
+  - Terms are saved on a published listing while offline; they are committed locally, marked unsent, and buyers see them only after the new projection is accepted.
+  - Seller sets minimum offer higher than the asking price; BAZAAR_SELL_MIN_OFFER_INVALID is returned.
+  - Free-text delivery note contains what looks like an IBAN or wallet address; it is rejected with BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC.
+  - Seller prices in ETH (18 decimals) at 0.5 ETH, which is 5 x 10^17 minor units; accepted because the cap is 10^10 major units for every currency.
+  - The listing is deleted; the terms are purged 30 days later and a tombstone stays 180 days.
+ux:
+  screens:
+    - "Sell terms form: price with currency selector, additional accepted currencies, payment method chips (cash, crypto, external), crypto asset picker, negotiable switch, barter-acceptable switch, minimum offer, pickup and delivery options."
+    - "Honesty banner: ClassRup does not hold your money. Payment happens directly between you and the buyer."
+  states: [loading, empty, saving-local, saved-local, unsent-changes, validation-error, rate-limited]
+  a11y:
+    - Price input has a visible label with currency and uses inputmode decimal; errors are linked with aria-describedby.
+    - Payment method chips are toggle buttons with pressed state exposed.
+    - Money amounts are displayed with currency code via Intl.NumberFormat (UX-4).
+processes:
+  domain_schema:
+    requirements:
+      - "SellTerms stores the asking price as Money (integer minor units string), accepted currencies, payment methods, negotiable flag, minimum offer and fulfilment options for one listing."
+      - "SellTerms is P3 while the listing is a draft and P0 inside the signed projection once published; payment instructions are never stored."
+      - "Free-text fields are short, plain text and screened so no account number, wallet address or contact detail becomes public."
+      - "SellTerms carries the public barterAcceptable flag (default false), exposed in the projection and in bazaar.sell_terms.set so barter matching and discovery filters can use it (N15)."
+    entities:
+      - name: SellTerms
+        schema: classrup.bazaar.sell_terms/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "listingId: uuidv7 — ref F01.S01.M01 Listing of kind sell; unique"
+          - "ownerId: did:key — local principal"
+          - "askingPrice: Money — CTR-MNY-001; > 0; <= maxAmount(currency) = 10^(10 + registry decimals) minor units (F09.S03.M03)"
+          - "acceptedCurrencies: string[] — 1..5 registered currency codes, includes askingPrice.currency"
+          - "paymentMethods: string[] — 1..3 of cash | crypto | external"
+          - "cryptoAssets?: string[] — 1..5 registry codes (for example BTC, USDC); required when crypto is accepted"
+          - "negotiable: boolean — default true"
+          - "barterAcceptable: boolean — default false; public in the projection (N15)"
+          - "minOffer?: Money — same currency as askingPrice; > 0 and <= askingPrice; never published, only used locally"
+          - "pickup: boolean — default true"
+          - "delivery: boolean — default false"
+          - "deliveryNote?: string — <= 280 code points, plain text, no payment details"
+          - "priceChangeCount24h: int — derived counter, 0..10"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Exactly one SellTerms exists per sell listing and it cannot exist for other kinds.
+          - askingPrice.currency is in acceptedCurrencies and every code is registered in F09.S03.M01.
+          - minOffer is never part of any event, projection or statement.
+          - Field classes are annotated per F10.S02.M02 (minOffer P3; askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets, negotiable, barterAcceptable, pickup, delivery and deliveryNote P0 once projected).
+    sql: |
+      CREATE TABLE bazaar_sell_terms (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+        asking_amount TEXT NOT NULL, asking_currency TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX bazaar_sell_terms_listing ON bazaar_sell_terms(tenant_id, listing_id);
+  validation_rules:
+    requirements:
+      - "Money is validated as an integer minor-unit string with a registered currency; floating point and unknown currencies are rejected."
+      - "Payment methods must be consistent with their supporting fields, and free text must not carry payment details."
+      - "Price changes on published listings are rate limited."
+      - "The money cap is per currency: amounts are at most 10^10 major units, computed once by the F09.S03.M03 helper maxAmount(currency) from the registry decimals, and the same helper is used by WantSpec, Variant, Offer and NegotiationRound."
+    rules:
+      - "V01 | askingPrice.amount is a positive decimal-integer string <= maxAmount(askingPrice.currency) = 10^(10 + registry decimals) and has no sign, point or exponent | VALIDATION_FAILED"
+      - "V02 | every currency code is registered in the currency registry | BAZAAR_SELL_CURRENCY_UNKNOWN"
+      - "V03 | askingPrice.currency is within acceptedCurrencies of 1..5 distinct codes | VALIDATION_FAILED"
+      - "V04 | paymentMethods has 1..3 distinct valid values | VALIDATION_FAILED"
+      - "V05 | cryptoAssets present and registered iff crypto is in paymentMethods | BAZAAR_SELL_CRYPTO_ASSET_REQUIRED"
+      - "V06 | minOffer, if present, has the asking currency and is > 0 and <= asking price | BAZAAR_SELL_MIN_OFFER_INVALID"
+      - "V07 | deliveryNote <= 280 code points and contains no IBAN, card number or crypto address pattern | BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC"
+      - "V08 | pickup or delivery is true | VALIDATION_FAILED"
+      - "V09 | listing exists, is of kind sell and is in status draft, published or unpublished | CONFLICT_STATE"
+      - "V10 | at most 10 asking-price changes within 24 h on a published listing | RATE_LIMITED"
+      - "V11 | barterAcceptable, if present, is a boolean | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - "SellTerms has no lifecycle of its own; it is a versioned record whose revision increases on each accepted change."
+      - "Changes are allowed only while the listing is draft, published or unpublished; closed, expired and archived listings keep their last terms read-only."
+      - "Whether terms are unsent is derived by comparing the latest revision with the one in the last signed projection."
+    machines: []
+    note: "SellTerms is a versioned record without states. The listing's lifecycle is owned by F01.S01.M01."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - "bazaar.sell_terms.define is a vault-local command that creates or replaces the terms using expectedRevision; it produces no signed statement, since the signed projection in F01.S01.M03 embeds the P0 part of the terms."
+      - "Events are emitted only while the listing is published or unpublished and contain public fields only, never minOffer."
+      - "bazaar.sell_terms.get is the only way other modules read the terms; minOffer is returned only to the owner and to the offers module acting for the owner."
+    commands:
+      - name: bazaar.sell_terms.define
+        capability: bazaar.sell_terms.define
+        input: "[vault-local] { listingId, expectedRevision? (absent on first definition), askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets?, negotiable?, barterAcceptable?, minOffer?, pickup?, delivery?, deliveryNote? }"
+        output: "{ sellTermsId, revision, priceChanged, unsentChanges }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RATE_LIMITED, BAZAAR_SELL_CURRENCY_UNKNOWN, BAZAAR_SELL_CRYPTO_ASSET_REQUIRED, BAZAAR_SELL_MIN_OFFER_INVALID, BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC, BAZAAR_EDIT_REVISION_LIMIT]
+        emits: [bazaar.sell_terms.set]
+        idempotent: true
+    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.sell_terms), DeletionPort (plan: purge terms of own listings) and RetentionPurgePort (purge 30 days after the listing is deleted, tombstone 180 days) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. SellTerms hold no counterparty data, so nothing is pseudonymized."
+    queries:
+      - name: bazaar.sell_terms.get
+        capability: bazaar.sell_terms.read
+        input: "{ listingId }"
+        output: "{ terms: SellTerms }"
+        errors: [NOT_FOUND]
+      - name: bazaar.sell_terms.accepts
+        capability: bazaar.sell_terms.read
+        input: "{ listingId, currency }"
+        output: "{ accepted: boolean, negotiable: boolean }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: bazaar.sell_terms.set, privacy: P0, payload: "{ listingId, ownerId, revision, askingPrice, acceptedCurrencies, paymentMethods, negotiable, barterAcceptable, priceChanged }"}
+    events_consumed:
+      - {type: bazaar.listing.deleted, effect: "schedule purge of the listing's SellTerms 30 days after deletion and keep a tombstone {id, type, deletedAt} for 180 days"}
+    errors:
+      - "BAZAAR_SELL_CURRENCY_UNKNOWN | 422 | no | a currency code is not in the registry"
+      - "BAZAAR_SELL_CRYPTO_ASSET_REQUIRED | 422 | no | crypto accepted without a registered asset list, or assets without crypto"
+      - "BAZAAR_SELL_MIN_OFFER_INVALID | 422 | no | minimum offer has wrong currency or exceeds the asking price"
+      - "BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC | 422 | no | free text looks like payment details that must not be published"
+    example: |
+      vault.dispatch("bazaar.sell_terms.define", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
+        "askingPrice": { "amount": "5000", "currency": "EUR" }, "acceptedCurrencies": ["EUR"], "paymentMethods": ["cash", "external"],
+        "negotiable": true, "barterAcceptable": true, "minOffer": { "amount": "3500", "currency": "EUR" }, "pickup": true },
+        idempotencyKey: "0192f3a4-0000-7000-8000-000000000071")
+      => { "sellTermsId": "0192f3ac-...", "revision": 1, "priceChanged": false, "unsentChanges": false }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal who owns the listing may define terms."
+      - "Reads of the full record, including minOffer, are limited to the owner and to internal callers acting for the owner; public terms reach others only through signed projections."
+      - "No relay role or relay policy row applies to this module."
+    capabilities:
+      - "bazaar.sell_terms.define | owner | listing.ownerId = local principal; listing kind sell; status draft, published or unpublished"
+      - "bazaar.sell_terms.read | owner | listing.ownerId = local principal, or internal caller F01.S04.M01, F01.S04.M02 or F01.S01.M03 on the owner's behalf"
+  failure_recovery_idempotency:
+    requirements:
+      - "The command is idempotent per CTR-IDM-001 and carries expectedRevision when replacing existing terms."
+      - "Terms, listing revision record and outbox event commit in one transaction or not at all."
+      - "Offline edits are committed locally and remain unsent until the next signed projection is prepared, and count as received by a relay only after its verified receipt; no certainty beyond that state is claimed."
+    idempotency: "Idempotency-Key required; key and request hash kept 24 h in the vault; replay returns the stored result."
+    concurrency: "expectedRevision on every replace; the unique index on listing id prevents two terms records; stale revision returns CONFLICT_REVISION with currentRevision and both values are shown."
+    retries: "Only IndexedDB aborts are retried (max 3); RATE_LIMITED is retried only after retryAfterMs."
+    offline: "Fully offline capable; sync state of the affected projection is tracked by F01.S01.M03 (prepared, then transport_acknowledged on a verified relay receipt; a public projection is never peer_accepted)."
+    partial_failure: "If recording the listing revision fails, the terms write is rolled back and DEPENDENCY_UNAVAILABLE is returned only for transient storage faults."
+  privacy_retention_abuse:
+    requirements:
+      - "minOffer and drafts are P3 and never leave the vault; the public projection contains asking price, currencies, methods, negotiable and barterAcceptable flags and fulfilment options only."
+      - "No payment account, wallet address or contact detail may be stored in public fields; the screening is a safeguard, not a guarantee, and the UI says so."
+      - "Terms follow RET-STANDARD with the listing; deleted listings leave a tombstone for 180 days."
+      - "The module registers ExportSectionPort (section bazaar.sell_terms), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every SellTerms field with its F10.S02.M02 class."
+    data:
+      - "SellTerms: P3 in draft, P0 for the projected subset; field classes annotated per F10.S02.M02."
+      - "minOffer: P3, local only."
+    retention:
+      - "SellTerms: RET-STANDARD; purged 30 days after the listing is deleted with a tombstone kept 180 days; price history is retained in ListingRevision (RET-EVIDENCE)."
+    threats:
+      - "T01 | Seller publishes bank or wallet details to lure buyers off-platform or collect scams | free-text screening, no payment fields in schema, payment details exchanged only inside a Deal"
+      - "T02 | Bait pricing: very low price then price rise | price-change rate limit of 10 per 24 h, material revision event, buyers must re-confirm"
+      - "T03 | Floating-point or overflow price manipulation | integer string Money with a per-currency maximum of 10^10 major units from F09.S03.M03; strict parser"
+      - "T04 | Minimum offer revealed to buyers | minOffer excluded from event and projection allowlists; offers below it look exactly like unanswered offers (F01.S04.M01); contract test enforces"
+    abuse_controls:
+      - "Price-change limit 10 per 24 h per listing; 200 sell-terms commands per hour per vault."
+      - "Currency list capped at 5 per listing."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Define meets local latency budgets on Moto G-class hardware."
+      - "Validation failures are counted by code for local debugging."
+    metrics:
+      - "classrup_bazaar_sell_terms_commands_total{outcome, code} (local)"
+      - "classrup_bazaar_sell_price_changes_total (local)"
+    logs:
+      - "info sell_terms.set {listingId, revision, priceChanged, correlationId} in local diagnostics; no amounts."
+    budgets:
+      - "define p95 <= 60 ms; get p95 <= 30 ms on Moto G-class hardware."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate the command, event and Money format against the registry."
+      - "Honesty tests assert that no checkout or payment-held wording or field exists."
+    fixtures: "Vault with draft sell listing L and published sell listing P (EUR 50.00); currency registry with EUR, JPY, USD, BTC, ETH, USDC; clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | define valid terms; send amount 49.99 as float; unknown currency | stored with integer string; float and unknown currency rejected with documented codes"
+      - "T02 | unit | 02.R03 | violate each rule V01-V11 | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random define sequences across listing statuses | revision increments by 1 per accepted change; closed or archived listing refuses changes"
+      - "T04 | contract | 04.R01,04.R03,09.R02 | define and get run | outputs and bazaar.sell_terms.set payload validate; minOffer absent from event"
+      - "T05 | integration | 04.R02,06.R03 | define on published P with price change | event emitted once; revision recorded as material; draft L emits no event"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | other principal calls define; internal caller reads minOffer | FORBIDDEN or NOT_FOUND; offers module allowed on owner's behalf"
+      - "T07 | integration | 06.R01,06.R02 | replay define; stale expectedRevision | original result; CONFLICT_REVISION with currentRevision"
+      - "T08 | chaos | 06.R03 | revision record fails inside define | terms write rolled back"
+      - "T09 | integration | 06.R03 | edit offline then send projection | state unsent, then prepared, then transport_acknowledged only after the verified relay receipt, never peer_accepted"
+      - "T10 | abuse | 01.R02,01.R03,07.R01,07.R02 | scan projection, events and logs; note with IBAN; schema search for payment instruction fields | no minOffer or drafts leave device; projected subset only after publish; note rejected; no payment instruction field exists"
+      - "T11 | abuse | 02.R03 | 11 price changes within 24 h | 11th returns RATE_LIMITED with retryAfterMs"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 1 000 define calls on Moto G profile | p95 <= 60 ms, counters present, no network"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool and wording test | every PS-006 requirement maps to a passing test; no UI string implies platform-held funds"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import terms for listing of another owner | round-trip identical; foreign terms rejected"
+      - "T15 | integration | 07.R03 | delete listing P and advance the clock 29, 30 and 181 days | terms present on day 29, purged on day 30, tombstone present until day 180 and gone on day 181"
+      - "T16 | property | 02.R04 | for every registry currency, amounts at maxAmount(currency) and maxAmount(currency) + 1, including ETH 0.5 and JPY 10^10 | at the cap accepted, above refused with VALIDATION_FAILED; the same helper result is used by WantSpec, Variant and Offer validation"
+      - "T17 | contract | 01.R04 | define with barterAcceptable true on published P | bazaar.sell_terms.set carries barterAcceptable true and the projection preview of F01.S01.M03 exposes it; minOffer still absent"
+      - "T18 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.sell_terms present with field classes, minOffer marked P3; deletion plan purges own terms"
+    acceptance:
+      - All tests T01-T18 pass in CI.
+      - No money is ever represented as a floating-point number, every currency has a cap derived from its decimals, and minOffer never appears outside the owner's vault.
+      - No screen or string suggests the platform holds, escrows or processes payment.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains SellTerms of own listings in section bazaar.sell_terms."
+      - "Import validates Money, currencies and the one-terms-per-listing rule, and rejects terms for listings that are not own sell listings."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Section bazaar.sell_terms in classrup-export/v1, one line per SellTerms (schema classrup.bazaar.sell_terms/v1), including minOffer because the export goes to the owner only."
+    import: "Unknown currencies keep the record read-only with a warning; duplicates by listing id are rejected; minOffer stays local; records without barterAcceptable import with false."
+    backup: "Vault export is the primary backup (IOX-6); relays hold only the public subset inside listing projections."
+    migration_rollback: "Additive optional fields only in v1 (barterAcceptable defaults to false); rollback is by reinstalling the previous release; older readers ignore new fields."

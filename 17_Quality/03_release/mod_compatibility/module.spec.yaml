@@ -1,0 +1,190 @@
+id: F17.S03.M03
+scope: MVP
+summary: Compatibility tests that keep older data and clients working. Schema N-1 tests check that the current code reads records, signed statements and export bundles written by the previous release (CTR-SCH-001) and that vault IndexedDB migrations upgrade N-1 vaults without loss; signed envelopes from older releases still verify. Forward-compatible statement additions travel only in ext under CTR-SCH-001 SCH-2, and an IndexedDB version bump is handled by restore rather than by an N-1 read. API versioning checks protect relay endpoints. A browser support matrix runs smoke journeys on automated cells CI can actually run, each labelled with its real engine source and version (Chrome N and N-1 via version-pinned Chrome for Testing, Chrome beta via the Playwright channel, the Playwright Firefox build and the Playwright WebKit build as a Safari-engine proxy labelled WebKit), and records Firefox stable, real Safari and iOS Safari (last 2) and iOS 16.4+ installed-PWA Web Push as manual release checklist cells with an approver.
+responsibilities:
+- 'Maintain fixtures of the previous release (N-1): vault snapshots, exported bundles, signed statements and relay API recordings; test that the current release reads them and that a vault upgraded from N-1 round-trips exactly.'
+- 'Check CTR-SCH-001 SCH-2 forward compatibility of signed statements: an unknown key in a statement payload outside ext is rejected with VALIDATION_FAILED; forward-compatible additions travel in ext, are preserved byte-exact so cid and signature still verify, and are capped at 4 KiB; an ext key named in the critical-extension list ext.crit that an N-1 reader does not understand makes that reader refuse the statement; unknown major schema versions are refused with UNSUPPORTED_SCHEMA_VERSION.'
+- 'Define and run the browser support matrix as cells that declare their engine source. Automated cells (nightly and release, ubuntu-24.04): Chrome N and N-1 from version-pinned Chrome for Testing downloads, Chrome beta through the Playwright chrome-beta channel, the Firefox engine as the Playwright Firefox build of the pinned release, and the WebKit engine as the Playwright WebKit build, a Safari-engine proxy labelled WebKit and never Safari; each labelled with its real engine version. Manual cells (release checklist, level manual, signed with device, OS, browser version and approver): Firefox stable N and N-1, Safari desktop last 2, iOS Safari last 2, and iOS 16.4 or later installed-PWA Web Push.'
+- 'Check relay API versioning: /api/v1 paths unchanged, additive-only changes within a major, deprecation headers present, and generated OpenAPI diff against the previous release shows no breaking change.'
+non_responsibilities:
+- Implementing migrations (F15.S02.M03 and each module).
+- General e2e journeys on the pinned Chromium (F17.S01.M04).
+- Policy of schema evolution (CTR-SCH-001).
+- 'Future: automated testing on real Safari, Firefox stable and iOS devices (macOS runners are future in F17.S03.M01) and on N-2 releases.'
+depends_on:
+- CTR-SCH-001
+- CTR-ERR-001
+- CTR-FED-001
+- CTR-IOX-001
+- CTR-TST-001
+- CTR-OBS-001
+- F17.S01.M01
+- F15.S02.M03
+- F11.S01.M02
+- F11.S01.M03
+- F10.S01.M03
+user_stories:
+- As a user with an older vault, I upgrade the app and all my records, drafts and signed statements are still there and valid.
+- As a relay operator, I upgrade to a new release without breaking clients on the previous minor version.
+- As a product owner, I see a support matrix report telling me which engine builds passed automated smoke journeys and which real browsers were checked by hand, by whom and on which device.
+edge_cases:
+- A record written by N-1 lacks a field added in N; the reader supplies the documented default and the record validates.
+- A signed statement from N-1 uses an older canonical form; verification still succeeds because signature covers its original JCS bytes.
+- The vault upgrade is interrupted midway (tab closed); the next start resumes or rolls back and no record is lost or duplicated.
+- Safari lacks a feature (for example Web Push outside installed PWAs); the app degrades with a visible message rather than failing.
+- A relay API response (not a signed statement payload) carries an unknown additive field; clients ignore it per SCH-3.
+- A statement from N carries an unknown key in its payload outside ext; N-1 rejects it with VALIDATION_FAILED instead of dropping the key and acting on a broader promise than was signed.
+- A statement from N adds a new restriction in ext and lists it in ext.crit; an N-1 reader that does not understand it refuses the statement.
+- Release N bumps the IndexedDB version for a new object store; N-1 code opening the database gets VersionError, catches it, offers restore from the pre-upgrade export kept by N, and never opens partially.
+- An automated WebKit run passes; the report says WebKit (Playwright build) and the Safari cells stay pending until their manual checklist is signed.
+- An export from the newer release is imported into N-1; unknown major versions are refused clearly rather than partially imported.
+ux:
+  notes: Headless. Outputs are a compatibility report (reports/compat.json and compat.md) and a browser matrix table of pass, fail and unsupported per journey.
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; N-1 fixtures live in tests/compat/fixtures/<version>/ and are regenerated by a script at each release.
+    - Each fixture set contains a vault snapshot, an export bundle (CTR-IOX-001), signed statements (CTR-FED-001) and relay API recordings with the producing version recorded.
+    - Fixtures are synthetic and contain generated keys that are never used elsewhere.
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - The current release must read every N-1 fixture and, after upgrade, every record validates against its current schema and every N-1 signature still verifies.
+    - 'Schemas follow expand and contract: removed required fields or changed meanings of a field fail the schema diff check with QUALITY_COMPAT_BREAKING_CHANGE.'
+    - Readers follow CTR-SCH-001 SCH-2 - an unknown key in a statement payload outside ext is rejected with VALIDATION_FAILED; ext keys are preserved byte-exact so cid and signature still verify and ext is at most 4 KiB; an unknown key listed in ext.crit is refused; unknown major versions are refused with UNSUPPORTED_SCHEMA_VERSION.
+    rules:
+    - V01 | Current release reads all N-1 fixtures and upgraded records validate against current schemas | QUALITY_COMPAT_N1_READ_FAILED
+    - V02 | Schema diff against the previous tag shows no removed or retyped fields within a major version | QUALITY_COMPAT_BREAKING_CHANGE
+    - V03 | N-1 signed statements still verify after upgrade | QUALITY_COMPAT_SIGNATURE_BROKEN
+    - V04 | Vault upgrade interrupted at any step loses and duplicates zero records | QUALITY_COMPAT_UPGRADE_UNSAFE
+    - V05 | Every automated matrix cell passes smoke or is policy-unsupported, and every manual cell has a signed passing release checklist | QUALITY_COMPAT_BROWSER_FAILED
+    - V06 | Relay OpenAPI diff has no removed paths, removed fields or retyped fields | QUALITY_COMPAT_API_BREAKING
+    - V07 | Statement payload keys outside ext are rejected when unknown, ext is preserved byte-exact with cid and signature re-verifying and is at most 4 KiB, and unknown ext.crit keys are refused | QUALITY_COMPAT_EXT_UNSAFE
+    - V08 | A release that bumps the IndexedDB version keeps a pre-upgrade export or snapshot and N-1 catches VersionError and offers restore with zero record loss and no partial open; a release without a bump passes the N-1 read test | QUALITY_COMPAT_ROLLBACK_UNSAFE
+    - V09 | Every matrix cell names its engine source (Chrome for Testing, Playwright channel, Playwright build or manual device) and real version, and no automated cell is labelled Safari or Firefox stable | QUALITY_COMPAT_MATRIX_MISLABELED
+  workflow_state_machine:
+    requirements:
+    - Vault upgrade runs through states N-1, upgrading and N; interruption in upgrading must resume or roll back on next start with zero lost or duplicated records.
+    - Automated browser matrix cells move through queued, running and pass, fail or unsupported, and manual cells through pending checklist, then signed pass or signed fail; a cell marked unsupported needs an entry in the support policy.
+    - A release is blocked when any automated cell fails its smoke journey, and when any manual cell (Firefox stable N and N-1, Safari desktop and iOS Safari last 2, iOS 16.4+ installed-PWA push) has a missing or failed signed checklist; F17.S03.M02 reads both from reports/compat.json.
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:compat (N-1 data and API), pnpm test:compat:browsers (automated matrix, nightly and release), pnpm compat:schema-diff and pnpm compat:checklist <version>, which merges the signed manual cells from gates/manual/<version>/ into reports/compat.json.
+    - 'Exit codes: 0 pass, 1 compatibility failure, 2 matrix cell failure, 3 configuration failure.'
+    - The OpenAPI diff compares the generated relay spec of the previous release tag with the working tree and fails on removed paths, removed fields or changed types.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_COMPAT_N1_READ_FAILED | 422 | no | current release cannot read an N-1 fixture (exit 1)
+    - QUALITY_COMPAT_BREAKING_CHANGE | 422 | no | schema change breaks N-1 compatibility (exit 1)
+    - QUALITY_COMPAT_SIGNATURE_BROKEN | 422 | no | N-1 signature no longer verifies (exit 1)
+    - QUALITY_COMPAT_UPGRADE_UNSAFE | 422 | no | vault upgrade lost or duplicated records (exit 1)
+    - QUALITY_COMPAT_BROWSER_FAILED | 422 | no | a browser matrix cell failed (exit 2)
+    - QUALITY_COMPAT_API_BREAKING | 422 | no | relay API diff shows a breaking change (exit 1)
+    - QUALITY_COMPAT_EXT_UNSAFE | 422 | no | a reader drops unknown payload keys, alters or over-admits ext, or accepts an unknown critical ext key (exit 1)
+    - QUALITY_COMPAT_ROLLBACK_UNSAFE | 422 | no | N-1 rollback after an IndexedDB version bump loses records, opens partially or offers no restore (exit 1)
+    - QUALITY_COMPAT_MATRIX_MISLABELED | 422 | no | a matrix cell lacks its engine source and version or an automated cell is labelled as a real Safari or Firefox stable release (exit 3)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:compat
+        fixtures 0.2.x -> 0.3.0: 842 records upgraded, 842 valid, 311 signatures verified  OK
+        schema diff: 1 additive field (mutiny.proposal.note)  OK
+        openapi diff: 0 breaking  OK
+      $ pnpm test:compat:browsers
+        automated: chrome 150 (Chrome for Testing) OK | chrome 149 (Chrome for Testing) OK | chrome-beta 151 (Playwright channel) OK
+                   firefox-engine Gecko 142.0 (Playwright build) OK | webkit-engine WebKit 26.0 (Playwright build, Safari-engine proxy) OK
+                   webkit-engine push: feature-detect and content-free payload format OK
+        manual (gates/manual/0.3.0/): firefox 142, 141 | safari 26, 18 (macOS) | ios-safari 26, 18 | iOS 16.4+ installed-PWA push  -> pending checklist
+  authorization_capabilities:
+    requirements:
+    - Compat tests run as unit and integration tests with no relay credentials; relay API recordings are replayed against the in-process relay with relay access tokens from fixtures.
+    - Vault upgrade tests use locally generated keys; no secret leaves the test process.
+    - Statements from N-1 signed by a key authorized in N-1 remain accepted when the role mapping is unchanged (CTR-CAP-001 CAP-8).
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - 'The vault upgrade is idempotent: running it twice leaves identical data, and an interrupted upgrade resumes without duplicating records.'
+    - 'Rollback of the app to N-1 follows one explicit rule: the IndexedDB database version is bumped only for object-store or index changes, and record-level additive changes go through lazy SCH-4 migrations without a bump, so the N-1 read test (N-1 code opens and reads N vault data) applies to releases without a bump; for a release with a bump, N keeps a pre-upgrade export or snapshot, N-1 code catches VersionError and offers restore from it, and the test asserts zero record loss and no partial open (CTR-IOX-001 IOX-4, never a destructive in-place downgrade).'
+    - The matrix runner retries a cell once for infrastructure failure only.
+    idempotency: The vault upgrade is idempotent and the compat suite re-creates vaults from fixtures on each run, so re-runs are safe.
+    concurrency: Browser matrix cells run in parallel (max 6 workers) with isolated profiles; N-1 tests are sequential per fixture set.
+    retries: A matrix cell is retried once for infrastructure failures (browser download, runner loss), never for assertion failures.
+    offline: N-1 data and schema tests run fully offline; the browser matrix needs the nightly runner to have the browser builds cached.
+    partial_failure: If one cell or fixture set fails, all others still run and the report lists every failure.
+  privacy_retention_abuse:
+    requirements:
+    - Fixtures and reports contain no real data; keys are synthetic.
+    - Browser matrix runs use clean profiles with no extensions and no signed-in browser profile; manual checklists record device, OS and browser version but no personal data beyond the approver handle.
+    - Reports are retained 30 days in CI.
+    data:
+    - Synthetic fixtures with generated keys (P0/P1).
+    - 'Reports: versions, counts, verdicts.'
+    retention:
+    - Fixtures kept in git for the last 2 releases plus the current; reports 30 days as artifacts.
+    threats:
+    - T01 | Fixture keys reused as real keys | fixture keys are generated by the script, marked test-only and rejected by the production key import path
+    - T02 | Breaking change sneaks in through a migration | schema diff and N-1 read tests are release-blocking (gates module) and code-owned
+    - T03 | Older client acts on a broader promise than was signed because it dropped a restriction the signer added (a new scope, expiry or context binding) | strict payload parsing rejects unknown keys outside ext with VALIDATION_FAILED; ext is preserved byte-exact and capped at 4 KiB; restrictions are listed in ext.crit and an N-1 reader refuses unknown critical keys; unknown major versions refused
+    abuse_controls:
+    - 'Changes to fixtures of released versions are rejected: released fixture directories are append-only.'
+    - The browser matrix cannot be reduced without editing the support policy file, which is code-owned.
+  observability_performance:
+    requirements:
+    - The runner records pass or fail per cell, durations and the browser version tested.
+    - N-1 data tests finish in at most 60 s; schema and OpenAPI diff in at most 20 s; browser matrix in at most 25 min nightly.
+    - Automated runs only feature-detect Web Push and check the content-free push payload format (reference and template key only) on the WebKit engine build; real push delivery to an installed iOS 16.4+ PWA is a manual checklist cell recorded with device, iOS version and approver.
+    metrics:
+    - classrup_quality_compat_checks_total{kind,outcome}
+    - classrup_quality_compat_matrix_cells{browser,outcome}
+    - classrup_quality_compat_records_upgraded_total
+    logs:
+    - JSON line per check {ts, level, msg, module, kind, outcome, durationMs, code?} with counts only.
+    budgets:
+    - N-1 data tests at most 60 s; schema and OpenAPI diff at most 20 s.
+    - Browser matrix at most 25 min nightly with 6 workers.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Planted breaking changes (field removed, type changed, required field added) must be caught by the schema diff.
+    - The support matrix in documentation is compared with the matrix actually run in CI to prevent drift.
+    fixtures: 'Fixture sets for N-1 (previous tag) with 842 records, 311 signed statements, one export bundle and 40 recorded API calls; one N-1 to N pair without and one with an IndexedDB version bump; statements with a payload unknown key, ext of 4 KiB, ext of 4 KiB + 1 byte and an unknown ext.crit key; automated cells Chrome N and N-1 (Chrome for Testing), Chrome beta (Playwright channel), Playwright Firefox and WebKit builds; a manual checklist template for Firefox stable N and N-1, Safari last 2, iOS Safari last 2 and iOS 16.4+ installed-PWA push.'
+    tests:
+    - T01 | integration | 01.R01,01.R02,01.R03 | load fixture manifests and inspect keys | manifest lists version, vault, bundle, statements, API recordings; keys flagged test-only
+    - T02 | integration | 02.R01,06.R02 | upgrade the N-1 vault and validate all records and signatures; then open the N vault with N-1 code for the pair without an IndexedDB version bump and for the pair with a bump | all records valid and signatures verify; without a bump N-1 opens and reads N data; with a bump N-1 gets VersionError, catches it and offers restore from the pre-upgrade export, with zero record loss and no partial open
+    - 'T03 | unit | 02.R02,09.R02 | planted breaking changes: field removed, type changed, required field added | each fails with QUALITY_COMPAT_BREAKING_CHANGE'
+    - T04 | unit | 02.R03,10.R02 | statements with a payload unknown key outside ext, an unknown ext key of 4 KiB, ext of 4 KiB + 1 byte, an unknown key listed in ext.crit, and an unknown major version; an N export into N-1 | payload unknown key gives VALIDATION_FAILED; the 4 KiB ext is accepted, preserved byte-exact and cid and signature re-verify; oversize ext rejected; unknown critical ext refused; major refused with UNSUPPORTED_SCHEMA_VERSION; N export refused clearly by N-1; a reader that drops the unknown key fails with QUALITY_COMPAT_EXT_UNSAFE
+    - T05 | chaos | 03.R01,06.R01 | interrupt vault upgrade at each step, then restart | resumes or rolls back; zero lost and zero duplicated records; second upgrade identical
+    - T06 | e2e | 03.R02,03.R03 | automated matrix smoke on Chrome N and N-1 (Chrome for Testing), Chrome beta (Playwright channel), Playwright Firefox build and Playwright WebKit build, then merge the manual checklist | each cell labelled with its engine source and real version and no automated cell labelled Safari; unsupported cells match the policy; a failing automated cell blocks with exit 2; a missing or failed manual cell blocks the release
+    - T07 | unit | 04.R01,04.R02,04.R03 | run scripts; diff OpenAPI of previous tag and working tree with a removed field | documented exit codes; QUALITY_COMPAT_API_BREAKING for removed field
+    - T08 | integration | 05.R01,05.R02,05.R03 | replay N-1 API recordings against in-process relay; statements with unchanged role mapping | accepted using fixture tokens; no secrets outside the process
+    - T09 | unit | 06.R03 | force an infrastructure failure on one cell | retried once; assertion failure not retried
+    - T10 | abuse | 07.R01,07.R02 | scan fixtures and reports for real data and profile config | synthetic only; clean profiles without extensions
+    - T11 | integration | 07.R03,10.R01 | modify a released fixture directory in a branch | rejected as append-only; reports retained 30 days
+    - T12 | load | 08.R01,08.R02 | run N-1 data, diff and matrix suites | 60 s, 20 s and 25 min budgets met; versions recorded
+    - T13 | e2e | 08.R03 | WebKit engine build - Web Push feature detection and the content-free push payload | payload holds reference and template key only; the fallback message is shown when push is unsupported; the real iOS 16.4+ installed-PWA push cell stays pending until its manual checklist is signed
+    - T14 | integration | 09.R01,09.R03 | traceability run and doc matrix comparison | every requirement maps to a passing test; documented matrix equals CI matrix
+    - T15 | integration | 10.R03 | revert module in a branch | other suites unaffected; release gate fails closed without compat report
+    - T16 | manual | 03.R03 | release checklist - smoke journeys on Firefox stable N and N-1, Safari desktop last 2 (macOS), iOS Safari last 2, and push delivery to an iOS 16.4+ installed PWA | each cell signed in gates/manual/<version>/ with device, OS, browser version, result and approver; compat:checklist merges them into reports/compat.json
+    - T17 | unit | 03.R02 | matrix report fixtures - a WebKit run labelled safari, a Playwright Firefox run labelled firefox stable, a cell without engine version | each fails with QUALITY_COMPAT_MATRIX_MISLABELED
+    acceptance:
+    - The current release reads all N-1 vaults, bundles and signed statements with zero loss and all signatures verifying.
+    - A planted breaking schema or API change fails the compatibility checks.
+    - Every automated matrix cell (Chrome N, N-1 and beta, Playwright Firefox and WebKit builds) passes smoke with its real engine labelled, and the manual Firefox stable, Safari, iOS Safari and iOS 16.4+ installed-PWA push cells have signed passing checklists; no automated run reports Safari.
+    - An unknown statement payload key outside ext is rejected, and ext additions are preserved byte-exact and re-verify.
+    - An interrupted vault upgrade loses and duplicates no record.
+  import_export_backup_rollback:
+    requirements:
+    - Compat reports and the support matrix table are exports; fixtures are the N-1 export bundles.
+    - Importing an N export into N-1 must fail clearly (UNSUPPORTED_SCHEMA_VERSION) rather than partially; importing N-1 into N must succeed fully.
+    - Rollback of this module is a git revert; fixtures for a new release are generated at the release tag before changes to schemas are merged.
+    export: reports/compat.json and compat.md; N-1 export bundles act as fixtures.
+    backup: Fixtures in git for last 2 releases; reports 30 days in CI.
+    migration_rollback: Fixtures are generated at each release tag before schema changes merge; rollback by git revert; app rollback to N-1 is tested per 06.R02 (no IndexedDB version bump - N-1 reads N data; with a bump - VersionError, then restore from the pre-upgrade export).
+    import: Imports N-1 export bundles (CTR-IOX-001) as fixtures; bundles of an unknown major version are refused with UNSUPPORTED_SCHEMA_VERSION.

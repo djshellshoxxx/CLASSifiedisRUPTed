@@ -1,35 +1,38 @@
-# PS-122-02 — validation rules
+# PS-122-02 — Validation rules: Disaster recovery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-02. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S03.M03 Disaster recovery](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/recovery` · **Contracts:** [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the validation rules process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-122-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-122-02.R01** Restore refuses to run unless the target, the artifacts, the manifests, the ledger and the keys pass all preconditions.
+- **PS-122-02.R02** Replay is bounded by count, repetition and consumer state so that it cannot cause event storms.
+- **PS-122-02.R03** Every refusal returns one stable error code with a messageKey for the operator tool.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | restore target directory is empty, writable, on a different volume than RELAY_DATA_DIR and is not the live data directory (no in-place restore) | PLATFORM_RECOVERY_TARGET_INVALID |
+| V02 | selected base snapshot is in status verified (or --allow-unverified with explicit flag) and its SHA-256 matches | PLATFORM_RECOVERY_SNAPSHOT_UNVERIFIED |
+| V03 | backup key matches the recorded keyFingerprint | PLATFORM_RECOVERY_KEY_MISMATCH |
+| V04 | WAL segments form a contiguous chain from the base snapshot's walPosition | PLATFORM_RECOVERY_WAL_GAP |
+| V05 | relay identity key file present, or --new-identity given (which always creates a new relayId) | PLATFORM_RELAY_IDENTITY_MISSING |
+| V06 | replay selection is ≤ 500 events and each event has replay_count < 3 | PLATFORM_DEADLETTER_REPLAY_LIMIT |
+| V07 | consumer module of the event is enabled for the relay | FEATURE_DISABLED |
+| V08 | requested restore time is not older than the oldest retained snapshot | PLATFORM_RECOVERY_TARGET_INVALID |
+| V09 | an authenticated tombstone ledger artifact exists whose range covers every tombstone up to the latest ledger append | PLATFORM_RECOVERY_LEDGER_MISSING |
+| V10 | every manifest used by the plan or restore passes F15.S03.M02 V10 (MAC verifies and links into the chain) | PLATFORM_BACKUP_MANIFEST_INVALID |
+| V11 | restore re-delivery never targets a consumer registered with externalSideEffects (push, email); such consumers are listed in excludedConsumers | FORBIDDEN |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-122-09.T02 | unit | PS-122-02.R01, PS-122-02.R02, PS-122-02.R03 | each rule V01-V11 violated in turn | documented error code returned and live data untouched |
+| TEST-PS-122-09.T23 | abuse | PS-122-02.R01, PS-122-07.R03 | plan with a relabelled manifest, then with the tombstone ledger artifact removed | PLATFORM_BACKUP_MANIFEST_INVALID, then PLATFORM_RECOVERY_LEDGER_MISSING; nothing restored |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F15.S03.M02, F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-EVT-001, CTR-IDM-001, CTR-OBS-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

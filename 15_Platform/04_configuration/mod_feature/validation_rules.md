@@ -1,35 +1,40 @@
-# PS-123-02 — validation rules
+# PS-123-02 — Validation rules: Feature registry
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-123-02. **Owner:** [15_Platform/04_configuration/mod_feature](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_feature. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M01 Feature registry](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/feature` · **Contracts:** [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the validation rules process for feature within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-123-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-123-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-123-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-123-02.R01** Generation validates structure, graph and defaults and fails the build on any violation with a stable code.
+- **PS-123-02.R02** The same input always produces byte-identical output so that staleness is detectable by comparison.
+- **PS-123-02.R03** Registry queries validate keys against the registry and never accept free-form patterns.
+- **PS-123-02.R04** A module whose spec is missing is never treated as a module without dependencies; it stays off and unregistered, and strict generation fails.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | module ID matches F[0-9]{2}.S[0-9]{2}.M[0-9]{2} and feature ID matches F[0-9]{2} | VALIDATION_FAILED |
+| V02 | every dependsOn entry that is not CTR-* exists in planning/modules.yaml and is not the module itself | PLATFORM_FEATURE_UNKNOWN_DEPENDENCY |
+| V03 | the dependency graph is acyclic (Kahn topological sort consumes all catalog nodes) | PLATFORM_FEATURE_CYCLE |
+| V04 | every module with defaultState on has all dependsOn modules defaultState on and registered | PLATFORM_FEATURE_DEFAULT_VIOLATION |
+| V05 | generated file equals the output of a fresh generation | PLATFORM_FEATURE_REGISTRY_STALE |
+| V06 | query key is a known module or feature ID | NOT_FOUND |
+| V07 | core features F15 and F16 have no module with defaultState off | PLATFORM_FEATURE_DEFAULT_VIOLATION |
+| V08 | surface is vault, relay or both and equals the value derived from the catalog code path (apps/pwa, apps/relay, packages) | VALIDATION_FAILED |
+| V09 | every catalog module has a module.spec.yaml (strict generation); in normal generation a missing spec yields dependsOnKnown false, defaultState off and registered false | PLATFORM_FEATURE_SPEC_MISSING |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-123-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-123-09.T01 | unit | PS-123-01.R01, PS-123-01.R02, PS-123-02.R02 | generate from the valid fixture twice | identical bytes, fields present on every record, hash equals sha256 of canonical JSON |
+| TEST-PS-123-09.T02 | unit | PS-123-02.R01, PS-123-02.R03 | each of V01-V09 violated in turn | documented code returned; query for unknown key returns NOT_FOUND |
+| TEST-PS-123-09.T03 | property | PS-123-03.R01, PS-123-02.R01 | random digraphs with and without injected back edges | cycle detected exactly when one exists; topological order places dependencies first |
+| TEST-PS-123-09.T08 | integration | PS-123-06.R03, PS-123-02.R03 | vault of release N queries relay of release N+1 hash | mismatch reported informationally, work continues, unknown modules listed |
+| TEST-PS-123-09.T16 | unit | PS-123-02.R04, PS-123-06.R03 | fixture catalog where module X has no spec and module Y (default on) depends on X; generate in normal and strict mode | X has dependsOnKnown false, defaultState off, registered false; Y fails V04 with PLATFORM_FEATURE_DEFAULT_VIOLATION until it defaults off; strict mode fails with PLATFORM_FEATURE_SPEC_MISSING |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-FLG-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

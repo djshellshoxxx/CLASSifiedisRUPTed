@@ -1,35 +1,47 @@
-# PS-013-07 — privacy retention abuse
+# PS-013-07 — Privacy, retention and abuse: Barter offer items
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-07. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S01.M03 Barter offer items](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/trade_proposals/offer` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-013-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-013-07.R01** Legs expose only what is already in public listings plus the declared values the owners chose to publish; nothing about addresses or exact location.
+- **PS-013-07.R02** Legs of closed subjects are retained as evidence for 2 years and pseudonymized if a party erases their identity locally.
+- **PS-013-07.R03** Abuse such as listing other people's items is limited because peer items require a signed listing authored by the giver.
+- **PS-013-07.R04** The module registers ExportSectionPort (section mutiny.legs), DeletionPort and RetentionPurgePort with F10 (N6), annotates every TradeLeg field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased party in retained legs.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- TradeLeg: P2; item references are public listing cids, declared values are owner-published; field classes annotated per F10.S02.M02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- RET-EVIDENCE 2 years after last related activity; voided unreferenced legs are purged after 7 days.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | A proposer lists someone else's item to bait them | peer items need a listing projection signed by the giver, and the giver's own signed reservation is required before commit |
+| T02 | Availability claim shown as fact | basis chip distinguishes local verification from signed listing claims |
+| T03 | Draft legs leak intent | legs are not sent until sealed in a revision to the subject's parties only |
+| T04 | Resource exhaustion by creating many legs | 8 legs per subject, 24 h garbage collection, 200 defined legs per vault |
+
+**Abuse controls**
+- At most 200 defined unreferenced legs per vault; define rate limit 60 per hour.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-013-09.T09 | abuse | PS-013-05.R01, PS-013-05.R02, PS-013-05.R03, PS-013-07.R01 | other principal defines or reads; leg for someone else's unlisted item | FORBIDDEN or NOT_FOUND; MUTINY_ITEM_NOT_OWNED |
+| TEST-PS-013-09.T11 | abuse | PS-013-07.R03 | 201st defined leg; 61st define in an hour | limit error and RATE_LIMITED |
+| TEST-PS-013-09.T12 | unit | PS-013-07.R02, PS-013-07.R01 | account erased locally with closed subject | leg pseudonymized and retained, no address fields ever present |
+| TEST-PS-013-09.T17 | integration | PS-013-07.R04 | F10 export, deletion of a counterparty and retention sweep | section mutiny.legs exported; erased DID pseudonymized in referenced legs; voided legs purged after 7 days |
+
+## Dependencies
+
+Module depends on: F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

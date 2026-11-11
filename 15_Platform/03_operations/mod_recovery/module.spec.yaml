@@ -1,0 +1,265 @@
+# F15.S03.M03 Relay disaster recovery (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S03.M03
+scope: MVP
+summary: >-
+  Restore tooling and the runbook for a relay, with targets of RPO 6 h and RTO 4 h (CTR-IOX-001 IOX-3, IOX-4),
+  plus operator replay of dead-lettered events (CTR-EVT-001 EVT-6). Recovery always creates a new relay instance
+  from verified, authenticated backups of F15.S03.M02, applies WAL frames after the snapshot's walPosition up to
+  the chosen time, re-applies the tombstone ledger, re-delivers only those archived events that the restored data
+  actually contains to relay consumers without external side effects, publishes a relay-signed restore
+  announcement so vault outboxes resend what the relay lost, freezes relay-hosted auctions with activity in the
+  lost window, and only then opens the port. Under ADR-0016 the relay holds no user-owned private records, so
+  recovery of a user's private data is a vault restore from the user's own export (F10.S01.M03), which this
+  module documents but does not perform. Data written after the last archived WAL frame is lost, which is the
+  stated RPO, and the report says exactly how much.
+responsibilities:
+  - Provide the restore command relay restore --to <dir> [--at <timestamp>|latest] [--new-identity] that locates the base snapshot through authenticated manifests, verifies checksums, decrypts, applies WAL frames after the snapshot's walPosition in order up to the target time, runs integrity checks and migrations check, re-applies the tombstone ledger, and writes a restore report.
+  - Provide a recovery plan query computed from BackupRecords and authenticated manifests (not from events) that shows which snapshot, WAL segments, archive and ledger artifacts would be used, the expected data-loss window and an RTO estimate before anything is restored.
+  - Re-deliver archived outbox events only when occurredAt ≤ reachedTimestamp, the event's aggregate revision exists in the restored records and the consumer's inbox row is absent, never to consumers registered with external side effects (push, email), and report every later event as lost.
+  - Publish after restore a relay-signed restore announcement classrup.platform.relay_restore/v1 { relayId, keyId, restoredTo, lostWindow, lastReceiptSeq, epoch, announcedAt, predecessorRelayId? } (epoch is the new receipt epoch; receipts of earlier epochs with seq above lastReceiptSeq are the ones the relay lost; predecessorRelayId only from a new identity) served by F15.S02.M01 in /.well-known/classrup-relay.json, increment the receipt epoch, and freeze relay-hosted auctions with activity in the lost window through the AuctionHostPort registered by F04.
+  - Register the NewIdentityHook with the F15.S02.M01 relay process (inverted registration, because this module depends on F15.S02.M01) so that relay identity init --new-identity, with or without a restore, publishes a restore announcement signed by the new identity and naming predecessorRelayId before the port opens (F16.S03.M03 RB-01).
+  - Provide dead-letter listing and operator replay (max 500 events per call, max 3 replays per event, tracked in the dead_letter replay_count) with audit and a dry-run mode, and purge dead letters 30 days after dead-lettering.
+  - Maintain the restore runbook with timed steps that fit in 4 h and the quarterly drill checklist.
+non_responsibilities:
+  - Taking and verifying backups, manifest authentication and the tombstone ledger (F15.S03.M02 mod_backups).
+  - The dead_letter table and its columns (F15.S02.M03 owns it, including replay_count and last_replayed_at).
+  - Resending lost deliveries (vault outboxes of F15.S01.M01 and F11.S02.M01 react to the restore announcement) and renegotiating frozen auctions (F04 auction modules).
+  - Recovery of a user's vault; the user restores from their own export, F10.S01.M03 and the recovery kit of F07, and nothing here can read or rebuild a vault.
+  - "Failover orchestration, hot standby and DNS automation. Future: warm standby relay with continuous WAL shipping; Future: automatic DNS cutover."
+  - Incident process and communications (F16.S03.M02 and F16.S03.M03).
+depends_on: [F15.S03.M02, F15.S02.M01, F15.S02.M03, F15.S03.M01, F16.S01.M01, CTR-IOX-001, CTR-EVT-001, CTR-IDM-001, CTR-OBS-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a relay operator, after losing my server I can restore the latest backup to a new machine in under 4 hours, losing at most the last 6 hours (typically 5 minutes), and know exactly what was lost.
+  - As a relay operator, I can see which events failed delivery, fix the cause and replay them without duplicating side effects.
+  - As a member, I understand that if my relay is lost, my private records are safe in my own vault, my deliveries show as pending until I choose another relay, and anything the restored relay lost is sent again automatically.
+edge_cases:
+  - The newest snapshot fails verification; the plan automatically selects the newest verified snapshot and states the larger data-loss window.
+  - A WAL segment in the middle of the chain is missing or corrupt; restore stops at the last contiguous segment and reports the exact timestamp reached, never applying later segments.
+  - A manifest has been relabelled or does not link into the chain; the plan and restore reject it with PLATFORM_BACKUP_MANIFEST_INVALID and use the authenticated chain only.
+  - The relay identity key file is not available; restore proceeds only with --new-identity, which creates a new genesis key and therefore a new relayId (or activates the pending successor named by a compromise revocation); its first restore announcement names predecessorRelayId, vaults see a different relay, the old relay's entries stay pending until users confirm the new fingerprint and reroute, and the report says so.
+  - The restored snapshot holds attachment rows of F08.S01.M03 whose encrypted MediaBlobs F15.S03.M02 excluded from the backup set; the restore report counts them in excludedBlobs, and the F08.S01.M03 reconciliation sweep marks those rows expired after the relay starts, so no attachment is served from a backup.
+  - Restored data is older than receipts the relay already issued; the signed restore announcement names lostWindow and lastReceiptSeq, vault outboxes resend the covered entries, and relay-hosted auctions with bids or a close in the lost window are frozen for renegotiation instead of contradicting bid orders or results already signed.
+  - An archived event occurred after the reached timestamp, or its aggregate revision is missing from the restored records; it is not re-delivered and is counted as lost.
+  - A push notification consumer has archived events in the replay range; it is excluded from restore re-delivery so no notification is sent twice.
+  - Dead-lettered event is replayed but the consumer module is disabled by flag; replay is refused with FEATURE_DISABLED and the event stays dead-lettered; a requeued event whose consumer is disabled later returns to dead_lettered.
+  - Replay of the same event is requested a fourth time; refused with PLATFORM_DEADLETTER_REPLAY_LIMIT and the operator must investigate.
+  - Restore target directory is not empty, is on the same volume as the live database, or is the live data directory itself; the tool refuses.
+ux:
+  notes: "Operator CLI and API: relay restore, relay restore plan, relay deadletter list, relay deadletter replay [--dry-run]. A restore report is written to <dir>/restore-report.json and printed. No end-user UI; the PWA only shows relay reachability, pending delivery states and the 'this relay restored an older backup' banner of F15.S01.M01."
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no persisted entity; restore progress and results live in a restore-report.json file in the target directory.
+      - Dead letters are rows of the dead_letter table owned by the storage module, which keeps replay_count and last_replayed_at across requeue and re-dead-lettering; this module only reads and re-queues them.
+      - The restore report records timing, selected artifacts, checks, the data-loss window, events re-delivered and lost, excluded consumers, the restore announcement and frozen auctions so that drills are evidenced.
+    entities: []
+    note: "Tooling module: restore state is the file restore-report.json { startedAt, finishedAt, baseBackupId, walSegments[], reachedTimestamp, eventsReplayed, lostEvents, excludedConsumers[], excludedBlobs, tombstonesApplied, ledgerBackupId, checks, rpoAchievedMs, lostWindow { from, to }, announcementCid, receiptEpoch, frozenAuctions, newIdentity, predecessorRelayId?, rtoElapsedMs } written to the restore directory and exported by the operator; dead letters are owned by F15.S02.M03 (dead_letter with replay_count and last_replayed_at)."
+  validation_rules:
+    requirements:
+      - Restore refuses to run unless the target, the artifacts, the manifests, the ledger and the keys pass all preconditions.
+      - Replay is bounded by count, repetition and consumer state so that it cannot cause event storms.
+      - Every refusal returns one stable error code with a messageKey for the operator tool.
+    rules:
+      - "V01 | restore target directory is empty, writable, on a different volume than RELAY_DATA_DIR and is not the live data directory (no in-place restore) | PLATFORM_RECOVERY_TARGET_INVALID"
+      - "V02 | selected base snapshot is in status verified (or --allow-unverified with explicit flag) and its SHA-256 matches | PLATFORM_RECOVERY_SNAPSHOT_UNVERIFIED"
+      - "V03 | backup key matches the recorded keyFingerprint | PLATFORM_RECOVERY_KEY_MISMATCH"
+      - "V04 | WAL segments form a contiguous chain from the base snapshot's walPosition | PLATFORM_RECOVERY_WAL_GAP"
+      - "V05 | relay identity key file present, or --new-identity given (which always creates a new relayId) | PLATFORM_RELAY_IDENTITY_MISSING"
+      - "V06 | replay selection is ≤ 500 events and each event has replay_count < 3 | PLATFORM_DEADLETTER_REPLAY_LIMIT"
+      - "V07 | consumer module of the event is enabled for the relay | FEATURE_DISABLED"
+      - "V08 | requested restore time is not older than the oldest retained snapshot | PLATFORM_RECOVERY_TARGET_INVALID"
+      - "V09 | an authenticated tombstone ledger artifact exists whose range covers every tombstone up to the latest ledger append | PLATFORM_RECOVERY_LEDGER_MISSING"
+      - "V10 | every manifest used by the plan or restore passes F15.S03.M02 V10 (MAC verifies and links into the chain) | PLATFORM_BACKUP_MANIFEST_INVALID"
+      - "V11 | restore re-delivery never targets a consumer registered with externalSideEffects (push, email); such consumers are listed in excludedConsumers | FORBIDDEN"
+  workflow_state_machine:
+    requirements:
+      - A restore follows ordered phases and any failure leaves the target directory unusable but the live system untouched.
+      - The restored relay opens its port only after all phases pass and the operator confirms.
+      - A dead letter moves back to pending delivery only through the replay command, each replay is counted in replay_count, and every non-terminal state has an exit - requeued events return to dead_lettered when the consumer is disabled or not delivered within 7 days, and dead letters are purged 30 days after deadLetteredAt.
+      - Restore re-delivers only events with occurredAt ≤ reachedTimestamp whose aggregate revision exists in the restored records, never to consumers with external side effects, and reports later events as lost in rpoAchievedMs and lostEvents.
+      - Before the port opens, the restore writes the relay-signed restore announcement, increments the receipt epoch and freezes relay-hosted auctions with activity in the lost window.
+    machines:
+      - entity: RestoreRun
+        initial: planned
+        terminal: [ready, aborted]
+        transitions:
+          - "planned -> fetching | operator starts restore with a valid plan | artifacts copied to the target directory"
+          - "fetching -> verifying | all artifacts present | manifests authenticated (V10), checksums and GCM tags verified (V02-V04), ledger checked (V09)"
+          - "verifying -> applying | verification passed | snapshot decrypted, WAL frames after walPosition applied up to the target time"
+          - "applying -> replaying | database opens and integrity_check is ok | tombstone ledger re-applied; archived events with occurredAt ≤ reachedTimestamp, an existing aggregate revision and no inbox row re-delivered to consumers without external side effects; later events counted lost"
+          - "replaying -> ready | replay finished and migrations current | restore announcement signed with the relay key, or with the new identity through the NewIdentityHook naming predecessorRelayId, and written for F15.S02.M01, receipt epoch incremented, auctions with activity in lostWindow frozen through AuctionHostPort, restore-report.json written; relay may be started on the new host"
+          - "planned -> aborted | validation fails or operator cancels | target directory left for inspection"
+          - "fetching -> aborted | artifact missing or IO error | report records the phase"
+          - "verifying -> aborted | manifest, checksum, key, ledger or chain failure | report records the failed check"
+          - "applying -> aborted | integrity or migration failure | report records the failed check"
+          - "replaying -> aborted | consumer failure exceeds 8 attempts for more than 5 percent of events | report lists dead letters"
+      - entity: DeadLetterReplay
+        initial: dead_lettered
+        terminal: [delivered, purged]
+        transitions:
+          - "dead_lettered -> requeued | platform.deadletter.replay by a relay_operator or admin | replay_count += 1, last_replayed_at = now, attempts reset to 0, rate 500 per minute"
+          - "requeued -> delivered | consumer processes the event and records it in the inbox | removed from dead_letter"
+          - "requeued -> dead_lettered | consumer fails 8 more attempts, the consumer is disabled (FEATURE_DISABLED), or 7 days pass without delivery | error code updated, replay_count and last_replayed_at kept"
+          - "dead_lettered -> purged | 30 days after deadLetteredAt | row deleted, counted in classrup_platform_deadletter_purged_total"
+    timeouts:
+      - "Restore RTO budget 14400000 ms (4 h) end to end, with phase budgets fetch 45 min, verify 30 min, apply 30 min, replay 30 min, cutover and checks 60 min, reserve 45 min."
+      - "Dead letters purged 2592000000 ms (30 days) after deadLetteredAt; a requeued event not delivered within 604800000 ms (7 days) returns to dead_lettered."
+      - "Quarterly restore drill, alert after 100 days without one."
+  commands_queries_events:
+    requirements:
+      - The module exposes relay commands for dead-letter replay and read-only queries for the recovery plan and dead letters, all for relay_operator or admin; the restore itself is an offline CLI that does not use the HTTP API.
+      - Replay emits one summary event per call and never changes event payloads or order guarantees.
+      - The module consumes backup events only to refresh the restore-readiness alert; the recovery plan is computed from BackupRecords and authenticated manifests, including WAL segments, which emit no event.
+      - The restore announcement classrup.platform.relay_restore/v1 is a statement signed by the relay key under context classrup-relay-restore:v1 with signer role relay_identity, registered with F11.S01.M01 (N2), served unchanged by F15.S02.M01 and verified by F15.S01.M01 (V16).
+      - For a new identity (relay identity init --new-identity of F15.S02.M01, or relay restore --new-identity) the NewIdentityHook signs the first restore announcement with the new genesis key, naming predecessorRelayId, with epoch 0, lastReceiptSeq 0, restoredTo the newest data the instance holds (announcedAt when it starts empty) and lostWindow from the predecessor's revokedAt (or restoredTo) to announcedAt; vaults apply it only to the new relayId and reroute to it only after the user confirms the new fingerprint.
+    commands:
+      - name: platform.deadletter.replay
+        capability: platform.deadletter.replay
+        input: "{ eventIds?: uuid[] ≤ 500, filter?: { consumer?, errorCode?, olderThanMs? }, limit ≤ 500, dryRun?: boolean } — relay command, relay_operator or admin (the operator capability platform.deadletter.replay of CTR-EVT-001 EVT-6)"
+        output: "{ replayId, requeued, skipped, refused: [{ eventId, code }] }"
+        errors: [FORBIDDEN, VALIDATION_FAILED, FEATURE_DISABLED, PLATFORM_DEADLETTER_REPLAY_LIMIT, RATE_LIMITED]
+        emits: [platform.deadletter.replayed]
+        idempotent: false
+    queries:
+      - name: platform.deadletter.list
+        capability: platform.deadletter.read
+        input: "{ consumer?, errorCode?, cursor?, limit ≤ 100 } — relay query, relay_operator or admin; returns metadata, never payloads"
+        output: "{ items: [{ eventId, type, consumer, errorCode, attempts, replayCount, lastReplayedAt?, deadLetteredAt }], nextCursor? }"
+        errors: [FORBIDDEN]
+      - name: platform.recovery.get_plan
+        capability: platform.recovery.read_plan
+        input: "{ at?: timestamp } — relay query, relay_operator or admin; reads BackupRecords and authenticated manifests"
+        output: "{ baseBackupId, baseConsistentAt, walSegments, archiveSegments, ledgerBackupId, reachableTimestamp, dataLossWindowMs, rtoEstimateMs, warnings[] }"
+        errors: [FORBIDDEN, PLATFORM_RECOVERY_TARGET_INVALID, PLATFORM_RECOVERY_WAL_GAP, PLATFORM_RECOVERY_LEDGER_MISSING, PLATFORM_BACKUP_MANIFEST_INVALID]
+    events_produced:
+      - {type: platform.deadletter.replayed, privacy: P1, payload: "{ replayId, requeued, skipped, refused, operatorActorId, replayedAt }"}
+    events_consumed:
+      - {type: platform.backup.completed, effect: "refresh the restore-readiness alert from consistentAt and walPosition; the plan itself re-reads BackupRecords"}
+      - {type: platform.backup.failed, effect: "mark the restore point stale in the readiness alert and widen the reported data-loss window until the plan re-reads BackupRecords"}
+    errors:
+      - "PLATFORM_RECOVERY_TARGET_INVALID | 422 | no | restore target is not empty, is on the live volume or is the live data directory, or the requested time is out of range"
+      - "PLATFORM_RECOVERY_WAL_GAP | 409 | no | WAL segment chain has a gap; restore stops at the last contiguous segment"
+      - "PLATFORM_RECOVERY_SNAPSHOT_UNVERIFIED | 422 | no | base snapshot is not verified or its checksum does not match"
+      - "PLATFORM_RECOVERY_KEY_MISMATCH | 422 | no | backup key fingerprint does not match or decryption fails"
+      - "PLATFORM_RECOVERY_LEDGER_MISSING | 422 | no | no authenticated tombstone ledger covers the restore, so deleted public content could be resurrected"
+      - "PLATFORM_DEADLETTER_REPLAY_LIMIT | 409 | no | event already replayed 3 times or selection exceeds 500 events"
+    example: |
+      $ relay restore plan --at latest
+      { "baseBackupId": "0192f500-…", "baseConsistentAt": "2026-11-04T06:17:40.910Z", "walSegments": 71, "ledgerBackupId": "0192f5ff-…",
+        "reachableTimestamp": "2026-11-04T12:12:00Z", "dataLossWindowMs": 292000, "rtoEstimateMs": 5400000 }
+      $ relay restore --to /srv/relay-new --at latest
+      ... fetching, verifying, applying, replaying (ledger 412 tombstones, 1 830 events re-delivered, 37 lost, push excluded), ready
+      restore announcement { "relayId": "relay:7k3m...", "keyId": "relay:7k3m...#k2", "restoredTo": "2026-11-04T12:12:00Z",
+        "lostWindow": { "from": "2026-11-04T12:12:00Z", "to": "2026-11-04T12:16:52Z" }, "lastReceiptSeq": 88000, "epoch": 1 }
+      $ relay identity init --new-identity   (after relay identity revoke --reason compromised named successorRelayId relay:q4n8...)
+      NewIdentityHook -> { "relayId": "relay:q4n8...", "keyId": "relay:q4n8...#k1", "predecessorRelayId": "relay:7k3m...", "epoch": 0, "lastReceiptSeq": 0,
+        "restoredTo": "2026-11-04T13:00:00Z", "lostWindow": { "from": "2026-11-04T12:40:00Z", "to": "2026-11-04T13:00:00Z" } }
+      POST /api/v1/cmd/platform.deadletter.replay { "filter": { "consumer": "relay.index" }, "limit": 100 }
+      200 { "replayId": "0192f700-…", "requeued": 98, "skipped": 0, "refused": [ { "eventId": "0192f6aa-…", "code": "PLATFORM_DEADLETTER_REPLAY_LIMIT" } ] }
+  authorization_capabilities:
+    requirements:
+      - Relay policy applies, so only a key holding the relay-scope relay_operator or admin role of this relay (F16.S01.M01 RoleAssignment) may replay dead letters or read the plan, tenant-scoped operators may not, and restore requires filesystem access to the backup directory and the backup key.
+      - Dead-letter listing returns metadata only; payloads are never shown through the API because they may contain P1 data.
+      - The restore tool never needs vault keys or user credentials, and the relay identity key is read only from the operator-supplied key file.
+    capabilities:
+      - "platform.deadletter.replay | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment; consumer module enabled; max 500 per call and 3 replays per event"
+      - "platform.deadletter.read | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment"
+      - "platform.recovery.read_plan | relay_operator, admin | signed request by a key with an active relay-scope F16.S01.M01 RoleAssignment, or local CLI"
+  failure_recovery_idempotency:
+    requirements:
+      - Restore is safe to repeat because it only writes into an empty new directory and never touches the live database.
+      - Replay is idempotent at the consumer level through the inbox (CTR-EVT-001 EVT-3), so duplicate delivery has no duplicate effect, and replay writes only dead_letter and inbox rows.
+      - A failed restore phase is resumable from the report or restartable from scratch within the RTO budget.
+      - Data the relay had receipted inside the lost window is recovered from its senders - the signed restore announcement lets vault outboxes return covered entries to prepared and resend them with the same cid or Idempotency-Key - and relay-hosted auctions with activity in that window are frozen for renegotiation rather than contradicting bid orders or results already signed.
+    idempotency: "Restore writes to a new empty directory and finishes by renaming a ready marker; rerunning on a failed directory is refused and the operator starts a new directory. Replay requeues events by eventId through the F15.S02.M03 requeue primitive, changing only dead_letter (replay_count, last_replayed_at) and inbox rows; the inbox suppresses (consumer, eventId) duplicates. A replay call with the same eventIds after success reports them as skipped. The restore announcement is keyed by (relayId, epoch), so a repeated restore of the same target never issues a second announcement for one epoch."
+    concurrency: "One restore per target directory (lock file). Replay holds the dispatcher's single-instance lease of the running relay only to insert requeue rows in one transaction; it does not run a second dispatcher."
+    retries: "Fetch and decrypt retry IO errors with IDM-4 backoff (base 500 ms, cap 30 s, 6 attempts); replayed events retry with the standard consumer backoff and return to dead_letter after 8 attempts."
+    offline: "Restore needs only the backup directory and key, no network. Vaults of members are unaffected; their sync outbox shows deliveries as pending, transport_acknowledged or completed until the relay is back, the restore announcement then returns lost ones to prepared, and users can switch relays."
+    partial_failure: "If the target host dies mid-restore the directory is discarded and the process restarts on a new host. If event replay fails for some consumers, the restore still completes and the failures remain dead letters for operator replay; the report counts them. If AuctionHostPort is not registered (auctions disabled), no auction is frozen and the report says so."
+  privacy_retention_abuse:
+    requirements:
+      - Restore handles only encrypted relay data and the operator's keys, produces a report without payload content, and leaves no plaintext snapshot outside the target directory.
+      - Temporary decrypted files are written only inside the restore target, mode 0600, and the target must be on encrypted or access-restricted storage per the runbook.
+      - Every tombstone in the authenticated ledger is re-applied before the restored relay serves public projections, so deleted content is not resurrected on this relay whatever the age of the base snapshot.
+    data:
+      - "Restore report: P1 counters, backup ids, timestamps, lost window; no content."
+      - "Restore announcement: P0 relay-signed statement with timestamps, receipt sequence numbers and, for a new identity, the predecessor relayId only."
+      - "Dead-letter rows: event envelopes with IDs and minimal fields (P0 to P1) kept 30 days."
+    retention:
+      - "Restore reports kept by the operator for at least 1 year (drill evidence, RET-AUDIT); restore announcements served for the life of the relay (newest 10 in the well-known document)."
+      - "Dead letters purged 30 days after dead-lettering."
+    threats:
+      - "T01 | Restore from a tampered or older malicious snapshot | checksums and GCM authentication, manifests accepted only when authenticated and in chain, signed relay announcements after restore show the same identity"
+      - "T02 | Replay storm overloads consumers or duplicates side effects | limits of 500 per call, 3 replays per event, 500 per minute, inbox idempotency, dry-run, externally side-effecting consumers excluded from restore re-delivery"
+      - "T03 | Unauthorized replay to trigger notifications or mutate indexes | relay_operator or admin capability with audit entry; replay never edits payloads"
+      - "T04 | Decrypted snapshot left on disk after restore | decrypt only into the target, wipe temp files, runbook step to restrict access, report lists files left"
+      - "T05 | Resurrected deleted content after restore | tombstone ledger re-application before readyz returns 200, refusal without a covering ledger (V09), and test for it"
+      - "T06 | Senders believe data was delivered that the restored relay lost | signed restore announcement with lostWindow and lastReceiptSeq; vault outboxes resend covered entries"
+      - "T07 | Restored auction host contradicts bid orders or results it already signed | auctions with activity in the lost window frozen for renegotiation through AuctionHostPort"
+      - "T08 | An attacker's relay claims to succeed a compromised one | the new identity's announcement names predecessorRelayId and the compromise revocation (signed by the old key) names successorRelayId; vaults reroute only after an out-of-band fingerprint confirmation (F16.S03.M03 RB-01)"
+    abuse_controls:
+      - "Rate limit 500 replays per minute and 1 restore per target directory."
+      - "Every replay and restore is written to the operator audit log (CTR-CAP-001 CAP-7) with actor, capability and counts only."
+  observability_performance:
+    requirements:
+      - Recovery readiness is measured continuously as restore-point age and dead-letter count per CTR-OBS-001.
+      - Drills measure real restore time and compare it with the 4 h RTO and the achieved data-loss window with the 6 h RPO.
+      - Replay throughput and failure counts are visible while running.
+    metrics:
+      - "classrup_platform_recovery_restore_point_age_seconds (alert at 25200)"
+      - "classrup_platform_deadletter_count (alert when above 0 for 15 minutes)"
+      - "classrup_platform_deadletter_replay_total{outcome=requeued|refused}"
+      - "classrup_platform_deadletter_purged_total"
+      - "classrup_platform_recovery_drill_duration_ms (from restore-report.json, recorded by drill)"
+    logs:
+      - "info restore.phase {phase, durationMs}; warn restore.aborted {phase, code}; info restore.announced {epoch, lostEvents}; info deadletter.replayed {replayId, requeued, refused} — no payloads."
+    budgets:
+      - "End-to-end restore of a 5 GiB database ≤ 2 h in drills, hard target RTO 4 h."
+      - "Achieved data loss ≤ 6 h (RPO) even without WAL segments; typical ≤ 5 min with segments."
+      - "Replay of 500 events requeues within 2 s; consumers process 1 000 events/s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The restore path is exercised in CI against generated backups with WAL segments, including corrupted and missing inputs.
+      - A quarterly manual drill on a clean machine is recorded with timings against the RPO and RTO.
+    fixtures: "Backup fixture set from F15.S03.M02 tests: 3 full snapshots with consistentAt and walPosition, 71 WAL segments, 2 archive segments, a tombstone ledger, a 100 000-row database, 40 dead-lettered events across 2 consumers (one disabled), a push consumer flagged externalSideEffects, a stub AuctionHostPort with one auction bid in the lost window, a stub F15.S01.M01 outbox, a relay process stub that calls registered NewIdentityHooks, a compromise revocation naming successorRelayId; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R01,01.R03,03.R02 | relay restore to an empty directory at latest | database opens, integrity ok, restore-report.json contains all documented fields"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01-V11 violated in turn | documented error code returned and live data untouched"
+      - "T03 | property | 03.R01,03.R03 | random failures injected per phase and random dead-letter timelines | only declared transitions occur; aborted runs never modify the live database; every non-terminal dead-letter state reaches delivered, dead_lettered or purged"
+      - "T04 | integration | 03.R01,06.R03 | delete a middle WAL segment | restore stops at the last contiguous segment, reports reachedTimestamp, applies no later segment"
+      - "T05 | contract | 04.R01,04.R02 | replay, list and plan calls | outputs and the platform.deadletter.replayed payload validate against registry schemas; list omits payloads and shows replayCount"
+      - "T06 | integration | 04.R03 | publish backup.failed and backup.completed events, then add a WAL segment without an event | readiness alert marks the restore point stale then fresh; the plan includes the new segment because it reads BackupRecords"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | member key and tenant-scoped operator key replay and list; operator reads payloads through the API | FORBIDDEN; no payload field exists in any response"
+      - "T08 | integration | 06.R01,06.R02 | rerun restore on a failed directory; replay same eventIds twice | refused with PLATFORM_RECOVERY_TARGET_INVALID; second replay reports skipped; consumer inbox shows one effect"
+      - "T09 | chaos | 06.R03,03.R03 | kill the restore process in each phase and the consumer during replay | restart from scratch succeeds; failed consumers leave dead letters, not lost events"
+      - "T10 | abuse | 07.R03,07.R01 | tombstone issued after the snapshot, restore then query the public projection | tombstone re-applied from the ledger before readyz 200; deleted projection not served"
+      - "T11 | abuse | 07.R02,07.R01 | restore then scan filesystem for plaintext snapshots and temp files | decrypted data only inside target, mode 0600, temp files wiped"
+      - "T12 | integration | 08.R01,08.R03 | scrape metrics before and after a backup failure and a dead-letter spike | restore point age and dead-letter alerts fire; replay counters correct"
+      - "T13 | load | 08.R02,08.R03 | restore of a generated 5 GiB database with 600 WAL segments, replay of 500 events | total ≤ 2 h, requeue ≤ 2 s, throughput ≥ 1 000 events/s"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-122 requirement maps to a passing test"
+      - "T15 | integration | 09.R02,09.R03,10.R03 | CI restore drill against fixture set with rpo and rto assertion | achieved data loss ≤ 6 h, elapsed time recorded in the report, N-1 binary opens the restored data"
+      - "T16 | integration | 10.R01,10.R02 | export restore report, restore with --new-identity | report exportable without payloads; new identity creates a new genesis key and a new relayId, prints a fingerprint warning and records newIdentity in the report"
+      - "T17 | manual | 08.R02,09.R03 | quarterly drill on a clean machine following the runbook | all phases complete within 4 h and the operator signs the checklist"
+      - "T18 | integration | 06.R02,01.R02 | replay 20 dead letters, let 5 fail again, replay those; diff every relay table before and after | only dead_letter and inbox rows changed; replay_count is 2 for the 5 re-dead-lettered events and last_replayed_at kept"
+      - "T19 | integration | 06.R01,10.R02 | restore with --to pointing at RELAY_DATA_DIR and at a directory on the live volume | refused with PLATFORM_RECOVERY_TARGET_INVALID; live database byte-identical afterwards"
+      - "T20 | integration | 03.R04,01.R03 | archive holds events before and after reachedTimestamp, one whose aggregate revision is missing in the restored records, and push events in range | only events ≤ reachedTimestamp with existing revisions re-delivered; the rest counted in lostEvents and rpoAchievedMs; push consumer listed in excludedConsumers and sends nothing"
+      - "T21 | integration | 03.R05,04.R04,06.R04 | restore with receipts issued after the restored point and an auction bid in the lost window | signed restore announcement served in the well-known document with lostWindow, lastReceiptSeq and epoch 1; the stub outbox returns covered entries to prepared and resends them once; the auction is frozen through AuctionHostPort"
+      - "T22 | integration | 03.R03 | dead letter left 30 days; a requeued event whose consumer is then disabled; a requeued event not delivered for 7 days | first purged and counted; second and third return to dead_lettered with replay_count kept"
+      - "T23 | abuse | 02.R01,07.R03 | plan with a relabelled manifest, then with the tombstone ledger artifact removed | PLATFORM_BACKUP_MANIFEST_INVALID, then PLATFORM_RECOVERY_LEDGER_MISSING; nothing restored"
+      - "T24 | integration | 04.R05,03.R05 | relay identity init --new-identity after a compromise revocation, with an empty database; then relay restore --new-identity of the fixture set | each new identity's first announcement is signed by its genesis key under classrup-relay-restore:v1, names predecessorRelayId, has epoch 0 and lastReceiptSeq 0 and is served in the well-known document before readyz 200; a stub vault applies it only to the new relayId; the report records predecessorRelayId and excludedBlobs"
+    acceptance:
+      - All tests T01-T16 and T18-T24 pass in CI and the manual drill T17 is completed at least every 100 days.
+      - A restore to a new instance completes within 4 h with at most 6 h of data loss, and the report states both numbers and every lost event.
+      - Dead-letter replay never produces duplicate side effects, writes only dead_letter and inbox rows and is limited to 3 replays per event.
+      - After a restore, vault outboxes learn from a signed announcement what the relay lost, and no relay-hosted auction contradicts what it signed before.
+      - Recovery never reads or reconstructs vault data, and user private records remain recoverable only from the user's own export.
+  import_export_backup_rollback:
+    requirements:
+      - The restore report is exportable and contains no content; user data export remains the vault's responsibility (CTR-IOX-001 IOX-6).
+      - Restore is the only data rollback path and always produces a new instance with event replay, never an in-place downgrade (IOX-4).
+      - Application rollback uses the previous release and requires N-1 compatible schemas, verified by opening restored data with the previous binary.
+    export: "restore-report.json plus relay deadletter list --json (metadata only)."
+    import: "Not applicable: restore reads backup artifacts of F15.S03.M02; the operator may import a restore report into the drill log only."
+    backup: "Covered by F15.S03.M02; this module has no state to back up besides reports, which the operator archives with the drill record."
+    migration_rollback: "Runbook step 9 rolls back by pointing traffic to the previous instance if it still exists; otherwise redeploy N-1 against the restored data. Schema expand/contract keeps N-1 readable for at least 180 days."

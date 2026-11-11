@@ -1,35 +1,99 @@
-# PS-005-01 — domain schema
+# PS-005-01 — Domain schema: Giveaway listing type
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-01. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S02.M03 Giveaway listing type](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listing_types/giveaway` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the domain schema process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-005-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-005-01.R01** GiveawayTerms define how a giveaway is run; GiveawayRequest records each requester's signed request and its outcome.
+- **PS-005-01.R02** Requests and notes are P2: visible only to giver and requester, travelling only as end-to-end encrypted envelopes and never in public projections.
+- **PS-005-01.R03** Anti-hoarding counters are derived from the giver's own stored requests and selections and apply per giver; a requester's behaviour toward other givers is not visible.
+- **PS-005-01.R04** The vault record GiveawayRequest (schema classrup.bazaar.giveaway_request_record/v1) is distinct from the signed request statement classrup.bazaar.giveaway_request/v1; each vault keeps its own record with localRole giver or requester.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### GiveawayTerms
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.bazaar.giveaway_terms/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
+| listingId | uuidv7 — ref F01.S01.M01 Listing of kind giveaway; unique |
+| ownerId | did:key — giver, local principal |
+| selectionMode | enum — first_come \| giver_choice |
+| queueLimit | int — 1..200, default 50 |
+| closesAt? | timestamp — now + 1 h..30 d |
+| maxPendingPerRequester | int — default 3 per giver, range 1..3 |
+| freshKeyShare | int — percent of queueLimit open to keys never seen by this vault; fixed 50 |
+| pickupNote? | string — <= 280 code points, plain text; shown only to the selected recipient |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- Exactly one GiveawayTerms per giveaway listing.
+- pickupNote is never part of a public projection; it is sent only in the selection statement.
+- queueLimit bounds the number of requests in status pending; at most freshKeyShare percent of them come from keys never seen by this vault.
+
+### GiveawayRequest
+
+Schema `classrup.bazaar.giveaway_request_record/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
+
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key (generated by the requester) |
+| tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
+| localRole | enum — giver \| requester (which side this vault holds) |
+| listingId | uuidv7 — ref Listing (giver) or verified mirror listing (requester) |
+| listingCid? | string — cid of the verified listing projection the requester saw |
+| giverId | did:key — listing owner, author of the verified projection |
+| requesterId | did:key — signer of the request statement |
+| note? | string — <= 280 code points, plain text; purged 30 days after a terminal state |
+| quantity | int — 1..10, not more than available |
+| receiptSeq? | int — giver vault: arrival order, strictly increasing per listing |
+| tieGroup? | int — giver vault: requests from one mailbox sync batch or within 60 s share a group |
+| drawRank? | int — giver vault: giver-local random draw inside the tie group (CSPRNG, recorded) |
+| freshKey | boolean — giver vault: no earlier verified statement from requesterId existed in this vault |
+| claimedAt | timestamp — requester's clock, a claim only |
+| status | enum — pending \| selected \| collected \| declined \| withdrawn \| expired |
+| holdId? | uuidv7 — giver vault: ref InventoryHold when selected |
+| selectionCid? | string — sha256- of the signed selection statement |
+| declineCid? | string — sha256- of the signed decline statement |
+| selectedUntil? | timestamp — selection time + 72 h, as signed in the selection |
+| requestCid | string — sha256- over JCS of the request envelope |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
+
+**Invariants**
+- At most one request per (listingId, requesterId) that is not in a terminal state.
+- In the giver vault, status selected implies holdId and selectedUntil are set and the hold is active.
+- In the requester vault, status selected or declined implies selectionCid or declineCid names a statement signed by giverId that binds this requestId and requestCid.
+- giverId differs from requesterId; requestCid is unique per listing.
+- Field classes are annotated per F10.S02.M02 (all P2; note purged after 30 days).
+
+### Storage DDL
+
+```sql
+CREATE TABLE bazaar_giveaway_request (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, requester_id TEXT NOT NULL,
+  status TEXT NOT NULL, receipt_seq INTEGER, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX bazaar_giveaway_request_live ON bazaar_giveaway_request(tenant_id, listing_id, requester_id)
+  WHERE status IN ('pending','selected');
+CREATE INDEX bazaar_giveaway_request_queue ON bazaar_giveaway_request(tenant_id, listing_id, status, receipt_seq);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-005-09.T01 | unit | PS-005-01.R01, PS-005-01.R03, PS-005-02.R03 | define terms and receive a valid request | records stored; counters derived from stored requests |
+| TEST-PS-005-09.T02 | unit | PS-005-01.R02, PS-005-07.R01 | inspect projection, relay payload and logs | notes and queue only in encrypted statements; projection has mode, queueLimit and closesAt only |
+| TEST-PS-005-09.T07 | contract | PS-005-01.R04, PS-005-04.R01, PS-005-04.R03, PS-005-09.R02 | request, select, decline, withdraw run in both vaults | statements validate and verify; recipient_selected payload has no notes; stored records validate as classrup.bazaar.giveaway_request_record/v1 with localRole giver or requester and never as the statement schema |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F08.S01.M01, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

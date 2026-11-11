@@ -1,35 +1,37 @@
-# PS-130-08 — observability performance
+# PS-130-08 — Observability and performance: Signatures
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-130-08. **Owner:** [16_Security/02_cryptography/mod_signatures](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S02.M03 Signatures](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/cryptography/signatures` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the observability performance process for signatures within 02_cryptography. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-130-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-130-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-130-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-130-08.R01** Relay verification outcomes are counted per CTR-OBS-001 with codes as labels and no key IDs; the vault keeps local diagnostics only.
+- **PS-130-08.R02** sign and verify meet p95 ≤ 5 ms on desktop-class and ≤ 25 ms on a Moto G-class device for 4 KiB payloads.
+- **PS-130-08.R03** Verification failure spikes are visible to the incident detection hooks of F16.S03.M02.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_security_signature_verifications_total{outcome=accepted|not_accepted,code}
+- classrup_security_signature_verify_ms (histogram)
+- classrup_security_signature_freshness_total{class=fresh|stale|unknown}
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- relay warn signature.not_accepted {context, code, correlationId} — no payload, no key ID.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-130-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- sign and verify p95 ≤ 5 ms (desktop) and ≤ 25 ms (Moto G profile) for 4 KiB; canonicalization of 64 KiB ≤ 10 ms.
+- Library bundle ≤ 12 KiB gzip excluding @noble/curves and the F11.S01.M03 primitives.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-130-09.T11 | load | PS-130-08.R01, PS-130-08.R02, PS-130-08.R03 | 1 000 verifications per second for 5 minutes, 4 KiB payloads; Moto G profile | p95 ≤ 5 ms desktop and ≤ 25 ms Moto G; metrics exported and visible to the F16.S03.M02 hooks |
+
+## Dependencies
+
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

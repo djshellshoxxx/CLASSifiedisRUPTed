@@ -1,35 +1,33 @@
-# PS-081-01 — domain schema
+# PS-081-01 — Domain schema: Data classification model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-01. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S02.M02 Data classification model](SPEC.md) · **Scope:** MVP · **Code:** `packages/privacy/src/security_boundaries/model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the domain schema process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-081-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-081-01.R01** The library defines the value types PrivacyClass, LocationLevel, Sink, ClassificationMap and RedactionStrategy and no persistent entities.
+- **PS-081-01.R02** A ClassificationMap assigns a class to every field path of a schema, with optional location level, and is stored beside the schema in the registry as part of its version.
+- **PS-081-01.R03** The default class for any unannotated or unknown path is P4, which is denied for every sink including export and ui_owner, so an unclassified field never appears in any output.
+- **PS-081-01.R04** The class-by-sink matrix in the note, covering 5 classes by 11 sinks plus a location cap per sink, is the normative oracle for canFlow and every redaction helper.
+- **PS-081-01.R05** A field annotation may declare a single-recipient disclosure {as P2, recipientRole}; the field keeps its own class (for example P3) for every sink, and only participant_envelope accepts it, as P2, when the envelope is encrypted to exactly one recipient of that role - used by F04.S01.M01 reservePrice and reserveSalt and by F04.S01.M02 maxAmount, bidderId and clientNonce with recipientRole auction_host, the host key named in the auction terms.
+- **PS-081-01.R06** The only path for P2 content to a non-participant is the PRV-9 moderation disclosure - a redact/1 copy of a P2 message, offer or cycle proposal, sealed to exactly one relay moderation key, accepted only when the envelope context declares the approved preview in state export_prepared with its preview digest.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Library module with no persistent entity. Value types - PrivacyClass P0..P4, LocationLevel L0..L4, Sink (log, event, federation, notification, projection, search, participant_envelope, export, ui_public, ui_participant, ui_owner), ClassificationMap {schema, fields: path to {class, level?, redact?: drop|hash|truncate|snap, disclose?: {as: P2, recipientRole (for example auction_host), maxRecipients: 1}}}, EnvelopeContext {encrypted, recipients: key id[], recipientRole?: participant (default) | a disclosure role | relay_moderation, disclosure?: {kind: moderation_report, targetType: message|offer|cycle_proposal, rulesVersion: redact/1, state: export_prepared, previewDigest}} and RedactionResult {value, dropped: path[], refused?: boolean}. Sink matrix (A allow, I IDs only, X allow with other users' data excluded, E allow only when the envelope is encrypted to its listed recipients, D deny). P0 - log A, event A, federation A (only when the owner opted in, FED-1), notification A, projection A, search A, participant_envelope A, export A, ui_public A, ui_participant A, ui_owner A. P1 - log I, event A, federation D, notification D, projection D, search D, participant_envelope E, export A, ui_public D, ui_participant A, ui_owner A. P2 - log I, event A (vault-local, EVT-8), federation D, notification D, projection D, search D, participant_envelope E, export X, ui_public D, ui_participant A, ui_owner A. P3 - log D, event A (vault-local only, EVT-8), federation D, notification D, projection D, search D, participant_envelope D, export X, ui_public D, ui_participant D, ui_owner A. P4 and unclassified - D for every sink. Location cap per sink - log L2, event L3 (L4 refused, EVT-5), federation L2, notification L2, projection L2, search L2, participant_envelope L4 only for a user-initiated share (F06.S02.M02) and L3 otherwise, export L4 for the owner's own records, ui_public L2, ui_participant L3, ui_owner L4. Declared exceptions, both inside participant_envelope only - (1) a field with disclose {as: P2, recipientRole} flows as P2 when the envelope is encrypted to exactly one recipient and recipientRole matches, and keeps its own class for every other sink and recipient (auction host disclosures of F04.S01.M01 and F04.S01.M02); (2) PRV-9 - a P2 message, offer or cycle proposal (disclosure.targetType as in F12.S01.M02) that is already the redact/1 output flows to one relay_moderation recipient only with disclosure.state export_prepared. Every other P2 envelope needs recipientRole participant.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-081-09.T01 | unit | PS-081-01.R01, PS-081-01.R02, PS-081-02.R01 | load a classification map for a schema and check every field | all paths classified; a missing path raises PRIVACY_CLASSIFICATION_MISSING |
+| TEST-PS-081-09.T02 | unit | PS-081-01.R03, PS-081-02.R02 | unannotated field in a record redacted for each of the 11 sinks | treated as P4 and dropped from every sink, including export and ui_owner |
+| TEST-PS-081-09.T03 | unit | PS-081-01.R04, PS-081-02.R02, PS-081-03.R02 | full class by sink matrix (5 classes by 11 sinks) and the location cap per sink | every result equals the matrix in the domain_schema note; P4 denied everywhere; P3 only to event, export and ui_owner |
+| TEST-PS-081-09.T16 | unit | PS-081-01.R03 | redactForExport on records with an unannotated field, a field from a newer schema version and a P4 key field | none of those paths appears in any redactForExport result |
+| TEST-PS-081-09.T18 | unit | PS-081-01.R05, PS-081-02.R05 | reservePrice, reserveSalt, maxAmount, bidderId and clientNonce through redactForEnvelope with one host key and recipientRole auction_host, with two recipients, with role participant, unencrypted, and through redactForEvent, redactForLog, redactForProjection, redactForExport for another user and ui_participant; a map that puts disclose on a P4 field or with maxRecipients 2 | only the single encrypted auction_host envelope carries the fields as P2; every other call drops or refuses them with PRIVACY_SINK_FORBIDDEN; the owner's own export keeps them; the bad maps fail the lint |
+| TEST-PS-081-09.T19 | unit | PS-081-01.R06, PS-081-02.R05 | redact/1 output of a P2 message, offer and cycle proposal through redactForEnvelope to one relay_moderation key with state export_prepared; the same with state previewed, without previewDigest, with two recipients, with recipientRole relay_operator, and the unredacted message | the three approved disclosures pass; every other call is refused with PRIVACY_SINK_FORBIDDEN, so no other P2 content reaches a non-participant |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-PRV-001, CTR-EVT-001, CTR-FED-001, CTR-ERR-001, CTR-IOX-001, CTR-OBS-001, CTR-TST-001. Predecessor: [module SPEC](SPEC.md).

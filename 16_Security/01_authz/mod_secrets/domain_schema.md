@@ -1,35 +1,27 @@
-# PS-127-01 — domain schema
+# PS-127-01 — Domain schema: Secrets handling
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-01. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M02 Secrets handling](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/secrets` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the domain schema process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-127-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-127-01.R01** The module owns no persistent entities and never writes secret values to the database, to logs or to exports.
+- **PS-127-01.R02** Token hashes use SHA-256 over 256-bit random tokens, which is sufficient because the input has full entropy; low-entropy secrets are never accepted as tokens.
+- **PS-127-01.R03** Secret names follow RELAY_SECRET_[A-Z0-9_]+ and each has a declared purpose, kind (comparison or data-wrapping), minimum length and rotation period in the secret manifest - DATA_KEY (data-wrapping), AUDIT_PEPPER, VAPID_PRIVATE_KEY and SMTP_PASSWORD (comparison or signing) - and the relay signing key is not in the manifest because F15.S02.M01 owns its key file.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** No catalog entities. Secrets are process configuration and are never persisted by the product. Relay access tokens are hashed by this module's helper and stored by the owning session module, not here. The data-key re-wrap progress is a relay-local table (security_rewrap_progress: objectId, keyVersion) of the owning storage, not a catalog entity.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-127-09.T01 | unit | PS-127-01.R01, PS-127-01.R03, PS-127-02.R01 | manifest with all secrets present once | all loaded; names match RELAY_SECRET_ pattern; relay signing key absent from the manifest; nothing written to the database |
+| TEST-PS-127-09.T03 | property | PS-127-01.R02, PS-127-07.R01, PS-127-07.R03 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms |
+| TEST-PS-127-09.T05 | unit | PS-127-01.R02, PS-127-02.R02 | hashToken for 43-character token and malformed tokens | SHA-256 of decoded bytes for valid; UNAUTHENTICATED for malformed |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001. Predecessor: [module SPEC](SPEC.md).

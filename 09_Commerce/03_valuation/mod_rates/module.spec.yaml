@@ -1,0 +1,356 @@
+# F09.S03.M02 FX rates and quotes (ADR-0015, ADR-0016). Expiry is decided by the checking vault's own clock; no relay is authoritative.
+id: F09.S03.M02
+scope: MVP
+summary: >-
+  Issues FX quotes with exact rational rates {num, den}, a named source and a short expiry (default 15 minutes) so that
+  barter cycles, offers and deals can pin a quote by ID and show the same conversion to every party. Quotes live in the
+  user's vault (ADR-0016). Rates come from a RateSourcePort adapter that the user chose (direct provider, or a relay
+  that signs the quote it serves) or from manual rates typed by a principal, which are always labelled as manual. A quote
+  requested with purpose barter_normalization may be pinned for up to 24 h and is shown as 'pinned rate agreed by all parties'
+  (N16). Only a relay-signed quote has a verifiable origin (sourceSigned true); a manual quote is signed by its issuer, which
+  proves who asserted the rate but not where it came from (issuerSigned true, sourceSigned false); a direct-provider quote
+  embedded in a statement is labelled 'source asserted by <issuer pseudonym>, not verifiable' (sourceSigned false), and a
+  receiver may re-derive reproducible sources such as the ECB reference rate for asOf. Expiry is evaluated against the local
+  clock of the vault doing the check; a relay's asOf or expiresAt is shown only as that relay's claim. Quotes never move money
+  and never silently refresh: an expired quote returns EXPIRED and callers must re-quote and re-obtain consent.
+responsibilities:
+  - Own FxQuote records and issue them from RateSourcePort adapters (MVP adapters ecb-daily for fiat and manual for any pair).
+  - Convert provider decimal strings to exact rationals without floating point, reducing by gcd and bounding to 40 digits.
+  - Enforce expiry on the local clock (default 15 min; provider quotes 1 to 60 min for purpose general and up to 24 h for purpose barter_normalization; manual quotes 15 min to 24 h) and staleness limits per source.
+  - Label manual quotes visibly with the issuing principal and reason, and let the issuer revoke them; a relay operator may also serve relay-signed quotes through a relay command.
+  - Provide a validity check so consumers can verify a pinned quote ID before use, per MNY-4.
+  - Verify quotes embedded in peer statements (relay signature, issuer signature and issuerRef binding, local-clock expiry, optional ECB re-derivation) and return sourceSigned with the label every consumer shows.
+  - Produce classrup.commerce.fx_quote_revocation/v1 and ingest peer revocations through commerce.fx_quote.ingest_revocation with signer-role checks, cid deduplication and quarantine reasons.
+non_responsibilities:
+  - The conversion arithmetic and rounding (F09.S03.M03 precision).
+  - Which currencies exist and their decimals (F09.S03.M01 currency registry).
+  - Re-consent flows after quote expiry (F02.S04.M02 normalization and the barter consent modules).
+  - Choosing a trusted relay or rate provider; the user selects it in settings (F15 platform) and this module only records the choice in each quote's source.
+  - Locale-aware formatting of approximate values (F14.S02.M02 formatApprox, reached through the injected ApproxFormatPort) and collecting consent for a pinned quote (the pinning module passes pinned.consentCollected).
+  - "Future: live crypto market-data adapters and multi-source median quotes; MVP crypto pairs use manual quotes or a configured adapter disabled by default."
+depends_on: [F09.S03.M01, F09.S03.M03, F11.S01.M01, F11.S01.M03, F07.S02.M01, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001, CTR-FED-001, CTR-PRV-001]
+user_stories:
+  - As a barter participant, I see the exact rate, its source and when it expires before I consent to a value-balanced cycle.
+  - As a community member, I can enter a manual rate for a local currency pair, and everyone who receives a statement containing it sees it labelled as a manual rate with my pseudonym.
+  - As a developer, I can pin a quote by ID and later verify it is still valid.
+  - As a receiver of a cycle proposal, I see whether each embedded rate's origin is verifiable or only asserted by the proposer, and whether it deviates from the ECB reference rate for its asOf.
+  - As a barter coordinator, I pin a cross-currency rate for up to 24 h so participants in different time zones can consent before it expires.
+edge_cases:
+  - Provider (direct or via relay) returns the rate as a JSON float 1.0870; the adapter parses the token as a decimal string and stores 10870/10000 reduced to 1087/1000, never a double.
+  - The ECB daily file is 3 days old over a weekend; fiat quotes remain acceptable up to 96 h, older returns COMMERCE_RATE_STALE.
+  - A provider returns a rate that differs by more than 50 percent from the last accepted quote of the pair in 24 h; the quote is refused as suspicious.
+  - Two members request the same pair at the same instant; both get the same cached rate but separate quote IDs and expiry clocks.
+  - A quote expires while a consumer displays it; the consumer's pin check returns EXPIRED and it must request a new quote.
+  - The chosen source is unreachable or the device is offline; the request returns DEPENDENCY_UNAVAILABLE and falls back only to a non-expired local manual quote if one exists for the pair.
+  - A relay-signed quote arrives with an invalid or unknown-relay signature; it is refused with COMMERCE_RATE_SIGNATURE_INVALID and never pinned.
+  - No relay is configured at all; provider and manual quotes are issued and expire on the vault's own clock exactly as with a relay.
+  - A relay's clock runs 20 minutes ahead and its signed asOf and expiresAt reflect that; the receiving vault evaluates expiresAt against its own clock, shows the relay's times as that relay's claim and adds the 10-minute skew note.
+  - A proposer embeds {source ecb-daily} with an invented rate in a cycle revision; the receiving vault labels it 'source asserted by <proposer pseudonym>, not verifiable', re-derives the ECB reference rate for asOf and flags the deviation.
+  - A peer embeds a manual quote attributed to another pseudonym without that issuer's signature; it is refused with COMMERCE_RATE_SIGNATURE_INVALID and never shown as that issuer's rate.
+  - A barter_normalization request asks for validForMs 86 400 000 (24 h) and is accepted; 86 400 001 is refused with VALIDATION_FAILED, and a purpose general provider request above 60 minutes is refused too.
+  - A revocation statement arrives from a did that is not the quote's issuer, or from a blocked did; the first is quarantined with reason signer_not_issuer and the second dropped silently.
+ux:
+  screens:
+    - "Rate chip next to converted values: the approximate value is rendered through the ApproxFormatPort (F14.S02.M02 formatApprox) from the QuoteLabel of commerce.fx_quote.quote_label, showing 1 EUR = 1.087 USD, the provenance wording (quote from <provider>, manual rate by <issuer>, unverified source, pinned rate agreed by all parties), 'expires in 14:32' on this device's clock and an expired or revoked marker; without a source or time the chip shows the original price with 'conversion unavailable'."
+    - "Origin line under an embedded rate: 'signed by relay <name>', 'manual rate by <pseudonym>' or 'source asserted by <pseudonym>, not verifiable', plus 'ECB reference rate differs by 3.2 %' when re-derived."
+    - "Pinned barter rate: 'pinned rate agreed by all parties' with source, asOf and expiry; relay times shown as 'according to relay <name>'."
+    - "Manual-rate form: pair, rate as decimal or fraction, reason (≤ 200 chars), validity 15 min to 24 h."
+  states: [loading, fresh, expiring, expired, manual, pinned-barter, source-unverified, revoked, error]
+  a11y:
+    - The expiry countdown is announced politely at 5 min, 1 min and at expiry, not every second.
+    - Manual rate and unverified-origin labels use text, not only color.
+    - Rate chip is keyboard focusable and exposes source, origin verification and asOf in its accessible description.
+processes:
+  domain_schema:
+    requirements:
+      - An FxQuote stores base, quote, rational rate {num, den}, source, sourceKind, asOf, expiresAt, issuer reference and optional source signature per MNY-4, in the principal's vault.
+      - Quotes are P1 reference data (the issuer's did is the only identity) and retained as RET-EVIDENCE in the vault because proposals pin them; a quote embedded in a signed statement is carried in full.
+      - A quote is immutable after issue except for revocation of manual quotes.
+      - Every FxQuote records purpose (general or barter_normalization) and sourceSigned; issuerRef is mandatory (the fetching principal's did for direct-provider quotes, the issuing principal's did for manual quotes, the relay key id for relay-signed quotes), and only a relay-signed quote whose relay signature verifies has sourceSigned true; a manual quote signed by its issuer has issuerSigned true, which proves who asserted the rate, not its origin, and keeps sourceSigned false (F02.S04.M02 V07).
+      - A quote received inside a peer statement is stored with receivedFrom (the embedding statement's signer), the local receivedAt, its verification label and, when re-derived, the reference rate and deviation.
+    entities:
+      - name: FxQuote
+        schema: classrup.commerce.fx_quote/v1
+        storage: device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key; pinned by consumers"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "base: string — currency code, must be active in the registry"
+          - "quote: string — currency code, differs from base"
+          - "rateNum: string — positive integer, ≤ 40 digits"
+          - "rateDen: string — positive integer, ≤ 40 digits; num/den reduced by gcd"
+          - "source: string — adapter ID such as ecb-daily, or manual:<issuer did>"
+          - "sourceKind: enum — provider | manual | derived"
+          - "purpose: enum — general | barter_normalization; set at request time and immutable"
+          - "label?: string — shown for manual quotes, e.g. Manual rate by <issuer pseudonym>; reason ≤ 200 chars"
+          - "asOf: timestamp — time the rate was observed at the source, as stated by the issuer (a claim)"
+          - "expiresAt: timestamp — issuedAt + 1..60 min (provider, purpose general), up to 24 h (provider with purpose barter_normalization, or manual); evaluated on the checking vault's local clock"
+          - "status: enum — issued | expired | revoked"
+          - "derivedFrom?: uuidv7[] — quote IDs when triangulated via EUR"
+          - "issuerRef: string — mandatory; did of the fetching principal (direct provider), of the issuing principal (manual), or relay key id (relay-signed)"
+          - "sig?: string — base64url Ed25519 FED-2 signature over JCS(quote minus sig) by the relay key (relay-signed) or by issuerRef (manual); absent for direct-provider quotes"
+          - "sourceSigned: boolean — true only when sig verifies under a trusted relay key; manual and direct-provider quotes are always false (F02.S04.M02 V07)"
+          - "issuerSigned: boolean — true when a manual quote's sig verifies under issuerRef's active device key; proves attribution, not origin"
+          - "verificationLabel: enum — relay_signed | issuer_signed | fetched_here | asserted_unverified"
+          - "receivedFrom?: did — signer of the peer statement that embedded this quote"
+          - "receivedAt?: timestamp — local clock when an embedded quote was stored"
+          - "reDerived?: object — {referenceRate {num, den}, referenceSource: ecb-daily, deviationBps, checkedAt} for reproducible sources"
+          - "assetDescriptors?: array — F09.S03.M01 descriptors for crypto or non-snapshot base or quote currencies"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - num and den are positive and coprime.
+          - expiresAt is after createdAt and not more than 24 h later.
+          - sourceKind manual implies label is set.
+          - sourceKind provider with purpose general implies expiresAt is at most 60 min after createdAt.
+          - sourceSigned true implies a relay signature verifies; manual and direct-provider quotes are never sourceSigned.
+    sql: |
+      CREATE TABLE commerce_fx_quote (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL /* vault id */, base TEXT NOT NULL, quote TEXT NOT NULL,
+        rate_num TEXT NOT NULL, rate_den TEXT NOT NULL, source TEXT NOT NULL, source_kind TEXT NOT NULL, purpose TEXT NOT NULL,
+        as_of TEXT NOT NULL, expires_at TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX commerce_fx_pair ON commerce_fx_quote(tenant_id, base, quote, created_at DESC);
+  validation_rules:
+    requirements:
+      - Quote requests validate currencies, source availability, source signature (for relay quotes) and rate sanity before issuing.
+      - Provider values are parsed as decimal strings into exact rationals; floating point parse is forbidden.
+      - Staleness and deviation checks run on every provider quote.
+      - Quotes embedded in peer statements are verified before display - relay-signed quotes by the relay key, manual quotes by issuerRef, which must equal the embedding statement's signer unless the quote carries its own valid issuer signature - and unsigned provider quotes are labelled 'source asserted by <issuer pseudonym>, not verifiable' with sourceSigned false.
+    rules:
+      - "V01 | base and quote are active currencies in the local registry and differ | COMMERCE_RATE_PAIR_INVALID"
+      - "V02 | provider rate token is a decimal string with at most 18 fractional digits and positive value | VALIDATION_FAILED"
+      - "V03 | provider asOf is within 96 h for fiat pairs and 5 min for crypto pairs | COMMERCE_RATE_STALE"
+      - "V04 | provider rate deviates at most 50 percent from the last accepted quote of the pair within 24 h | COMMERCE_RATE_SUSPECT"
+      - "V05 | requested validity is 1 to 60 min for provider quotes with purpose general, 1 min to 24 h (86 400 000 ms) for provider quotes with purpose barter_normalization, and 15 min to 24 h for manual quotes | VALIDATION_FAILED"
+      - "V06 | manual quote has a reason of 1 to 200 characters | VALIDATION_FAILED"
+      - "V07 | at least one RateSourcePort adapter or a live manual quote exists for the pair | COMMERCE_RATE_UNAVAILABLE"
+      - "V08 | quote ID pinned by a consumer exists, is not revoked and its expiresAt is after the local clock of the checking vault | EXPIRED"
+      - "V09 | relay-issued or relay-served quote carries a valid Ed25519 signature from a relay key the user trusts | COMMERCE_RATE_SIGNATURE_INVALID"
+      - "V10 | purpose is general or barter_normalization and issuerRef is present; a direct-provider quote names the fetching principal's did | VALIDATION_FAILED"
+      - "V11 | an embedded manual quote is signed by issuerRef's active key, and issuerRef equals the embedding statement's signer unless the quote carries that issuer's own valid signature | COMMERCE_RATE_SIGNATURE_INVALID"
+      - "V12 | a fx_quote_revocation statement is signed by the issuerRef of a manual quote it names; statements from a blocked did are dropped silently | COMMERCE_RATE_SIGNATURE_INVALID"
+      - "V13 | embedded crypto or non-snapshot currencies carry asset descriptors equal to the local CurrencyDef (F09.S03.M01) | COMMERCE_CURRENCY_MISMATCH"
+  workflow_state_machine:
+    requirements:
+      - A quote is issued once and ends as expired or revoked; it is never extended or edited.
+      - Expiry is evaluated against the local clock of the vault doing the check; any relay-signed asOf or expiresAt is shown as that relay's claim, receivers check embedded quotes against their own clock with the 10-minute skew note used by F09.S01.M01, and consumers must call the validity check before using a pinned quote.
+      - Revocation applies to manual quotes only; a revoked quote that was already embedded in a statement sent to a peer is superseded by a signed revocation statement and peers invalidate it at next sync.
+      - A barter_normalization quote lives at most 24 h and is shown as 'pinned rate agreed by all parties'; it is never extended, and a deadline beyond its expiry needs a re-quote and fresh consent (N16, F02.S04.M02).
+    machines:
+      - entity: FxQuote
+        initial: issued
+        terminal: [expired, revoked]
+        transitions:
+          - "issued -> expired | expiry sweep when expiresAt passes on the local clock | status flips lazily on read and by sweep every 60 s; relay clocks are never consulted"
+          - "issued -> revoked | commerce.fx_quote.revoke by the issuing principal, or an ingested revocation signed by issuerRef | only for sourceKind manual; emits commerce.fx_quote.revoked and, for a local revoke, queues statement classrup.commerce.fx_quote_revocation/v1"
+    timeouts:
+      - "Expiry sweep every 60 s on the local clock marks quotes with expiresAt ≤ local now as expired; default lifetime 15 min; barter_normalization quotes up to 24 h."
+      - "Revocations naming an unknown quote are buffered 24 h (quote_unknown) and then dropped."
+  commands_queries_events:
+    requirements:
+      - Commands request, issue_manual and revoke are vault commands (local, actor is the unlocked principal); relay_issue is a relay command that returns a relay-signed quote; revoke additionally produces the signed statement classrup.commerce.fx_quote_revocation/v1.
+      - Each issue emits commerce.fx_quote.issued into the vault outbox in the same IndexedDB transaction as the insert.
+      - Consumers pin quotes by ID only and never copy rates without the ID.
+      - classrup.commerce.fx_quote_revocation/v1 (signer - the issuerRef of the manual quote) is ingested through the internal vault command commerce.fx_quote.ingest_revocation, idempotent by cid, with quarantine reasons signer_not_issuer, not_manual and quote_unknown (buffered 24 h), and statements from blocked dids are dropped silently.
+      - commerce.fx_quote.verify_embedded is the one check consumers (F02.S04.M02, offers, Deals) call for quotes inside peer statements; it returns sourceSigned, the verification label, local-clock expiry with a skew note and, when asked, the ECB re-derivation.
+      - "Approximate values are rendered only through F14.S02.M02 formatApprox, reached through the injected ApproxFormatPort that the vault composition binds (F14.S02.M02 depends on this module, so there is no static edge back), with the QuoteLabel { source, sourceKind, issuerDisplay, label, signatureVerified, asOf, expiresAt, status, pinned?: { consentCollected } } from commerce.fx_quote.quote_label - issuerDisplay resolved and signatures verified before the call, signatureVerified true only for a verified relay signature, a verified manual issuer signature or a quote this vault fetched through its own direct adapter, status evaluated on the local clock, and pinned passed through only from the caller that pinned the quote."
+    commands:
+      - name: commerce.fx_quote.request
+        capability: commerce.fx_quote.request
+        input: "[vault command] { base, quote, purpose?: general|barter_normalization (default general), validForMs? (default 900000; 60000..3600000 for general, 60000..86400000 for barter_normalization), sourceId? (user-chosen RateSourcePort) }"
+        output: "FxQuote with id, rate, source, purpose, issuerRef, sourceSigned, verificationLabel, expiresAt"
+        errors: [VALIDATION_FAILED, COMMERCE_RATE_PAIR_INVALID, COMMERCE_RATE_UNAVAILABLE, COMMERCE_RATE_STALE, COMMERCE_RATE_SUSPECT, COMMERCE_RATE_SIGNATURE_INVALID, DEPENDENCY_UNAVAILABLE]
+        emits: [commerce.fx_quote.issued]
+        idempotent: true
+      - name: commerce.fx_quote.issue_manual
+        capability: commerce.fx_quote.issue_manual
+        input: "[vault command; the quote is signed by the issuer's device key so it can be embedded in statements] { base, quote, rate: {num, den}, reason, purpose?: general|barter_normalization, validForMs? (900000..86400000) }"
+        output: "FxQuote labelled manual, issuerRef the local principal, issuerSigned true, sourceSigned false"
+        errors: [VALIDATION_FAILED, COMMERCE_RATE_PAIR_INVALID]
+        emits: [commerce.fx_quote.issued]
+        idempotent: true
+      - name: commerce.fx_quote.relay_issue
+        capability: commerce.fx_quote.relay_issue
+        input: "[relay command] signed request { base, quote, purpose?, validForMs? } over the relay API"
+        output: "relay-signed FxQuote (sig by relay key; asOf and expiresAt are the relay's claims)"
+        errors: [VALIDATION_FAILED, COMMERCE_RATE_PAIR_INVALID, COMMERCE_RATE_UNAVAILABLE, COMMERCE_RATE_STALE, COMMERCE_RATE_SUSPECT, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: commerce.fx_quote.revoke
+        capability: commerce.fx_quote.revoke
+        input: "[vault command, produces signed statement classrup.commerce.fx_quote_revocation/v1] { quoteId, expectedRevision }"
+        output: "{ quoteId, revision, status: revoked }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [commerce.fx_quote.revoked]
+        idempotent: true
+      - name: commerce.fx_quote.ingest_revocation
+        capability: commerce.fx_quote.ingest
+        input: "[vault command, internal; receives classrup.commerce.fx_quote_revocation/v1 from the vault mailbox router] { envelope }"
+        output: "{ outcome: applied|buffered|quarantined|duplicate|dropped, reason?: signer_not_issuer|not_manual|quote_unknown|blocked }"
+        errors: [VALIDATION_FAILED, COMMERCE_RATE_SIGNATURE_INVALID, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [commerce.fx_quote.revoked]
+        idempotent: true
+    queries:
+      - name: commerce.fx_quote.check
+        capability: commerce.fx_quote.read
+        input: "{ quoteId }"
+        output: "{ valid: boolean, status, expiresAt, msRemaining (local clock), label }"
+        errors: [NOT_FOUND, EXPIRED]
+      - name: commerce.fx_quote.get
+        capability: commerce.fx_quote.read
+        input: "{ quoteId }"
+        output: "FxQuote (full record)"
+        errors: [NOT_FOUND]
+      - name: commerce.fx_quote.verify_embedded
+        capability: commerce.fx_quote.read
+        input: "{ quote: classrup.commerce.fx_quote/v1, embeddingSignerId, embeddingReceivedAt, embeddingSignedAt?, reDerive?: boolean }"
+        output: "{ sourceSigned, issuerSigned, verificationLabel, label (e.g. 'source asserted by <pseudonym>, not verifiable'), expired (local clock), skewNote?, issuerPseudonym, reDerived?: {referenceRate, deviationBps} }"
+        errors: [VALIDATION_FAILED, COMMERCE_RATE_SIGNATURE_INVALID, COMMERCE_CURRENCY_MISMATCH, DEPENDENCY_UNAVAILABLE]
+      - name: commerce.fx_quote.quote_label
+        capability: commerce.fx_quote.read
+        input: "{ quoteId } or { quote: classrup.commerce.fx_quote/v1, embeddingSignerId, embeddingReceivedAt }, pinned?: { consentCollected: boolean } (supplied by the pinning caller)"
+        output: "QuoteLabel { source, sourceKind, issuerDisplay (manual issuer pseudonym or signing relay display name), label?, signatureVerified, asOf, expiresAt, status: issued|expired|revoked (local clock), pinned?: { consentCollected } } for F14.S02.M02 formatApprox"
+        errors: [NOT_FOUND, VALIDATION_FAILED, COMMERCE_RATE_SIGNATURE_INVALID, COMMERCE_CURRENCY_MISMATCH]
+    note: >-
+      Statement registry (N2, registered in F11.S01.M01): classrup.commerce.fx_quote_revocation/v1 - signer is the issuerRef of
+      the manual quote it names. Quotes embedded in other modules' statements (classrup.commerce.fx_quote/v1 carried as data) are
+      signed by the relay key (relay-signed), by issuerRef (manual), or unsigned (direct provider, sourceSigned false). The
+      revocation is not Deal-scoped, so the vault mailbox router delivers it to commerce.fx_quote.ingest_revocation rather than to
+      the F09.S01.M01 dispatcher. Labels - relay_signed 'signed by relay <name>; its asOf and expiry are that relay's claim';
+      issuer_signed 'manual rate by <pseudonym>: <reason>'; fetched_here 'fetched by you from <source>'; asserted_unverified
+      'source asserted by <issuer pseudonym>, not verifiable'; barter_normalization quotes add 'pinned rate agreed by all
+      parties'. ECB re-derivation fetches the ECB daily reference rate for asOf through the user's chosen source and reports the
+      deviation; it never changes the pinned quote. ApproxFormatPort {formatApprox(money, currencyDef, quoteLabel, locale, {timeZone,
+      now})} is injected by the vault composition and bound to F14.S02.M02; QuoteLabel mapping - signatureVerified is sourceSigned
+      for relay quotes, issuerSigned for manual quotes and true for fetched_here, false for asserted_unverified; a quote refused by
+      verify_embedded never yields a QuoteLabel.
+    events_produced:
+      - {type: commerce.fx_quote.issued, privacy: P1, payload: "{ quoteId, base, quote, rate: {num, den}, source, sourceKind, purpose, issuerRef, sourceSigned, issuerSigned, expiresAt }"}
+      - {type: commerce.fx_quote.revoked, privacy: P1, payload: "{ quoteId, base, quote, issuerRef, revocationCid? }"}
+    events_consumed:
+      - {type: commerce.currency.registered, effect: "register supported pairs for adapters and manual quotes when a new asset is added"}
+      - {type: commerce.currency.status_changed, effect: "invalidate cached provider rates and refuse quotes for disabled or retired currencies"}
+      - {type: privacy.deletion.completed, effect: "through the DeletionPort plan, replace the deleted principal's did in issuerRef and receivedFrom of retained quotes with the per-deletion pseudonym; signatures kept and flagged unverifiable-after-pseudonymization"}
+    errors:
+      - "COMMERCE_RATE_PAIR_INVALID | 422 | no | base or quote is unknown, disabled or equal"
+      - "COMMERCE_RATE_SIGNATURE_INVALID | 422 | no | relay or issuer signature failed verification, or a manual quote is attributed to an issuer who did not sign it"
+      - "COMMERCE_RATE_UNAVAILABLE | 422 | no | no adapter or manual quote supplies this pair"
+      - "COMMERCE_RATE_STALE | 422 | yes | provider data is older than the allowed age for this pair"
+      - "COMMERCE_RATE_SUSPECT | 422 | no | provider rate deviates more than 50 percent from the last accepted quote"
+    example: |
+      vault command commerce.fx_quote.request (actor: unlocked local principal; command ID 0192f3a4-0000-7000-8000-0000000000d1)
+      { "base": "EUR", "quote": "GBP", "purpose": "barter_normalization", "validForMs": 86400000 }
+      => { "id": "0192f3a5-…", "base": "EUR", "quote": "GBP", "rate": { "num": "857", "den": "1000" }, "source": "ecb-daily",
+           "sourceKind": "provider", "purpose": "barter_normalization", "issuerRef": "did:key:z6MkCoord…", "sourceSigned": false,
+           "verificationLabel": "fetched_here", "asOf": "2026-11-04T09:00:00.000Z", "expiresAt": "2026-11-05T10:00:00.000Z" }
+      in a receiving vault: commerce.fx_quote.verify_embedded { quote, embeddingSignerId: "did:key:z6MkCoord…", reDerive: true }
+      => { "sourceSigned": false, "label": "source asserted by maple-otter, not verifiable", "expired": false, "reDerived": { "deviationBps": 0 } }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked local principal requests, issues manual quotes for, checks or revokes quotes in its vault.
+      - Under relay policy a relay serves relay_issue to requests signed by a registered device key and only relay operators configure which sources it offers.
+      - Manual quote issuance is logged in the vault's local audit log with reason; relay issuance is audited by the relay under RET-AUDIT.
+      - Incoming revocations are accepted only when signed by the issuerRef of the manual quote they name; relay keys sign only relay_issue quotes and carry no authority over a vault's quotes or their expiry.
+    capabilities:
+      - "commerce.fx_quote.request | local-principal | vault unlocked; local limit 30 provider fetches per hour"
+      - "commerce.fx_quote.issue_manual | local-principal | vault unlocked; reason present"
+      - "commerce.fx_quote.revoke | local-principal | quote sourceKind is manual and issuerRef is the local principal"
+      - "commerce.fx_quote.relay_issue | relay-device-key, operator | relay policy row quote_service enabled; relay rate limit 30 per hour per device key"
+      - "commerce.fx_quote.ingest | local-principal | internal ingest pipeline of the unlocked vault; signer is the quote's issuerRef"
+      - "commerce.fx_quote.read | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Quote requests are idempotent per CTR-IDM-001 in the vault; a replay returns the same quote ID and relay calls carry the same Idempotency-Key.
+      - Provider and relay fetch failures use bounded retries and then fall back to local manual quotes or fail visibly.
+      - The rate cache is a read-through cache; losing it only costs a provider call.
+    idempotency: "Vault commands carry a command ID recorded in the vault inbox for 24 h; replay returns the original quote. relay_issue requires Idempotency-Key and replays for 24 h. Revocation statements dedupe by cid."
+    concurrency: "Quotes are append-only; revoke uses expectedRevision. Fetches for the same pair are single-flighted per tab via a Web Lock so one HTTP call serves concurrent requests. No distributed lock is used (IDM-8) and no relay clock decides validity."
+    retries: "Provider calls: 3 attempts with backoff 1 s, 2 s, 4 s and 5 s timeout each; then DEPENDENCY_UNAVAILABLE (retryable)."
+    offline: "Offline the vault can issue manual quotes locally, evaluate expiry on its own clock and display expired quotes labelled expired; it cannot fetch provider or relay quotes or re-derive ECB rates. Revocation statements queue in the sync outbox (prepared, transport_acknowledged, peer_accepted)."
+    partial_failure: "If persisting the quote fails after fetching, nothing is returned; the cached provider rate is kept for the next request. A failed ECB re-derivation leaves the label asserted_unverified without a deviation figure."
+  privacy_retention_abuse:
+    requirements:
+      - Quote requests carry no location or identity to providers; providers only receive the pair, and the UI states that a direct provider sees the device IP while a relay proxy hides it from the provider but not from the relay.
+      - Manual rate abuse is controlled by the mandatory label, reason and pseudonym attached to the quote, and by counterparties consenting to the exact pinned quote.
+      - Quotes are kept as evidence for 2 years because proposals pin them.
+      - The module registers ExportSectionPort (section commerce.fx_quotes), DeletionPort (pseudonymization of issuerRef and receivedFrom) and RetentionPurgePort (RET-EVIDENCE, unreferenced quotes after 30 days) with F10 (N6), annotates every FxQuote field with its F10.S02.M02 class, and consumes privacy.deletion.completed.
+      - Forged source attribution is never shown as verified - unsigned provider quotes read 'source asserted by <sender>, not verifiable', manual quotes need issuerRef's signature, revocations from blocked dids are dropped (N7), and the revocation ingest uses a bounded quarantine of 100 entries with oldest-first eviction.
+    data:
+      - "FxQuote: P1 reference data in the vault; issuerRef and receivedFrom are dids or a relay key id; field classes annotated per F10.S02.M02."
+      - "Direct provider calls expose the device IP to that provider; users choose between direct and relay-proxied sources in settings."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity); unreferenced quotes older than 30 days are purged through the RetentionPurgePort."
+      - "On deletion: issuerRef and receivedFrom replaced by the per-deletion pseudonym; copies embedded in other parties' statements cannot be recalled."
+    threats:
+      - "T01 | A counterparty proposes a manipulated manual rate to disadvantage barter participants | rate shown with Manual label, issuer pseudonym and reason; each participant consents to the exact pinned quote; deviation versus last provider quote shown when over 20 percent"
+      - "T02 | Quote request flooding exhausts provider or relay quotas | local limit 30 fetches per hour, relay limit 30 per hour per device key and 600 per hour per relay, response cache 60 s per pair"
+      - "T03 | Stale or poisoned provider data | staleness limit, 50 percent deviation guard, adapters pinned to HTTPS and a fixed hostname allowlist"
+      - "T04 | Proposer embeds a forged ecb-daily rate or attributes a manual rate to another pseudonym | unsigned provider quotes labelled asserted_unverified with optional ECB re-derivation; manual quotes need issuerRef's signature and issuerRef must equal the embedding signer unless independently signed"
+      - "T05 | A relay with a skewed or dishonest clock tries to keep a quote alive or expire it early | expiry is evaluated only on the checking vault's local clock; relay times are labelled as that relay's claim"
+    abuse_controls:
+      - "Relay rate limits apply per relay policy; repeated COMMERCE_RATE_SUSPECT results show a local warning and, on a relay, an operator alert."
+      - "Revocation ingest limited to 20 statements per hour per known issuer; bounded quarantine of 100 entries with oldest-first eviction; blocked senders dropped silently."
+  observability_performance:
+    requirements:
+      - Relay metrics follow CTR-OBS-001; the PWA sends no telemetry (OBS-7) and keeps counters in local diagnostics only.
+      - Quote issue meets the local write budget and the relay budget at 50 req/s from cache.
+      - Manual quote counts are visible in the vault's local diagnostics.
+    metrics:
+      - "Relay only: classrup_commerce_fx_quotes_total{sourceKind=provider|manual|derived,outcome=issued|stale|suspect|unavailable}"
+      - "Local diagnostics: classrup_commerce_fx_manual_quotes_total{outcome=issued|revoked|ingested_revocation}"
+      - "Local diagnostics: classrup_commerce_fx_embedded_checks_total{label=relay_signed|issuer_signed|asserted_unverified|rejected}"
+      - "classrup_commerce_fx_provider_latency_ms{adapter}"
+      - "classrup_commerce_fx_cache_age_ms{pair} (gauge)"
+    logs:
+      - "info fx_quote.issued {quoteId, base, quote, sourceKind, purpose, correlationId} — rate included, no actor identity beyond ID."
+    budgets:
+      - "Vault request p95 ≤ 150 ms when cached, ≤ 1.5 s on provider miss; check and verify_embedded p95 ≤ 30 ms (IndexedDB) excluding re-derivation."
+      - "Expiry sweep of 10 000 local quotes ≤ 1 s; relay sweep of 100 000 quotes ≤ 3 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Adapter behavior is tested against recorded provider fixtures with no network access in CI, and signature verification is tested with fixed relay test keys.
+      - Expiry boundaries are tested with a controllable clock.
+    fixtures: "Recorded ECB daily XML fixtures (fresh, 3 days old, 6 days old), manual issuer O, fixed relay test keys with a relay clock skewed +20 min, vaults A (proposer) and B (receiver) with no relay configured, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R02 | request EUR/USD with the fixture 1.0870 token | stored rate 1087/1000, no float used, source ecb-daily"
+      - "T02 | unit | 02.R01,02.R03 | same currency pair, unknown currency, stale 6-day-old data, 60% deviation | documented error codes returned and nothing stored"
+      - "T03 | property | 01.R01,02.R02 | random decimal strings up to 18 fractional digits | num and den coprime and num/den equals the decimal exactly"
+      - "T04 | unit | 03.R01,03.R02,01.R03 | no relay configured; the vault clock is advanced to expiresAt and to one second before | check evaluates the local clock only - valid then EXPIRED - and the quote is never extended"
+      - "T05 | integration | 03.R03 | issuer revokes a manual quote already sent to a peer | local check shows revoked, revocation statement reaches prepared then peer_accepted, peer pin check reports invalid"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | execute each command and query | outputs and events validate against registry schemas"
+      - "T07 | integration | 04.R03,06.R01 | replayed request with same key | same quote ID returned; no second event"
+      - "T08 | abuse | 05.R01,05.R02,07.R02 | relay_issue by an unregistered device key; 31 relay requests in one hour; tampered relay quote | relay denies, 31st returns RATE_LIMITED, vault rejects tampered quote with COMMERCE_RATE_SIGNATURE_INVALID"
+      - "T09 | chaos | 06.R02,06.R03 | provider times out three times | DEPENDENCY_UNAVAILABLE, falls back to live manual quote if present, cache intact"
+      - "T10 | integration | 07.R01,01.R02 | inspect outbound provider request and a statement embedding a relay-signed and a direct-provider quote | request contains only the pair and no client identifiers; the relay-signed quote is carried with its relay signature; the direct-provider quote is carried in full with sourceSigned false"
+      - "T11 | load | 08.R01,08.R02 | 50 req/s for 5 minutes with cache | p95 ≤ 150 ms; sweep of 100 000 quotes ≤ 3 s"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run and boundary tests | every PS-075 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, re-import and downgrade | quotes round-trip identical; expired quotes import as expired"
+      - "T14 | abuse | 01.R04,01.R05,02.R04,07.R05 | vault A embeds a forged {source ecb-daily} quote with an invented rate in a statement to vault B; B calls verify_embedded with reDerive | B shows 'source asserted by <A pseudonym>, not verifiable', sourceSigned false, stores receivedFrom and the ECB deviation; nothing reads as ECB-sourced"
+      - "T15 | unit | 03.R02,05.R04 | relay-signed quote from a relay whose clock is 20 minutes ahead, embedded in a statement received 12 minutes after its claimed signing time | expiry decided on vault B's clock; relay asOf and expiresAt shown as the relay's claim; skew note shown"
+      - "T16 | unit | 03.R04,02.R01 | barter_normalization requests of 86 400 000 ms and 86 400 001 ms, a general provider request of 3 600 001 ms, and a 24 h quote checked 23 h 29 min after issue against F02.S04.M02's 30-minute remaining-life requirement | first accepted and labelled 'pinned rate agreed by all parties'; second and third VALIDATION_FAILED; the 24 h quote still has 31 minutes of life and passes"
+      - "T17 | integration | 04.R04 | vault B ingests a revocation signed by the issuer, one signed by another did, a duplicate, one naming an unknown quote and one from a blocked did | applied once; signer_not_issuer quarantined; duplicate no-op; quote_unknown buffered then dropped after 24 h; blocked dropped silently"
+      - "T18 | abuse | 02.R04,07.R05 | manual quote attributed to pseudonym C embedded by A without C's signature; and with C's valid signature | first refused with COMMERCE_RATE_SIGNATURE_INVALID; second shown as 'manual rate by C' with issuerSigned true and sourceSigned false"
+      - "T19 | integration | 07.R04 | export, deletion and retention purge driven by F10 | section commerce.fx_quotes exported; privacy.deletion.completed pseudonymizes issuerRef; RetentionPurgePort purges unreferenced quotes after 30 days; every field carries an F10.S02.M02 class"
+      - "T20 | unit | 08.R03 | issue two manual quotes, revoke one and ingest one revocation | classrup_commerce_fx_manual_quotes_total counts issued 2, revoked 1, ingested_revocation 1 in local diagnostics; no network telemetry"
+      - "T21 | unit | 05.R03 | issue a manual quote with a reason | one local audit-log entry with quoteId, pair and reason and no rate in any network payload"
+      - "T22 | integration | 07.R03 | a quote pinned by a proposal and an unreferenced quote, clock advanced 31 days and then 2 years | unreferenced quote purged at 31 days; pinned quote retained until 2 years after the proposal's last activity"
+      - "T23 | contract | 04.R05 | verify_embedded for relay-signed, issuer-signed, fetched and asserted quotes | outputs validate and carry the labels in the note exactly"
+      - "T24 | contract | 04.R06 | quote_label for a fetched ecb-daily quote, a verified relay quote, an issuer-signed manual quote, an asserted_unverified embedded quote, an expired and a revoked quote, and a barter_normalization quote with pinned consentCollected true and false, each rendered by the rate chip through an ApproxFormatPort double | each QuoteLabel validates against F14.S02.M02 V05 and V08; issuerDisplay present for manual and relay quotes; signatureVerified false only for asserted_unverified; status follows the local clock; pinned passed through unchanged; the chip calls formatApprox exactly once per value and never formats a rate itself"
+    acceptance:
+      - All tests T01–T24 pass in CI.
+      - An expired or revoked quote can never be pinned or used, and the response is always EXPIRED or an explicit invalid status.
+      - Every manual quote is visibly labelled manual in API output and UI.
+      - Quote validity is decided by the local clock of the checking vault; no relay clock can make a quote valid or expired.
+      - A rate's origin is shown as verified only when a relay signature verifies; a manual rate shows its signed issuer, and every other embedded quote reads 'source asserted by <issuer pseudonym>, not verifiable'.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export includes quotes pinned by the user's proposals through the pinning module's section as references with the quote data embedded.
+      - Imported quotes keep their original expiresAt; those already past it are stored as expired.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "ExportSectionPort section commerce.fx_quotes in the vault export classrup-export/v1: only quotes referenced by the user's proposals, deals or cycles; one line per FxQuote (schema classrup.commerce.fx_quote/v1) with purpose, sourceSigned and verificationLabel."
+    import: "Quotes import as read-only evidence; status recomputed from expiresAt on the local clock so a stale quote can never become valid again; signatures are re-verified and sourceSigned recomputed."
+    backup: "The vault export is the primary backup (IOX-6). Relays that serve quotes keep no user data worth backing up."
+    migration_rollback: "Additive fields only (purpose defaults to general, sourceSigned recomputed). Rollback is safe because new optional fields are ignored by older readers."

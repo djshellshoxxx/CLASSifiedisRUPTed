@@ -1,35 +1,76 @@
-# PS-118-03 — workflow state machine
+# PS-118-03 — Workflow state machine: Relay service
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-118-03. **Owner:** [15_Platform/02_backend/mod_relays](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_relays. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M01 Relay service](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/relays` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for relays within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-118-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-118-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-118-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-118-03.R01** The process follows starting, ready, draining, stopped, and /readyz is true only in ready.
+- **PS-118-03.R02** Shutdown is ordered, meaning stop accepting, drain in-flight requests for up to 10 s, stop the dispatcher after its current batch, run the registered pre-checkpoint hooks (the F15.S03.M02 final WAL archive), checkpoint with TRUNCATE only if every hook succeeded, and close the database.
+- **PS-118-03.R03** A RelayIdentity key moves from active to retired only through a rotation that it signs itself, from active or retired to revoked only through revocation from the local CLI with filesystem access (no prior-key authorization required), and never back.
+- **PS-118-03.R04** relay identity init --new-identity activates the pending successor key named by a compromise revocation (or a fresh genesis key), and before the port opens it calls the NewIdentityHook that F15.S03.M03 registers with the relay process to sign and publish a classrup.platform.relay_restore/v1 announcement from the new identity naming predecessorRelayId; the relay does not become ready without that announcement.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### RelayProcess lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **starting**; terminal **stopped**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-118-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| starting -> ready | configuration valid, key file passes checkSecretFile, migrations current, identity loaded with an active key (for a new identity, its restore announcement written through the NewIdentityHook), dispatcher lease held, port bound | /readyz returns 200 |
+| starting -> stopped | configuration or runtime check fails, or no active key exists | exit code 78 or 1; no port opened |
+| ready -> draining | SIGTERM or SIGINT | /readyz returns 503, server.close() called, idle connections closed, new requests get PLATFORM_RELAY_DRAINING |
+| draining -> stopped | in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed | dispatcher stopped after current batch, remaining connections closed, pre-checkpoint hooks run with a 5000 ms budget (F15.S03.M02 archives WAL frames up to mxFrame), wal_checkpoint(TRUNCATE) only if every hook succeeded, database closed, exit 0 (1 if requests were cut, 130 on second signal without TRUNCATE) |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> starting
+  starting --> ready: configuration valid, key file passes checkSecretFile, migrations current, identity loaded with an active key (for a new identity, its restore announcement written through the NewIdentityHook), dispatcher lease held, port bound
+  starting --> stopped: configuration or runtime check fails, or no active key exists
+  ready --> draining: SIGTERM or SIGINT
+  draining --> stopped: in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed
+  stopped --> [*]
+```
+
+### RelayIdentity lifecycle
+
+Initial **active**; terminal **revoked**.
+
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| active -> retired | platform.relay_identity.rotate by a relay_operator or admin, V10 and V11 pass | new key generated, rotation statement signed by this key with prevKeyId and seq, new revocation certificate written; old key published as retired |
+| active -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | for reason compromised with a readable key file the pending successor genesis key is generated first and the revocation, signed by the key itself, names successorRelayId; otherwise the revocation is signed by the key or its pre-signed certificate; published; relay stops serving until --new-identity activates the successor or creates a new relayId |
+| retired -> revoked | platform.relay_identity.revoke from the local CLI with filesystem access | revocation statement published; receipts by this key are valid only if stored before revokedAt |
+
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> retired: platform.relay_identity.rotate by a relay_operator or admin, V10 and V11 pass
+  active --> revoked: platform.relay_identity.revoke from the local CLI with filesystem access
+  retired --> revoked: platform.relay_identity.revoke from the local CLI with filesystem access
+  revoked --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Drain deadline RELAY_DRAIN_MS default 10000 ms (range 1000..30000); pre-checkpoint hook budget 5000 ms.
+- Request timeout 30000 ms, headers timeout 10000 ms, keep-alive 5000 ms.
+- Dispatcher lease TTL 30000 ms renewed every 10000 ms.
+- Rotation at most once per 86400000 ms; revocation has no rate limit.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-118-09.T04 | integration | PS-118-03.R01, PS-118-03.R02 | SIGTERM with 5 requests in flight (3 s) and a running dispatcher batch | readyz 503 immediately, requests finish, dispatcher stops after batch, hooks run, WAL truncated, exit 0 within 10 s |
+| TEST-PS-118-09.T05 | integration | PS-118-03.R02, PS-118-03.R01 | SIGTERM with a request lasting 20 s, then a second SIGTERM | request cut at 10 s with exit 1, second signal exits 130 without TRUNCATE |
+| TEST-PS-118-09.T06 | property | PS-118-03.R03, PS-118-01.R03 | random sequences of rotate, revoke requests and clock changes | active to retired and active or retired to revoked only, never back; rotation rate limit respected; revocation never rate limited |
+| TEST-PS-118-09.T20 | abuse | PS-118-03.R03, PS-118-01.R03, PS-118-02.R04 | CLI revoke of the stolen active key 1 h after a rotation, using the pre-signed certificate; vault holds receipts by that key stored before and after revokedAt | revocation accepted without prior-key authorization and without RATE_LIMITED; relay refuses to serve until --new-identity; receipts stored before revokedAt still verify, later ones are rejected |
+| TEST-PS-118-09.T23 | integration | PS-118-03.R02, PS-118-06.R03 | shutdown with a registered pre-checkpoint hook that succeeds, then one that fails | WAL archived before TRUNCATE in the first case; TRUNCATE skipped and the WAL kept in the second; next start archives it first |
+| TEST-PS-118-09.T29 | integration | PS-118-01.R05, PS-118-03.R04 | revoke the active key with reason compromised while its key file is readable, then relay identity init --new-identity; repeat with the key file deleted using the pre-signed certificate | revocation signed by the key names successorRelayId equal to the new relayId; the new identity records predecessorRelayId and its restore announcement naming it is served before readyz 200; without the announcement hook the relay stays in starting; the certificate path has no successorRelayId and the announcement still names the predecessor |
+
+## Dependencies
+
+Module depends on: F15.S02.M02, F15.S02.M03, F15.S03.M01, F16.S01.M01, F16.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

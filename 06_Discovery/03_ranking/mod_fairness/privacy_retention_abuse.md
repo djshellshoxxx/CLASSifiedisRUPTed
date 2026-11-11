@@ -1,35 +1,45 @@
-# PS-050-07 — privacy retention abuse
+# PS-050-07 — Privacy, retention and abuse: Ranking fairness
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-07. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S03.M02 Ranking fairness](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/ranking/fairness` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-050-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-050-07.R01** Inputs are public fields only; outputs reveal no private information and no user-specific signals.
+- **PS-050-07.R02** Exposure rules do not use protected characteristics, pseudonym text or reputation.
+- **PS-050-07.R03** The fairness rules are published in the product's help page and in this spec, and limits against Sybil gaming are stated.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Candidates: P0 document fields and score components; explanation keys: no personal data.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- None; no state is kept.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | One author floods a page | max 3 results per author per page, 100-document relay cap per author in the index (F06.S01.M01) |
+| T02 | Many throwaway authors capture new-author slots (Sybil, Douceur 2002) | only 2 slots per 20-result page, 50 percent minimum score ratio, 30 day window by local first-seen; honest limit - without a trusted identity authority the library cannot prove the authors are distinct people |
+| T03 | Promotion crowds out organic results | promoted share at most 20 percent of a page, multiplier cap 1.25 in F06.S03.M01, mandatory label |
+| T04 | Explanation used to deceive | explanation is generated from the same score components used for ranking, never free text from authors |
+| T05 | A self-hosted relay skips these rules in its own code | vaults run auditPage on every relay page and label the relay 'ranking policy not followed' |
+
+**Abuse controls**
+- Constants are code-level and need a decision record to change; relays cannot raise the promoted share above 20 percent.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-050-09.T08 | abuse | PS-050-05.R01, PS-050-05.R02, PS-050-05.R03, PS-050-07.R01, PS-050-07.R02 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema (V05); ranking identical with and without them |
+| TEST-PS-050-09.T15 | manual | PS-050-07.R03 | review the product help page against the constants file | the page lists 3 per author, 2 new-author slots per 20, the 50 percent ratio, the 30-day window, promoted at most 20 percent and the stated Sybil limit, matching the constants |
+
+## Dependencies
+
+Module depends on: F06.S03.M01, F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-UX-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

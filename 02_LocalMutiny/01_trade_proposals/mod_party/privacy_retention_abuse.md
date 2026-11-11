@@ -1,35 +1,47 @@
-# PS-014-07 — privacy retention abuse
+# PS-014-07 — Privacy, retention and abuse: Proposal party roster
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-07. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S01.M02 Proposal party roster](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/trade_proposals/party` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-014-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-014-07.R01** No roster field, event or error reveals that a block exists or who holds it; the principal's own block list never leaves the vault.
+- **PS-014-07.R02** The roster holds pseudonym DIDs and relay ids only and is retained as evidence for 2 years with its subject.
+- **PS-014-07.R03** Subject spam against a person is limited by the principal-side limit of 5 open subjects and by recipients' local filtering.
+- **PS-014-07.R04** The module registers ExportSectionPort (section mutiny.parties), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ProposalParty field with its F10.S02.M02 class, and on privacy.deletion.completed replaces the erased DID with the deletion pseudonym in retained rosters.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- ProposalParty: P2; DIDs and relay routing hints only; field classes annotated per F10.S02.M02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- RET-EVIDENCE with the subject (2 years after last related activity).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Probing who blocked whom by trying rosters | generic BLOCKED_PARTY and unavailable codes only, checked on the principal's own list |
+| T02 | Fake roster entries forcing a person into a cycle | a party becomes bound only by its own signed consent and reservation; roster rows alone bind nobody |
+| T03 | Reroute by silent substitution | positions are fixed by the signed revision and left parties are never replaced |
+| T04 | Harassment by repeated proposals naming the same person | recipient vault can mute the proposer; per-proposer limit of 5 open subjects at the proposer |
+
+**Abuse controls**
+- Recipients' vaults auto-hide proposals from DIDs the recipient blocked or muted, silently.
+- A DID that sends more than 10 proposals to one recipient in 24 h is quarantined at the recipient.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-014-09.T03 | contract | PS-014-02.R02, PS-014-07.R01 | roster containing a locally blocked DID | BLOCKED_PARTY with params that do not include any DID |
+| TEST-PS-014-09.T10 | abuse | PS-014-07.R02, PS-014-07.R03 | 11 proposals from one DID in 24 h; 6th open subject by one proposer | quarantine and MUTINY_PARTY_LIMIT |
+| TEST-PS-014-09.T15 | integration | PS-014-07.R04, PS-014-07.R02 | F10 export, deletion of a party and retention sweep | section mutiny.parties exported; erased DID pseudonymized and mailbox hints dropped; rows purged only after RET-EVIDENCE |
+
+## Dependencies
+
+Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

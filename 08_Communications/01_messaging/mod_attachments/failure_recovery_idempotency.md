@@ -1,35 +1,32 @@
-# PS-059-06 — failure recovery idempotency
+# PS-059-06 — Failure recovery and idempotency: Message attachments
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-06. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M03 Message attachments](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/attachments` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-059-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-059-06.R01** Slot creation and finalize are idempotent per CTR-IDM-001; chunk upload is idempotent on (attachmentId, index) and a repeated chunk with different bytes is refused.
+- **PS-059-06.R02** Interrupted uploads resume at the first missing chunk index within the 1 hour slot life without re-encrypting.
+- **PS-059-06.R03** Finalize is one relay transaction; MediaBlob storage and the attachment row remain consistent through write-then-rename and a reconciliation sweep, and the vault records the response and emits its event in one IndexedDB transaction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Relay commands require Idempotency-Key on create_slot, finalize and delete; the vault attach and remove commands are idempotent on attachmentId; put_chunk is naturally idempotent on (attachmentId, index) with a content hash check; replay window 24 h.
+- **concurrency:** expectedRevision on finalize and delete; two finalize calls race on the pending-to-uploaded transition and exactly one wins, the other replays the result.
+- **retries:** Upload relay commands use the F15.S01.M01 outbox timers (CTR-IDM-001 IDM-4 backoff base 500 ms, cap 30 s, full jitter, 6 attempts; unsent entries expire 7 days after creation after a day-6 prompt); the whole upload restarts with a new slot after EXPIRED.
+- **offline:** Photo processing and encryption happen in the vault; the ciphertext is held as a local MediaBlob and outbox entries carry only its reference, so the 5 MiB outbox cap is not used up; the message referencing it is sent only after finalize succeeds, and until then it shows prepared.
+- **partial failure:** If the relay process crashes between blob rename and database commit the reconciliation sweep (every 10 minutes) deletes orphan MediaBlobs without a row and marks rows without a blob as expired; if the vault never receives the finalize response it repeats finalize with the same Idempotency-Key.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-059-09.T08 | integration | PS-059-06.R01, PS-059-06.R02 | upload 10 chunks, kill connection after 3, resume, repeat chunk 2 with different bytes | upload completes; conflicting repeat refused |
+| TEST-PS-059-09.T09 | chaos | PS-059-06.R03 | crash between blob rename and commit; lost finalize response | reconciliation sweep removes orphan blob and expires row; repeated finalize replays the stored response |
+
+## Dependencies
+
+Module depends on: F08.S01.M01, F08.S01.M02, F09.S02.M02, F15.S02.M03, F10.S02.M03, F11.S01.M01, F11.S01.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,35 @@
-# PS-004-06 — failure recovery idempotency
+# PS-004-06 — Failure recovery and idempotency: Listing publication
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-004-06. **Owner:** [01_LocalBazaar/01_listings/mod_publish](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_publish. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S01.M03 Listing publication](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listings/publish` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for publish within 01_listings. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-004-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-004-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-004-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-004-06.R01** Publishing is idempotent per CTR-IDM-001; a replay returns the stored PublicationRecord and never signs a second statement.
+- **PS-004-06.R02** federation.record.publish (signing and seq allocation in F11.S01.M02), the PublicationRecord, the Listing status change and the F15.S01.M01 outbox entries commit in one IndexedDB transaction; transport is a separate retried step.
+- **PS-004-06.R03** Offline publish commits locally and shows prepared; the UI never reports relay receipt or acceptance before a signed receipt exists.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Idempotency-Key required on every command; keys and request hashes kept 24 h in the vault. Statements are additionally deduplicated by cid at relays and peers (CTR-FED-001 FED-3); inbound relay notices are deduplicated by cid.
+- **concurrency:** expectedRevision on the listing and on the publication; one live publication per listing is enforced by a partial unique index. Seq and prev are allocated by F11.S01.M02 in its storing transaction, so concurrent publishers in one vault never collide; a conflict detected by F11.S02.M03 (seq fork or a second projection of the listing from another device of the principal) freezes the publication and the owner chooses which candidate to keep; no last-writer-wins.
+- **retries:** Transport retries follow IDM-4: exponential backoff with full jitter, base 500 ms, cap 30 s, 6 attempts per burst, then waits for the next app start or network event; a relay_rejected or relay_removed result is never retried to that relay.
+- **offline:** Everything except relay delivery works offline. The sync outbox entry stays prepared; entries older than 7 days prompt the user to resend or discard. Offline publish uses the last known receipt median for V10 and warns when it is older than 7 days.
+- **partial failure:** Delivery to relay A may succeed while relay B fails; each destination has its own state. An unpublish, including one the owner confirmed from policy_attention, with some relays unreachable queues tombstones for them and shows tombstone pending. If commerce.deal.open fails, attach_promotion stores nothing.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-004-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-004-09.T01 | unit | PS-004-01.R01, PS-004-01.R03, PS-004-06.R03 | publish L offline | PublicationRecord active, delivery prepared, no receiptAt, no relay receipt claim |
+| TEST-PS-004-09.T05 | integration | PS-004-03.R03, PS-004-06.R02 | R1 accepts, R2 rejects | R1 transport_acknowledged once its verified receipt completes the outbox entry and never peer_accepted, R2 relay_rejected, record stays active |
+| TEST-PS-004-09.T10 | integration | PS-004-06.R01, PS-004-06.R02 | replay publish with same key; federation.conflict.detected names the statementCid (second device published another projection of L), then federation.conflict.resolved drop_all | one statement; publication frozen with the user prompt, then unpublished with a tombstone issued through federation.tombstone.issue |
+| TEST-PS-004-09.T11 | chaos | PS-004-06.R03 | R1 unreachable for 2 h then returns | backoff schedule honoured, state moves prepared to transport_acknowledged without duplicate statements |
+| TEST-PS-004-09.T25 | contract | PS-004-04.R02, PS-004-06.R02 | publish, renew, unpublish and end with reason expired through the StatementPublisherPort test double | every statement is created by federation.record.publish or federation.tombstone.issue with the seq returned by F11.S01.M02; the module calls no signing primitive and keeps no seq counter; bazaar.listing.unpublished carries tombstoneCid; end with reason expired returns tombstoneCid and emits no bazaar.listing.unpublished |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S02.M01, F01.S02.M02, F01.S02.M03, F01.S03.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03, F12.S02.M02, F12.S03.M01, F10.S01.M01, F06.S02.M01, F08.S01.M01, F09.S01.M01, F11.S01.M01, F11.S01.M02, F15.S01.M01, F15.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-COM-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

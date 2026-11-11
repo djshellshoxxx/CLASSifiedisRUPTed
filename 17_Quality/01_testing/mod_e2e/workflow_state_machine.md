@@ -1,35 +1,33 @@
-# PS-134-03 — workflow state machine
+# PS-134-03 — Workflow state machine: E2E testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-03. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M04 E2E testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/e2e` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-134-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-134-03.R01** There is no entity lifecycle for the module; each journey exercises lifecycles owned by other modules.
+- **PS-134-03.R02** A journey passes only if the UI state of each participant matches that participant's own vault state, and the vaults agree on the signed statements they exchanged (same cid and revision, verified signer). For an offer, the buyer and seller vaults in separate browser contexts hold the same accepted offer cid and revision and the Deal, and the buyer's OutboxEntry reaches peer_accepted bound to that cid; in the no-relay profile the envelopes travel as direct file transfers. Relay checks cover only relay-held artifacts (the receipt for an opaque envelope, index presence of a P0 projection), and no relay query returns offer plaintext (P2, CTR-PRV-001 PRV-5).
+- **PS-134-03.R03** Offline journeys walk the F15.S01.M01 sync states: the offer is local committed at once; its OutboxEntry is prepared while offline (Saved on this device), then sending, then transport_acknowledged after a verified relay receipt (Delivered to relay, peer has not confirmed), then peer_accepted when the seller's signed acknowledgement arrives (Confirmed by peer); conflict, failed and expired are driven by injected relay responses and page.clock; each state is visible and announced and the UI never shows more than the reached state.
+- **PS-134-03.R04** A no-relay journey runs with all network requests aborted: first-run identity creation, local listing publish, local search, vault export and restore, and sync status displayed as Saved on this device (local committed, OutboxEntry prepared) without claiming delivery.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-03`; scenarios and fixtures to be detailed in Prompt 3.
+_None._
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-134-09.T05 | e2e | PS-134-03.R01, PS-134-03.R02 | buyer makes offer, seller accepts on a second browser context (with-relay profile, and no-relay profile with direct file transfer) | buyer and seller vaults both hold the accepted offer (same cid and revision, verified signer) and the Deal, and each UI matches its own vault; the buyer OutboxEntry is peer_accepted bound to that cid; the relay holds only ciphertext envelopes and receipts for that thread and no relay query returns offer plaintext |
+| TEST-PS-134-09.T06 | e2e | PS-134-03.R03, PS-134-06.R01 | go offline, create offer, reload page, go online, seller acknowledges | one OutboxEntry with the original cid survives the reload; the seller vault applies the offer once (dedupe by cid); labels move Saved on this device, then Delivered to relay, peer has not confirmed, then Confirmed by peer and never ahead of the reached state |
+| TEST-PS-134-09.T16 | a11y | PS-134-03.R03 | walk prepared, sending, transport_acknowledged, peer_accepted plus conflict, failed and expired with a screen-reader live region check | each change announced via aria-live polite with the F15.S01.M01 label; conflict uses role=alertdialog |
+| TEST-PS-134-09.T18 | e2e | PS-134-03.R04 | block all network, create identity, publish listing locally, search, export and restore the vault | journey completes with zero network requests; status Saved on this device; QUALITY_E2E_RELAY_REQUIRED never raised |
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-UX-001, CTR-OBS-001, CTR-IDM-001, CTR-CAP-001, CTR-PRV-001, F17.S01.M01, F15.S01.M01, F15.S01.M02, F14.S01.M03, F07.S01.M01, F07.S01.M02, F07.S01.M03, F11.S01.M02, F01.S04.M01. Predecessor: [domain_schema.md](domain_schema.md).

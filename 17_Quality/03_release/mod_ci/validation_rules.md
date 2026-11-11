@@ -1,35 +1,36 @@
-# PS-141-02 — validation rules
+# PS-141-02 — Validation rules: Continuous integration
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-02. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M01 Continuous integration](SPEC.md) · **Scope:** MVP · **Code:** `.github/workflows` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for ci within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-141-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-141-02.R01** The workflow lint rejects: any uses: outside actions/*, missing permissions block, permissions broader than contents: read except the per-job allowlist (issues: write only on the nightly-report job of nightly.yml; contents: write only on the release-publish job of release.yml, which needs the gates job; never a write permission on a job reachable from pull_request), pull_request_target triggers, workflow-level paths-ignore or paths filters on ci.yml, missing concurrency cancel-in-progress, and missing timeout-minutes.
+- **PS-141-02.R02** The fast gate must contain jobs changes, install, spec-check, typecheck, test (unit, property, integration), offline (pnpm test:offline, fake network, under 30 s, on every pull request), build-pwa, offline-browser (pnpm test:offline:browser after build-pwa when pwa_changed), e2e-smoke and gate-summary, where every job after changes depends on changes and install.
+- **PS-141-02.R03** Branch protection requires the single check gate-summary, which runs with if: always() and passes only when every job succeeded or was skipped because of a changes output; it fails if any job failed, was cancelled or was skipped for any other reason.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | Every uses: references an action in the actions/ organization | QUALITY_CI_ACTION_FORBIDDEN |
+| V02 | Workflow has default permissions contents: read, any write permission only on an allowlisted job (nightly-report issues: write, release-publish contents: write) and none on a pull_request-reachable job, concurrency with cancel-in-progress true and timeout-minutes | QUALITY_CI_WORKFLOW_INVALID |
+| V03 | e2e job downloads the pwa-dist artifact and never runs the build | QUALITY_CI_ARTIFACT_MISSING |
+| V04 | ci.yml has no workflow-level paths-ignore; the changes job diffs against the fetched base; a docs-only change skips test jobs with gate-summary success; a change to any module.spec.yaml, planning/modules.yaml, planning/contracts/*.md or tools/specgen runs spec-check; secret scanning uses the same diff | QUALITY_CI_PATH_FILTER_WRONG |
+| V05 | Fast gate p95 duration is at most 10 min on a warm cache | QUALITY_CI_GATE_TOO_SLOW |
+| V06 | The fast gate runs pnpm test:offline on every pull request and pnpm test:offline:browser after build-pwa when pwa_changed, both counted by gate-summary, and weekly.yml runs load soak with timeout-minutes 90 on schedule only | QUALITY_CI_JOB_MISSING |
+| V07 | release.yml runs every evidence suite on the release commit, downloads all reports into one directory before gates:release, and runs release-publish only after GO | QUALITY_CI_RELEASE_EVIDENCE_MISSING |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-141-09.T02 | unit | PS-141-02.R01 | lint the good fixtures and 11 bad fixtures - third-party action, missing permissions, broad workflow permissions, issues: write on a pull_request job, contents: write outside release-publish, pull-requests: write anywhere, release-publish without needs on the gates job, workflow-level paths-ignore, pull_request_target, no concurrency, no timeout | good fixtures (nightly-report issues: write, release-publish contents: write) accepted; each bad fixture rejected with its code |
+| TEST-PS-141-09.T03 | unit | PS-141-02.R02, PS-141-03.R03, PS-141-04.R01 | parse ci.yml job graph and triggers | changes precedes all; install precedes test jobs; offline runs on every pull request; offline-browser and e2e-smoke need build-pwa; gate-summary has if: always(); triggers include push, pull_request, workflow_dispatch, schedules for nightly and weekly, and v* tags for release |
+| TEST-PS-141-09.T04 | integration | PS-141-02.R03, PS-141-03.R01 | simulate runs with one failed job, one job skipped by a changes output and one job skipped for another reason | gate-summary fails for the failure and for the unexplained skip, and passes for the changes skip |
+| TEST-PS-141-09.T15 | unit | PS-141-02.R02 | lint fixtures without the offline job, with offline-browser not counted by gate-summary, and with soak scheduled nightly at 60 min | each fails with QUALITY_CI_JOB_MISSING; the good weekly.yml with timeout-minutes 90 passes |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M02, F17.S01.M03, F17.S01.M04, F17.S02.M01, F17.S02.M02, F17.S02.M03, F17.S03.M02, F17.S03.M03, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

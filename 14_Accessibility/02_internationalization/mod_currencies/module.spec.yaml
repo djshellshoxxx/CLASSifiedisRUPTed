@@ -1,0 +1,229 @@
+id: F14.S02.M02
+scope: MVP
+summary: >-
+  Locale-aware display and input parsing of Money (CTR-MNY-001: a decimal string of minor units plus a currency
+  code). Amounts are validated with the canonical Money library F09.S03.M03 (parseMinor, at most 38 digits) and the
+  currency is the F09.S03.M01 CurrencyDef the caller resolved from the registry; a code missing from the registry
+  fails with COMMERCE_CURRENCY_UNKNOWN (MNY-2) and renders an explicit unavailable state. Formatting never converts
+  minor units to a JavaScript Number: the string is split into whole and fraction digits and formatted through
+  Intl.NumberFormat so values far beyond 2^53 stay exact. Approximate (converted) values are labelled with the code,
+  wording that matches the quote's provenance (provider, manual rate by a named issuer, unverified source, or the
+  N16 pinned rate agreed by all parties), the quote time and an expired marker taken from the quote's expiresAt and
+  status, for example "≈ 42.10 EUR, quote from ECB at 10:15" (CTR-UX-001 UX-4); without a source or time no
+  converted amount is shown. Every public function returns a Result. The module displays and parses only; it does
+  not convert, round or hold funds, and a displayed price is a claim, not a payment instruction.
+responsibilities:
+  - Format Money { amount, currency } for a locale with the F09.S03.M01 CurrencyDef (decimals) passed by the caller, using string splitting so no Number conversion occurs, with exactly decimals fraction digits and no rounding; return COMMERCE_CURRENCY_UNKNOWN when the caller found no CurrencyDef and I18N_MONEY_SPEC_MISMATCH when money.currency differs from the CurrencyDef code.
+  - Support display modes symbol, code and name; fiat currencies known to Intl use Intl currency style, and registered codes that Intl does not know (crypto such as BTC 8, ETH 18, USDC 6, up to 36 decimals) use decimal style plus the code isolated for bidi, with CurrencyDef.name as the currency name.
+  - Format approximate values from a QuoteLabel that the caller builds from an F09.S03.M02 FxQuote, with provenance wording (quote from <provider>, manual rate by <issuer>, unverified source, pinned rate agreed by all parties), the quote time in the viewer's time zone and an expired or revoked marker; without a source or time no converted amount is rendered.
+  - Parse user-typed amounts in a locale to minor-unit strings by normalizing to a neutral decimal string and calling F09.S03.M03 parseDecimal, rejecting more fraction digits than the decimals, mixed separators, ambiguous grouping and values above 38 digits instead of rounding silently.
+  - Expose parts (sign, currency, integer, group, decimal, fraction) so layouts can style the currency and fraction, and provide currencyName output used by the spoken names of F14.S01.M02.
+non_responsibilities:
+  - Currency registry and decimals (F09.S03.M01), FX rates and quotes (F09.S03.M02) and Money parsing, conversion arithmetic and rounding (F09.S03.M03).
+  - Message catalogs and locale negotiation (F14.S02.M01), which this module uses.
+  - Verifying quote signatures, collecting consent and resolving issuer pseudonyms (callers, using F09.S03.M02, the barter consent modules and F07 identity); this module only renders the result it is given.
+  - Storing the display preference (F15.S04.M03 LocalSettings.moneyDisplay; the PWA shell passes it in).
+  - Payments, balances and custody; the platform holds no funds and displayed amounts are claims between parties (CTR-COM-001).
+  - "Future: compact notation for large amounts, accounting-style negatives and per-region currency symbol preferences; MVP uses standard notation only."
+depends_on: [F14.S02.M01, F09.S03.M01, F09.S03.M02, F09.S03.M03, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
+user_stories:
+  - As a buyer in Germany, I see a EUR price as "45,00 €" and a US buyer sees "€45.00" for the same listing.
+  - As a user, a very large amount such as 12345678901234567890 minor units is shown with every digit correct.
+  - As a barter participant, an approximate converted value reads "≈ 42.10 EUR, quote from ECB at 10:15", and a rate my counterparty typed reads "manual rate by <their pseudonym>", so I know it is neither exact nor from a provider.
+  - As a user typing a price, "12,50" in a German locale is understood as 12.50 and "12.345" is rejected as ambiguous with the hint "use 12345 or 12,345" rather than read silently.
+  - As a barter participant, a rate we pinned into the proposal reads "pinned rate agreed by all parties" only once every party has consented, and an expired pinned rate tells me a re-quote needs new consent from all parties.
+edge_cases:
+  - Amount 5 minor units of a 2-decimal currency formats as 0.05, not 0.5 or 5.00.
+  - Negative amount -250 formats with the locale's minus sign and, when the whole part is zero (-5), keeps the sign (-0.05).
+  - Currency with 0 decimals (JPY) shows no fraction; 3 (KWD) shows three digits; ETH (18) shows 18 digits and a registered crypto asset with 36 decimals shows 36, with no trailing trim unless the caller requests trimming.
+  - Amount 9007199254740993 (above 2^53) formats exactly; a Number-based formatter would show ...992.
+  - The engine lacks exact decimal-string support in Intl.NumberFormat (older Safari); the BigInt part-substitution path is used and produces identical output.
+  - The quote has reached expiresAt or is revoked; the label adds 'expired quote' or 'revoked quote'; an unpinned quote offers a re-quote when online, while a pinned quote shows 're-quote needs new consent from all parties' instead of a refresh.
+  - A registered code that Intl does not know, such as USDC, is rendered through decimal style plus the code and CurrencyDef.name, never through Intl currency style which would throw; a code missing from the registry returns COMMERCE_CURRENCY_UNKNOWN and the price component shows 'amount unavailable, unknown currency <code>'.
+  - A JPY amount is passed with the EUR CurrencyDef; I18N_MONEY_SPEC_MISMATCH is returned instead of a value with the wrong exponent.
+  - A counterparty sends a manual quote whose source text is 'ECB'; it is rendered 'manual rate by <pseudonym>', never 'quote from ECB'.
+  - The quote source or time is missing; no converted amount is rendered and the caller shows the original-currency price with 'conversion unavailable'.
+  - Right-to-left locale; the amount is wrapped in bidi isolation so digits and symbol keep order inside RTL text.
+ux:
+  screens:
+    - "Price display components used in listing cards, offers, proposals and receipts, always with a currency symbol or code, and an explicit 'amount unavailable, unknown currency <code>' state for codes missing from the registry."
+    - "Money input field: label with currency, locale-aware decimal separator hint, inline errors for too many fraction digits, mixed separators and ambiguous grouping (with the hint 'use 12345 or 12,345' in the locale's separators)."
+    - "Approximate value chip: '≈ 42.10 EUR' with provenance wording and an info button that opens the quote source, issuer, manual reason, time and expiry; for an expired unpinned quote it offers Re-quote, for an expired pinned quote it shows 're-quote needs new consent from all parties'."
+  states: [formatted, approximate, expired-quote, conversion-unavailable, amount-unavailable, invalid-input, parsed]
+  a11y:
+    - Money input uses inputmode=decimal, a visible label including the currency, and errors linked with aria-describedby.
+    - The approximate chip's accessible name contains approximately, the amount with currency name, the provenance wording, the time and the expired marker when shown.
+    - The info button is at least 44×44 px and opens an accessible popover with focus management.
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; its types are Money (CTR-MNY-001, F09.S03.M03), the F09.S03.M01 CurrencyDef { code, kind fiat | crypto, decimals, name } supplied by callers from the registry, and QuoteLabel { source, sourceKind, issuerDisplay?, label?, signatureVerified, asOf, expiresAt, status, pinned? } built by callers from an F09.S03.M02 FxQuote.
+      - Amounts are canonical F09.S03.M03 minor-unit strings (optional leading minus, 1 to 38 digits, no leading zeros, never '-0') or bigint in code, and are never converted to floating point.
+      - Display output is derived data and is never stored or sent as the source of truth for an amount.
+    entities: []
+    note: >-
+      Pure formatting and parsing library; stores nothing and owns no catalog entity. QuoteLabel fields - source: FxQuote.source
+      (adapter ID such as ecb-daily, or the source string of a manual or relay quote); sourceKind: provider | manual | derived;
+      issuerDisplay: pseudonym of the manual issuer or display name of the signing relay, required for manual quotes and for
+      sources that are not catalog adapter IDs; label: FxQuote.label (manual reason, shown in the info popover);
+      signatureVerified: true only when the caller verified the source signature over the quote or this vault fetched it
+      through its own direct provider adapter; asOf, expiresAt: RFC 3339; status: issued | expired | revoked; pinned:
+      { consentCollected: boolean } when the quote is pinned into a signed proposal (N16). Adapter IDs map to display names
+      through catalog keys money.source.<adapterId> (ecb-daily -> ECB).
+  validation_rules:
+    requirements:
+      - Inputs are validated before formatting so the output is either exact or an explicit error, never a silently wrong number.
+      - Parsing refuses ambiguous or lossy input instead of rounding.
+      - Each failure has one stable error code usable in forms and tests; Money and currency errors reuse the F09.S03.M03 and F09.S03.M01 codes (N1) and only input and label errors specific to display or a locale use I18N_ codes.
+      - Group separators in typed text are accepted only when every group after the first has exactly 3 digits and the text also contains the locale decimal separator; text with group separators but no decimal separator is rejected with I18N_MONEY_AMBIGUOUS and the hint 'use 12345 or 12,345' written with the locale's separators.
+      - formatMoney, formatMoneyParts, formatApprox and parseMoneyInput return Err(I18N_MONEY_SPEC_MISMATCH), never a string, when money.currency differs from the CurrencyDef code, and Err(COMMERCE_CURRENCY_UNKNOWN) when the caller found no CurrencyDef for the code.
+    rules:
+      - "V01 | amount is canonical per F09.S03.M03 parseMinor and matches ^0$ or ^-?[1-9][0-9]{0,37}$ (1 to 38 digits, no leading zeros, no '-0') | COMMERCE_MONEY_INVALID"
+      - "V02 | spec is an F09.S03.M01 CurrencyDef with kind fiat and decimals 0 to 18 or kind crypto and decimals 0 to 36 (the range rule of F09.S03.M01 V03, same common code) | VALIDATION_FAILED"
+      - "V03 | parsed text has no more fraction digits than spec.decimals (F09.S03.M03 parseDecimal) | COMMERCE_MONEY_PRECISION_LOSS"
+      - "V04 | parsed minor-unit value has at most 38 digits (F09.S03.M03 bound) | COMMERCE_MONEY_OVERFLOW"
+      - "V05 | quote label has a source of 1 to 80 plain-text characters, sourceKind provider, manual or derived, valid RFC 3339 asOf and expiresAt with asOf not after expiresAt, status issued, expired or revoked, and issuerDisplay when sourceKind is manual or the source is not a catalog adapter ID | I18N_QUOTE_LABEL_INVALID"
+      - "V06 | an approximate value is never rendered without the currency code, the provenance wording and the time; when source or time is missing formatApprox returns an error and no converted amount is rendered | I18N_QUOTE_LABEL_INVALID"
+      - "V07 | money.currency === spec.code | I18N_MONEY_SPEC_MISMATCH"
+      - "V08 | the bare 'quote from <name>' wording is used only for a provider or derived quote with signatureVerified true whose source is a catalog adapter ID; manual quotes read 'manual rate by <issuer>', unverified quotes read 'unverified source', other verified sources add 'signed by <issuer>', and 'pinned rate agreed by all parties' appears only with pinned.consentCollected true | I18N_QUOTE_LABEL_INVALID"
+      - "V09 | typed text uses the locale decimal separator at most once and no separator other than the locale decimal and group separators (NBSP and narrow NBSP count as the fr group separator) | I18N_MONEY_SEPARATOR"
+      - "V10 | group separators appear only with 1 to 3 digits before the first and exactly 3 digits in every later group, and only when the locale decimal separator is also present | I18N_MONEY_AMBIGUOUS"
+      - "V11 | parsed value does not exceed the caller's maximum opts.max | I18N_MONEY_TOO_LARGE"
+      - "V12 | typed text is at most 40 characters before parsing | I18N_MONEY_INPUT_TOO_LONG"
+  workflow_state_machine:
+    requirements:
+      - Formatting is a pure function from (Money, CurrencyDef, locale, options) to a Result of a string and parts.
+      - Parsing is a pure function from (text, locale, CurrencyDef) to a Result of a minor-unit string, normalized to a neutral decimal string and built with F09.S03.M03 parseDecimal.
+      - There is no persisted lifecycle, so no entity state machine is declared.
+    machines: []
+    timeouts: []
+    note: "Stateless library; the only time-dependent logic is the expired-quote check now ≥ expiresAt, computed from an injected clock; status revoked or expired from the QuoteLabel also marks the quote."
+  commands_queries_events:
+    requirements:
+      - The module exposes library functions and no vault or relay commands, queries or events.
+      - All public functions return Result values, Ok with the string, parts or minor-unit amount for valid input and an AppError otherwise, never a silently wrong string.
+      - Formatting the same input twice returns identical output, so UI snapshots are stable.
+    commands: []
+    queries: []
+    note: >-
+      API: formatMoney(money, spec: CurrencyDef | null, locale, { display: symbol|code|name, trimZeros? }) -> Result<string,
+      AppError>; formatMoneyParts(...) -> Result<Part[], AppError>; formatApprox(money, spec, quote: QuoteLabel, locale,
+      { timeZone, now }) -> Result<{ text, expired: boolean, action: requote | requote_needs_consent | none }, AppError>;
+      parseMoneyInput(text, spec, locale, { max? }) -> Result<string, AppError>; currencyName(spec, locale, count) ->
+      Result<string, AppError> (Intl plural currency name for fiat, CurrencyDef.name for crypto). The display option comes from
+      F15.S04.M03 LocalSettings.moneyDisplay through the PWA shell; the default is symbol.
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "I18N_MONEY_TOO_LARGE | 422 | no | typed amount exceeds the caller maximum"
+      - "I18N_QUOTE_LABEL_INVALID | 422 | no | quote label malformed, missing source or time, or provenance fields inconsistent for an approximate value"
+      - "I18N_MONEY_SPEC_MISMATCH | 422 | no | money.currency differs from the CurrencyDef code passed in"
+      - "I18N_MONEY_SEPARATOR | 422 | no | typed amount uses mixed, repeated or misplaced separators for the locale"
+      - "I18N_MONEY_AMBIGUOUS | 422 | no | typed amount has group separators but no decimal separator"
+      - "I18N_MONEY_INPUT_TOO_LONG | 422 | no | typed text longer than 40 characters"
+    example: |
+      const eurDef = { code: "EUR", kind: "fiat", decimals: 2, name: "Euro" }, btcDef = { code: "BTC", kind: "crypto", decimals: 8, name: "Bitcoin" };
+      formatMoney({ amount: "4500", currency: "EUR" }, eurDef, "de") // Ok("45,00 €")
+      formatMoney({ amount: "4500", currency: "EUR" }, eurDef, "en") // Ok("€45.00")
+      formatMoney({ amount: "12345678901234567890", currency: "USD" }, usdDef, "en") // Ok("$123,456,789,012,345,678.90")
+      formatMoney({ amount: "100000000", currency: "BTC" }, btcDef, "en") // Ok("1.00000000 BTC")
+      formatMoney({ amount: "500", currency: "JPY" }, eurDef, "en") // Err(I18N_MONEY_SPEC_MISMATCH)
+      formatMoney({ amount: "500", currency: "XYZ" }, null, "en") // Err(COMMERCE_CURRENCY_UNKNOWN) -> "amount unavailable, unknown currency XYZ"
+      formatApprox({ amount: "4210", currency: "EUR" }, eurDef, { source: "ecb-daily", sourceKind: "provider", signatureVerified: true,
+        asOf: "2026-11-04T10:15:00Z", expiresAt: "2026-11-04T10:30:00Z", status: "issued" }, "en", { timeZone: "UTC", now: "2026-11-04T10:20:00Z" })
+        // Ok("≈ 42.10 EUR, quote from ECB at 10:15")
+      // same amount, manual quote from a counterparty claiming source "ECB": "≈ 42.10 EUR, manual rate by river-otter-42 at 10:15"
+      // relay-served quote whose signature did not verify: "≈ 42.10 EUR, unverified source relay-r7k3m at 10:15"
+      // pinned with consentCollected true: "≈ 42.10 EUR, pinned rate agreed by all parties, quote from ECB at 10:15"
+      // pinned and now ≥ expiresAt: "... expired quote", action requote_needs_consent ("re-quote needs new consent from all parties")
+      // source missing: Err(I18N_QUOTE_LABEL_INVALID) -> caller shows "€45.00, conversion unavailable"
+      parseMoneyInput("12,50", eurDef, "de") // Ok("1250");  parseMoneyInput("12,345", eurDef, "de") // Err(COMMERCE_MONEY_PRECISION_LOSS)
+      parseMoneyInput("12.345", eurDef, "de") // Err(I18N_MONEY_AMBIGUOUS, hint "use 12345 or 12,345")
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization and has no roles; it runs in the browser under the unlocked local principal.
+      - It reads no vault data itself; callers pass in the Money, the F09.S03.M01 CurrencyDef, the QuoteLabel and the display preference.
+      - Formatted strings are derived from data the viewer is already allowed to see and add no new disclosure.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Formatting is deterministic and idempotent, and never returns a string for an invalid amount; invalid input yields an explicit error value shown as a localized message.
+      - If the Intl implementation lacks exact decimal-string support, the BigInt part-substitution path produces identical output; a startup self-test verifies the two paths agree on 20 sample values, and on any disagreement the BigInt path is used for the rest of the session and a development warning is logged.
+      - If Intl.NumberFormat cannot format a registered currency code (not in Intl's currency list, such as USDC), the decimal style plus isolated code is used so a price is never blank; a code missing from the registry returns COMMERCE_CURRENCY_UNKNOWN and callers render the explicit 'amount unavailable, unknown currency <code>' state.
+    idempotency: "Pure functions; the same input and locale give the same output."
+    concurrency: "No shared mutable state except a bounded cache of at most 64 Intl.NumberFormat instances keyed by locale, currency and options, and the session flag set by the self-test."
+    retries: "Not applicable; no network or storage operations."
+    offline: "Fully offline; uses the browser's built-in Intl data and the bundled catalogs."
+    partial_failure: "A quote label missing its source or time returns Err(I18N_QUOTE_LABEL_INVALID); no converted amount is rendered and callers show only the original-currency price with the catalog text 'conversion unavailable'."
+  privacy_retention_abuse:
+    requirements:
+      - The module stores and transmits nothing, and formatted prices are never logged with user identifiers.
+      - Price display must not mislead, so an approximate value is rendered only with its full label (code, provenance wording, time and expired marker); without a source or time the converted amount is not rendered at all and callers show the original-currency price with 'conversion unavailable', and the UI never presents an approximate value as a payment amount.
+      - Quote source display names come from catalog keys for known adapter IDs; other source strings and issuer pseudonyms are rendered as plain text through F14.S02.M01 t() parameters (bidi-isolated, directional controls removed), never as links or markup.
+      - Quote wording reflects provenance, so a manual or unverified quote never borrows a provider's authority; manual quotes read 'manual rate by <issuer>', unverified quotes read 'unverified source', the bare 'quote from <name>' wording is reserved for verified catalog adapters, and 'pinned rate agreed by all parties' appears only when the caller passes pinned.consentCollected true (N16).
+    data:
+      - "Money values, CurrencyDef and quote metadata passed in: whatever class the owning record has; not stored here."
+    retention:
+      - "None; the format cache holds Intl objects only and is discarded on reload."
+    threats:
+      - "T01 | Misleading price display through rounding or Number precision loss | exact string-based formatting, no rounding, property tests up to 38 digits"
+      - "T02 | Approximate value shown as exact | V06 forbids rendering without marker, code, provenance and time; without them no converted amount is rendered; UI tests assert the label"
+      - "T03 | Spoofed text through bidi control characters in quote source or issuer names | names are passed as F14.S02.M01 t() parameters, which isolate them with FSI and PDI and remove directional controls when rendered"
+      - "T04 | Locale-based parsing mistakes causing wrong amounts (12.345 read as 12345) | V10 accepts group separators only with 3-digit groups and a decimal separator present; '12.345' in de is rejected with I18N_MONEY_AMBIGUOUS and a hint; excess fraction digits rejected by parseDecimal"
+      - "T05 | A counterparty borrows provider authority by labelling a manual or unsigned quote 'ECB' | V08 provenance wording; bare 'quote from' only for verified catalog adapters; 'manual rate by <pseudonym>'; 'unverified source'"
+      - "T06 | Expired or revoked quote shown as current, or a refresh offered on a pinned rate without fresh consent | expired marker from expiresAt and status; pinned quotes offer only 're-quote needs new consent from all parties' (N16, MNY-4)"
+    abuse_controls:
+      - "Input length is capped at 40 characters before parsing to avoid pathological regular expression cost; parsing uses a linear scan."
+  observability_performance:
+    requirements:
+      - CI reports golden-string and property test results; production builds send no metrics.
+      - Formatting one amount takes 0.05 ms or less at p95 after the formatter cache is warm.
+      - The module adds at most 3 KiB gzip to the initial bundle beyond the browser's built-in Intl and the F09.S03.M03 package.
+    metrics:
+      - "ci_i18n_money_golden_mismatch_total{locale, engine} (CI artifact)"
+      - "ci_i18n_money_property_runs_total (CI artifact)"
+    logs:
+      - "dev-only console.warn i18n.money.fallback {currency, reason} — no amounts; removed from production builds."
+      - "dev-only console.warn i18n.money.selftest_disagreement {sample index} — no amounts; the BigInt path stays active for the session."
+    budgets:
+      - "formatMoney p95 ≤ 0.05 ms warm, ≤ 1 ms cold; parseMoneyInput p95 ≤ 0.05 ms."
+      - "Self-test of both formatting paths ≤ 10 ms at startup."
+      - "Bundle addition ≤ 3 KiB gzip."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Property tests prove digit-exactness for random bigint amounts up to 38 digits in every shipped locale, for fiat decimals 0 to 18 and crypto decimals 0 to 36.
+      - Golden strings are generated with a pinned Node ICU version and cross-checked in Chromium and WebKit, with CLDR differences reviewed.
+    fixtures: "CurrencyDefs EUR 2, USD 2, JPY 0, KWD 3 (fiat) and BTC 8, ETH 18, USDC 6 and a registered test asset with 36 decimals (crypto); unregistered code XYZ; locales en, de, fr, es, ar-XB; amounts 0, 5, -5, 4500, -250, 9007199254740993, 12345678901234567890 and 38-digit values; QuoteLabels for a verified ecb-daily quote asOf 2026-11-04T10:15:00Z, a counterparty manual quote with source 'ECB', an unverified relay quote, pinned quotes with consentCollected true and false, an expired and a revoked quote; an allowlist of reviewed CLDR differences between Node, Chromium and WebKit with reviewer and date."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | golden strings for the fixture amounts and CurrencyDefs in en, de, fr, es | Ok strings equal reviewed goldens; 5 minor units shows 0.05; -5 keeps sign"
+      - "T02 | property | 01.R02,03.R01,06.R01,09.R02 | random bigint amounts 1..38 digits, fiat decimals 0..18 and crypto decimals 0..36, all shipped locales (10 000 runs nightly) | digits extracted from formatToParts without group separators equal the input digits exactly"
+      - "T03 | unit | 01.R02,06.R02,02.R03 | amount 9007199254740993 compared with a Number-based formatter | module output exact; naive Number output differs (documented counter-example)"
+      - "T04 | unit | 02.R02,02.R03,02.R05,03.R01,04.R02 | each rule V01–V12 violated, including '-0', '01', a 39-digit amount, ETH with decimals 37, and a JPY amount with the EUR CurrencyDef | the F09.S03.M03, F09.S03.M01, common VALIDATION_FAILED (V02, ETH with decimals 37) or I18N_ code of the rule returned as Err; I18N_MONEY_SPEC_MISMATCH for JPY with EUR from formatMoney, formatApprox and parseMoneyInput; no string produced"
+      - "T05 | unit | 06.R02,03.R03 | force the BigInt part-substitution path by stubbing resolvedOptions; run the startup self-test; then make the decimal-string path disagree on one sample | identical output on 20 samples including negatives with zero whole part; on disagreement the BigInt path is used for the rest of the session and the dev warning i18n.money.selftest_disagreement is logged"
+      - "T06 | unit | 02.R03,02.R05,06.R03 | BTC 8, ETH 18, USDC 6, the 36-decimal asset and EUR with their CurrencyDefs; code XYZ with spec null | registered codes unknown to Intl use decimal style plus isolated code; currencyName returns CurrencyDef.name for crypto and the Intl plural name for fiat; XYZ returns Err(COMMERCE_CURRENCY_UNKNOWN) and the price component renders 'amount unavailable, unknown currency XYZ'; no RangeError; never blank"
+      - "T07 | unit | 04.R01,04.R02,04.R03,05.R01,05.R02,05.R03 | inspect exports, calls to vault, relay or network, and authorization hooks | pure typed functions returning Result; no events or commands; no I/O"
+      - "T08 | unit | 02.R03,07.R02,07.R03 | formatApprox with a fresh verified quote, now ≥ expiresAt, status revoked, pinned with consentCollected true and false, pinned and expired, missing source, missing asOf, source with bidi characters | label has marker, code, provenance and time; 'expired quote' with action requote; 'revoked quote'; pinned wording only with consentCollected true; pinned and expired gives action requote_needs_consent and no refresh; missing source or time returns Err(I18N_QUOTE_LABEL_INVALID) with no converted amount and the chip shows the original price with 'conversion unavailable'; bidi isolated"
+      - "T09 | unit | 02.R02,02.R04,03.R02 | parseMoneyInput for '12,50' (de), '12.50' (en), '12,345' (de), '1.234,50' (de), '12.345' (de), '12,345' (en), '1 234,50' (fr with NBSP), '12.5.0', 41 characters, 39 digits, above the caller maximum; then the same input twice | 1250, 1250, COMMERCE_MONEY_PRECISION_LOSS, 123450, I18N_MONEY_AMBIGUOUS, I18N_MONEY_AMBIGUOUS, 123450, I18N_MONEY_SEPARATOR, I18N_MONEY_INPUT_TOO_LONG, COMMERCE_MONEY_OVERFLOW, I18N_MONEY_TOO_LARGE; identical Results for identical input; amounts built through F09.S03.M03 parseDecimal"
+      - "T10 | abuse | 07.R01,07.R02 | capture logs and network during formatting and parsing | no amounts, identifiers or network calls; UI never labels an approximate value as a payment amount"
+      - "T11 | a11y | 07.R03,02.R03 | axe and screen reader pass on the approximate chip and money input in en and ar-XB | zero serious findings; accessible name contains approximately, amount, provenance wording and time; targets ≥ 44 px"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 format calls warm and cold; bundle check | p95 ≤ 0.05 ms warm, ≤ 1 ms cold, ≤ 3 KiB gzip"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-112 requirement maps to a passing test"
+      - "T14 | unit | 10.R01,10.R03 | upgrade ICU data and golden file; roll back | changed goldens require review; stored amounts unaffected; rollback restores previous goldens"
+      - "T15 | contract | 01.R03 | render prices in every shipped locale during the listing, offer and proposal fixture flows, then scan stored records, outbox payloads and signed statements | every amount field is a canonical minor-unit string with a currency code; no formatted text, separators or symbols are stored or sent"
+      - "T16 | unit | 07.R04 | counterparty manual quote with source 'ECB' and issuerDisplay river-otter-42; relay-served provider quote with signatureVerified false; verified ecb-daily quote; verified provider quote with an uncatalogued source | 'manual rate by river-otter-42', never 'quote from ECB'; 'unverified source'; 'quote from ECB' through money.source.ecb-daily; 'quote from <source>, signed by <issuer>'; V08 holds in every case"
+      - "T17 | integration | 10.R02 | export and import F15.S04.M03 LocalSettings with moneyDisplay symbol, code and name, then with the invalid value emoji | each valid value survives and the shell passes it to formatMoney; the invalid value falls back to symbol"
+      - "T18 | e2e | 09.R03 | run the golden suite through Playwright in Chromium and WebKit | every string equals the Node golden or matches an allowlisted CLDR difference with reviewer and date; any unlisted difference fails"
+    acceptance:
+      - All tests T01–T18 pass in CI.
+      - Formatting is digit-exact for any amount up to 38 digits in every shipped locale (property test).
+      - Every approximate value is shown with currency, provenance wording and quote time, or the converted amount is not shown at all.
+  import_export_backup_rollback:
+    requirements:
+      - The module stores no user data; amounts in exports remain minor-unit strings as defined by CTR-MNY-001 and are never formatted text.
+      - The display preference (symbol, code or name) lives in F15.S04.M03 LocalSettings as the optional field moneyDisplay and travels with that module's vault export; the PWA shell reads it and passes it to formatMoney as the display option.
+      - Upgrades of locale data change only display strings, never stored values, so rollback needs no data migration.
+    export: "No module data is exported; moneyDisplay is part of the F15.S04.M03 LocalSettings vault export, and exported amounts stay minor-unit strings."
+    import: "F15.S04.M03 validates moneyDisplay against symbol, code or name; any other value is dropped and the default symbol is used."
+    backup: "Nothing to back up; the library ships with the app bundle and uses the browser's Intl data."
+    migration_rollback: "Golden files are versioned with the Node ICU pin; rollback restores the previous goldens and library with no data migration because stored amounts are independent of display."

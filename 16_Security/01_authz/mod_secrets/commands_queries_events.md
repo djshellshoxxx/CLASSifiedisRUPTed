@@ -1,35 +1,67 @@
-# PS-127-04 — commands queries events
+# PS-127-04 — Commands, queries and events: Secrets handling
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-04. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M02 Secrets handling](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/secrets` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the commands queries events process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-127-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-127-04.R01** loadSecret returns a Secret or a typed error and never returns the raw string to callers outside reveal().
+- **PS-127-04.R02** equalConstantTime compares byte arrays of equal length in time independent of content and returns false immediately only for length mismatch.
+- **PS-127-04.R03** The scanner CLI exits 0 with no findings and 1 with findings, printing rule ID, path and line but not the matched value.
+- **PS-127-04.R04** The verify-rewrap CLI reports the number of objects per data-key version and exits non-zero while any object remains on a version marked for removal.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| SECURITY_SECRET_MISSING | 500 | no | a required secret or a data-key version still in use is not configured; relay refuses to start |
+| SECURITY_SECRET_AMBIGUOUS | 500 | no | both environment and file forms are set for one secret |
+| SECURITY_SECRET_PERMISSIONS | 500 | no | secret file permissions, ownership or type are unsafe |
+| SECURITY_SECRET_WEAK | 500 | no | secret shorter than the manifest minimum |
+| SECURITY_SECRET_LEAK_DETECTED | 500 | no | CI scan found a secret-like value in the change set |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Library module with no commands, queries or events. API is loadSecret, checkSecretFile, Secret.reveal, equalConstantTime, hashToken, redact, the data-key rotation CLI (relay secrets rotate-data-key, relay secrets verify-rewrap) and the CI scanner CLI.
+
+### Example
+
+```
+RELAY_SECRET_DATA_KEY_V2_FILE=/run/secrets/data_key_v2 RELAY_SECRET_DATA_KEY_V1_FILE=/run/secrets/data_key_v1 node apps/relay/dist/main.js
+-> startup: data_key v2 loaded (file, 32 bytes); data_key v1 loaded (file, 32 bytes; 1 200 objects still wrapped)   [values never printed]
+$ relay secrets verify-rewrap -> v1: 0 objects, v2: 48 211 objects; v1 may be removed
+logger.info("session", { token: secret })           -> {"msg":"session","token":"[REDACTED]"}
+pnpm secrets:scan  -> SECURITY_SECRET_LEAK_DETECTED rule=classrup-secret-literal path=apps/relay/.env.example line=3 fingerprint=4f2a
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-127-09.T02 | unit | PS-127-02.R01, PS-127-02.R03, PS-127-04.R01, PS-127-05.R01 | missing, ambiguous, permissive, symlinked, short secrets; checkSecretFile on a 0644 relay key file | documented SECURITY_SECRET_* code each; relay does not start |
+| TEST-PS-127-09.T04 | unit | PS-127-04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch |
+| TEST-PS-127-09.T07 | integration | PS-127-04.R03, PS-127-09.R03 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file |
+| TEST-PS-127-09.T13 | integration | PS-127-03.R03, PS-127-03.R04, PS-127-04.R04 | rotate data key with 2 000 objects, interrupt at 1 200, SIGHUP after 301 s, remove v1 before verify reports zero, finish and verify | v1 stays loaded beyond 300 s; startup refuses with SECURITY_SECRET_MISSING naming v1 and 800 objects; verify-rewrap exits 1 then 0; v1 removable afterwards |
+
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

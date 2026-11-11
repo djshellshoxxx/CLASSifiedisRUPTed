@@ -1,35 +1,41 @@
-# PS-028-02 — validation rules
+# PS-028-02 — Validation rules: Service availability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-02. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F03.S01.M02 Service availability](SPEC.md) · **Scope:** MVP · **Code:** `packages/services/src/service_catalog/availability` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the validation rules process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-028-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-028-02.R01** Calendar input is validated strictly; zone names are checked against the bundled tz database, not against the device locale.
+- **PS-028-02.R02** Slot holds are validated for overlap including buffers, horizon, notice and exceptions before they are stored.
+- **PS-028-02.R03** Every violation maps to one stable error code with a localized message key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | timeZone is a canonical IANA name present in the bundled tz database | SERVICES_TZ_UNKNOWN |
+| V02 | weeklyRules windows are valid HH:mm, startLocal < endLocal, no overlap on a weekday, length multiple of slotMinutes | VALIDATION_FAILED |
+| V03 | buffers within 0..120, notice within 0..20160, horizon within 1..180 | VALIDATION_FAILED |
+| V04 | requested slot start is a generated slot at least minNoticeMinutes from now and within horizonDays | SERVICES_SLOT_UNAVAILABLE |
+| V05 | requested interval plus buffers overlaps no held or committed interval; a hold past expiresAt counts as expired even before the sweep runs | SERVICES_SLOT_UNAVAILABLE |
+| V06 | a client holds at most 3 active holds and a calendar has at most 50 active holds | SERVICES_HOLD_LIMIT |
+| V07 | exceptions has at most 200 items and each localDate is within the horizon plus 30 days | VALIDATION_FAILED |
+| V08 | holder is not blocked either way (F07.S02.M02 isBlockedEither) | BLOCKED_PARTY |
+| V09 | commit needs status held, expiresAt after now, needsReconfirmation false, and the interval still generated or kept | SERVICES_SLOT_UNAVAILABLE |
+| V10 | extend needs status held, no earlier extension, and a new expiresAt no later than now plus 24 hours | CONFLICT_STATE |
+| V11 | ttlMs within 300000..259500000 (5 minutes to 72 hours 5 minutes) | VALIDATION_FAILED |
+| V12 | publish_summary has privacy.consent.check(federation_publish, relayId) granted for every relay destination before signing | SERVICES_PUBLISH_CONSENT_MISSING |
+| V13 | summary input names only allowlisted fields, granularity slot or day_part, and windows within the next 14 days | VALIDATION_FAILED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-028-09.T02 | unit | PS-028-02.R01, PS-028-02.R02, PS-028-02.R03 | each rule V01–V13 violated | documented code returned and nothing stored |
+| TEST-PS-028-09.T03 | property | PS-028-01.R01, PS-028-02.R02, PS-028-09.R02 | random rules in every zone for 2026-2028 | derived slots are unique, ordered, non-overlapping, and no slot falls in a DST gap |
+| TEST-PS-028-09.T06 | integration | PS-028-02.R03, PS-028-06.R02 | two tabs hold overlapping slots simultaneously | exactly one succeeds, other SERVICES_SLOT_UNAVAILABLE |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F07.S01.M01, F07.S02.M02, F08.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

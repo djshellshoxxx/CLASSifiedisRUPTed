@@ -1,35 +1,98 @@
-# PS-094-03 — workflow state machine
+# PS-094-03 — Workflow state machine: Content flags
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-094-03. **Owner:** [12_Moderation/01_reporting/mod_flags](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S01.M01 Content flags](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/reporting/flags` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for flags within 01_reporting. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-094-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-094-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-094-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-094-03.R01** Reports follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
+- **PS-094-03.R02** Sync state advances only through local committed, prepared, transport_acknowledged (relay transport 2xx or mailbox acknowledgement) and peer_accepted (verified relay receipt bound to reportId and statement digest), and the UI never shows more than the reached state.
+- **PS-094-03.R03** A reporter can withdraw a report while it is filed or linked; withdrawal sends a signed withdrawal statement but cannot recall evidence the relay already holds.
+- **PS-094-03.R04** The relay sends a signed reportlinked statement when it attaches a received report to a case and a signed reportoutcome statement when that case closes, so the reporter's vault can reach linked and resolved and see the outcome actioned or no_action.
+- **PS-094-03.R05** A local hide is active from hide until the user's explicit unhide, which deletes the row so the item or author shows again at the next query; hiding again creates a new row, and withdrawing a report does not unhide its target.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Report lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **filed**; terminal **resolved**, **withdrawn**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-094-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| filed -> linked | verified classrup.moderation.reportlinked/v1 { reportId, caseRef } signed by the addressed relay (vault), or moderation.case.opened attaching the report (relay copy) | caseRef stored |
+| filed -> withdrawn | moderation.report.withdraw by reporter | withdrawal statement queued; local record kept |
+| linked -> resolved | verified classrup.moderation.reportoutcome/v1 with outcome actioned or no_action bound to reportId and caseRef (vault), or moderation.case.closed (relay copy) | outcome stored |
+| linked -> withdrawn | moderation.report.withdraw by reporter | relay told; case may continue on other evidence |
+| filed -> resolved | verified classrup.moderation.reportoutcome/v1 with outcome duplicate or content_removed_by_owner and no caseRef | outcome stored; caseRef stays empty |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> filed
+  filed --> linked: verified classrup.moderation.reportlinked/v1 { reportId, caseRef } signed by the addressed relay (vault), or moderation.case.opened attaching the report (relay copy)
+  filed --> withdrawn: moderation.report.withdraw by reporter
+  linked --> resolved: verified classrup.moderation.reportoutcome/v1 with outcome actioned or no_action bound to reportId and caseRef (vault), or moderation.case.closed (relay copy)
+  linked --> withdrawn: moderation.report.withdraw by reporter
+  filed --> resolved: verified classrup.moderation.reportoutcome/v1 with outcome duplicate or content_removed_by_owner and no caseRef
+  resolved --> [*]
+  withdrawn --> [*]
+```
+
+### ReportSyncState lifecycle
+
+Initial **local_committed**; terminal **peer_accepted**.
+
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| local_committed -> prepared | sync outbox builds and seals the statement for the addressed relay | statement bytes and statementDigest fixed; UI 'Saved on this device' |
+| prepared -> transport_acknowledged | relay HTTP 2xx for moderation.report.receive or mailbox put acknowledgement | relayReceivedAt stored as a relay-clock claim; UI 'Sent to relay' |
+| transport_acknowledged -> peer_accepted | verified classrup.moderation.reportreceipt/v1 bound to reportId and statementDigest | receipt stored; UI 'Relay acknowledged' |
+
+```mermaid
+stateDiagram-v2
+  [*] --> local_committed
+  local_committed --> prepared: sync outbox builds and seals the statement for the addressed relay
+  prepared --> transport_acknowledged: relay HTTP 2xx for moderation.report.receive or mailbox put acknowledgement
+  transport_acknowledged --> peer_accepted: verified classrup.moderation.reportreceipt/v1 bound to reportId and statementDigest
+  peer_accepted --> [*]
+```
+
+### LocalHide lifecycle
+
+Initial **active**; terminal **removed**.
+
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| active -> removed | moderation.localhide.remove by the local principal (explicit unhide) | row deleted; isHidden and filterHidden stop matching it at the next call |
+
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> removed: moderation.localhide.remove by the local principal (explicit unhide)
+  removed --> [*]
+```
+
+**Note:** A 2xx response that already carries the signed receipt records transport_acknowledged and then peer_accepted as two ordered writes in one vault transaction, so each state has its own trigger and no step is skipped.
+
+### Timeouts and scheduled transitions
+
+- Prepared statements retry delivery with CTR-IDM-001 backoff for up to 7 days, then show 'not delivered' with export and resend actions.
+- Relay side: a received report without a linked case after 24 h raises an operator metric.
+- Vault label sweep on app idle and before display removes advisory labels whose expiresAt has passed.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-094-09.T03 | property | PS-094-03.R01, PS-094-03.R02 | random sequences of transport results, receipts, link, outcome and withdrawal statements on one report | only declared transitions succeed; transport_acknowledged only after a relay 2xx or mailbox acknowledgement; peer_accepted only after a verified receipt bound to reportId and digest; no state is skipped |
+| TEST-PS-094-09.T04 | integration | PS-094-03.R03 | withdraw while linked | withdrawal statement queued, local record kept, relay case continues |
+| TEST-PS-094-09.T06 | integration | PS-094-04.R03, PS-094-03.R04 | case.opened then case.closed delivered twice on the relay | reports linked and resolved once; one reportlinked and one reportoutcome statement per reporter; the vault applies each once |
+| TEST-PS-094-09.T10 | integration | PS-094-03.R02, PS-094-06.R03 | relay offline for 8 days then back | UI shows not delivered after 7 days; manual resend reaches transport_acknowledged then peer_accepted |
+| TEST-PS-094-09.T16 | e2e | PS-094-03.R02, PS-094-08.R02 | mobile reporter files a report offline then reconnects | single report, delivery status progresses Saved, Sent, Relay acknowledged honestly, axe zero serious issues |
+| TEST-PS-094-09.T19 | integration | PS-094-03.R04 | report filed, case opened, moderation.action.apply with closeCase true | vault receives reportlinked then reportoutcome actioned and shows Resolved; status_for_reporter returns the same statements |
+| TEST-PS-094-09.T26 | integration | PS-094-04.R06, PS-094-03.R04 | a second reporter's report arrives after case C is open and is merged by F12.S02.M01; moderation.case.opened redelivered | link_case called in the intake transaction; the second reporter's vault receives one reportlinked for C and reaches linked; the fallback consumer sends nothing twice |
+| TEST-PS-094-09.T27 | contract | PS-094-04.R07, PS-094-01.R06, PS-094-03.R05, PS-094-02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault |
+
+## Dependencies
+
+Module depends on: F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,0 +1,202 @@
+id: F17.S02.M03
+scope: MVP
+summary: 'Test suite for client offline behavior under ADR-0016: the PWA is local-first, so offline is the normal state and a relay is optional. It verifies, against the owner F15.S01.M01 (N24), that the core works with no relay configured, that each locally committed record''s OutboxEntry moves through prepared, sending, transport_acknowledged and peer_accepted (plus conflict, failed, expired and discarded) with labels never stronger than the reached state, that retries follow CTR-IDM-001 IDM-4, that conflicts surface as the resolve-or-discard dialog and forks freeze the coordination, that vault lock keeps data encrypted and queued work intact, and that service worker caching never stores relay-authenticated responses. It runs partly as vitest tests with a fake network and IndexedDB shim and partly through Playwright network emulation.'
+responsibilities:
+- Provide a controllable fake network (online, offline, latency 2 s, 30 percent packet loss, connection reset mid-request) for unit and integration tests of the outbox.
+- 'Verify the F15.S01.M01 outbox behavior (CTR-IDM-001 IDM-4, IDM-5, IDM-7): delivery in seq order per destination and aggregateKey, the original cid (statements) or Idempotency-Key (relay commands) on every resend, IDM-4 retry (full jitter, base 500 ms, cap 30 s, retryAfterMs honoured, 6 attempts then failed with failureReason retry_exhausted, Retry now resets attempts), the day-6 expiry prompt and expiry at 7 days, and the 200-entry and 5 MiB per-principal caps (PLATFORM_OUTBOX_FULL).'
+- 'Verify conflict handling (IDM-5, F15.S01.M01): CONFLICT_REVISION or a peer rejection after reconnect surfaces the conflict dialog with exactly the actions Prepare a new version on theirs and Discard mine (plus Change relay in the outbox sheet); no option overwrites the peer''s signed revision and nothing is auto-merged; two conflicting signed promises (a fork) freeze the coordination with no resolve option (ADR-0016 section 5).'
+- 'Verify cache behavior: app shell available offline after first visit, relay-authenticated responses never served from or stored in Cache Storage, versioned cache cleanup on update.'
+- 'Verify vault lock and principal switch (F07.S01.M02, F15.S01.M02): in-memory keys are dropped, the IndexedDB vault stays encrypted and unreadable until unlock, OutboxEntry rows are kept but not sent, relay access tokens are dropped and the image partition is unbound; unlocking restores everything with zero entries lost; only Erase vault (F10.S01.M04) after an export prompt deletes vault data.'
+non_responsibilities:
+- The outbox and service worker implementations (F15.S01.M01 and F15.S01.M02).
+- General e2e journeys (F17.S01.M04).
+- Server-side fault injection (F17.S02.M02).
+- Receiver-side verification and quarantine of statements (F11.S01.M02); this suite only checks that the sender's entry shows the reported rejection.
+- Deleting vault data (F10.S01.M04 deletion flow behind Erase vault); this suite only proves lock and switch never delete.
+- 'Future: background sync on iOS when the platform supports it.'
+depends_on:
+- CTR-IDM-001
+- CTR-ERR-001
+- CTR-UX-001
+- CTR-TST-001
+- CTR-OBS-001
+- F17.S01.M01
+- F17.S01.M04
+- F15.S01.M01
+- F15.S01.M02
+- F15.S02.M03
+- F07.S01.M02
+- F10.S01.M04
+- F11.S01.M02
+- CTR-PRV-001
+- CTR-CAP-001
+user_stories:
+- As a user on a train, I create an offer offline, see it as Saved on this device, and after I reconnect it reaches the relay and the seller's vault applies it once.
+- As a user who locks my vault on a shared phone, my records stay encrypted and my queued statements wait, unsent, until I unlock again.
+- As a user whose listing was edited on another device, I get a clear choice when my queued edit conflicts.
+- As a developer, I run one command that proves cache and outbox behavior under flaky networks.
+edge_cases:
+- Connection drops after the relay committed but before the response arrived; a relay command resend returns the stored response under its Idempotency-Key and a statement resend is ignored as a duplicate cid, so no duplicate is created.
+- Two queued commands target the same entity; order is preserved and the second uses the revision from the first response.
+- An unsent entry reaches day 6; the expiry prompt lists it with Send now, Keep until expiry and Discard; at 7 days it moves to expired with its payload erased, is never sent, and a send attempt is refused with EXPIRED.
+- The service worker caches a relay-authenticated response by mistake; the test asserts network-only for such routes.
+- Storage quota is exceeded when queuing; the user is told and the command is not silently dropped.
+- The 201st entry, or one that would push queued payload past 5 MiB for the principal, is refused with PLATFORM_OUTBOX_FULL and shown to the user.
+- The vault locks with three entries queued; keys leave memory, records stay encrypted, entries are kept but not sent, relay access tokens are dropped and the image partition is unbound; unlocking restores everything and sending resumes with zero entries lost.
+- Two conflicting signed promises (a fork) arrive for one coordination; it is frozen and the dialog offers no option that picks a winner.
+- Browser reloads during replay; the outbox resumes from persisted state without double send.
+ux:
+  notes: 'Headless tests that assert user-visible states: the sync status chip with the F15.S01.M01 labels (Saved on this device, Delivered to relay, peer has not confirmed, Confirmed by peer, Needs attention), the failure banner with Retry now, the conflict dialog with exactly Prepare a new version on theirs and Discard mine, the day-6 expiry prompt, the lock screen and the offline shell. They check accessible names and aria-live announcements.'
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; it reads the OutboxEntry shape owned by F15.S01.M01 through the public API and never defines its own copy.
+    - Test fixtures create outbox entries through the production enqueue function so the schema is exercised as shipped.
+    - Network scenarios are described as data (sequence of online, offline, latency, loss steps) in tests/offline/scenarios/.
+    - 'The core must work with no relay configured: create, edit and search local records and sign statements offline; the sync status shows Saved on this device (local committed, OutboxEntry prepared) and never a relay or peer label without a verified receipt or acknowledgement.'
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - 'Every offline test must assert exactly-once effect: the receiving vault applies each statement once, identified by its cid, and a relay command takes effect once under its Idempotency-Key.'
+    - Conflict tests must assert that CONFLICT_REVISION or a peer rejection never produces a silent overwrite, that the dialog offers exactly Prepare a new version on theirs (a new entry with a new cid and expectedRevision = currentRevision) and Discard mine, that no option overwrites the peer's signed revision, and that a fork freezes the coordination with no resolve option.
+    - An unsent entry triggers the expiry prompt from day 6 and at 7 days moves to expired with its payload erased; it is never sent afterwards and a send attempt is refused with EXPIRED.
+    - The UI label for an entry is never stronger than the F15.S01.M01 label for its reached state, ranked by CONSISTENCY_STATES (Saved on this device, then Delivered to relay, peer has not confirmed, then Confirmed by peer); an overclaim is for example Confirmed by peer before peer_accepted, or any delivered wording at transport_acknowledged that does not say to relay, and fails with QUALITY_OFFLINE_OVERCLAIM.
+    - Outbox limits are asserted as F15.S01.M01 defines them, at most min(200, the local limit) entries and 5 MiB of payload per principal, and the next enqueue is refused with PLATFORM_OUTBOX_FULL and a visible message, never a silent drop.
+    rules:
+    - V01 | Receiving vault applies each queued statement exactly once per cid and a relay command takes effect once per Idempotency-Key | QUALITY_OFFLINE_DUPLICATE_EFFECT
+    - V02 | A conflict shows exactly Prepare a new version on theirs and Discard mine, no option overwrites the peer's signed revision, and a fork offers no resolve option | QUALITY_OFFLINE_SILENT_OVERWRITE
+    - V03 | Relay-authenticated responses (Authorization-bearing requests, mailbox and private media) are not present in Cache Storage | QUALITY_OFFLINE_AUTH_CACHED
+    - V04 | Unsent entries are prompted from day 6, expire at 7 days with payload erased and are never sent after expiry (EXPIRED) | QUALITY_OFFLINE_STALE_REPLAYED
+    - 'V05 | Each retry delay for attempt n is uniform in [0, min(30 s, 500 ms x 2^(n-1))], retryAfterMs is honoured, and after 6 attempts the entry is failed with failureReason retry_exhausted (IDM-4) | QUALITY_OFFLINE_BACKOFF_INVALID'
+    - V06 | No label is stronger than the F15.S01.M01 label for the reached state | QUALITY_OFFLINE_OVERCLAIM
+    - V07 | On vault lock and principal switch keys leave memory, vault data stays encrypted and unreadable until unlock, entries are kept but not sent, relay access tokens are dropped and the image partition is unbound; only Erase vault after an export prompt deletes vault data | QUALITY_OFFLINE_LOCK_UNSAFE
+    - V08 | The entry beyond min(200, local limit) or beyond 5 MiB of payload per principal is refused with PLATFORM_OUTBOX_FULL and shown, never silently dropped | QUALITY_OFFLINE_LIMIT_INVALID
+    - V09 | Entries for relay destinations carry only ciphertext for P2 and no P3 field, and enqueue of plaintext P2 or of P3 is refused | QUALITY_OFFLINE_PLAINTEXT_QUEUED
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle for the module; tests walk the F15.S01.M01 OutboxEntry states prepared, sending, transport_acknowledged, peer_accepted, conflict, failed, expired and discarded with that module's state-to-label table (the domain record itself is local committed; quarantine is a receiver-side status of F11.S01.M02, not an outbox state; CTR-IDM-001 IDM-7).
+    - Transitions are asserted in both unit tests with the fake network and a browser run with Playwright network emulation.
+    - A test ends only after the outbox is empty or in an explicit expected terminal state.
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:offline (fake network, no browser, under 30 s) and pnpm test:offline:browser (Playwright, Pixel 7 profile).
+    - The scenarios are offline_queue, flaky_replay, conflict_prompt, fork_freeze, expiry_prompt, retry_exhausted, outbox_full, cache_shell, quota_full, vault_lock and reload_during_replay.
+    - 'Exit codes: 0 pass, 1 assertion failure, 2 configuration failure.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_OFFLINE_DUPLICATE_EFFECT | 422 | no | a queued statement or relay command had its effect applied more than once (exit 1)
+    - QUALITY_OFFLINE_SILENT_OVERWRITE | 422 | no | a conflict was resolved without user choice, offered an option other than the two F15.S01.M01 actions, overwrote the peer's signed revision, or a fork was resolvable (exit 1)
+    - QUALITY_OFFLINE_AUTH_CACHED | 422 | no | relay-authenticated response found in Cache Storage (exit 1)
+    - QUALITY_OFFLINE_STALE_REPLAYED | 422 | no | an entry past its 7-day expiry was sent, or the day-6 prompt or the expiry did not happen (exit 1)
+    - QUALITY_OFFLINE_BACKOFF_INVALID | 422 | no | retry delays, attempt count or final state differ from CTR-IDM-001 IDM-4 (exit 1)
+    - QUALITY_OFFLINE_OVERCLAIM | 422 | no | a label is stronger than the F15.S01.M01 label for the reached state (exit 1)
+    - QUALITY_OFFLINE_LOCK_UNSAFE | 422 | no | vault lock or principal switch deleted data, left keys or relay tokens usable, sent entries while locked, or left the image partition bound (exit 1)
+    - QUALITY_OFFLINE_LIMIT_INVALID | 422 | no | outbox cap not enforced or an entry silently dropped (exit 1)
+    - QUALITY_OFFLINE_PLAINTEXT_QUEUED | 422 | no | an entry for a relay destination holds plaintext P2 or any P3 field (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:offline
+        TEST-PS-140-09.T03 flaky_replay: 10 resets, 1 effect   OK
+        TEST-PS-140-09.T05 cache_shell: auth responses cached = 0   OK
+        TEST-PS-140-09.T09 retry_exhausted: 6 attempts, delays within IDM-4 bounds, failed (retry_exhausted)   OK
+        TEST-PS-140-09.T08 vault_lock: keys dropped, 3 entries kept unsent, records unreadable until unlock   OK
+      $ pnpm test:offline:browser --grep conflict_prompt
+  authorization_capabilities:
+    requirements:
+    - 'Offline tests use real authorization: a queued statement signed by a key revoked while offline is refused or quarantined by the receiving vault (F11.S01.M02), and the sender''s entry shows the reported rejection as Needs attention with its reason; quarantine is the receiver''s status, not an outbox state.'
+    - 'On vault lock (F07.S01.M02) and principal switch, the suite asserts: in-memory keys are dropped; the vault in IndexedDB stays encrypted and unreadable until unlock; OutboxEntry rows are kept but not sent; relay access tokens are dropped; the principal''s image partition is unbound (CLEAR_USER_CACHES reason lock or principal switch, F15.S01.M02); a second principal on the device gets a separate vault; and only an explicit Erase vault (F10.S01.M04 deletion flow) after an export prompt may delete IndexedDB data.'
+    - No test uses an elevated relay role (operator, moderator); test principals are locally created identities.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Retry follows CTR-IDM-001 IDM-4 as F15.S01.M01 specifies it - each delay for attempt n is uniform in [0, min(30 s, 500 ms x 2^(n-1))], retryAfterMs is honoured when larger, after 6 attempts the entry moves to failed with failureReason retry_exhausted, and Retry now resets attempts; tests assert the bounds with a fake clock and a seeded jitter source.
+    - Resend is idempotent by construction (the same cid for statements, the same Idempotency-Key for relay commands); the test resends 1, 3 and 10 times across resets with identical results.
+    - A command that fails with a non-retryable error is not retried and is surfaced to the user.
+    idempotency: The suite proves resend idempotency by sending each queued entry up to 10 times across connection resets and asserting a single effect in the receiving vault (per cid) or relay test double (per Idempotency-Key).
+    concurrency: Two devices edit the same entity offline; the second replay receives CONFLICT_REVISION and the prompt appears; both orders are tested.
+    retries: Tests use the fake clock and a seeded jitter source to advance the IDM-4 backoff instead of waiting (base 500 ms, cap 30 s, full jitter, 6 attempts, then failed with retry_exhausted); real-time sleeps over 50 ms are forbidden.
+    offline: 'This module is about offline: the network is toggled by the fake network or Playwright setOffline.'
+    partial_failure: If replay stops midway (page reload), the outbox resumes from persisted state; the test verifies no lost and no duplicated commands.
+  privacy_retention_abuse:
+    requirements:
+    - Cached and queued data are synthetic; outbox entries for relay destinations contain only ciphertext for P2 and no P3 field, and an enqueue of plaintext P2 or of P3 is refused (F15.S01.M01, CTR-PRV-001 PRV-5), proven by a planted-leak test.
+    - Vault lock and principal switch keep the previous principal's vault encrypted and its outbox entries kept but neither shown nor sent; a locked vault's records are unreadable without unlock, unlocking restores them intact with zero entries lost, and only Erase vault after an export prompt deletes them.
+    - Browser traces from offline tests redact Authorization headers.
+    data:
+    - Synthetic outbox entries and cached public listings (P0/P1).
+    - No real credentials; test tokens are random and short-lived.
+    retention:
+    - Reports 14 days as CI artifacts; browser contexts are discarded after each test.
+    threats:
+    - T01 | Relay-authenticated response or vault data exposed to the next principal on a shared device | network-only routes for relay-authenticated requests; per-principal image partitions unbound on lock and principal switch; locked vault unreadable without unlock; tests assert all three
+    - T02 | Resend applies a statement twice, for example a payment claim recorded twice | exactly-once assertions by cid and Idempotency-Key across resets
+    - T03 | Queued command with stale authority executes after privilege revocation | replay re-checks authorization; test expects FORBIDDEN
+    - T04 | A sign-out style wipe destroys the user's only copy of records and queued signed statements | lock and principal switch never delete; only Erase vault after an export prompt deletes vault data; V07 fails a planted wipe on lock
+    abuse_controls:
+    - 'Quota-filling attempts: the test fills storage to 95 percent and expects a visible error rather than silent drop.'
+    - Outbox size is limited to 200 entries and 5 MiB of payload per principal (or the lower local limit); the next enqueue is refused with PLATFORM_OUTBOX_FULL and a visible message.
+  observability_performance:
+    requirements:
+    - 'The suite records resend latency after reconnect: first entry sent at most 2 s after connectivity returns on the fake network.'
+    - 'OBS-5 offline budget is asserted: the app shell loads offline after the first visit in at most 2.5 s on the 4G profile.'
+    - Fake network tests finish in at most 30 s; browser tests in at most 3 min on 2 vCPU.
+    metrics:
+    - classrup_quality_offline_tests_total{outcome}
+    - classrup_quality_offline_replay_latency_ms
+    - classrup_quality_offline_duplicate_effects_total
+    logs:
+    - JSON line per scenario {ts, level, msg, module, scenario, durationMs, code?} with no payloads.
+    budgets:
+    - Fake network suite at most 30 s; browser suite at most 3 min on 2 vCPU.
+    - First entry sent at most 2 s after reconnect; app shell offline load at most 2.5 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Planted bugs (resend with a new key, relay-authenticated response cached, a label stronger than the reached state, a third merge option, plaintext P2 queued for a relay) must fail the suite.
+    - pnpm test:offline runs in the F17.S03.M01 fast gate on every pull request, and pnpm test:offline:browser runs after build-pwa whenever the changes job reports apps/pwa changes; both report into gate-summary.
+    fixtures: FakeNetwork scenario files, FakeClock 2026-11-04T10:00:00Z, seeded jitter source, in-memory IndexedDB shim, Pixel 7 profile for browser tests, relay test double that counts effects per cid and per Idempotency-Key, principals P1 and P2 sharing one browser profile, a receiving vault double that reports rejections and forks.
+    tests:
+    - T01 | unit | 01.R01,01.R02,01.R03 | enqueue through production function with a scenario file | entry matches the OutboxEntry schema; scenario parses
+    - T02 | integration | 02.R01,06.R02 | resend one statement and one relay command across 10 connection resets | effect count is exactly 1 in the receiving vault (per cid) and in the relay double (per Idempotency-Key)
+    - T03 | integration | 02.R02,03.R01 | two devices edit the same entity offline then reconnect | second gets CONFLICT_REVISION and the conflict dialog shows exactly Prepare a new version on theirs and Discard mine; choosing the first enqueues a new entry with a new cid and expectedRevision = currentRevision; no option overwrites the peer's signed revision
+    - T04 | integration | 02.R03,06.R03 | advance the fake clock to day 6 and then past 7 days with an unsent entry; separately return a non-retryable error | the day-6 prompt lists the entry with Send now, Keep until expiry and Discard; at 7 days it is expired with payload erased, never sent, and a send attempt gives EXPIRED; the non-retryable error is not retried
+    - T05 | integration | 03.R02,03.R03 | walk prepared, sending, transport_acknowledged, peer_accepted, conflict, failed, expired and discarded with both harnesses | every state reached with its F15.S01.M01 label; quarantine appears only on the receiving vault; the outbox ends empty or in an expected terminal state
+    - T06 | unit | 04.R01,04.R02,04.R03 | run the scripts and read exit codes | fake-network suite under 30 s; browser variant runs scenario list; exit codes as documented
+    - T07 | e2e | 05.R01,05.R03 | revoke signing key while offline then reconnect | receiver refuses or quarantines the statement; the sender's entry shows Needs attention with the reported reason; no elevated role used
+    - T08 | e2e | 05.R02,07.R02 | P1 locks the vault with 3 queued entries and a relay access token; P2 unlocks its own vault; P1 unlocks again; finally P1 runs Erase vault | on lock in-memory keys are dropped, IndexedDB records stay encrypted and unreadable, the 3 entries are kept and not sent, relay access tokens are dropped and CLEAR_USER_CACHES reason lock unbinds the image partition; P2 sees only its separate vault; after unlock all records and the 3 entries are intact and sending resumes; IndexedDB data is deleted only by Erase vault after the export prompt
+    - 'T09 | unit | 06.R01 | fake clock and seeded jitter over failing attempts, one retryable response carrying retryAfterMs 45 s, then Retry now | each delay for attempt n = 1..6 lies in [0, min(30000, 500 x 2^(n-1))] ms, or equals retryAfterMs when larger; no 7th attempt happens; the entry is failed with retry_exhausted; Retry now resets attempts to 0 and sends'
+    - T10 | e2e | 09.R02 | plant a relay-authenticated response in cache | QUALITY_OFFLINE_AUTH_CACHED and suite fails
+    - T11 | abuse | 09.R02 | fill storage to 95 percent and enqueue; plant resend with a new key | visible quota error; the new-key bug fails with QUALITY_OFFLINE_DUPLICATE_EFFECT
+    - T12 | e2e | 08.R01,08.R02,08.R03 | reconnect on Pixel 7 4G profile and load shell offline | first replay within 2 s, shell within 2.5 s, browser suite within 3 min
+    - T13 | integration | 09.R01,09.R03 | traceability tool run and parse the fast-gate workflow | every requirement maps to a passing test; test:offline runs on every pull request; test:offline:browser runs after build-pwa when the changes job reports apps/pwa changes; both feed gate-summary
+    - T14 | integration | 10.R01,10.R02,10.R03 | export report and reuse scenario files in e2e | reports contain no user data; scenarios load in both harnesses
+    - T15 | e2e | 03.R01 | reload the page during replay | outbox resumes, no lost and no duplicate commands
+    - 'T16 | e2e | 01.R04 | no relay configured, network blocked - create and search records, sign a statement | works; status Saved on this device'
+    - T17 | e2e | 02.R04 | drive a statement through each sync state, then plant labels Confirmed by peer at transport_acknowledged and Delivered without to relay | each label equals the F15.S01.M01 label for the reached state (transport_acknowledged reads Delivered to relay, peer has not confirmed); both planted labels fail with QUALITY_OFFLINE_OVERCLAIM
+    - T18 | abuse | 07.R01 | planted leak - enqueue a plaintext P2 offer and a P3 address field for a relay destination, and plant a bypass of the enqueue check | both enqueues refused by F15.S01.M01; stored relay-destination entries contain only ciphertext; the bypass fails with QUALITY_OFFLINE_PLAINTEXT_QUEUED
+    - T19 | abuse | 07.R03 | scan every browser trace and HAR from the offline browser run | no Authorization header value and no relay access token present
+    - T20 | integration | 02.R02 | fork_freeze - two conflicting signed promises for one coordination arrive in both orders | coordination frozen; the dialog offers no option that picks a winner; nothing auto-merged
+    - T21 | integration | 02.R05 | outbox_full - enqueue 200 entries then one more, and separately a payload that passes 5 MiB for the principal | both refused with PLATFORM_OUTBOX_FULL and a visible message; nothing silently dropped
+    acceptance:
+    - An offer created offline is applied exactly once by the receiving vault after reconnect, even across repeated connection resets.
+    - A revision conflict shows exactly Prepare a new version on theirs and Discard mine, never overwrites the peer's signed revision, and a fork freezes the coordination.
+    - Relay-authenticated responses are never present in Cache Storage, vault lock keeps data encrypted and queued entries intact, and only Erase vault after an export prompt deletes vault data.
+    - Retry timing follows IDM-4 exactly and unsent entries expire at 7 days after the day-6 prompt.
+    - The app shell loads offline after first visit within the OBS-5 budget.
+  import_export_backup_rollback:
+    requirements:
+    - Reports are JUnit XML and reports/offline.json; no user data.
+    - Scenarios are plain data files and can be reused by the e2e module.
+    - Rollback is a git revert; no persistent state.
+    export: reports/offline.json and JUnit XML; scenario data files in tests/offline/scenarios/.
+    backup: Scenario files in git; reports 14 days in CI.
+    migration_rollback: Outbox schema changes are covered by F15.S01.M01; this module updates scenarios in the same pull request; rollback by git revert.
+    import: The suite imports scenario data files (JSON) that describe network steps; other inputs are rejected.

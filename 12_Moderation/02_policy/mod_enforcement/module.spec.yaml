@@ -1,0 +1,456 @@
+id: F12.S02.M01
+scope: MVP
+summary: >-
+  Relay-side moderation. Moderators of one relay work a case queue built from received reports, spam
+  detections, shill suspicions, high risk levels, operator-opened cases and host-policy records from hosting modules
+  (an auction void confirmed by two host moderators in F04.S02.M03), and apply actions that affect only
+  what that relay hosts: remove content from the relay's index, restrict a relay feature for a key, suspend a
+  key's access to the relay, or warn. A case can carry several actions. Every action carries policy rule IDs in
+  force at decision time and a relay-signed statement of reasons delivered to the affected key's mailbox, with
+  an appeal route and an expiry. The only statement that goes beyond the subject is an opt-in, expiring advisory
+  that other relays and vaults apply only under their own policy or subscription; moderation never issues
+  federation tombstones. There is no global suspension or takedown: copies in other vaults and on other relays
+  are outside this module, and statements say so. The subject's vault verifies received statements and derives
+  its own local events; users' local records are never touched.
+responsibilities:
+  - Own ModerationCase and EnforcementAction records on the relay, with case assignment, notes and closure, and the subject's verified copy of their own actions in the vault.
+  - Open cases from received reports (moderation.report.received), spam detections, shill suspicions, high risk levels and the operator command, and merge new reports about the same target into the open case.
+  - Apply relay-scoped actions (warn, remove from index, restrict feature, suspend relay access) with rule IDs, facts summary and expiry, never silently, several per case when needed.
+  - Produce and deliver the relay-signed statement of reasons (classrup.moderation.reasons/v1) and optionally an expiring advisory (classrup.moderation.advisory/v1) others may subscribe to.
+  - Revert actions on moderator decision, expiry or appeal overturn, replace them on an appeal outcome reduced, and publish the reversal and the advisory retraction.
+  - Verify received statements of reasons and reversals in the subject's vault and derive local moderation.action.applied and moderation.action.reverted events (EVT-9).
+  - Record host-policy EnforcementActions for hosting modules in-process through moderation.action.record_host_policy (auction voids from F04.S02.M03), opening a case with source auction_review when none is open for the auction and returning the actionId, so the void carries a statement of reasons and is appealable through F12.S01.M03.
+non_responsibilities:
+  - Policy rule text (F12.S02.M03); spam heuristics (F12.S02.M02); risk scoring (F12.S03.M01).
+  - Appeals handling and reviewer assignment (F12.S01.M03).
+  - Report intake, reporter statements and the report ledger (F12.S01.M01).
+  - Local hide and block in a user's vault (F12.S01.M01 and F07.S02.M02).
+  - Search index storage (F06.S01.M01 removes only the document named by targetRef when it consumes moderation.action.applied); relay-hosted profile copies (F07.S02.M02 stops serving its relay copy in relay runtime).
+  - Auction review, void decisions and void statements (F04.S02.M03); this module only records the host-policy action and its statement of reasons.
+  - Global takedown, global suspension, federation tombstones or any effect on other relays or vaults; those do not exist in this architecture.
+  - "Future: shared moderation queues between cooperating relays; transparency export per action (F18.S02.M02 consumes aggregate counts only)."
+depends_on: [F12.S02.M03, F12.S01.M01, F12.S01.M02, F12.S03.M03, F06.S01.M01, F08.S01.M01, F07.S02.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a relay moderator, I see one case per reported target with all reasons and evidence snapshots, and I apply one or more actions citing the rules they violate.
+  - As a member, I receive a signed statement saying what happened to my content on that relay, which rule applied, what I can do, and until when, and my vault keeps it even if the relay goes away.
+  - As a relay operator, I can open a case about an account, see every action and who decided it, and revert mistakes; reversals are published with the same transparency.
+edge_cases:
+  - Two moderators apply conflicting actions to the same case at once; the second returns CONFLICT_REVISION and sees the first action.
+  - The target is already deleted by its author before the action; the case closes with outcome content_removed_by_owner and no action is recorded.
+  - Suspend access is requested for a key that is the relay's only admin; refused with MODERATION_LAST_ADMIN_PROTECTED.
+  - The subject's mailbox is unreachable; the statement of reasons is stored for retrieval and the action stays pending_notice until the mailbox acknowledges it or 24 h pass, except for imminent-harm rules where effect is immediate and notice follows.
+  - A permanent suspension is attempted by a moderator; only an operator can apply it, and an expiry of at most 90 days applies for moderators.
+  - Removal from the index is applied but a federation peer already holds a copy; no tombstone is sent, the optional advisory is only advice for subscribers, and the statement of reasons says copies already fetched cannot be recalled.
+  - A key is restricted on the relay and moves to another relay; the action has no effect there, and the old relay's advisory is only advice.
+  - A moderator cites a rule version that is published but scheduled for next week; refused with MODERATION_RULE_REQUIRED because the version is not yet in force.
+  - A suspended key wants to appeal; appeal filing, own-action reads and own-evidence reads stay allowed and cannot be listed as restricted capabilities.
+  - F04.S02.M03 confirms an auction void while a report case about the same auction is open; record_host_policy attaches to that case instead of opening a second one, records the action with source auction_review and returns its actionId; a retry with the same reviewId returns the same actionId.
+  - An auction document was already removed from the relay index at close; the host-policy remove_from_index is still recorded with its statement of reasons, and its index effect is a no-op.
+  - The relay operator uploads a prohibited-goods pack (F18.S01.M02 relay_upload) that retires a rule cited, through a prohibited_goods policy rule, by an action on an open case; the case gets a policy-change review flag, the action stays until a moderator reverts it, and a vault-scope copy of the event changes nothing.
+ux:
+  screens:
+    - "Case queue: filter by status, source, reason, age, assignee; deadline, appeal and policy-change review badges; reporter identities hidden unless the case view is opened."
+    - "Case view: reports grouped by target, evidence snapshots (F12.S01.M02), signals summary, rule picker showing only versions in force, list of actions already applied on the case, action form with expiry and facts summary, close case with outcome."
+    - "Operator 'Open case' form: subject key, target type (including account), target id, reason, optional snapshots."
+    - "Action confirmation dialog: preview of the statement of reasons exactly as the subject will see it."
+    - "Subject notice: signed statement of reasons with rule IDs, plain-language explanation, 'what this does not affect', appeal button and deadline."
+  states: [loading, empty-queue, assigned, deciding, pending-notice, applied, reverted, expired, conflict]
+  a11y:
+    - Queue and action forms are fully keyboard operable with visible focus.
+    - Status changes are announced in an aria-live polite region.
+    - Destructive actions use buttons of at least 44 by 44 px with confirmation naming the action and the rule.
+processes:
+  domain_schema:
+    requirements:
+      - A ModerationCase stores subject target and key, source, linked report receipt IDs and snapshot IDs, action IDs, assignee, status and outcome, with tenant and revision per CTR-ID-001.
+      - An EnforcementAction stores kind, target, scope, policy rule IDs with versions, facts summary, decider, expiry, statement-of-reasons content id and issue time, and status; actions are never silent and always carry rule IDs.
+      - Cases and actions are P2 between the relay's moderators and the subject, retained under RET-EVIDENCE, and never federated; the only outward statements are the subject's statement of reasons and reversal and the opt-in advisory with its retraction.
+      - A case can carry several actions (for example removal plus a warning) and stays assigned after an action until a moderator closes it, unless the apply asks to close it.
+      - "Every action stores targetRef { type, id, cid? } naming exactly the content it concerns (cid is the signed projection's content id when known, for a listing its statementCid), so index and hosting consumers act only on that item, and type account is the only form that concerns every document of the subject key."
+      - A host-policy action recorded for a hosting module is an ordinary relay action with caseSource auction_review, kind remove_from_index, targetRef { type auction, id auctionId }, the seller as subjectKey, in-force ruleRefs, a factsSummary, the confirming moderator as deciderKey and the proposing moderator as proposerKey, so it has a statement of reasons and an appeal route like any other action.
+    entities:
+      - name: ModerationCase
+        schema: classrup.moderation.case/v1
+        storage: relay
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "subjectKey: did:key — author or account key the case concerns"
+          - "targetType: enum — listing | auction | message | profile | review | bid | offer | attachment | cycle_proposal | account"
+          - "targetId: string — content uuidv7, or the subject did:key for targetType account"
+          - "reportRefs: string[] — up to 200 report receipt IDs from F12.S01.M01; reporter identities not stored here"
+          - "snapshotIds: uuidv7[] — up to 20 EvidenceSnapshot IDs"
+          - "actionIds: uuidv7[] — up to 10 EnforcementAction IDs applied on this case"
+          - "source: enum — report | spam_detection | shill_suspicion | risk_review | operator | auction_review"
+          - "openReason?: string — 10..500 code points, operator-opened cases"
+          - "assigneeKey?: did:key — moderator working the case"
+          - "status: enum — open | assigned | resolved"
+          - "outcome?: enum — actioned | no_action | duplicate | content_removed_by_owner"
+          - "notes: string[] — internal notes, each ≤ 2000 code points, max 100"
+          - "reviewFlags?: object[] — up to 20 { reason: prohibited_rule_changed, publisherId, ruleKey, ruleId, change: activated|retired|emergency_expired, citedRuleRef, flaggedAt } set from relay-scope governance.prohibited_rule.changed; shown as a queue badge until the case is resolved; never change an action"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "openedAt: timestamp — RFC 3339 UTC, relay clock"
+          - "closedAt?: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one non-resolved case exists per (tenantId, targetType, targetId).
+          - status resolved implies outcome is set; outcome actioned implies actionIds is not empty.
+          - Notes and reporter references are never included in any statement sent to the subject.
+      - name: EnforcementAction
+        schema: classrup.moderation.enforcementaction/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "caseId: uuidv7 — ref ModerationCase"
+          - "kind: enum — warn | remove_from_index | restrict_feature | suspend_relay_access"
+          - "subjectKey: did:key — affected key"
+          - "targetType: enum — as ModerationCase.targetType"
+          - "targetId: string — content id or subject key for account actions"
+          - "targetRef: object — { type: targetType, id: targetId, cid?: content id (sha256-…) of the exact signed projection the action concerns, for a listing the projection statementCid }; always set; type account means every document of subjectKey on this relay"
+          - "restrictedCapabilities?: string[] — relay capabilities denied, 1..20, never the protected appeal, own-read, export or deletion capabilities"
+          - "ruleRefs: string[] — policy rule IDs with versions in force at appliedAt, e.g. POL-SPAM-001@2, 1..5 required"
+          - "factsSummary: string — 50..2000 code points shown to the subject"
+          - "deciderKey?: did:key — moderator who decided; relay copy only, recorded for appeal independence; absent in the vault copy"
+          - "proposerKey?: did:key — host-policy records only: the moderator who proposed the decision the decider confirmed (F04.S02.M03 two-moderator rule); relay copy only, checked for appeal independence like deciderKey"
+          - "caseSource: enum — the case source at apply (report | spam_detection | shill_suspicion | risk_review | operator | auction_review); auction_review marks a host-policy record"
+          - "hostRef?: string — host-policy records only: id of the hosting module record (auction review id), unique per (tenantId, caseSource)"
+          - "automated: boolean — true only for deterministic velocity throttles; others always have a human decider"
+          - "expiresAt?: timestamp — max 365 days for restrict, 90 days for suspend by moderators, absent only for operator-applied permanent suspension"
+          - "reasonsStatementCid: string — content id of the relay-signed statement of reasons"
+          - "reasonsIssuedAt: timestamp — relay-signed issue time of the statement of reasons (starts the appeal window)"
+          - "noticeState: enum — prepared | transport_acknowledged (subject mailbox acknowledgement of the statement)"
+          - "advisoryCid?: string — content id of the published advisory, when publishAdvisory was set"
+          - "replacesActionId?: uuidv7 — the contested action this one replaces after an appeal outcome reduced"
+          - "status: enum — pending_notice | active | reverted | expired"
+          - "revertReason?: enum — moderator_decision | appeal_overturned | appeal_reduced | error_correction | expired"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "appliedAt: timestamp — RFC 3339 UTC, relay clock"
+        invariants:
+          - Every action has 1..5 ruleRefs that F12.S02.M03 reported in force at appliedAt, a factsSummary, a reasonsStatementCid and a reasonsIssuedAt.
+          - kind is never a hidden or shadow restriction; the subject can always retrieve the statement of reasons.
+          - deciderKey's principal differs from the subject's and from the reviewer of any appeal on the action.
+          - status expired implies revertReason expired; a replacement action references a contested action whose revertReason is appeal_reduced.
+          - caseSource auction_review implies kind remove_from_index, targetRef.type auction, hostRef, deciderKey and proposerKey set with different principals, and at most one action per (tenantId, hostRef).
+    sql: |
+      CREATE TABLE moderation_case (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL, assignee_key TEXT, revision INTEGER NOT NULL,
+        opened_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_case_open ON moderation_case(tenant_id, target_type, target_id) WHERE status != 'resolved';
+      CREATE TABLE moderation_action (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, case_id TEXT NOT NULL, kind TEXT NOT NULL, subject_key TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT, replaces_action_id TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX moderation_action_subject ON moderation_action(tenant_id, subject_key, status);
+      CREATE INDEX moderation_action_case ON moderation_action(tenant_id, case_id);
+  validation_rules:
+    requirements:
+      - Action input is validated strictly, and rule references, facts summary and expiry are mandatory.
+      - Role limits (moderator versus operator) and last-admin protection are checked before persistence.
+      - Every violation maps to one stable error code.
+      - Rule references must be versions in force at the decision time, and restricted capabilities may never include the appeal, own-action read, subject evidence read, export or deletion capabilities.
+      - A host-policy record is accepted only for a registered source and kind (auction_review with remove_from_index), with two different moderators whose principals differ from the subject, and is not refused because the target is no longer in the relay index.
+    rules:
+      - "V01 | kind is allowed and ruleRefs has 1..5 rule versions that F12.S02.M03 moderation.policyrule.check_citable reports in force at the decision time | MODERATION_RULE_REQUIRED"
+      - "V02 | factsSummary 50..2000 code points and contains no reporter identity or internal note text | VALIDATION_FAILED"
+      - "V03 | expiresAt within limits: restrict ≤ 365 days, suspend by moderator ≤ 90 days, permanent only for operator | MODERATION_ACTION_LIMIT"
+      - "V04 | the subject key is not the relay's last admin or operator key | MODERATION_LAST_ADMIN_PROTECTED"
+      - "V05 | case is open or assigned and expectedRevision matches | CONFLICT_REVISION"
+      - "V06 | decider is an assigned moderator whose principal (F07.S02.M01 key set and the relay moderator registry) is neither the case subject nor the reporter of any linked report (F12.S01.M01 moderation.report.ledger_for_case) | FORBIDDEN"
+      - "V07 | remove_from_index targets content currently in this relay's index (F06.S01.M01); host-policy records (caseSource auction_review) are exempt and their index effect is a no-op when no document exists | NOT_FOUND"
+      - "V08 | restrictedCapabilities lists 1..20 capabilities of this relay and none of moderation.appeal.receive, moderation.appeal.withdraw, moderation.appeal.read_status_own, moderation.action.read_own, moderation.evidence.read_as_subject or any privacy export or deletion capability | MODERATION_CAPABILITY_PROTECTED"
+      - "V09 | a replacement for an appeal outcome reduced has a kind no more severe and an expiry no later than the contested action | VALIDATION_FAILED"
+      - "V10 | case.open has a did:key subjectKey, a targetType in the enum (account allowed), a reason of 10..500 code points and at most 20 snapshotIds | VALIDATION_FAILED"
+      - "V11 | case.close with outcome actioned requires at least one action on the case; no_action, duplicate and content_removed_by_owner require none to be active | CONFLICT_STATE"
+      - "V12 | record_host_policy has source auction_review, kind remove_from_index, targetRef.type auction with a uuidv7 id, a did:key subjectKey, a hostRef, and deciderKey and proposerKey of two relay moderators whose principals (F07.S02.M01 key set) differ from each other and from the subject | VALIDATION_FAILED"
+      - "V13 | an action targetRef has type equal to targetType and id equal to targetId, and cid, when present, is a sha256- content id | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Cases and actions follow the declared lifecycles and any other transition is refused with CONFLICT_STATE.
+      - An action takes effect only after its statement of reasons is transport_acknowledged by the subject's mailbox or 24 hours have passed since apply, except imminent-harm rules where effect is first and notice follows within 24 h.
+      - Revert and expiry restore the relay-side effect, publish the reversal and, when an advisory was published, a signed advisory retraction; they never alter the original statement.
+      - An appeal outcome reduced reverts the contested action with reason appeal_reduced and applies a new linked action with the reduced kind, expiry and capabilities and a new statement of reasons in one relay transaction.
+      - Advisories carry the action's expiresAt, and subscriber vaults drop them at expiry or on the verified retraction.
+    machines:
+      - entity: ModerationCase
+        initial: open
+        terminal: [resolved]
+        transitions:
+          - "open -> assigned | moderation.case.assign by moderator or operator, or moderation.action.record_host_policy | assigneeKey set (the confirming moderator for a host-policy record)"
+          - "assigned -> open | moderation.case.assign with empty assignee | assignee cleared"
+          - "open -> resolved | moderation.case.close | outcome no_action, duplicate or content_removed_by_owner; emits moderation.case.closed"
+          - "assigned -> resolved | moderation.case.close, or moderation.action.apply or moderation.action.record_host_policy with closeCase true | outcome set (actioned needs at least one action); emits moderation.case.closed"
+      - entity: EnforcementAction
+        initial: pending_notice
+        terminal: [reverted, expired]
+        transitions:
+          - "pending_notice -> active | reasons statement transport_acknowledged by the subject's mailbox, or 24 h since apply, or imminent-harm rule (at apply), or replacement for an appeal outcome reduced (at apply) | effect applied on relay; emits moderation.action.applied"
+          - "active -> reverted | moderation.action.revert, or moderation.appeal.decided overturned | effect removed; reversal statement and, if an advisory exists, advisory retraction issued; emits moderation.action.reverted"
+          - "active -> expired | expiry sweep at expiresAt | effect removed; advisory retraction issued if an advisory exists; emits moderation.action.reverted with reason expired"
+          - "pending_notice -> reverted | moderation.action.revert before notice, or moderation.appeal.decided overturned or reduced | no effect was applied; reversal statement issued"
+    note: "Appeal outcome reduced on an active action uses active -> reverted with revertReason appeal_reduced; in the same transaction the replacement action is created with replacesActionId and goes pending_notice -> active at apply, and the events are emitted in the order reverted, applied."
+    timeouts:
+      - "Expiry sweep every 60 s moves active actions with expiresAt ≤ now to expired."
+      - "pending_notice actions become active 24 h after apply even if the mailbox never acknowledged, with the statement available by query."
+      - "Cases open for 14 days without an assignee raise an operator alert metric."
+  commands_queries_events:
+    requirements:
+      - Every command declares whether it is a relay command or a vault-local intake and which signed statements it produces.
+      - Case opening is driven by consumed events (received reports through moderation.report.received, spam detections, shill suspicions, high risk levels) and by the operator command moderation.case.open, and emits moderation.case.opened in the same transaction as the case.
+      - Apply and revert emit action events in the same transaction, and the statement of reasons is stored before the event is dispatched.
+      - A subject's vault verifies received classrup.moderation.reasons/v1 and reversal/v1 statements and derives local moderation.action.applied and moderation.action.reverted events (EVT-9, actor.kind federated) with the same target fields and without deciderKey.
+      - Action events carry the target, restricted capabilities, rule references, expiry, statement content id and issue time that appeals, limits, signals, index and notification consumers need.
+      - "moderation.action.applied and moderation.action.reverted always carry targetRef { type, id, cid? } and caseSource, and the relay-signed reasons/v1 and reversal/v1 statements carry relayId, actionId and targetRef (for a listing, id listingId and cid the projection statementCid), so F06.S01.M01 removes only the targeted document and F01.S01.M03 binds each notice to one delivery."
+      - "moderation.action.applied and moderation.action.reverted affect only the acting relay's hosted copy: relay consumers (F06.S01.M01 index, F07.S02.M02 profile hosting, F16.S01.M01 authorization caches) apply them in relay runtime only, and vault-origin copies derived from verified statements are informational and never change vault records."
+      - moderation.action.record_host_policy is the in-process relay command a hosting module calls in its own decision transaction (F04.S02.M03 confirm_void); it opens or reuses the case for the auction with source auction_review, applies the action, optionally closes the case, and returns actionId and caseId, which the hosting module stores to match moderation.appeal.decided.actionId.
+      - "governance.prohibited_rule.changed is consumed in relay runtime only with scope relay (the relay's own applied pack after F18.S01.M02 relay_upload; vault-scope copies are ignored): each open or assigned case with an action citing a policy rule version whose F12.S02.M03 prohibitedRuleRef has the event's (publisherId, ruleKey) gets one review flag for moderator review, and the flag never reverts or changes an action by itself."
+      - "The action kind enum (warn, remove_from_index, restrict_feature, suspend_relay_access) and the origin enum (relay, vault) of moderation.action.applied and moderation.action.reverted are a stable v1 vocabulary bound by the F18.S02.M02 transparency dimensions and its contract test T22; adding, renaming or removing a value is a breaking change that needs a new major event schema (CTR-SCH-001 SCH-3) coordinated with F18.S02.M02."
+    commands:
+      - name: moderation.case.open
+        mode: "relay command (operator); returns the existing open case for the same target instead of creating a second one"
+        capability: moderation.case.open
+        input: "{ subjectKey, targetType, targetId, reason, snapshotIds? }"
+        output: "{ caseId, revision, merged: boolean }"
+        errors: [VALIDATION_FAILED, FORBIDDEN]
+        emits: [moderation.case.opened]
+        idempotent: true
+      - name: moderation.case.assign
+        mode: "relay command"
+        capability: moderation.case.assign
+        input: "{ caseId, expectedRevision, assigneeKey? }"
+        output: "{ caseId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: moderation.case.close
+        mode: "relay command; reportlinked and reportoutcome statements to reporters are produced by F12.S01.M01 from moderation.case.closed"
+        capability: moderation.case.close
+        input: "{ caseId, expectedRevision, outcome: actioned|no_action|duplicate|content_removed_by_owner, note? }"
+        output: "{ caseId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: [moderation.case.closed]
+        idempotent: true
+      - name: moderation.action.apply
+        mode: "relay command; produces classrup.moderation.reasons/v1 (sealed to the subject's mailbox) and, when publishAdvisory, classrup.moderation.advisory/v1 (public, expiresAt equal to the action expiry)"
+        capability: moderation.action.apply
+        input: "{ caseId, expectedRevision, kind, subjectKey, targetType, targetId, targetCid?, restrictedCapabilities?, ruleRefs[], factsSummary, expiresInMs?, publishAdvisory?: boolean, closeCase?: boolean } — the action stores targetRef { type: targetType, id: targetId, cid: targetCid }"
+        output: "{ actionId, revision, reasonsStatementCid, reasonsIssuedAt, status }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MODERATION_RULE_REQUIRED, MODERATION_ACTION_LIMIT, MODERATION_LAST_ADMIN_PROTECTED, MODERATION_CAPABILITY_PROTECTED, FORBIDDEN, DEPENDENCY_UNAVAILABLE]
+        emits: [moderation.action.applied, moderation.case.closed]
+        idempotent: true
+      - name: moderation.action.record_host_policy
+        mode: "relay-local, in-process from hosting modules in their decision transaction (F04.S02.M03 auctions.review.confirm_void); produces classrup.moderation.reasons/v1 sealed to the subject's mailbox; not routable over HTTP"
+        capability: moderation.action.record_host_policy
+        input: "{ source: auction_review, hostRef: reviewId, kind: remove_from_index, subjectKey: seller did:key, targetRef: { type: auction, id: auctionId, cid?: auction terms cid }, ruleRefs[] (1..5 in force), factsSummary, deciderKey (confirming moderator), proposerKey (proposing moderator), expiresInMs?, closeCase?: boolean (default true) }"
+        output: "{ actionId, caseId, revision, reasonsStatementCid, reasonsIssuedAt, status, created: boolean }"
+        errors: [VALIDATION_FAILED, MODERATION_RULE_REQUIRED, MODERATION_ACTION_LIMIT, FORBIDDEN, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [moderation.case.opened, moderation.action.applied, moderation.case.closed]
+        idempotent: true
+      - name: moderation.action.revert
+        mode: "relay command; produces classrup.moderation.reversal/v1 and, when an advisory exists, classrup.moderation.advisoryretraction/v1, both signed by the relay"
+        capability: moderation.action.revert
+        input: "{ actionId, expectedRevision, reason: moderator_decision|error_correction }"
+        output: "{ actionId, revision, reversalStatementCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN]
+        emits: [moderation.action.reverted]
+        idempotent: true
+      - name: moderation.action.receive
+        mode: "vault-local intake of classrup.moderation.reasons/v1 and classrup.moderation.reversal/v1 from the mailbox or the get_mine query; derives local events (EVT-9)"
+        capability: moderation.action.receive
+        input: "{ statement }"
+        output: "{ actionId, status, quarantined: boolean }"
+        errors: [FORBIDDEN, VALIDATION_FAILED, CONFLICT_STATE]
+        emits: [moderation.action.applied, moderation.action.reverted]
+        idempotent: true
+    queries:
+      - name: moderation.case.list
+        capability: moderation.case.read_queue
+        input: "{ status?, source?, assigneeKey?, sort?: age|reason, cursor?, limit ≤ 50 }"
+        output: "{ items: ModerationCase[], nextCursor? }"
+        errors: []
+      - name: moderation.action.get_mine
+        capability: moderation.action.read_own
+        input: "{ actionId }"
+        output: "{ action: EnforcementAction without deciderKey, reasonsStatement, reversal? }"
+        errors: [NOT_FOUND]
+      - name: moderation.action.list_active_for_key
+        capability: moderation.action.read_restrictions
+        input: "{ subjectKey }"
+        output: "{ items: { actionId, kind, targetRef, restrictedCapabilities, expiresAt }[] }"
+        errors: []
+    events_produced:
+      - {type: moderation.case.opened, privacy: P2, payload: "{ caseId, targetType, targetId, subjectKey, source (report | spam_detection | shill_suspicion | risk_review | operator | auction_review), reportRefs, hostRef? }"}
+      - {type: moderation.case.closed, privacy: P2, payload: "{ caseId, outcome, reportRefs, actionIds }"}
+      - {type: moderation.action.applied, privacy: P2, payload: "{ actionId, caseId, origin: relay|vault, caseSource, kind, subjectKey, targetType, targetId, targetRef: { type, id, cid? }, restrictedCapabilities?, ruleRefs, expiresAt, reasonsStatementCid, reasonsIssuedAt, deciderKey? and proposerKey? (relay origin only), hostRef? (relay origin only), replacesActionId? } — relay-local on the relay (EVT-8) and affecting only this relay's hosted copy of targetRef; the vault copy is derived from the verified statement (EVT-9, actor.kind federated), never carries deciderKey or proposerKey and never changes vault records"}
+      - {type: moderation.action.reverted, privacy: P2, payload: "{ actionId, caseId, origin: relay|vault, caseSource, kind, subjectKey, targetType, targetId, targetRef: { type, id, cid? }, restrictedCapabilities?, reason: moderator_decision|appeal_overturned|appeal_reduced|error_correction|expired, replacedByActionId?, reversalStatementCid } — restores only this relay's hosted copy of targetRef; the vault copy never changes vault records"}
+    events_consumed:
+      - {type: moderation.report.received, effect: "relay only: open a case for (targetType, targetId) with subjectKey and source report, or attach receiptId and snapshotId to the open case, and in the same transaction call F12.S01.M01 moderation.report.link_case { receiptId, caseRef } so the reporter is told for new and merged cases; dedupe on receiptId"}
+      - {type: moderation.spam.detected, effect: "relay origin only: open or extend a case for subjectKey and the target with source spam_detection when score ≥ 80; lower scores only add signals (F12.S03.M02)"}
+      - {type: auctions.shill.suspected, effect: "open or extend a case with source shill_suspicion and subjectKey = subjectId for the auction hosted on this relay"}
+      - {type: moderation.appeal.decided, effect: "relay origin only (vault-derived copies are ignored): overturned reverts the contested action with reason appeal_overturned; reduced reverts it with appeal_reduced and applies the replacement described by reducedTo { kind, expiresAt?, restrictedCapabilities? } with a new statement of reasons in the same transaction; upheld changes nothing; moot closures never produce this event"}
+      - {type: governance.prohibited_rule.changed, effect: "relay runtime, scope relay only (emitted by F18.S01.M02 relay_upload for the relay's applied pack; vault-scope copies are ignored): for open or assigned cases, resolve the ruleRefs of their actions with F12.S02.M03 moderation.policyrule.get_version and add reviewFlags { reason prohibited_rule_changed, publisherId, ruleKey, ruleId, change, citedRuleRef } to each case citing a version whose prohibitedRuleRef has the payload's (publisherId, ruleKey); dedupe on (consumer, eventId); actions are never changed"}
+      - {type: moderation.risk.elevated, effect: "relay only, level high for subjectType key: open or extend a case with source risk_review and targetType account for human review; the level is never a rule and never an action by itself"}
+      - {type: privacy.deletion.completed, effect: "vault: delete received statements of reasons and reversals unless the request kept evidence, in which case subjectKey is replaced by the payload pseudonym; relay cases and actions are pseudonymized by the DeletionPort when the relay applies the signed deletion request and stay for RET-EVIDENCE"}
+    errors:
+      - "MODERATION_RULE_REQUIRED | 422 | no | an action needs 1..5 policy rule references in force at the decision time"
+      - "MODERATION_ACTION_LIMIT | 422 | no | expiry or kind exceeds the role's limit"
+      - "MODERATION_LAST_ADMIN_PROTECTED | 409 | no | the relay's last admin or operator key cannot be suspended"
+      - "MODERATION_CAPABILITY_PROTECTED | 422 | no | the appeal route, own-action and own-evidence reads, export and deletion can never be restricted"
+    note: >-
+      Statement registry (N2, F11.S01.M01), all signed by the relay key pinned when users selected the relay:
+      classrup.moderation.reasons/v1 { relayId, actionId, caseRef, kind, subjectKey, targetRef { type, id, cid? },
+      ruleRefs, factsSummary, restrictedCapabilities?, expiresAt?, appealDeadlineAt, scope: this_relay_only,
+      replacesActionId?, issuedAt } and classrup.moderation.reversal/v1 { relayId, actionId, reasonsStatementCid,
+      targetRef { type, id, cid? }, reason, replacedByActionId?, issuedAt }, where relayId is the issuing relay DID and,
+      for a listing, targetRef.id is the listingId and targetRef.cid the listing projection statementCid (to the
+      subject, sealed into the subject's mailbox through F08.S01.M01 comms.mailbox.put with a content-free push through
+      notify.notification.dispatch, N17; F01.S01.M03 bazaar.publication.receive_relay_notice binds each notice to one
+      delivery by relayId, actionId and targetRef),
+      classrup.moderation.advisory/v1 { advisoryId, seq, targetCid, ruleRef, advice: label|hide_suggested, issuedAt, expiresAt? }
+      and classrup.moderation.advisoryretraction/v1 { seq, retractsAdvisoryCid, reason } (public feed, opt-in for subscribers in
+      F12.S01.M01). Moderation never produces classrup.federation.tombstone/v1; only authors tombstone their own content.
+      Index effects are applied by F06.S01.M01 from moderation.action.applied to the targetRef document only, profile
+      hosting effects by F07.S02.M02 in relay runtime only; no consumer changes vault records. Host-policy records
+      (moderation.action.record_host_policy) are called by F04.S02.M03, which depends on this module; this module does not
+      depend on F04. Privacy ports (N6): ExportSectionPort (section
+      moderation.actions), DeletionPort (pseudonymize subjectKey on relays, delete or pseudonymize vault copies) and
+      RetentionPurgePort (RET-EVIDENCE, internal notes after 180 days) are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
+    example: |
+      POST https://relay.example/api/v1/cmd/moderation.action.apply   (relay command, moderator token)
+      Idempotency-Key: 0192f3b8-0000-7000-8000-000000000d01
+      { "caseId": "0192f3b4-5555-7000-8000-000000000005", "expectedRevision": 2, "kind": "remove_from_index", "subjectKey": "did:key:z6MkAuthorExample",
+        "targetType": "listing", "targetId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "targetCid": "sha256-aa01…", "ruleRefs": ["POL-FRAUD-001@1"],
+        "factsSummary": "Listing asks buyers to pay by gift card before showing the item, which matches rule POL-FRAUD-001.", "expiresInMs": null, "closeCase": false }
+      -> 201 { "actionId": "0192f3b8-3333-7000-8000-000000000003", "revision": 1, "reasonsStatementCid": "sha256-bb12…", "reasonsIssuedAt": "2026-11-04T10:00:00Z", "status": "pending_notice" }
+      mailbox acknowledges the reasons statement -> active; emits moderation.action.applied { origin: "relay", caseSource: "report", targetType: "listing", targetRef: { "type": "listing", "id": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "cid": "sha256-aa01…" }, reasonsIssuedAt: "2026-11-04T10:00:00Z", … }
+      in-process moderation.action.record_host_policy { "source": "auction_review", "hostRef": "0192f3c9-0000-7000-8000-000000000e01", "kind": "remove_from_index", "subjectKey": "did:key:z6MkSellerExample", "targetRef": { "type": "auction", "id": "0192f3c9-1111-7000-8000-000000000e02" }, "ruleRefs": ["POL-FRAUD-002@1"], "factsSummary": "The host voided this auction result because the seller placed bids through a second key linked to the seller account.", "deciderKey": "did:key:z6MkModB", "proposerKey": "did:key:z6MkModA" }
+      -> { "actionId": "0192f3c9-2222-7000-8000-000000000e03", "caseId": "0192f3c9-3333-7000-8000-000000000e04", "status": "pending_notice", "created": true }
+      subject vault: moderation.action.receive verifies the statement -> local moderation.action.applied { origin: "vault" } without deciderKey
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: relay moderators work cases and apply actions up to their limits, operators open cases, apply permanent suspensions and revert any action, and admins assign roles through F16.S01.M01."
+      - "Vault policy: a user's vault accepts a statement of reasons only when signed by the issuing relay key, shows it with the relay name, and never changes local records because of it."
+      - A moderator cannot decide a case in which their own principal, by any linked key, is the subject or a reporter.
+      - Conflict-of-interest checks compare principals, not single keys, using the F07.S02.M01 key set (device keys and seq chain), same-owner attestations and the relay moderator registry, in assignment, apply, close and revert.
+      - Keys suspended or restricted on this relay keep moderation.appeal.receive, moderation.appeal.withdraw, moderation.appeal.read_status_own, moderation.action.read_own and moderation.evidence.read_as_subject, in addition to the CAP-5 read, export and deletion rights.
+      - Host-policy records are accepted only in-process from a hosting module registered for the source (F04.S02.M03 for auction_review) on the relay that hosts the auction, never over HTTP, and the two moderators named in the record pass the same principal conflict checks as any decider.
+    capabilities:
+      - "moderation.case.open | operator | relay role operator; principal is not the subject"
+      - "moderation.case.assign | moderator, operator | relay role; case in tenant; assignee principal is neither the subject nor a reporter of a linked report"
+      - "moderation.case.close | moderator, operator | relay role; case assigned to actor or actor is operator"
+      - "moderation.action.apply | moderator, operator | relay role; assigned to the case; permanent suspension only operator; actor principal is neither the subject nor a reporter of a linked report"
+      - "moderation.action.record_host_policy | operator | in-process relay call by the hosting module registered for the source (F04.S02.M03 for auction_review) on the host relay; deciderKey and proposerKey hold the relay moderator role; not routable over HTTP"
+      - "moderation.action.revert | moderator, operator | operator any action; moderator only own actions within 7 days; appeal reversal and replacement are system"
+      - "moderation.action.receive | local principal | vault unlocked; statement signed by the issuing relay key and addressed to the local principal"
+      - "moderation.case.read_queue | moderator, operator | relay role"
+      - "moderation.action.read_own | member | action.subjectKey = actor (relay access token or signed request); stays allowed while the key is suspended or restricted"
+      - "moderation.action.read_restrictions | operator | internal relay policy lookup used by authorize(); not exposed to members"
+  failure_recovery_idempotency:
+    requirements:
+      - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
+      - Apply, statement storage and outbox event commit in one relay transaction; delivery to the subject is at-least-once.
+      - Case intake from events is idempotent via the inbox table so duplicates never create two cases.
+      - A host-policy record is idempotent on (caseSource, hostRef) for as long as the action is retained and commits in the hosting module's transaction, so a retried or crashed confirm never records a second action.
+    idempotency: "Idempotency-Key required on all relay commands; replay returns the stored response for 24 h; case intake dedupes on (consumer, eventId) and on receiptId; record_host_policy dedupes on (tenantId, caseSource, hostRef) for the life of the action and returns the stored actionId with created false; vault intake of statements dedupes on statement cid."
+    concurrency: "expectedRevision on every mutation; partial unique index allows one open case per target; apply uses BEGIN IMMEDIATE and checks case revision so conflicting actions return CONFLICT_REVISION; an appeal outcome reduced writes the revert and the replacement in one transaction."
+    retries: "Subject notice delivery to the mailbox retries with CTR-IDM-001 backoff for 24 h; command callers retry DEPENDENCY_UNAVAILABLE only; the subject vault refetches statements through get_mine."
+    offline: "Moderation commands require the relay online; nothing here is queued by a vault except the intake of statements, which the vault verifies whenever it next syncs."
+    partial_failure: "If the index check fails, the transaction aborts with DEPENDENCY_UNAVAILABLE and the action is not recorded; if notice delivery fails, the action stays pending_notice for at most 24 h and the statement remains retrievable. Privacy ports (N6): ExportSectionPort, DeletionPort and RetentionPurgePort run resumably per action id."
+  privacy_retention_abuse:
+    requirements:
+      - Cases and actions are P2 relay-side data, accessible to relay moderators and the subject, and never leave the relay except as the subject's statement of reasons or reversal and the opt-in public advisory with its retraction.
+      - Retention is RET-EVIDENCE, with legal hold override, and subject deletion leaves a pseudonymized record for the case duration.
+      - Moderator abuse is limited by assignment, rule requirement, principal-level conflict checks, audit logging and operator reversal.
+      - "Moderation never issues classrup.federation.tombstone/v1: remove_from_index changes only this relay's index, and other relays and vaults act only on the opt-in advisory under their own policy or subscription (F12.S01.M01)."
+      - The module meets N6 by registering ExportSectionPort, DeletionPort and RetentionPurgePort with F10, classifying case and action fields per F10.S02.M02, and consuming privacy.deletion.completed.
+    data:
+      - "ModerationCase: P2 (relay moderators); reporter identities are not stored on the case."
+      - "EnforcementAction: P2 (relay moderators; subject sees own action without decider)."
+      - "Advisory and retraction statements: P0 content limited to target content id, rule ID, advice, sequence and expiresAt; no facts summary, no subject key."
+    retention:
+      - "Cases and actions: RET-EVIDENCE (2 years after last related activity)."
+      - "Internal notes: deleted 180 days after case closure unless an appeal or legal hold exists."
+      - "Advisories: served until expiresAt or retraction; retractions served 180 days."
+    threats:
+      - "T01 | Moderator abuses power against a rival | actions need in-force rule IDs and facts summary, are audit-logged (F16.S01.M01) and reversible by operators; subject can appeal to a different moderator"
+      - "T02 | Silent suppression | no hidden action kinds exist; the subject always gets a signed statement; shadow restriction is rejected by schema"
+      - "T03 | Forged statement of reasons used to scare a user | vault verifies relay signature and shows relay identity; unsigned statements are ignored"
+      - "T04 | Over-broad effect misread as global ban | statements and UI state the relay-only scope and that other relays and local data are unaffected"
+      - "T05 | Report-count brigading triggers removal | removal needs a human decider or deterministic rule recorded in ruleRefs; count alone is never a rule"
+      - "T06 | One relay's moderators delete content on other relays and in other vaults | moderation never emits tombstones; advisories are opt-in, expiring and retractable (test T20)"
+      - "T07 | Moderator with a second device key or a filed report decides the case | conflict checks by principal through key linkage and the report ledger (test T22)"
+      - "T08 | Restriction used to block the appeal route | protected capabilities cannot be restricted (V08)"
+    abuse_controls:
+      - "Moderators can apply at most 50 actions per 24 h each (F12.S03.M03 class moderation.action.apply); operators receive a weekly action summary."
+      - "Automated actions are limited to velocity throttles with expiry ≤ 1 hour and are labelled automated."
+  observability_performance:
+    requirements:
+      - Relay command latency and outcomes are measured per CTR-OBS-001; logs never contain facts summaries or keys.
+      - Apply meets the write budget (p95 ≤ 300 ms) at 50 req/s.
+      - Queue age and pending-notice counts are alerting metrics.
+    metrics:
+      - "classrup_moderation_cases_total{source,outcome=opened|actioned|no_action|duplicate}"
+      - "classrup_moderation_actions_total{kind,outcome=applied|reverted|expired|replaced}"
+      - "classrup_moderation_case_queue_age_ms (gauge: oldest open case)"
+      - "classrup_moderation_pending_notice (gauge)"
+    logs:
+      - "relay info action.applied {actionId, caseId, kind, correlationId} — no keys, no facts."
+    budgets:
+      - "apply and close p95 ≤ 300 ms; list p95 ≤ 150 ms for 50 items."
+      - "Expiry sweep processes 10 000 expiring actions in ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check commands, statements and event payloads against the schema registry.
+      - Race, conflict and no-silent-action cases are covered by deterministic tests.
+    fixtures: "Relay X, moderators M1 and M2 (M2 also holds a second device key in its F07.S02.M01 key set), operator O, author S with listing L and a federated copy on relay Y, three reports (one filed by M2), rule POL-FRAUD-001 v1 in force and v2 scheduled, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | apply remove_from_index with a valid in-force rule and facts | action stored with ruleRefs, target fields, statement CID and reasonsIssuedAt; case stays assigned"
+      - "T02 | unit | 02.R02,02.R03,02.R04 | each rule V02–V13 violated, and a citation of POL-FRAUD-001@2 before its effective date | documented error code, nothing stored, no effect on index; MODERATION_RULE_REQUIRED for the scheduled version"
+      - "T03 | property | 03.R01 | random sequences of open, assign, close, apply, revert, expiry and appeal outcomes | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02 | mailbox acknowledges the statement after 2 h; mailbox down for 24 h; imminent-harm rule | active at acknowledgement; active at 24 h with the statement retrievable; imminent-harm effect first and notice follows"
+      - "T05 | integration | 03.R03,04.R03 | operator revert and expiry of actions that published advisories | effect removed, reversal and advisory retraction signed, original statement unchanged, events in the same transaction as the state change"
+      - "T06 | contract | 04.R01,04.R05,09.R02 | each command, statement and event | validate against registry schemas; action.applied and reverted carry target, restricted capabilities, ruleRefs, expiresAt, reasonsStatementCid and reasonsIssuedAt; statements verify with the relay key"
+      - "T07 | integration | 04.R02,06.R03 | moderation.report.received delivered twice; a second report on the same target; spam.detected score 79 and 80; risk.elevated high | one case with source report, both receipts attached and link_case called once per receipt; 79 adds signals only, 80 opens or extends a case for subjectKey; risk case has source risk_review and targetType account"
+      - "T08 | abuse | 05.R01,05.R03 | moderator suspends permanently; moderator decides a case about self; non-moderator applies | MODERATION_ACTION_LIMIT, FORBIDDEN, FORBIDDEN"
+      - "T09 | abuse | 05.R02,07.R03,09.R03 | statement signed by wrong key; unsigned statement; schema with shadow kind | vault ignores first two; shadow kind rejected by validation"
+      - "T10 | integration | 06.R01,06.R02,09.R03 | same Idempotency-Key replayed; two moderators apply concurrently | original response replayed; one succeeds, other CONFLICT_REVISION"
+      - "T11 | chaos | 06.R02,06.R03 | index check fails mid-apply | no action row, no event, DEPENDENCY_UNAVAILABLE"
+      - "T12 | integration | 01.R03,07.R01,07.R02 | subject's signed deletion request applied on the relay after an action; legal hold present; outbound traffic captured | pseudonymized case kept; hold prevents purge; only reasons, reversal, advisory and retraction statements ever left the relay"
+      - "T13 | abuse | 07.R03 | moderator applies 51 actions in 24 h | 51st returns RATE_LIMITED; operator report lists all"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 50 req/s mixed apply and list for 5 minutes; 10 000 expiring actions | p95 ≤ 300 ms, sweep ≤ 5 s, no keys in logs"
+      - "T15 | unit | 09.R01 | traceability tool run | every PS-096 requirement maps to a passing test"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | export subject statements, relay backup and restore | statements verify; restored active actions still enforce"
+      - "T17 | integration | 01.R04,04.R02 | operator opens an account case with moderation.case.open; moderator applies remove_from_index then warn on that case; then closes it actioned | case.opened emitted; two actions on one case; case resolved actioned only by the close"
+      - "T18 | integration | 03.R04 | appeal decided reduced from suspend_relay_access 90 days to restrict_feature 7 days; then the same with a failure injected after the revert | contested action reverted appeal_reduced and replacement active with a new statement in one transaction, events reverted then applied; with the failure neither change is stored"
+      - "T19 | integration | 03.R05,01.R03 | action with advisory expires; another is overturned on appeal; subscriber vault syncs the feed | advisories carry expiresAt; retraction published with seq and advisory cid; subscriber drops both labels"
+      - "T20 | abuse | 07.R04 | apply remove_from_index with publishAdvisory on listing L that relay Y mirrors; capture every outbound statement | no classrup.federation.tombstone/v1 produced; relay Y keeps its copy; only reasons and advisory statements sent"
+      - "T21 | integration | 04.R04 | subject vault receives reasons/v1, later reversal/v1, and one statement with a forged signature | local moderation.action.applied and reverted derived with actor.kind federated, same target fields, no deciderKey; forged statement quarantined"
+      - "T22 | abuse | 05.R04 | M2 applies on a case whose subject lists M2's second key; M2 applies on a case with M2's report linked; assignment of M2 to either case | FORBIDDEN in each case through key-set linkage and the report ledger"
+      - "T23 | abuse | 05.R05,02.R04 | suspended key files an appeal, reads its appeal status, its own action and its evidence; apply with restrictedCapabilities containing moderation.appeal.receive or moderation.appeal.read_status_own | appeal accepted and reads allowed; MODERATION_CAPABILITY_PROTECTED for both"
+      - "T24 | integration | 07.R05 | ExportSectionPort run and privacy.deletion.completed in the subject vault with keepEvidence true and false | section moderation.actions exported; statements deleted or pseudonymized"
+      - "T25 | contract | 04.R05 | action.applied restrict_feature and action.reverted consumed by F12.S03.M04, F12.S03.M02 and F12.S01.M03 contract fixtures | each consumer resolves subject key, capabilities, expiry and reasonsIssuedAt from the payload without extra lookups"
+      - "T26 | integration | 07.R02,07.R01 | injected clock: case closed 181 days ago without appeal or hold; case and actions past RET-EVIDENCE with and without a legal hold | internal notes deleted at 180 days; RetentionPurgePort purges the unheld case and actions and keeps the held ones; nothing was ever sent off the relay except the documented statements"
+      - "T27 | integration | 01.R06,04.R08,02.R05,05.R06 | F04.S02.M03 contract fixture confirms a void (seller_fraud) for auction A with no open case and for auction B with a report case open; a record whose proposer equals the decider; an HTTP request to record_host_policy | A: case opened with source auction_review and assigned to the confirming moderator, remove_from_index with targetRef { auction, A }, subject the seller, reasons statement queued, actionId returned, case resolved actioned; B: action attached to the open case; VALIDATION_FAILED; no route"
+      - "T28 | chaos | 06.R04,02.R05 | record_host_policy retried with the same hostRef after a crash before commit and after a successful commit; the auction document already left the index at close | one action only, the retry returns the stored actionId with created false; the record is accepted without NOT_FOUND and the index effect is a no-op"
+      - "T29 | contract | 01.R05,04.R06 | apply remove_from_index on listing L with targetCid, apply on an account case, then revert both; inspect events and statements with the F06.S01.M01 and F01.S01.M03 contract fixtures | applied and reverted carry targetRef { listing, L, cid } or { account, subjectKey } and caseSource; reasons/v1 and reversal/v1 carry relayId, actionId and targetRef with the listingId and projection statementCid; the index fixture removes only L's document; the publication fixture binds each notice to one delivery"
+      - "T30 | contract | 04.R07 | action.applied and action.reverted delivered to the F07.S02.M02 and F06.S01.M01 relay runtime fixtures and derived in a subject vault | relay copies stop and resume serving only the targetRef item; no vault record changes on either origin"
+      - "T31 | integration | 01.R06,04.R08 | the host-policy action is appealed through F12.S01.M03 and overturned | moderation.appeal.decided carries the actionId the hosting module stored; the action is reverted with appeal_overturned and a reversal statement; the reviewer's principal differs from proposer and decider"
+      - "T32 | integration | 04.R09 | relay-scope governance.prohibited_rule.changed retired for (P, counterfeit_goods) delivered twice while open case C1 has an action citing POL-PROH-001@1 (prohibitedRuleRef P, counterfeit_goods) and case C2 citing the same rule is resolved; a vault-scope copy of the event | C1 flagged once with reason prohibited_rule_changed; C2 unchanged; the copy is ignored; no action reverted or changed"
+      - "T33 | contract | 04.R10 | compare the kind and origin enums of the moderation.action.applied and moderation.action.reverted schemas with the F18.S02.M02 dimension fixture; a schema fixture that adds a kind within v1 | identical values (four kinds, relay and vault); the added kind fails the contract check"
+    acceptance:
+      - All tests T01–T33 pass in CI.
+      - No action exists without in-force rule IDs, facts summary and a retrievable signed statement of reasons.
+      - No moderation path produces any effect outside the issuing relay, and no federation tombstone is ever produced; statements say so.
+  import_export_backup_rollback:
+    requirements:
+      - A subject's vault export contains the statements of reasons they received and appeals, never case notes or reporter data.
+      - Relay admin export of cases and actions requires operator role and omits reporter identities unless under legal hold.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.actions in classrup-export/v1 (vault, ExportSectionPort): signed statements of reasons and reversals received by the user; relay operator export: cases and actions as JSON lines without notes."
+    import: "Statements import after signature verification as read-only history; relay import restores cases and actions with original IDs and re-arms expiry; conflicting IDs are rejected."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring recomputes active restrictions before accepting traffic."
+    migration_rollback: "Additive fields only in v1 (targetType, targetId, reasonsIssuedAt, noticeState, advisoryCid, replacesActionId, actionIds, proposerKey, caseSource, hostRef); targetRef changes from the optional cid string to the object { type, id, cid? } by an expand step that builds it from targetType, targetId and the stored cid, with caseSource taken from the case source; readers of the earlier draft read targetRef.cid; rollback is safe because new optional fields are ignored by older readers (reviewFlags included); the action kind and origin enums are frozen within v1 because F18.S02.M02 binds them, so a new kind needs a v2 event schema, and older readers show a v2 kind they cannot read as warn."

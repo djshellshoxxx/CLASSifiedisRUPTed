@@ -1,35 +1,33 @@
-# PS-124-06 — failure recovery idempotency
+# PS-124-06 — Failure recovery and idempotency: Feature flags
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-06. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M02 Feature flags](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/flags` · **Contracts:** [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-124-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-124-06.R01** Writes are idempotent per CTR-IDM-001 and use expectedRevision, so retries and concurrent edits are safe.
+- **PS-124-06.R02** A cascade is a single transaction; a failure leaves no partial change.
+- **PS-124-06.R03** When settings cannot be read, evaluation fails closed - it uses the last committed values kept in memory or in the mirror row, and when none are available every switchable non-core module evaluates off, the UI shows "settings unavailable" and the relay answers DEPENDENCY_UNAVAILABLE for relay commands of affected modules; FUTURE modules and relay-hosted features that need a host are always off without a value.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Relay commands (set_relay, reset_relay) require Idempotency-Key and replay the stored response for 24 h. Vault-local set and reset are idempotent by value: setting the same value with the matching revision, or resetting a key with no row, returns the current state without a new event.
+- **concurrency:** expectedRevision per key; the unique index on (scope, tenant_id, key) enforces one row. Cascades run in one BEGIN IMMEDIATE transaction on the relay or one IndexedDB readwrite transaction in the vault, together with the mirror row.
+- **retries:** Clients retry only network errors, DEPENDENCY_UNAVAILABLE and RATE_LIMITED with IDM-4 backoff; PLATFORM_FLAG_DEPENDENCY and CONFLICT_REVISION are not retried automatically.
+- **offline:** Vault-scope flags work fully offline. Relay-scope changes need the relay and are not queued, because they are operator decisions that need live feedback; the operator console shows read-only when offline.
+- **partial failure:** If the event insert fails the whole transaction rolls back. If cache invalidation fails the entry expires within 30 s. If settings cannot be read, evaluation uses the last committed values from memory or the mirror row; with none it evaluates every switchable non-core module off, logs a local diagnostic and retries the read at the next evaluation after 5 s; it never falls back to registry defaults for a key that may have a stored off value.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-124-09.T04 | integration | PS-124-03.R02, PS-124-06.R02 | cascade off of B with A and D on, injected failure on the third write | no key changed; without failure A, D, B off in one transaction with three events |
+| TEST-PS-124-09.T09 | integration | PS-124-06.R01, PS-124-03.R01 | same Idempotency-Key replayed with same and different body on set_relay and reset_relay; stale expectedRevision | original response replayed; IDEMPOTENCY_KEY_REUSED; CONFLICT_REVISION |
+| TEST-PS-124-09.T10 | integration | PS-124-06.R03, PS-124-05.R03 | user turns F13 push and F06 location off, then the settings store becomes unreadable in a new process with and without the mirror row; relay settings unreadable; FUTURE module queried | with the mirror the switched-off modules stay off (source last_committed); without it every switchable non-core module is off (source fail_closed) and 'settings unavailable' is shown; relay commands of affected modules answer DEPENDENCY_UNAVAILABLE; FUTURE module off |
+
+## Dependencies
+
+Module depends on: F15.S04.M01, F15.S04.M03, F15.S02.M03, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FLG-001, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

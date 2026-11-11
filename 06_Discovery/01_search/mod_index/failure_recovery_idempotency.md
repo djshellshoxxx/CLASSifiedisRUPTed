@@ -1,35 +1,32 @@
-# PS-045-06 — failure recovery idempotency
+# PS-045-06 — Failure recovery and idempotency: Search index
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-06. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S01.M01 Search index](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/search/index` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for index within 01_search. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-045-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-045-06.R01** Event handling is idempotent through the inbox and the sourceRevision guard; replays never duplicate or resurrect documents.
+- **PS-045-06.R02** A failed handler retries with backoff and moves to dead letter after 8 attempts, leaving the previous document in place.
+- **PS-045-06.R03** A crash during rebuild leaves the live index untouched because the swap is one transaction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Consumers record (consumer, eventId) in the local inbox before side effects; rebuild, set_promotion and clear_promotion require an Idempotency-Key and replay the stored response for 24 h, and a different body with the same key returns IDEMPOTENCY_KEY_REUSED; upsert is keyed by (tenantId, sourceKind, sourceId, authorDid).
+- **concurrency:** Single writer per vault (one IndexedDB or SQLite transaction per event); on a relay one writer per aggregate by (aggregate.id, revision) order, with the V16 pack evaluation (a pure in-process query) run before the write transaction outside the single writer; rebuild builds shadow tables, copies firstSeenAt and authorFirstSeenAt from the live table by source key and authorDid, applies concurrent events to both, and swaps in one transaction.
+- **retries:** Handler retries use base 500 ms, cap 30 s, full jitter, max 8 attempts, then dead_letter; the vault shows 'search data needs repair' with a Rebuild button.
+- **offline:** The local index is fully functional offline; the relay index is simply not queried. Projections fetched later are indexed on arrival in creation order after F11.S01.M02 accepts them.
+- **partial failure:** If a projection cannot be verified because the author's identity document is unavailable, F11.S01.M02 buffers or quarantines it and this module indexes nothing; removals never depend on verification, only on the tombstone, unpublish or moderation event. If an enrichment projection arrives before its listing, it is retried for 24 h and then dropped with a local diagnostic. If F15.S04.M03 TenantPort.limits cannot be read on a relay, new projections are not admitted (the handler retries with backoff) and indexed documents stay unchanged. If the in-process F18.S01.M02 governance.prohibited_rule.evaluate returns an error on a relay, the listing projection is not admitted (the handler retries with backoff, then dead letter) and indexed documents stay unchanged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-045-09.T06 | integration | PS-045-04.R02, PS-045-06.R01 | deliver the same event twice and an older edit afterwards | one document, stale edit ignored |
+| TEST-PS-045-09.T11 | integration | PS-045-06.R02, PS-045-06.R03 | handler fails 8 times; crash during rebuild; verification key unavailable | dead_letter after 8 attempts; live index unchanged; nothing indexed while F11 buffers the record |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

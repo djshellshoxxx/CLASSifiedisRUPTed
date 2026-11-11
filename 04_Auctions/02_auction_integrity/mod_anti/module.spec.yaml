@@ -1,0 +1,287 @@
+id: F04.S02.M01
+scope: MVP
+summary: >-
+  The host relay of an auction keeps the seller and the seller's linked keys from bidding on that seller's auctions, and
+  scores bidding patterns for shill suspicion. Linkage means evidence the host can actually hold - the same key, a device key that
+  the in-process F07 reads identity.portable_doc.key_set and find_by_key list under both the seller DID and the bidder DID (active,
+  revoked or removed keys, which stay linked; MVP has no account key rotation chain), a same_owner attestation signed by both DIDs
+  (identity.attestation.list_linkage), or keys this host saw together in one signed device-link or registration request or in one
+  relay access-token session (identity.session.linked_keys). IP addresses, network ranges, timing and device
+  fingerprints are never linkage. A deterministic link or a revoked key denies the bid with a generic error. Statistical patterns,
+  scored by the fixed table shill-v1 from host-local auction events, never deny a bid; they flag the bidder for human review in
+  F04.S02.M03. A seller who uses a fresh unlinked key cannot be detected by linkage, and the UI and policy say so; pseudonymity is
+  not anonymity, and the host is trusted to run this check honestly.
+responsibilities:
+  - Own ShillCheck records on the host - one per denied or flagged evaluation - with the verdict, reason codes, evidence type, score and scoring version.
+  - Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations (classrup.security.keyrevocation/v1, the single device revocation type owned by F16.S02.M02) in-process from host-held F07 data through identity.portable_doc.key_set, find_by_key and key_status, identity.attestation.list_linkage and identity.session.linked_keys.
+  - Compute an asynchronous shill score with scoring table shill-v1 from consumed host-local auctions.bid.* and auction result events after each placed bid, and emit auctions.shill.suspected at score 60 or more.
+  - Keep the linkage evidence private - the bidder gets a generic denial, the seller sees nothing, the reviewers see evidence types and ids.
+  - Confirm or dismiss each check only from the per-check outcomes in auctions.review.closed.
+non_responsibilities:
+  - Bid placement and ledger (F04.S01.M02) and result voiding (F04.S02.M03 issues the host finding, F04.S01.M03 applies it in each vault).
+  - Creating or revoking keys and attestations (F07.S01.M01, F07.S03.M02) and identity documents (F07.S02.M01); this module only reads them.
+  - Account-level enforcement; a host may apply its own hosting policy through F12.S02.M01 on the host, and no global ban exists (ADR-0016 section 8).
+  - "Future: cross-host linkage sharing between hosts under explicit peer agreements, machine-learned scoring, and rotation-chain linkage once account key rotation leaves Future in F07.S02.M01."
+depends_on: [F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a bidder, I am told only that I cannot bid on an auction when I am ineligible, and I know where to appeal to the host operator.
+  - As a seller, I know that my own keys, keys I revoked and keys I linked to myself cannot bid on my auctions.
+  - As a host moderator, I see flagged bidders with reasons and evidence types ranked by score and decide in the review.
+edge_cases:
+  - A family member uses a distinct key that was registered on this host in the same signed device-link request as the seller's key (linked_host_registration); the bid is denied generically, the bidder appeals to the host operator, who can allow-list the pair for one auction with a recorded reason; the allow-list never applies to the seller's own key.
+  - The seller replaces a device key (the old key revoked with reason superseded); identity.portable_doc.key_set lists the new key as active and the old one as revoked, so both stay linked; no rotation chain is read because account key rotation is Future in F07.
+  - A same-owner attestation is revoked after a denial; the revoked attestation still links the two keys for this seller for 30 days and permanently for auctions scheduled before the revocation; past denials are kept as history.
+  - F07 linkage data on the host is older than 24 h or missing; the check uses cached data while it is at most 24 h old, and beyond that allows the bid with a linkage_stale flag for review, a counter and an operator alert; the seller-key equality and revoked-key checks still run on host-local data.
+  - Two honest friends alternate bids; the alternation feature gives 25 points and alone stays below the flag threshold of 60.
+  - A bidder bids on only one seller's auctions because it is the only local seller; concentration and price_pump points are halved when the host had fewer than 5 sellers in the last 30 days.
+  - A flagged bidder wins an auction before review; the result is not changed by the flag; F04.S02.M03 may void it later.
+  - Scoring job lags; flags may appear up to 5 minutes after the bid, and the bid decision never waits for the score.
+  - The seller revokes a device key and then bids with it; the host holds the classrup.security.keyrevocation/v1 statement, identity.portable_doc.key_status answers revoked, the key is refused as revoked, and it stays linked to the seller anyway.
+  - Two honest bidders bid from the same IP address within the same second; IP addresses, network ranges and timing are never linkage evidence, so both are allowed.
+  - An operator tries allow_pair for the seller's own key, or to override a seller_self or linked_identity_doc denial; refused with VALIDATION_FAILED because the allow-list never overrides V01 or V02.
+ux:
+  screens:
+    - "Bidder denial message: You cannot bid on this auction. Contact the host operator; no detail about the reason is shown."
+    - "Host moderator queue: flagged checks sorted by score with reasons, evidence types, scoring version, auction links and an Open review action; linkage_stale flags in their own tab."
+    - "Auction page integrity note: Bids from the seller and keys linked to the seller are blocked by this host; linkage cannot see unlinked new keys."
+  states: [loading, empty, allowed, denied, flagged, under-review, dismissed, confirmed, expired]
+  a11y:
+    - Denial and integrity messages are plain text in a role=alert region and do not rely on colour.
+    - Moderator queue is a table with column headers, sortable by keyboard, and rows have accessible names with auction and score.
+    - Score is shown as a number and a text band (low, medium, high), never colour alone.
+processes:
+  domain_schema:
+    requirements:
+      - A ShillCheck stores auction, subject key, verdict, reason codes, evidence references, score, host time and status, with revision per CTR-ID-001.
+      - ShillChecks are P3 host records because they reveal key linkage; they never appear in public projections, events to bidders, exports of other users or logs.
+      - Only denied and flagged evaluations are stored; allowed evaluations leave only counters.
+      - Revoked keys and revoked attestations stay in the linkage cache as linked for the seller for at least 30 days, and permanently for auctions scheduled before the revocation; linked_host_registration evidence is never dropped on revocation.
+    entities:
+      - name: ShillCheck
+        schema: classrup.auctions.shill_check/v1
+        storage: relay
+        privacy: P3
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — host relay tenant scope"
+          - "auctionId: uuidv7 — ref F04.S01.M01 Auction"
+          - "subjectId: actorId — bidder key being evaluated; host only"
+          - "verdict: enum — deny | flag"
+          - "reasons: string[] — 1..8 codes; deterministic seller_self, linked_identity_doc, linked_attestation, linked_host_registration, revoked_key; heuristic concentration, alternation, probing, price_pump, new_key, never_wins; data quality linkage_stale"
+          - "evidence: object[] — 0..10 items {type, ref, ageSeconds}; refs are ids, never key material beyond the subject key"
+          - "score: int — 0..100; deterministic links 100; heuristic 0..99 per shill-v1; linkage_stale flags 0"
+          - "scoringVersion: string — shill-v1"
+          - "triggerBidSeq?: int — ledger sequence that triggered the flag"
+          - "status: enum — evaluated | denied | flagged | under_review | confirmed | dismissed | expired"
+          - "reviewId?: uuidv7 — ref F04.S02.M03 AuctionReview"
+          - "decidedAt: timestamp — host clock, RFC 3339 UTC"
+          - "retentionClass: enum — RET-EVIDENCE for denied and confirmed | RET-SHORT for dismissed and expired"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - verdict deny implies at least one deterministic reason (seller_self, linked_identity_doc, linked_attestation, linked_host_registration, revoked_key) and score 100.
+          - verdict flag implies either score between 60 and 99 with heuristic reasons only, or the single reason linkage_stale with score 0.
+          - At most one open (flagged or under_review) ShillCheck per (auctionId, subjectId).
+          - No allow-list entry names the seller key of its auction as the bidder key.
+    sql: |
+      CREATE TABLE auctions_shill_check (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, auction_id TEXT NOT NULL, subject_id TEXT NOT NULL, verdict TEXT NOT NULL,
+        score INTEGER NOT NULL, status TEXT NOT NULL, decided_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX auctions_shill_open ON auctions_shill_check(tenant_id, auction_id, subject_id) WHERE status IN ('flagged','under_review');
+      CREATE INDEX auctions_shill_queue ON auctions_shill_check(tenant_id, status, score DESC);
+  validation_rules:
+    requirements:
+      - The eligibility check evaluates deterministic linkage first and heuristic scoring only afterwards and asynchronously.
+      - Scoring inputs are bounded - the last 20 bids of the subject and the last 30 days of host data, taken from consumed host-local auctions.bid.* and auction result events - and the features, points, caps and thresholds are the fixed constants of scoring table shill-v1 in this specification.
+      - Every violation maps to one stable error code; the bidder-facing code never discloses the reason.
+      - Linkage evidence is limited to signed or host-recorded co-occurrence - key sets of identity documents (identity.portable_doc.key_set and find_by_key), same_owner attestations signed by both DIDs (identity.attestation.list_linkage), one signed device-link or registration request, one relay access-token session (identity.session.linked_keys) - and never IP addresses, network ranges, time proximity or device fingerprints; no rotation chain is read while account key rotation is Future in F07.
+    rules:
+      - "V01 | subject key is not equal to the auction seller key; no allow-list entry overrides this rule | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V02 | no device key is listed under both the subject DID and the seller DID - identity.portable_doc.key_set of the seller (activeKeys, revokedKeys and removedKeys, kept per 01.R04) and identity.portable_doc.find_by_key for the subject's keys, cache age at most 24 h; no rotation chain is read | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V03 | no same_owner link returned by identity.attestation.list_linkage (F07.S03.M02, kind same_owner signed by both DIDs, N11) connects subject and seller DIDs within 3 hops; links revoked less than 30 days ago, or after this auction was scheduled, still count | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V04 | linked_host_registration - subject and seller keys do not appear together in one signed classrup.identity.device_link/v1 or classrup.identity.handle_registration/v1 request received by this host, nor in one relay access-token session of this host (identity.session.linked_keys, F07.S01.M02); IP addresses, network ranges and time proximity are excluded | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V05 | score input window is at most 20 bids and 30 days and thresholds are 60 for flag and 85 for high priority per shill-v1 | VALIDATION_FAILED"
+      - "V06 | host operator allow-list entries name one auction, one bidder key different from the seller key, a reason of 10..500 code points, and cover only linked_host_registration or linked_attestation reasons; the allow-list never overrides V01, V02 or V07 | VALIDATION_FAILED"
+      - "V07 | identity.portable_doc.key_status for the subject DID and its signing key at host receipt time is not revoked (classrup.security.keyrevocation/v1 statements, the single device revocation type owned by F16.S02.M02, and identity documents this host holds) | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+    notes: "Scoring table shill-v1 (fixed constants). Window W is the subject's last 20 bids on this host within the last 30 days, built only from consumed host-local auctions.bid.placed, auctions.bid.outbid, auctions.bid.retracted, auctions.auction.closed and auctions.auction.won events; S is the subject, X the seller of the scored auction A; retractions count as bids of S. concentration - share of S's bids in W placed on X's auctions with at least 5 bids in W; at least 0.6 gives 25 points, at least 0.9 gives 35; cap 35. alternation - in A, S and one other bidder alternate as consecutive leader-changing entries at least 6 times in a row; 25 points; cap 25. probing - in A within 10 minutes, S placed bids at exactly the minimum next bid that were each followed by an auto entry for the leader; 3 such bids give 20 points, 5 give 30; cap 30. price_pump - on at least 3 of X's auctions closed in the last 30 days, S was the last bidder outbid before close and did not win; 25 points; cap 25. new_key - S's first bid on this host is less than 7 days old and S bid on no seller other than X; 10 points; cap 10. never_wins - S bid on at least 5 auctions on this host closed in the last 30 days and won none; 10 points; cap 10. Damping - when the host had fewer than 5 distinct sellers with auctions in the last 30 days, concentration and price_pump points are halved and rounded down. Total - the sum of feature points capped at 99; flag at 60 or more; high priority at 85 or more."
+  workflow_state_machine:
+    requirements:
+      - An evaluation ends at once as denied, or as flagged, or is not stored; flagged moves through review to confirmed or dismissed, or expires when no review takes it up or a review never closes.
+      - Flags never alter bids, prices or results; only F04.S02.M03 decisions do.
+      - Review outcomes arrive per check in auctions.review.closed (confirmedCheckIds) from the fraud review module; only the listed checks are confirmed, the other checks of that review are dismissed, and no outcome is assumed.
+    machines:
+      - entity: ShillCheck
+        initial: evaluated
+        terminal: [denied, confirmed, dismissed, expired]
+        transitions:
+          - "evaluated -> denied | auctions.shill.check finds deterministic linkage or a revoked key | bid rejected generically; no event to the bidder; retention RET-EVIDENCE"
+          - "evaluated -> flagged | auctions.shill.score reaches 60 or more, or the check ran with linkage data older than 24 h | heuristic flags emit auctions.shill.suspected; linkage_stale flags emit nothing and only enter the moderator queue"
+          - "flagged -> under_review | auctions.review.opened consumed with this checkId in triggers, on open or on merge | reviewId stored"
+          - "under_review -> confirmed | auctions.review.closed consumed with this checkId in confirmedCheckIds | retention RET-EVIDENCE"
+          - "under_review -> dismissed | auctions.review.closed consumed without this checkId in confirmedCheckIds, including a void with a non-shill reason or a dismissal | retention RET-SHORT"
+          - "under_review -> expired | 90 days under review without auctions.review.closed | host sweep; operator alert; retention RET-SHORT"
+          - "flagged -> expired | 30 days without review | host sweep; retention RET-SHORT"
+    timeouts:
+      - "Host sweep every hour expires flagged checks older than 30 days and under_review checks older than 90 days with an operator alert; scoring runs within 5 s of a placed bid and is retried up to 3 times at 5 s, 15 s and 45 s."
+  commands_queries_events:
+    requirements:
+      - The host relay exposes auctions.shill.check as an internal synchronous command called inside the bid transaction and auctions.shill.score as an asynchronous job command.
+      - Moderators read the review queue through a relay query; the public policy query describes the controls and their limits in words.
+      - The module consumes host-local bid and result events, identity events and review events on the host; nothing here runs in participant vaults.
+      - auctions.shill.check also answers whether the bidder key is revoked as known to the host, so the bid path rejects revoked keys with the same generic error (F04.S01.M02 V07).
+      - Linkage is read only through the in-process F07 reads on the host - identity.portable_doc.key_set, identity.portable_doc.find_by_key and identity.portable_doc.key_status (F07.S02.M01), identity.attestation.list_linkage for kind same_owner signed by both DIDs (F07.S03.M02) and identity.session.linked_keys (F07.S01.M02) - cached at most 24 h; no rotation chain is read until account key rotation leaves Future in F07 (N11 as narrowed by F07).
+    commands:
+      - name: auctions.shill.check
+        capability: auctions.shill.check
+        input: "[relay internal, called by F04.S01.M02 inside the bid transaction] { auctionId, bidderId }"
+        output: "{ verdict: allow | deny, checkId?, flags?: [linkage_stale] }"
+        errors: [NOT_FOUND, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: auctions.shill.score
+        capability: auctions.shill.score
+        input: "[relay job, triggered by auctions.bid.placed or auctions.bid.retracted] { auctionId, bidderId, triggerBidSeq }"
+        output: "{ score, flagged: boolean, checkId?, scoringVersion: shill-v1 }"
+        errors: [NOT_FOUND, DEPENDENCY_UNAVAILABLE]
+        emits: [auctions.shill.suspected]
+        idempotent: true
+      - name: auctions.shill.allow_pair
+        capability: auctions.shill.allow_pair
+        input: "[relay command by host operator, signed request] { auctionId, bidderId, coveredReasons: [linked_host_registration | linked_attestation], reason }"
+        output: "{ allowListId, expiresAt }"
+        errors: [NOT_FOUND, FORBIDDEN, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: auctions.shill.list_for_review
+        capability: auctions.shill.read_review
+        input: "[relay query] { status?: flagged|under_review, reason?: linkage_stale, minScore?, cursor?, limit ≤ 50 }"
+        output: "{ items: ShillCheck[] ordered by score desc, nextCursor? }"
+        errors: []
+      - name: auctions.shill.get_policy
+        capability: auctions.shill.read_public
+        input: "{ hostRelayId }"
+        output: "{ controls: [string], limits: [string], scoringVersion: shill-v1, thresholds: { flag: 60, highPriority: 85 }, appealContact }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: auctions.shill.suspected, privacy: P3, payload: "{ checkId, auctionId, subjectId, score, reasons[], triggerBidSeq, scoringVersion } — host-local only; never emitted for linkage_stale flags"}
+    events_consumed:
+      - {type: auctions.bid.placed, effect: "append alias, bidderId, kind, amount, newPrice, seq and leaderChanged to the scoring projection and enqueue the scoring job for the bidder and trigger bid"}
+      - {type: auctions.bid.outbid, effect: "append the outbid entry to the scoring projection (price_pump, probing)"}
+      - {type: auctions.bid.retracted, effect: "append the retraction and enqueue scoring of the retracting bidder"}
+      - {type: auctions.auction.closed, effect: "close the auction in the scoring projection"}
+      - {type: auctions.auction.won, effect: "record the winner key for never_wins and price_pump"}
+      - {type: auctions.auction.scheduled, effect: "record the scheduling time used by the revocation rule (01.R04)"}
+      - {type: auctions.review.opened, effect: "move each flagged check listed in triggers to under_review, on open and on merge"}
+      - {type: auctions.review.closed, effect: "move checks listed in confirmedCheckIds to confirmed and the other checks of the review to dismissed"}
+      - {type: identity.attestation.added, effect: "when the attestation is of kind same_owner, re-read identity.attestation.list_linkage for both DIDs and cache only links signed by both DIDs"}
+      - {type: identity.attestation.revoked, effect: "mark the attestation revoked with its time and keep the link per 01.R04"}
+      - {type: identity.portable_doc.published, effect: "re-read identity.portable_doc.key_set for the DID (activeKeys, revokedKeys, removedKeys and revocationCids of the classrup.security.keyrevocation/v1 statements) and keep keys that left the document as revoked links per 01.R04; no rotation chain is read"}
+      - {type: privacy.deletion.completed, effect: "host relay, when the relay applies the deletion - replace the erased principal's did in retained ShillChecks with the per-deletion pseudonym"}
+    errors:
+      - "AUCTIONS_BIDDER_NOT_ELIGIBLE | 403 | no | bidder cannot bid on this auction; no reason is disclosed"
+    example: |
+      bid transaction on host: auctions.shill.check { "auctionId": "0192f400-0002-…", "bidderId": "did:key:z6Mk…" } -> { "verdict": "allow" }
+      after bid seq 17: auctions.shill.score -> concentration 0.9 (35) + probing 5 bids (30) = 65 -> { "score": 65, "flagged": true, "checkId": "0192f420-0001-…", "scoringVersion": "shill-v1" }
+      event auctions.shill.suspected { "checkId": "0192f420-0001-…", "auctionId": "0192f400-0002-…", "score": 65, "reasons": ["concentration", "probing"], "scoringVersion": "shill-v1" }
+  authorization_capabilities:
+    requirements:
+      - Relay policy - check and score are callable only by the host's own bid path and job runner; allow_pair and review queries require the host operator or moderator role on that host.
+      - No vault command exists in this module; bidders and sellers cannot read ShillChecks, including their own.
+      - Roles are per host (CAP-9) and affect only auctions hosted there.
+    capabilities:
+      - "auctions.shill.check | system | called inside a bid transaction holding the auction lease"
+      - "auctions.shill.score | system | host job runner"
+      - "auctions.shill.allow_pair | operator | host operator signed request; reason recorded; one auction and one pair; bidder key differs from the seller key; covers only linked_host_registration or linked_attestation"
+      - "auctions.shill.read_review | moderator, operator | moderator or operator of the hosting relay"
+      - "auctions.shill.read_public | anonymous, principal | policy text only"
+  failure_recovery_idempotency:
+    requirements:
+      - Check and score are idempotent per (auction, subject, trigger sequence); repeated calls return the stored verdict.
+      - The synchronous check never writes an allow record, so a crash cannot leave partial state; deny and flag writes are single transactions.
+      - Linkage data unavailability degrades by one rule - the seller-key equality and revoked-key checks always run on host-local data, other linkage uses cached F07 data while it is at most 24 h old, beyond that linkage reasons fail open with a linkage_stale flag for review, a counter and an operator alert, and the check returns DEPENDENCY_UNAVAILABLE only when the equality check itself cannot run.
+    idempotency: "Unique open check per (auction, subject); score keyed by (auction, subject, triggerBidSeq); consumed events deduplicated by (consumer, eventId)."
+    concurrency: "The check runs inside the bid transaction under the auction lease; scoring runs outside the lease on a snapshot of the scoring projection at triggerBidSeq, so a delayed score never blocks bids."
+    retries: "Scoring retried 5 s, 15 s, 45 s then dead-letter per EVT-6 with an operator alert; the synchronous check is never retried inside the bid path."
+    offline: "Not applicable in vaults; on the host the check depends only on local SQLite data and the cached F07 projections."
+    partial_failure: "Cache at most 24 h old - used for every linkage reason. No cache, or a cache older than 24 h - V01 and V07 still run on host-local data; V02 to V04 fail open, the check returns allow with flags [linkage_stale], a linkage_stale ShillCheck enters the moderator queue, classrup_auctions_shill_linkage_stale_total is counted and the operator is alerted. Host database or auction record unreadable, so V01 cannot run - the check returns DEPENDENCY_UNAVAILABLE and F04.S01.M02 rejects the bid. Bids are never blocked by scoring failure."
+  privacy_retention_abuse:
+    requirements:
+      - Linkage evidence and scores are P3 on the host and visible only to host moderators and operators; they are never sent to sellers, bidders or federated peers.
+      - The generic denial prevents using the bid endpoint to probe who is linked to whom.
+      - Scoring uses only the host-local auction events of shill-v1 and linkage uses only the evidence named in 02.R04 - no device fingerprinting, IP addresses, location or telemetry.
+      - ShillChecks are host operator data - the module registers ExportSectionPort for the operator audit scope only (section auctions.shill_checks, excluded from user exports), DeletionPort and RetentionPurgePort with F10 (N6), annotates fields with their F10.S02.M02 class, pseudonymizes subject keys on deletion, and purges denied and confirmed checks after RET-EVIDENCE and dismissed or expired checks after RET-SHORT.
+    data:
+      - "ShillCheck: P3 host-only."
+      - "Linkage cache: P3 host-only, entries hold key hashes, evidence ids and revocation times."
+    retention:
+      - "Denied and confirmed ShillChecks: RET-EVIDENCE per host policy (default 1 year after closure); dismissed and expired ShillChecks: RET-SHORT (30 days)."
+      - "Linkage cache entries are refreshed every 24 h; revoked-key and revoked-attestation links are kept for 30 days, or for the life of auctions scheduled before the revocation."
+    threats:
+      - "T01 | Probing the bid endpoint to map seller-linked keys | denial is generic and constant-time within 5 ms of an allow path, per-key rate limits apply"
+      - "T02 | Seller shills with a fresh unlinked key | linkage cannot see it; heuristics flag patterns for review; documented limitation shown on the auction page"
+      - "T03 | False accusations through crafted attestations | only same_owner attestations signed by both DIDs count (identity.attestation.list_linkage, F07.S03.M02); a revocation stops linkage only after 30 days and never for auctions scheduled before it; host moderator can inspect the evidence"
+      - "T04 | Host operator misuses the review queue to harass a bidder | actions are logged in the host audit (CTR-CAP-001 CAP-7), decisions are statements with reasons, and bidders can choose another host"
+      - "T05 | Score gaming by an adversary mimicking benign patterns | scores only flag, never deny; human review decides; the scoring table is versioned (shill-v1)"
+      - "T06 | Seller revokes a linked key or attestation and then bids with it | revoked keys are rejected (V07) and kept linked (01.R04); host registration evidence is never dropped"
+      - "T07 | Operator allow-list used to let the seller bid | the allow-list never overrides V01, V02 or V07, covers only two reasons, and every entry is logged in the host audit"
+    abuse_controls:
+      - "Per-key denial counter: 10 denials in an hour on a host raises a host operator alert."
+      - "Allow-list entries expire at the auction end."
+  observability_performance:
+    requirements:
+      - The host exports metrics and logs per OBS-1 to OBS-6 without key material in labels or messages.
+      - The synchronous check meets p95 ≤ 40 ms and p99 ≤ 100 ms with 10 000 linkage cache entries.
+      - Scoring completes within 5 s of the trigger bid at p95 under 50 bids per second.
+    metrics:
+      - "classrup_auctions_shill_checks_total{verdict=allow|deny}"
+      - "classrup_auctions_shill_flags_total{reason}"
+      - "classrup_auctions_shill_score_lag_ms (histogram)"
+      - "classrup_auctions_shill_linkage_stale_total"
+    logs:
+      - "info shill.denied {auctionId, checkId, correlationId} - no key and no reason code."
+    budgets:
+      - "check p95 ≤ 40 ms, p99 ≤ 100 ms; score job p95 ≤ 5 s end to end."
+      - "Linkage cache refresh for one identity document ≤ 200 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Linkage and scoring are covered by fixture-based unit tests and a labelled synthetic dataset with measured precision and recall.
+      - Contract tests validate the event payload and that no check data leaks into bidder-facing payloads.
+    fixtures: "Host H; seller S whose key set (identity.portable_doc.key_set) lists K1 and K2 active and K0 revoked with reason superseded; bidders B1 (unlinked), B2 (holds K2), B3 (same_owner attestation dual-signed with S), B4 (registered with S in one signed device-link request), B5 (unlinked, flagged); synthetic dataset of 500 auctions with 25 labelled shill patterns; fixed clock 2026-11-05T12:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | evaluate seller key, K2, K0, attested B3 and B4 | all denied with the right internal reasons (seller_self, linked_identity_doc, linked_attestation, linked_host_registration); B1 allowed; allow leaves no record"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V07 violated or satisfied | documented outcome and generic error code"
+      - "T03 | property | 03.R01 | random check, review and sweep event sequences | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,03.R03 | flagged bidder wins; review opened then closed without the check in confirmedCheckIds | result unchanged by the flag; check dismissed; confirmed only when listed"
+      - "T05 | unit | 04.R01,02.R02 | shill-v1 totals - alternation only; concentration 0.6 plus alternation plus new_key; damped concentration 0.9 plus damped price_pump plus probing 5; concentration 0.9 plus probing 5 plus price_pump; every feature at its maximum | 25 no flag; 60 flag; 17 + 12 + 30 = 59 no flag; 35 + 30 + 25 = 90 flag at high priority; 135 capped at 99"
+      - "T06 | contract | 04.R02,04.R03,09.R02 | check, score, allow_pair, queries and the event | payloads validate against registry schemas; no check data in bid errors; no event for linkage_stale flags"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | bidder, seller and non-moderator try to read checks; allow_pair without operator role | FORBIDDEN or NOT_FOUND; no data returned"
+      - "T08 | chaos | 06.R01,06.R02,06.R03 | F07 cache 23 h old, 25 h old and missing; host database unreadable; scoring job crashes; duplicate events | 23 h - linkage denies; 25 h and missing - the seller key and a revoked key are still denied, other linkage allows with a linkage_stale flag, counter and alert; unreadable - DEPENDENCY_UNAVAILABLE; scoring retried; duplicates skipped"
+      - "T09 | abuse | 07.R01,07.R02 | compare response time and body for denial and allow paths | identical error body family and timing within 5 ms; no reason leaked"
+      - "T10 | integration | 09.R03 | run synthetic dataset | precision at least 0.7 and recall at least 0.5 at threshold 60, report stored; no deny from heuristics"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 10 000 cache entries, 50 bids per second for 5 minutes | check p95 ≤ 40 ms, score lag p95 ≤ 5 s, metrics exported without key labels"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-036 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | operator export for audit, restore host backup | checks round-trip; restore keeps the open-check unique index"
+      - "T14 | integration | 01.R04,03.R01 | same_owner attestation revoked after a denial; seller revokes K2 and bids with it; auction scheduled before the revocation | within 30 days the attestation still denies; K2 denied as revoked_key; for the earlier auction the link is permanent; after 30 days a later auction allows the attested key; past denial kept as history"
+      - "T15 | integration | 01.R02 | inspect public projections, bidder errors and events, seller views, logs, federation outbox and user exports | no ShillCheck field appears outside host moderator views and the operator export"
+      - "T16 | unit | 07.R03,02.R04 | allowlist test of the scorer and linkage inputs; two keys bid from one IP address in the same second; two keys in one relay access-token session | scorer reads only the shill-v1 event fields and linkage only the listed evidence; the same-IP bidders are both allowed; the session pair is denied as linked_host_registration"
+      - "T17 | abuse | 02.R01 | allow_pair(seller, seller) and allow_pair covering a seller_self or linked_identity_doc denial | refused with VALIDATION_FAILED; the denial stays"
+      - "T18 | integration | 03.R03 | review with flagged bidders B2 and B5 closes with only B2's check in confirmedCheckIds | B2's check confirmed with RET-EVIDENCE; B5's check dismissed with RET-SHORT"
+      - "T19 | integration | 07.R04 | operator export, export of the subject's user vault, deletion applied on the host, retention sweep | checks only in the operator export; subject pseudonymized; dismissed checks purged after 30 days, confirmed after RET-EVIDENCE"
+      - "T20 | integration | 04.R04 | bid with a key revoked by a classrup.security.keyrevocation/v1 statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE"
+      - "T21 | contract | 04.R05,02.R04 | linkage reads against F07 conformance stubs for key_set, find_by_key, key_status, list_linkage and linked_keys; a same_owner attestation with only one signature; a stub that also offers a rotation chain | the check calls exactly the named in-process reads; only links signed by both DIDs count; no rotation-chain read is made"
+    acceptance:
+      - All tests T01–T21 pass in CI.
+      - Deterministic linkage and revoked keys always deny and heuristics never deny.
+      - Denials are generic and indistinguishable in body and timing from other ineligibility.
+      - No IP address, network range, timing or device fingerprint is ever used as linkage evidence.
+  import_export_backup_rollback:
+    requirements:
+      - ShillChecks are host operator data; they are exported only in the host operator's audit export and never in a user's vault export.
+      - Import of a host audit export validates ids and schema version and restores checks as read-only history.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section auctions.shill_checks in the host operator export (classrup-export/v1, operator scope); excluded from every user export."
+    import: "Checks import as read-only history with status preserved; open checks import as flagged and are re-linked to reviews by review id."
+    backup: "Host relay SQLite backup (IOX-3, IOX-7); no vault backup exists for this module."
+    migration_rollback: "Additive optional fields only in v1; the scoring table is a versioned constant (shill-v1) so rollback restores the earlier table with the earlier code."

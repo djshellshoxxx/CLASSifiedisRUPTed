@@ -1,35 +1,121 @@
-# PS-039-01 — domain schema
+# PS-039-01 — Domain schema: Rental availability
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-01. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S01.M01 Rental availability](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_catalog/availability` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the domain schema process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-039-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-039-01.R01** A RentalOffering stores owner, listing, rates, quantity, durations, buffers, lead time, horizon, blackouts, late-fee terms, cancellation policy, declared value, checklist template, time zone and status, with revision per CTR-ID-001; its public projection is a signed P0 statement limited to the F11.S01.M01 field allowlist.
+- **PS-039-01.R02** A RentalReservation stores offering, renter, owner, interval, occupied interval including buffers, units, price, rate unit, the terms copied from the signed request, the checklist template, the absolute request expiry, status and the cids of its signed statements and consents, and is P2 in both vaults.
+- **PS-039-01.R03** Rent, late-fee rate and cap, cancellation fee and declared value are integer minor units per CTR-MNY-001; the rent is computed once, with ceiling on rate units and no rounding of minor units.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### RentalOffering
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.rentals.offering/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — vault tenant scope |
+| ownerId | actorId — did:key of the owner; signs the projection |
+| listingId | uuidv7 — ref F01.S01.M01 Listing of subtype rental |
+| hourlyRate? | Money — CTR-MNY-001; > 0; at least one of hourlyRate and dailyRate is required |
+| dailyRate? | Money — CTR-MNY-001; > 0; same currency as hourlyRate |
+| quantity | int — 1..20 identical units |
+| minDurationMinutes | int — 60..1440 |
+| maxDurationDays | int — 1..90 |
+| bufferBeforeMinutes | int — 0..1440 |
+| bufferAfterMinutes | int — 0..1440 |
+| leadTimeMinutes | int — 0..43200 |
+| horizonDays | int — 1..365 |
+| timeZone | string — IANA zone used for blackout dates and local display |
+| blackoutDates | string[] — 0..100 local dates YYYY-MM-DD in timeZone |
+| lateFee | object — {graceMinutes 0..1440 default 60, ratePerHour: Money, capAmount: Money}; capAmount ≤ 1 000 000 000 000 |
+| cancellationPolicy | object — {freeUntilHours: int 0..720 before startsAt, fee: Money ≥ 0 in the rate currency}; a renter cancellation after the free period owes fee |
+| declaredValue | Money — owner's stated replacement value; > 0; ≤ 1 000 000 000 000 minor units; shown to the renter and bound by the signed request |
+| checklistTemplate | ChecklistTemplateItem[] — 1..30 items {id: string ≤ 40, label: string ≤ 80}; labels are P0-safe (no names, addresses or contact data) |
+| autoConfirm | boolean — confirm automatically when the owner's app is open and the interval is free |
+| pickupAreaCell | string — geohash of length 4 or 5 checked by F06.S02.M01 assertPublicCell; never finer |
+| status | enum — draft \| active \| paused \| archived |
+| withdrawReason? | enum — paused \| archived \| listing_unavailable; set when a published offering leaves active and carried in rentals.offering.withdrawn |
+| projectionCid? | string — cid of the signed public projection |
+| revision | int — CTR-ID-001 ID-4 |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- Currency is identical for hourlyRate, dailyRate, lateFee, cancellationPolicy.fee and declaredValue.
+- pickupAreaCell has length 4 or 5; no exact address field exists in the offering, its projection or any rentals statement.
+- The signed projection contains only the F11.S01.M01 allowlisted fields of classrup.rentals.offering/v1 and every field carries an F10.S02.M02 class.
+- bufferBeforeMinutes plus bufferAfterMinutes plus minDurationMinutes is at most 4 320 minutes.
+
+### RentalReservation
+
+Schema `classrup.rentals.reservation/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
+
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key, generated by the renter vault with the request |
+| offeringId | uuidv7 — ref RentalOffering |
+| offeringRevision | int — offering revision the renter saw; bound in the signed request |
+| projectionCid | string — cid of the signed projection the renter saw; bound in the signed request |
+| renterId | actorId — signer of the request |
+| ownerId | actorId — must equal the offering owner key |
+| startsAt | timestamp — RFC 3339 UTC, claimed pickup start |
+| endsAt | timestamp — RFC 3339 UTC, after startsAt; duration between minDurationMinutes and maxDurationDays |
+| occupiedFrom | timestamp — startsAt minus bufferBeforeMinutes |
+| occupiedUntil | timestamp — endsAt plus bufferAfterMinutes; adjusted on early or late return and set to closedAt for a closure without return |
+| units | int — 1..quantity |
+| rateUnit | enum — hour \| day |
+| rent | Money — CTR-MNY-001; units times ceil(duration / unit) times rate |
+| lateFeeTerms | object — copy of the lateFee terms in the signed request |
+| cancellationPolicy | object — copy of the cancellation policy in the signed request |
+| declaredValue | Money — copy of the declared value in the signed request |
+| checklistTemplate | ChecklistTemplateItem[] — copied at confirmation from the offering revision named in the request |
+| expiresAt | timestamp — signed in the request; min(request createdAt + 48 h, startsAt − leadTimeMinutes) |
+| status | enum — requested \| lapsed \| declined \| confirmed \| frozen \| handoff_pending \| in_use \| overdue \| returned \| closed \| cancelled |
+| frozenReason? | enum — fork \| equivocation \| late_confirmation \| consent_conflict |
+| cancelReason? | enum — renter \| owner \| declined \| expired \| no_handoff \| conflict \| offering_unavailable \| blocked; blocked is local-only and never sent |
+| cancelledBy? | actorId — DID of the party whose signed cancellation took effect, or of the local principal for a locally derived reason |
+| requestCid | string — cid of the signed rental_request |
+| requestConsentCid | string — cid of the renter's comms.consent statement (consent.rentals.reservation.request.v1) |
+| confirmationCid? | string — cid of the owner's rental_confirmation |
+| confirmConsentCid? | string — cid of the owner's comms.consent statement (consent.rentals.reservation.confirm.v1) |
+| consentRevocationId? | string — revocationId of the comms.consent.revoked whose revokedIds[] named requestConsentCid or confirmConsentCid and froze the reservation |
+| dealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); rent Deal for contextRef {rental_reservation, reservationId}, opened at handoff |
+| feeDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); cancellation-fee Deal for contextRef {rental_cancellation_fee, reservationId} |
+| dealCancelPending? | boolean — a commerce.deal.cancel statement awaits the counterparty's signature |
+| syncState | map — per peer {state: prepared \| transport_acknowledged \| peer_accepted, at} |
+| revision | int — CTR-ID-001 ID-4 |
+
+**Invariants**
+- In the owner vault, at any instant the units of reservations with status confirmed, handoff_pending, in_use, overdue or frozen whose occupied intervals contain that instant are at most the offering quantity, except for frozen excess created by a detected fork, and no confirmation or renegotiation adds units at an instant where such excess exists.
+- status confirmed or later implies confirmationCid is set and both signatures and both consent statements verified.
+- lateFeeTerms, cancellationPolicy and declaredValue equal the values in the signed request.
+- occupiedFrom is before occupiedUntil and startsAt is before endsAt.
+
+### Storage DDL
+
+```sql
+CREATE TABLE rentals_reservation (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, offering_id TEXT NOT NULL, renter_id TEXT NOT NULL, owner_id TEXT NOT NULL,
+  occupied_from TEXT NOT NULL, occupied_until TEXT NOT NULL, units INTEGER NOT NULL, status TEXT NOT NULL,
+  expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE INDEX rentals_reservation_range ON rentals_reservation(tenant_id, offering_id, status, occupied_from, occupied_until);
+CREATE INDEX rentals_reservation_expiry ON rentals_reservation(status, expires_at);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-039-09.T01 | unit | PS-039-01.R01, PS-039-01.R03, PS-039-02.R03 | compute rent for 25 h on day unit, 90 min on hour unit, and JPY and BHD currencies | ceiling units, integer minor units, no rounding of minor units |
+| TEST-PS-039-09.T03 | property | PS-039-02.R02, PS-039-01.R02, PS-039-09.R02 | random reservations, including frozen ones, for quantities 1 to 20 against brute-force reference | accept/refuse decisions identical; never more than quantity units at any minute outside detected fork excess |
+| TEST-PS-039-09.T16 | e2e | PS-039-01.R01, PS-039-04.R01 | mobile renter requests, owner confirms in second browser | both show confirmed; busy blocks update; axe zero serious issues |
+| TEST-PS-039-09.T18 | contract | PS-039-07.R02, PS-039-01.R01 | inspect the offering projection, busy summary and every rentals statement; validate pickupAreaCell values of length 4, 5 and 6 through assertPublicCell; share the address in the thread | no address field exists anywhere; lengths 4 and 5 accepted, 6 refused; projection keys equal the F11.S01.M01 allowlist; the address travels only as an F06.S02.M02 share with location_precise consent and TTL ≤ 24 h |
+| TEST-PS-039-09.T19 | integration | PS-039-01.R02, PS-039-02.R04 | owner raises the late fee between request and confirmation, then the renter re-requests with the new terms | first confirm returns RENTALS_TERMS_CHANGED; the confirmed reservation's lateFeeTerms, cancellationPolicy and declaredValue equal the signed request |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S01.M01, F09.S03.M01, F09.S03.M03, F08.S01.M01, F08.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F06.S02.M01, F06.S02.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

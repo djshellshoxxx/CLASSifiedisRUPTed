@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-022-06.R01** All commands are idempotent per CTR-IDM-001; a repeated withdraw returns the stored record.
-- **PS-022-06.R02** A withdrawal, the phase computation, the cycle cancellation and the release of the principal's reservations happen in one IndexedDB transaction, so no state exists where the cycle is cancelled but items are still held.
+- **PS-022-06.R02** A withdrawal, the phase computation, the cycle cancellation and the release of the principal's reservations happen in one IndexedDB transaction, with F02.S03.M02 LockPort.releaseForSubject called inside it, so no state exists where the cycle is cancelled but items are still held; the mutiny.cycle.cancelled event is additionally consumed by F02.S03.M02 idempotently and orphan reconciliation runs on vault open.
 - **PS-022-06.R03** Conflicting evidence, such as a handover attestation arriving after cancellation, never reopens a cycle and is escalated to recovery rather than merged.
 
 ## Specification
@@ -26,9 +26,10 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 |---|---|---|---|---|
 | TEST-PS-022-09.T02 | integration | PS-022-01.R03, PS-022-03.R02, PS-022-06.R02 | Dan withdraws in 4-party cycle after Alice's handed_over evidence | outcome partially_executed, cycle not cancelled, recovery opened by F02.S03.M04 |
 | TEST-PS-022-09.T05 | integration | PS-022-03.R04, PS-022-06.R03 | handed_over attestation arrives after cancellation | cycle stays cancelled and a standalone recovery case is opened |
-| TEST-PS-022-09.T11 | integration | PS-022-06.R01, PS-022-06.R02 | replay withdraw; crash between cancellation and release | one record; no partial state; release and cancel atomic |
-| TEST-PS-022-09.T12 | chaos | PS-022-06.R03, PS-022-05.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline |
+| TEST-PS-022-09.T11 | integration | PS-022-06.R01, PS-022-06.R02, PS-022-03.R01 | replay withdraw; crash inside the withdraw transaction after LockPort.releaseForSubject was called; abort of that transaction | one record; after abort the cycle and the holds are unchanged; after commit cancellation and release are both visible, never only one |
+| TEST-PS-022-09.T12 | chaos | PS-022-06.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline |
+| TEST-PS-022-09.T21 | integration | PS-022-06.R03, PS-022-03.R04 | vault opened with an own active lock whose cycle is already cancelled (orphan) | evaluate on open releases it through LockPort.releaseForSubject; no cycle reopens |
 
 ## Dependencies
 
-Module depends on: F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S03.M01, F02.S03.M02, F02.S03.M04, F02.S01.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

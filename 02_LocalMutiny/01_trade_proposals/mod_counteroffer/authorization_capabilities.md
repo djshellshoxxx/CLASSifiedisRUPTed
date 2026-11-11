@@ -15,7 +15,8 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | mutiny.revision.create | principal | vault unlocked; principal is a party; turn or coordinator rule satisfied; subject open |
-| mutiny.revision.ingest | principal | envelope signer is a party of the subject with a non-revoked device key |
+| mutiny.revision.ingest | principal | envelope signer is a party of the subject with a non-revoked device key and not blocked by the principal |
+| mutiny.revision.report_fork | system | internal port; caller is F02.S01.M01 or F02.S03.M01 holding a consent accepted by F08.S02.M02 |
 | mutiny.revision.read | principal | own vault |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
@@ -24,8 +25,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-012-09.T07 | abuse | PS-012-05.R01, PS-012-05.R02, PS-012-05.R03, PS-012-07.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND |
+| TEST-PS-012-09.T07 | abuse | PS-012-05.R01, PS-012-05.R02, PS-012-05.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND |
 
 ## Dependencies
 
-Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

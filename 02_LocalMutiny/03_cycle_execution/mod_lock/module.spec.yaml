@@ -275,7 +275,7 @@ processes:
     fixtures: "Vault A with items I1 (qty 1), I2 (qty 3), I3 (qty 1, held elsewhere); vaults B and C; fixed clock 2026-11-04T10:00:00Z; 4-party and 6-party subject fixtures."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R01 | reserve I1 and I2 | InventoryPort lines mapped from the leg items, holds with holder {type: cycle, id: subjectId}, classrup.bazaar.reservation/v1 issued with ext.revisionHash, expiry equals deadline plus execution window"
-      - "T02 | unit | 02.R01,02.R03 | each rule V01..V09 violated in turn | documented error code and no hold left behind"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01..V10 violated in turn | documented error code and no hold left behind"
       - "T03 | property | 03.R01,06.R02 | random reserve, release, supersede, expire sequences | status only moves forward; active own locks always have active holds; sum of quantities within availability"
       - "T04 | integration | 06.R02,01.R02,09.R03 | two concurrent reserves of the same quantity-1 item for different subjects | exactly one succeeds, the other MUTINY_LOCK_CONFLICT without naming the first"
       - "T05 | integration | 02.R01,06.R03 | reserve [I1, I2, I3] where I3 is unavailable | MUTINY_LOCK_UNAVAILABLE and I1, I2 holds absent"

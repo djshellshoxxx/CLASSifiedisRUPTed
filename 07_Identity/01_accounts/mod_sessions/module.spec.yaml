@@ -3,41 +3,51 @@ scope: MVP
 summary: >-
   Two kinds of session, neither needing a central account. A vault unlock session lives only in memory on the
   user's device - it opens the local vault with the passphrase (or a platform-protected key), auto-locks after 15
-  minutes idle by default and holds no server credential. A relay access session is an opaque 256-bit token a relay
-  issues after an Ed25519 challenge-response signed by a device key of a DID, used only for that relay's resources
-  (index writes, mailboxes, auction hosting, push subscriptions). Tokens are stored hashed on the relay, expire idle
-  after 7 days and absolute after 30 days, and are listed and revocable by the user.
+  minutes idle by default and holds no server credential; the user can change the passphrase, which re-wraps the
+  keystore in one transaction. A relay access session is an opaque 256-bit token a relay issues after an Ed25519
+  challenge-response signed by a device key of a DID, used only for that relay's resources (index writes, mailboxes,
+  auction hosting, push subscriptions). Challenges are issued for every well-formed did:key, every start failure looks
+  the same from outside, and a first login may carry the identity document inline. Tokens are stored hashed on the
+  relay, expire idle after 7 days and absolute after 30 days, rotate with a 30 second grace, and are listed and
+  revocable by the user; when a device key is revoked the vault revokes its tokens on every known relay and each relay
+  ends them once it stores the newer identity document.
 responsibilities:
   - Unlock and lock the vault - derive the vault key from the passphrase with scrypt (N=2^17, r=8, p=1), keep it in memory only, lock on idle (default 15 minutes, range 1 minute to 8 hours), on tab close and on explicit lock.
-  - Issue relay challenges (32-byte nonce, 120 s TTL, single use) and verify the signature over classrup-login:v1:<relayId>:<nonce> with a device key authorized by the DID's identity document.
-  - Issue, rotate and revoke relay access tokens (256-bit random, SHA-256 hash stored, idle 7 days, absolute 30 days, max 20 active per DID per relay).
+  - Change the vault passphrase - check strength, re-wrap every keystore entry under a new scrypt-derived key in one transaction, and lock other tabs.
+  - Issue relay challenges (32-byte nonce, 120 s TTL, single use) for every well-formed did:key with per (DID, IP prefix) caps and oldest-first eviction, and verify the signature over classrup-login:v1:<relayId>:<nonce> with a device key active in the DID's identity document, accepting an inline document on first login.
+  - Issue, rotate and revoke relay access tokens (256-bit random, SHA-256 hash stored, idle 7 days, absolute 30 days, max 20 active per DID per relay, 30 second rotation grace).
+  - End relay tokens of revoked device keys - the vault revokes them on every known relay through the outbox, and the relay ends tokens whose key is no longer active in the stored document within 60 seconds.
   - List sessions - the vault shows its unlock state and its known relay tokens; a relay shows the sessions of the DID that presents a valid token.
 non_responsibilities:
   - Creating keys and devices (F07.S01.M01) and recovery (F07.S01.M03).
+  - Verifying and storing identity documents (F07.S02.M01); this module asks it for the key status.
   - Authorization decisions; the kernel command bus evaluates capabilities per CTR-CAP-001.
   - Passkeys or WebAuthn second factors, which are FUTURE (ADR-0013).
   - A global account session; there is none, and the vault never depends on a server to open.
   - "Future: WebAuthn PRF for vault unlock, hardware-backed non-extractable device keys where supported, per-relay scoped tokens with capability lists."
-depends_on: [F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F07.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
   - As a user, I unlock my vault with my passphrase and it locks itself after 15 idle minutes so a borrowed phone does not expose my data.
   - As a user, I sign in to a relay with my device key, without a password, and the relay gives me a token valid for at most 30 days.
   - As a user, I see my active relay sessions and can revoke any of them.
   - As a relay operator, I can see only that a DID has a session, not the vault or the keys.
+  - As a user who fears my passphrase was seen, I change it and the old one stops working on this device.
 edge_cases:
   - Wrong passphrase entered repeatedly; the vault applies a local backoff of 1 s, 2 s, 4 s up to 15 minutes after 5 failures, and states that this is a convenience, because an attacker with the stored file can guess offline limited only by scrypt cost.
-  - The challenge nonce is used twice or after 120 s; the second use returns EXPIRED or CONFLICT_STATE and no token is issued.
-  - The device key was revoked but the relay has not seen the new identity document; the relay accepts the key until it fetches a newer document, and revokes tokens when it does.
+  - The challenge nonce is used twice or after 120 s; start returns UNAUTHENTICATED, the reason class goes only to relay diagnostics, and no token is issued.
+  - The device key was revoked; the vault publishes the new identity document to every relay where it holds a session and calls identity.session.revoke there, the relay ends that key's tokens within 60 s of storing the document, and a relay re-fetches a cached document older than 1 hour at every start.
   - A token is presented from a different network; the relay does not bind tokens to IPs, and the user can see the /24 prefix used at start in the session list.
   - Two tabs unlock the same vault; a Web Lock makes one the writer and the other read-only until the first locks.
   - The absolute 30-day limit is reached during use; the next request returns EXPIRED and the client silently re-runs the challenge-response with the device key.
-  - Unknown DID asks for a challenge; the relay returns a decoy challenge (HMAC-derived) so existence cannot be probed, and start fails uniformly with UNAUTHENTICATED.
+  - A DID logs in to a relay for the first time and the relay holds no document for it; start carries the document inline, the relay verifies it per F07.S02.M01, stores it and then checks the key.
+  - An attacker requests many challenges for a victim's DID from one network; only the attacker's own (DID, IP prefix) slots fill and evict each other, and the victim still gets a challenge from another network.
   - The device clock is wrong by an hour; relay-side expiry uses the relay clock and vault idle-lock uses a monotonic timer.
+  - The browser crashes in the middle of a passphrase change; the old passphrase still unlocks the vault and the new one does not.
 ux:
   screens:
-    - "Unlock screen: passphrase field, show/hide toggle, biometric or platform unlock button where supported, backoff countdown text, link to recovery."
-    - "Settings > Sessions: this device's lock timeout selector, list of relay sessions with relay name, started day, last used, /24 prefix, Revoke and Revoke all others."
-  states: [locked, unlocking, unlocked, backoff, relay-session-active, expired, revoked, error]
+    - "Unlock screen: passphrase field, show/hide toggle, biometric or platform unlock button where supported, backoff countdown text, link to recovery, and the honest note that a copied vault file can be attacked offline."
+    - "Settings > Sessions: this device's lock timeout selector, Change passphrase, list of relay sessions with relay name, started day, last used, /24 prefix, Revoke and Revoke all others."
+  states: [locked, unlocking, unlocked, backoff, changing-passphrase, relay-session-active, rotating, expired, revoked, error]
   a11y:
     - The passphrase field has a visible label, a show/hide control, and error text linked with aria-describedby and announced via aria-live polite.
     - Backoff countdown is text and updates at most every 10 seconds to avoid noisy announcements.
@@ -46,7 +56,7 @@ processes:
   domain_schema:
     requirements:
       - A LoginChallenge stores only the hash of the nonce, the DID it was issued for, the relay it was bound to, and a 120 second expiry; it is relay-side ephemeral data.
-      - A Session stores kind, DID, device key, token hash for relay sessions, idle and absolute expiry, and metadata; vault unlock sessions are in memory and never persisted.
+      - A Session stores kind, DID, device key, token hash for relay sessions, idle and absolute expiry, rotation grace and metadata; vault unlock sessions are in memory and never persisted.
       - Tokens and the vault key are P4 values that never appear in logs, events or exports; only SHA-256 hashes of tokens are stored on the relay.
     entities:
       - name: LoginChallenge
@@ -57,18 +67,18 @@ processes:
         fields:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — the relay namespace"
-          - "did: did — DID the challenge was issued for"
+          - "did: did — DID the challenge was issued for; any well-formed did:key"
           - "relayId: string — relay identifier bound into the signed message"
           - "nonceHash: string — SHA-256 of the 32-byte nonce, hex 64 characters"
-          - "status: enum — issued | consumed | expired"
-          - "ipPrefix: string — IPv4 /24 or IPv6 /48 truncation for rate limiting"
+          - "status: enum — issued | consumed | expired | evicted"
+          - "ipPrefix: string — IPv4 /24 or IPv6 /48 truncation for caps and rate limiting"
           - "expiresAt: timestamp — relay clock, createdAt plus 120 000 ms"
           - "consumedAt?: timestamp — relay clock"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
           - A challenge is consumed at most once and never after expiresAt.
-          - A DID has at most 5 outstanding issued challenges per relay.
+          - A (DID, ipPrefix) pair has at most 5 outstanding issued challenges per relay and a 6th evicts the oldest of that pair; a DID has at most 50 outstanding challenges across all prefixes, oldest evicted first.
           - The raw nonce is never stored; only nonceHash.
       - name: Session
         schema: classrup.identity.session/v1
@@ -87,10 +97,12 @@ processes:
           - "lastSeenAt: timestamp — updated at most once per 5 minutes"
           - "idleExpiresAt: timestamp — lastSeenAt plus idle timeout (7 days relay, 15 minutes default for vault)"
           - "absoluteExpiresAt?: timestamp — startedAt plus 30 days, relay_token only"
+          - "graceUntil?: timestamp — relay clock, rotation time plus 30 000 ms, rotating only"
+          - "successorSessionId?: uuidv7 — the session that replaced this one at rotation"
           - "uaLabel?: string — coarse label such as 'Firefox on Android', at most 80 code points"
           - "ipPrefix?: string — /24 or /48 at start, relay_token only"
-          - "status: enum — active | revoked | expired"
-          - "endReason?: enum — locked | idle | absolute | user_revoked | device_revoked | recovery | erased | limit"
+          - "status: enum — active | rotating | revoked | expired"
+          - "endReason?: enum — locked | idle | absolute | user_revoked | device_revoked | recovery | erased | limit | rotated | passphrase_changed"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
@@ -98,56 +110,69 @@ processes:
           - Raw tokens and the vault key are never stored; vault_unlock rows exist only in memory.
           - A relay_token session has tokenHash, relayId and absoluteExpiresAt; a vault_unlock session has none of them.
           - A DID has at most 20 active relay_token sessions per relay; the 21st start revokes the least recently used with reason limit.
+          - A rotating session has graceUntil and successorSessionId, and its token is accepted only until graceUntil.
     sql: |
       CREATE TABLE identity_login_challenge (
-        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, nonce_hash TEXT NOT NULL, status TEXT NOT NULL,
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, ip_prefix TEXT NOT NULL, nonce_hash TEXT NOT NULL, status TEXT NOT NULL,
         expires_at TEXT NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX identity_challenge_nonce ON identity_login_challenge(nonce_hash);
+      CREATE INDEX identity_challenge_slots ON identity_login_challenge(tenant_id, did, ip_prefix, status);
       CREATE TABLE identity_session (
-        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, token_hash TEXT NOT NULL, status TEXT NOT NULL,
-        idle_expires_at TEXT NOT NULL, absolute_expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, device_key TEXT NOT NULL, token_hash TEXT NOT NULL, status TEXT NOT NULL,
+        idle_expires_at TEXT NOT NULL, absolute_expires_at TEXT NOT NULL, grace_until TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX identity_session_token ON identity_session(token_hash);
       CREATE INDEX identity_session_did ON identity_session(tenant_id, did, status);
+      CREATE INDEX identity_session_key ON identity_session(tenant_id, did, device_key, status);
   validation_rules:
     requirements:
       - A challenge is valid only if unexpired, unused, issued for the claimed DID and relay, and signed over the exact domain-separated message.
-      - The signing key must be listed active in the DID's current signed identity document held by the relay.
-      - Every failure on the start path returns the same UNAUTHENTICATED outward response, with the specific reason only in relay diagnostics.
+      - The signing key must be listed active in the DID's current signed identity document, verified per F07.S02.M01, re-fetched from the document's listed relays when the cached copy is older than 1 hour, or supplied inline on first login.
+      - Every challenge or signature failure on the start path returns the same UNAUTHENTICATED outward response, with the specific reason only in relay diagnostics; EXPIRED is used only for a token past its absolute expiry.
+      - Challenges are issued for every well-formed did:key, with caps per (DID, IP prefix) and oldest-first eviction, so an attacker can neither probe which DIDs a relay knows through the login endpoints nor lock a victim out by filling challenge slots.
+      - Vault unlock enforces the idle timeout range and the local backoff schedule, and a passphrase change requires the current passphrase and a new one that passes the strength rule.
     rules:
-      - "V01 | challenge exists, status issued, expiresAt not passed, nonceHash matches the SHA-256 of the presented nonce | EXPIRED"
+      - "V01 | challenge exists, status issued, expiresAt not passed, nonceHash matches the SHA-256 of the presented nonce | UNAUTHENTICATED"
       - "V02 | Ed25519 signature verifies over classrup-login:v1:<relayId>:<nonce> with the presented device public key | UNAUTHENTICATED"
-      - "V03 | device public key is listed active in the DID's identity document (valid signature by the account key, highest seq seen) | UNAUTHENTICATED"
+      - "V03 | device public key is listed active in the DID's identity document verified per F07.S02.M01 (signed by the DID root key, highest seq seen), using an inline identityDocument stored first when the relay holds none | UNAUTHENTICATED"
       - "V04 | failed starts for the same (IP /24, DID) are fewer than 10 in 15 minutes and for the IP /24 fewer than 100 in 15 minutes | RATE_LIMITED"
       - "V05 | vault unlock idle timeout is between 1 minute and 8 hours | VALIDATION_FAILED"
       - "V06 | passphrase unlock attempts respect the local backoff schedule 1 s, 2 s, 4 s, up to 900 s after 5 failures | RATE_LIMITED"
       - "V07 | the session to revoke belongs to the caller's DID | NOT_FOUND"
+      - "V08 | the document used for V03 was verified within the last hour, or was refreshed from its listed relays; when it is older than 24 hours and no listed relay answers, start fails without consuming the challenge | DEPENDENCY_UNAVAILABLE"
+      - "V09 | did is a well-formed did:key with multicodec 0xed01; challenges are issued for every such DID regardless of whether the relay holds its document | VALIDATION_FAILED"
+      - "V10 | change_passphrase - the current passphrase unlocks the keystore and the new passphrase has at least 12 characters or 4 words and differs from the current one | VALIDATION_FAILED"
+      - "V11 | a token is used before its absoluteExpiresAt, and a rotating session's old token only until graceUntil | EXPIRED"
   workflow_state_machine:
     requirements:
-      - Challenges move from issued to consumed or expired exactly once and never return.
+      - Challenges move from issued to consumed, expired or evicted exactly once and never return.
       - Sessions are active until locked, revoked or expired; the end is permanent, and a new login creates a new session.
-      - Rotation replaces a relay token atomically with a new session and a 30 second overlap for the old token to cover in-flight requests.
+      - Rotation moves the old session to rotating with graceUntil now plus 30 seconds, inserts the new session in the same transaction, and revokes the old one with reason rotated only when the grace ends.
     machines:
       - entity: LoginChallenge
         initial: issued
-        terminal: [consumed, expired]
+        terminal: [consumed, expired, evicted]
         transitions:
           - "issued -> consumed | identity.session.start with valid signature | mark consumed in the same transaction as session insert"
           - "issued -> expired | expiry sweep at expiresAt | no token issued"
+          - "issued -> evicted | a 6th challenge for the same (DID, IP prefix) or a 51st for the DID is issued | the oldest is evicted; no token can be issued for it"
       - entity: Session
         initial: active
         terminal: [revoked, expired]
         transitions:
-          - "active -> revoked | identity.session.lock, identity.session.revoke, device key revoked, recovery completed, vault erase or limit overflow | set endReason, emit identity.session.revoked"
+          - "active -> rotating | identity.session.rotate | new session inserted active in the same transaction; graceUntil = now + 30 s; old token still accepted until graceUntil"
+          - "rotating -> revoked | graceUntil passed, or lock, revoke, device revocation, recovery or erase during the grace | endReason rotated or the explicit reason; emit identity.session.revoked"
+          - "active -> revoked | identity.session.lock, identity.session.revoke, change_passphrase on other tabs, device key no longer active in the stored document, recovery completed, vault erase or limit overflow | set endReason, emit identity.session.revoked"
           - "active -> expired | idle timeout, absolute timeout, or vault idle lock | set endReason idle or absolute, emit identity.session.revoked"
     timeouts:
       - "LoginChallenge TTL 120 s; expiry sweep every 30 s; rows deleted 24 h after creation (RET-EPHEMERAL)."
       - "Relay token idle timeout 7 days, absolute 30 days; sweep every 60 s; rows deleted 30 days after the end."
+      - "Rotation grace 30 s; the sweep ends rotating sessions at graceUntil and emits identity.session.revoked then."
       - "Vault idle lock 15 minutes by default (1 minute to 8 hours), measured with a monotonic timer, also locks when the page is hidden for more than the timeout."
   commands_queries_events:
     requirements:
-      - unlock, lock and rotate-vault-key operate in the vault with no statement; challenge, start, rotate and revoke for relay tokens are relay commands, and the start request carries a signature by the device key.
-      - Every command emits its events in the same transaction as the state change.
-      - The module consumes device key, recovery and erase events to end sessions.
+      - unlock, lock and change_passphrase (which re-wraps the vault keystore under a new passphrase-derived key) operate in the vault with no statement; challenge, start, rotate and revoke for relay tokens are relay commands, and the start request carries a signature by the device key.
+      - Every command emits its events in the same transaction as the state change, and rotate emits identity.session.revoked for the old session only when the grace ends.
+      - The module consumes device key, recovery, identity document and erase events to end sessions - in the vault it revokes the affected relay tokens on every known relay through the outbox, and on a relay it ends tokens whose device key is no longer active in the stored document.
     commands:
       - name: identity.session.unlock
         capability: identity.session.unlock
@@ -163,6 +188,13 @@ processes:
         errors: [NOT_FOUND]
         emits: [identity.session.revoked]
         idempotent: true
+      - name: identity.session.change_passphrase
+        capability: identity.session.change_passphrase
+        input: "{ currentPassphrase, newPassphrase }"
+        output: "{ rewrappedKeyCount, lockedOtherSessions }"
+        errors: [UNAUTHENTICATED, VALIDATION_FAILED, RATE_LIMITED, CONFLICT_STATE]
+        emits: [identity.session.revoked]
+        idempotent: false
       - name: identity.login_challenge.issue
         capability: identity.login_challenge.issue
         input: "{ did, relayId }"
@@ -172,25 +204,26 @@ processes:
         idempotent: false
       - name: identity.session.start
         capability: identity.session.start
-        input: "{ challengeId, did, deviceKeyPublic, nonce, signature, identityDocument?: classrup.identity.portable_doc/v1 }"
+        input: "{ challengeId, did, deviceKeyPublic, nonce, signature, identityDocument?: classrup.identity.portable_doc/v1 (sent on first login to a relay or when asked to refresh) }"
         output: "{ sessionId, token (shown once), idleExpiresAt, absoluteExpiresAt }"
-        errors: [UNAUTHENTICATED, EXPIRED, RATE_LIMITED, VALIDATION_FAILED]
+        errors: [UNAUTHENTICATED, RATE_LIMITED, VALIDATION_FAILED, DEPENDENCY_UNAVAILABLE]
         emits: [identity.session.started]
         idempotent: false
       - name: identity.session.rotate
         capability: identity.session.rotate
         input: "{ expectedRevision }"
-        output: "{ sessionId, token (shown once), idleExpiresAt, absoluteExpiresAt }"
-        errors: [UNAUTHENTICATED, CONFLICT_REVISION, EXPIRED]
-        emits: [identity.session.started, identity.session.revoked]
+        output: "{ sessionId, token (shown once), idleExpiresAt, absoluteExpiresAt, oldTokenGraceUntil }"
+        errors: [UNAUTHENTICATED, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED]
+        emits: [identity.session.started]
         idempotent: false
       - name: identity.session.revoke
         capability: identity.session.revoke
-        input: "{ sessionId?, allOthers?: boolean }"
+        input: "{ sessionId?, allOthers?: boolean, deviceKeyPublic?: string (end every token of this DID started with that key) }"
         output: "{ revokedCount }"
         errors: [NOT_FOUND, UNAUTHENTICATED]
         emits: [identity.session.revoked]
         idempotent: true
+    note: "No signed statements are produced (N2). The login signature is a challenge response over classrup-login:v1:<relayId>:<nonce>, domain-separated from every statement prefix. Key status comes from F07.S02.M01 (KeyStatusPort and the relay's stored documents). In the vault, identity.session.revoke for relay tokens is queued per relay in the sync outbox after the reissued identity document, so a relay that comes back online first stores the document and then processes the revoke."
     queries:
       - name: identity.session.list_own
         capability: identity.session.read_own
@@ -199,29 +232,32 @@ processes:
         errors: [UNAUTHENTICATED]
     events_produced:
       - {type: identity.session.started, privacy: P3, payload: "{ sessionId, kind, did, relayId?, startedAt }"}
-      - {type: identity.session.revoked, privacy: P3, payload: "{ sessionId, kind, did, reason }"}
+      - {type: identity.session.revoked, privacy: P3, payload: "{ sessionId, kind, did, reason: locked|idle|absolute|user_revoked|device_revoked|recovery|erased|limit|rotated|passphrase_changed }"}
     events_consumed:
-      - {type: identity.device_key.revoked, effect: "end sessions started with that device key (relay tokens at the next identity document fetch, vault unlock sessions immediately) with reason device_revoked"}
-      - {type: identity.recovery.completed, effect: "end all relay tokens and lock the vault session with reason recovery"}
+      - {type: identity.device_key.revoked, effect: "vault - lock vault unlock sessions of that device at once and queue identity.session.revoke with deviceKeyPublic on every relay where this vault holds a session, after the reissued document; reason device_revoked"}
+      - {type: identity.recovery.completed, effect: "vault - queue identity.session.revoke for every relay token of the revoked keys on each known relay through the outbox and lock the vault session with reason recovery"}
+      - {type: identity.portable_doc.published, effect: "relay runtime only, origin relay_stored - end within 60 s every token whose deviceKeyPublic is no longer active in the stored document, endReason device_revoked (CAP-6)"}
       - {type: security.role.assigned, effect: "relay only - rotate or end sessions of the DID so new relay privileges apply from the next request"}
       - {type: security.role.revoked, effect: "relay only - end sessions of the DID so the removed relay privileges apply from the next request"}
-      - {type: privacy.deletion.completed, effect: "vault erase - end all sessions and delete stored token hashes with reason erased"}
+      - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already ended sessions and deleted stored token hashes; remove leftovers with reason erased"}
     errors: []
     example: |
       relay command: identity.login_challenge.issue { "did": "did:key:z6Mk…", "relayId": "relay.example.org" }
       -> { "challengeId": "0192f410-…", "nonce": "…43 chars…", "expiresAt": "2026-11-04T10:02:00.000Z" }
-      relay command: identity.session.start { "challengeId": "0192f410-…", "did": "did:key:z6Mk…", "deviceKeyPublic": "…", "nonce": "…", "signature": "…" }
+      relay command: identity.session.start { "challengeId": "0192f410-…", "did": "did:key:z6Mk…", "deviceKeyPublic": "…", "nonce": "…", "signature": "…", "identityDocument": { "type": "classrup.identity.portable_doc/v1", … } }
       -> 201 { "sessionId": "0192f411-…", "token": "…43 chars…", "idleExpiresAt": "2026-11-11T10:00:00.000Z", "absoluteExpiresAt": "2026-12-04T10:00:00.000Z" }
+      any start failure -> 401 { "code": "UNAUTHENTICATED" } (same body and timing class for every reason)
   authorization_capabilities:
     requirements:
-      - Vault policy - only a person who knows the passphrase or holds the platform-protected key can unlock; once unlocked the principal acts as the local actor.
+      - Vault policy - only a person who knows the passphrase or holds the platform-protected key can unlock or change the passphrase; once unlocked the principal acts as the local actor.
       - Relay policy - challenge and start are open to anonymous callers (they authenticate by signature); all other session commands need a valid relay token of the same DID.
       - Relay roles from security.role.* apply only to that relay's resources and end sessions so they take effect on the next request (CAP-6).
     capabilities:
       - "identity.session.unlock | anonymous | local passphrase or platform key; local backoff applies"
       - "identity.session.lock | principal | vault unlocked"
-      - "identity.login_challenge.issue | anonymous | relay policy allows the DID; rate limit 10 per minute per IP /24"
-      - "identity.session.start | anonymous | valid unexpired challenge and valid device signature"
+      - "identity.session.change_passphrase | principal | vault unlocked and current passphrase re-entered; local backoff applies"
+      - "identity.login_challenge.issue | anonymous | well-formed did:key; per (DID, IP prefix) cap with eviction; rate limit 10 per minute per IP /24"
+      - "identity.session.start | anonymous | valid unexpired challenge and valid device signature by a key active in the DID's document"
       - "identity.session.rotate | principal | valid relay token of the DID"
       - "identity.session.revoke | principal | valid token or unlocked vault; sessions belong to the DID"
       - "identity.session.read_own | principal | unlocked vault or valid relay token; own DID only"
@@ -230,16 +266,17 @@ processes:
       - Token issuance and challenge consumption occur in one relay transaction so a crash never leaves a consumed challenge without a session or a session without consumption.
       - Revocation is idempotent and takes effect on the next request.
       - Vault unlock is local and works offline; relay sessions fail closed, and the client re-authenticates with the device key transparently.
-    idempotency: "Revoke and lock are idempotent; start is single-use by challenge id (a replay returns UNAUTHENTICATED, not a second token); rotate returns a new token each call and invalidates the old one after 30 s."
-    concurrency: "Challenge consumption uses UPDATE status issued to consumed with row count check inside BEGIN IMMEDIATE; session limit enforcement is in the same transaction; two tabs coordinate unlock via Web Locks."
-    retries: "Clients retry challenge and start only on network errors and RATE_LIMITED with base 500 ms, cap 30 s, full jitter, max 6 attempts; a failed signature is never retried."
-    offline: "Vault unlock and lock work fully offline; relay token requests queue nothing and the UI shows 'relay unavailable' while local work continues."
-    partial_failure: "If the relay cannot fetch the identity document it returns DEPENDENCY_UNAVAILABLE and consumes no challenge; if token storage fails the transaction rolls back and the challenge remains valid until expiry."
+    idempotency: "Revoke and lock are idempotent; start is single-use by challenge id (a replay returns UNAUTHENTICATED, not a second token); rotate returns a new token each call and the old one ends when its 30 s grace passes; change_passphrase is not idempotent and is serialized by a Web Lock."
+    concurrency: "Challenge consumption uses UPDATE status issued to consumed with row count check inside BEGIN IMMEDIATE; challenge caps and eviction and the session limit are enforced in the same transaction; two tabs coordinate unlock and passphrase change via Web Locks."
+    retries: "Clients retry challenge and start only on network errors, RATE_LIMITED and DEPENDENCY_UNAVAILABLE with base 500 ms, cap 30 s, full jitter, max 6 attempts; a failed signature is never retried."
+    offline: "Vault unlock, lock and passphrase change work fully offline; relay token requests queue nothing, while revocations of tokens after a device revocation wait in the sync outbox per relay, and the UI shows 'relay unavailable' while local work continues."
+    partial_failure: "If the relay cannot refresh a stale identity document it returns DEPENDENCY_UNAVAILABLE and consumes no challenge; if token storage fails the transaction rolls back and the challenge remains valid until expiry; a passphrase change writes all re-wrapped entries and the new KDF salt in one IndexedDB transaction, so a crash leaves the old passphrase valid."
   privacy_retention_abuse:
     requirements:
       - Tokens are 256-bit random values returned once, stored only as SHA-256 hashes, sent only in the Authorization header and never logged or placed in URLs.
       - Relays learn the DID, device public key, /24 or /48 prefix and user agent label only; they never learn the passphrase, vault key or any private key.
       - The vault passphrase protects against casual access and not against an attacker with a copy of the encrypted vault who can guess offline; the UI says so.
+      - The module meets the N6 privacy duties - it registers ExportSectionPort (section identity.sessions with the lock timeout preference only, never sessions), DeletionPort (end every session and delete token hashes on each known relay before keys are destroyed) and RetentionPurgePort (ended sessions after 30 days, challenges after 24 h), classifies its fields with F10.S02.M02, and treats privacy.deletion.completed only as final cleanup.
     data:
       - "Session: P4 for token hash and vault key (memory only); metadata P3."
       - "LoginChallenge: P4 nonce hash; ephemeral."
@@ -249,58 +286,69 @@ processes:
       - "T01 | Replay of a captured challenge signature | nonce single use, 120 s TTL, relay and domain separation in the signed message"
       - "T02 | Token theft from storage on the relay | only SHA-256 hashes stored, 256-bit random tokens, idle 7 d and absolute 30 d expiry"
       - "T03 | Online brute force or signature-grinding | signature is Ed25519 so guessing is infeasible; limits of 10 failed starts per 15 min per (IP /24, DID) and 100 per IP /24"
-      - "T04 | Enumeration of DIDs known to a relay | decoy HMAC-derived challenges for unknown DIDs and uniform UNAUTHENTICATED responses"
-      - "T05 | Offline guessing of the vault passphrase from a stolen device | scrypt N=2^17, r=8, p=1 and strength requirement; the local backoff is advisory; honest warning in the UI"
-      - "T06 | Stolen unlocked device | 15 minute idle lock by default, lock on hide, user can lock at once and revoke relay sessions from another device"
+      - "T04 | Enumeration of DIDs known to a relay | real challenges for every well-formed did:key and one UNAUTHENTICATED response for every start failure, so the login endpoints are no oracle; honest limit - the relay's public document read (F07.S02.M01 identity.portable_doc.get) reveals which DIDs it hosts"
+      - "T05 | Offline guessing of the vault passphrase from a stolen device | scrypt N=2^17, r=8, p=1 and strength requirement; the local backoff is advisory; honest warning in the UI; the user can change the passphrase"
+      - "T06 | Stolen unlocked device | 15 minute idle lock by default, lock on hide, user can lock at once and revoke the device key from another device, which revokes its relay tokens on every known relay"
+      - "T07 | Lock-out by filling a victim's challenge slots | caps per (DID, IP prefix) with oldest-first eviction, so an attacker only evicts its own challenges"
+      - "T08 | Stolen device keeps relay access after revocation | vault pushes the new document and revokes the key's tokens on every known relay; relays end such tokens within 60 s of storing the document and refresh cached documents older than 1 hour at every start"
     abuse_controls:
-      - "Relay start limits as above plus a per-relay global cap of 50 starts per second."
-      - "Max 20 active relay sessions per DID per relay and 5 outstanding challenges per DID."
+      - "Relay start limits as above plus a per-relay global cap of 50 starts per second, run through the bus RateLimitPort (F12.S03.M03, N18)."
+      - "Max 20 active relay sessions per DID per relay; 5 outstanding challenges per (DID, IP prefix) and 50 per DID, with oldest-first eviction."
   observability_performance:
     requirements:
       - Relays export session metrics per CTR-OBS-001 without DIDs or tokens as labels; the vault keeps only local counters.
       - Challenge issue and start meet the write budget of p95 at most 300 ms at 50 req/s; vault unlock completes within 1.5 seconds on a Moto G-class device.
       - Per-request token verification adds at most 2 ms p95.
     metrics:
-      - "classrup_identity_session_starts_total{outcome=ok|bad_signature|expired|rate_limited}"
+      - "classrup_identity_session_starts_total{outcome=ok|bad_signature|expired_challenge|key_inactive|rate_limited|doc_unavailable}"
       - "classrup_identity_sessions_active (gauge, relay)"
+      - "classrup_identity_challenges_evicted_total (relay)"
       - "local counter vault_unlock_total{outcome=ok|wrong_passphrase|backoff}"
     logs:
       - "info session.started {kind, correlationId} - no DID, token, nonce or key."
-      - "warn session.start_failed {reasonClass, correlationId} - no inputs."
+      - "warn session.start_failed {reasonClass, correlationId} - relay diagnostics only, no inputs."
     budgets:
-      - "challenge and start p95 <= 300 ms at 50 req/s; token verification <= 2 ms p95; vault unlock <= 1.5 s on a Moto G-class device (scrypt N=2^17)."
+      - "challenge and start p95 <= 300 ms at 50 req/s; token verification <= 2 ms p95; vault unlock <= 1.5 s and passphrase change <= 3 s on a Moto G-class device (scrypt N=2^17)."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test with injected clock and fixed key pairs.
       - Signature tests include RFC 8032 vectors and negative cases for wrong domain, relay and nonce.
       - Privacy tests prove tokens and keys never appear in logs, events, URLs or exports.
-    fixtures: "Fixed Ed25519 keys for DID A (devices A1 active, A2 revoked), relay R with identity document cache, fixed clock 2026-11-04T10:00:00Z, vault with passphrase fixture."
+      - Accessibility and UI copy tests check the unlock, passphrase and sessions screens, including the offline-guessing warning.
+    fixtures: "Fixed Ed25519 keys for DID A (devices A1 active, A2 revoked), DID N unknown to relay R, relay R with identity document cache and listed-relay fetch stub, attacker network 203.0.113.0/24 and victim network 198.51.100.0/24, fixed clock 2026-11-04T10:00:00Z, vault with passphrase fixture."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01 | issue challenge then start with a valid signature | challenge consumed, session active, token returned once, only its hash stored"
-      - "T02 | unit | 02.R01,02.R02,02.R03 | signature over wrong relay, wrong nonce, reused nonce, expired nonce (121 s), revoked device A2 | UNAUTHENTICATED or EXPIRED with identical outward bodies for key failures; no token issued"
-      - "T03 | property | 03.R01,03.R02 | random sequences of start, rotate, revoke, expire on sessions and challenges | only declared transitions succeed; ended sessions never revive; a challenge is consumed at most once"
-      - "T04 | integration | 03.R03,06.R01 | rotate a token | old token valid for 30 s then rejected; new token works; one transaction"
-      - "T05 | unit | 02.R02,04.R01 | vault unlock with wrong passphrase 6 times then correct; idle timeout 15 min | backoff schedule applied; unlock succeeds; auto-lock after 15 minutes measured with monotonic clock"
-      - "T06 | contract | 04.R01,04.R02,09.R02 | each command and the query run | outputs and events validate against registry schemas"
-      - "T07 | integration | 04.R03,02.R03 | device key revoked, recovery completed, role assigned, erase events delivered | affected sessions end with documented reasons"
-      - "T08 | abuse | 05.R01,05.R02,05.R03 | non-owner revokes another DID's session; unauthenticated rotate; role change on relay | NOT_FOUND or UNAUTHENTICATED; role change ends sessions"
-      - "T09 | chaos | 06.R01,06.R02,06.R03 | crash between consume and insert; identity document fetch fails; storage failure | no consumed-without-session state; DEPENDENCY_UNAVAILABLE leaves the challenge valid"
-      - "T10 | abuse | 01.R03,07.R01,07.R02,07.R03 | scan logs, events, URLs and exports for tokens, nonces, passphrases; 11 failed starts from one IP /24 for one DID | none found; 11th returns RATE_LIMITED"
-      - "T11 | abuse | 07.R03,02.R03 | unknown DID requests challenge and starts | decoy challenge returned; start returns the same UNAUTHENTICATED as a bad signature; timing within 10 percent"
-      - "T12 | load | 08.R01,08.R02,08.R03 | 50 starts per second for 5 minutes; unlock on emulated Moto G | p95 <= 300 ms, verification <= 2 ms, unlock <= 1.5 s"
-      - "T13 | a11y | 01.R01,03.R01 | unlock screen and sessions list with axe-core and keyboard only | zero serious or critical issues; backoff text announced politely"
-      - "T14 | unit | 09.R01,09.R03 | traceability run over PS-054 | every requirement maps to a passing test"
-      - "T15 | integration | 10.R01,10.R02,10.R03 | vault export and relay backup restore | no tokens or vault key in exports; restored relay has hashes only and sessions expire naturally"
+      - "T02 | unit | 02.R01,02.R03,09.R02 | signature over wrong relay, wrong nonce, wrong domain prefix, reused nonce, expired nonce (121 s), unknown challenge id, revoked device A2 | UNAUTHENTICATED with identical outward bodies for every case; reason class only in diagnostics; no token issued"
+      - "T03 | property | 03.R01,03.R02 | random sequences of issue, start, rotate, revoke, expire and eviction | only declared transitions succeed; ended sessions never revive; a challenge is consumed at most once"
+      - "T04 | integration | 03.R03,04.R02,06.R01 | rotate a token with an injected clock | old session rotating and accepted for 30 s, then revoked with reason rotated and identity.session.revoked emitted at grace end, not at the rotate call; new token works; one transaction"
+      - "T05 | unit | 02.R05,03.R02 | vault unlock with wrong passphrase 6 times then correct; idle timeout 0 and 9 h; idle 15 min | backoff schedule applied; VALIDATION_FAILED for out-of-range timeouts; unlock succeeds; auto-lock after 15 minutes measured with monotonic clock"
+      - "T06 | contract | 04.R01,04.R02 | each command and the query run | outputs and events validate against registry schemas; revoked reason values include rotated and passphrase_changed"
+      - "T07 | integration | 04.R03 | identity.device_key.revoked, identity.recovery.completed, security.role.assigned and erase cleanup delivered | vault queues revokes per relay and locks; relay ends role-affected sessions; documented reasons set"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | non-owner revokes another DID's session; unauthenticated rotate; role change on relay | NOT_FOUND or UNAUTHENTICATED; role change ends sessions on the next request"
+      - "T09 | chaos | 06.R01,06.R02,06.R03 | crash between consume and insert; revoke delivered twice; relay offline during local unlock | no consumed-without-session state; second revoke is a no-op; unlock works offline and the relay call fails closed"
+      - "T10 | abuse | 01.R03,07.R01,07.R02,09.R03 | scan logs, events, URLs and exports for tokens, nonces, passphrases; 11 failed starts from one IP /24 for one DID | none found; relay sees only DID, key, prefix and UA label; 11th returns RATE_LIMITED"
+      - "T11 | abuse | 02.R03,02.R04 | unknown DID N and known DID A request challenges and start with bad signatures | both receive real challenges; start returns the same UNAUTHENTICATED body for both, timing within 10 percent"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 50 starts per second for 5 minutes; unlock on emulated Moto G | p95 <= 300 ms, verification <= 2 ms, unlock <= 1.5 s; metrics carry no DID labels"
+      - "T13 | a11y | 09.R04 | unlock, change passphrase and sessions screens with axe-core and keyboard only | zero serious or critical issues; backoff text announced politely"
+      - "T14 | unit | 09.R01 | traceability run over PS-054 | every requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | vault export, relay backup restore and an additive v1 field read by the previous release | no tokens or vault key in exports; restored relay has hashes only and sessions expire naturally; older reader ignores the new field"
+      - "T16 | abuse | 02.R04,01.R01 | attacker network floods 60 challenges for A's DID; A requests from the victim network | A gets a real challenge; only the attacker's (DID, prefix) slots were evicted; per-DID cap of 50 evicts oldest first"
+      - "T17 | integration | 02.R02,06.R03 | first login of N with an inline document; A's cached document 2 h old; cached document 30 h old with every listed relay down | N's document verified and stored, session started; A's document refreshed before V03; DEPENDENCY_UNAVAILABLE without consuming the challenge"
+      - "T18 | integration | 04.R03,05.R03 | injected clock - A1 revoked in the vault while sessions exist on relays R and S | vault publishes the new document to R and S and queues revokes; each relay ends A1's tokens within 60 s of storing the document with endReason device_revoked"
+      - "T19 | integration | 04.R01,02.R05,05.R01 | change_passphrase with a crash midway; then a full change; weak new passphrase | after the crash the old passphrase unlocks and the new does not; after success the old fails with UNAUTHENTICATED and other tabs are locked; weak passphrase VALIDATION_FAILED"
+      - "T20 | e2e | 07.R03,09.R04 | UI copy check of unlock and change passphrase screens in every locale bundle | the offline-guessing warning and 'backoff is a convenience' text are present"
+      - "T21 | integration | 07.R04 | F10 export section, deletion plan and retention sweep with stub registries | section identity.sessions holds only the lock timeout; deletion ends sessions on known relays before keys are destroyed; ended sessions purged after 30 days"
     acceptance:
-      - All tests T01-T15 pass in CI.
+      - All tests T01-T21 pass in CI.
       - Tokens, nonces, passphrases and vault keys never appear in storage as plaintext, logs, events or URLs (privacy suite).
-      - Idle and absolute expiry and device-revocation effects are verified with an injected clock.
+      - Idle and absolute expiry, rotation grace and device-revocation effects on every known relay are verified with an injected clock.
+      - Login endpoints answer identically for known and unknown DIDs, and a challenge flood from one network cannot lock a victim out.
   import_export_backup_rollback:
     requirements:
       - Sessions are never exported or imported; after an import the user unlocks and re-authenticates to relays.
       - A relay backup restores token hashes and expiry only; tokens remain valid until their original expiry, and an operator can revoke all with one command.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
-    export: "Not exported: sessions and challenges are ephemeral; the vault export (IOX-6) excludes them."
-    import: "Nothing imported; the user signs in again to each relay with their device key."
+    export: "Section identity.sessions in classrup-export/v1 holds only the lock timeout preference; sessions and challenges are ephemeral and excluded (IOX-6)."
+    import: "Only the lock timeout preference is imported; the user signs in again to each relay with their device key."
     backup: "Relay SQLite backup (IOX-3, IOX-7) includes token hashes; the operator can revoke all sessions of a relay with the operator tool after a restore."
-    migration_rollback: "Additive fields only in v1; rollback is redeploying the previous release, and sessions stay valid because hashes and expiries keep the same format."
+    migration_rollback: "Additive fields only in v1; rollback is redeploying the previous release, and sessions stay valid because hashes and expiries keep the same format; a rotating row read by an older release is treated as active until graceUntil."

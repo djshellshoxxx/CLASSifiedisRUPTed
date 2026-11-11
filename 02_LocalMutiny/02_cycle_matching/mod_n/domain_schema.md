@@ -25,13 +25,15 @@ Schema `classrup.mutiny.cycle_suggestion/v1` · storage **device** · privacy **
 | runId | uuidv7 — run that produced or last confirmed it |
 | mode | enum — local_rooted \| relay_global \| relay_imported |
 | length | int — 2..8 |
-| legs | array — 2..8 items {position, giverId did, receiverId did, inventoryItemId uuidv7, listingCid cid, wantCid cid, indicativeValue Money, distanceBucket 0..4} |
+| legs | array — 2..8 items {position, giverId did, receiverId did, inventoryItemId uuidv7, listingCid cid, wantCid cid, indicativeValue Money, distanceBucket int 0..4 (F02.S02.M04 ordinal of bucketBetween(giver listing cell, receiver want cell))} |
 | settlementCurrency | string — registered currency code (F09.S03.M01) |
 | score | object — {participants int, imbalancePermille int 0..1000, maxDistanceBucket 0..4, oldestWantAgeDays int} |
 | needsCompensation | boolean — true when some gap exceeds the profile tolerance but is within 250 permille and all participants accept compensation |
 | rank | int — 1-based position in the run selection |
 | status | enum — suggested \| proposed \| dismissed \| expired \| superseded |
-| verifiedLocally | boolean — true when every leg was re-derived from retained signed projections in this vault |
+| verifiedLocally | boolean — true when every leg was rechecked against retained signed projections in this vault (shown as 'rechecked against signed listings on this device'; peer availability remains a claim until that peer signs a reservation) |
+| trust | array — one per participant {actorId, firstSeenDays int (local first sighting of the projection), completedTrades int (F07.S03.M01 completedByType total known here), keyLinkedWith did[] (F07 key-linkage reads), newIdentity boolean} |
+| keyLinked | boolean — true when two or more participants are key-linked; the ring is shown with a warning and needs explicit confirmation to propose |
 | projectionAsOf | timestamp — oldest projection timestamp used (a claim of the projection authors) |
 | relayId? | string — origin relay when mode is relay_imported |
 | relaySig? | string — Ed25519 signature of the relay over JCS of the suggestion body; evidence of relay assertion only |
@@ -55,12 +57,12 @@ Schema `classrup.mutiny.compatibility_graph/v1` · storage **derived** · privac
 |---|---|
 | id | uuidv7 — primary key |
 | runId | uuidv7 — owning run |
-| partitionKey | string — 'all' or 'l1:<geohash4>'; cross-cell edges are not built in MVP |
+| partitionKey | string — 'all' or 'l1:<geohash4>' from the matching profile regionL1 (partitioning only); cross-cell edges are not built in MVP |
 | mode | enum — local_rooted \| relay_global |
 | inputHash | cid — sha256 of JCS(sorted nodes, sorted edges, parameters); equal inputHash must give equal output |
 | nodeCount | int — 0..2000 |
 | edgeCount | int — 0..20000 |
-| edges | array — sorted by (from, to) items {from did, to did, inventoryItemId, wantCid, valueMinor string, distanceBucket 0..4, wantCreatedAt timestamp} |
+| edges | array — sorted by (from, to) items {from did, to did, inventoryItemId, wantCid, valueMinor string, distanceBucket int 0..4 (cell to cell from L2 cells), wantCreatedAt timestamp} |
 | lmax | int — 2..8 |
 | expansions | int — 0..100000 |
 | durationMs | int — wall time of enumeration |
@@ -89,8 +91,9 @@ CREATE INDEX mutiny_suggestion_expiry ON mutiny_cycle_suggestion(tenant_id, stat
 | TEST-PS-018-09.T01 | unit | PS-018-01.R01, PS-018-01.R02, PS-018-04.R01, PS-018-09.R04 | run on g2, g3, g4 | suggestions of length 2, 3, 4 with stable cycleKey rotated to smallest DID; no statement emitted |
 | TEST-PS-018-09.T02 | unit | PS-018-01.R04, PS-018-02.R01, PS-018-02.R02 | Lmax 1 and 9, and graph with 2001 nodes | MUTINY_LMAX_INVALID and MUTINY_GRAPH_TOO_LARGE respectively |
 | TEST-PS-018-09.T03 | property | PS-018-09.R02, PS-018-01.R01 | random graphs up to 60 nodes | every suggestion is elementary, has distinct participants, distinct items, length ≤ Lmax and receiverId of leg i equals giverId of leg i+1 |
-| TEST-PS-018-09.T19 | e2e | PS-018-01.R03, PS-018-05.R03 | mobile user opens suggestion, dismisses it | ring diagram text alternative present, axe zero serious issues, no network call made |
+| TEST-PS-018-09.T21 | integration | PS-018-01.R03 | graph built at T0, clock injected to T0 + 24 h + 1 s | CompatibilityGraph purged by the retention sweep and get_stats returns NOT_FOUND for that run |
+| TEST-PS-018-09.T23 | unit | PS-018-02.R02, PS-018-01.R01 | pair distance from L2 cells u4pru and u4prv, an L1-only listing cell, and a 6-character cell | ordinal 0, at least 3, and DISCOVERY_PRECISION_FORBIDDEN rejection of the projection edge |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F11.S01.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

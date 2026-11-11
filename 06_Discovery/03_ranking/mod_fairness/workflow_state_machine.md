@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** Pure function, no entity lifecycle. rerank(candidates, pageParams, constants) returns { items, nextWindowPosition }.
+**Note:** Pure function, no entity lifecycle. rerank(candidates, pageParams { pageSize, windowStart, position, carry, promotionEnabled }, constants) returns { items, nextPosition, nextWindowStart, carry }. Carry rule - results deferred by the author cap or the promoted cap at the end of window n are placed first in the candidate order of window n+1 (in their original score order); in the last window (400..499) deferred results fill the remaining pages in score order, with pages shortened rather than breaking a cap, so every candidate up to depth 500 appears exactly once. auditPage(page, constants) returns { followed, violations: max_per_author|promoted_share|promoted_unlabelled }.
 
 ### Timeouts and scheduled transitions
 
@@ -23,8 +23,8 @@ _None._
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-050-09.T02 | property | PS-050-01.R03, PS-050-03.R01 | random promoted flags | promoted count per page at most floor(0.2 times page size); every promoted item has a promoted explanation key |
-| TEST-PS-050-09.T04 | unit | PS-050-02.R03, PS-050-03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, unsorted, promoted flag where not enabled | VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED or FAIRNESS_PROMOTION_NOT_ALLOWED |
-| TEST-PS-050-09.T05 | property | PS-050-03.R01, PS-050-03.R02, PS-050-03.R03 | 200 runs of same input and paging through all pages | identical output, same order on repeated runs, windowed paging never repeats or drops |
+| TEST-PS-050-09.T04 | unit | PS-050-02.R02, PS-050-02.R03, PS-050-03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, window start 300, unsorted, a promoted flag with promotionEnabled false | VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED, FAIRNESS_PROMOTION_NOT_ALLOWED; never a partial or reordered page |
+| TEST-PS-050-09.T05 | property | PS-050-03.R01, PS-050-03.R02, PS-050-03.R03 | 200 runs of the same 500-candidate input, paging through all 25 pages across windows 0, 200 and 400 with the carry passed through the cursor | identical output on repeated runs; all 500 results appear exactly once; caps hold on every page including carried results |
 
 ## Dependencies
 

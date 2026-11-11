@@ -13,11 +13,11 @@
 ## Specification
 
 **Metrics**
-- classrup_services_offerings_total{outcome=created|published|withdrawn}
+- classrup_services_offerings_total{outcome=created|published|republished|withdrawn}
 - classrup_services_offering_validation_failures_total{code}
 
 **Logs**
-- info offering.published {offeringId, correlationId} in the local diagnostics log only — no credential text.
+- info offering.published {offeringId, seq, correlationId} in the local diagnostics log only — no credential text.
 
 **Budgets**
 - vault write commands p95 ≤ 100 ms; services.offering.get p95 ≤ 50 ms; list_mine p95 ≤ 80 ms for 50 items.
@@ -33,4 +33,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F18.S01.M03, F09.S03.M01, F06.S02.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F03.S01.M02, F18.S01.M03, F09.S03.M01, F06.S02.M01, F07.S01.M01, F11.S01.M01, F11.S01.M02, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

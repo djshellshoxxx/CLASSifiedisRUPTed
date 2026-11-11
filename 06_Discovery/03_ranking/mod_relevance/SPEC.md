@@ -6,20 +6,21 @@
 
 ## Purpose
 
-Deterministic relevance scoring for search results. The score combines BM25 text relevance, a recency decay anchored on local first-seen time, and a distance-bucket weight, with an optional paid-promotion multiplier capped at 1.25 that exists only on a relay that chose to sell promotion and is always labelled 'Promoted'. The vault uses the bundled default RankingConfig; a relay operator may publish its own versioned RankingConfig as a signed statement so clients can read how that relay ranks. Same inputs and same config always give the same order.
+Deterministic relevance scoring for search results. The score combines BM25 text relevance, a recency decay anchored on local first-seen time, and a distance-bucket weight, with an optional relay-sold promotion multiplier capped at 1.25 that exists only on a relay that chose to sell promotion and is always labelled 'Promoted'. The vault uses the bundled default RankingConfig; a relay operator may publish its own versioned RankingConfig as a signed statement so clients can read how that relay ranks. A relay's ranking is that relay's claim: vaults re-check every relay page against the F06.S03.M02 fairness rules and label a relay that breaks them. Same inputs (including the index's first-seen times) and the same config always give the same order, with ties broken on the projection cid.
 
 ## Responsibilities
 
 - Define and own RankingConfig - weights, half-life, BM25 field weights, distance bucket weights and the promotion cap - with strict bounds and immutable versions.
-- Provide pure score() and explainComponents() functions used identically by the vault and the relay, with fixed tie-breaking.
+- Provide pure score() and explainComponents() functions used identically by the vault and the relay, with fixed tie-breaking (score, then newer recency anchor, then lexicographically smaller projectionCid) and renormalisation when the text or distance term does not apply.
 - Let a relay operator publish and roll back RankingConfig versions, emitting a signed statement and the event discovery.ranking_config.published.
-- Anchor recency on the index's local firstSeenAt clamped by the author's claim, never on claims alone.
+- Anchor recency on the author's claimed publication time clamped by the index's local firstSeenAt (min(claim, firstSeenAt)), so a claim can only make a document look older than first seen, never newer.
 
 ## Not responsible for
 
 - Diversity, new-author exposure and explanation strings for the user interface (F06.S03.M02).
 - Text index and query parsing (F06.S01.M01, F06.S01.M02).
-- Selling promotion, billing and promotion claims (a relay-local policy; payment evidence is F09 claims, never custody).
+- Selling promotion, billing and promotion claims (a relay-local policy; payment evidence is F09 claims, never custody); setting promotedUntil is F06.S01.M01 set_promotion.
+- Re-checking relay pages in the vault (F06.S01.M02 and F06.S02.M03 call F06.S03.M02 auditPage).
 - Future: learned ranking, per-user personalization, click feedback; none is allowed without a new decision record because they would profile users.
 
 ## User stories
@@ -27,17 +28,20 @@ Deterministic relevance scoring for search results. The score combines BM25 text
 - As a buyer, I see the best text match first, with newer and closer items ranked a bit higher, and I can see why each result is ranked where it is.
 - As a buyer, promoted results are clearly labelled 'Promoted' and cannot jump more than a capped amount.
 - As a relay operator, I can publish a ranking configuration and roll it back, and my users can read it.
-- As a developer, the same query on the same data gives the same order on every device.
+- As a developer, the same query on the same data (including first-seen times) gives the same order on every device.
+- As a buyer, I can read a relay's full ranking history for the last 12 months and see when a relay does not follow the published fairness rules.
 
 ## Edge cases
 
 - A query has no text terms (browse by filters); the text term is dropped and the remaining weights are renormalized.
-- Two results have equal scores to six decimals; the newer firstSeenAt wins, then the smaller documentId.
+- Two results have equal scores to six decimals; the newer recency anchor wins, then the lexicographically smaller projectionCid, which is the same on every device (a locally generated documentId is never used).
+- A browse query has no search center, or a document has no cell; the distance term is dropped and the remaining weights are renormalised, as for text.
 - A document's claimedPublishedAt is in the future; recency uses min(claim, firstSeenAt), so it gains nothing.
 - A promotion has expired (promotedUntil in the past) but the flag was not cleared; the multiplier is not applied and the label is not shown.
 - An operator publishes weights that do not sum to 1.0 or a boost above 0.25; rejected with RANKING_CONFIG_INVALID.
 - A vault has no relay config; it uses the bundled default config and states 'default ranking' in the explanation.
-- A rollback is requested to a version that never existed; NOT_FOUND.
+- A rollback is requested to a version that never existed; NOT_FOUND. A rollback to the currently active version; CONFLICT_STATE.
+- An operator publishes 10 versions a day to push old versions out of view; get_active pages through the whole 12-month history, so nothing is hidden.
 
 ## UX and accessibility
 
@@ -49,7 +53,7 @@ Deterministic relevance scoring for search results. The score combines BM25 text
 
 ## Owned data
 
-- `RankingConfig` (classrup.discovery.ranking_config/v1, P0, RET-STANDARD)
+- `RankingConfig` (classrup.discovery.ranking_config/v1, P0, RET-AUDIT)
 
 ## Interfaces
 
@@ -60,7 +64,7 @@ Deterministic relevance scoring for search results. The score combines BM25 text
 
 ## Dependencies
 
-F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001
+F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -72,7 +76,7 @@ F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR
 | PS-051-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-051-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-051-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-051-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-051-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-051-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-051-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-051-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -81,6 +85,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T14 pass in CI.
+- All tests T01-T20 pass in CI.
 - Golden score vectors match on Node and in the browser test runner.
 - No configuration can produce a promotion multiplier above 1.25 or an unlabelled promoted result.

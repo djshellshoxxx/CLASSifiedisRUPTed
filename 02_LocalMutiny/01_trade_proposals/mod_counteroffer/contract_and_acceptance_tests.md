@@ -21,29 +21,35 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-012-09.T01 | unit | PS-012-01.R01, PS-012-01.R02, PS-012-02.R02 | create revision 1 then verify stored fields | snapshot, contentHash and sig immutable; hash equals independent JCS cid |
-| TEST-PS-012-09.T02 | unit | PS-012-02.R01, PS-012-02.R03 | each rule V01..V11 violated in turn | documented code returned and nothing stored |
+| TEST-PS-012-09.T02 | unit | PS-012-02.R01, PS-012-02.R03 | each rule V01..V15 violated in turn, including a cross-currency deadline of 25 h and 14 d consent plus 23 d execution window | documented code returned and nothing stored |
 | TEST-PS-012-09.T03 | property | PS-012-01.R03, PS-012-03.R01 | random sequences of create and ingest | revision numbers contiguous, chain prev matches, never above 20 |
 | TEST-PS-012-09.T04 | integration | PS-012-01.R03, PS-012-03.R02, PS-012-09.R03 | Alice and Bob both counter as revision 3 offline, then sync | both quarantined as fork, subject frozen, mutiny.revision.forked emitted once |
 | TEST-PS-012-09.T05 | integration | PS-012-03.R03, PS-012-04.R03 | revise after accepted and after cancelled | CONFLICT_STATE; all earlier consents voided on an accepted revision of a different open subject |
 | TEST-PS-012-09.T06 | contract | PS-012-04.R01, PS-012-04.R02, PS-012-09.R02 | create and ingest | statement validates against classrup.mutiny.proposal_revision/v1 and events against registry |
-| TEST-PS-012-09.T07 | abuse | PS-012-05.R01, PS-012-05.R02, PS-012-05.R03, PS-012-07.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND |
+| TEST-PS-012-09.T07 | abuse | PS-012-05.R01, PS-012-05.R02, PS-012-05.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND |
 | TEST-PS-012-09.T08 | integration | PS-012-06.R01, PS-012-06.R02 | replay create with same key, deliver same envelope twice, crash mid-transaction | one revision, duplicate skipped, no partial record |
-| TEST-PS-012-09.T09 | integration | PS-012-06.R03, PS-012-01.R04 | offline create then reconnect | syncState prepared then transport_acknowledged; plaintext absent from relay fixture |
-| TEST-PS-012-09.T10 | abuse | PS-012-07.R01, PS-012-07.R02, PS-012-07.R03 | tampered snapshot with unchanged hash; replayed older revision; swapped participant in cycle revision | MUTINY_REVISION_HASH_MISMATCH, duplicate or fork, MUTINY_REVISION_MATERIAL_FORBIDDEN |
-| TEST-PS-012-09.T11 | abuse | PS-012-07.R03 | createdAtClaim 6 minutes in the future and backdated | first quarantined, second accepted but not used for ordering or deadline |
+| TEST-PS-012-09.T09 | integration | PS-012-06.R03, PS-012-01.R04, PS-012-07.R01 | offline create then reconnect | syncState prepared then transport_acknowledged; relay fixture sees only ciphertext with mailbox id, size and time |
+| TEST-PS-012-09.T10 | abuse | PS-012-02.R02, PS-012-02.R03 | tampered snapshot with unchanged hash; replayed older revision; swapped participant in cycle revision | MUTINY_REVISION_HASH_MISMATCH, MUTINY_REVISION_DUPLICATE or fork, MUTINY_REVISION_MATERIAL_FORBIDDEN |
+| TEST-PS-012-09.T11 | abuse | PS-012-02.R01 | createdAtClaim 6 minutes in the future and backdated | first quarantined, second accepted but not used for ordering or deadline |
 | TEST-PS-012-09.T12 | load | PS-012-08.R02, PS-012-08.R03 | 8-leg revision create and ingest on emulated Moto G | p95 within budgets, snapshot under 64 KiB |
 | TEST-PS-012-09.T13 | unit | PS-012-08.R01 | diagnostics sink | codes recorded, no DIDs or values, nothing transmitted |
 | TEST-PS-012-09.T14 | unit | PS-012-09.R01 | traceability tool run | every PS-012 requirement maps to a passing test |
 | TEST-PS-012-09.T15 | unit | PS-012-04.R03, PS-012-01.R01 | diff between revision 1 and 2 of 3-party cycle | exactly the compensation line added; all earlier consents void |
 | TEST-PS-012-09.T16 | integration | PS-012-10.R01, PS-012-10.R02, PS-012-10.R03 | export, import to fresh vault, rollback | revisions round-trip with signatures valid; conflicting IDs rejected; forked flag preserved |
 | TEST-PS-012-09.T17 | a11y | PS-012-01.R04 | diff and history screens | axe zero serious issues; text labels for added, removed, changed |
+| TEST-PS-012-09.T18 | property | PS-012-01.R05, PS-012-01.R02, PS-012-03.R01 | random revision chains where revision k restores the terms of an earlier revision | every revision has a distinct contentHash; consents on the earlier digest stay void |
+| TEST-PS-012-09.T19 | integration | PS-012-02.R04, PS-012-01.R03 | same-number concurrent revision, revision 5 before 4, exact duplicate, wrong prev | fork detected (not MUTINY_REVISION_LIMIT); 5 buffered with MUTINY_REVISION_GAP and applied after 4; duplicate skipped; MUTINY_REVISION_CHAIN_INVALID |
+| TEST-PS-012-09.T20 | abuse | PS-012-07.R03 | 11 revision creates on one subject within an hour, then a 21st revision | RATE_LIMITED for the 11th; MUTINY_REVISION_LIMIT for the 21st |
+| TEST-PS-012-09.T21 | integration | PS-012-07.R02, PS-012-07.R04 | F10 export, deletion of a party and retention sweep | section mutiny.revisions exported with sig; erased DID pseudonymized in local metadata; signatures still verify; quarantined statements purged after 30 days |
+| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | hex digest equals base64url-decoded contentHash; registered signer role is party, coordinator for cycle |
+| TEST-PS-012-09.T23 | integration | PS-012-04.R04, PS-012-03.R02 | mutiny.revision.report_fork called with a signed consent on a different digest at the head revision number | forked set, mutiny.revision.forked emitted once with evidence consent, further revisions refused |
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T23 pass in CI.
 - A consent can only ever bind a contentHash that equals the hash of the displayed snapshot.
 - No revision can add, remove or replace a participant of an existing cycle, and forks always freeze the subject.
 
 ## Dependencies
 
-Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

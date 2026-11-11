@@ -2,53 +2,65 @@ id: F07.S02.M01
 scope: MVP
 summary: >-
   The portable identity document is a signed statement (classrup.identity.portable_doc/v1) that binds a did:key to its
-  current pseudonym, its active and recently revoked device public keys, and up to 5 relays where the owner can be
-  reached. The account signing key signs it over RFC 8785 JCS bytes, each version carries a sequence number and the
-  hash of the previous one, and any vault can verify it offline. Relays store and serve it; vaults store the documents of
-  people they interact with and detect forks. It evidences that the holder of the key asserted these facts - not who the
-  person is, and not delivery of anything.
+  current pseudonym, its active and recently revoked device public keys (each active key with its own possession
+  signature, older revocations as key hashes), and up to 5 relays where the owner can be reached. Only the account root
+  key - the key the did:key encodes - signs it over RFC 8785 JCS bytes; each version carries a sequence number and the
+  hash of the previous one, and any vault can verify it offline. Relays store and serve it; vaults store the documents
+  of people they interact with, accept a first document on first contact, buffer chain gaps, detect forks, keep
+  revocations as a grow-only union, and apply revocations made by a recovery only 72 hours after they first saw the
+  recovery notice. It evidences that the holder of the root key asserted these facts - not who the person is, and not
+  delivery of anything. It also answers the key-linkage reads other modules need (N11).
 responsibilities:
   - Encode and decode did:key for Ed25519 (multicodec 0xed01, multibase base58btc) and verify that a document's DID matches its signing key.
-  - Issue a new signed document version from the current Account and DeviceKey state (vault command) with seq increased by 1 and prev set to the previous cid.
-  - Receive and store documents of other principals, verify signature, seq and chain, keep provenance, and flag forks (same DID and seq with different cid, or two documents claiming the same prev) as contested.
+  - Issue a new signed document version from the current Account and DeviceKey state (vault command, root device only) with seq increased by 1 and prev set to the previous cid.
+  - Receive and store documents of other principals, verify signature, possession proofs, seq and chain, keep provenance, accept the first document on first contact, buffer gaps for 24 hours, and flag forks (same DID and seq with different cid, two documents claiming the same prev, or two recovery notices for one DID) as contested.
+  - Keep revocations as a grow-only union per DID, require resolving documents to carry every revocation of every competing branch, and hold recovery-driven revocations until 72 hours after this vault's first sight of the recovery notice.
   - Serve and accept documents on a relay (public read, signed publish with quotas, at most 20 versions per DID).
-  - Mark the owner's own current document stale when device keys or the pseudonym change, prompting reissue.
+  - Mark the owner's own current document stale when device keys or the pseudonym change or 150 days pass, and treat any document past expiresAt as expired.
+  - Publish identity.portable_doc.published for own, received and relay-stored documents, and answer the key-linkage reads key_set, find_by_key and key_status.
 non_responsibilities:
-  - Device key and pseudonym management (F07.S01.M01) and recovery (F07.S01.M03).
+  - Device key and pseudonym management (F07.S01.M01) and recovery (F07.S01.M03), which reports recovery notices and disputes through this module's ports.
   - Federation transport and peer policy (F11); this module supplies the signed document that F11 and account migration use.
   - Trust in the person behind a key; that comes from attestations and reputation (F07.S03).
-  - "Future: DID methods other than did:key, key rotation of the account signing key with a signed move statement, witness co-signatures."
-depends_on: [F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+  - Block lists (F07.S02.M02); blocked DIDs are filtered through the injected BlockFilterPort.
+  - "Future: DID methods other than did:key, rotation of the account root key with a signed move statement (no rotation chain exists in MVP), witness co-signatures."
+depends_on: [F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
 user_stories:
   - As a user, my devices and pseudonym are published in a signed document that anyone can verify without trusting a server.
-  - As a counterparty, I can check that a statement was signed by a key that the author's document lists as active.
+  - As a counterparty, I can check that a statement was signed by a key that the author's document listed as active when my device first saw the statement.
   - As a user who moves to another relay, I publish a new document version listing the new relay, and my history stays intact.
-  - As a contact, I am warned if two conflicting versions of someone's identity document appear.
+  - As a contact, I am warned if two conflicting versions of someone's identity document appear, and no resolution can silently bring back a revoked key.
+  - As a contact meeting someone whose document is already at version 25, I can still start trusting it, and I see that it was first seen by me now.
 edge_cases:
   - A document has a valid signature but seq lower than the stored one; it is kept as history and never replaces the current document.
-  - Two documents have the same DID and seq but different content; both are stored, marked contested, and the UI shows a warning with both device key lists until a higher seq signed document resolves it.
-  - A document is older than its expiresAt (180 days); it remains evidence but is marked expired for trust decisions and the UI prompts a refresh.
-  - A revoked device key signed a statement before the verifier saw the revocation; the verifier accepts it and the UI shows the revocation date as a claim.
-  - The document exceeds 8 KiB or lists more than 20 device keys; rejected.
+  - Two documents have the same DID and seq but different content; both are stored, marked contested, and the UI shows a warning with both device key lists until a resolving document that chains from one branch and lists every revocation of both branches is accepted.
+  - A document passes its expiresAt (180 days); it remains evidence but is marked expired for trust decisions and the UI prompts a refresh.
+  - A revoked device key signed a statement before the verifier saw the revocation; the verifier accepts it by its own first-seen time and the UI shows the revocation date as a claim.
+  - The document exceeds 8 KiB or lists more than 20 device key entries or more than 10 active keys; rejected.
+  - A user who replaced many devices has more revoked keys than entries allow; the newest revoked keys stay listed and older ones move to revokedKeyHashes, and verifiers keep every revocation they already saw.
+  - First contact with a DID whose relay holds only versions 21 to 25; version 25 is accepted as current on first use and firstSeenAt is recorded.
+  - Stored seq 3, then seq 5 arrives; the revocations in seq 5 apply at once, seq 5 is buffered for 24 hours while seq 4 is fetched from the listed relays, and is then accepted with a gap flag if no conflicting seq 4 is known.
+  - A document revokes keys with reason recovery; it is held as recovery pending until 72 hours after this vault first saw the matching recovery notice, and if no notice arrives within 24 hours, or the document's issuedAt is before the notice's own notBefore claim, the DID is contested.
   - A relay receives 50 documents per hour for one DID; it refuses beyond 10 per hour.
   - Clock skew - issuedAt is 2 hours in the future; verifiers accept up to 10 minutes of skew and quarantine the rest.
   - The document's pseudonym differs from the pseudonym in a profile statement from the same DID; the document is authoritative for DID to key binding only, and the UI shows the newest profile's label.
   - The relay list contains a non-HTTPS URL or credentials in the URL; rejected.
+  - A document lists an active key without a valid possession signature, for example another user's device key; rejected with IDENTITY_LINK_INVALID.
 ux:
   screens:
-    - "Identity settings > My identity document: DID with copy and QR, current seq, listed devices, relays, 'Publish to relay' per relay with sync state (prepared, relay received, peer accepted)."
-    - "Contact details > Identity: document version, 'verified signature', 'contested' warning, key fingerprint."
-  states: [loading, current, stale, publishing, contested, expired, offline-pending, error]
+    - "Identity settings > My identity document: DID with copy and QR, fingerprint, current seq, listed devices, relays, 'Publish to relay' per relay with sync state (prepared, relay received, peer accepted), and the note that published versions cannot be recalled."
+    - "Contact details > Identity: document version, 'signature valid', first seen date, fingerprint, and warnings for contested, gap, recovery pending and expired documents."
+  states: [loading, current, stale, publishing, gap-pending, recovery-pending, contested, expired, offline-pending, error]
   a11y:
     - The DID and fingerprint are shown as text with a copy button and group separators for screen reader pacing.
-    - Contested and expired warnings are text with an icon, announced via aria-live polite.
+    - Contested, gap, recovery pending and expired warnings are text with an icon, announced via aria-live polite.
     - The QR code has a text equivalent, and all buttons are at least 44 by 44 px.
 processes:
   domain_schema:
     requirements:
       - A PortableIdentityDoc stores the signed document bytes' fields, its cid, sequence, previous cid, status and provenance, for the owner's own versions and for received versions of others.
-      - The signed payload lists the DID, seq, prev, pseudonym, device keys with statuses, relays and issuedAt/expiresAt, and is at most 8 KiB.
-      - Statuses express verification outcomes - current, stale (own, needs reissue), superseded and contested - and never imply real-world identity.
+      - The signed payload lists the DID, seq, prev, pseudonym, device keys with statuses and possession signatures, hashes of older revoked keys, relays and issuedAt/expiresAt, is signed only by the DID root key, and is at most 8 KiB.
+      - Statuses express verification outcomes - verifying, current, gap_pending, recovery_pending, stale (own, needs reissue), expired, superseded, history and contested - and never imply real-world identity.
     entities:
       - name: PortableIdentityDoc
         schema: classrup.identity.portable_doc/v1
@@ -58,202 +70,278 @@ processes:
         fields:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — tenant scope"
-          - "did: did — did:key subject, derived from the account signing key"
+          - "did: did — did:key subject, derived from the account root key"
           - "seq: int — starts at 1, increases by exactly 1 per version of one DID"
           - "prev?: string — cid of the previous version; absent for seq 1"
           - "cid: string — sha256-base64url of JCS(document without sig) per CTR-ID-001 ID-3"
           - "pseudonym: string — display label claimed by the owner, 3..32 code points"
-          - "deviceKeys: array — at most 20 entries { publicKey (43 chars), status: active|revoked, addedAt, revokedAt?, revokesEffectiveAt? }"
+          - "deviceKeys: array — at most 20 entries, at most 10 active { publicKey (43 chars), status: active|revoked, addedAt, linkNonce, possessionSig (active entries), revokedAt?, revokesEffectiveAt?, revokeReason?: lost|stolen|retired|compromised|recovery, recoveryNoticeCid? }"
+          - "revokedKeyHashes: array — at most 64 base64url first-16-byte SHA-256 hashes of keys revoked in the last 180 days that no longer fit in deviceKeys"
           - "relays: array — at most 5 HTTPS URLs without credentials or query, each at most 255 characters"
           - "issuedAt: timestamp — the owner's claim"
           - "expiresAt: timestamp — issuedAt plus 180 days"
-          - "sig: string — Ed25519 signature by the account signing key over JCS bytes, base64url"
+          - "sig: string — Ed25519 signature by the account root key over JCS bytes, base64url"
           - "origin: enum — own | received | relay_stored"
           - "provenance: object — { originRelay?, via: array, receivedAt (local clock), verifiedAt (local clock) } per CTR-FED-001 FED-6"
-          - "status: enum — current | stale | superseded | contested"
+          - "firstSeenAt: timestamp — local clock when this vault first stored any document of this DID (trust on first use)"
+          - "gap: boolean — true when accepted as current while intermediate versions were missing"
+          - "pendingRecoveries?: array — at most 2 { noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt (local clock), disputeCids } recorded through recordRecoveryNotice and recordRecoveryDispute"
+          - "revokedUnion?: array — local, not signed; every key ever seen revoked for this DID, grow-only"
+          - "status: enum — verifying | current | gap_pending | recovery_pending | stale | expired | superseded | history | contested"
+          - "contestReason?: enum — fork | rollback | two_recoveries | recovery_disputed | missing_notice | early_revocation"
           - "statementSyncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (own documents only)"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - sig verifies against the public key encoded in did over JCS bytes of the document without sig.
-          - For one DID, seq values are unique among non-contested documents and prev equals the cid of the version seq minus 1.
+          - sig verifies against the public key encoded in did over JCS bytes of the document without sig; no device key can sign a document.
+          - For one DID, seq values are unique among non-contested documents and prev equals the cid of the version seq minus 1 unless the document carries the gap flag.
           - Serialized signed document is at most 8 192 bytes.
-          - Exactly one document per DID has status current unless the DID is contested.
+          - At most one document per DID has status current or expired unless the DID is contested.
+          - revokedUnion never shrinks, and no key in it is treated as active whatever a later document lists.
     sql: |
       CREATE TABLE identity_portable_doc (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, did TEXT NOT NULL, seq INTEGER NOT NULL, cid TEXT NOT NULL,
         status TEXT NOT NULL, origin TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX identity_portable_doc_cid ON identity_portable_doc(tenant_id, cid);
       CREATE INDEX identity_portable_doc_did ON identity_portable_doc(tenant_id, did, seq);
+      CREATE TABLE identity_doc_key (tenant_id TEXT NOT NULL, public_key TEXT NOT NULL, did TEXT NOT NULL, status TEXT NOT NULL,
+        learned_at TEXT NOT NULL, revoked_at TEXT, PRIMARY KEY (tenant_id, public_key, did));
   validation_rules:
     requirements:
-      - Every document is verified for DID derivation, signature, size, chain and field limits before it is stored as anything other than quarantine.
+      - Every document is verified for DID derivation, signature, size, possession proofs, chain and field limits before it is stored as anything other than quarantine.
       - Clock claims are checked with explicit tolerance and never trusted for ordering; seq orders versions.
       - Relay publication adds quotas and URL checks.
+      - First contact, chain gaps and recovery-driven revocations have explicit rules - trust on first use, a 24 hour gap buffer with fetches from the listed relays, and a 72 hour wait from this vault's first sight of the recovery notice.
+      - Revocations are a grow-only union - a key once seen revoked stays revoked, a resolving document must list every revocation of every competing branch, and the deviceKeys cap is met by moving older revocations to key hashes rather than dropping them.
     rules:
       - "V01 | did is a did:key with multicodec 0xed01 and the signature verifies against that key over JCS bytes of the document without sig | IDENTITY_DOC_SIGNATURE_INVALID"
-      - "V02 | document size is at most 8 192 bytes, deviceKeys at most 20 entries, relays at most 5 HTTPS URLs without credentials | VALIDATION_FAILED"
-      - "V03 | seq is exactly stored seq plus 1 and prev equals the cid of the stored current version, otherwise the document is stored as history or contested | IDENTITY_DOC_CHAIN_INVALID"
+      - "V02 | document size is at most 8 192 bytes, deviceKeys at most 20 entries of which at most 10 active, revokedKeyHashes at most 64, relays at most 5 HTTPS URLs without credentials | VALIDATION_FAILED"
+      - "V03 | chain - with a stored current document seq is stored seq plus 1 and prev equals its cid; a lower seq is stored as history, a higher seq is buffered as gap_pending, and with no stored document the highest valid document is accepted on first contact (trust on first use, firstSeenAt recorded) | IDENTITY_DOC_CHAIN_INVALID"
       - "V04 | issuedAt is not more than 10 minutes ahead of the verifier's clock and expiresAt equals issuedAt plus 180 days | VALIDATION_FAILED"
-      - "V05 | for an own document, deviceKeys equals the active keys in F07.S01.M01 plus keys revoked within the last 180 days, and pseudonym equals the Account pseudonym | CONFLICT_STATE"
+      - "V05 | for an own document, deviceKeys holds every active key of F07.S01.M01 plus the newest revoked keys up to 20 entries in total, every other key revoked in the last 180 days is in revokedKeyHashes, and pseudonym equals the Account pseudonym; the entry cap wins, and beyond 64 hashes the oldest roll off, which verifiers that saw them do not forget (revokedUnion) | CONFLICT_STATE"
       - "V06 | relay only - at most 10 publications per hour per DID and 100 per hour per IP /24 | RATE_LIMITED"
+      - "V07 | every active deviceKeys entry carries a possession signature by that key over classrup-device-link:v1:<did>:<publicKey>:<linkNonce> | IDENTITY_LINK_INVALID"
+      - "V08 | a gap_pending document is accepted as current only when the missing versions arrive and chain, or after 24 hours if signed by the same DID key and no conflicting version of any intermediate seq is known; its revocations apply at once, its additions only on acceptance | IDENTITY_DOC_CHAIN_INVALID"
+      - "V09 | a document that newly revokes keys with revokeReason recovery is applied only 72 hours after this vault's first sight of the matching recovery notice; with no notice seen within 24 hours, or an issuedAt before the notice's notBefore claim, the DID becomes contested | CONFLICT_STATE"
+      - "V10 | a document resolving a contested DID chains from one competing version and lists as revoked, or in revokedKeyHashes, every key revoked in any competing branch; otherwise the DID stays contested | IDENTITY_DOC_CHAIN_INVALID"
+      - "V11 | a later document that lists as active a key in revokedUnion is a rollback and makes the DID contested | IDENTITY_DOC_CHAIN_INVALID"
+      - "V12 | issue runs only on the root device of the local principal | IDENTITY_ROOT_KEY_REQUIRED"
   workflow_state_machine:
     requirements:
-      - A document moves from current to superseded when a valid higher seq arrives, to stale when the owner's state changes, and to contested when a fork is detected.
-      - A contested identity is resolved only by a signed document with a higher seq that chains from one of the competing versions and that the user accepts.
-      - Superseded documents are kept for verification of old statements.
+      - A document moves from current to superseded when a valid newer version is accepted, to stale when the owner's state changes or 150 days pass, to expired when expiresAt passes, and to contested when a fork is detected.
+      - A contested identity is resolved only by a signed document with a higher seq that chains from one competing version, lists every key revoked in any competing branch, and that the user accepts.
+      - Superseded documents are kept for verification of old statements, and lower-seq documents received later are stored as history.
     machines:
       - entity: PortableIdentityDoc
-        initial: current
-        terminal: [superseded]
+        initial: verifying
+        terminal: [superseded, history]
         transitions:
-          - "current -> stale | own device key added or revoked, or pseudonym changed | mark stale and show reissue prompt, document stays valid for verification"
-          - "current -> superseded | valid document with seq plus 1 chained from this cid is accepted | keep as history, emit nothing further"
-          - "stale -> superseded | identity.portable_doc.issue creates seq plus 1 | new document becomes current and is queued for publication"
-          - "current -> contested | another valid document with the same DID and seq but a different cid, or the same prev, is received | freeze trust upgrades for this DID, warn user, keep both"
+          - "verifying -> current | own issue (seq = stored + 1), first contact with no stored document (trust on first use), or a received document that extends the chain | record firstSeenAt on first contact; emit identity.portable_doc.published"
+          - "verifying -> history | valid signature but seq lower than the current one, or an older version fetched to close a gap | stored as history; never current"
+          - "verifying -> gap_pending | seq higher than stored seq + 1 | apply its revocations at once (grow-only), buffer up to 24 h, fetch missing versions from the listed relays (FED-3)"
+          - "verifying -> recovery_pending | the document newly revokes keys with revokeReason recovery | previous current stays current; wait 72 h from this vault's first sight of the matching notice"
+          - "verifying -> contested | same DID and seq with a different cid, same prev as a stored version, a rollback of a revoked key, or a second recovery notice for the DID | freeze trust upgrades for this DID, warn the user, keep every version"
+          - "gap_pending -> current | missing versions chain, or 24 h passed with no conflicting intermediate version known | set gap when versions are still missing; supersede the previous current; emit identity.portable_doc.published"
+          - "gap_pending -> contested | a conflicting version of an intermediate seq becomes known | keep both; warn"
+          - "recovery_pending -> current | 72 h after first sight of the matching notice and no dispute seen | supersede the previous current; emit identity.portable_doc.published"
+          - "recovery_pending -> contested | a verified dispute, no notice within 24 h, or issuedAt before the notice's notBefore claim | keep both; the revocations are not applied"
+          - "current -> stale | own documents only - device key added or revoked, pseudonym changed, or 150 days after issuedAt | mark stale and show the reissue prompt; the document stays valid for verification"
+          - "current -> expired | expiresAt passed by the local clock | trust decisions treat the DID as expired and the UI prompts a refresh"
+          - "stale -> expired | expiresAt passed by the local clock | same handling"
+          - "current -> superseded | a valid newer document becomes current | keep as history, emit nothing further for this version"
+          - "stale -> superseded | identity.portable_doc.issue creates seq + 1 | new document becomes current and is queued for publication"
+          - "expired -> superseded | a valid newer document becomes current | keep as evidence"
+          - "current -> contested | fork detected as above | same handling"
           - "stale -> contested | fork detected as above | same handling"
-          - "contested -> superseded | a valid higher-seq document chained from one competing version is accepted by the user | the chosen branch becomes current, the other branch stays superseded as evidence"
+          - "contested -> superseded | identity.portable_doc.resolve accepts a resolving document that passes V10 | the resolving document becomes current; every competing version stays as evidence"
     timeouts:
-      - "A current own document is marked stale-by-age at 150 days (30 days before expiry) to prompt a refresh."
+      - "A current own document is marked stale-by-age at 150 days (30 days before expiry) to prompt a refresh; any document is expired at expiresAt (180 days)."
+      - "Gap buffer 24 h (86 400 000 ms) with fetch attempts from the listed relays at 1 min, 10 min, 1 h and 6 h."
+      - "Recovery wait 72 h (259 200 000 ms) from this vault's first sight of the notice; a revoking document without a notice waits 24 h for it."
       - "Relay keeps the latest 20 versions per DID; older ones are purged when version 21 arrives."
   commands_queries_events:
     requirements:
-      - Issue is a vault command that produces the signed statement classrup.identity.portable_doc/v1; receive is the vault intake of someone else's document; publish and the public read are relay endpoints.
-      - The event identity.portable_doc.published is emitted when a document is issued locally and when a relay stores a verified document, in the same transaction as the state change.
-      - Documents are public P0 statements and are only sent to relays the owner selected or directly to peers.
+      - Issue is a vault command that produces the root-signed statement classrup.identity.portable_doc/v1; receive is the vault intake of someone else's document; resolve is the user's explicit choice for a contested DID; publish and the public read are relay endpoints.
+      - The event identity.portable_doc.published is emitted when a document is issued locally, when a received document changes a DID's current document or status, and when a relay stores a verified document, in the same transaction as the state change.
+      - Documents are public P0 statements and are only sent to relays the owner selected, after privacy.consent.check(federation_publish, relayId), or directly to peers.
+      - Key-linkage reads (N11) return the key set and seq chain of a DID, the DIDs that list a given key, and a key's status at a point in time; there is no account key rotation chain in MVP.
+      - Counterparty modules learn of other people's key changes only from identity.portable_doc.published with origin received, which carries the added and revoked keys; identity.device_key events describe only the local principal's keys.
     commands:
       - name: identity.portable_doc.issue
         capability: identity.portable_doc.issue
         input: "{ relays?: array of at most 5 URLs, expectedSeq }"
-        output: "{ docId, seq, cid, statement: classrup.identity.portable_doc/v1 (signed), syncState: local_committed }"
-        errors: [CONFLICT_STATE, CONFLICT_REVISION, VALIDATION_FAILED]
+        output: "{ docId, seq, cid, statement: classrup.identity.portable_doc/v1 (signed by the root key), syncState: local_committed, skippedRelays: array (no federation_publish consent) }"
+        errors: [CONFLICT_STATE, CONFLICT_REVISION, VALIDATION_FAILED, IDENTITY_ROOT_KEY_REQUIRED]
         emits: [identity.portable_doc.published]
         idempotent: true
       - name: identity.portable_doc.receive
         capability: identity.portable_doc.receive
         input: "{ document: classrup.identity.portable_doc/v1, provenance }"
-        output: "{ docId, status: current|superseded|contested|history, did, seq }"
-        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, VALIDATION_FAILED, BLOCKED_PARTY]
-        emits: []
+        output: "{ docId, status: current|gap_pending|recovery_pending|superseded|contested|history, did, seq }"
+        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        emits: [identity.portable_doc.published]
+        idempotent: true
+      - name: identity.portable_doc.resolve
+        capability: identity.portable_doc.resolve
+        input: "{ did, chosenCid, expectedRevision }"
+        output: "{ did, currentCid, seq, status: current }"
+        errors: [NOT_FOUND, CONFLICT_STATE, CONFLICT_REVISION, IDENTITY_DOC_CHAIN_INVALID]
+        emits: [identity.portable_doc.published]
         idempotent: true
       - name: identity.portable_doc.publish
         capability: identity.portable_doc.publish
         input: "{ document: classrup.identity.portable_doc/v1 }"
         output: "{ docId, seq, cid, storedAt }"
-        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        errors: [IDENTITY_DOC_SIGNATURE_INVALID, IDENTITY_DOC_CHAIN_INVALID, IDENTITY_LINK_INVALID, VALIDATION_FAILED, RATE_LIMITED]
         emits: [identity.portable_doc.published]
         idempotent: true
+    note: "Statements and signer roles (N2): classrup.identity.portable_doc/v1 - only the DID root key (the key encoded in the did:key). Ports provided: KeyStatusPort.isActive(did, publicKey, at) and keyStatus(did, publicKey, at) for every verifier (F07.S01.M01, F07.S01.M02, F07.S02.M02, F07.S03.M01, F07.S03.M02 and other features), implementing the rule 'signer key active in the author's document at this vault's first-seen time of the statement'; recordRecoveryNotice(did, noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt) and recordRecoveryDispute(did, disputeCid, signerKey) for F07.S01.M03. Injected port: BlockFilterPort.isBlocked(did), implemented by F07.S02.M02 and wired by the vault composition root because F07.S02.M02 depends on this module (N7); a blocked DID's document is dropped silently with no error to the intake pipeline or the sender."
     queries:
       - name: identity.portable_doc.get
         capability: identity.portable_doc.read_public
         input: "{ did, seq?, includeHistory?: boolean }"
-        output: "{ document: classrup.identity.portable_doc/v1, status, provenance, history?: array of at most 20 }"
+        output: "{ document: classrup.identity.portable_doc/v1, status, provenance, firstSeenAt, history?: array of at most 20 }"
         errors: [NOT_FOUND]
       - name: identity.portable_doc.list_contested
         capability: identity.portable_doc.read_own
         input: "{ limit? (1..50) }"
-        output: "{ items: [{ did, versions: array, detectedAt }] }"
+        output: "{ items: [{ did, versions: array, contestReason, detectedAt }] }"
         errors: []
+      - name: identity.portable_doc.key_set
+        capability: identity.portable_doc.read_linkage
+        input: "{ did: did:key }"
+        output: "{ did, seq, currentCid, activeKeys: publicKey[], revokedKeys: [{ publicKey, revokedAt?, revokeReason? }], revokedKeyHashes, seqChain: [{ seq, cid, status }], contested: boolean }"
+        errors: [NOT_FOUND]
+      - name: identity.portable_doc.find_by_key
+        capability: identity.portable_doc.read_linkage
+        input: "{ publicKey }"
+        output: "{ items: [{ did, status: active|revoked|pending|contested, seq }] }"
+        errors: []
+      - name: identity.portable_doc.key_status
+        capability: identity.portable_doc.read_linkage
+        input: "{ did, publicKey, at?: timestamp (default now; local first-seen time of the statement being verified) }"
+        output: "{ status: active|revoked|unknown, revokedAt?, learnedAt, contested: boolean, recoveryPending: boolean }"
+        errors: [NOT_FOUND]
     events_produced:
-      - {type: identity.portable_doc.published, privacy: P0, payload: "{ did, seq, cid, origin: own|relay_stored, issuedAt }"}
+      - {type: identity.portable_doc.published, privacy: P0, payload: "{ did, seq, cid, origin: own|received|relay_stored, status, addedKeys: publicKey[], revokedKeys: [{ publicKey, revokesEffectiveAt, revokeReason }], gap, issuedAt }"}
     events_consumed:
-      - {type: identity.device_key.added, effect: "own document becomes stale and the reissue prompt is shown"}
-      - {type: identity.device_key.revoked, effect: "own document becomes stale; reissue lists the key as revoked with revokesEffectiveAt"}
+      - {type: identity.device_key.added, effect: "own document becomes stale and the reissue prompt is shown on the root device"}
+      - {type: identity.device_key.revoked, effect: "own document becomes stale; reissue lists the key as revoked with revokesEffectiveAt, or in revokedKeyHashes when entries are full"}
       - {type: identity.pseudonym.changed, effect: "own document becomes stale until reissued"}
-      - {type: privacy.deletion.completed, effect: "vault erase - delete all documents; relays keep documents until a signed tombstone arrives (PRV-6)"}
+      - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already queued a signed tombstone for the own document to the relays (PRV-6) and deleted or pseudonymized the stored documents"}
     errors:
       - "IDENTITY_DOC_SIGNATURE_INVALID | 422 | no | DID derivation or Ed25519 signature check failed"
-      - "IDENTITY_DOC_CHAIN_INVALID | 409 | no | seq or prev does not extend the stored chain"
+      - "IDENTITY_DOC_CHAIN_INVALID | 409 | no | seq or prev does not extend the stored chain, a resolving document omits a revocation, or a revoked key is listed as active again"
     example: |
-      vault command: identity.portable_doc.issue { "expectedSeq": 3, "relays": ["https://relay.example.org"] }
-      -> { "docId": "0192f430-…", "seq": 4, "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "v": 1, "type": "classrup.identity.portable_doc/v1", "author": "did:key:z6Mk…", "seq": 4, "prev": "sha256-Zx…", "payload": { "pseudonym": "Riverstone", "deviceKeys": [ … ], "relays": [ … ] }, "sig": "…" } }
+      vault command (root device): identity.portable_doc.issue { "expectedSeq": 3, "relays": ["https://relay.example.org"] }
+      -> { "docId": "0192f430-…", "seq": 4, "cid": "sha256-Qm…", "syncState": "local_committed", "skippedRelays": [], "statement": { "v": 1, "type": "classrup.identity.portable_doc/v1", "author": "did:key:z6Mk…", "seq": 4, "prev": "sha256-Zx…", "payload": { "pseudonym": "Riverstone", "deviceKeys": [ { "publicKey": "…", "status": "active", "linkNonce": "…", "possessionSig": "…" } ], "revokedKeyHashes": [], "relays": [ … ] }, "sig": "…root…" } }
       relay query: POST /api/v1/query/identity.portable_doc.get { "did": "did:key:z6Mk…" } -> 200 { "document": { … }, "status": "current" }
+      vault query: identity.portable_doc.key_status { "did": "did:key:z6Mk…", "publicKey": "…", "at": "2026-11-04T10:00:00.000Z" } -> { "status": "active", "learnedAt": "…", "contested": false, "recoveryPending": false }
   authorization_capabilities:
     requirements:
-      - Vault policy - only the unlocked principal issues documents for its own DID; any signed document is accepted into the store only after cryptographic verification, so authority comes from the signature, not from the sender.
+      - Vault policy - only the unlocked principal on its root device issues documents for its own DID; any signed document is accepted into the store only after cryptographic verification, so authority comes from the root key signature, not from the sender.
       - Relay policy - publication is open to anyone presenting a valid signed document within quota (no account needed), and reads are public; a relay operator may refuse a DID by hosting policy but cannot alter a document.
-      - A blocked DID's documents are not stored by the blocking vault.
+      - A blocked DID's documents are dropped silently through the injected BlockFilterPort, implemented by F07.S02.M02, and the sender cannot tell.
     capabilities:
-      - "identity.portable_doc.issue | principal | unlocked local principal; expectedSeq matches the stored seq"
-      - "identity.portable_doc.receive | principal | signature verifies; signer DID not blocked"
+      - "identity.portable_doc.issue | principal | unlocked local principal on the root device; expectedSeq matches the stored seq"
+      - "identity.portable_doc.receive | principal | signature verifies; BlockFilterPort does not report the DID (otherwise dropped silently)"
+      - "identity.portable_doc.resolve | principal | unlocked local principal; the chosen document passes V10"
       - "identity.portable_doc.publish | anonymous, principal | valid signed document within relay quota; relay hosting policy allows the DID"
       - "identity.portable_doc.read_public | principal, anonymous | public read; relay quota applies"
       - "identity.portable_doc.read_own | principal | unlocked local principal"
+      - "identity.portable_doc.read_linkage | principal, operator | vault - unlocked principal or in-process modules; relay - the host relay's anti-shill checks over documents it stores (N11)"
   failure_recovery_idempotency:
     requirements:
       - Issue and receive are idempotent by cid, so duplicate delivery never creates a duplicate version.
       - Documents are published to relays through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never shows more than the reached state.
       - Fork detection never discards either version; it records both.
     idempotency: "Idempotency-Key per command in the vault log for 24 h; receive and publish are keyed by cid (unique index), so replays return the stored result."
-    concurrency: "expectedSeq compare-and-set for issue; two devices issuing seq n plus 1 concurrently create a fork that both vaults detect and show as contested; Web Locks serialize tabs on one device."
-    retries: "Outbox retries use base 500 ms, cap 30 s, full jitter, max 6 attempts per window and continue until transport_acknowledged or the user cancels."
-    offline: "Issue works offline and the new version waits in the outbox; receiving works from any transport including a scanned QR; verification needs no network."
+    concurrency: "expectedSeq compare-and-set for issue; only a vault holding the root key can issue, so a fork needs two root-key holders (a recovering device and the old root device, or a stolen kit), and both vaults detect and show it as contested; conflicting device changes from different devices reconcile here - the resolving document must carry the union of all revocations (V10), never last writer wins; Web Locks serialize tabs on one device."
+    retries: "Outbox retries use base 500 ms, cap 30 s, full jitter, max 6 attempts per window and continue until transport_acknowledged or the user cancels; gap fetches follow the gap buffer schedule."
+    offline: "Issue works offline and the new version waits in the outbox; receiving works from any transport including a scanned QR; verification needs no network; gap fetches resume when online and the 24 h buffer counts from receipt."
     partial_failure: "If publication to one of several relays fails, the others continue and the UI shows the per-relay state; the local document is already current."
   privacy_retention_abuse:
     requirements:
-      - The document is a deliberate public P0 statement containing only public keys, the pseudonym and relay URLs, and it never contains P3 data, private keys or recovery material.
+      - The document is a deliberate public P0 statement containing only public keys, key hashes, the pseudonym and relay URLs, and it never contains P3 data, private keys or recovery material.
       - The product states before first publication that a published document and copies other vaults fetched cannot be recalled, only superseded or tombstoned.
       - Relays honor signed tombstones within 24 hours (FED-4, PRV-6) and may not rewrite documents.
+      - The module meets the N6 privacy duties - it registers ExportSectionPort (section identity.portable_docs), DeletionPort (tombstone the own document on the selected relays, delete received documents, pseudonymize documents kept as evidence) and RetentionPurgePort, classifies provenance fields with F10.S02.M02, checks federation_publish consent per relay before publication, and treats privacy.deletion.completed only as final cleanup.
     data:
-      - "PortableIdentityDoc: P0 public; provenance fields are local metadata (P3 on device)."
+      - "PortableIdentityDoc: P0 public; provenance, firstSeenAt, pendingRecoveries and revokedUnion are local metadata (P3 on device)."
     retention:
-      - "Own and received documents until vault erase or contact removal (RET-STANDARD); superseded versions kept for 2 years (RET-EVIDENCE) to verify old statements; relay keeps the latest 20 versions per DID."
+      - "Own and received documents until vault erase or contact removal (RET-STANDARD); superseded and history versions kept for 2 years (RET-EVIDENCE) to verify old statements; relay keeps the latest 20 versions per DID."
     threats:
-      - "T01 | Forged document for someone else's DID | signature must verify against the key encoded in the DID; a forger would need the private key"
-      - "T02 | Fork attack - attacker with a stolen device key publishes a conflicting document | device keys cannot sign documents (only the account key can), forks are detected and shown as contested, and the owner reissues with a higher seq"
-      - "T03 | Replay of an old document to resurrect a revoked device | seq and prev chain; verifiers prefer the highest valid seq seen and warn on rollback"
+      - "T01 | Forged document for someone else's DID | signature must verify against the key encoded in the DID; a forger would need the root private key"
+      - "T02 | Fork attack by a stolen key | only the root key signs documents, so a stolen non-root device cannot fork the document; a stolen root device or kit can, which shows as a fork (contested) as soon as the owner also issues, and the honest limit is stated"
+      - "T03 | Replay of an old document to resurrect a revoked device | seq and prev chain, lower seq stored as history, revokedUnion keeps every revocation and a later active listing is a rollback that contests the DID"
       - "T04 | Document used to deanonymize the owner | the document contains only what the owner chose; the UI explains that a DID is a stable pseudonymous identifier that links all of the owner's public activity, not anonymity"
       - "T05 | Relay flood with many fake DIDs | 10 publications per hour per DID, 100 per hour per IP /24, 8 KiB size limit, relay hosting policy"
       - "T06 | Backdated issuedAt to claim earlier revocation | issuedAt is a claim; verifiers use seq and their own receipt time for trust decisions, the relay-signed receipt time is evidence of that relay's clock only"
+      - "T07 | Fork resolution that brings back a revoked key | a resolving document must list every revocation of every competing branch (V10) and revokedUnion never shrinks"
+      - "T08 | Quick takeover by a recovery that revokes the owner's devices | revocations with reason recovery wait 72 h from this vault's own first sight of the notice; no notice or a self-contradicting timeline contests the DID"
+      - "T09 | Foreign key listed to fake same-owner linkage | possession signatures over the DID-bound message are required for every active key (V07)"
     abuse_controls:
-      - "Relay quotas as above; vault intake accepts at most 50 documents per hour from one transport source and quarantines the rest."
-      - "Documents from blocked DIDs are dropped silently; the sender cannot tell."
+      - "Relay quotas as above; vault intake accepts at most 50 documents per hour from one transport source and quarantines the rest; gap fetches at most 4 per DID per 24 h."
+      - "Documents from blocked DIDs are dropped silently through BlockFilterPort; the sender cannot tell."
   observability_performance:
     requirements:
       - Relays export publication and read metrics per CTR-OBS-001; vaults keep local diagnostics only.
       - Signature verification and storage of a document take at most 10 ms p95 on a Moto G-class device and 5 ms on the relay.
       - Relay reads meet the read budget of p95 at most 150 ms.
     metrics:
-      - "classrup_identity_doc_publications_total{outcome=ok|invalid|chain|rate_limited} (relay)"
+      - "classrup_identity_doc_publications_total{outcome=ok|invalid|chain|possession|rate_limited} (relay)"
       - "classrup_identity_doc_contested_total (relay)"
-      - "local counter portable_doc_total{event=issued|received|contested}"
+      - "local counter portable_doc_total{event=issued|received|contested|gap|recovery_pending|history}"
     logs:
       - "info portable_doc.stored {outcome, correlationId} - no DID, keys or relay URLs."
     budgets:
-      - "verify and store p95 <= 10 ms on device and <= 5 ms on relay; relay read p95 <= 150 ms; issue p95 <= 100 ms."
+      - "verify and store p95 <= 10 ms on device (including up to 10 possession signatures) and <= 5 ms on relay; relay read p95 <= 150 ms; issue p95 <= 100 ms; key_status p95 <= 2 ms."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test with fixed key pairs, JCS test vectors and an injected clock.
       - did:key encoding is verified against the W3C did:key Ed25519 test behaviour (prefix z6Mk, round trip).
-      - Fork, rollback and quota behaviour are tested with deterministic fixtures.
-    fixtures: "Account key pairs K1 and K2, device keys D1..D3, documents seq 1..4 for K1, a forked seq 3, a stolen device key, fixed clock 2026-11-04T10:00:00Z, relay harness with quotas."
+      - Fork, rollback, gap, recovery-wait and quota behaviour are tested with deterministic fixtures.
+      - Accessibility and UI copy tests cover the identity document and contact screens, including contested, gap, recovery pending and expired warnings and the no-recall notice.
+    fixtures: "Root key pairs K1 and K2, device keys D1..D12, documents seq 1..25 for K1, a forked seq 3, a stolen device key, a recovery notice and its revoking document, fixed clock 2026-11-04T10:00:00Z, relay harness with quotas and a relay holding only seq 21..25, BlockFilterPort stub."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01 | issue seq 1 then seq 2 for a fixed account | statement signature verifies over JCS bytes, did starts with did:key:z6Mk, cid computed per ID-3, size under 8 KiB"
-      - "T02 | property | 01.R02,02.R01 | 1 000 random Ed25519 keys | did:key encode and decode round trip; every did starts with z6Mk"
-      - "T03 | unit | 02.R01,02.R02,02.R03 | tampered field, wrong signing key, 8.5 KiB document, 21 device keys, http relay URL, issuedAt +20 min | IDENTITY_DOC_SIGNATURE_INVALID or VALIDATION_FAILED each time; nothing stored as current"
-      - "T04 | integration | 03.R01,03.R02 | receive seq 2, then seq 3, then a replay of seq 1, then a forked seq 3 | current moves forward; replay stays history; fork marks contested; nothing is deleted"
-      - "T05 | integration | 03.R03,02.R03 | resolve contested by receiving seq 4 chained from one branch and accepting | chosen branch current, other superseded as evidence"
-      - "T06 | property | 03.R01,03.R02,03.R03 | random sequences of issue, receive, device events | only declared transitions succeed; exactly one current per uncontested DID"
-      - "T07 | contract | 04.R01,04.R02,04.R03,09.R02 | commands, queries and the event run | outputs, statement and payload validate against registry schemas"
-      - "T08 | integration | 04.R03,05.R01 | device key added and pseudonym changed events | own current document becomes stale; reissue creates seq plus 1 and supersedes"
-      - "T09 | abuse | 05.R01,05.R02,05.R03 | locked vault issues; blocked DID's document received; operator edits a stored document | FORBIDDEN; silently dropped; edit impossible because signature would fail"
-      - "T10 | chaos | 06.R01,06.R02,06.R03 | duplicate delivery, crash after sign but before commit, one of three relays down | one document per cid; no half-committed seq; per-relay states shown"
-      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect document for P3 fields and private keys; stolen device key tries to sign a document; relay receives 11 documents per hour for one DID | no private data; device-key signature rejected; 11th RATE_LIMITED"
-      - "T12 | load | 08.R01,08.R02,08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms"
-      - "T13 | a11y | 04.R03,01.R03 | identity document and contact screens with axe-core | zero serious or critical issues; contested warning announced"
-      - "T14 | unit | 09.R01,09.R03 | traceability run over PS-055 | every requirement maps to a passing test"
-      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import in a fresh vault, relay backup restore | documents round-trip with provenance; invalid signatures rejected on import"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | issue seq 1 then seq 2 for a fixed account on the root device | statement signed by the root key verifies over JCS bytes, did starts with did:key:z6Mk, cid computed per ID-3, possession signatures present, size under 8 KiB"
+      - "T02 | property | 09.R02 | 1 000 random Ed25519 keys | did:key encode and decode round trip; every did starts with z6Mk"
+      - "T03 | unit | 02.R01,02.R02,02.R03 | tampered field, wrong signing key, document signed by a device key, 8.5 KiB document, 21 entries, 11 active keys, http relay URL, issuedAt +20 min, relay receives 11 documents in an hour for one DID | IDENTITY_DOC_SIGNATURE_INVALID, VALIDATION_FAILED or RATE_LIMITED each time; nothing stored as current"
+      - "T04 | integration | 03.R01,03.R03 | receive seq 2, then seq 3, then a replay of seq 1, then a forked seq 3 | current moves forward; replay stored as history; fork marks contested; nothing is deleted"
+      - "T05 | integration | 03.R02,02.R05 | resolve a contested DID with seq 4 chained from one branch that lists the union of both branches' revocations, and with one that omits branch B's revocation of D2 | the first becomes current after identity.portable_doc.resolve; the second is refused with IDENTITY_DOC_CHAIN_INVALID and the DID stays contested"
+      - "T06 | property | 01.R03,03.R01,03.R02,03.R03,09.R03 | random sequences of issue, receive (lower, equal, plus 1, gap, fork, recovery), expiry and device events | only declared transitions succeed; at most one current or expired per uncontested DID; lower seq stored as history; revokedUnion never shrinks"
+      - "T07 | contract | 04.R01,04.R02 | commands, queries and the event run | outputs, statement and payload validate against registry schemas; published carries origin, status, addedKeys and revokedKeys"
+      - "T08 | integration | 03.R01,04.R02 | own device key added, pseudonym changed, and 150 days pass | own current document becomes stale each time; reissue creates seq plus 1, supersedes it and emits published with origin own"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | locked vault or non-root device issues; blocked DID's document received; operator edits a stored document | FORBIDDEN or IDENTITY_ROOT_KEY_REQUIRED; blocked document dropped silently with no error; edit impossible because the signature fails"
+      - "T10 | chaos | 06.R01,06.R02,06.R03 | duplicate delivery, crash after sign but before commit, one of three relays down | one document per cid; no half-committed seq; per-relay states shown; both fork versions kept"
+      - "T11 | abuse | 07.R01,07.R03 | inspect documents for P3 fields and private keys; relay asked to rewrite a document; tombstone for the own document | no private data; rewrite impossible; relay removes it within 24 h"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms; metrics exported without DIDs"
+      - "T13 | a11y | 09.R04 | identity document and contact screens with axe-core | zero serious or critical issues; contested, gap and recovery pending warnings announced"
+      - "T14 | unit | 09.R01 | traceability run over PS-055 | every requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import in a fresh vault, relay backup restore, and a document with an unknown ext key | documents round-trip with provenance and firstSeenAt; invalid signatures rejected on import; unknown ext keys ignored and covered by the signature"
+      - "T16 | integration | 02.R04 | first contact with a DID through a relay that holds only seq 21..25 | seq 25 accepted as current on first use with firstSeenAt recorded; no chain error"
+      - "T17 | integration | 02.R04,02.R05 | stored seq 3, then seq 5 that revokes D2 arrives; seq 4 unavailable for 24 h; later seq 4 arrives | D2 treated as revoked at once; seq 5 gap_pending then current with gap true after 24 h; seq 4 stored as history and the fork check passes"
+      - "T18 | integration | 02.R04 | revoking document with revokeReason recovery whose notice was first seen 10 h earlier; a revoking document with no notice for 24 h; one whose issuedAt precedes the notice's notBefore claim | first recovery_pending until 72 h after the notice's first sight then current; second and third contested with missing_notice and early_revocation"
+      - "T19 | unit | 02.R05 | own document with 10 active and 11 revoked keys; received document with 21 entries | 20 entries plus 1 key hash, valid and under 8 KiB; the received one VALIDATION_FAILED"
+      - "T20 | abuse | 01.R02,02.R01 | received document lists an active key without a possession signature, and one whose signature is over another DID | IDENTITY_LINK_INVALID; nothing stored as current"
+      - "T21 | contract | 04.R04 | key_set, find_by_key and key_status at points in time with active, revoked, pending and contested keys | outputs validate and match the fixtures; key_status at a time before the revocation was learned returns active"
+      - "T22 | integration | 04.R05,04.R03 | receive a counterparty document that adds D3 and revokes D1; the same document again; issue with one relay lacking federation_publish consent | published with origin received, addedKeys [D3] and revokedKeys [D1]; nothing emitted for the duplicate; the relay without consent is skipped and shown"
+      - "T23 | integration | 03.R01 | a received current document passes expiresAt; then a newer document arrives | status expired and key_status flags it; the newer one supersedes the expired one"
+      - "T24 | integration | 07.R04 | F10 export section, deletion plan and retention sweep with stub registries | section identity.portable_docs exported; own document tombstoned on selected relays; received documents deleted; superseded versions kept as evidence are pseudonymized"
+      - "T25 | e2e | 07.R02,09.R04 | UI copy check before first publication and on the contact identity screen | no-recall notice shown before the first publication; 'first seen by this device' and recovery pending texts present"
+      - "T26 | abuse | 02.R05,07.R01 | a later document lists revoked key D1 as active again | rollback detected; DID contested; D1 stays revoked in key_status"
     acceptance:
-      - All tests T01-T15 pass in CI.
-      - A forked or rolled-back identity document is never silently accepted (fork and rollback tests).
+      - All tests T01-T26 pass in CI.
+      - A forked or rolled-back identity document is never silently accepted and no resolution can bring back a revoked key (fork, rollback and union tests).
       - No document contains private keys or P3 data and no UI text claims real-world identity verification.
+      - Recovery-driven revocations are never applied by a verifying vault before 72 hours after its own first sight of the notice.
   import_export_backup_rollback:
     requirements:
       - The vault export contains the owner's document history and the documents of contacts, each with provenance, so the identity can move between relays and devices.
-      - Import re-verifies every signature, chain and size, keeps valid documents with their original provenance and rejects invalid ones with a report.
+      - Import re-verifies every signature, possession proof, chain and size, keeps valid documents with their original provenance and firstSeenAt and rejects invalid ones with a report.
       - Schema changes follow expand/contract with v1 readable for 180 days, and a new major carries a signed migration statement.
-    export: "Section identity.portable_docs in classrup-export/v1 (schema classrup.identity.portable_doc/v1), own history and received documents."
-    import: "Each document is verified; valid ones are stored with origin received or own (when the DID matches the vault principal); a chain gap stores the document as history and reports it."
+    export: "Section identity.portable_docs in classrup-export/v1 (schema classrup.identity.portable_doc/v1), own history and received documents with provenance, firstSeenAt and revokedUnion."
+    import: "Each document is verified; valid ones are stored with origin received or own (when the DID matches the vault principal); a chain gap follows the gap rule and is reported; revokedUnion entries from the export are merged, never removed."
     backup: "The vault export is the primary backup (IOX-6); relay backups (IOX-3, IOX-7) hold public documents only, so losing a relay loses nothing the owner cannot republish."
     migration_rollback: "Additive optional fields in v1 under ext only; rollback is safe because verifiers ignore unknown ext keys and the signature covers them."

@@ -12,11 +12,11 @@
 
 ## Specification
 
-- **idempotency:** Local command id stored 24 h; submission cid and approval cid are content hashes so a repeated statement yields the same result; payment events are deduplicated by (consumer, eventId) in the inbox.
+- **idempotency:** Local command id stored 24 h; submission cid and approval cid are content hashes so a repeated statement yields the same result; commerce.deal.open is idempotent through the deterministic dealId; payment events are deduplicated by (consumer, eventId) in the inbox; DeletionPort and RetentionPurgePort handlers are idempotent by request id.
 - **concurrency:** Web Locks lock services-booking-<bookingId> around milestone commands and payment event handling; expectedRevision on every command; forked devices of one party are detected through the seq/prev chain and freeze the milestone.
 - **retries:** Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; local payment-event handlers retry per EVT-6.
-- **offline:** Submit, approve and request_changes work offline and commit locally; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the counterparty saw it before the signed acknowledgement.
-- **partial failure:** If registering the payment context with the Deal fails, approval is not signed and the milestone stays submitted; if relay delivery fails the local state remains and the sync line shows the failure.
+- **offline:** Submit, approve, request_changes and completion signing work offline and commit locally (the Deal is opened in the same local vault); the UI shows prepared, transport_acknowledged or peer_accepted and never claims the counterparty saw it before the signed acknowledgement.
+- **partial failure:** If commerce.deal.open fails during approval, approval is not signed and the milestone stays submitted; if relay delivery fails the local state remains and the sync line shows the failure.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -25,8 +25,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-031-09.T08 | integration | PS-031-06.R01, PS-031-06.R02, PS-031-09.R03 | relay duplicates, drops and reorders; two forked provider devices sign different submissions | duplicates skipped; fork freezes the milestone for renegotiation |
-| TEST-PS-031-09.T09 | integration | PS-031-06.R03 | fail Deal registration during approval | approval not signed; milestone stays submitted |
+| TEST-PS-031-09.T09 | integration | PS-031-06.R03, PS-031-03.R04 | commerce.deal.open fails during approval | approval not signed; milestone stays submitted; no dealId |
 
 ## Dependencies
 
-Module depends on: F03.S02.M01, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S02.M01, F09.S01.M01, F09.S01.M03, F08.S01.M03, F07.S01.M01, F07.S02.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

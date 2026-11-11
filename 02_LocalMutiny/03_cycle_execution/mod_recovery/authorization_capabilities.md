@@ -18,7 +18,7 @@
 | mutiny.attestation.ingest | principal | envelope signer has the claimed role on the leg with a non-revoked device key |
 | mutiny.attestation.read | principal | cycle stored in this vault |
 | mutiny.recovery.propose_option | principal | principal is a participant of the cycle; case open |
-| mutiny.recovery.respond | principal | principal is the counterparty named in the option; option proposed |
+| mutiny.recovery.respond | principal | principal is in the option's requiredSignerIds; option proposed |
 | mutiny.recovery.escalate | principal | principal is a participant; case open |
 | mutiny.recovery.ingest | principal | envelope signer is a participant of the cycle with a non-revoked device key |
 | mutiny.recovery.read | principal | case stored in this vault |
@@ -33,4 +33,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F07.S02.M02, F15.S01.M01, F15.S02.M03, F10.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

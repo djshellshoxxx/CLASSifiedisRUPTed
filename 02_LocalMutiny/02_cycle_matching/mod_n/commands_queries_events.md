@@ -10,6 +10,7 @@
 - **PS-018-04.R02** Every command is idempotent per CTR-IDM-001 and emits its events in the same IndexedDB transaction as the state change (EVT-8).
 - **PS-018-04.R03** Runs are serialized per vault with a Web Locks mutex so at most one run executes at a time, and the relay serializes runs per tenant.
 - **PS-018-04.R04** The engine consumes want, listing, profile, valuation, block and cycle events only to mark the graph dirty or to change suggestion status; it never acts on another party's behalf.
+- **PS-018-04.R05** classrup.mutiny.cycle_suggestion/v1 envelopes are registered with the F11.S01.M01 statement registry with signer role 'relay that computed it' (evidence of a relay assertion only); this module is their single ingest owner, and a relay run calls the relay platform hook notify.notification.dispatch for a content-free push after each mailbox put (N17), with no build dependency because the hook is provided by the relay runtime.
 
 ## Specification
 
@@ -20,7 +21,7 @@
 | `mutiny.suggestion.generate` | mutiny.suggestion.generate | { lmax? (2..8, default 5), mode? local_rooted (default), timeBudgetMs? ≤ 250, expansionBudget? ≤ 100000, dryRun? } | { runId, suggestions: CycleSuggestion[], stats: { nodes, edges, expansions, durationMs, cyclesFound, truncated, projectionAsOf } } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_MATCHING_NOT_ENABLED, MUTINY_RUN_IN_PROGRESS, RATE_LIMITED | mutiny.cycle.suggested, mutiny.matching.run_completed | yes (Idempotency-Key) |
 | `mutiny.suggestion.import` | mutiny.suggestion.import | { envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox } | { suggestionId, verifiedLocally, status } | MUTINY_SUGGESTION_UNVERIFIED, VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION | mutiny.cycle.suggested | yes (Idempotency-Key) |
 | `mutiny.suggestion.dismiss` | mutiny.suggestion.dismiss | { suggestionId, expectedRevision } | { suggestionId, revision, suppressedUntil } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE |  | yes (Idempotency-Key) |
-| `mutiny.suggestion.compute_public` | mutiny.suggestion.compute_public | { partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } | { runId, stats, deliveredEnvelopes: int } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED | mutiny.matching.run_completed | yes (Idempotency-Key) |
+| `mutiny.suggestion.compute_public` | mutiny.suggestion.compute_public | { partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } — relay command; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them | { runId, stats, deliveredEnvelopes: int } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED | mutiny.matching.run_completed | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -51,6 +52,9 @@
 | `identity.block.added` | supersede active suggestions containing the blocked DID; no notification names the block |
 | `mutiny.cycle.proposed` | set matching suggestion to proposed when payload.suggestionId matches |
 | `mutiny.cycle.declined` | suppress the cycleKey for 30 days in this vault |
+| `identity.portable_doc.published` | recompute keyLinked and the trust panel of active suggestions containing that DID |
+| `identity.reputation.recomputed` | refresh completedTrades in the trust panel of active suggestions containing that DID |
+| `privacy.deletion.completed` | delete all suggestions and graph caches of the erased local principal; suggestions are RET-SHORT and not evidence |
 
 ### Module errors
 
@@ -63,6 +67,7 @@
 | MUTINY_PROFILE_NOT_ELIGIBLE | 409 | no | an endpoint of an edge is not an opted-in, unpaused participant |
 | MUTINY_EDGE_INVALID | 422 | no | an edge fails item, want, distance or projection-age admission |
 | MUTINY_SUGGESTION_UNVERIFIED | 422 | no | relay suggestion failed local signature or leg re-verification |
+| MUTINY_RING_KEY_LINKED | 409 | no | two or more participants of the ring are key-linked and proposing needs explicit confirmation |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -101,7 +106,8 @@ Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000a1
 | TEST-PS-018-09.T09 | integration | PS-018-04.R02, PS-018-04.R03, PS-018-06.R01 | replay generate with same key, different body, and parallel generate | stored result replayed; IDEMPOTENCY_KEY_REUSED; second parallel gets MUTINY_RUN_IN_PROGRESS |
 | TEST-PS-018-09.T10 | contract | PS-018-04.R02, PS-018-09.R03 | each command and event | payloads validate against registry schemas classrup.mutiny.cycle_suggestion/v1 and event payloads |
 | TEST-PS-018-09.T11 | integration | PS-018-04.R04, PS-018-03.R02 | consume want.withdrawn, block.added, cycle.declined | suggestions superseded, and declined cycleKey suppressed 30 days |
+| TEST-PS-018-09.T24 | contract | PS-018-04.R05 | registry entry of classrup.mutiny.cycle_suggestion/v1 and relay push hook | signer role relay; compute_public calls notify.notification.dispatch once per delivered envelope with no content |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F11.S01.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

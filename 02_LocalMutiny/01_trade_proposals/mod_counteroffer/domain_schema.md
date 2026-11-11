@@ -7,9 +7,10 @@
 ## Requirements
 
 - **PS-012-01.R01** A ProposalRevision is immutable after creation; its snapshot, contentHash, author and signature never change and a correction is a new revision.
-- **PS-012-01.R02** The snapshot is the single source of the digest and carries parties, legs with item references and declared values, compensation legs, normalization with quote ids and rates, deadlines and the cited feasibility report hash.
+- **PS-012-01.R02** The snapshot carries parties, legs with item references and declared values, compensation legs, accepted imbalances, normalization with quote ids and rates, deadlines and the cited feasibility report hash, and the digest covers subject type, subject id, revision number, prev and author together with the snapshot.
 - **PS-012-01.R03** Revisions of one subject form a chain by prev hash and number with at most 20 entries, and the head is the revision with the highest number that is not part of a fork.
 - **PS-012-01.R04** Revisions are P2 and travel only as end-to-end encrypted envelopes addressed to the subject's parties (PRV-5).
+- **PS-012-01.R05** contentHash = cid (sha256-base64url) of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); canonicalBytes returns exactly these JCS bytes, and the F08 subjectRevisionHash is the lowercase hex of the same 32 SHA-256 bytes (hex = base64url-decode of the contentHash digest), so one digest is compared in one encoding everywhere.
 
 ## Specification
 
@@ -27,13 +28,13 @@ Schema `classrup.mutiny.proposal_revision/v1` · storage **device** · privacy *
 | prev? | cid — contentHash of revision revisionNo-1; absent for revision 1 |
 | authorId | did — signer; must be a party of the subject |
 | reason | enum — initial \| counter \| compensation_added \| quote_refresh \| deadline_change \| acceptance_policy_change |
-| snapshot | object — canonical terms ≤ 64 KiB: {parties[], legs[], compensation[], normalization, consentDeadline, executionWindowMs, feasibilityReportHash?} |
-| contentHash | cid — sha256-base64url of JCS(snapshot); the digest all consents sign |
+| snapshot | object — canonical terms ≤ 64 KiB: {parties[{did, role, position}], legs[], compensation[], acceptedImbalances[{actorId, maxAmount Money}] (0..8, each a participant's signed acceptance of a gap through its consent on this digest), settlementCurrency, normalization, toleranceRef? {quoteId, rate, source} (EUR to settlement currency, present when the settlement currency is not EUR, F02.S04.M02), consentDeadline, executionWindowMs, feasibilityReportHash?} |
+| contentHash | cid — sha256-base64url of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); the digest all consents sign (F08 hex form = the same 32 bytes) |
 | legIds | array — 1..8 uuidv7 of TradeLeg ids sealed by this revision |
 | compensationLegIds | array — 0..8 uuidv7 of CompensationLeg ids sealed by this revision |
 | normalizationId? | uuidv7 — NormalizationRecord id when more than one currency is involved |
 | consentDeadline | timestamp — claim of the author; every vault evaluates it on its own clock |
-| executionWindowMs | int — 86400000..2592000000, default 1209600000 |
+| executionWindowMs | int — 86400000..1987200000 (1 d..23 d), default 1209600000; (consentDeadline − creation time) + executionWindowMs ≤ 2592000000 so reservations fit the 30 d F01.S03.M01 hold lifetime |
 | createdAtClaim | timestamp — author's clock, a claim; never used to order revisions (revisionNo orders them) |
 | sig | string — Ed25519 signature (base64url) over JCS(envelope minus sig) per CTR-FED-001 FED-2 |
 | origin | enum — local \| peer |
@@ -45,7 +46,7 @@ Schema `classrup.mutiny.proposal_revision/v1` · storage **device** · privacy *
 
 **Invariants**
 - snapshot, contentHash, authorId, revisionNo, prev and sig are never modified after creation.
-- contentHash equals the cid of JCS(snapshot) and sig verifies against authorId.
+- contentHash equals the cid of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}) and sig verifies against authorId.
 - For one (subjectId, revisionNo) at most one non-forked revision exists, and revisionNo is at most 20.
 - authorId is a party of the subject and, for subjectType cycle, equals the coordinator.
 
@@ -67,10 +68,13 @@ CREATE INDEX mutiny_revision_hash ON mutiny_proposal_revision(tenant_id, content
 | TEST-PS-012-09.T01 | unit | PS-012-01.R01, PS-012-01.R02, PS-012-02.R02 | create revision 1 then verify stored fields | snapshot, contentHash and sig immutable; hash equals independent JCS cid |
 | TEST-PS-012-09.T03 | property | PS-012-01.R03, PS-012-03.R01 | random sequences of create and ingest | revision numbers contiguous, chain prev matches, never above 20 |
 | TEST-PS-012-09.T04 | integration | PS-012-01.R03, PS-012-03.R02, PS-012-09.R03 | Alice and Bob both counter as revision 3 offline, then sync | both quarantined as fork, subject frozen, mutiny.revision.forked emitted once |
-| TEST-PS-012-09.T09 | integration | PS-012-06.R03, PS-012-01.R04 | offline create then reconnect | syncState prepared then transport_acknowledged; plaintext absent from relay fixture |
+| TEST-PS-012-09.T09 | integration | PS-012-06.R03, PS-012-01.R04, PS-012-07.R01 | offline create then reconnect | syncState prepared then transport_acknowledged; relay fixture sees only ciphertext with mailbox id, size and time |
 | TEST-PS-012-09.T15 | unit | PS-012-04.R03, PS-012-01.R01 | diff between revision 1 and 2 of 3-party cycle | exactly the compensation line added; all earlier consents void |
 | TEST-PS-012-09.T17 | a11y | PS-012-01.R04 | diff and history screens | axe zero serious issues; text labels for added, removed, changed |
+| TEST-PS-012-09.T18 | property | PS-012-01.R05, PS-012-01.R02, PS-012-03.R01 | random revision chains where revision k restores the terms of an earlier revision | every revision has a distinct contentHash; consents on the earlier digest stay void |
+| TEST-PS-012-09.T19 | integration | PS-012-02.R04, PS-012-01.R03 | same-number concurrent revision, revision 5 before 4, exact duplicate, wrong prev | fork detected (not MUTINY_REVISION_LIMIT); 5 buffered with MUTINY_REVISION_GAP and applied after 4; duplicate skipped; MUTINY_REVISION_CHAIN_INVALID |
+| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | hex digest equals base64url-decoded contentHash; registered signer role is party, coordinator for cycle |
 
 ## Dependencies
 
-Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

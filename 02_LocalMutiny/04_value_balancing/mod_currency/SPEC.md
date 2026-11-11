@@ -6,14 +6,16 @@
 
 ## Purpose
 
-Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers. Receivers independently recompute the arithmetic. A quote's rate is only as trustworthy as its source, and the UI labels the source (relay-signed, manual operator rate, local). When a pinned quote expires before commit, the record expires and the coordinator must issue a new revision, which voids earlier consents.
+Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers. Receivers independently recompute the arithmetic. Quotes are requested with purpose barter_normalization and a lifetime of at most 24 h (N16) and are shown as 'pinned rate agreed by all parties' with their source (relay-signed, manual operator rate, local). A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues a quote_refresh revision, which voids earlier consents. When a pinned quote expires before commit, the record expires with the same consequence.
 
 ## Responsibilities
 
 - Compute normalization records for a subject from valuations and quotes, with settlement currency default from the vault's configuration (default EUR for a EUR tenant), at most 5 distinct currencies and 8 quotes per record.
-- Request quotes with a time-to-live that covers the consent deadline plus 30 minutes where the source allows, and shorten the effective consent deadline to the earliest quote expiry otherwise.
+- Request quotes from F09.S03.M02 with purpose barter_normalization and validForMs = min(consentDeadline − now + 30 min, 24 h) (N16), label each pinned rate 'pinned rate agreed by all parties' with its source, and require consentDeadline ≤ now + 24 h and ≤ earliestQuoteExpiry; otherwise re-quote and require fresh consent through a quote_refresh revision.
 - Verify and store peers' normalization data from signed revisions by recomputing every conversion, and flag mismatches.
-- Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, and freeze records after commit.
+- Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, freeze records after commit and close them when the subject ends, forks or freezes.
+- When the settlement currency is not EUR, provide the tolerance reference quote EUR to settlement currency (purpose barter_normalization) that the revision pins as toleranceRef, used only to convert the profile's absolute minimum reference (F02.S02.M05 C05); its rate is part of the signed terms and its later expiry has no effect.
+- Register the module's export section, deletion and retention purge handlers with F10 (N6).
 
 ## Not responsible for
 
@@ -30,17 +32,18 @@ Converts the declared values of all items in a proposal or cycle into one settle
 
 ## Edge cases
 
-- All items are already in the settlement currency; a record is still created with no quotes so the pinned numbers are explicit.
+- All items are already in the settlement currency; no NormalizationRecord is referenced (normalizationId absent), the 24 h cross-currency deadline cap does not apply, and when the settlement currency is not EUR only the tolerance reference quote is pinned.
+- The coordinator asks for a 72 h consent deadline on a cycle with EUR and GBP items; compute refuses with MUTINY_QUOTE_TOO_SHORT and offers 24 h, because barter quotes live at most 24 h.
 - A currency pair has no available quote; the record is refused and the user is told which pair is missing.
 - The only available rate is a manual operator rate; it is accepted but labelled manual and flagged as not independently sourced.
-- A quote expires 10 minutes after the cycle was proposed; the record expires, the effective consent window ended early, and the coordinator must create a quote_refresh revision.
+- A quote expires before everyone consented; the record expires, the effective consent window ended early, and the coordinator must re-quote and create a quote_refresh revision with fresh consent.
 - A participant's recomputation gives a different converted amount by one minor unit; the revision is flagged normalization_mismatch and cannot be consented.
 - A declared value is in a currency that is not in the registry; refused with the registry's currency error.
 - The settlement currency has zero decimals (JPY) while items are in EUR; the exponent difference is applied exactly as in MNY-4.
 
 ## UX and accessibility
 
-- Values summary: each item with declared amount, rate used, converted amount and source label, plus a footer line 'Rates expire at 14:20; after that the proposal needs a refresh and new consent'.
+- Values summary: each item with declared amount, the rate labelled 'pinned rate agreed by all parties', converted amount and source label, plus a footer line 'Rates expire at 14:20; after that the proposal needs a refresh and new consent'.
 - Rate source details sheet naming source, as-of time and whether the rate was signed by its source or stated by the proposer.
 
 **States:** loading; current; expiring; expired; mismatch; frozen; error
@@ -56,11 +59,11 @@ Converts the declared values of all items in a proposal or cycle into one settle
 - Commands: `mutiny.normalization.compute`, `mutiny.normalization.verify`
 - Queries: `mutiny.normalization.get`, `mutiny.normalization.current_for_subject`
 - Emits: `mutiny.values.normalized`, `mutiny.normalization.expired`
-- Consumes: `mutiny.valuation.declared`, `mutiny.proposal.revised`, `mutiny.cycle.committed`, `mutiny.proposal.accepted`, `mutiny.cycle.declined`, `mutiny.cycle.cancelled`, `mutiny.proposal.rejected`, `mutiny.proposal.expired`, `commerce.fx_quote.issued`
+- Consumes: `mutiny.valuation.declared`, `mutiny.proposal.revised`, `mutiny.cycle.committed`, `mutiny.proposal.accepted`, `mutiny.cycle.declined`, `mutiny.cycle.cancelled`, `mutiny.proposal.rejected`, `mutiny.proposal.expired`, `mutiny.proposal.withdrawn`, `mutiny.revision.forked`, `mutiny.lock.conflict_detected`, `privacy.deletion.completed`, `commerce.fx_quote.issued`
 
 ## Dependencies
 
-F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
+F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -69,10 +72,10 @@ F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, CT
 | PS-025-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-025-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-025-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-025-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-025-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-025-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-025-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-025-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-025-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-025-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-025-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-025-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -81,6 +84,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T15 pass in CI.
+- All tests T01–T19 pass in CI.
 - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
 - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.

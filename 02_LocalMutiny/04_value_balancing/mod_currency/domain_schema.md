@@ -25,8 +25,9 @@ Schema `classrup.mutiny.normalization_record/v1` · storage **device** · privac
 | origin | enum — local \| peer_verified |
 | settlementCurrency | string — registered currency code |
 | items | array — 2..16 items {inventoryItemId uuidv7, valuationId uuidv7, declared Money, quoteId? uuidv7, converted Money, rounding HALF_EVEN} |
-| quotes | array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt, source label, sourceSigned boolean} |
-| earliestQuoteExpiry? | timestamp — min of quotes[].expiresAt; absent when no quotes |
+| quotes | array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt ≤ issuedAt + 24 h, purpose barter_normalization, source label, sourceSigned boolean} |
+| earliestQuoteExpiry? | timestamp — min of quotes[].expiresAt; absent when no quotes; the revision consentDeadline is ≤ this and ≤ creation + 24 h |
+| toleranceRef? | object — {quoteId, rate {num, den}, source} EUR to settlement currency, present when the settlement currency is not EUR; converts the absolute minimum reference only |
 | normalizationHash | cid — sha256 of JCS(settlementCurrency, items, quotes) |
 | status | enum — current \| superseded \| expired \| frozen \| closed |
 | mismatch | boolean — true when a peer's recomputation differs |
@@ -47,7 +48,8 @@ Schema `classrup.mutiny.normalization_record/v1` · storage **device** · privac
 | TEST-PS-025-09.T01 | unit | PS-025-01.R01, PS-025-01.R02, PS-025-02.R02, PS-025-09.R03 | compute the 3-currency example | converted amounts 12000, 11700, 11463 EUR minor; normalizationHash stable |
 | TEST-PS-025-09.T02 | property | PS-025-01.R02, PS-025-02.R02 | 10 000 random conversions vs reference | identical results with single HALF_EVEN rounding; no floating point |
 | TEST-PS-025-09.T04 | unit | PS-025-01.R03, PS-025-02.R03 | JPY settlement with EUR items | exponent difference applied exactly as in MNY-4 |
+| TEST-PS-025-09.T18 | unit | PS-025-01.R01, PS-025-02.R01 | single-currency JPY subject | no NormalizationRecord referenced, no 24 h cap, toleranceRef EUR->JPY 163/1 returned |
 
 ## Dependencies
 
-Module depends on: F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

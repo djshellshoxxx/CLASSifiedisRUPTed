@@ -15,9 +15,10 @@
 | Rule | Check | Error |
 |---|---|---|
 | V01 | every candidate has a finite non-negative score and a unique documentId | VALIDATION_FAILED |
-| V02 | page limit is 1..50 and the window start is within the 200 candidate window | VALIDATION_FAILED |
-| V03 | promoted candidates come only from an index that has promotion enabled, otherwise the flag is ignored and recorded | FAIRNESS_PROMOTION_NOT_ALLOWED |
-| V04 | candidate list is already sorted by descending score with the documented tie-break | FAIRNESS_INPUT_UNSORTED |
+| V02 | page limit is 1..50, the window start is 0, 200 or 400, the page position lies inside that window, and the carry is a bitmap of at most 200 positions of the previous window | VALIDATION_FAILED |
+| V03 | a candidate with promoted true is supplied only when pageParams.promotionEnabled is true (always false in a vault's own ranking); otherwise rerank returns this error and no page | FAIRNESS_PROMOTION_NOT_ALLOWED |
+| V04 | candidate list is already sorted by descending score, then newer recency anchor, then ascending projectionCid | FAIRNESS_INPUT_UNSORTED |
+| V05 | every candidate has exactly the documented fields (documentId, projectionCid, sourceId, authorDid, score, recencyAnchor, promoted, authorFirstSeenAt, components) and no others | VALIDATION_FAILED |
 
 ## Verification
 
@@ -25,7 +26,7 @@
 |---|---|---|---|---|
 | TEST-PS-050-09.T01 | property | PS-050-01.R01, PS-050-02.R01 | 200 random corpora | no page has more than 3 results from one author; no duplicates; no result dropped across pages |
 | TEST-PS-050-09.T03 | unit | PS-050-01.R02, PS-050-02.R02 | corpus with qualifying new authors and corpus without | 2 slots filled with qualifying items at positions 5 and 12; none filled when no candidate reaches 50 percent of the top score |
-| TEST-PS-050-09.T04 | unit | PS-050-02.R03, PS-050-03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, unsorted, promoted flag where not enabled | VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED or FAIRNESS_PROMOTION_NOT_ALLOWED |
+| TEST-PS-050-09.T04 | unit | PS-050-02.R02, PS-050-02.R03, PS-050-03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, window start 300, unsorted, a promoted flag with promotionEnabled false | VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED, FAIRNESS_PROMOTION_NOT_ALLOWED; never a partial or reordered page |
 
 ## Dependencies
 

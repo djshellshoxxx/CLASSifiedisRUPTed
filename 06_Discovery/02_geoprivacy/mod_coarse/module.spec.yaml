@@ -8,8 +8,9 @@ summary: >-
 responsibilities:
   - Encode and decode standard geohash (base32 alphabet 0123456789bcdefghjkmnpqrstuvwxyz) and compute the 8 neighbors of a cell.
   - Snap a latitude and longitude to an L1, L2 or L3 cell and expose a guard that rejects any public or federated payload cell longer than 5 characters.
-  - Enumerate cells covering a radius of 5..100 km around a center cell, using precision-5 cells up to 25 km and precision-4 cells above, with a hard cap of 512 cells.
-  - Compute the distance bucket (lt5, 5_10, 10_25, 25_50, gt50) between two cells from cell-center distance only.
+  - Enumerate cells covering a radius of 5..100 km around a center cell of 4 or 5 characters (its cell center is used), using precision-5 cells up to 25 km and precision-4 cells above, with a hard cap of 512 cells; callers compile the mixed precision as F06.S01.M03 specifies.
+  - Compute the distance bucket (lt5, 5_10, 10_25, 25_50, gt50) between two cells of 4 to 6 characters from cell-center distance only, so an L1 document is bucketed from its L1 cell center.
+  - Own the geo error codes (DISCOVERY_COORD_INVALID, DISCOVERY_PRECISION_FORBIDDEN, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_RADIUS_TOO_LARGE); other modules reference them through depends_on (N1).
 non_responsibilities:
   - Storing locations and user settings (F06.S02.M02).
   - Proximity query policy, rate limits and trilateration controls (F06.S02.M03).
@@ -25,6 +26,7 @@ edge_cases:
   - Latitude outside -90..90, longitude outside -180..180 or NaN; rejected with DISCOVERY_COORD_INVALID.
   - A search circle crosses the antimeridian or a pole; cell enumeration wraps longitude and clamps latitude, returning each cell once.
   - Radius below 5 km (for example 1 km) is requested; rejected with DISCOVERY_RADIUS_TOO_SMALL, never rounded silently.
+  - Radius 7 km or 200 km is requested; rejected with DISCOVERY_RADIUS_NOT_ALLOWED because it is not in the allowed set.
   - A 6-character cell is passed to the public guard; rejected with DISCOVERY_PRECISION_FORBIDDEN.
   - A circle would need more than 512 cells; rejected with DISCOVERY_RADIUS_TOO_LARGE instead of truncating.
 ux:
@@ -39,7 +41,9 @@ processes:
     note: >-
       Library module with no persisted entity. Value types - Cell (geohash string of 4..6 characters), Level (L0..L3),
       Bucket (lt5, 5_10, 10_25, 25_50, gt50). Functions - encode(lat, lon, precision), decode(cell), neighbors(cell),
-      snap(lat, lon, level), assertPublicCell(cell), cellsForRadius(centerCell, radiusKm), bucketBetween(cellA, cellB).
+      snap(lat, lon, level), assertPublicCell(cell), cellsForRadius(centerCell of 4 or 5 characters, radiusKm) returning
+      precision-5 cells for 5, 10 and 25 km and precision-4 cells for 50 and 100 km, bucketBetween(cellA, cellB) for
+      cells of 4..6 characters.
   validation_rules:
     requirements:
       - Coordinates, precisions, radii and cell strings are validated before any computation, and violations return typed errors.
@@ -49,8 +53,10 @@ processes:
       - "V01 | latitude is a finite number in -90..90 and longitude in -180..180 | DISCOVERY_COORD_INVALID"
       - "V02 | precision is 4, 5 or 6 and a cell string uses only the 32 geohash characters in lowercase | VALIDATION_FAILED"
       - "V03 | assertPublicCell accepts only cells of length 0 (none), 4 or 5 | DISCOVERY_PRECISION_FORBIDDEN"
-      - "V04 | radiusKm is one of 5, 10, 25, 50, 100 | DISCOVERY_RADIUS_TOO_SMALL"
+      - "V04 | radiusKm is at least 5 km | DISCOVERY_RADIUS_TOO_SMALL"
       - "V05 | cellsForRadius result has at most 512 cells | DISCOVERY_RADIUS_TOO_LARGE"
+      - "V06 | radiusKm is one of the allowed radii 5, 10, 25, 50, 100 | DISCOVERY_RADIUS_NOT_ALLOWED"
+      - "V07 | cellsForRadius center has 4 or 5 characters and bucketBetween cells have 4 to 6 characters | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - The library is stateless and deterministic; there is no lifecycle.
@@ -72,14 +78,18 @@ processes:
     errors:
       - "DISCOVERY_COORD_INVALID | 422 | no | latitude or longitude is not a finite value in range"
       - "DISCOVERY_PRECISION_FORBIDDEN | 422 | no | cell is finer than L2 and may not appear in a public payload"
-      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value"
+      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below the 5 km minimum"
+      - "DISCOVERY_RADIUS_NOT_ALLOWED | 422 | no | radius is at least 5 km but not one of 5, 10, 25, 50, 100"
       - "DISCOVERY_RADIUS_TOO_LARGE | 422 | no | radius would need more than 512 cells"
     example: |
       encode(42.6, -5.6, 5)            -> "ezs42"
       encode(57.64911, 10.40744, 5)    -> "u4pru"
       snap(57.64911, 10.40744, "L2")   -> "u4pru"
       bucketBetween("u4pru", "u4prv")  -> "lt5"
-      cellsForRadius("u4pru", 10)      -> ["u4prg", "u4prs", "u4pru", …]  (sorted, at most 512)
+      cellsForRadius("u4pru", 10)      -> ["u4prg", "u4prs", "u4pru", …]  (precision 5, sorted, at most 512)
+      cellsForRadius("u4pru", 100)     -> ["u4nz", "u4pr", "u4px", …]  (precision 4, sorted)
+      bucketBetween("u4pru", "u4pr")   -> "lt5" (from the L1 cell center)
+      cellsForRadius("u4pru", 200)     -> error DISCOVERY_RADIUS_NOT_ALLOWED
       assertPublicCell("u4pruy")       -> error DISCOVERY_PRECISION_FORBIDDEN
   authorization_capabilities:
     requirements:
@@ -91,7 +101,7 @@ processes:
     requirements:
       - All functions are pure, so repeated calls and retries give identical results.
       - Invalid input returns an error and never a clamped or approximate value.
-      - No function allocates more than 512 cells or 4 KiB of working memory per call.
+      - No function returns more than 512 cells, and the work of cellsForRadius is bounded linearly by the size of its result.
     idempotency: "Pure functions; the same input always returns the same output."
     concurrency: "No shared state; safe from workers and multiple tabs."
     retries: "Not applicable; there is no I/O."
@@ -133,16 +143,16 @@ processes:
       - "T01 | unit | 01.R01,01.R02 | known geohash vectors for encode and decode at precisions 4, 5, 6 | exact strings above and decode centers within cell bounds"
       - "T02 | property | 01.R02,03.R01 | 10 000 random valid points | snap is idempotent, decode(snap(p)) bounds contain p, and all points in one cell snap to the same cell"
       - "T03 | property | 01.R02 | neighbors of random cells | symmetric relation, 8 distinct neighbors except at poles, wrap across longitude 180"
-      - "T04 | unit | 02.R01,02.R03 | NaN, 91, -181, uppercase or invalid-letter cells, precision 7 | the documented error code each time and no result"
-      - "T05 | unit | 01.R03,02.R02 | assertPublicCell with 4, 5, 6 and 11 characters and empty string | accepted for 0, 4, 5; DISCOVERY_PRECISION_FORBIDDEN for 6 and 11"
-      - "T06 | unit | 02.R03 | radius 1, 3, 7, 100, 200 km | DISCOVERY_RADIUS_TOO_SMALL for 1, 3, 7 and 200; 100 accepted with at most 512 cells"
-      - "T07 | property | 01.R03,03.R02 | random center pairs | bucketBetween is symmetric, monotone in true distance, and a number is never returned"
-      - "T08 | unit | 03.R03 | cellsForRadius at the antimeridian, near a pole and at the equator | sorted unique cells, wrap handled, count within 512"
+      - "T04 | unit | 02.R01,02.R03,06.R02 | NaN, 91, -181, uppercase or invalid-letter cells, precision 7 | the documented error code each time and no clamped, rounded or partial result"
+      - "T05 | unit | 02.R02,07.R02 | assertPublicCell with 4, 5, 6 and 11 characters and empty string | accepted for 0, 4, 5; DISCOVERY_PRECISION_FORBIDDEN for 6 and 11"
+      - "T06 | unit | 02.R03 | radius 1, 3, 7, 100, 200 km | DISCOVERY_RADIUS_TOO_SMALL for 1 and 3; DISCOVERY_RADIUS_NOT_ALLOWED for 7 and 200; 100 accepted with at most 512 precision-4 cells"
+      - "T07 | property | 01.R03,03.R02 | random center pairs of 4, 5 and 6 characters | bucketBetween is symmetric, monotone in true distance, uses cell centers only, and a number is never returned"
+      - "T08 | unit | 03.R03,06.R03 | cellsForRadius for every allowed radius at the antimeridian, near a pole and at the equator, with 4- and 5-character centers | sorted unique cells, wrap handled, count at most 512, operation count grows linearly with result length"
       - "T09 | unit | 04.R01,04.R02,04.R03 | inspect exports | no command, query, event or capability exists; errors map to documented codes"
       - "T10 | property | 05.R01,05.R03,06.R01 | 200 runs of the same call sequence | byte-identical results, no I/O performed"
       - "T11 | abuse | 05.R02,07.R01,07.R02,07.R03 | scan the public API for functions returning coordinates or cells longer than 5 characters | none found; contract helper fails a fake publisher that skips the guard"
       - "T12 | load | 08.R01,08.R02,08.R03 | benchmark encode, snap, cellsForRadius(100) 100 000 times | within budgets"
-      - "T13 | unit | 09.R01,09.R02,09.R03,06.R02,06.R03 | traceability run over PS-047 | every requirement maps to a passing test; vectors file unchanged"
+      - "T13 | unit | 09.R01,09.R02,09.R03 | traceability run over PS-047 | every requirement maps to a passing test; vectors file unchanged"
       - "T14 | unit | 10.R01,10.R02,10.R03 | check that the package exports no persistence | no export section; vectors compatible across library versions"
     acceptance:
       - All tests T01-T14 pass in CI with the published geohash vectors.

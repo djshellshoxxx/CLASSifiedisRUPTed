@@ -21,26 +21,32 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-051-09.T01 | unit | PS-051-01.R01, PS-051-02.R01 | publish valid config | version 4 active, previous version 3 retired, one active row |
-| TEST-PS-051-09.T02 | unit | PS-051-02.R01, PS-051-02.R02, PS-051-02.R03 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights | RANKING_CONFIG_INVALID each time, nothing stored |
+| TEST-PS-051-09.T02 | unit | PS-051-02.R01, PS-051-02.R02 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights, NaN bm25 | RANKING_CONFIG_INVALID each time and VALIDATION_FAILED for the NaN input, nothing stored |
 | TEST-PS-051-09.T03 | unit | PS-051-01.R02, PS-051-01.R03 | golden score vectors for text, recency, distance, promotion | final scores equal the golden values to 6 decimals; promoted multiplier never above 1.25 |
 | TEST-PS-051-09.T04 | property | PS-051-03.R01, PS-051-03.R02, PS-051-03.R03 | random concurrent publish and rollback attempts | at every point exactly one active version; retired never reactivated |
-| TEST-PS-051-09.T05 | property | PS-051-01.R02, PS-051-06.R03 | 200 runs of the same ranking | identical order; ties resolved by firstSeenAt then documentId |
+| TEST-PS-051-09.T05 | property | PS-051-01.R02, PS-051-06.R03 | 200 runs of the same ranking on two simulated devices with different documentIds but the same projections and first-seen times | identical order; ties resolved by recency anchor then projectionCid |
 | TEST-PS-051-09.T06 | contract | PS-051-04.R01, PS-051-04.R02, PS-051-04.R03, PS-051-09.R02 | commands, query and event run | outputs and statement validate against registry schemas and the signature verifies |
 | TEST-PS-051-09.T07 | abuse | PS-051-05.R01, PS-051-05.R02, PS-051-05.R03 | member publishes; anonymous reads; operator of relay A publishes on relay B | FORBIDDEN for the first and last; read allowed |
 | TEST-PS-051-09.T08 | integration | PS-051-06.R01, PS-051-06.R02 | same Idempotency-Key replayed; crash between insert and retire | original response replayed; exactly one active version after restart |
-| TEST-PS-051-09.T09 | abuse | PS-051-07.R01, PS-051-07.R02, PS-051-01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label |
-| TEST-PS-051-09.T10 | abuse | PS-051-07.R03, PS-051-02.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED; client rejects the tampered statement |
+| TEST-PS-051-09.T09 | abuse | PS-051-07.R02, PS-051-01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label |
+| TEST-PS-051-09.T10 | abuse | PS-051-07.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED from RateLimitPort; client rejects the tampered statement with RANKING_CONFIG_INVALID |
 | TEST-PS-051-09.T11 | load | PS-051-08.R01, PS-051-08.R02, PS-051-08.R03 | score 1 000 candidates on emulated device and relay | p95 <= 20 ms and <= 10 ms; metrics exported |
-| TEST-PS-051-09.T12 | integration | PS-051-02.R03, PS-051-06.R03 | vault without relay config | bundled default used and explanation says default ranking |
+| TEST-PS-051-09.T12 | integration | PS-051-01.R02, PS-051-06.R03 | vault without relay config | bundled default used and explanation says default ranking |
 | TEST-PS-051-09.T13 | unit | PS-051-09.R01, PS-051-09.R03 | traceability run over PS-051 | every requirement maps to a passing test |
-| TEST-PS-051-09.T14 | integration | PS-051-10.R01, PS-051-10.R02, PS-051-10.R03 | restore relay from backup and import a config statement into a vault | active version preserved; vault ignores relay config for local ranking |
+| TEST-PS-051-09.T14 | integration | PS-051-10.R01, PS-051-10.R02, PS-051-10.R03 | restore relay from backup; vault fetches the relay's config with get_active | relay active version and numbering preserved; in the vault the config lands only in discovery_ranking_config_cache keyed by relay and version, the bundled row is unchanged and local ranking ignores it |
+| TEST-PS-051-09.T15 | unit | PS-051-07.R01 | score() on the same candidates with and without identity, history, click and reputation fields | identical scores and order; extra fields never read |
+| TEST-PS-051-09.T16 | abuse | PS-051-02.R03 | vault principal tries to publish, roll back or write the bundled config | no vault command exists, FORBIDDEN, bundled version 1 unchanged |
+| TEST-PS-051-09.T17 | unit | PS-051-01.R01, PS-051-02.R02 | browse query without center, document with empty cell, query without text | distance or text term dropped and remaining weights renormalised; golden values match |
+| TEST-PS-051-09.T18 | unit | PS-051-03.R02, PS-051-02.R01 | rollback to the active version and to a missing version | CONFLICT_STATE and NOT_FOUND, nothing changes |
+| TEST-PS-051-09.T19 | integration | PS-051-07.R04, PS-051-04.R02 | relay with 60 versions over 6 months; get_active paged with limit 20 | all 60 versions reachable through nextCursor, none older than 12 months |
+| TEST-PS-051-09.T20 | integration | PS-051-07.R04 | vault receives a relay page with 4 items of one author and an unlabelled promoted item, checked through F06.S03.M02 auditPage by F06.S01.M02 | relay labelled 'ranking policy not followed'; local ranking unchanged |
 
 ## Acceptance criteria
 
-- All tests T01-T14 pass in CI.
+- All tests T01-T20 pass in CI.
 - Golden score vectors match on Node and in the browser test runner.
 - No configuration can produce a promotion multiplier above 1.25 or an unlabelled promoted result.
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

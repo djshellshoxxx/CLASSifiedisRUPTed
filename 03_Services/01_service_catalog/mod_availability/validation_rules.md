@@ -18,18 +18,24 @@
 | V02 | weeklyRules windows are valid HH:mm, startLocal < endLocal, no overlap on a weekday, length multiple of slotMinutes | VALIDATION_FAILED |
 | V03 | buffers within 0..120, notice within 0..20160, horizon within 1..180 | VALIDATION_FAILED |
 | V04 | requested slot start is a generated slot at least minNoticeMinutes from now and within horizonDays | SERVICES_SLOT_UNAVAILABLE |
-| V05 | requested interval plus buffers overlaps no held or committed interval | SERVICES_SLOT_UNAVAILABLE |
+| V05 | requested interval plus buffers overlaps no held or committed interval; a hold past expiresAt counts as expired even before the sweep runs | SERVICES_SLOT_UNAVAILABLE |
 | V06 | a client holds at most 3 active holds and a calendar has at most 50 active holds | SERVICES_HOLD_LIMIT |
 | V07 | exceptions has at most 200 items and each localDate is within the horizon plus 30 days | VALIDATION_FAILED |
+| V08 | holder is not blocked either way (F07.S02.M02 isBlockedEither) | BLOCKED_PARTY |
+| V09 | commit needs status held, expiresAt after now, needsReconfirmation false, and the interval still generated or kept | SERVICES_SLOT_UNAVAILABLE |
+| V10 | extend needs status held, no earlier extension, and a new expiresAt no later than now plus 24 hours | CONFLICT_STATE |
+| V11 | ttlMs within 300000..259500000 (5 minutes to 72 hours 5 minutes) | VALIDATION_FAILED |
+| V12 | publish_summary has privacy.consent.check(federation_publish, relayId) granted for every relay destination before signing | SERVICES_PUBLISH_CONSENT_MISSING |
+| V13 | summary input names only allowlisted fields, granularity slot or day_part, and windows within the next 14 days | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-028-09.T02 | unit | PS-028-02.R01, PS-028-02.R02, PS-028-02.R03 | each rule V01–V07 violated | documented code returned and nothing stored |
-| TEST-PS-028-09.T03 | property | PS-028-01.R01, PS-028-02.R02, PS-028-03.R02, PS-028-09.R02 | random rules in every zone for 2026-2028 | derived slots are unique, ordered, non-overlapping, and no slot falls in a DST gap |
+| TEST-PS-028-09.T02 | unit | PS-028-02.R01, PS-028-02.R02, PS-028-02.R03 | each rule V01–V13 violated | documented code returned and nothing stored |
+| TEST-PS-028-09.T03 | property | PS-028-01.R01, PS-028-02.R02, PS-028-09.R02 | random rules in every zone for 2026-2028 | derived slots are unique, ordered, non-overlapping, and no slot falls in a DST gap |
 | TEST-PS-028-09.T06 | integration | PS-028-02.R03, PS-028-06.R02 | two tabs hold overlapping slots simultaneously | exactly one succeeds, other SERVICES_SLOT_UNAVAILABLE |
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F08.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

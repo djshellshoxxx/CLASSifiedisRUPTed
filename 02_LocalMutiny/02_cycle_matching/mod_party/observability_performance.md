@@ -29,9 +29,10 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-019-09.T12 | load | PS-019-08.R03, PS-019-08.R01 | check_eligible for 8 actors and list_known for 200 | within budgets on emulated Moto G |
-| TEST-PS-019-09.T13 | unit | PS-019-08.R02, PS-019-09.R01 | traceability tool run | every PS-019 requirement maps to a passing test |
+| TEST-PS-019-09.T12 | load | PS-019-08.R03 | check_eligible for 8 actors and list_known for 200 | within budgets on emulated Moto G |
+| TEST-PS-019-09.T16 | unit | PS-019-08.R01 | local diagnostics after update and ingest | outcomes recorded without DIDs or exclusions; nothing transmitted |
+| TEST-PS-019-09.T17 | contract | PS-019-08.R02 | relay deployment ingests valid, stale and invalid projections | classrup_mutiny_profile_ingest_total counts per outcome exported per CTR-OBS-001 without DIDs |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -39,6 +39,8 @@ Schema `classrup.mutiny.feasibility_report/v1` · storage **derived** · privacy
 - checks contains each of C01..C13 exactly once per participant or leg scope it applies to, in ascending code order.
 - staleAt equals evaluatedAt plus 10 minutes.
 
+**Note:** LengthProfile registry (port, no records): register({length, toleranceBps, absoluteMinRef: Money (reference amount, default 500 EUR minor), maxPairBucket 0..4, imbalanceQuantumPermille, minWantAgeMinutes, maxOtherOpenCycles?, version}) is called at startup by F02.S02.M01 (length 3), F02.S02.M02 (length 4) and F02.S02.M03 (engine default for all other lengths); get(length) returns the registered profile or the engine default, never another length's profile. checkFeasibility(input, ports, effectiveProfile?) uses an explicit effectiveProfile when the caller passes one.
+
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
@@ -47,7 +49,8 @@ Schema `classrup.mutiny.feasibility_report/v1` · storage **derived** · privacy
 | TEST-PS-016-09.T03 | property | PS-016-01.R02, PS-016-06.R01 | random subjects, same inputs twice | identical checks and inputHash |
 | TEST-PS-016-09.T04 | unit | PS-016-01.R01, PS-016-09.R02 | 3-party fixture 12000, 11800, 11500 | all three participants within tolerance, overall feasible only when all bases are local or signed_projection |
 | TEST-PS-016-09.T17 | a11y | PS-016-01.R01 | checklist screen | axe zero serious issues, basis chips announced |
+| TEST-PS-016-09.T20 | unit | PS-016-01.R01, PS-016-04.R02 | registry with profiles 3 and 4 registered, get(5), explicit effectiveProfile, explanation of a 4-party suggestion with the 3-party profile | engine default for 5; explicit profile used; MUTINY_PROFILE_LENGTH_MISMATCH |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

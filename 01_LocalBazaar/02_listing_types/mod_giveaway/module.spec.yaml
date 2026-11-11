@@ -3,45 +3,54 @@ scope: MVP
 summary: >-
   Free-item listings. A giver publishes a giveaway with a selection mode (first come or giver choice), a queue
   limit and a closing time. Interested members send a signed, end-to-end encrypted request; the giver's vault
-  queues requests, applies anti-hoarding limits and selects a recipient. Selection reserves the item locally
-  through the inventory port and sends the recipient a signed selection statement with an expiry. No money
-  changes hands; handover is confirmed by the giver and optionally acknowledged by the recipient, and neither
-  confirmation is proof of delivery.
+  queues requests in the order its device received them, breaks near-ties by a local random draw, applies
+  anti-hoarding limits (including a cap on keys it has never seen) and selects a recipient, in first-come mode only
+  after one giver confirmation per pick. Selection reserves the item locally through the inventory port and sends
+  the recipient a signed selection statement with an expiry; the requester's vault accepts a selection or decline
+  only when the author of the verified listing projection signed it for that exact request. No money changes
+  hands; handover is confirmed by the giver and optionally marked received by the recipient, and neither is proof
+  of delivery.
 responsibilities:
-  - Own GiveawayTerms (selection mode, queue limit, closing time, requester caps) and GiveawayRequest (one per requester per giveaway).
-  - Verify incoming request statements (signature, block lists, self-request, caps) and quarantine invalid ones.
-  - Select a recipient by first-come order or by giver choice, reserve the quantity through bazaar.inventory.hold, and sign the selection statement.
-  - Enforce anti-hoarding limits per requester: 3 pending requests, 2 uncollected selections and 5 collected items per rolling 7 days, counted from signed history in the giver's vault.
+  - Own GiveawayTerms (selection mode, queue limit, closing time, requester caps) and GiveawayRequest (one per requester per giveaway, in the giver's and in the requester's vault).
+  - Verify incoming request statements (signature, block lists, self-request, caps, fresh-key share) and quarantine invalid ones.
+  - Select a recipient by queue order (as received by the giver's device, near-ties drawn locally) with one giver confirmation, or by giver choice; reserve the quantity through bazaar.inventory.hold and sign the selection statement.
+  - Enforce anti-hoarding limits per requester: 3 pending requests, 2 uncollected selections and 5 collected items per rolling 7 days, counted from signed history in the giver's vault, plus at most 50 % of the queue from keys this vault has never seen.
+  - Verify selection and decline statements in the requester's vault against the author of the verified listing projection (F11.S01.M02) and the exact request they answer.
   - Re-open selection when a selected recipient withdraws or does not collect within 72 hours.
+  - Register the F10 privacy ports and pseudonymize retained requests after principal deletion (N6).
 non_responsibilities:
   - Listing creation and publication (F01.S01.M01, F01.S01.M03).
   - Inventory quantities and holds (F01.S03.M01).
   - Messaging and meetup coordination between giver and recipient (F08).
   - Reputation effects (F07.S03.M01).
-  - Verifying the requester's real identity or neediness; requesters are pseudonymous principals.
+  - Verifying the requester's real identity or neediness; requesters are pseudonymous principals and rings of pseudonyms cannot be fully detected.
+  - Mirror verification of the listing projection (F11.S01.M02); this module reads the verified mirror view.
   - "Future: lottery selection and charity-verified givers."
-depends_on: [F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
+depends_on: [F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F11.S01.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001]
 user_stories:
   - As a giver, I choose first come or my own choice and see who asked, with a short note from each.
   - As a requester, I can ask for an item once, withdraw my request, and see whether I was selected and until when I must collect.
-  - As a giver, I am protected from one person grabbing everything by per-person limits.
+  - As a giver, I am protected from one person or a swarm of new pseudonyms grabbing everything by per-person limits, a cap on unknown keys and a confirmation before each pick.
+  - As a requester, I can trust that a selection shown to me was signed by the person who published the giveaway.
 edge_cases:
-  - Two requests arrive in the same second in first-come mode; order is decided by the giver vault's receipt sequence, not by the requesters' timestamps, which are only claims.
+  - Requests fetched in the same mailbox sync batch or received within 60 s of each other are tied and ordered by a giver-local random draw; requesters' timestamps are only claims and the queue says relays can influence order.
   - A requester asks twice; the second is rejected with BAZAAR_GIVEAWAY_DUPLICATE_REQUEST.
   - The selected recipient never collects; after 72 h the request expires, the hold is released and the giver may select again.
   - Requester is blocked by the giver; the request is dropped silently on the giver side and the requester is shown only that it is pending delivery.
   - The giver chooses a requester who withdrew a moment ago; selection returns CONFLICT_STATE and the queue refreshes.
-  - A request arrives for a closed or full giveaway; it is rejected with BAZAAR_GIVEAWAY_CLOSED and a signed rejection is returned.
-  - Requests statement carries a forged signature or a signer different from the stated requester; it is quarantined with reason and never queued.
+  - A request arrives for a closed or full giveaway; it is rejected with BAZAAR_GIVEAWAY_CLOSED and a signed decline is returned.
+  - A request statement carries a forged signature or a signer different from the stated requester; it is quarantined with reason and never queued.
   - The giver's vault is offline for days; requests wait in the relay mailbox as ciphertext and are processed on next unlock; requesters see pending, never selected, until the signed selection arrives.
+  - 200 fresh keys send requests within a minute to a first-come giveaway with queueLimit 50; at most 25 are queued, they are tied and drawn, and nothing is selected until the giver confirms.
+  - A selection arrives at the requester signed by a key that is not the listing author, or a selection of an older withdrawn request is replayed; both are quarantined and the request stays pending.
 ux:
   screens:
     - "Giveaway terms form: selection mode, queue limit (1 to 200), closing time (1 h to 30 d), pickup note."
-    - "Giver queue: list of requests with pseudonym, note (up to 280 characters), request time (as claimed) and receipt order; Select button with confirm dialog."
-    - "Requester view: Request button, my request state, selected card with expiry and instructions, Withdraw action."
-  states: [loading, empty, queue-open, queue-full, closed, requested-pending-delivery, selected, collected, expired, withdrawn, blocked-silent]
+    - "Giver queue: list of requests with pseudonym, note (up to 280 characters), request time (as claimed), tie group marker and the label Order as received by your device; relays can influence order; first-come shows the proposed next recipient with a Confirm pick button; giver choice shows Select with confirm dialog."
+    - "Requester view: Request button, my request state, selected card with expiry, giver identity from the verified listing and instructions, Withdraw and Mark received actions."
+  states: [loading, empty, queue-open, queue-full, closed, pick-awaiting-confirmation, requested-pending-delivery, selected, collected, expired, withdrawn, blocked-silent]
   a11y:
-    - Queue is a labelled list; Select and Decline buttons have names including the requester pseudonym and are at least 44x44 px.
+    - Queue is a labelled list; Select, Confirm pick and Decline buttons have names including the requester pseudonym and are at least 44x44 px.
     - Status changes and new requests are announced in an aria-live polite region.
     - Expiry times are shown as text with date and time, not only as a countdown graphic.
 processes:
@@ -50,6 +59,7 @@ processes:
       - "GiveawayTerms define how a giveaway is run; GiveawayRequest records each requester's signed request and its outcome."
       - "Requests and notes are P2: visible only to giver and requester, travelling only as end-to-end encrypted envelopes and never in public projections."
       - "Anti-hoarding counters are derived from the giver's own stored requests and selections and apply per giver; a requester's behaviour toward other givers is not visible."
+      - "The vault record GiveawayRequest (schema classrup.bazaar.giveaway_request_record/v1) is distinct from the signed request statement classrup.bazaar.giveaway_request/v1; each vault keeps its own record with localRole giver or requester."
     entities:
       - name: GiveawayTerms
         schema: classrup.bazaar.giveaway_terms/v1
@@ -65,6 +75,7 @@ processes:
           - "queueLimit: int — 1..200, default 50"
           - "closesAt?: timestamp — now + 1 h..30 d"
           - "maxPendingPerRequester: int — default 3 per giver, range 1..3"
+          - "freshKeyShare: int — percent of queueLimit open to keys never seen by this vault; fixed 50"
           - "pickupNote?: string — <= 280 code points, plain text; shown only to the selected recipient"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
@@ -72,38 +83,46 @@ processes:
         invariants:
           - Exactly one GiveawayTerms per giveaway listing.
           - pickupNote is never part of a public projection; it is sent only in the selection statement.
-          - queueLimit bounds the number of requests in status pending.
+          - queueLimit bounds the number of requests in status pending; at most freshKeyShare percent of them come from keys never seen by this vault.
       - name: GiveawayRequest
-        schema: classrup.bazaar.giveaway_request/v1
+        schema: classrup.bazaar.giveaway_request_record/v1
         storage: device
         privacy: P2
         retention: RET-EVIDENCE
         fields:
           - "id: uuidv7 — primary key (generated by the requester)"
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
-          - "listingId: uuidv7 — ref Listing"
-          - "giverId: did:key — listing owner"
+          - "localRole: enum — giver | requester (which side this vault holds)"
+          - "listingId: uuidv7 — ref Listing (giver) or verified mirror listing (requester)"
+          - "listingCid?: string — cid of the verified listing projection the requester saw"
+          - "giverId: did:key — listing owner, author of the verified projection"
           - "requesterId: did:key — signer of the request statement"
-          - "note?: string — <= 280 code points, plain text"
+          - "note?: string — <= 280 code points, plain text; purged 30 days after a terminal state"
           - "quantity: int — 1..10, not more than available"
-          - "receiptSeq: int — giver-vault arrival order, strictly increasing per listing"
+          - "receiptSeq?: int — giver vault: arrival order, strictly increasing per listing"
+          - "tieGroup?: int — giver vault: requests from one mailbox sync batch or within 60 s share a group"
+          - "drawRank?: int — giver vault: giver-local random draw inside the tie group (CSPRNG, recorded)"
+          - "freshKey: boolean — giver vault: no earlier verified statement from requesterId existed in this vault"
           - "claimedAt: timestamp — requester's clock, a claim only"
           - "status: enum — pending | selected | collected | declined | withdrawn | expired"
-          - "holdId?: uuidv7 — ref InventoryHold when selected"
+          - "holdId?: uuidv7 — giver vault: ref InventoryHold when selected"
           - "selectionCid?: string — sha256- of the signed selection statement"
-          - "selectedUntil?: timestamp — selection time + 72 h"
+          - "declineCid?: string — sha256- of the signed decline statement"
+          - "selectedUntil?: timestamp — selection time + 72 h, as signed in the selection"
           - "requestCid: string — sha256- over JCS of the request envelope"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
           - At most one request per (listingId, requesterId) that is not in a terminal state.
-          - status selected implies holdId and selectedUntil are set and the hold is active.
+          - In the giver vault, status selected implies holdId and selectedUntil are set and the hold is active.
+          - In the requester vault, status selected or declined implies selectionCid or declineCid names a statement signed by giverId that binds this requestId and requestCid.
           - giverId differs from requesterId; requestCid is unique per listing.
+          - Field classes are annotated per F10.S02.M02 (all P2; note purged after 30 days).
     sql: |
       CREATE TABLE bazaar_giveaway_request (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, requester_id TEXT NOT NULL,
-        status TEXT NOT NULL, receipt_seq INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+        status TEXT NOT NULL, receipt_seq INTEGER, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX bazaar_giveaway_request_live ON bazaar_giveaway_request(tenant_id, listing_id, requester_id)
         WHERE status IN ('pending','selected');
       CREATE INDEX bazaar_giveaway_request_queue ON bazaar_giveaway_request(tenant_id, listing_id, status, receipt_seq);
@@ -112,43 +131,62 @@ processes:
       - "Incoming request statements are verified before queueing: signature, signer, schema, listing state, block lists and caps."
       - "Selection is validated against queue state, available quantity and the anti-hoarding limits."
       - "Every violation maps to one stable error code; blocked requesters get a silent drop, not a revealing error."
+      - "Each rule names the vault that runs it: the giver vault checks against its own records, the requester vault against the verified listing projection (F11.S01.M02 mirror view) and its own requests."
     rules:
-      - "V01 | request envelope signature verifies, author equals requesterId, schema classrup.bazaar.giveaway_request/v1 | VALIDATION_FAILED"
-      - "V02 | giveaway is published, not past closesAt, and queue has fewer than queueLimit pending requests | BAZAAR_GIVEAWAY_CLOSED"
-      - "V03 | requester has no live request on this listing | BAZAAR_GIVEAWAY_DUPLICATE_REQUEST"
-      - "V04 | requester is not blocked by the giver (F07.S02.M02) and is not the giver | BLOCKED_PARTY"
-      - "V05 | requester has at most 3 pending and 2 uncollected selected requests with this giver | BAZAAR_GIVEAWAY_LIMIT"
-      - "V06 | requester has collected fewer than 5 items from this giver in the last 7 days | BAZAAR_GIVEAWAY_LIMIT"
-      - "V07 | note <= 280 code points; quantity 1..10 | VALIDATION_FAILED"
-      - "V08 | select targets a pending request and quantity <= available stock | BAZAAR_GIVEAWAY_NOT_SELECTABLE"
-      - "V09 | closesAt between 1 h and 30 d from now; queueLimit 1..200 | VALIDATION_FAILED"
-      - "V10 | expectedRevision matches | CONFLICT_REVISION"
+      - "V01 | giver vault receive: request envelope signature verifies, author equals requesterId, schema classrup.bazaar.giveaway_request/v1 | VALIDATION_FAILED"
+      - "V02 | requester vault: the verified projection is a published giveaway before closesAt and not tombstoned; giver vault: giveaway is published, not past closesAt, and queue has fewer than queueLimit pending requests | BAZAAR_GIVEAWAY_CLOSED"
+      - "V03 | both vaults: requester has no live request on this listing | BAZAAR_GIVEAWAY_DUPLICATE_REQUEST"
+      - "V04 | both vaults: neither party blocks the other (F07.S02.M02 isBlockedEither) and requester is not the giver; the giver vault drops statements from blocked DIDs silently (N7) | BLOCKED_PARTY"
+      - "V05 | giver vault: requester has at most 3 pending and 2 uncollected selected requests with this giver | BAZAAR_GIVEAWAY_LIMIT"
+      - "V06 | giver vault: requester has collected fewer than 5 items from this giver in the last 7 days | BAZAAR_GIVEAWAY_LIMIT"
+      - "V07 | both vaults: note <= 280 code points; quantity 1..10 | VALIDATION_FAILED"
+      - "V08 | giver vault: select targets a pending request and quantity <= available stock | BAZAAR_GIVEAWAY_NOT_SELECTABLE"
+      - "V09 | giver vault: closesAt between 1 h and 30 d from now; queueLimit 1..200 | VALIDATION_FAILED"
+      - "V10 | both vaults: expectedRevision matches | CONFLICT_REVISION"
+      - "V11 | giver vault receive: pending requests from keys never seen by this vault stay at most 50 % of queueLimit; further fresh-key requests are declined as full | BAZAAR_GIVEAWAY_LIMIT"
+      - "V12 | requester vault receive: selection or decline signature verifies Ed25519 over JCS, the signer is the author did:key of the verified listing projection, the statement binds this requestId, requestCid and listingId (and selectedUntil for a selection), and its cid is new | VALIDATION_FAILED"
+      - "V13 | giver vault: in first_come mode an automatic pick is applied only with one giver confirmation naming the proposed requestId | BAZAAR_GIVEAWAY_NOT_SELECTABLE"
   workflow_state_machine:
     requirements:
       - "GiveawayRequest follows the declared machine; collected, declined, withdrawn and expired are terminal."
       - "Selecting a recipient is atomic with the inventory hold; if the hold fails, the request stays pending."
       - "A selected request that is not collected within 72 hours expires and releases its hold, making the unit selectable again; no cross-vault lock is claimed."
+      - "The requester vault changes a request to selected or declined only on a verified statement signed by the listing author for that exact request, and expires a selection at selectedUntil by its own clock."
+      - "Queue order is the order in which the giver's device received requests: requests from one mailbox sync batch or within 60 s of each other are tied and ordered by a giver-local random draw, first-come picks need one giver confirmation, and the UI labels the order as influenced by relays."
     machines:
-      - entity: GiveawayRequest
+      - entity: GiveawayRequest (giver vault)
         initial: pending
         terminal: [collected, declined, withdrawn, expired]
         transitions:
-          - "pending -> selected | bazaar.giveaway_request.select by giver, or automatic in first_come mode when stock is available | inventory hold taken in same transaction; selection statement signed; emits bazaar.giveaway.recipient_selected"
-          - "pending -> declined | bazaar.giveaway_request.decline by giver, or giveaway closed or sold out | signed decline statement queued"
-          - "pending -> withdrawn | withdraw statement from the requester, verified | no event"
+          - "pending -> selected | bazaar.giveaway_request.select by giver; in first_come mode the vault proposes the head of the queue (receipt order, tie groups by draw) and the pick is applied only with the giver's confirmation | inventory hold (holder {type: giveaway, id: requestId}, ttl 72 h) taken in same transaction; selection statement signed; emits bazaar.giveaway.recipient_selected"
+          - "pending -> declined | bazaar.giveaway_request.decline by giver, giveaway full, closed or sold out | signed decline statement queued"
+          - "pending -> withdrawn | verified withdrawal statement from the requester | no event"
           - "pending -> expired | giveaway closed or closesAt reached | no event"
-          - "selected -> collected | bazaar.giveaway_request.confirm_collected by giver | inventory hold converted; optional recipient acknowledgement recorded when it arrives"
-          - "selected -> withdrawn | withdraw statement from the recipient | hold released"
+          - "selected -> collected | bazaar.giveaway_request.confirm_collected by giver | inventory hold converted; optional recipient mark recorded when it arrives"
+          - "selected -> withdrawn | verified withdrawal statement from the recipient | hold released"
           - "selected -> expired | selectedUntil reached | hold released; giver may select again"
+      - entity: GiveawayRequest (requester vault)
+        initial: pending
+        terminal: [collected, declined, withdrawn, expired]
+        transitions:
+          - "pending -> selected | bazaar.giveaway_selection.receive verifies a selection signed by the listing author for this requestId and requestCid (V12) | selectedUntil and pickup note shown; replayed or foreign selections are quarantined"
+          - "pending -> declined | bazaar.giveaway_selection.receive verifies a decline signed by the listing author for this request | shows declined"
+          - "pending -> withdrawn | bazaar.giveaway_request.withdraw by requester | withdrawal statement queued"
+          - "pending -> expired | closesAt of the verified projection passed on the requester clock, or the listing tombstone was applied by F11.S01.M02 | no statement"
+          - "selected -> withdrawn | bazaar.giveaway_request.withdraw by requester | withdrawal statement queued; the giver releases the hold on receipt"
+          - "selected -> expired | selectedUntil passed on the requester clock | shows expired"
+          - "selected -> collected | bazaar.giveaway_request.confirm_collected by the requester (mark received) | local record only; not proof of delivery"
     timeouts:
       - "Selected requests expire 72 h after selection."
       - "Pending requests expire when the giveaway closes (closesAt or listing leaves published)."
       - "Selection statement expiry equals selectedUntil; the requester's app shows expired after that time by its own clock."
+      - "A first-come pick proposal waits for the giver's confirmation without a timeout; while it waits, no unit is held."
   commands_queries_events:
     requirements:
       - "define_terms, select, decline and confirm_collected are vault-local commands; select and decline produce signed statements (classrup.bazaar.giveaway_selection/v1 and classrup.bazaar.giveaway_decision/v1); a requester's vault produces classrup.bazaar.giveaway_request/v1 and classrup.bazaar.giveaway_withdrawal/v1 through request and withdraw."
       - "Incoming statements are handled by bazaar.giveaway_request.receive, which verifies and stores them with provenance or quarantines them."
       - "bazaar.giveaway.recipient_selected is the only catalog event and carries ids and quantity, never notes."
+      - "In the requester vault, bazaar.giveaway_selection.receive (capability peer) verifies selection and decline statements: the signer is the author did:key of the verified listing projection, the statement binds requestId, requestCid and listingId (and selectedUntil), it is deduplicated by cid, and anything else is quarantined."
     commands:
       - name: bazaar.giveaway_terms.define
         capability: bazaar.giveaway_terms.define
@@ -159,21 +197,28 @@ processes:
         idempotent: true
       - name: bazaar.giveaway_request.request
         capability: bazaar.giveaway_request.create
-        input: "[vault-local + statement classrup.bazaar.giveaway_request/v1, encrypted to giver] { giverId, listingId, quantity?, note? }"
-        output: "{ requestId, syncState: prepared }"
-        errors: [VALIDATION_FAILED, BAZAAR_GIVEAWAY_CLOSED, BAZAAR_GIVEAWAY_DUPLICATE_REQUEST, BLOCKED_PARTY, RATE_LIMITED]
+        input: "[vault-local + statement classrup.bazaar.giveaway_request/v1, encrypted to the giver's mailbox hint of the verified projection] { listingId, listingCid, quantity?, note? }"
+        output: "{ requestId, requestCid, syncState: prepared }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, BAZAAR_GIVEAWAY_CLOSED, BAZAAR_GIVEAWAY_DUPLICATE_REQUEST, BLOCKED_PARTY, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: bazaar.giveaway_request.receive
         capability: bazaar.giveaway_request.receive
-        input: "[vault-local, inbound statement] { envelope, provenance }"
-        output: "{ requestId?, accepted: boolean, quarantineReason? }"
+        input: "[vault-local, inbound statement in the giver vault] { envelope: classrup.bazaar.giveaway_request/v1 | classrup.bazaar.giveaway_withdrawal/v1, provenance: { syncBatchId, receivedAt, relayId? } }"
+        output: "{ requestId?, accepted: boolean, quarantineReason?, tieGroup? }"
         errors: [VALIDATION_FAILED, BAZAAR_GIVEAWAY_CLOSED, BAZAAR_GIVEAWAY_DUPLICATE_REQUEST, BAZAAR_GIVEAWAY_LIMIT]
+        emits: []
+        idempotent: true
+      - name: bazaar.giveaway_selection.receive
+        capability: bazaar.giveaway_selection.receive
+        input: "[vault-local, inbound statement in the requester vault] { envelope: classrup.bazaar.giveaway_selection/v1 | classrup.bazaar.giveaway_decision/v1, provenance }"
+        output: "{ requestId?, accepted: boolean, status?, quarantineReason?: signature_invalid|signer_not_listing_author|binding_mismatch|unknown_request|duplicate }"
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION, CONFLICT_STATE]
         emits: []
         idempotent: true
       - name: bazaar.giveaway_request.select
         capability: bazaar.giveaway_request.decide
-        input: "[vault-local + statement classrup.bazaar.giveaway_selection/v1, encrypted to requester] { requestId, expectedRevision }"
+        input: "[vault-local + statement classrup.bazaar.giveaway_selection/v1, encrypted to requester] { requestId, expectedRevision, confirmProposal? (first_come) }"
         output: "{ requestId, revision, holdId, selectedUntil, selectionCid }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_GIVEAWAY_NOT_SELECTABLE]
         emits: [bazaar.giveaway.recipient_selected]
@@ -199,34 +244,47 @@ processes:
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED]
         emits: []
         idempotent: true
+    note: >-
+      Statement registry (N2, F11.S01.M01): classrup.bazaar.giveaway_request/v1 and classrup.bazaar.giveaway_withdrawal/v1,
+      signer role requester (the stated requesterId), ingested by the giver vault; classrup.bazaar.giveaway_selection/v1
+      {requestId, requestCid, listingId, quantity, selectedUntil, pickupNote?} and classrup.bazaar.giveaway_decision/v1
+      {requestId, requestCid, listingId, reason: declined|closed|full|sold_out}, signer role listing author (the author of
+      the verified listing projection), ingested by the requester vault. Statements from blocked DIDs are dropped
+      silently (N7). Privacy ports (N6): the module registers ExportSectionPort (sections bazaar.giveaway_terms and
+      bazaar.giveaway_requests), DeletionPort (plan: purge notes, pseudonymize the deleted party in retained requests) and
+      RetentionPurgePort (note purge 30 days after terminal state) with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
     queries:
       - name: bazaar.giveaway_request.list_for_listing
         capability: bazaar.giveaway_request.read_as_giver
         input: "{ listingId, status?, cursor?, limit <= 50 }"
-        output: "{ items: GiveawayRequest[], nextCursor? }"
+        output: "{ items: GiveawayRequest[], proposedNext?, nextCursor? }"
         errors: [NOT_FOUND]
       - name: bazaar.giveaway_request.list_mine
         capability: bazaar.giveaway_request.read_own
         input: "{ status?, cursor?, limit <= 50 }"
-        output: "{ items: GiveawayRequest[], nextCursor? }"
+        output: "{ items: GiveawayRequest[] (only requests whose requesterId is the local principal), nextCursor? }"
         errors: [VALIDATION_FAILED]
     events_produced:
       - {type: bazaar.giveaway.recipient_selected, privacy: P2, payload: "{ listingId, requestId, giverId, recipientId, quantity, holdId, selectedUntil, selectionMode }"}
     events_consumed:
-      - {type: bazaar.listing.unpublished, effect: "expire pending requests with reason closed; selected requests stay valid until selectedUntil"}
-      - {type: bazaar.listing.expired, effect: "expire pending requests; selected requests stay valid until selectedUntil"}
-      - {type: bazaar.listing.closed, effect: "expire pending requests"}
-      - {type: identity.block.added, effect: "drop pending requests between the two parties silently and release their holds"}
+      - {type: bazaar.listing.unpublished, effect: "giver vault: expire pending requests with reason closed and queue decline statements; selected requests stay valid until selectedUntil"}
+      - {type: bazaar.listing.expired, effect: "giver vault: expire pending requests and queue decline statements; selected requests stay valid until selectedUntil"}
+      - {type: bazaar.listing.closed, effect: "giver vault: expire pending requests and queue decline statements"}
+      - {type: identity.block.added, effect: "both vaults: drop pending requests between the two parties silently and release their holds in the giver vault"}
+      - {type: federation.tombstone.applied, effect: "requester vault: when the tombstone targets the giveaway's listing projection, expire the pending request locally"}
+      - {type: privacy.deletion.completed, effect: "replace the deleted party's DID with the payload pseudonym in requests retained under RET-EVIDENCE and purge their notes"}
     errors:
       - "BAZAAR_GIVEAWAY_CLOSED | 409 | no | giveaway is not accepting requests (closed, full or unpublished)"
       - "BAZAAR_GIVEAWAY_DUPLICATE_REQUEST | 409 | no | requester already has a live request on this giveaway"
-      - "BAZAAR_GIVEAWAY_LIMIT | 429 | no | anti-hoarding limit for this requester with this giver reached"
-      - "BAZAAR_GIVEAWAY_NOT_SELECTABLE | 409 | no | request is not pending or no stock is available"
+      - "BAZAAR_GIVEAWAY_LIMIT | 429 | no | anti-hoarding limit for this requester with this giver, or the fresh-key share of the queue, reached"
+      - "BAZAAR_GIVEAWAY_NOT_SELECTABLE | 409 | no | request is not pending, no stock is available, or a first-come pick lacks the giver's confirmation"
     example: |
-      requester vault: dispatch("bazaar.giveaway_request.request", { "giverId": "did:key:z6MkGiver...", "listingId": "0192f3a4-8888-7d8e-9f01-23456789abcd", "note": "For my class" })
-      => { "requestId": "0192f3ae-...", "syncState": "prepared" }   (later transport_acknowledged, then peer_accepted after the giver's signed receipt)
-      giver vault: dispatch("bazaar.giveaway_request.select", { "requestId": "0192f3ae-...", "expectedRevision": 1 })
+      requester vault: dispatch("bazaar.giveaway_request.request", { "listingId": "0192f3a4-8888-7d8e-9f01-23456789abcd", "listingCid": "sha256-Lst...", "note": "For my class" })
+      => { "requestId": "0192f3ae-...", "requestCid": "sha256-Req...", "syncState": "prepared" }   (later transport_acknowledged, then peer_accepted after the giver's signed receipt)
+      giver vault: dispatch("bazaar.giveaway_request.select", { "requestId": "0192f3ae-...", "expectedRevision": 1, "confirmProposal": true })
       => { "requestId": "0192f3ae-...", "revision": 2, "holdId": "0192f3af-...", "selectedUntil": "2026-11-07T10:00:00.000Z", "selectionCid": "sha256-Zm9v..." }
+      requester vault: dispatch("bazaar.giveaway_selection.receive", { "envelope": { "type": "classrup.bazaar.giveaway_selection/v1", "author": "did:key:z6MkGiver...", ... } })
+      => { "requestId": "0192f3ae-...", "accepted": true, "status": "selected" }
   authorization_capabilities:
     requirements:
       - "Vault policy: only the giver's principal defines terms, selects, declines and confirms; only the requester's principal creates or withdraws a request."
@@ -235,8 +293,9 @@ processes:
     capabilities:
       - "bazaar.giveaway_terms.define | owner | listing.ownerId = local principal; listing kind giveaway; status draft, published or unpublished"
       - "bazaar.giveaway_request.create | owner | local principal is the requester; not blocked by the giver; one live request per giveaway"
-      - "bazaar.giveaway_request.receive | peer | statement signed by the requester key; signature verified; giveaway owned by local principal"
-      - "bazaar.giveaway_request.decide | owner | request.giverId = local principal"
+      - "bazaar.giveaway_request.receive | peer | giver vault: statement signed by the requester key; signature verified; giveaway owned by local principal"
+      - "bazaar.giveaway_selection.receive | peer | requester vault: statement signed by the author key of the verified listing projection; binds the local principal's own request"
+      - "bazaar.giveaway_request.decide | owner | giver vault: request.giverId = local principal; requester vault: confirm_collected only, request.requesterId = local principal (mark received)"
       - "bazaar.giveaway_request.read_as_giver | owner | listing.ownerId = local principal"
       - "bazaar.giveaway_request.read_own | owner | request.requesterId = local principal"
       - "bazaar.giveaway_request.relay_mailbox | relay-member | relay policy: request signed by the recipient device key; ciphertext only; mailbox quota default 10 MiB"
@@ -246,7 +305,7 @@ processes:
       - "Selection, inventory hold and request update commit in one transaction; the signed statement is queued in the same transaction and sent afterwards."
       - "Each sync step states only what is known: prepared, transport_acknowledged by relay receipt, peer_accepted by the peer's signed acknowledgement."
     idempotency: "Idempotency-Key required on commands, kept 24 h; inbound statements deduplicated by cid; replayed selection returns the stored selection statement."
-    concurrency: "expectedRevision on select and decline; the unique index allows one live request per requester; the hold uses F01.S03.M01 serialization; two tabs selecting different requests for the last unit give one success and one BAZAAR_GIVEAWAY_NOT_SELECTABLE."
+    concurrency: "expectedRevision on select and decline; the unique index allows one live request per requester; the hold uses F01.S03.M01 serialization; two tabs selecting different requests for the last unit give one success and one BAZAAR_GIVEAWAY_NOT_SELECTABLE. The random draw for a tie group is made once and recorded, so a replay or a second tab sees the same order."
     retries: "Transport retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts per burst); quarantined statements are never retried."
     offline: "Requester can queue a request offline; it stays prepared and is not shown as sent. The giver processes the queue after unlock; selections made offline are final locally and sent when online."
     partial_failure: "If the selection statement cannot be signed (key locked), the whole select is rolled back including the hold; if transport fails after commit, the selection stands locally and the requester sees pending until delivery."
@@ -255,18 +314,22 @@ processes:
       - "Requests, notes and selections are P2 and travel only end-to-end encrypted to the two parties; relays see ciphertext and routing metadata."
       - "Requests are retained RET-EVIDENCE for the giver and the requester; notes are purged 30 days after a terminal state unless a dispute references them."
       - "The queue is visible only to the giver; requesters never see others in the queue."
+      - "The module registers ExportSectionPort, DeletionPort and RetentionPurgePort with F10 (N6), annotates every GiveawayTerms and GiveawayRequest field with its F10.S02.M02 class, and pseudonymizes the deleted party in retained requests on privacy.deletion.completed."
     data:
-      - "GiveawayRequest: P2 (giver, requester)."
-      - "GiveawayTerms: P3 draft; selectionMode and closesAt are public in the projection, pickupNote is not."
+      - "GiveawayRequest: P2 (giver, requester); field classes annotated per F10.S02.M02."
+      - "GiveawayTerms: P3 draft; selectionMode, queueLimit and closesAt are public in the projection, pickupNote is not."
     retention:
-      - "GiveawayRequest: RET-EVIDENCE with note purged 30 days after terminal state."
+      - "GiveawayRequest: RET-EVIDENCE with note purged 30 days after terminal state; party DIDs pseudonymized after principal deletion."
       - "GiveawayTerms: RET-STANDARD."
+      - "Quarantined statements: RET-SHORT 30 days."
     threats:
-      - "T01 | Hoarding by one person or a ring of pseudonyms for resale | per-giver caps (3 pending, 2 uncollected, 5 per 7 days), giver choice mode, visible honest note that pseudonym rings cannot be fully detected"
-      - "T02 | Forged request or selection statements | signatures verified against stated signer; non-matching signer quarantined"
-      - "T03 | Spam flooding a giver's queue | queueLimit up to 200, relay mailbox quotas, requester rate limit 20 requests per hour, block list silent drop"
+      - "T01 | Hoarding by one person or a ring of pseudonyms for resale | per-giver caps (3 pending, 2 uncollected, 5 per 7 days), fresh-key share of 50 % of the queue, giver confirmation of every first-come pick, giver choice mode, visible honest note that pseudonym rings cannot be fully detected"
+      - "T02 | Forged request or selection statements | requests verified against the stated requester; selections and declines verified against the author of the verified listing projection and bound to requestId and requestCid; mismatches quarantined"
+      - "T03 | Spam flooding a giver's queue | queueLimit up to 200, fresh-key share, relay mailbox quotas, requester rate limit 20 requests per hour, block list silent drop"
       - "T04 | Harassment or stalking through pickup details | pickupNote only in the selection statement to the recipient; exact location shared by the user only through F06.S02.M02 shares with TTL 24 h"
-      - "T05 | Gaming first-come with forged timestamps | order uses the giver vault's receiptSeq, requester claimedAt is shown only as a claim"
+      - "T05 | Gaming first-come with forged timestamps or a relay reordering deliveries | order uses the giver vault's receipt order, requests within one sync batch or 60 s are tied and drawn locally, requester claimedAt is shown only as a claim, and the queue says relays can influence order"
+      - "T06 | Sybil swarm of free did:keys draining stock while the giver is away | first-come picks wait for one giver confirmation; fresh keys capped at 50 % of the queue"
+      - "T07 | Replay of an old selection onto a new request | selection binds requestId and requestCid; cid dedup; replays quarantined"
     abuse_controls:
       - "Requester limit 20 request commands per hour per vault; giver limit 200 select/decline per hour."
       - "Silent drops on block avoid retaliation; moderation of listing content is by relay hosting policy and local filtering."
@@ -290,34 +353,39 @@ processes:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate statements, commands and the recipient_selected event against the registry and verify signatures."
       - "Anti-hoarding limits and ordering are tested with injected clock and receipt sequence."
-    fixtures: "Giver vault G with giveaway listing L (quantity 2), requester vaults R1..R4 (R4 blocked by G), second giveaway L2, clock 2026-11-04T10:00:00Z."
+    fixtures: "Giver vault G with giveaway listing L (quantity 2, first_come, queueLimit 50) and its verified projection mirrored in requester vaults R1..R4 (R4 blocked by G), 200 fresh requester keys, a key K that is not the listing author, second giveaway L2, clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R03 | define terms and receive a valid request | records stored; counters derived from stored requests"
-      - "T02 | unit | 01.R02,07.R01 | inspect projection, relay payload and logs | notes and queue only in encrypted statements; projection has mode and closesAt only"
-      - "T03 | unit | 02.R01,02.R02 | violate each rule V01-V10 | documented error code returned; blocked requester dropped silently with no error to peer"
+      - "T02 | unit | 01.R02,07.R01 | inspect projection, relay payload and logs | notes and queue only in encrypted statements; projection has mode, queueLimit and closesAt only"
+      - "T03 | unit | 02.R01,02.R02 | violate each rule V01-V13 | documented error code returned; blocked requester dropped silently with no error to peer"
       - "T04 | property | 03.R01,03.R02,03.R03 | random commands, withdrawals and clock advances | only declared transitions; selected implies active hold; terminal states never regress"
       - "T05 | integration | 03.R02,06.R02 | two tabs select different requests for last unit | one selected, other BAZAAR_GIVEAWAY_NOT_SELECTABLE"
       - "T06 | integration | 03.R03 | selected recipient does not collect for 72 h | request expired, hold released, second selection possible"
-      - "T07 | contract | 04.R01,04.R03,09.R02 | request, select, decline, withdraw run | statements validate and verify; recipient_selected payload has no notes"
+      - "T07 | contract | 01.R04,04.R01,04.R03,09.R02 | request, select, decline, withdraw run in both vaults | statements validate and verify; recipient_selected payload has no notes; stored records validate as classrup.bazaar.giveaway_request_record/v1 with localRole giver or requester and never as the statement schema"
       - "T08 | integration | 04.R02,05.R02 | statement with wrong signer, tampered body, unknown schema | all quarantined with reasons; none queued"
       - "T09 | abuse | 05.R01,05.R03 | non-giver selects; relay reads mailbox | FORBIDDEN; relay holds ciphertext only"
       - "T10 | integration | 06.R01,06.R03 | replay select with same key; fail signing | one selection; failure rolls back hold"
-      - "T11 | chaos | 06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock; requester sees pending until signed receipt"
-      - "T12 | abuse | 07.R03,07.R02 | requester sends 4th pending request and 6th collection within 7 days; 21 requests in an hour | BAZAAR_GIVEAWAY_LIMIT and RATE_LIMITED"
-      - "T13 | abuse | 07.R01,07.R02 | terminal request older than 30 days | note purged, evidence fields retained"
+      - "T11 | chaos | 06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock with tie groups per sync batch; requester sees pending until signed receipt"
+      - "T12 | abuse | 02.R03,07.R03 | requester sends 4th pending request and 6th collection within 7 days; 21 requests in an hour | BAZAAR_GIVEAWAY_LIMIT and RATE_LIMITED; the rejected requester learns nothing about the queue"
+      - "T13 | abuse | 07.R02 | terminal request older than 30 days | note purged, evidence fields retained"
       - "T14 | load | 08.R01,08.R02,08.R03 | 200 queued requests on Moto G profile | select p95 <= 120 ms, receive p95 <= 80 ms, list p95 <= 150 ms, no telemetry"
       - "T15 | unit | 09.R01,09.R03 | traceability tool run | every PS-005 requirement maps to a passing test"
       - "T16 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import request with invalid signature | round-trip identical; invalid signature quarantined; selected imports as expired if past selectedUntil"
+      - "T17 | abuse | 04.R04,03.R04 | R1 receives a selection signed by K, then a valid selection of its older withdrawn request replayed against its new request, then a valid selection | first two quarantined (signer_not_listing_author, binding_mismatch) and the request stays pending; the valid one moves it to selected with selectedUntil; expiry by R1's clock afterwards"
+      - "T18 | abuse | 03.R05 | 200 fresh keys send requests within 60 s to L | at most 25 queued (50 % of queueLimit), all in one tie group ordered by the recorded draw, no selection until the giver confirms the proposed pick; queue label states relays can influence order"
+      - "T19 | integration | 07.R03 | R1 and R2 each request L; R1 calls list_mine and the giver calls list_for_listing | R1 sees only its own request; only the giver vault returns the queue"
+      - "T20 | integration | 02.R04 | R1 requests after the verified projection's closesAt, and after its tombstone was applied | BAZAAR_GIVEAWAY_CLOSED in the requester vault without contacting the giver; pending request expires on tombstone"
+      - "T21 | integration | 07.R04 | export sections, deletion plan and retention purge through the F10 ports, then privacy.deletion.completed for R2 | sections present with field classes; R2's DID replaced by the pseudonym in retained requests and notes purged"
     acceptance:
-      - All tests T01-T16 pass in CI.
-      - A recipient is never shown as selected before the signed selection statement is verified, and handover is never described as proven.
-      - Per-requester limits hold under retries, replays and concurrent tabs.
+      - All tests T01-T21 pass in CI.
+      - A recipient is never shown as selected before a selection statement signed by the listing author for that exact request is verified, and handover is never described as proven.
+      - Per-requester limits and the fresh-key share hold under retries, replays, Sybil swarms and concurrent tabs.
   import_export_backup_rollback:
     requirements:
       - "The user export contains terms and requests (as giver and as requester) in sections bazaar.giveaway_terms and bazaar.giveaway_requests together with their statements."
       - "Import verifies statement signatures and the party roles; expired selections import as expired and never revive a reservation."
       - "Schema changes follow expand/contract and keep v1 readable for 180 days."
-    export: "Sections bazaar.giveaway_terms and bazaar.giveaway_requests in classrup-export/v1, one line per record (schemas classrup.bazaar.giveaway_terms/v1 and classrup.bazaar.giveaway_request/v1) plus the signed statements."
+    export: "Sections bazaar.giveaway_terms and bazaar.giveaway_requests in classrup-export/v1, one line per record (schemas classrup.bazaar.giveaway_terms/v1 and classrup.bazaar.giveaway_request_record/v1) plus the signed statements."
     import: "Records with invalid signatures are quarantined; requests where neither party is the importing principal are rejected; imported pending requests become expired to avoid stale commitments."
     backup: "Vault export is the primary backup (IOX-6); relays keep only encrypted mailbox envelopes for a limited retention period per their policy."
-    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; statements already sent remain valid because their schemas are unchanged."
+    migration_rollback: "Additive optional fields only in v1; records exported under the earlier record name classrup.bazaar.giveaway_request/v1 are read as classrup.bazaar.giveaway_request_record/v1 for 180 days; rollback is by reinstalling the previous release; statements already sent remain valid because their schemas are unchanged."

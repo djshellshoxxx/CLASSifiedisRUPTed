@@ -8,7 +8,7 @@
 
 - **PS-027-02.R01** Declarations are validated strictly on amount, currency, basis, ownership and lock state before anything is signed.
 - **PS-027-02.R02** Plausibility thresholds are fixed numbers evaluated with integer arithmetic so every vault gets the same verdict.
-- **PS-027-02.R03** Flags are accepted only from participants of a non-terminal proposal or cycle that contains the item, and acknowledgements need a justification.
+- **PS-027-02.R03** Flags are accepted only from participants of a non-terminal subject that contains the item and in which the owner already signed consent or the reservation, and acknowledgements need a justification.
 
 ## Specification
 
@@ -19,18 +19,23 @@
 | V03 | basis is one of retail_estimate, purchase_price, replacement_cost, other and note ≤ 280 code points | VALIDATION_FAILED |
 | V04 | the item has no active reservation (lockedBySubjectId absent) | MUTINY_VALUATION_LOCKED |
 | V05 | ratioPermille below 200 gives plausibility low, above 5000 gives high, otherwise ok; no reference gives unchecked | VALIDATION_FAILED |
-| V06 | flagger is a participant of a non-terminal proposal or cycle containing the item and has not flagged the same item within 30 days | MUTINY_VALUATION_FLAG_NOT_ALLOWED |
+| V06 | flagger is a participant of a non-terminal subject containing the item in which the owner has already signed consent or the reservation, as verified in the receiving vault from the owner's own statements, and has not flagged the same item within 30 days | MUTINY_VALUATION_FLAG_NOT_ALLOWED |
 | V07 | acknowledgement is by the owner, the valuation is flagged, and ackNote has 10..280 code points | MUTINY_VALUATION_ACK_INVALID |
 | V08 | peer projection signature verifies, signer equals ownerId, seq is greater than stored and prev equals stored cid, claimed time not more than 5 minutes ahead of the local clock | MUTINY_VALUATION_STATEMENT_INVALID |
+| V09 | a flag-triggered state change happens at most once per item per 30 days (lastFlagStateChangeAt); later flags are stored and counted but change nothing | RATE_LIMITED |
+| V10 | a projection contains exactly the whitelisted fields {ownerId, inventoryItemId, listingCid, declared, basis, note, plausibility, ackNote?, seq, prev}; any other field is refused before signing and on ingest | MUTINY_VALUATION_STATEMENT_INVALID |
+| V11 | privacy.consent.check(purpose federation_publish, relayId) returns granted before a projection is sent to a relay; tombstones are always sent | PRECONDITION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-027-09.T01 | unit | PS-027-01.R01, PS-027-02.R01, PS-027-02.R03 | declare 12000 EUR on I1 | stored with ratio 960 permille, plausibility ok, signed projection seq 1 |
-| TEST-PS-027-09.T02 | unit | PS-027-02.R01, PS-027-02.R02 | each rule V01..V08 violated in turn | documented error code and nothing signed |
+| TEST-PS-027-09.T02 | unit | PS-027-02.R01, PS-027-02.R02 | each rule V01..V11 violated in turn | documented error code and nothing signed |
 | TEST-PS-027-09.T03 | unit | PS-027-02.R02 | ratio 199, 200, 5000, 5001 permille and missing or foreign-currency reference | low, ok, ok, high, unchecked |
+| TEST-PS-027-09.T16 | contract | PS-027-01.R04, PS-027-01.R02, PS-027-02.R01 | schema assertions on the signed projection envelope and the flag payload for declared, auto-flagged, acknowledged and locked valuations | projection fields equal the whitelist exactly; flags, flagCount, lockedBySubjectId, referencePrice and ratioPermille never appear; ackNote appears only after acknowledging an automatic flag; flag payload has only subject, item, reason and comment |
+| TEST-PS-027-09.T17 | abuse | PS-027-03.R04, PS-027-07.R03, PS-027-02.R03 | two Sybil DIDs each send Alice a proposal naming her item and flag it; Bob flags in a subject where Alice signed consent; a second flag-triggered change within 30 days | Sybil flags refused (MUTINY_VALUATION_FLAG_NOT_ALLOWED); Bob's flag blocks only his subject; second change refused with RATE_LIMITED and counted |
 
 ## Dependencies
 
-Module depends on: F01.S02.M01, F01.S03.M01, F01.S01.M01, F09.S03.M01, F09.S03.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S02.M01, F01.S03.M01, F01.S01.M01, F09.S03.M01, F09.S03.M03, F16.S02.M03, F07.S01.M01, F07.S02.M02, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

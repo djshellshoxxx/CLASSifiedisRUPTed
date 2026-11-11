@@ -2,34 +2,40 @@ id: F06.S03.M01
 scope: MVP
 summary: >-
   Deterministic relevance scoring for search results. The score combines BM25 text relevance, a recency decay
-  anchored on local first-seen time, and a distance-bucket weight, with an optional paid-promotion multiplier capped
+  anchored on local first-seen time, and a distance-bucket weight, with an optional relay-sold promotion multiplier capped
   at 1.25 that exists only on a relay that chose to sell promotion and is always labelled 'Promoted'. The vault uses
   the bundled default RankingConfig; a relay operator may publish its own versioned RankingConfig as a signed statement
-  so clients can read how that relay ranks. Same inputs and same config always give the same order.
+  so clients can read how that relay ranks. A relay's ranking is that relay's claim: vaults re-check every relay page
+  against the F06.S03.M02 fairness rules and label a relay that breaks them. Same inputs (including the index's
+  first-seen times) and the same config always give the same order, with ties broken on the projection cid.
 responsibilities:
   - Define and own RankingConfig - weights, half-life, BM25 field weights, distance bucket weights and the promotion cap - with strict bounds and immutable versions.
-  - Provide pure score() and explainComponents() functions used identically by the vault and the relay, with fixed tie-breaking.
+  - Provide pure score() and explainComponents() functions used identically by the vault and the relay, with fixed tie-breaking (score, then newer recency anchor, then lexicographically smaller projectionCid) and renormalisation when the text or distance term does not apply.
   - Let a relay operator publish and roll back RankingConfig versions, emitting a signed statement and the event discovery.ranking_config.published.
-  - Anchor recency on the index's local firstSeenAt clamped by the author's claim, never on claims alone.
+  - Anchor recency on the author's claimed publication time clamped by the index's local firstSeenAt (min(claim, firstSeenAt)), so a claim can only make a document look older than first seen, never newer.
 non_responsibilities:
   - Diversity, new-author exposure and explanation strings for the user interface (F06.S03.M02).
   - Text index and query parsing (F06.S01.M01, F06.S01.M02).
-  - Selling promotion, billing and promotion claims (a relay-local policy; payment evidence is F09 claims, never custody).
+  - Selling promotion, billing and promotion claims (a relay-local policy; payment evidence is F09 claims, never custody); setting promotedUntil is F06.S01.M01 set_promotion.
+  - Re-checking relay pages in the vault (F06.S01.M02 and F06.S02.M03 call F06.S03.M02 auditPage).
   - "Future: learned ranking, per-user personalization, click feedback; none is allowed without a new decision record because they would profile users."
-depends_on: [F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
   - As a buyer, I see the best text match first, with newer and closer items ranked a bit higher, and I can see why each result is ranked where it is.
   - As a buyer, promoted results are clearly labelled 'Promoted' and cannot jump more than a capped amount.
   - As a relay operator, I can publish a ranking configuration and roll it back, and my users can read it.
-  - As a developer, the same query on the same data gives the same order on every device.
+  - As a developer, the same query on the same data (including first-seen times) gives the same order on every device.
+  - As a buyer, I can read a relay's full ranking history for the last 12 months and see when a relay does not follow the published fairness rules.
 edge_cases:
   - A query has no text terms (browse by filters); the text term is dropped and the remaining weights are renormalized.
-  - Two results have equal scores to six decimals; the newer firstSeenAt wins, then the smaller documentId.
+  - Two results have equal scores to six decimals; the newer recency anchor wins, then the lexicographically smaller projectionCid, which is the same on every device (a locally generated documentId is never used).
+  - A browse query has no search center, or a document has no cell; the distance term is dropped and the remaining weights are renormalised, as for text.
   - A document's claimedPublishedAt is in the future; recency uses min(claim, firstSeenAt), so it gains nothing.
   - A promotion has expired (promotedUntil in the past) but the flag was not cleared; the multiplier is not applied and the label is not shown.
   - An operator publishes weights that do not sum to 1.0 or a boost above 0.25; rejected with RANKING_CONFIG_INVALID.
   - A vault has no relay config; it uses the bundled default config and states 'default ranking' in the explanation.
-  - A rollback is requested to a version that never existed; NOT_FOUND.
+  - A rollback is requested to a version that never existed; NOT_FOUND. A rollback to the currently active version; CONFLICT_STATE.
+  - An operator publishes 10 versions a day to push old versions out of view; get_active pages through the whole 12-month history, so nothing is hidden.
 ux:
   screens:
     - "Relay ranking page: shows the active RankingConfig version, weights, half-life, promotion cap and the signed statement fingerprint; operator console adds Publish and Roll back with a diff preview."
@@ -41,14 +47,14 @@ processes:
   domain_schema:
     requirements:
       - A RankingConfig is an immutable numbered version with bounded numeric parameters, a signature by the publishing relay key, and exactly one active version per relay.
-      - The vault ships a default RankingConfig version 1 inside the app bundle and never edits it.
+      - The vault ships a default RankingConfig version 1 inside the app bundle and never edits it; relay configs fetched for display are stored only in a separate cache table and never used for local ranking.
       - The promotion multiplier cap is a hard maximum of 1.25 that no configuration can exceed.
     entities:
       - name: RankingConfig
         schema: classrup.discovery.ranking_config/v1
         storage: relay+device
         privacy: P0
-        retention: RET-STANDARD
+        retention: RET-AUDIT
         fields:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — tenant scope"
@@ -72,12 +78,17 @@ processes:
           - Exactly one RankingConfig per relay (and exactly the bundled one in a vault) has status active.
           - Published versions are never edited; a change is a new version and a rollback is a new version copying an older one.
           - promotionBoost is at most 0.25 and weights sum to 1.0.
+          - Relay configs cached by a vault live only in discovery_ranking_config_cache, never in discovery_ranking_config.
     sql: |
       CREATE TABLE discovery_ranking_config (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, version INTEGER NOT NULL, origin TEXT NOT NULL,
         status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX discovery_ranking_config_version ON discovery_ranking_config(tenant_id, version);
       CREATE UNIQUE INDEX discovery_ranking_config_active ON discovery_ranking_config(tenant_id) WHERE status = 'active';
+      -- vault only: display cache of relay configs fetched with get_active (24 h), keyed by relay
+      CREATE TABLE discovery_ranking_config_cache (
+        tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, version INTEGER NOT NULL, statement_cid TEXT NOT NULL,
+        fetched_at TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (tenant_id, relay_id, version));
   validation_rules:
     requirements:
       - Every parameter has a documented numeric range and violations are rejected as a whole; nothing is clamped.
@@ -89,8 +100,11 @@ processes:
       - "V03 | recencyHalfLifeDays is an integer in 1..90 | RANKING_CONFIG_INVALID"
       - "V04 | distanceWeights are each in 0.05..1.0 and non-increasing from lt5 to gt50 | RANKING_CONFIG_INVALID"
       - "V05 | promotionBoost is in 0..0.25 | RANKING_CONFIG_INVALID"
-      - "V06 | rollback target version exists and is not the active version | NOT_FOUND"
-      - "V07 | at most 10 config publications per 24 h per relay | RATE_LIMITED"
+      - "V06 | rollback target version exists in this relay's history | NOT_FOUND"
+      - "V07 | at most 10 config publications per 24 h per relay, enforced through RateLimitPort (F12.S03.M03) | RATE_LIMITED"
+      - "V08 | rollback target version is not the currently active version | CONFLICT_STATE"
+      - "V09 | score inputs (bm25, age in days, bucket) are finite and non-negative; a missing center or empty cell drops the distance term and renormalises the remaining weights | VALIDATION_FAILED"
+      - "V10 | a fetched relay config statement verifies against that relay's key over JCS bytes (F11.S01.M03) before it is cached or displayed | RANKING_CONFIG_INVALID"
   workflow_state_machine:
     requirements:
       - A new version becomes active atomically and the previous active version becomes retired in the same transaction.
@@ -106,7 +120,7 @@ processes:
   commands_queries_events:
     requirements:
       - publish and rollback are relay commands that produce the signed statement classrup.discovery.ranking_config/v1 signed with the relay key; there is no vault command because the vault uses the bundled default.
-      - get_active is a public query available in the vault (bundled default) and on a relay (its active version).
+      - get_active is a public query available in the vault (bundled default) and on a relay (its active version), and pages through the full 12-month version history.
       - The event discovery.ranking_config.published is emitted in the same transaction as the activation and is local to the relay.
     commands:
       - name: discovery.ranking_config.publish
@@ -120,15 +134,20 @@ processes:
         capability: discovery.ranking_config.rollback
         input: "{ targetVersion, expectedActiveVersion, reasonNote? }"
         output: "{ configId, version, statementCid }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, RATE_LIMITED, FORBIDDEN]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RATE_LIMITED, FORBIDDEN]
         emits: [discovery.ranking_config.published]
         idempotent: true
     queries:
       - name: discovery.ranking_config.get_active
         capability: discovery.ranking_config.read_public
-        input: "{ includeHistory?: boolean }"
-        output: "{ active: RankingConfig, history?: RankingConfig[] (at most 20 versions) }"
-        errors: []
+        input: "{ includeHistory?: boolean, cursor?, limit? (1..50, default 20) }"
+        output: "{ active: RankingConfig, history?: RankingConfig[] (one page, newest first), nextCursor? (more versions within the 12-month history) }"
+        errors: [EXPIRED, RATE_LIMITED]
+    note: >-
+      Statement registry (N2): classrup.discovery.ranking_config/v1 has signer role 'relay (the publishing relay's
+      key)' and audience public, and is registered in the F11.S01.M01 registry; a vault verifies it (V10) before it is
+      cached for display. Relay ranking is that relay's claim: the vault never uses a relay config for local ranking
+      and re-checks relay pages through F06.S03.M02 auditPage in F06.S01.M02 and F06.S02.M03.
     events_produced:
       - {type: discovery.ranking_config.published, privacy: P0, payload: "{ configId, version, origin, relayId?, statementCid, activatedAt }"}
     events_consumed: []
@@ -138,6 +157,8 @@ processes:
       relay command: discovery.ranking_config.publish { "weights": { "text": 0.6, "recency": 0.25, "distance": 0.15 }, "bm25": { "titleWeight": 5, "bodyWeight": 1, "k": 3 }, "recencyHalfLifeDays": 14, "distanceWeights": { "lt5": 1, "5_10": 0.85, "10_25": 0.65, "25_50": 0.4, "gt50": 0.2 }, "promotionBoost": 0.15, "expectedActiveVersion": 3 }
       -> { "configId": "0192f3f0-…", "version": 4, "statementCid": "sha256-Qm…" }
       score: text = s/(s+k) with s = -bm25; base = 0.60*text + 0.25*0.5^(ageDays/14) + 0.15*bucketWeight; final = round(base * (1 + boost if promoted), 6)
+      no center or empty cell: base = (0.60*text + 0.25*recency) / 0.85; no text terms: base = (0.25*recency + 0.15*bucketWeight) / 0.40
+      ageDays is measured from the recency anchor min(claimedPublishedAt, firstSeenAt); ties: newer anchor, then smaller projectionCid
   authorization_capabilities:
     requirements:
       - Relay policy - only the operator role of the relay hosting the config may publish or roll back; the action is recorded in that relay's audit log with actor and version only.
@@ -155,21 +176,22 @@ processes:
     idempotency: "Idempotency-Key required on publish and rollback; replay returns the stored response for 24 h; scoring has no side effects."
     concurrency: "expectedActiveVersion compare-and-set inside BEGIN IMMEDIATE; the partial unique index on status active prevents two active rows."
     retries: "Operators retry on RATE_LIMITED or DEPENDENCY_UNAVAILABLE with base 500 ms, cap 30 s, full jitter, max 6 attempts."
-    offline: "The vault scores offline with the bundled default; relay configs fetched earlier are cached 24 h for display only."
+    offline: "The vault scores offline with the bundled default; relay configs fetched earlier are kept 24 h in discovery_ranking_config_cache for display only."
     partial_failure: "If signing fails the transaction aborts and the previous version stays active; if the statement is not delivered to clients, clients still fetch it with get_active."
   privacy_retention_abuse:
     requirements:
       - Ranking uses only public document fields, query text and the coarse distance bucket; it uses no user identity, history or click data.
       - Promotion is shown honestly with a 'Promoted' label and a capped multiplier, and is relay-local policy, never claimed as global.
       - Config publication is auditable and rate limited to prevent silent manipulation.
+      - Relay ranking is presented as that relay's claim; vaults re-apply the F06.S03.M02 page checks to every relay page and label a relay that breaks them, and no history can be flushed from view because get_active pages through the full 12 months.
     data:
-      - "RankingConfig: P0 public; signed statement published by the relay."
+      - "RankingConfig: P0 public; signed statement published by the relay; a vault keeps fetched relay configs only in the 24 h display cache."
       - "Scores: computed on demand, not stored; explain components contain no personal data."
     retention:
-      - "RankingConfig versions kept 12 months for transparency (RET-STANDARD) on the relay; vault keeps the bundled version only."
+      - "RankingConfig versions kept 12 months for transparency (RET-AUDIT, 1 year) on the relay; the vault keeps the bundled version and a 24 h display cache of fetched relay configs."
     threats:
-      - "T01 | Operator quietly boosts own or paying listings | promotion cap 1.25, mandatory label, signed publication statement with version history of 20 visible to clients, per-page promoted share limit in F06.S03.M02"
-      - "T02 | Backdated or future claimedPublishedAt manipulates recency | recency anchored on min(claim, firstSeenAt), never on claims alone"
+      - "T01 | Operator quietly boosts own or paying listings, or runs a self-hosted relay that skips the fairness code | relay ranking is that relay's claim; promotion cap 1.25, mandatory label, signed publication statements with the full 12-month history readable page by page, and every relay page re-checked in the vault with F06.S03.M02 auditPage (at most 3 per author, promoted at most floor(20 percent) of the page, every promoted item labelled), a failing relay labelled 'ranking policy not followed'"
+      - "T02 | Backdated or future claimedPublishedAt manipulates recency | recency anchor is the claim clamped by firstSeenAt (min(claim, firstSeenAt)), so post-dating gains nothing"
       - "T03 | Keyword stuffing to raise BM25 | bm25 saturation k, body length normalisation in FTS5 bm25, title weight bounded to 10, index caps body at 2000 code points"
       - "T04 | Config tampering in transit | Ed25519 signature over JCS bytes with the relay key and client verification before display"
     abuse_controls:
@@ -196,21 +218,27 @@ processes:
     fixtures: "Candidate set of 100 documents with known bm25, ages, buckets and promotion flags; default config version 1; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | publish valid config | version 4 active, previous version 3 retired, one active row"
-      - "T02 | unit | 02.R01,02.R02,02.R03 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights | RANKING_CONFIG_INVALID each time, nothing stored"
+      - "T02 | unit | 02.R01,02.R02 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights, NaN bm25 | RANKING_CONFIG_INVALID each time and VALIDATION_FAILED for the NaN input, nothing stored"
       - "T03 | unit | 01.R02,01.R03 | golden score vectors for text, recency, distance, promotion | final scores equal the golden values to 6 decimals; promoted multiplier never above 1.25"
       - "T04 | property | 03.R01,03.R02,03.R03 | random concurrent publish and rollback attempts | at every point exactly one active version; retired never reactivated"
-      - "T05 | property | 01.R02,06.R03 | 200 runs of the same ranking | identical order; ties resolved by firstSeenAt then documentId"
+      - "T05 | property | 01.R02,06.R03 | 200 runs of the same ranking on two simulated devices with different documentIds but the same projections and first-seen times | identical order; ties resolved by recency anchor then projectionCid"
       - "T06 | contract | 04.R01,04.R02,04.R03,09.R02 | commands, query and event run | outputs and statement validate against registry schemas and the signature verifies"
       - "T07 | abuse | 05.R01,05.R02,05.R03 | member publishes; anonymous reads; operator of relay A publishes on relay B | FORBIDDEN for the first and last; read allowed"
       - "T08 | integration | 06.R01,06.R02 | same Idempotency-Key replayed; crash between insert and retire | original response replayed; exactly one active version after restart"
-      - "T09 | abuse | 07.R01,07.R02,01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label"
-      - "T10 | abuse | 07.R03,02.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED; client rejects the tampered statement"
+      - "T09 | abuse | 07.R02,01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label"
+      - "T10 | abuse | 07.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED from RateLimitPort; client rejects the tampered statement with RANKING_CONFIG_INVALID"
       - "T11 | load | 08.R01,08.R02,08.R03 | score 1 000 candidates on emulated device and relay | p95 <= 20 ms and <= 10 ms; metrics exported"
-      - "T12 | integration | 02.R03,06.R03 | vault without relay config | bundled default used and explanation says default ranking"
+      - "T12 | integration | 01.R02,06.R03 | vault without relay config | bundled default used and explanation says default ranking"
       - "T13 | unit | 09.R01,09.R03 | traceability run over PS-051 | every requirement maps to a passing test"
-      - "T14 | integration | 10.R01,10.R02,10.R03 | restore relay from backup and import a config statement into a vault | active version preserved; vault ignores relay config for local ranking"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | restore relay from backup; vault fetches the relay's config with get_active | relay active version and numbering preserved; in the vault the config lands only in discovery_ranking_config_cache keyed by relay and version, the bundled row is unchanged and local ranking ignores it"
+      - "T15 | unit | 07.R01 | score() on the same candidates with and without identity, history, click and reputation fields | identical scores and order; extra fields never read"
+      - "T16 | abuse | 02.R03 | vault principal tries to publish, roll back or write the bundled config | no vault command exists, FORBIDDEN, bundled version 1 unchanged"
+      - "T17 | unit | 01.R01,02.R02 | browse query without center, document with empty cell, query without text | distance or text term dropped and remaining weights renormalised; golden values match"
+      - "T18 | unit | 03.R02,02.R01 | rollback to the active version and to a missing version | CONFLICT_STATE and NOT_FOUND, nothing changes"
+      - "T19 | integration | 07.R04,04.R02 | relay with 60 versions over 6 months; get_active paged with limit 20 | all 60 versions reachable through nextCursor, none older than 12 months"
+      - "T20 | integration | 07.R04 | vault receives a relay page with 4 items of one author and an unlabelled promoted item, checked through F06.S03.M02 auditPage by F06.S01.M02 | relay labelled 'ranking policy not followed'; local ranking unchanged"
     acceptance:
-      - All tests T01-T14 pass in CI.
+      - All tests T01-T20 pass in CI.
       - Golden score vectors match on Node and in the browser test runner.
       - No configuration can produce a promotion multiplier above 1.25 or an unlabelled promoted result.
   import_export_backup_rollback:
@@ -219,6 +247,6 @@ processes:
       - A relay's configuration history is part of the relay backup and restored intact with the same version numbers.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
     export: "No vault export section; a relay operator can export the version history as JSON Lines of classrup.discovery.ranking_config/v1 for transparency."
-    import: "A relay operator import re-validates every version and rejects gaps in numbering or invalid parameters; a vault never imports relay configs."
+    import: "A relay operator import re-validates every version and rejects gaps in numbering or invalid parameters; a vault never imports relay configs into discovery_ranking_config and only caches verified fetched configs for display."
     backup: "Relay backup per CTR-IOX-001 IOX-3 and IOX-7 includes the table; losing a relay loses no user-owned data."
     migration_rollback: "Additive parameters only within v1 with defaults; rollback is a new version copying an older one, and releases roll back by redeploying the previous version."

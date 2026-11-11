@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section services.calendars in classrup-export/v1; one line per calendar and per hold (schemas classrup.services.availability/v1 and classrup.services.slot_hold/v1).
-- **import:** Calendars import as saved-local without publishing; held holds with expiresAt in the past import as expired; committed holds import as is.
+- **export:** ExportSectionPort section services.calendars in classrup-export/v1; one line per calendar and per hold (schemas classrup.services.calendar/v1 and classrup.services.slot_hold/v1); published summaries are listed by cid.
+- **import:** Calendars import as saved-local without publishing; held holds with expiresAt in the past import as expired; committed holds import as is; holds whose local time moved import with needsReconfirmation.
 - **backup:** Vault export is the primary backup (IOX-6); relays hold only the signed summary (IOX-7).
-- **migration rollback:** Additive fields only in v1; the stored tzdbVersion lets a rollback regenerate slots with the earlier database without losing committed intervals.
+- **migration rollback:** Additive fields only in v1; the stored tzdbVersion lets a rollback regenerate slots with the earlier database without losing committed intervals; the calendar schema id classrup.services.calendar/v1 replaces the earlier shared id, which readers map on import.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-028-09.T13 | integration | PS-028-10.R01, PS-028-10.R02, PS-028-10.R03 | export, import into fresh vault, change tz database version | calendars round-trip; moved holds flagged needs_reconfirmation |
+| TEST-PS-028-09.T13 | integration | PS-028-10.R01, PS-028-10.R02, PS-028-10.R03 | export, import into fresh vault, change tz database version | calendars round-trip; moved holds flagged needsReconfirmation |
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F08.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

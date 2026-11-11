@@ -17,17 +17,19 @@
 | V01 | filter has only known keys and every list is non-empty and within its maximum length | DISCOVERY_FILTER_INVALID |
 | V02 | price.min and price.max are integers within 0..1 000 000 000 000 and min is not greater than max | DISCOVERY_FILTER_INVALID |
 | V03 | price filter carries a registered currency code | DISCOVERY_FILTER_CURRENCY_REQUIRED |
-| V04 | distanceKm is one of 5, 10, 25, 50, 100 (minimum 5 km) | DISCOVERY_RADIUS_TOO_SMALL |
-| V05 | distanceKm is accompanied by a center cell of exactly 5 characters or a stored home cell | DISCOVERY_FILTER_CENTER_REQUIRED |
+| V04 | distanceKm is at least 5 km (F06.S02.M01 V04) | DISCOVERY_RADIUS_TOO_SMALL |
+| V05 | distanceKm is accompanied by a center cell of 4 or 5 characters or a stored home cell | DISCOVERY_FILTER_CENTER_REQUIRED |
 | V06 | category expansion yields at most 200 category ids | DISCOVERY_FILTER_INVALID |
-| V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum | DISCOVERY_FILTER_INVALID |
+| V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum (new, like_new, good, fair, poor, for_parts) | DISCOVERY_FILTER_INVALID |
+| V08 | distanceKm is one of the allowed radii 5, 10, 25, 50, 100 (F06.S02.M01 V06) | DISCOVERY_RADIUS_NOT_ALLOWED |
+| V09 | the center cell passes F06.S02.M01 assertPublicCell (at most 5 characters) | DISCOVERY_PRECISION_FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-044-09.T01 | unit | PS-044-01.R01, PS-044-02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden |
-| TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km | the documented error code each time with the field path |
+| TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km, distance 7 km and 200 km, 6-character center | DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CENTER_REQUIRED, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN, each with the field path |
 
 ## Dependencies
 

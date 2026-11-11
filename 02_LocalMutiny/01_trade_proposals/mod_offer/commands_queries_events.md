@@ -39,6 +39,7 @@
 | `mutiny.proposal.revised` | mark legs listed in legIds as referenced and materialize peer legs from the revision snapshot when origin is peer |
 | `bazaar.listing.edited` | flag defined legs that reference the listing with listingChanged so the author must re-confirm before sealing |
 | `bazaar.listing.unpublished` | void defined (unreferenced) legs referencing the listing; referenced legs stay and are handled by feasibility |
+| `privacy.deletion.completed` | pseudonymize the erased DID as giver or receiver of retained referenced legs and purge its defined, unreferenced legs |
 
 ### Module errors
 
@@ -73,4 +74,4 @@ mutiny.leg.define { "subjectType":"trade_proposal", "subjectId":"0192f3f0-…", 
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

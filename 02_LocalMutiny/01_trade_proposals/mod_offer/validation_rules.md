@@ -16,7 +16,7 @@
 |---|---|---|
 | V01 | items has 1..5 lines (exactly 1 with quantity 1 when subjectType is cycle) and each quantity is 1..99 | MUTINY_LEG_ITEMS_INVALID |
 | V02 | giverId differs from receiverId and both are parties of the subject | MUTINY_LEG_PARTY_INVALID |
-| V03 | own items exist in the local inventory, owned by the principal and quantity available ≥ requested | MUTINY_ITEM_UNAVAILABLE |
+| V03 | own items exist in the local inventory, owned by the principal and quantity available ≥ requested, checked with bazaar.inventory.check on the InventoryPort line {listingId of the item's local listing, variantId?, quantity} | MUTINY_ITEM_UNAVAILABLE |
 | V04 | other party's items have a verified, non-tombstoned listing projection authored by the giver and flagged barterAcceptable | MUTINY_ITEM_NOT_OWNED |
 | V05 | no inventoryItemId occurs twice within the subject's legs | MUTINY_ITEM_DUPLICATE |
 | V06 | subject has at most 8 legs | MUTINY_LEG_LIMIT |
@@ -34,4 +34,4 @@
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

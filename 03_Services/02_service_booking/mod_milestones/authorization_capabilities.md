@@ -7,17 +7,18 @@
 ## Requirements
 
 - **PS-031-05.R01** Vault policy - only the local principal who is the booking provider may submit; only the principal who is the booking client may approve or request changes.
-- **PS-031-05.R02** Inbound statements are accepted only when the signer's key matches the role for that statement in this booking; otherwise quarantine with a reason code.
-- **PS-031-05.R03** Payment events are applied only when their context reference points to a milestone of a booking in this vault; relays have no role.
+- **PS-031-05.R02** Inbound statements are accepted only when the signer's key matches the role for that statement in this booking; statements from blocked DIDs are dropped silently (N7) and other mismatches quarantined with a reason code.
+- **PS-031-05.R03** Payment events are applied only when their dealId equals the dealId of a milestone of a booking in this vault; relays have no role.
 
 ## Specification
 
 | Capability | Granted to | Conditions |
 |---|---|---|
-| services.milestone.submit | principal | local principal is the booking provider; booking confirmed or in progress |
-| services.milestone.approve | principal | local principal is the booking client; milestone submitted |
+| services.milestone.submit | principal | local principal is the booking provider; booking confirmed or in progress and not frozen |
+| services.milestone.approve | principal | local principal is the booking client; milestone submitted and not frozen |
 | services.milestone.request_changes | principal | local principal is the booking client; milestone submitted; changeRounds below 3 |
-| services.milestone.receive | principal | any envelope; acceptance depends on signature and signer role |
+| services.completion.sign | principal | local principal is client or provider of the booking; every non-cancelled milestone settled |
+| services.milestone.receive | principal | any envelope; acceptance depends on block check, signature and signer role |
 | services.milestone.read_own | principal | local principal is client or provider of the booking |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
@@ -26,8 +27,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-031-09.T07 | abuse | PS-031-05.R01, PS-031-05.R02, PS-031-05.R03 | approval signed by provider key; submission signed by client; payment event with foreign context | all quarantined or ignored; no state change |
+| TEST-PS-031-09.T07 | abuse | PS-031-05.R01, PS-031-05.R02, PS-031-05.R03 | approval signed by provider key; submission signed by client; payment event with the dealId of another context | all quarantined or ignored; no state change |
 
 ## Dependencies
 
-Module depends on: F03.S02.M01, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S02.M01, F09.S01.M01, F09.S01.M03, F08.S01.M03, F07.S01.M01, F07.S02.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

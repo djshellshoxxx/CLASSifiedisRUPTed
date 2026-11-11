@@ -6,12 +6,12 @@
 
 ## Purpose
 
-The length-3 profile of the cycle engine. It fixes the thresholds that apply to exactly three participants (value tolerance, distance, want age, imbalance quantum) and the plain-language explanation shown to each participant of a 3-party suggestion. It registers a LengthProfile provider with F02.S02.M03 and owns no records. The engine in the vault or on a relay remains the only producer of suggestions, and a suggestion remains advice.
+The length-3 profile of the cycle engine. It fixes the thresholds that apply to exactly three participants (value tolerance, distance, want age, imbalance quantum) and the plain-language explanation shown to each participant of a 3-party suggestion. It registers its LengthProfile with the registry held by F02.S02.M05, which the engine F02.S02.M03 reads, and owns no records. The absolute minimum is a reference amount of 5.00 EUR converted to the settlement currency with the subject's pinned quote, so it means the same value in EUR, JPY or BTC. The engine in the vault or on a relay remains the only producer of suggestions, and a suggestion remains advice.
 
 ## Responsibilities
 
-- [object Object]
-- Allow tenant or vault settings to override the profile only inside bounds (tolerance 0..1000 bps, absolute minimum 0..100 major units) and record the effective profile version used for each suggestion.
+- Define and register with the F02.S02.M05 registry the immutable-per-release length-3 profile: tolerance 500 basis points of the larger side (MNY-5 default 5 percent), absolute minimum reference 5.00 EUR (converted to the settlement currency with the pinned barter_normalization quote, MNY-4), maximum pair distance bucket 3 (25_50 in the F02.S02.M04 ordinal mapping), imbalance quantum 10 permille, minimum want age 15 minutes.
+- Allow tenant or vault settings to override the profile only inside bounds (tolerance 0..1000 bps, absolute minimum reference 0..100.00 EUR) and record the effective profile version used for each suggestion.
 - Produce the participant-facing explanation of a 3-party suggestion, naming for each participant what they give, what they receive, the value gap against tolerance, distance bucket and the facts that are only claims of others.
 
 ## Not responsible for
@@ -31,8 +31,9 @@ The length-3 profile of the cycle engine. It fixes the thresholds that apply to 
 - A participant's gap is exactly at tolerance; the explanation says within tolerance and the engine kept the cycle.
 - A tenant override sets tolerance to 1000 bps; the engine records profile version with the override and the explanation shows the effective numbers, not the defaults.
 - A relay-imported suggestion was computed with a different profile version than the vault's; the vault shows both and re-verifies with its own profile.
-- Participant settlement currency has zero decimals (JPY); the absolute minimum is 5 times 10 to the exponent 0, i.e. 5 minor units, and the explanation uses the currency's own formatting.
-- Explanation requested for a suggestion of another length; the query returns VALIDATION_FAILED instead of a wrong explanation.
+- Participant settlement currency has zero decimals (JPY); the absolute minimum is 5.00 EUR converted with the pinned EUR->JPY quote (163/1 gives 815 JPY), and the explanation uses the currency's own formatting.
+- Settlement currency is BTC (exponent 8); the same reference converts with a pinned EUR->BTC quote (1/60000 gives 8333 satoshi), never 5 BTC.
+- Explanation requested for a suggestion of another length; the query returns MUTINY_PROFILE_LENGTH_MISMATCH instead of a wrong explanation.
 
 ## UX and accessibility
 
@@ -56,7 +57,7 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
+F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -77,6 +78,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T13 pass in CI.
+- All tests T01–T15 pass in CI.
 - The golden 3-party example reproduces gaps 500, 200, 300 and tolerances 600, 600, 590 exactly.
 - The module emits no events and no statements and holds no records.

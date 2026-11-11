@@ -67,7 +67,7 @@ processes:
           - "prev?: cid — contentHash of revision revisionNo-1; absent for revision 1"
           - "authorId: did — signer; must be a party of the subject"
           - "reason: enum — initial | counter | compensation_added | quote_refresh | deadline_change | acceptance_policy_change"
-          - "snapshot: object — canonical terms ≤ 64 KiB: {parties[{did, role, position}], legs[], compensation[], acceptedImbalances[{actorId, maxAmount Money}] (0..8, each a participant's signed acceptance of a gap through its consent on this digest), settlementCurrency, normalization, consentDeadline, executionWindowMs, feasibilityReportHash?}"
+          - "snapshot: object — canonical terms ≤ 64 KiB: {parties[{did, role, position}], legs[], compensation[], acceptedImbalances[{actorId, maxAmount Money}] (0..8, each a participant's signed acceptance of a gap through its consent on this digest), settlementCurrency, normalization, toleranceRef? {quoteId, rate, source} (EUR to settlement currency, present when the settlement currency is not EUR, F02.S04.M02), consentDeadline, executionWindowMs, feasibilityReportHash?}"
           - "contentHash: cid — sha256-base64url of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); the digest all consents sign (F08 hex form = the same 32 bytes)"
           - "legIds: array — 1..8 uuidv7 of TradeLeg ids sealed by this revision"
           - "compensationLegIds: array — 0..8 uuidv7 of CompensationLeg ids sealed by this revision"

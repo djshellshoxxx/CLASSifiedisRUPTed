@@ -20,7 +20,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-050-09.T08 | abuse | PS-050-05.R01, PS-050-05.R02, PS-050-05.R03, PS-050-07.R01 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema; ranking identical with and without them |
+| TEST-PS-050-09.T08 | abuse | PS-050-05.R01, PS-050-05.R02, PS-050-05.R03, PS-050-07.R01, PS-050-07.R02 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema (V05); ranking identical with and without them |
 
 ## Dependencies
 

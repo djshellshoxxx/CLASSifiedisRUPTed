@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Valuations v1 12000 EUR, v2 10000 GBP, v3 10990 CHF; quotes GBP->EUR 117/100, CHF->EUR 1043/1000 expiring 2026-11-07T10:30:00Z; JPY settlement variant; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Valuations v1 12000 EUR, v2 10000 GBP, v3 10990 CHF; quotes GBP->EUR 117/100, CHF->EUR 1043/1000, purpose barter_normalization, issued 2026-11-04T10:00:00Z and expiring 2026-11-05T10:00:00Z; EUR->JPY 163/1 reference quote; JPY settlement variant; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -22,7 +22,7 @@ See the module test table below (all processes).
 |---|---|---|---|---|
 | TEST-PS-025-09.T01 | unit | PS-025-01.R01, PS-025-01.R02, PS-025-02.R02, PS-025-09.R03 | compute the 3-currency example | converted amounts 12000, 11700, 11463 EUR minor; normalizationHash stable |
 | TEST-PS-025-09.T02 | property | PS-025-01.R02, PS-025-02.R02 | 10 000 random conversions vs reference | identical results with single HALF_EVEN rounding; no floating point |
-| TEST-PS-025-09.T03 | unit | PS-025-02.R01, PS-025-02.R03 | each rule V01..V08 violated in turn | documented error code and nothing stored |
+| TEST-PS-025-09.T03 | unit | PS-025-02.R01, PS-025-02.R03 | each rule V01..V09 violated in turn | documented error code and nothing stored |
 | TEST-PS-025-09.T04 | unit | PS-025-01.R03, PS-025-02.R03 | JPY settlement with EUR items | exponent difference applied exactly as in MNY-4 |
 | TEST-PS-025-09.T05 | integration | PS-025-03.R01, PS-025-03.R02 | quote expires before commit with injected clock | record expired, mutiny.normalization.expired emitted, coordinator must create quote_refresh revision |
 | TEST-PS-025-09.T06 | integration | PS-025-03.R02, PS-025-03.R03 | subject commits then quote expires | record frozen and expiry ignored |
@@ -35,13 +35,17 @@ See the module test table below (all processes).
 | TEST-PS-025-09.T13 | load | PS-025-08.R02 | 16 items 4 quotes on emulated Moto G | p95 ≤ 60 ms |
 | TEST-PS-025-09.T14 | unit | PS-025-08.R01, PS-025-08.R03, PS-025-09.R01 | diagnostics and traceability tool | no amounts or DIDs in diagnostics; every PS-025 requirement maps to a passing test |
 | TEST-PS-025-09.T15 | integration | PS-025-10.R01, PS-025-10.R02, PS-025-10.R03 | export, import, rollback | records round-trip and keep hash; imported current records are marked expired when quotes lapsed |
+| TEST-PS-025-09.T16 | contract | PS-025-04.R04, PS-025-02.R03 | compute for the 3-currency example with consent deadlines of 23 h 30 min and 72 h | quote requests carry purpose barter_normalization and validForMs ≤ 86400000; 23 h 30 min accepted with every rate labelled 'pinned rate agreed by all parties'; 72 h refused with MUTINY_QUOTE_TOO_SHORT |
+| TEST-PS-025-09.T17 | integration | PS-025-03.R01, PS-025-04.R04 | mutiny.proposal.withdrawn, mutiny.revision.forked and mutiny.lock.conflict_detected for subjects with current records | each record closed; later compute for a new subject creates a new record |
+| TEST-PS-025-09.T18 | unit | PS-025-01.R01, PS-025-02.R01 | single-currency JPY subject | no NormalizationRecord referenced, no 24 h cap, toleranceRef EUR->JPY 163/1 returned |
+| TEST-PS-025-09.T19 | integration | PS-025-07.R04 | F10 export, deletion and retention sweep | section mutiny.normalizations exported; erased DID pseudonymized in local metadata; normalizationHash unchanged |
 
 ## Acceptance criteria
 
-- All tests T01–T15 pass in CI.
+- All tests T01–T19 pass in CI.
 - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
 - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.
 
 ## Dependencies
 
-Module depends on: F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

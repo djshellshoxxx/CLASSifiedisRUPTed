@@ -17,7 +17,7 @@
 - Profile constants: P0.
 
 **Retention**
-- Explanation cache is deleted together with its CycleSuggestion (RET-SHORT, 30 days).
+- Explanation cache is deleted together with its CycleSuggestion (RET-SHORT, 30 days) and dropped as soon as the suggestion is no longer status suggested (on read and by a 60 s sweep).
 
 **Threats and controls**
 
@@ -35,10 +35,11 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-020-09.T06 | unit | PS-020-02.R03, PS-020-07.R01 | JPY fixture | absolute minimum is 5 minor units and formatting follows the currency |
-| TEST-PS-020-09.T07 | integration | PS-020-03.R02, PS-020-03.R03, PS-020-06.R03, PS-020-07.R02, PS-020-07.R03 | engine started without provider | engine default profile used and degraded diagnostic logged |
+| TEST-PS-020-09.T01 | unit | PS-020-01.R01, PS-020-03.R01, PS-020-07.R03 | read default profile as principal and as relay-client | toleranceBps 500, absoluteMinRef 500 EUR minor, maxPairBucket 3, quantum 10, minWantAgeMinutes 15, version p3.2; output carries no personal data |
+| TEST-PS-020-09.T06 | unit | PS-020-02.R03, PS-020-07.R01 | JPY fixture with pinned EUR->JPY 163/1 (golden) | absolute minimum 815 JPY, gaps computed in bigint and formatting follows the currency; no negative information about absent people |
 | TEST-PS-020-09.T08 | abuse | PS-020-05.R01, PS-020-05.R02, PS-020-05.R03, PS-020-07.R01 | other principal queries; explanation inspected for exclusions | NOT_FOUND; no negative information about absent people |
+| TEST-PS-020-09.T15 | integration | PS-020-07.R02 | suggestion expires and is superseded with an injected clock | cached explanation dropped on next read and by the 60 s sweep; nothing remains after the suggestion is purged |
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

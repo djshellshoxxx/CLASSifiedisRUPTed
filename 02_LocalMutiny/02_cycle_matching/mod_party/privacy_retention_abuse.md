@@ -9,11 +9,12 @@
 - **PS-019-07.R01** Exclusions, pause reasons and block interactions never leave the vault in any event, log, projection or request.
 - **PS-019-07.R02** The published projection contains exactly four coarse fields plus region at L1 and the author DID, nothing finer than L2 location.
 - **PS-019-07.R03** Opt-in is explicit, versioned and withdrawable, and the UI states that already fetched copies cannot be recalled (PRV-6).
+- **PS-019-07.R04** Projections are published only after privacy.consent.check(federation_publish) per relay and assertPublicCell on regionL1; the module registers ExportSectionPort (section mutiny.matching_profile), DeletionPort and RetentionPurgePort with F10 (N6), annotates fields per F10.S02.M02, and its opt-in disclosure states the relay matching limit: a relay that computes suggestions knows each ring composition it computed and learns from mailbox metadata which participants fetched it.
 
 ## Specification
 
 **Data classification**
-- MatchingProfile local record: P3.
+- MatchingProfile local record: P3; field classes annotated per F10.S02.M02 (excludedActorIds and includeUnknownIdentities P3, published fields P0).
 - Public projection: P0 fields {optedIn, maxCycleLength, maxDistanceBucket, acceptsCompensation, regionL1}.
 
 **Retention**
@@ -27,7 +28,8 @@
 | T01 | Inference of who a member excludes | exclusions never published; relay matching cannot apply them and recipient vaults drop suggestions silently |
 | T02 | Forged projection opts a victim in to matching | signature must verify against the DID in the envelope; suggestions involving a victim still require the victim's own signed consent |
 | T03 | Replay of an old projection to resurrect an opted-out member | seq and prev chain; tombstone with higher seq wins |
-| T04 | Location inference from region and distance bucket | regionL1 only (about 39 km by 19.5 km) and bucket enum; no finer cell published |
+| T04 | Location inference from region and distance bucket | regionL1 only (about 39 km by 19.5 km, assertPublicCell) and bucket ordinal; no finer cell published by this module |
+| T05 | Publishing without the member's federation consent | privacy.consent.check per relay before every projection; withdrawal sends a tombstone |
 
 **Abuse controls**
 - Local rate limit of 20 profile updates per day to bound relay write abuse.
@@ -42,8 +44,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-019-09.T02 | contract | PS-019-01.R02, PS-019-04.R02, PS-019-07.R02, PS-019-09.R02, PS-019-09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs |
 | TEST-PS-019-09.T08 | abuse | PS-019-05.R01, PS-019-05.R02, PS-019-07.R01 | other actor updates profile; projection signed by wrong DID; request logs inspected | FORBIDDEN or quarantine; no exclusion in any log |
 | TEST-PS-019-09.T10 | abuse | PS-019-07.R03, PS-019-07.R01 | opt-in without confirmation; replay of old projection after tombstone | MUTINY_OPTIN_REQUIRED; old projection ignored |
-| TEST-PS-019-09.T15 | e2e | PS-019-07.R03, PS-019-02.R01 | mobile user opts in and out | disclosure shown, fetched-copy warning shown, axe zero serious issues |
+| TEST-PS-019-09.T15 | e2e | PS-019-07.R03 | mobile user opts in and out | disclosure shown with the relay matching limit, fetched-copy warning shown, axe zero serious issues |
+| TEST-PS-019-09.T20 | integration | PS-019-07.R04, PS-019-07.R02 | federation_publish granted for relay A only; regionL1 of 5 characters; consent withdrawn for A; vault erased | projection sent to A only; DISCOVERY_PRECISION_FORBIDDEN; tombstone queued to A; local profile purged after the tombstone |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

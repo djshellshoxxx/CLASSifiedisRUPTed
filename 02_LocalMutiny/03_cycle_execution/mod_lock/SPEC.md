@@ -6,19 +6,21 @@
 
 ## Purpose
 
-Each participant reserves only their own items in their own vault, all-or-nothing, through an inventory hold with an absolute expiry, and signs a reservation statement (classrup.mutiny.cycle_lock/v1) that tells the other participants what was reserved and until when. A reservation prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented. Other participants' reservation statements are verified and stored with provenance. A subject can be committed by a vault only when every giver's reservation statement is present, valid and unexpired on that vault's clock. Conflicting promises about one item freeze the affected subjects.
+Each participant reserves only their own items in their own vault, all-or-nothing, through the F01.S03.M01 InventoryPort with holder {type: cycle, id: subjectId} (trade proposals use the same holder type and their proposal id, which later becomes the cycle id), and issues the single signed reservation statement of ClassRup, classrup.bazaar.reservation/v1, through bazaar.inventory.issue_reservation, with an absolute expiresAt and the revision digest in its extension (N14). The statement's expiry is never extended; this module renews the local hold behind it internally under the same absolute expiry, up to the F01 hold lifetime. This module is the single caller of the InventoryPort for cycle holds and the single ingest owner of cycle reservations and release notices. A reservation prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented. A subject can be committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects. The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement.
 
 ## Responsibilities
 
-- Reserve the principal's own items for a subject all-or-nothing through InventoryPort.hold with expiry equal to consentDeadline plus executionWindow (maximum 37 days) and sign the reservation statement.
-- Release, convert (after the receiver's signed receipt) or expire reservations and publish a signed release statement on request.
-- Verify and store peers' reservation statements, detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
+- Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d).
+- Renew the local hold internally with bazaar.inventory.renew before it lapses, up to the statement's absolute expiresAt and never beyond the hold's maxExpiresAt, without re-signing.
+- Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1.
+- Verify peers' reservation statements and release notices (storing the generic statement through bazaar.inventory.record_peer_reservation), detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
+- Provide the LockPort releaseForSubject used inside the transactions of F02.S01.M01, F02.S03.M01 and F02.S03.M03.
 - Enforce a cap of 5 active own reservation sets per vault and evaluate expiry lazily on vault open and every 60 s while open.
 
 ## Not responsible for
 
 - Any claim that an item is physically available or that a peer will honor a reservation; a signed statement is evidence of a promise only.
-- Inventory quantities, holds storage and listing availability (F01.S03.M01).
+- Inventory quantities, holds storage, the reservation statement format and listing availability (F01.S03.M01).
 - Deciding the commit verdict (F02.S03.M01) and handling dropouts (F02.S03.M03).
 - Future: reservations with partial quantities across several cycles and a deposit-free reputation staking signal.
 
@@ -35,6 +37,9 @@ Each participant reserves only their own items in their own vault, all-or-nothin
 - The vault is closed past the reservation expiry; on next open the reservation is expired before any other action and the subject is told.
 - A peer's reservation statement names an item and another statement from the same peer names the same quantity-1 item for another subject; both are marked conflicted and both subjects are frozen at this vault.
 - A reservation statement arrives with expiresAt earlier than consentDeadline plus executionWindow; it is invalid for commit and the UI says the peer's promise is too short.
+- The 14-day hold behind a 17-day reservation reaches its ttl; the vault renews it with bazaar.inventory.renew up to the statement's expiresAt and sends nothing.
+- A peer's reservation for a subject that already ended in this vault would conflict with a new cycle; it is marked expired when the subject ended and is not counted, so the new cycle is not frozen.
+- An old release notice is replayed against a newer reservation of the same giver; its releasesCid names the old reservation, so it is ignored.
 - The vault clock moves backwards; expiry never un-expires a reservation that was already marked expired.
 - The receiver's received attestation arrives after the giver already released after a cancellation; the lock is already terminal and the late attestation is handled by recovery.
 
@@ -53,14 +58,14 @@ Each participant reserves only their own items in their own vault, all-or-nothin
 
 ## Interfaces
 
-- Commands: `mutiny.lock.reserve`, `mutiny.lock.release`, `mutiny.lock.ingest`
+- Commands: `mutiny.lock.reserve`, `mutiny.lock.release`, `mutiny.lock.ingest`, `mutiny.lock.release_for_subject`
 - Queries: `mutiny.lock.get_for_subject`, `mutiny.lock.list_active_own`
 - Emits: `mutiny.cycle.locked`, `mutiny.cycle.unlocked`, `mutiny.lock.conflict_detected`
-- Consumes: `mutiny.cycle.declined`, `mutiny.cycle.cancelled`, `mutiny.cycle.completed`, `mutiny.cycle.partially_executed`, `mutiny.recovery.resolved`, `mutiny.leg.received`, `mutiny.proposal.rejected`, `mutiny.proposal.withdrawn`, `mutiny.proposal.expired`, `mutiny.revision.forked`, `bazaar.inventory.released`
+- Consumes: `mutiny.cycle.declined`, `mutiny.cycle.cancelled`, `mutiny.cycle.completed`, `mutiny.cycle.partially_executed`, `mutiny.recovery.resolved`, `mutiny.leg.handed_over`, `mutiny.leg.received`, `mutiny.proposal.rejected`, `mutiny.proposal.withdrawn`, `mutiny.proposal.expired`, `mutiny.revision.forked`, `bazaar.inventory.released`, `bazaar.inventory.conflict_detected`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S03.M01, F01.S01.M01, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
+F01.S03.M01, F01.S01.M01, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -69,10 +74,10 @@ F01.S03.M01, F01.S01.M01, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR
 | PS-023-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-023-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-023-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-023-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-023-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-023-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-023-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
-| PS-023-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-023-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-023-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-023-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-023-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -81,6 +86,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T22 pass in CI.
 - A reservation never leaves a partial item set, and no module claims that a peer's reservation prevents that peer from double-promising.
 - Expiry is always evaluated on the local clock and terminal lock states never reopen.

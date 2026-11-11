@@ -2,44 +2,53 @@ id: F07.S01.M03
 scope: MVP
 summary: >-
   Account recovery without any server holding a secret. The recovery kit is a one-time artifact the user downloads or
-  prints - a 24-word secret (256 bits of entropy) and an encrypted blob that wraps the account signing key. A key derived
-  with scrypt (N=2^17, r=8, p=1) from the secret encrypts the blob with XChaCha20-Poly1305. The vault keeps only kit
-  metadata and a public verifier; the kit is never uploaded by default and may go to a user-selected encrypted backup
-  location. Recovery on a new device adds a new device key; revoking the other devices is announced and takes effect only
-  after a 72 hour notice window during which an existing device can dispute it. Whoever holds the words and the blob can act
-  as the account, and the product states this.
+  prints - a 24-word secret (256 bits of entropy) and an encrypted file that wraps the account root key and carries a
+  copy of the public identity document current at kit creation. A key derived with scrypt (N=2^17, r=8, p=1) from the
+  secret encrypts the root seed with XChaCha20-Poly1305. The vault keeps only kit metadata and a public verifier; the
+  kit is never uploaded by default and may go to a user-selected encrypted backup location. Recovery on a new device
+  fetches and verifies the latest identity document, adds a new device key, publishes a signed recovery notice and,
+  if asked, revokes the other device keys after a 72 hour notice window. The window binds honest clients; every
+  verifying vault also waits 72 hours from its own first sight of the notice, and existing devices can dispute, which
+  freezes the recovery as contested rather than cancelling it. Whoever holds the words and the file can act as the
+  account, and creating a new kit does not invalidate an old one; the product states both.
 responsibilities:
-  - Create the kit on the client - generate the 24-word secret, derive keys with scrypt (N=2^17, r=8, p=1, 16-byte salt), encrypt the account signing seed with XChaCha20-Poly1305 (24-byte nonce), and make the file and printable sheet.
+  - Create the kit on the client - generate the 24-word secret, derive keys with scrypt (N=2^17, r=8, p=1, 16-byte salt), encrypt the account root seed with XChaCha20-Poly1305 (24-byte nonce), embed the current public identity document as a hint, and make the file and printable sheet.
   - Own RecoveryKit metadata in the vault - verifier public key, KDF parameters, blob checksum, status, last verification time and optional backup location label; never the 24 words.
-  - Run recovery on a new device - decrypt locally, register a new device key through F07.S01.M01, publish a signed recovery notice, and complete or cancel.
-  - Enforce the 72 hour notice window before other device keys are revoked, and support a signed dispute from an existing device.
+  - Run recovery on a new device - decrypt locally, obtain and verify the latest identity document (input, the kit's relays, or an export), register the new device key through the F07.S01.M01 port registerRecoveredKey, publish a root-signed recovery notice, and complete or cancel.
+  - Hold the 72 hour window in the recovering vault, extend it to 7 days when disputed, and report the honest limit that receivers enforce their own wait (F07.S02.M01).
+  - On existing devices, receive recovery notices for the own DID, show them, and let the user dispute with a device-signed statement that needs no kit state.
+  - Process incoming disputes in the recovering vault and in peer vaults, and implement RecoveryKitStatusPort.hasVerifiedKit() for F07.S01.M01.
 non_responsibilities:
-  - Key generation and device management (F07.S01.M01) and sessions (F07.S01.M02).
+  - Key generation and device management (F07.S01.M01), identity document verification and the receiver-side wait rule (F07.S02.M01), and sessions (F07.S01.M02).
   - Storing or escrowing any recovery secret on a relay or with the operator; there is no operator recovery, and a lost kit with no remaining device means the account cannot be recovered.
   - Social recovery or guardians, hardware tokens (FUTURE).
-  - "Future: Shamir-split kit, passkey-based second factor, guardian contacts, recovery notification channels beyond the identity document and mailbox."
-depends_on: [F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001]
+  - "Future: Shamir-split kit, a dedicated recovery key separate from the root key so a superseded kit can be revoked, passkey-based second factor, guardian contacts, recovery notification channels beyond the identity document and mailbox."
+depends_on: [F07.S01.M01, F07.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001]
 user_stories:
   - As a new user, I am asked to download or print my recovery kit and to prove I saved it by re-entering 3 randomly chosen words.
   - As a user who lost my phone, I install the app on a new device, enter my words and kit file, and regain my identity.
-  - As a user with a second device, I get a notice that a recovery was started and I can dispute it within 72 hours.
+  - As a user with a second device, I get a notice that a recovery was started and I can dispute it, which makes the recovery visible to everyone as contested.
   - As a security-minded user, I can check that my kit still works without performing a recovery.
+  - As a contact of someone who recovers, I see 'recovery pending' for 72 hours from when my device first saw the notice before their old devices stop being trusted.
 edge_cases:
   - The user loses both the words and all devices; the account cannot be recovered and the creation flow said so; the user starts a new identity and can publish a signed statement from nothing, which is not a continuation.
   - The user types one wrong word; the checksum words (BIP-39 style 8-bit checksum) detect it before running scrypt, with an error that does not reveal which word.
   - The kit file is intact but words are wrong; XChaCha20-Poly1305 authentication fails and the vault applies a backoff of 60 s doubling up to 15 minutes after 5 failures.
-  - A thief has the printed kit and file; they can recover and the notice window is the only brake, so the product advises storing words and file in separate places.
-  - Recovery is started and the user does nothing for 7 days; the pending state expires back to active and the new device key remains registered.
-  - The old device is offline for the whole 72 hours; it learns of the notice on next sync, can still dispute until the revocation has been applied by the recoverer, after which the user sees a contested identity document.
-  - Two recoveries start at once from two new devices; the second is refused with CONFLICT_STATE while the first is pending.
-  - The user creates a new kit while recovery is pending; refused with CONFLICT_STATE.
+  - A thief has the printed kit and file; they can sign as the account, honest clients and verifying vaults still wait 72 hours before applying their revocations, and the product advises storing words and file in separate places.
+  - Recovery is started and the user does nothing for 7 days; the pending recovery expires, the new device key stays linked and announced, the planned revocation of the other keys is cancelled, and identity.recovery.cancelled is emitted with reason expired.
+  - The old device is offline for the whole 72 hours; on next sync it receives the notice, can still dispute, and if the revocation was already applied elsewhere the dispute makes the identity contested for every receiver.
+  - Two recoveries start from two new devices in vaults that cannot see each other; both succeed locally, and receivers see two recovery notices for one DID, keep both and show the identity as contested until the user resolves it explicitly.
+  - The user creates a new kit while recovery is pending in the same vault; refused with CONFLICT_STATE.
   - Kit file is corrupted (checksum mismatch); verify_kit reports IDENTITY_KIT_CORRUPT and the vault offers to create a replacement.
+  - Recovery runs offline in an empty vault with no copy of the latest document; revokeOthers is refused with DEPENDENCY_UNAVAILABLE, or the user chooses the explicit 'device list unknown' mode, which adds the key, revokes nothing and warns that a fork is expected.
+  - A stolen old device disputes the recovery repeatedly; one dispute per key per 24 hours is processed, the recovery is contested but the kit holder may complete after 7 days with the contested state visible to peers.
+  - The user creates a new kit after a leak; the old kit still decrypts the same root key, so the UI says that superseding does not revoke the old kit and suggests a new identity if the old kit was exposed.
 ux:
   screens:
-    - "Create kit: words shown once in a 4 by 6 grid with copy disabled, print and download buttons, a confirmation step asking for 3 random words, a warning that anyone with the words and file can act as the account, and a checkbox 'I stored the words and the file separately'."
-    - "Recover account: words entry with per-word autocomplete from the 2048-word list, kit file chooser, progress for key derivation, explanation of the 72 hour window."
-    - "Pending recovery banner on existing devices: 'A recovery was started on <date> for <new device label>. Dispute now' with a Dispute button."
-  states: [no-kit, kit-active, verifying, recovery-pending, recovery-complete, disputed, expired, error]
+    - "Create kit: words shown once in a 4 by 6 grid with copy disabled, print and download buttons, a confirmation step asking for 3 random words, a warning that anyone with the words and file can act as the account and that a newer kit does not revoke an older one, and a checkbox 'I stored the words and the file separately'."
+    - "Recover account: words entry with per-word autocomplete from the 2048-word list, kit file chooser, latest-document status (fetched from relays, from an export, or unknown), progress for key derivation, explanation of the 72 hour window and of contested recoveries."
+    - "Recovery notice banner on existing devices: 'A recovery was started for this account, first seen on <date>, adding device <fingerprint>. Dispute' with a Dispute button and 'This was me'."
+  states: [no-kit, kit-active, verifying, recovery-pending, contested, recovery-complete, disputed, expired, device-list-unknown, error]
   a11y:
     - Word entry supports keyboard and screen readers, each word field has a label 'Word 1 of 24', and errors are announced via aria-live polite.
     - The confirmation step does not require a memory puzzle beyond retyping the displayed words (no cognitive function test, WCAG 3.3.8) and allows paste of the whole phrase.
@@ -47,9 +56,9 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A RecoveryKit record stores the KDF parameters, salt, nonce, encrypted account key blob, public verifier and lifecycle fields, and never the 24 words or the derived keys.
+      - A RecoveryKit record of role kit stores the KDF parameters, salt, nonce, encrypted account root key blob, public verifier, the identity document hint and lifecycle fields, and never the 24 words or the derived keys; a record of role observed holds a recovery notice for the own DID that an existing device received.
       - KDF parameters are fixed to scrypt N=131072, r=8, p=1 with a 16-byte salt and the cipher is XChaCha20-Poly1305 with a 24-byte nonce; weaker parameters are rejected.
-      - Only one kit is active per account; creating a new one supersedes the old one.
+      - Only one kit is active per account in a vault and creating a new one supersedes the old one locally, but every kit wraps the same root key, so a superseded kit is not revoked and the UI and acceptance criteria say so.
     entities:
       - name: RecoveryKit
         schema: classrup.identity.recovery_kit/v1
@@ -60,68 +69,95 @@ processes:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — tenant scope"
           - "accountId: uuidv7 — ref Account"
-          - "kdf: object — { name: scrypt, N: 131072, r: 8, p: 1, saltB64: 16 bytes base64url }"
-          - "cipher: object — { name: xchacha20poly1305, nonceB64: 24 bytes base64url }"
-          - "encryptedAccountKey: string — ciphertext plus 16-byte tag of the 32-byte account signing seed, base64url (64 characters)"
-          - "verifierPublicKey: string — Ed25519 public key derived from the second 32 bytes of the KDF output, base64url (43 characters)"
-          - "blobChecksum: string — SHA-256 of the kit file bytes, hex 64 characters"
-          - "status: enum — active | recovery_pending | used | superseded"
+          - "role: enum — kit | observed"
+          - "kdf?: object — kit only; { name: scrypt, N: 131072, r: 8, p: 1, saltB64: 16 bytes base64url }"
+          - "cipher?: object — kit only; { name: xchacha20poly1305, nonceB64: 24 bytes base64url }"
+          - "encryptedAccountKey?: string — kit only; ciphertext plus 16-byte tag of the 32-byte account root seed, base64url (64 characters)"
+          - "verifierPublicKey?: string — kit only; Ed25519 public key derived from the second 32 bytes of the KDF output, base64url (43 characters)"
+          - "blobChecksum?: string — kit only; SHA-256 of the kit file bytes, hex 64 characters"
+          - "docHint?: object — kit only; { did, seq, cid, relays } of the identity document current at kit creation, also copied into the kit file"
+          - "status: enum — kit: active | recovery_pending | contested | used | superseded; observed: received | disputed | accepted | expired"
           - "createdAt: timestamp — local clock"
           - "lastVerifiedAt?: timestamp — local clock of the last successful verification"
           - "backupLabel?: string — 1..60 code points naming a user-chosen backup place, no path or secret"
+          - "mode?: enum — full | device_list_unknown (begin without a verified latest document; can add a key, revokes nothing)"
+          - "latestDocCid?: string — cid of the latest identity document verified by F07.S02.M01 at begin"
           - "pendingDeviceKeyId?: uuidv7 — new device key registered by an in-progress recovery"
           - "requestedAt?: timestamp — local clock when recovery began"
           - "revokeOthersRequested?: boolean — whether other device keys are to be revoked"
-          - "revokeOthersNotBefore?: timestamp — requestedAt plus 259 200 000 ms (72 h)"
-          - "noticeStatementCid?: string — cid of the signed classrup.identity.recovery_notice/v1"
+          - "plannedRevocations?: array — public keys to revoke on complete, taken from the verified latest document"
+          - "revokeOthersNotBefore?: timestamp — requestedAt plus 259 200 000 ms (72 h); requestedAt plus 7 days once contested"
+          - "noticeStatementCid?: string — cid of the root-signed classrup.identity.recovery_notice/v1"
+          - "disputeCids?: array — at most 8 cids of verified classrup.identity.recovery_dispute/v1 statements"
+          - "contestedAt?: timestamp — local clock of the first verified dispute"
+          - "observed?: object — observed only; { noticeCid, newDevicePublicKey, notBeforeClaim, firstSeenAt (local clock), disputeCid?, decidedAt? }"
           - "usedAt?: timestamp — local clock"
           - "revision: int — CTR-ID-001 ID-4"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - kdf equals scrypt N=131072, r=8, p=1 with a 16-byte salt; any other parameter set is rejected.
-          - The 24 words, the derived encryption key and the derived verifier private key are never stored.
-          - At most one RecoveryKit per account has status active or recovery_pending.
-          - revokeOthersNotBefore equals requestedAt plus 72 hours when revokeOthersRequested is true.
+          - For role kit, kdf equals scrypt N=131072, r=8, p=1 with a 16-byte salt; any other parameter set is rejected.
+          - The 24 words, the derived encryption key, the decrypted root seed and the derived verifier private key are never stored.
+          - At most one role-kit record per account in a vault has status active, recovery_pending or contested.
+          - revokeOthersNotBefore equals requestedAt plus 72 hours when revokeOthersRequested is true, and requestedAt plus 7 days once the record is contested.
+          - Role observed records hold no blob, KDF parameters or verifier, and plannedRevocations is empty when mode is device_list_unknown.
   validation_rules:
     requirements:
       - Kit creation validates parameters and confirms the user saved the words; recovery validates words with a checksum before spending scrypt time.
-      - Only one recovery may be pending; revocation of other devices before the notice window ends is refused.
+      - Within one vault only one recovery may be pending and revocation of other devices before the window ends is refused; vaults cannot see each other, so these rules bind only the recovering vault, and receivers enforce their own 72 hour wait from first sight of the notice (F07.S02.M01).
       - Every failure maps to one stable error code without revealing which word was wrong.
+      - Received recovery notices and disputes are verified against the DID root key and against the device keys of the latest identity document this vault holds, and are rate limited per DID and per signing key.
     rules:
       - "V01 | kdf is scrypt with N=131072, r=8, p=1, salt 16 bytes, cipher xchacha20poly1305 with a 24-byte nonce | IDENTITY_KIT_PARAMS_INVALID"
       - "V02 | the user confirmed 3 randomly chosen words and the stored-separately acknowledgement before the kit is activated | VALIDATION_FAILED"
       - "V03 | entered words are 24 words of the 2048-word list and the 8-bit checksum matches | IDENTITY_KIT_WORDS_INVALID"
       - "V04 | the kit file checksum equals blobChecksum and decryption authenticates with the derived key | IDENTITY_KIT_CORRUPT"
-      - "V05 | no other recovery is pending and no kit replacement is attempted while pending | CONFLICT_STATE"
-      - "V06 | revoking other device keys is requested only at or after revokeOthersNotBefore | IDENTITY_RECOVERY_WINDOW_OPEN"
+      - "V05 | within this vault no other recovery is pending or contested and no kit replacement is attempted meanwhile; recoveries in other vaults are not visible here and receivers detect two notices for one DID as a fork | CONFLICT_STATE"
+      - "V06 | the recovering vault requests revocation of other device keys only at or after revokeOthersNotBefore (72 h after begin, or 7 days after begin when contested) | IDENTITY_RECOVERY_WINDOW_OPEN"
       - "V07 | failed recovery attempts are fewer than 5 before the backoff of 60 s doubling to 900 s applies | RATE_LIMITED"
+      - "V08 | revokeOthers needs a latest identity document verified by F07.S02.M01 from the begin input, the relays in the kit's docHint, or an export; without one begin fails unless the user chose device_list_unknown, which plans no revocation | DEPENDENCY_UNAVAILABLE"
+      - "V09 | a received recovery notice verifies against the DID root key with prefix classrup-recovery-notice:v1; a received dispute verifies with prefix classrup-recovery-dispute:v1 against a device key active in the latest document this vault holds for the DID that is not the new key | IDENTITY_RECOVERY_STATEMENT_INVALID"
+      - "V10 | at most one recovery notice per DID and one dispute per signing key are processed per 24 hours; extra ones are quarantined | RATE_LIMITED"
+      - "V11 | registering the new device key keeps the account at no more than 10 active device keys (F07.S01.M01 registerRecoveredKey) | IDENTITY_DEVICE_LIMIT"
   workflow_state_machine:
     requirements:
       - A kit is active until recovery starts, is superseded, or is used; used and superseded are final.
-      - A pending recovery either completes into used, or returns to active by cancel, dispute or expiry after 7 days.
-      - Completing with revocation of other devices requires the 72 hour window to have passed.
+      - A pending recovery completes into used, returns to active by the recovering user's cancel or by expiry after 7 days (keeping the new key and cancelling the planned revocations), or becomes contested on a verified dispute, which never revokes the new key or resets the kit.
+      - The recovering vault requests revocation of other devices only after 72 hours, or after 7 days when contested; honest clients and verifying vaults wait 72 hours from their own first sight of the notice, and the product does not claim more.
+      - On existing devices an observed recovery notice moves from received to disputed, accepted or expired, and disputing needs no kit state.
     machines:
       - entity: RecoveryKit
         initial: active
         terminal: [used, superseded]
         transitions:
-          - "active -> recovery_pending | identity.recovery.begin with valid words and blob | register new device key via F07.S01.M01, sign and queue the recovery notice, emit identity.recovery.requested"
-          - "active -> superseded | identity.recovery.create_kit creates a newer kit | mark old kit superseded in the same transaction, emit identity.recovery.kit_created"
-          - "recovery_pending -> used | identity.recovery.complete | if revokeOthersRequested require now at or after revokeOthersNotBefore, revoke others via F07.S01.M01, emit identity.recovery.completed"
-          - "recovery_pending -> active | identity.recovery.cancel, a verified dispute statement from an existing device, or 7 days without completion | revoke the pending new device key unless the user keeps it, emit identity.recovery.cancelled"
+          - "active -> recovery_pending | identity.recovery.begin with valid words and blob, and a verified latest document unless device_list_unknown | registerRecoveredKey via F07.S01.M01, issue the next document via F07.S02.M01, sign and queue the recovery notice, emit identity.recovery.requested"
+          - "active -> superseded | identity.recovery.create_kit creates a newer kit | mark old kit superseded in the same transaction, emit identity.recovery.kit_created; the old kit still decrypts the root key"
+          - "recovery_pending -> used | identity.recovery.complete; when revokeOthers, now at or after revokeOthersNotBefore and mode full | revoke plannedRevocations via F07.S01.M01 with revokeReason recovery and the notice cid, issue the document, emit identity.recovery.completed"
+          - "recovery_pending -> contested | identity.recovery.receive_dispute verifies a dispute | set contestedAt, extend revokeOthersNotBefore to requestedAt + 7 days; new key and kit unchanged; peers see contested"
+          - "recovery_pending -> active | identity.recovery.cancel by the recovering user, or 7 days after begin without completion | keep the new device key, drop plannedRevocations, emit identity.recovery.cancelled with reason user_cancelled or expired"
+          - "contested -> used | identity.recovery.complete at or after requestedAt + 7 days | revoke plannedRevocations with the dispute cids listed; peers keep the DID contested until each viewer resolves it; emit identity.recovery.completed with contested true"
+          - "contested -> active | identity.recovery.cancel by the recovering user, or 14 days after begin without completion | keep the new device key, drop plannedRevocations, emit identity.recovery.cancelled with reason user_cancelled or expired"
+      - entity: RecoveryNotice (RecoveryKit role observed)
+        initial: received
+        terminal: [disputed, accepted, expired]
+        transitions:
+          - "received -> disputed | identity.recovery.dispute by the local user on an existing device | sign classrup.identity.recovery_dispute/v1 with this device key, queue it to the new device's mailbox and the document's relays, mark the own DID contested in F07.S02.M01"
+          - "received -> accepted | identity.recovery.acknowledge ('This was me'), or F07.S02.M01 applies a completing document chained after the notice once its 72 h wait ended | close the banner; this device follows the new document and may itself be revoked"
+          - "received -> expired | 14 days after firstSeenAt without a completing document | close the banner, keep the notice as evidence"
     timeouts:
-      - "Revocation of other devices is allowed 72 h (259 200 000 ms) after begin."
-      - "A pending recovery expires 7 days after begin and returns the kit to active."
+      - "Revocation of other devices is allowed 72 h (259 200 000 ms) after begin, or 7 days after begin when contested."
+      - "A pending recovery expires 7 days after begin and a contested one 14 days after begin; the kit returns to active and the new key stays."
+      - "An observed notice expires 14 days after its first sight."
       - "Kit verification reminder shown 365 days after the last verification."
   commands_queries_events:
     requirements:
-      - All commands are vault commands; begin, complete and cancel produce signed statements (classrup.identity.recovery_notice/v1 signed by the account key, classrup.identity.recovery_dispute/v1 signed by an existing device key) delivered through the sync outbox.
+      - "All commands are vault commands; begin produces classrup.identity.recovery_notice/v1 signed by the root key decrypted from the kit, dispute produces classrup.identity.recovery_dispute/v1 signed by an existing device key active in the latest document, and receive_notice and receive_dispute are the intakes of those statements; statements travel through the sync outbox."
       - No command contacts a relay with a secret; statements go to relays and mailboxes only as signed public or end-to-end encrypted items.
-      - Recovery registers and revokes device keys by calling F07.S01.M01, which emits the device key events.
+      - Recovery registers the new device key through the F07.S01.M01 port registerRecoveredKey, issues identity documents through F07.S02.M01 and revokes device keys through F07.S01.M01, which emit the device key events.
+      - Begin obtains and verifies the latest identity document before planning any revocation, or runs in the explicit device_list_unknown mode that can add a key but never revokes others.
     commands:
       - name: identity.recovery.create_kit
         capability: identity.recovery_kit.create
-        input: "{ kdf, cipher, encryptedAccountKey, verifierPublicKey, blobChecksum, confirmedWordIndexes: [3 numbers], storedSeparately: true, backupLabel? }"
+        input: "{ kdf, cipher, encryptedAccountKey, verifierPublicKey, blobChecksum, docHint, confirmedWordIndexes: [3 numbers], storedSeparately: true, backupLabel? }"
         output: "{ kitId, revision, supersededKitId? }"
         errors: [VALIDATION_FAILED, IDENTITY_KIT_PARAMS_INVALID, CONFLICT_STATE]
         emits: [identity.recovery.kit_created]
@@ -135,135 +171,190 @@ processes:
         idempotent: true
       - name: identity.recovery.begin
         capability: identity.recovery_kit.begin
-        input: "{ kitFile, words (24), newDeviceLabel, revokeOthers: boolean }"
-        output: "{ kitId, newDeviceKeyId, revokeOthersNotBefore?, noticeStatementCid }"
-        errors: [IDENTITY_KIT_WORDS_INVALID, IDENTITY_KIT_CORRUPT, IDENTITY_KIT_PARAMS_INVALID, CONFLICT_STATE, RATE_LIMITED]
+        input: "{ kitFile, words (24), newDevicePublicKey, possessionSig, newDeviceLabel, revokeOthers: boolean, latestDoc?: classrup.identity.portable_doc/v1, allowUnknownDeviceList?: boolean }"
+        output: "{ kitId, newDeviceKeyId, mode: full|device_list_unknown, latestDocSeq?, revokeOthersNotBefore?, noticeStatementCid }"
+        errors: [IDENTITY_KIT_WORDS_INVALID, IDENTITY_KIT_CORRUPT, IDENTITY_KIT_PARAMS_INVALID, IDENTITY_DEVICE_LIMIT, DEPENDENCY_UNAVAILABLE, CONFLICT_STATE, RATE_LIMITED]
         emits: [identity.recovery.requested]
         idempotent: true
       - name: identity.recovery.complete
         capability: identity.recovery_kit.complete
         input: "{ kitId, expectedRevision }"
-        output: "{ kitId, revision, revokedDeviceKeyIds: array, statementCids: array }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_RECOVERY_WINDOW_OPEN]
+        output: "{ kitId, revision, revokedDeviceKeyIds: array, statementCids: array, contested: boolean }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, IDENTITY_RECOVERY_WINDOW_OPEN, DEPENDENCY_UNAVAILABLE]
         emits: [identity.recovery.completed]
         idempotent: true
       - name: identity.recovery.cancel
         capability: identity.recovery_kit.cancel
-        input: "{ kitId, expectedRevision, reason: user_cancelled|disputed }"
-        output: "{ kitId, revision, disputeStatementCid? }"
+        input: "{ kitId, expectedRevision }"
+        output: "{ kitId, revision, keptDeviceKeyId }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: [identity.recovery.cancelled]
         idempotent: true
+      - name: identity.recovery.receive_notice
+        capability: identity.recovery_kit.receive_notice
+        input: "{ statement: classrup.identity.recovery_notice/v1, provenance }"
+        output: "{ did, noticeCid, status: recorded|observed|quarantined, firstSeenAt }"
+        errors: [IDENTITY_RECOVERY_STATEMENT_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        emits: [identity.recovery.requested]
+        idempotent: true
+      - name: identity.recovery.dispute
+        capability: identity.recovery_kit.dispute
+        input: "{ noticeCid, reason?: not_me|lost_device_found }"
+        output: "{ noticeCid, disputeCid, syncState: local_committed }"
+        errors: [NOT_FOUND, CONFLICT_STATE, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: identity.recovery.acknowledge
+        capability: identity.recovery_kit.acknowledge
+        input: "{ noticeCid }"
+        output: "{ noticeCid, status: accepted }"
+        errors: [NOT_FOUND, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: identity.recovery.receive_dispute
+        capability: identity.recovery_kit.receive_dispute
+        input: "{ statement: classrup.identity.recovery_dispute/v1, provenance }"
+        output: "{ did, disputeCid, effect: kit_contested|did_contested|quarantined }"
+        errors: [IDENTITY_RECOVERY_STATEMENT_INVALID, VALIDATION_FAILED, RATE_LIMITED]
+        emits: []
+        idempotent: true
+    note: "Statements and signer roles (N2): classrup.identity.recovery_notice/v1 { did, newDevicePublicKey, plannedRevocations, notBeforeClaim, docCid } - the DID root key decrypted from the kit; classrup.identity.recovery_dispute/v1 { did, noticeCid, reason } - a device key active in the latest document the receiver holds, never the new key. Incoming disputes - in the recovering vault a verified dispute moves the kit to contested (complete allowed after 7 days); in every other vault receive_dispute calls the F07.S02.M01 port recordRecoveryDispute and the DID shows as contested until the viewer resolves it. Incoming notices - receive_notice calls F07.S02.M01 recordRecoveryNotice for any DID so the receiver's own 72 h wait starts at its first sight, and for the own DID on an existing device also creates an observed record and the banner. Notices and disputes are sent to relays only after privacy.consent.check(federation_publish, relayId); without consent they go only to the own devices' mailboxes or as a file or QR. This module implements RecoveryKitStatusPort.hasVerifiedKit() for F07.S01.M01."
     queries:
       - name: identity.recovery.get_status
         capability: identity.recovery_kit.read_own
         input: "{ includeHistory?: boolean }"
-        output: "{ kit?: RecoveryKit (without blob), pending?: { requestedAt, revokeOthersNotBefore, newDeviceLabel }, lastVerifiedAt?, verifyDue: boolean }"
+        output: "{ kit?: RecoveryKit (without blob), pending?: { requestedAt, revokeOthersNotBefore, newDeviceLabel, mode, contested }, observed?: [{ noticeCid, firstSeenAt, status }], lastVerifiedAt?, verifyDue: boolean }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: identity.recovery.kit_created, privacy: P3, payload: "{ accountId, kitId, supersededKitId?, createdAt }"}
-      - {type: identity.recovery.completed, privacy: P3, payload: "{ accountId, kitId, newDeviceKeyId, revokedDeviceKeyIds, completedAt }"}
-      - {type: identity.recovery.requested, privacy: P3, payload: "{ accountId, kitId, newDeviceKeyId, revokeOthersNotBefore?, requestedAt }"}
-      - {type: identity.recovery.cancelled, privacy: P3, payload: "{ accountId, kitId, reason: user_cancelled|disputed|expired }"}
+      - {type: identity.recovery.kit_created, privacy: P3, payload: "{ accountId, did, kitId, supersededKitId?, createdAt }"}
+      - {type: identity.recovery.completed, privacy: P3, payload: "{ accountId, did, kitId, newDeviceKeyId, revokedDeviceKeyIds, contested, completedAt }"}
+      - {type: identity.recovery.requested, privacy: P3, payload: "{ accountId, did, kitId?, newDevicePublicKey, noticeCid, revokeOthersNotBefore?, requestedAt, origin: own|observed }"}
+      - {type: identity.recovery.cancelled, privacy: P3, payload: "{ accountId, did, kitId, keptDeviceKeyId, reason: user_cancelled|expired }"}
     events_consumed:
-      - {type: privacy.deletion.completed, effect: "vault erase - delete all RecoveryKit records; the user's printed kit remains valid and the UI says so"}
+      - {type: identity.portable_doc.published, effect: "own DID, origin received or relay_stored - when F07.S02.M01 applied a document completing a recovery after its 72 h wait, move the matching observed record from received to accepted"}
+      - {type: privacy.deletion.completed, effect: "final cleanup only - the DeletionPort steps already deleted kit metadata and pseudonymized observed notices and disputes kept as evidence; the user's printed kit remains valid and the UI says so"}
     errors:
       - "IDENTITY_KIT_PARAMS_INVALID | 422 | no | KDF or cipher parameters differ from the required fixed set"
       - "IDENTITY_KIT_WORDS_INVALID | 422 | no | words are not 24 valid list words or the checksum fails"
       - "IDENTITY_KIT_CORRUPT | 422 | no | kit file checksum mismatch or authenticated decryption failed"
-      - "IDENTITY_RECOVERY_WINDOW_OPEN | 409 | no | revocation of other devices requested before the 72 hour window ended"
+      - "IDENTITY_RECOVERY_WINDOW_OPEN | 409 | no | revocation of other devices requested before the 72 hour (or, when contested, 7 day) window ended"
+      - "IDENTITY_RECOVERY_STATEMENT_INVALID | 422 | no | a recovery notice or dispute does not verify against the DID root key or an active device key of the latest document"
     example: |
-      vault command: identity.recovery.begin { "kitFile": "<bytes>", "words": ["abandon", "…24 words…"], "newDeviceLabel": "New phone", "revokeOthers": true }
-      -> { "kitId": "0192f420-…", "newDeviceKeyId": "0192f421-…", "revokeOthersNotBefore": "2026-11-07T10:00:00.000Z", "noticeStatementCid": "sha256-Qm…" }
-      (72 hours later) vault command: identity.recovery.complete { "kitId": "0192f420-…", "expectedRevision": 2 }
-      -> { "kitId": "0192f420-…", "revision": 3, "revokedDeviceKeyIds": ["0192f401-…"], "statementCids": ["sha256-Zx…"] }
+      vault command: identity.recovery.begin { "kitFile": "<bytes>", "words": ["abandon", "…24 words…"], "newDevicePublicKey": "…", "possessionSig": "…", "newDeviceLabel": "New phone", "revokeOthers": true }
+      -> latest document fetched from the relays in the kit's docHint and verified (seq 7)
+      -> { "kitId": "0192f420-…", "newDeviceKeyId": "0192f421-…", "mode": "full", "latestDocSeq": 7, "revokeOthersNotBefore": "2026-11-07T10:00:00.000Z", "noticeStatementCid": "sha256-Qm…" }
+      (72 hours later, no dispute) vault command: identity.recovery.complete { "kitId": "0192f420-…", "expectedRevision": 2 }
+      -> { "kitId": "0192f420-…", "revision": 3, "revokedDeviceKeyIds": ["0192f401-…"], "statementCids": ["sha256-Zx…"], "contested": false }
+      peer vault that first saw the notice at 2026-11-04T20:00Z applies the revocation only from 2026-11-07T20:00Z
   authorization_capabilities:
     requirements:
-      - Vault policy - creating and verifying a kit require an unlocked vault; begin runs in a new or empty vault where possession of the words and blob is the authorization.
-      - Disputes are authorized by a signature from an active device key listed in the account's identity document; the dispute proves only that such a key signed it.
-      - Relays have no capability here; they only carry signed notices and end-to-end encrypted mailbox items.
+      - Vault policy - creating and verifying a kit require an unlocked vault; begin runs in a new or empty vault where possession of the words and file is the authorization.
+      - Disputes are authorized by a signature from a device key active in the account's latest document known to the receiving vault; a dispute proves only that such a key signed it and freezes the recovery as contested instead of cancelling it, so a stolen device cannot block a recovery for ever.
+      - Relays have no capability here; they only carry signed notices, disputes and end-to-end encrypted mailbox items.
     capabilities:
-      - "identity.recovery_kit.create | principal | unlocked vault; no pending recovery"
-      - "identity.recovery_kit.verify | principal | unlocked vault and possession of words and blob"
+      - "identity.recovery_kit.create | principal | unlocked vault; no pending or contested recovery in this vault"
+      - "identity.recovery_kit.verify | principal | unlocked vault and possession of words and file"
       - "identity.recovery_kit.begin | anonymous | possession of the 24 words and kit file; local backoff after 5 failures"
       - "identity.recovery_kit.complete | principal | unlocked vault on the recovering device; window passed when revoking others"
-      - "identity.recovery_kit.cancel | principal | unlocked vault holding an active device key, or the recovering device"
+      - "identity.recovery_kit.cancel | principal | unlocked vault on the recovering device"
+      - "identity.recovery_kit.receive_notice | principal | intake pipeline of the unlocked vault; notice verifies against the DID root key"
+      - "identity.recovery_kit.dispute | principal | unlocked vault holding a device key active in the latest document; no kit state required"
+      - "identity.recovery_kit.acknowledge | principal | unlocked vault with an observed notice for the own DID"
+      - "identity.recovery_kit.receive_dispute | principal | intake pipeline of the unlocked vault; dispute signed by an active device key other than the new key"
       - "identity.recovery_kit.read_own | principal | unlocked local principal"
   failure_recovery_idempotency:
     requirements:
       - Kit creation and each recovery step are single local transactions, so a crash leaves either the old state or the new state.
       - Statements go through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never claims more than the reached state.
       - A failed recovery never deletes the old kit and never revokes any key on its own.
-    idempotency: "Idempotency-Key per command in the local command log for 24 h; begin is keyed by (kitId, newDevicePublicKey) so a repeated begin returns the same pending record."
-    concurrency: "Partial unique index allows one active or pending kit per account; revision check on complete and cancel; Web Locks serialize tabs."
+    idempotency: "Idempotency-Key per command in the local command log for 24 h; begin is keyed by (kitId, newDevicePublicKey) so a repeated begin returns the same pending record; receive_notice and receive_dispute are keyed by statement cid."
+    concurrency: "Partial unique index allows one active, pending or contested kit per account in a vault; revision check on complete and cancel; Web Locks serialize tabs. Concurrent recoveries in different vaults cannot be prevented - there is no distributed lock (ADR-0016 section 5, N20); receivers detect two notices for one DID and freeze it as contested."
     retries: "Outbox retries follow base 500 ms, cap 30 s, full jitter, max 6 attempts per window; derivation errors are never retried automatically."
-    offline: "Create, verify, begin and complete all work offline because they need only the kit and local keys; notices are queued and the UI shows that existing devices have not yet been told."
-    partial_failure: "If registering the new device key succeeds but the notice statement fails to queue, the transaction rolls back; if the notice is queued but not delivered, the revocation window still counts from begin and the UI shows 'not yet delivered'."
+    offline: "Create and verify work offline. Begin needs the latest identity document to plan revocations - from the input, the kit's relays or an export; fully offline it either fails with DEPENDENCY_UNAVAILABLE or, by explicit choice, runs in device_list_unknown mode, which adds the key from the kit's docHint seq and warns that a fork is expected until the vault reconnects. Notices are queued and the UI shows that existing devices have not yet been told."
+    partial_failure: "If registering the new device key succeeds but the notice statement fails to queue, the transaction rolls back; if the notice is queued but not delivered, the local window still counts from begin, receivers count from their own first sight, and the UI shows 'not yet delivered'."
   privacy_retention_abuse:
     requirements:
       - The 24 words and all derived keys exist only in memory during derivation and in the user's own hands; the vault stores no copy and no relay ever receives them.
       - The kit file is encrypted and may be stored anywhere the user chooses; the app never uploads it by default and states that the file alone is useless without the words.
-      - The product states plainly that anyone with both the words and the file can control the account, so they should be stored separately.
+      - The product states plainly that anyone with both the words and the file can control the account, that a newer kit does not revoke an older one, and that words and file should be stored separately.
+      - The module meets the N6 privacy duties - it registers ExportSectionPort (section identity.recovery_kit), DeletionPort and RetentionPurgePort, classifies its fields with F10.S02.M02, pseudonymizes observed notices and disputes kept as RET-EVIDENCE instead of deleting them, checks federation_publish consent before sending statements to a relay, and treats privacy.deletion.completed only as final cleanup.
     data:
-      - "RecoveryKit: P4 (encrypted blob and verifier); metadata P3; words never stored."
-      - "Recovery notice: signed public statement containing the DID, the new device public key and the planned revocation time, P0."
+      - "RecoveryKit role kit: P4 (encrypted blob and verifier); metadata P3; words never stored."
+      - "Recovery notice and dispute: signed public statements containing the DID, the new device public key, the planned revocations and claimed times, P0; device labels stay local."
+      - "RecoveryKit role observed: P3 local record of a notice for the own DID."
     retention:
-      - "RecoveryKit until superseded, used or vault erase (RET-STANDARD); used and superseded records are kept 90 days then deleted."
-      - "Notices follow the identity document retention (F07.S02.M01)."
+      - "Role kit records until superseded, used or vault erase (RET-STANDARD); used and superseded records are kept 90 days then deleted."
+      - "Observed notices and disputes RET-EVIDENCE (2 years after last related activity), pseudonymized on account deletion."
     threats:
-      - "T01 | Stolen words and file used by an attacker to take over | notice statement and 72 hour window give existing devices a chance to dispute; honest limit - an attacker with both can still act as the account, so advice is to store them separately and rotate by creating a new identity if compromised"
+      - "T01 | Stolen words and file used by an attacker to take over | notice statement, the receivers' own 72 hour wait and the dispute path give existing devices a chance to make the takeover visible as contested; honest limit - an attacker with both can sign as the account, including revocations that bypass the notice, so the advice is to store them separately and to start a new identity if the kit was exposed"
       - "T02 | Offline guessing of a weak secret | the secret is 256 bits random, so guessing is infeasible; scrypt N=2^17 adds cost for partial leaks"
       - "T03 | Parameter downgrade in a forged kit file | fixed parameter check V01 before derivation and checksum comparison against the stored metadata"
       - "T04 | Phishing site asks for the 24 words | the words are entered only in the app's recovery screen; the UI warns that no operator or relay will ever ask for them"
-      - "T05 | Quiet takeover while the user is offline | revocation of other devices cannot happen before 72 hours, notice is delivered through identity documents and mailbox, and a dispute creates a visible contested state (fork detection in F07.S02.M01)"
-      - "T06 | Relay or backup location reads the kit | file is encrypted with a key from 256-bit secret; backups hold ciphertext only"
+      - "T05 | Quiet takeover while the user is offline | verifying vaults apply recovery revocations only 72 hours after their own first sight of the notice and mark revocations without a notice as contested (F07.S02.M01); this binds honest clients and verifiers, not an attacker's own client"
+      - "T06 | Relay or backup location reads the kit | file is encrypted with a key from a 256-bit secret; backups hold ciphertext only"
+      - "T07 | Stolen device blocks recovery by disputing it | a dispute freezes the recovery as contested and extends the window to 7 days but cannot cancel it, revoke the new key or reset the kit; one dispute per key per 24 h"
+      - "T08 | Leaked old kit after the user created a new one | every kit wraps the same root key, so superseding does not revoke the old kit; the UI says so and suggests a new identity; a dedicated recovery key is Future"
+      - "T09 | Concurrent recoveries from two vaults | no lock can prevent them; receivers see two notices for one DID and freeze the identity as contested until explicit resolution"
     abuse_controls:
       - "Local backoff after 5 failed attempts: 60 s doubling to 900 s; at most 3 begin attempts per hour."
-      - "Notice statements are limited to one per account per 24 hours by receiving vaults; extra ones are quarantined."
+      - "Notice statements are limited to one per DID per 24 hours and disputes to one per signing key per 24 hours by receiving vaults; extra ones are quarantined."
   observability_performance:
     requirements:
       - The PWA sends no telemetry; local diagnostics hold counters of kit creation, verification and recovery attempts without secrets.
       - Key derivation with scrypt N=2^17 completes within 1.5 seconds on a Moto G-class device and 600 ms on a laptop.
       - Kit creation completes within 3 seconds including printing layout.
     metrics:
-      - "local counter recovery_kit_total{event=created|verified|begin|completed|cancelled}"
+      - "local counter recovery_kit_total{event=created|verified|begin|completed|cancelled|contested|notice_received|dispute_sent}"
       - "local histogram recovery_kdf_duration_ms"
     logs:
       - "info recovery.event {event, correlationId} in the local diagnostics log - never words, keys or blobs."
     budgets:
-      - "scrypt derivation p95 <= 1.5 s on a Moto G-class device; create_kit p95 <= 3 s; verify_kit p95 <= 2 s; complete p95 <= 300 ms."
+      - "scrypt derivation p95 <= 1.5 s on a Moto G-class device; create_kit p95 <= 3 s; verify_kit p95 <= 2 s; complete p95 <= 300 ms; receive_notice p95 <= 20 ms."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test with injected clock, fixed salts and fixed key pairs.
       - Cryptographic tests use known-answer vectors for scrypt, XChaCha20-Poly1305 and Ed25519 and fail on any parameter change.
       - Privacy tests prove that words and derived keys never reach storage, logs, events, exports or the network.
-    fixtures: "Fixed 24-word phrase (valid checksum), fixed salt and nonce, account A with devices D1 and D2, new device N, fixed clock 2026-11-04T10:00:00Z, scrypt known-answer vector."
+      - Abuse tests cover a modified client, concurrent recoveries in isolated vaults, repeated disputes by a stolen device and disputes arriving after completion.
+      - Accessibility and UI copy tests check the kit and recovery screens, including the honest texts about kit possession, superseded kits and the notice window.
+    fixtures: "Fixed 24-word phrase (valid checksum), fixed salt and nonce, account A with root device D1 and device D2, new devices N1 and N2, peer vault P, fixed clock 2026-11-04T10:00:00Z, scrypt known-answer vector, relay harness that can delay delivery."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01 | create kit with fixed salt and nonce | blob decrypts with the derived key; record stores no words or keys; kdf equals scrypt N=131072 r=8 p=1"
+      - "T01 | unit | 01.R01,01.R02,02.R01,09.R02 | create kit with fixed salt and nonce | blob decrypts with the derived key (known-answer vectors); record stores no words or keys; kdf equals scrypt N=131072 r=8 p=1; docHint embedded"
       - "T02 | unit | 01.R02,02.R01 | create kit with N=16384 or a 12-byte nonce | IDENTITY_KIT_PARAMS_INVALID; nothing stored"
-      - "T03 | unit | 02.R02,02.R03 | words with wrong checksum, 23 words, unknown word, wrong file checksum, bit-flipped blob | IDENTITY_KIT_WORDS_INVALID or IDENTITY_KIT_CORRUPT without revealing which word"
-      - "T04 | property | 01.R03,03.R01,03.R02,03.R03 | random sequences of create, begin, complete, cancel, expire | only declared transitions succeed; one active or pending kit; used and superseded are final"
-      - "T05 | integration | 03.R03,02.R03 | begin with revokeOthers then complete at 71 h and at 72 h | IDENTITY_RECOVERY_WINDOW_OPEN at 71 h; success at 72 h with D1 and D2 revoked and statements queued"
-      - "T06 | integration | 03.R02,04.R03 | begin then dispute statement from D2 | kit returns to active, contested identity flagged, cancelled event emitted"
-      - "T07 | contract | 04.R01,04.R02,09.R02 | every command, query and event run | outputs, statements and payloads validate against registry schemas; statement signatures verify"
-      - "T08 | integration | 04.R03,06.R02 | begin registers a new device key through F07.S01.M01 | identity.device_key.added emitted by M01 once; revocations emitted on complete"
-      - "T09 | abuse | 05.R01,05.R02,05.R03 | locked vault creates a kit; dispute signed by a revoked key; relay tries to call begin | FORBIDDEN or rejected; relay has no capability"
-      - "T10 | chaos | 06.R01,06.R02,06.R03 | crash during begin, queue failure, replay of begin | no partial state; old kit intact; one pending record"
-      - "T11 | abuse | 07.R01,07.R02,07.R03 | inspect storage, events, logs, exports and network traces during create and begin | words and derived keys appear nowhere; no kit upload without the user's choice; 6th failed attempt triggers backoff"
-      - "T12 | load | 08.R01,08.R02,08.R03 | scrypt derivation on emulated Moto G and laptop | <= 1.5 s and <= 600 ms; create_kit <= 3 s"
-      - "T13 | a11y | 01.R01,03.R01 | create and recover screens with axe-core and keyboard only | zero serious or critical issues; paste of full phrase works"
-      - "T14 | unit | 09.R01,09.R03 | traceability run over PS-053 | every requirement maps to a passing test and crypto vectors are green"
-      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to a fresh vault, vault erase | kit metadata and blob round-trip; words never in export; erase leaves the printed kit valid"
+      - "T03 | unit | 02.R03 | words with wrong checksum, 23 words, unknown word, wrong file checksum, bit-flipped blob | IDENTITY_KIT_WORDS_INVALID or IDENTITY_KIT_CORRUPT without revealing which word"
+      - "T04 | property | 01.R03,03.R01,03.R02 | random sequences of create, begin, complete, cancel, dispute and expiry | only declared transitions succeed; one active, pending or contested kit per vault; used and superseded are final"
+      - "T05 | integration | 03.R03,02.R02 | honest client - begin with revokeOthers, complete at 71 h and at 72 h; peer P first saw the notice 10 h after begin | IDENTITY_RECOVERY_WINDOW_OPEN at 71 h; success at 72 h; P shows recovery pending and applies the revocation only at 82 h after begin"
+      - "T06 | integration | 03.R02,05.R02 | begin, then a verified dispute from D2 arrives in the recovering vault | kit contested; complete refused with IDENTITY_RECOVERY_WINDOW_OPEN before 7 days and allowed at 7 days with contested true; the new key is not revoked"
+      - "T07 | contract | 04.R01,09.R02 | every command, query and event run | outputs, statements and payloads validate against registry schemas; notice signed by the root key and dispute by a device key verify"
+      - "T08 | integration | 04.R03,06.R02 | begin registers the new key through registerRecoveredKey; then begin with 10 active keys | identity.device_key.added emitted once by F07.S01.M01; revocations emitted on complete; IDENTITY_DEVICE_LIMIT with nothing stored; outbox states shown honestly"
+      - "T09 | abuse | 05.R01,05.R03 | locked vault creates a kit; relay tries to call begin or dispute | FORBIDDEN or rejected; relay has no capability"
+      - "T10 | chaos | 06.R01,06.R03 | crash during begin, queue failure, replay of begin | no partial state; old kit intact; one pending record; no key revoked"
+      - "T11 | abuse | 04.R02,07.R01,07.R02,09.R03 | inspect storage, events, logs, exports and network traces during create and begin | words and derived keys appear nowhere; no kit upload without the user's choice; relays receive only signed public or encrypted items"
+      - "T12 | load | 08.R01,08.R02,08.R03 | scrypt derivation on emulated Moto G and laptop | <= 1.5 s and <= 600 ms; create_kit <= 3 s; counters hold no secrets"
+      - "T13 | a11y | 09.R05 | create and recover screens and the notice banner with axe-core and keyboard only | zero serious or critical issues; paste of full phrase works"
+      - "T14 | unit | 09.R01 | traceability run over PS-053 | every requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to a fresh vault, vault erase, and a stronger-KDF kit version next to a v1 kit | kit metadata and blob round-trip; words never in export; erase leaves the printed kit valid; v1 kit still recovers"
+      - "T16 | abuse | 09.R04,03.R03 | modified client completes at t+0 and publishes a revoking document whose issuedAt is before the notice's notBefore claim | peers mark the DID contested and keep D1 and D2 active"
+      - "T17 | integration | 09.R04,02.R02,05.R02 | two isolated vaults begin offline from the same kit with N1 and N2; a second begin inside one vault | both succeed locally; after sync receivers see two notices for one DID and freeze it as contested; the second begin in one vault returns CONFLICT_STATE"
+      - "T18 | integration | 04.R04 | offline begin in an empty vault without a latest document and revokeOthers true, then with device_list_unknown, then reconnect | DEPENDENCY_UNAVAILABLE first; unknown mode adds the key and plans no revocation; after reconnect the fetched document is verified and a seq collision is reported as a fork"
+      - "T19 | abuse | 09.R04,02.R04 | stolen D2 sends 5 disputes within 24 h | one processed, four quarantined with RATE_LIMITED; recovery contested and completed after 7 days with D2 revoked and contested visible to peers"
+      - "T20 | integration | 03.R04,02.R04 | existing device D2 without a kit record receives the notice, disputes it; a second notice for the same DID within 24 h; a dispute signed by revoked key D3 | observed record received then disputed and dispute queued; second notice quarantined and the DID contested; D3 dispute IDENTITY_RECOVERY_STATEMENT_INVALID"
+      - "T21 | integration | 09.R04 | a dispute from D2 arrives after the recovering vault completed | recovering vault stays used and stores the dispute as evidence; peers mark the DID contested"
+      - "T22 | integration | 03.R02 | pending recovery not completed for 7 days | kit back to active; new key kept and announced; planned revocations dropped; identity.recovery.cancelled with reason expired"
+      - "T23 | unit | 01.R03,07.R03 | create kit 2 after kit 1, then decrypt kit 1 | kit 1 superseded locally but still decrypts the root seed; the UI copy states that superseding does not revoke the old kit"
+      - "T24 | integration | 07.R04 | F10 export section, deletion plan and retention sweep with stub registries; notice to a relay without federation_publish consent | section identity.recovery_kit exported; observed notices and disputes pseudonymized, not deleted; notice delivered only to own mailboxes or as a file"
+      - "T25 | e2e | 09.R05,07.R03 | UI copy check of create kit, recover and banner screens in every locale bundle | texts about kit possession, separate storage, superseded kits, receivers' 72 h wait and contested recoveries are present"
     acceptance:
-      - All tests T01-T15 pass in CI.
+      - All tests T01-T25 pass in CI.
       - The 24 words and derived keys never appear in storage, logs, events, exports or network traffic (privacy suite).
-      - A recovery with revocation of other devices is impossible before 72 hours and a dispute from an existing device returns the kit to active.
+      - Honest clients and verifying vaults that saw the notice do not apply a recovery revocation before 72 hours after their own first sight of it, a dispute makes the recovery contested for every receiver without cancelling it, and the documentation states that an attacker with the words and file can sign as the account.
+      - The UI and these criteria state that creating a new kit does not revoke an older kit.
   import_export_backup_rollback:
     requirements:
       - The vault export contains kit metadata and the encrypted blob so a user can re-download the file, but never the words.
       - Import validates KDF parameters, blob checksum and the verifier, and sets the kit to active only if verification of the checksum passes.
       - Parameter changes (a stronger scrypt) are new kit versions; v1 kits remain valid and readable for 180 days after a new major.
-    export: "Section identity.recovery_kit in classrup-export/v1 (schema classrup.identity.recovery_kit/v1) with metadata and encrypted blob; the words are never included."
-    import: "A kit with unsupported parameters or checksum mismatch is imported as superseded and reported; at most one imported kit becomes active."
+    export: "Section identity.recovery_kit in classrup-export/v1 (schema classrup.identity.recovery_kit/v1) with metadata, docHint and encrypted blob, plus observed notices; the words are never included."
+    import: "A kit with unsupported parameters or checksum mismatch is imported as superseded and reported; at most one imported kit becomes active; observed notices import with their original firstSeenAt."
     backup: "The vault export is the primary backup (IOX-6); the user-selected encrypted backup location receives only the kit file; relays never receive kits."
     migration_rollback: "A stronger KDF is a new kit schema major with a registered migration that requires the user to create a new kit; rollback keeps v1 kits recoverable with the original parameters."

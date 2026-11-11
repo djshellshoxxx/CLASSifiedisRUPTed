@@ -5,23 +5,28 @@ summary: >-
   immutable ListingRevision for every non-draft change, and detects material changes (price, condition,
   category). A material change on a published listing is announced by event so offers and negotiations can flag
   their assumptions, and the owner is offered a re-publish that sends a new signed projection (F01.S01.M03).
-  The module never changes what other parties already hold; their copies change only when they accept the new statement.
+  Material edits are refused while an auction on the listing has bids (N11). The module never changes what other
+  parties already hold; their copies change only when they accept the new statement.
 responsibilities:
   - Apply owner edits to Listing through bazaar.listing.apply_edit with expectedRevision and no silent merging.
   - Own ListingRevision, an immutable snapshot of public fields per non-draft change, up to 100 per listing.
   - Detect material changes (price, condition, category) and set the material flag and changedFields on bazaar.listing.edited.
-  - Provide the system command bazaar.listing_revision.record so F01.S02.M01 (price) and F01.S03.M02 (variant price) report their changes as listing revisions inside their own transaction.
+  - Provide the system command bazaar.listing_revision.record so F01.S02.M01 (price), F01.S02.M02 (want spec) and F01.S03.M02 (variant price) report their changes as listing revisions inside their own transaction.
   - Re-run local prohibited-item rules on edits of published listings.
+  - Refuse material edits while an auction on the listing has at least one bid, tracked from consumed auction events (N11).
+  - Keep revisions cited by offers, negotiations or deals for the evidence window when the listing is purged.
 non_responsibilities:
   - Creating listings and the Listing status field (F01.S01.M01).
   - Signing and sending the updated public projection (F01.S01.M03); this module only marks the listing as having unsent changes.
   - Notifying offerers; offers (F01.S04.M01) and negotiations (F01.S04.M02) consume bazaar.listing.edited and notify through F13.
+  - Auction bidding and close (F04); this module only reads their events in the seller's vault.
   - "Future: three-way merge of concurrent edits from two devices."
-depends_on: [F01.S01.M01, F18.S01.M02, F18.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001]
+depends_on: [F01.S01.M01, F18.S01.M02, F18.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001]
 user_stories:
   - As a seller, I can fix a typo in my published listing and see that it is not treated as a price change.
   - As a seller, I am told before I save that changing the price or condition will mark open offers as based on an older version.
   - As a seller, I can see the history of changes to my listing and which ones were material.
+  - As a bidder, I can rely on the condition and category of an auctioned item not changing after I bid.
 edge_cases:
   - Edit with a stale expectedRevision (second tab) returns CONFLICT_REVISION and the draft form keeps the user's text for manual resolution.
   - A price change is recorded by the sell-terms module and a title edit lands in the same second; both revisions are recorded in order and each emits its own event.
@@ -30,12 +35,14 @@ edge_cases:
   - The listing reaches 100 revisions; the next edit returns BAZAAR_EDIT_REVISION_LIMIT and suggests archiving and relisting.
   - An edit arrives for an expired, closed or archived listing; CONFLICT_STATE is returned.
   - The owner edits a published listing offline; the edit is committed locally and the UI shows that other parties still see the earlier version until the new projection is sent.
+  - An auction on the listing has one bid and the seller changes the condition; BAZAAR_EDIT_AUCTION_HAS_BIDS is returned while a title typo fix is still allowed.
+  - The listing is purged 90 days after archive while a two-year-old accepted offer cites revision 4; revision 4 and later rows are kept as evidence, the rest of the listing content is purged.
 ux:
   screens:
     - "Edit listing form: same fields as creation, diff summary before save with a Material change badge for price, condition and category."
     - "History view: list of revisions with date, changed field names and material marker; tap shows the saved snapshot."
     - "Unsent changes banner: Your edit is saved on this device. Others still see the previous version until you update the listing."
-  states: [loading, saving-local, saved-local, unsent-changes, conflict, policy-blocked, revision-limit]
+  states: [loading, saving-local, saved-local, unsent-changes, conflict, policy-blocked, revision-limit, auction-has-bids]
   a11y:
     - Material change badges have text, not colour alone.
     - Diff summary is a table with row and column headers readable by screen readers.
@@ -46,6 +53,7 @@ processes:
       - "A ListingRevision is an immutable snapshot of the public fields of a listing at one revision number, with changedFields, a material flag and the editor principal."
       - "Revisions are written only for listings that have been published at least once; plain draft edits only bump Listing.revision to bound storage."
       - "Revision snapshots are P1 data in the owner's vault and are retained as commerce evidence because offers cite the revision the buyer saw."
+      - "A derived, rebuildable per-listing edit state {listingId, lastProjectedRevision, auctions [{auctionId, bidCount, open}]} is kept from consumed bazaar.listing.published, bazaar.publication.renewed and auction events; it is not an exported record and is rebuilt from the local outbox history."
     entities:
       - name: ListingRevision
         schema: classrup.bazaar.listing_revision/v1
@@ -57,18 +65,20 @@ processes:
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
           - "listingId: uuidv7 — ref F01.S01.M01 Listing"
           - "revisionNo: int — equals Listing.revision after the change; unique per listing"
-          - "editorId: did:key — local principal"
+          - "editorId: did:key — local principal; replaced by the deletion pseudonym on privacy.deletion.completed"
           - "source: enum — owner_edit | sell_terms | variant | wanted_spec | system"
           - "changedFields: string[] — <= 20 names such as title, price, condition, categoryId"
           - "material: boolean — true when price, condition or category changed"
           - "snapshot: object — public fields as published (title, description, categoryId, condition, mediaRefs, tags, regionCell, price?), <= 32 KiB"
           - "snapshotHash: string — sha256- over JCS(snapshot)"
           - "wasPublic: boolean — listing status was published or unpublished-after-publish at the time"
+          - "evidenceUntil?: timestamp — set when the listing is purged with keepEvidence true; listing deletion time + 2 years (RET-EVIDENCE)"
           - "createdAt: timestamp — RFC 3339 UTC"
         invariants:
-          - A ListingRevision is never updated or deleted while its listing exists; it is purged only with the listing.
+          - A ListingRevision is never updated while its listing exists; when the listing is purged, rows are kept until evidenceUntil if bazaar.listing.deleted carries keepEvidence true and are purged with the listing otherwise.
           - revisionNo values for one listing are strictly increasing without reuse; at most 100 rows per listing.
           - material is true exactly when changedFields intersects {price, variant_price, condition, categoryId}.
+          - Field classes are annotated per F10.S02.M02 (snapshot P1, editorId P1).
     sql: |
       CREATE TABLE bazaar_listing_revision (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, revision_no INTEGER NOT NULL,
@@ -79,6 +89,7 @@ processes:
       - "Edit input is a strict patch; fields that never change (kind, ownerId, status) are rejected."
       - "Published listings are re-checked against the active prohibited-item rules before the edit is stored."
       - "Every rule violation maps to one stable error code."
+      - "Material edits (condition, categoryId or price from any source) are refused while an auction on a listing of kind auction has at least one bid (N11); non-material edits stay allowed."
     rules:
       - "V01 | patch contains only title, description, categoryId, condition, mediaRefs, tags, regionCell | VALIDATION_FAILED"
       - "V02 | patch field limits equal creation limits in F01.S01.M01 (title 3..120, description <= 5000, mediaRefs <= 10) | VALIDATION_FAILED"
@@ -88,10 +99,11 @@ processes:
       - "V06 | prohibited-item evaluation of the edited text and category returns allow or allow_with_notice | BAZAAR_EDIT_POLICY_BLOCKED"
       - "V07 | patch is not empty after removing unchanged values | VALIDATION_FAILED"
       - "V08 | regionCell, if present, has length 4 or 5 | BAZAAR_EDIT_POLICY_BLOCKED"
+      - "V09 | kind auction with an open auction holding at least 1 bid (derived edit state): a patch or record touching condition, categoryId or price is refused | BAZAAR_EDIT_AUCTION_HAS_BIDS"
   workflow_state_machine:
     requirements:
       - "ListingRevision has no lifecycle beyond creation; the listing's status machine is owned by F01.S01.M01."
-      - "Whether a listing has unsent changes is derived by comparing the latest revision with the revision in the last signed projection of F01.S01.M03."
+      - "Whether a listing has unsent changes is derived by comparing the latest revision with the revision in the last signed projection of F01.S01.M03, learned from the listingRevision of consumed bazaar.listing.published and bazaar.publication.renewed events."
       - "An edit never changes Listing.status."
     machines: []
     note: "ListingRevision is append-only and has no states. Listing status is governed by F01.S01.M01."
@@ -106,21 +118,22 @@ processes:
         capability: bazaar.listing.edit
         input: "[vault-local] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, mediaRefs?, tags?, regionCell? } }"
         output: "{ listingId, revision, material, changedFields, unsentChanges }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_POLICY_BLOCKED]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_POLICY_BLOCKED, BAZAAR_EDIT_AUCTION_HAS_BIDS]
         emits: [bazaar.listing.edited]
         idempotent: true
       - name: bazaar.listing_revision.record
         capability: bazaar.listing_revision.record
         input: "[vault-local, internal port] { listingId, expectedRevision, source, changedFields, snapshotPatch }"
-        output: "{ listingId, revision, material }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_EDIT_REVISION_LIMIT]
+        output: "{ listingId, revision, material, unsentChanges }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_EDIT_REVISION_LIMIT, BAZAAR_EDIT_AUCTION_HAS_BIDS]
         emits: [bazaar.listing.edited]
         idempotent: true
+    note: "Privacy ports (N6): the module registers ExportSectionPort (section bazaar.listing_revisions), DeletionPort (plan: purge unreferenced revisions, pseudonymize editorId in rows kept as evidence) and RetentionPurgePort (purge rows past evidenceUntil) with F10.S01.M03, F10.S01.M04 and F10.S01.M02."
     queries:
       - name: bazaar.listing_revision.list
         capability: bazaar.listing_revision.read
         input: "{ listingId, cursor?, limit <= 50 }"
-        output: "{ items: ListingRevision[], nextCursor? }"
+        output: "{ items: ListingRevision[], nextCursor?, unsentChanges }"
         errors: [NOT_FOUND]
       - name: bazaar.listing_revision.get
         capability: bazaar.listing_revision.read
@@ -129,15 +142,25 @@ processes:
         errors: [NOT_FOUND]
     events_produced:
       - {type: bazaar.listing.edited, privacy: P1, payload: "{ listingId, ownerId, revision, status, material, changedFields: string[], source }"}
-    events_consumed: []
+    events_consumed:
+      - {type: bazaar.listing.published, effect: "set lastProjectedRevision = payload listingRevision for the listing, so unsentChanges becomes false when it equals Listing.revision"}
+      - {type: bazaar.publication.renewed, effect: "set lastProjectedRevision = payload listingRevision of the renewed signed projection"}
+      - {type: bazaar.listing.deleted, effect: "keepEvidence true: keep the listing's revisions and set evidenceUntil = deletion time + 2 years; keepEvidence false: purge the revisions in the same transaction"}
+      - {type: auctions.auction.scheduled, effect: "seller vault: record auctionId for the payload listingId in the derived edit state with bidCount 0 and open true"}
+      - {type: auctions.bid.placed, effect: "seller vault, as re-derived from the host relay's signed bid ledger (N17): increment bidCount of the auction; V09 then refuses material edits"}
+      - {type: auctions.auction.cancelled, effect: "mark the auction closed in the derived edit state so material edits are allowed again"}
+      - {type: auctions.auction.unsold, effect: "mark the auction closed in the derived edit state so material edits are allowed again"}
+      - {type: privacy.deletion.completed, effect: "replace editorId with the payload pseudonym in revisions retained under evidenceUntil and purge the derived edit state"}
     errors:
       - "BAZAAR_EDIT_REVISION_LIMIT | 409 | no | listing already has 100 revisions"
       - "BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.ruleKeys"
+      - "BAZAAR_EDIT_AUCTION_HAS_BIDS | 409 | no | an auction on this listing has bids; condition, category and price cannot change (N11)"
     example: |
       vault.dispatch("bazaar.listing.edit", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 4,
         "patch": { "condition": "like_new" } }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000021")
       => { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "revision": 5, "material": true, "changedFields": ["condition"], "unsentChanges": true }
       event bazaar.listing.edited { listingId, ownerId, revision: 5, status: "published", material: true, changedFields: ["condition"], source: "owner_edit" }
+      after F01.S01.M03 publishes revision 5: event bazaar.listing.published { listingRevision: 5, ... } => unsentChanges false
   authorization_capabilities:
     requirements:
       - "Vault policy: only the local principal who authored the listing may edit it; no role or relay can edit."
@@ -152,25 +175,29 @@ processes:
       - "Edits are idempotent per CTR-IDM-001 and always carry expectedRevision."
       - "The revision snapshot, the Listing update and the outbox event commit in one IndexedDB transaction or not at all."
       - "Edits made offline are committed locally; no relay acknowledgement is claimed, and the UI shows unsent changes until the projection is sent."
-    idempotency: "Idempotency-Key required on edit; the key and request hash are kept 24 h in the vault; replay returns the stored result."
-    concurrency: "expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins."
+    idempotency: "Idempotency-Key required on edit; the key and request hash are kept 24 h in the vault; replay returns the stored result. Event consumers record (consumer, eventId) before side effects and skip duplicates (EVT-3)."
+    concurrency: "expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. Auction events and edits serialize on the IndexedDB transaction; an edit committed before the first bid event stands."
     retries: "Only IndexedDB transaction aborts are retried (max 3); policy and validation errors are not retried."
     offline: "Edits work offline. Sync-outbox state for the projection belongs to F01.S01.M03: local committed, prepared, transport_acknowledged, peer_accepted."
-    partial_failure: "If the prohibited-rule pack cannot be read, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked."
+    partial_failure: "If the prohibited-rule pack cannot be read, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history before the next material edit is accepted."
   privacy_retention_abuse:
     requirements:
       - "Revision snapshots contain only fields that are already public when published; drafts store no snapshots."
-      - "Revisions follow RET-EVIDENCE (2 years after last related activity) and are purged with the listing afterwards."
+      - "Revisions follow RET-EVIDENCE (2 years after last related activity); when the listing is purged, revisions cited by an Offer, Negotiation or Deal are kept until evidenceUntil (keepEvidence from F01.S01.M04) and pseudonymized on privacy.deletion.completed, and all other revisions are purged with the listing."
       - "The edited event carries field names only so notifications never reveal old or new values."
+      - "The module registers ExportSectionPort (section bazaar.listing_revisions), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every ListingRevision field with its F10.S02.M02 class."
     data:
-      - "ListingRevision: P1 snapshot of public fields in the owner's vault."
+      - "ListingRevision: P1 snapshot of public fields in the owner's vault; field classes annotated per F10.S02.M02."
       - "bazaar.listing.edited: P1 payload with IDs and field names."
     retention:
-      - "ListingRevision: RET-EVIDENCE; purged when the listing tombstone is created and the evidence window has passed."
+      - "ListingRevision: RET-EVIDENCE; purged with the listing unless the purge carries keepEvidence, then kept until evidenceUntil (2 years) with editorId pseudonymized after principal deletion."
+      - "Derived edit state: RET-SHORT, deleted with the listing."
     threats:
       - "T01 | Bait-and-switch: seller changes price after buyers commit | material flag, event to offers, and explicit buyer re-confirmation in F01.S04.M01/M02; revision history is evidence"
       - "T02 | Edit used to smuggle prohibited content past publication checks | rules re-evaluated on every edit of a published listing; relay hosting policy applies again when the new projection is sent"
       - "T03 | History tampering | revisions are immutable and carry snapshotHash; the signed projection of F01.S01.M03 binds listingRevision and hash"
+      - "T04 | Auction bait-and-switch against bidders | V09 refuses condition, category and price changes while bids exist (N11)"
+      - "T05 | Evidence lost when the listing is purged | keepEvidence keeps cited revisions for the evidence window"
     abuse_controls:
       - "At most 20 edits per hour per listing and 100 revisions per listing; exceeding returns RATE_LIMITED or BAZAAR_EDIT_REVISION_LIMIT."
       - "Material changes more than 5 times in 24 hours flag the listing locally and show the owner a warning that buyers are notified each time."
@@ -193,32 +220,37 @@ processes:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate command output and bazaar.listing.edited payloads against the schema registry."
       - "Material-change detection has property tests over random patches."
-    fixtures: "Vault with published listing L (revision 4, EUR sell terms 50.00, condition good), policy pack with one blocked keyword, clock 2026-11-04T10:00:00Z."
+    fixtures: "Vault with published listing L (revision 4, EUR sell terms 50.00, condition good), auction listing A with a scheduled auction, policy pack with one blocked keyword, clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02 | edit title of published L then edit draft D | revision row exists for L with snapshotHash; none for D, whose Listing.revision still increments"
-      - "T02 | property | 01.R03,02.R01 | random patches | material equals intersection of changedFields with price, condition, categoryId; ownerId and kind patches rejected"
-      - "T03 | unit | 02.R02,02.R03 | each rule V01-V08 violated | documented error code returned; listing unchanged"
-      - "T04 | property | 03.R01,03.R02,03.R03 | random edits on listings in every status | Listing.status never changes; edits on expired, closed or archived give CONFLICT_STATE"
+      - "T02 | property | 02.R01 | random patches | material equals intersection of changedFields with price, condition, categoryId; ownerId and kind patches rejected"
+      - "T03 | unit | 02.R02,02.R03 | each rule V01-V09 violated | documented error code returned; listing unchanged"
+      - "T04 | property | 03.R01,03.R03 | random edits on listings in every status | Listing.status never changes; edits on expired, closed or archived give CONFLICT_STATE"
       - "T05 | contract | 04.R01,04.R03,09.R02 | edit and record execute | outputs and event payloads validate; payload contains no field values"
       - "T06 | integration | 04.R02,05.R02 | call record from a non-sibling caller and from sell terms | FORBIDDEN for the first; revision and event for the second in one transaction"
       - "T07 | abuse | 05.R01,05.R03 | edit or read history as a different principal in a shared device profile | NOT_FOUND or FORBIDDEN; nothing changes"
       - "T08 | integration | 06.R01,06.R02,06.R03 | replay edit; abort transaction after outbox write; edit offline | one revision per key; atomic outcome; unsentChanges true and no peer-accepted claim"
       - "T09 | integration | 06.R02 | two tabs edit with the same expectedRevision | one succeeds, other CONFLICT_REVISION with currentRevision"
-      - "T10 | abuse | 07.R01,07.R02,07.R03 | inspect stored revisions, logs and event payloads | snapshots hold public fields only; evidence retention honoured; no values in event or log"
+      - "T10 | abuse | 01.R03,07.R01,07.R03 | inspect stored revisions, logs and event payloads | snapshots hold public fields only and are classed P1 RET-EVIDENCE; no values in event or log"
       - "T11 | load | 08.R01,08.R02,08.R03 | 100 edits on a 2 000-rule pack on Moto G profile | edit p95 <= 80 ms, list p95 <= 100 ms, metrics present, no network calls"
       - "T12 | unit | 09.R01,09.R03 | traceability tool run and property seed replay | every PS-003 requirement maps to a passing test; failures print their seed"
       - "T13 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import row with gap in revisionNo | rows round-trip identical; gap import kept read-only with warning"
-      - "T14 | abuse | 07.R03,02.R03 | 21 edits within an hour on one listing | 21st returns RATE_LIMITED"
+      - "T14 | abuse | 02.R03 | 21 edits within an hour on one listing | 21st returns RATE_LIMITED"
+      - "T15 | integration | 03.R02 | edit published L to revision 5, then deliver bazaar.listing.published with listingRevision 5, then edit again | unsentChanges true, then false, then true; renewed event with the latest revision also clears it"
+      - "T16 | integration | 02.R04 | auction A scheduled, one auctions.bid.placed delivered, then patch condition, record a price, and patch the title; then auctions.auction.cancelled | condition and price give BAZAAR_EDIT_AUCTION_HAS_BIDS, title edit succeeds; after cancel the condition edit succeeds"
+      - "T17 | integration | 07.R02 | purge listing L with keepEvidence true and listing M with keepEvidence false, then privacy.deletion.completed | L revisions kept with evidenceUntil 2 years and editorId replaced by the pseudonym; M revisions purged"
+      - "T18 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.listing_revisions present with field classes; deletion plan pseudonymizes retained rows; retention purge removes rows past evidenceUntil"
+      - "T19 | unit | 01.R04 | drop the derived edit state and replay the outbox history | rebuilt state equals the original lastProjectedRevision and auction bid counts; it is absent from the export"
     acceptance:
-      - All tests T01-T14 pass in CI.
+      - All tests T01-T19 pass in CI.
       - A material change always produces bazaar.listing.edited with material true and never carries field values.
-      - No edit path changes Listing.status or bypasses expectedRevision.
+      - No edit path changes Listing.status or bypasses expectedRevision, and no material edit succeeds while an auction on the listing has bids.
   import_export_backup_rollback:
     requirements:
       - "The user export contains all ListingRevision rows of own listings."
       - "Import verifies snapshotHash for every row and that revisionNo values are unique per listing; failing rows are kept as read-only history."
       - "Schema changes follow expand/contract and keep v1 readable for 180 days."
-    export: "Section bazaar.listing_revisions in classrup-export/v1, one line per ListingRevision (schema classrup.bazaar.listing_revision/v1)."
-    import: "Rows whose listing is not in the import are held until the listing arrives; hash mismatches are quarantined and reported in the dry-run."
+    export: "Section bazaar.listing_revisions in classrup-export/v1, one line per ListingRevision (schema classrup.bazaar.listing_revision/v1); the derived edit state is not exported."
+    import: "Rows whose listing is not in the import are held until the listing arrives; hash mismatches are quarantined and reported in the dry-run; the derived edit state is rebuilt after import."
     backup: "Covered by the vault export (IOX-6); no relay copy exists."
     migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because older readers ignore new optional fields."

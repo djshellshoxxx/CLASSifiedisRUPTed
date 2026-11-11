@@ -19,18 +19,22 @@
 | V03 | recencyHalfLifeDays is an integer in 1..90 | RANKING_CONFIG_INVALID |
 | V04 | distanceWeights are each in 0.05..1.0 and non-increasing from lt5 to gt50 | RANKING_CONFIG_INVALID |
 | V05 | promotionBoost is in 0..0.25 | RANKING_CONFIG_INVALID |
-| V06 | rollback target version exists and is not the active version | NOT_FOUND |
-| V07 | at most 10 config publications per 24 h per relay | RATE_LIMITED |
+| V06 | rollback target version exists in this relay's history | NOT_FOUND |
+| V07 | at most 10 config publications per 24 h per relay, enforced through RateLimitPort (F12.S03.M03) | RATE_LIMITED |
+| V08 | rollback target version is not the currently active version | CONFLICT_STATE |
+| V09 | score inputs (bm25, age in days, bucket) are finite and non-negative; a missing center or empty cell drops the distance term and renormalises the remaining weights | VALIDATION_FAILED |
+| V10 | a fetched relay config statement verifies against that relay's key over JCS bytes (F11.S01.M03) before it is cached or displayed | RANKING_CONFIG_INVALID |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-051-09.T01 | unit | PS-051-01.R01, PS-051-02.R01 | publish valid config | version 4 active, previous version 3 retired, one active row |
-| TEST-PS-051-09.T02 | unit | PS-051-02.R01, PS-051-02.R02, PS-051-02.R03 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights | RANKING_CONFIG_INVALID each time, nothing stored |
-| TEST-PS-051-09.T10 | abuse | PS-051-07.R03, PS-051-02.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED; client rejects the tampered statement |
-| TEST-PS-051-09.T12 | integration | PS-051-02.R03, PS-051-06.R03 | vault without relay config | bundled default used and explanation says default ranking |
+| TEST-PS-051-09.T02 | unit | PS-051-02.R01, PS-051-02.R02 | weights sum 1.1, boost 0.3, half-life 0, non-monotonic distance weights, NaN bm25 | RANKING_CONFIG_INVALID each time and VALIDATION_FAILED for the NaN input, nothing stored |
+| TEST-PS-051-09.T16 | abuse | PS-051-02.R03 | vault principal tries to publish, roll back or write the bundled config | no vault command exists, FORBIDDEN, bundled version 1 unchanged |
+| TEST-PS-051-09.T17 | unit | PS-051-01.R01, PS-051-02.R02 | browse query without center, document with empty cell, query without text | distance or text term dropped and remaining weights renormalised; golden values match |
+| TEST-PS-051-09.T18 | unit | PS-051-03.R02, PS-051-02.R01 | rollback to the active version and to a missing version | CONFLICT_STATE and NOT_FOUND, nothing changes |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

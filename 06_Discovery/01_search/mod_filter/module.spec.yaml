@@ -8,7 +8,7 @@ summary: >-
 responsibilities:
   - Define the Filter schema with exact ranges and limits and reject unknown keys.
   - Compile a validated filter to a WHERE fragment with bound parameters only; no value is ever concatenated into SQL.
-  - Map distance filters to cell sets through F06.S02.M01 and never to numeric distances.
+  - Map distance filters to cell sets through F06.S02.M01 and never to numeric distances, compiling mixed precision correctly - precision-5 cells against geo_cell, precision-4 cells against the stored geo_cell4 column - so 50 and 100 km filters and L1 (4-character) documents match.
   - Provide a canonical form (sorted keys, normalized values) used for cache keys and saved search equality.
 non_responsibilities:
   - Running queries, ranking and pagination (F06.S01.M02, F06.S03.M01).
@@ -26,6 +26,9 @@ edge_cases:
   - A filter lists 11 categories or contains an unknown key; rejected, never silently truncated.
   - Category has descendants in the taxonomy; the filter expands to at most 200 category ids and rejects larger expansions.
   - A string value contains SQL metacharacters; it is only ever a bound parameter.
+  - A 50 or 100 km distance filter yields precision-4 cells; they compile to d.geo_cell4 IN (...) so L1 and L2 documents in those cells match instead of nothing.
+  - A listing published at L1 (4-character cell) is filtered with 10 km around an L2 center; it is not matched because its position is coarser than the radius, and it is matched from 25 km upward.
+  - distanceKm is 7 or 200; rejected with DISCOVERY_RADIUS_NOT_ALLOWED, while 3 is rejected with DISCOVERY_RADIUS_TOO_SMALL.
 ux:
   notes: Library module with no screens. Filter chips in the search screen (F06.S01.M02) render the canonical filter and show the localized label for each active filter with a remove button.
 processes:
@@ -34,13 +37,18 @@ processes:
       - The Filter value object has a closed set of keys with typed ranges, and any unknown key is a validation failure.
       - Compilation output is a pair of SQL text and an ordered parameter array, with SQL text drawn only from a fixed set of fragments.
       - The canonical form of a filter is deterministic so equal filters produce equal cache keys and saved search comparisons.
+      - Distance filters compile by cell precision - precision-5 cells match geo_cell exactly, precision-4 cells match the stored and indexed geo_cell4 column, and documents with a 4-character (L1) cell match only radii of 25 km or more.
     entities: []
     note: >-
       Library module. It defines the Filter value object (schema classrup.discovery.filter/v1, embedded in queries and
       SavedSearch) but owns no persisted entity. Keys - categoryIds (1..10), listingKinds (1..6 of sell, wanted, giveaway,
       service, rental, auction), price {currency, min?, max?} in integer minor units 0..1 000 000 000 000, conditions
-      (1..5 of new, like_new, good, fair, for_parts), distanceKm (one of 5, 10, 25, 50, 100), barterAcceptable (boolean),
-      postedWithin (one of 24h, 7d, 30d).
+      (1..6 of new, like_new, good, fair, poor, for_parts, matching F01.S01.M01 and the F06.S01.M01 index), distanceKm
+      (one of 5, 10, 25, 50, 100) with a center cell of 4 or 5 characters, barterAcceptable (boolean), postedWithin (one
+      of 24h, 7d, 30d). Distance compile rule over cellsForRadius(center, distanceKm) from F06.S02.M01 - 5 and 10 km give
+      precision-5 cells C5 compiled to d.geo_cell IN (C5); 25 km gives precision-5 cells C5 compiled to (d.geo_cell IN
+      (C5) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (P4))) where P4 are the distinct 4-character prefixes of C5;
+      50 and 100 km give precision-4 cells C4 compiled to d.geo_cell4 IN (C4), served by index discovery_doc_cell4.
   validation_rules:
     requirements:
       - Validation is strict and total - every key, range and combination is checked before compilation.
@@ -50,10 +58,12 @@ processes:
       - "V01 | filter has only known keys and every list is non-empty and within its maximum length | DISCOVERY_FILTER_INVALID"
       - "V02 | price.min and price.max are integers within 0..1 000 000 000 000 and min is not greater than max | DISCOVERY_FILTER_INVALID"
       - "V03 | price filter carries a registered currency code | DISCOVERY_FILTER_CURRENCY_REQUIRED"
-      - "V04 | distanceKm is one of 5, 10, 25, 50, 100 (minimum 5 km) | DISCOVERY_RADIUS_TOO_SMALL"
-      - "V05 | distanceKm is accompanied by a center cell of exactly 5 characters or a stored home cell | DISCOVERY_FILTER_CENTER_REQUIRED"
+      - "V04 | distanceKm is at least 5 km (F06.S02.M01 V04) | DISCOVERY_RADIUS_TOO_SMALL"
+      - "V05 | distanceKm is accompanied by a center cell of 4 or 5 characters or a stored home cell | DISCOVERY_FILTER_CENTER_REQUIRED"
       - "V06 | category expansion yields at most 200 category ids | DISCOVERY_FILTER_INVALID"
-      - "V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum | DISCOVERY_FILTER_INVALID"
+      - "V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum (new, like_new, good, fair, poor, for_parts) | DISCOVERY_FILTER_INVALID"
+      - "V08 | distanceKm is one of the allowed radii 5, 10, 25, 50, 100 (F06.S02.M01 V06) | DISCOVERY_RADIUS_NOT_ALLOWED"
+      - "V09 | the center cell passes F06.S02.M01 assertPublicCell (at most 5 characters) | DISCOVERY_PRECISION_FORBIDDEN"
   workflow_state_machine:
     requirements:
       - The library is stateless; validate and compile are pure functions with no lifecycle.
@@ -66,21 +76,29 @@ processes:
     requirements:
       - The module exposes functions only; it has no commands, queries or events.
       - Callers (F06.S01.M02, relay query handler) are responsible for capability checks and idempotency.
-      - Error codes defined here are returned inside Result values and mapped by callers to HTTP problems.
+      - Error codes defined here are returned inside Result values and mapped by callers to HTTP problems; geo codes (DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN) are defined once in F06.S02.M01 and only referenced here (N1).
     commands: []
     queries: []
     events_produced: []
     events_consumed: []
-    note: Library module - no commands or queries; callers expose them.
+    note: >-
+      Library module - no commands or queries; callers expose them. This module is the single owner of the filter
+      codes (DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_CENTER_REQUIRED);
+      DISCOVERY_FILTER_CENTER_REQUIRED is specific to a distanceKm filter without a center, while a proximity query
+      without a center uses DISCOVERY_CENTER_REQUIRED from F06.S02.M03, because the caller fixes them differently
+      (add a center to the filter versus choose a browse area).
     errors:
       - "DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range, of the wrong type or unknown"
       - "DISCOVERY_FILTER_CURRENCY_REQUIRED | 422 | no | price filter without a currency"
       - "DISCOVERY_FILTER_CENTER_REQUIRED | 422 | no | distance filter without a search center"
-      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value"
     example: |
-      compileFilter({ listingKinds: ["sell"], price: { currency: "EUR", max: 30000 }, distanceKm: 10, postedWithin: "7d" }, now)
-      -> { sql: "d.listing_kind IN (?) AND d.currency = ? AND d.price_minor <= ? AND d.geo_cell5 IN (?,?,?) AND d.first_seen_at >= ?",
+      compileFilter({ listingKinds: ["sell"], price: { currency: "EUR", max: 30000 }, distanceKm: 10, center: "u4pru", postedWithin: "7d" }, now)
+      -> { sql: "d.listing_kind IN (?) AND d.currency = ? AND d.price_minor <= ? AND d.geo_cell IN (?,?,?) AND d.first_seen_at >= ?",
            params: ["sell", "EUR", 30000, "u4pru", "u4prv", "u4prs", "2026-10-28T10:00:00.000Z"] }
+      compileFilter({ distanceKm: 25, center: "u4pru" }, now)
+      -> { sql: "(d.geo_cell IN (?,…) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (?,…)))", params: [C5…, "u4pr", "u4px", …] }
+      compileFilter({ distanceKm: 100, center: "u4pru" }, now)
+      -> { sql: "d.geo_cell4 IN (?,…)", params: ["u4nz", "u4pr", "u4px", …] }
   authorization_capabilities:
     requirements:
       - The library performs no authorization; it is pure and may be called by any caller that is itself authorized.
@@ -122,25 +140,25 @@ processes:
     logs:
       - "debug filter.rejected {code, path} - never the value."
     budgets:
-      - "validateFilter plus compileFilter <= 1 ms p95 for a filter with all keys and 200 categories; compiled queries use discovery_doc_cell or the category index (explain-plan test)."
+      - "validateFilter plus compileFilter <= 1 ms p95 for a filter with all keys and 200 categories; compiled queries use discovery_doc_cell (precision 5), discovery_doc_cell4 (precision 4) or the category index (explain-plan test)."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test, including property tests on canonicalization.
       - A golden test fixes the SQL fragment text and parameter order for each filter key.
       - Injection and limit tests run against a real SQLite database.
-    fixtures: "Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds and 20 categories; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden"
-      - "T02 | unit | 02.R02,02.R03 | price without currency, min above max, distance without center, distance 3 km | the documented error code each time with the field path"
+      - "T02 | unit | 02.R02,02.R03 | price without currency, min above max, distance without center, distance 3 km, distance 7 km and 200 km, 6-character center | DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CENTER_REQUIRED, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN, each with the field path"
       - "T03 | property | 01.R03 | random key order and equivalent values | canonicalize returns identical bytes and cache keys"
-      - "T04 | unit | 01.R02,03.R01 | compile each key alone and all together | SQL text and params equal golden fixtures"
+      - "T04 | unit | 01.R02,03.R01,01.R04 | compile each key alone and all together, including distanceKm 5, 10, 25, 50 and 100 around u4pru and condition poor | SQL text and params equal golden fixtures; 25 km has the L1 prefix branch, 50 and 100 km use d.geo_cell4 IN (...)"
       - "T05 | property | 03.R02,03.R03 | 200 runs of the same filter with the same clock | identical SQL and params; compile never reads the system clock"
-      - "T06 | integration | 01.R02,07.R01 | compiled filter run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data"
+      - "T06 | integration | 01.R02,07.R01,01.R04 | compiled filters, including distanceKm 50 and 100 km and L1 documents, run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data and is non-empty for 50 and 100 km"
       - "T07 | abuse | 07.R02,07.R03,08.R01 | 10 000 fuzz strings with SQL metacharacters and 5 000-item lists | no SQL injection, errors for oversize lists, validation under 1 ms p95"
       - "T08 | unit | 04.R01,04.R02,04.R03 | inspect module exports and error mapping | no commands, queries or events exist and errors map to documented codes"
       - "T09 | unit | 05.R01,05.R02,05.R03 | attempt to filter on a private column name | rejected as unknown key; no capability is defined"
       - "T10 | integration | 06.R01,06.R02,06.R03 | taxonomy port unavailable and stale snapshot | DEPENDENCY_UNAVAILABLE without partial output; stale snapshot validates with a hint"
-      - "T11 | integration | 08.R02,08.R03 | explain query plan for distance and category filters | index used, metrics counted by code without values"
+      - "T11 | integration | 08.R02,08.R03 | explain query plan for distance filters of 10 and 100 km and category filters | discovery_doc_cell and discovery_doc_cell4 used, metrics counted by code without values"
       - "T12 | unit | 09.R01,09.R02,09.R03 | traceability run over PS-044 | every requirement maps to a passing test; golden files unchanged"
       - "T13 | unit | 10.R01,10.R02,10.R03 | load a v1 filter stored inside a saved search export | parsed unchanged; unknown key rejected on import"
     acceptance:

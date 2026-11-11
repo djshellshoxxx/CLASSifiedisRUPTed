@@ -8,7 +8,7 @@ summary: >-
   engine F02.S02.M03 reads, explains 4-party suggestions to each participant and owns no records.
   Suggestions stay advice; a proposal needs explicit signed consent from all four.
 responsibilities:
-  - Define and register with the F02.S02.M05 registry the length-4 profile: tolerance 500 basis points of the larger side per leg (FLOW-05), absolute minimum reference 5.00 EUR converted with the pinned quote, every adjacent pair within distance bucket ordinal 2 (10_25, the stricter part of this profile), imbalance quantum 10 permille, minimum want age 15 minutes, and maxOtherOpenCycles 2 read by the consent-time guard of F02.S03.M01.
+  - "Define and register with the F02.S02.M05 registry the length-4 profile: tolerance 500 basis points of the larger side per leg (FLOW-05), absolute minimum reference 5.00 EUR converted with the pinned quote, every adjacent pair within distance bucket ordinal 2 (10_25, the stricter part of this profile), imbalance quantum 10 permille, minimum want age 15 minutes, and maxOtherOpenCycles 2 read by the consent-time guard of F02.S03.M01."
   - Require that all four participants have maxCycleLength at least 4 and opted in as profile admission rules; the limit of 2 other open cycles is not an admission rule, because other participants' counts are private, and each participant's own vault enforces it at consent time (F02.S03.M01).
   - Produce the participant-facing explanation of a 4-party suggestion including the dropout risk notice that one withdrawal cancels all four trades before handover.
 non_responsibilities:

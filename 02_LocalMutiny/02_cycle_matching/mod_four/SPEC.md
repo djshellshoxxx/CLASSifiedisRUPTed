@@ -6,12 +6,12 @@
 
 ## Purpose
 
-The length-4 profile of the cycle engine. Four-party cycles are riskier because a single dropout invalidates four trades, so this profile applies a stricter value tolerance and a tighter distance constraint than the 3-party profile and requires every participant to accept at least 4 participants. It registers a LengthProfile provider with F02.S02.M03, explains 4-party suggestions to each participant and owns no records. Suggestions stay advice; a proposal needs explicit signed consent from all four.
+The length-4 profile of the cycle engine. Four-party cycles are riskier because a single dropout invalidates four trades, so this profile applies the FLOW-05 value tolerance (at most 5 percent of the larger side) to every leg, a stricter distance constraint than the 3-party profile (each adjacent pair within 10-25 km) and requires every participant to accept at least 4 participants. It registers its LengthProfile with the F02.S02.M05 registry, which the engine F02.S02.M03 reads, explains 4-party suggestions to each participant and owns no records. Suggestions stay advice; a proposal needs explicit signed consent from all four.
 
 ## Responsibilities
 
-- [object Object]
-- Require that all four participants have maxCycleLength at least 4 and opted in, and that none has more than 2 other non-terminal cycles open, as profile admission rules.
+- Define and register with the F02.S02.M05 registry the length-4 profile: tolerance 500 basis points of the larger side per leg (FLOW-05), absolute minimum reference 5.00 EUR converted with the pinned quote, every adjacent pair within distance bucket ordinal 2 (10_25, the stricter part of this profile), imbalance quantum 10 permille, minimum want age 15 minutes, and maxOtherOpenCycles 2 read by the consent-time guard of F02.S03.M01.
+- Require that all four participants have maxCycleLength at least 4 and opted in as profile admission rules; the limit of 2 other open cycles is not an admission rule, because other participants' counts are private, and each participant's own vault enforces it at consent time (F02.S03.M01).
 - Produce the participant-facing explanation of a 4-party suggestion including the dropout risk notice that one withdrawal cancels all four trades before handover.
 
 ## Not responsible for
@@ -24,14 +24,14 @@ The length-4 profile of the cycle engine. Four-party cycles are riskier because 
 ## User stories
 
 - As a member in a 4-party suggestion, I see a plain notice that all four of us must consent and reserve before anything is committed, and that nothing is automatic.
-- As a member, I can see that the 4-party tolerance is stricter (3 percent) than the 3-party tolerance and that the two other cities are within 25 km of the neighbours in the ring.
+- As a member, I can see that the 5 percent tolerance applies to every leg of a 4-party cycle and that each neighbour in the ring is within 10-25 km, stricter than for 3-party cycles.
 
 ## Edge cases
 
 - One participant is within 10 km of the previous participant but 30 km from the next; the pair constraint fails for that edge and the cycle is not suggested.
-- A participant already has 2 other open cycles; the profile admission rule excludes them from 4-party suggestions but not from 2-party ones.
+- A participant already has 2 other open cycles; the suggestion is still shown, and that participant's own vault refuses consent with MUTINY_PARTICIPANT_OVERLOADED at consent time without revealing the count to anyone.
 - A 4-party suggestion has needsCompensation true; the explanation names who would pay whom as a plan to review, not a commitment.
-- A relay computed the suggestion with the 3 percent tolerance but the vault override is 5 percent; the vault re-verifies with its own values and shows both.
+- A relay computed the suggestion with an older profile version (p4.1, 3 percent) while the vault uses p4.2 (5 percent per leg); the vault re-verifies with its own values and shows both.
 - Explanation requested for a 3-party suggestion; the query rejects it as a length mismatch.
 
 ## UX and accessibility
@@ -56,7 +56,7 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
+F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -78,5 +78,5 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 ## Acceptance criteria
 
 - All tests T01–T13 pass in CI.
-- The golden 4-party example reproduces gaps 100, 200, 300, 400 and tolerances 600, 600, 594, 597 exactly.
+- The golden 4-party example reproduces gaps 100, 200, 300, 400 and tolerances 1000, 1000, 990, 995 exactly, matching FLOW-05.
 - The module emits no events and no statements and holds no records.

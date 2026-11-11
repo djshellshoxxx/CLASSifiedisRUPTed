@@ -28,8 +28,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-020-09.T09 | integration | PS-020-06.R01, PS-020-06.R02, PS-020-08.R02 | crash and restart | explanations rebuilt, computation within 10 ms |
-| TEST-PS-020-09.T10 | unit | PS-020-08.R01, PS-020-08.R03 | engine run statistics | profile version p3.1 present, latency recorded locally only |
+| TEST-PS-020-09.T10 | unit | PS-020-08.R01, PS-020-08.R03 | engine run statistics | profile version p3.2 present, latency recorded locally only |
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

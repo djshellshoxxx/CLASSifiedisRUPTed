@@ -34,13 +34,14 @@ See the module test table below (all processes).
 | TEST-PS-014-09.T12 | unit | PS-014-08.R01, PS-014-08.R03, PS-014-09.R01, PS-014-09.R03 | diagnostics and traceability tool | no DIDs in diagnostics; every PS-014 requirement maps to a passing test |
 | TEST-PS-014-09.T13 | integration | PS-014-10.R01, PS-014-10.R02, PS-014-10.R03 | export, import, rollback | rosters round-trip; mismatching imports flagged |
 | TEST-PS-014-09.T14 | a11y | PS-014-01.R01 | roster and ring screens | axe zero serious issues; ring text alternative present |
+| TEST-PS-014-09.T15 | integration | PS-014-07.R04, PS-014-07.R02 | F10 export, deletion of a party and retention sweep | section mutiny.parties exported; erased DID pseudonymized and mailbox hints dropped; rows purged only after RET-EVIDENCE |
 
 ## Acceptance criteria
 
-- All tests T01–T14 pass in CI.
+- All tests T01–T15 pass in CI.
 - No error, event or log reveals who blocked whom.
 - A left party is never replaced and ring positions never change after a revision is sealed.
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section discovery.location_setting in classrup-export/v1 with one line (schema classrup.discovery.location_setting/v1); LocationShare is excluded.
+- **export:** Section discovery.location_setting in classrup-export/v1 through the registered ExportSectionPort with one line (schema classrup.discovery.location_setting/v1); LocationShare and replay markers are excluded.
 - **import:** Setting imports with publicLevel preserved; if the cell is invalid the setting is skipped and the level becomes L0; share records in a bundle are ignored.
-- **backup:** The vault export is the primary backup (IOX-6); relays hold only opaque ciphertext of share envelopes, which they delete at mailbox expiry (7 days maximum).
-- **migration rollback:** Additive optional fields only in v1; rollback is safe because older readers ignore unknown fields and shares are ephemeral.
+- **backup:** The vault export is the primary backup (IOX-6); relays hold only opaque ciphertext of share envelopes, which they delete at the envelope's mailbox expiresAt (claimedExpiresAt, at most 24 h).
+- **migration rollback:** Additive optional fields only in v1; v1 records with a plaintext position are re-encrypted under a new per-share key on first read after upgrade; rollback is safe because older readers ignore unknown fields and shares are ephemeral.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

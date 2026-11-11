@@ -8,7 +8,7 @@
 
 - **PS-017-07.R01** Explanations expose no block or exclusion information and no other trades of the principal.
 - **PS-017-07.R02** Cached explanations are P2, device-only and deleted with their suggestion.
-- **PS-017-07.R03** Participant load (other open cycles) is checked from the proposer's own knowledge and signed projections, never from a central registry.
+- **PS-017-07.R03** Participant load (other open cycles) is never evaluated by the proposer or the engine; each participant's own vault enforces the limit of 2 other open cycles at consent time from local counts (F02.S03.M01), so no counter is published or inferred.
 
 ## Specification
 
@@ -23,8 +23,8 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Overload rule used to infer how many cycles a person has open | the rule uses only the principal's own knowledge and a published counter is not introduced |
-| T02 | Tampered override loosens the stricter tolerance | bounds enforced and effective values shown in every explanation |
+| T01 | Overload rule used to infer how many cycles a person has open | the rule runs only in each participant's own vault at consent time and its refusal is shown only to that participant; no counter is published |
+| T02 | Tampered override loosens the tolerance or the stricter distance | bounds enforced and effective values shown in every explanation |
 
 **Abuse controls**
 - Query rate limit 120 per minute per vault.
@@ -37,8 +37,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 |---|---|---|---|---|
 | TEST-PS-017-09.T08 | abuse | PS-017-05.R01, PS-017-05.R02, PS-017-05.R03, PS-017-07.R01 | other principal queries; explanation inspected | NOT_FOUND; no block or exclusion information |
 | TEST-PS-017-09.T09 | integration | PS-017-06.R01, PS-017-06.R03, PS-017-07.R02, PS-017-08.R02 | crash and restart | explanations rebuilt within 10 ms and cache purged with suggestion |
-| TEST-PS-017-09.T10 | unit | PS-017-07.R03, PS-017-08.R01, PS-017-08.R03 | load rule inputs and run statistics | only own knowledge used; profile version p4.1 in stats; latency recorded locally |
+| TEST-PS-017-09.T10 | unit | PS-017-07.R03, PS-017-08.R01, PS-017-08.R03 | suggestion with a participant holding 3 other open cycles; run statistics | suggestion produced, no load input read; consent-time guard of F02.S03.M01 refuses only in that participant's vault; profile version p4.2 in stats; latency recorded locally |
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -244,7 +244,7 @@ processes:
       - Abuse tests cover forged, replayed and future-dated projections.
     fixtures: "Principal did:key:z6MkAlice with home region u0qj; peers Bob and Carol; fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,02.R01,02.R02 | update with each of V01..V06 violated in turn | documented error code and nothing stored"
+      - "T01 | unit | 01.R01,02.R01,02.R02 | update with each of V01..V06 violated (V07..V10 in T03 and T20) in turn | documented error code and nothing stored"
       - "T02 | contract | 01.R02,04.R02,07.R02,09.R02,09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs"
       - "T03 | unit | 01.R03,02.R03,04.R04 | ingest valid, bad signature, lower seq, broken prev, future createdAt, and a projection of a DID the principal blocked | accepted once, other four quarantined or ignored with reasons, blocked DID dropped silently; signer role matches the F11.S01.M01 registry entry"
       - "T04 | property | 03.R01,03.R02 | random sequences of update commands | seq increments by exactly 1 per public change; opt-out always yields tombstone"

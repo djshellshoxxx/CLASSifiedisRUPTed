@@ -13,7 +13,7 @@
 ## Specification
 
 **Metrics**
-- local counter location_share_total{outcome=granted|revoked|expired|blocked}
+- local counter location_share_total{outcome=granted|revoked|expired|blocked|replay_refused}
 - local gauge location_share_active
 
 **Logs**
@@ -28,8 +28,10 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-048-09.T11 | integration | PS-048-08.R01, PS-048-08.R02, PS-048-08.R03 | expiry with the clock advanced past effectiveExpiresAt while app open and after unlock | share ended within 30 s or before the first read |
+| TEST-PS-048-09.T11 | integration | PS-048-08.R03 | expiry with the clock advanced past effectiveExpiresAt while app open and after unlock | share ended within 30 s or before the first read |
+| TEST-PS-048-09.T19 | load | PS-048-08.R02 | 1 000 set_home and 1 000 grant calls on the reference Moto G-class device | set_home p95 <= 100 ms and grant p95 <= 300 ms excluding transport |
+| TEST-PS-048-09.T20 | abuse | PS-048-08.R01 | network capture during set_home, grant, revoke, receive and expiry | no telemetry or analytics request; the only network traffic is sealed statements through the outbox |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

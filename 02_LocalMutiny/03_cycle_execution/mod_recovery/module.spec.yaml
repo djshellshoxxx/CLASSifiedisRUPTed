@@ -5,19 +5,22 @@ summary: >-
   After a vault considers a cycle committed, every hand-over is evidenced by Ed25519-signed attestations: the giver of a leg attests handed_over, the receiver attests received,
   and a receiver can report an issue. A cycle is completed in a vault when every leg has a valid receiver attestation and every compensation leg is settled (acknowledged or final,
   CTR-COM-001). Signatures evidence what the signer asserts, not that goods changed hands. If a participant drops or a deadline passes after any handover started, the cycle moves to
-  partially_executed and a RecoveryCase offers return of items, a compensation leg, waiver or a dispute (F09.S02.M02); parties agree on options with signed statements, and nothing is
-  decided by a relay or rerouted.
+  partially_executed and a RecoveryCase offers return of items, a compensation leg, waiver or a dispute (F09.S02.M02); every option names the participants whose signatures it needs,
+  each leg's disposition is backed by its own giver's and receiver's signed acceptance or a dispute outcome they acknowledged, and nothing is decided by a relay or rerouted.
+  The completion event carries a completionCid over the receiver attestations so reputation and other consumers can verify completion (N3).
 responsibilities:
   - Create, sign, verify and store HandoverAttestation statements with role rules, per-leg uniqueness and claimed-time checks.
-  - Compute completion locally from receiver attestations and compensation settlement and emit leg.handed_over, leg.received and cycle.completed.
+  - Compute completion locally from receiver attestations and compensation settlement and emit leg.handed_over, leg.received and cycle.completed with contextId, completionCid, parties and legs (N3).
   - Open a RecoveryCase on participant drop after handover, execution deadline with partial evidence, issue report or late evidence for a cancelled cycle, and emit cycle.partially_executed.
-  - Manage recovery options (return item, compensation, waive, dispute) as signed proposals and responses, escalate to F09.S02.M02, and record per-leg disposition of reserved items on resolution.
+  - Manage recovery options (return item, compensation, waive, dispute) as signed proposals and responses with requiredSignerIds derived per kind, escalate to F09.S02.M02, and record per-leg disposition of reserved items on resolution only when backed by that leg's giver and receiver.
+  - Emit review-unlock data with the outcome on mutiny.recovery.resolved, including closed_unresolved cases, so reputation can unlock reviews with a dispute flag (FLOW-08).
+  - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained evidence.
 non_responsibilities:
   - Consent and commit verdict (F02.S03.M01), reservations and inventory conversion (F02.S03.M02) and dropout classification (F02.S03.M03).
   - Payment claims and receipts (F09.S01.M01) and dispute adjudication (F09.S02.M02); this module only links to them.
   - Guaranteeing delivery or condition of any item; attestations are assertions by their signers.
   - "Future: photo-hash handover proofs with timestamp anchoring, QR-based in-person co-signing, and insurance integrations."
-depends_on: [F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F07.S02.M02, F15.S01.M01, F15.S02.M03, F10.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a giver, I attest that I handed my item to the next participant, and as a receiver I attest that I received mine; each attestation is signed and sent to the others.
   - As a participant in a cycle where someone dropped after the first handover, I see clear recovery options (return the item, compensation, waive, or open a dispute) and agree on one by signing.
@@ -30,7 +33,9 @@ edge_cases:
   - An attestation claims a time 10 minutes in the local future; it is quarantined because claimed times of others are not trusted.
   - Evidence photos include GPS metadata; they must be re-encoded and stripped before attaching and are rejected otherwise.
   - A compensation payment is acknowledged by the payee after all items were received; completion happens at that moment, not before.
-  - The recovery case has no activity for 30 days; it closes as unresolved and the UI states that no automatic remedy exists.
+  - The recovery case has no activity for 30 days; it closes as unresolved, the UI states that no automatic remedy exists, and reviews are unlocked with a dispute flag.
+  - In a 6-party cycle Erin proposes that Bob waives the loss on leg L2 between Carol and Dan; the option is not accepted until the party bearing the loss signs, and L2's disposition is recorded only when Carol and Dan both signed acceptance.
+  - The dispute on an escalated case is withdrawn by its opener; the case returns to open with its options instead of waiting 60 days.
 ux:
   screens:
     - "Hand-over screen per leg: I give / I receive, buttons 'I handed it over' and 'I received it', optional note and up to 3 photos, plain statement of what the signature means."
@@ -48,6 +53,7 @@ processes:
       - A RecoveryCase is the local aggregate that tracks which legs were handed over or received, which options were proposed, accepted or completed, any linked dispute, and the per-leg disposition of remaining reservations.
       - Both records are P2, retained as RET-EVIDENCE, exchanged only as end-to-end encrypted signed envelopes to the cycle's participants, and verified by each vault before use.
       - Local receive time is the only time used for decisions, and claimed times are shown as claims.
+      - "completionCid = cid (sha256-base64url) of the RFC 8785 JCS bytes of {cycleId, revisionHash, receipts: ascending list of the cids of the valid received attestations, one per leg, settlements: ascending list of the compensation settlement evidence cids}; every participant can recompute it from the signed attestations delivered to them, so it is verifiable proof of what was attested, not of delivery."
     entities:
       - name: HandoverAttestation
         schema: classrup.mutiny.handover_attestation/v1
@@ -65,7 +71,7 @@ processes:
           - "items: array — 1..5 items {inventoryItemId uuidv7, quantity int 1..99} covered by the statement; must equal the leg lines unless issue_reported names a subset"
           - "issueCode?: enum — not_received | not_as_described | damaged | other; required for issue_reported"
           - "note?: string — ≤ 280 code points, plain text"
-          - "evidenceRefs: array — 0..3 attachment ids (F08.S01.M03, metadata stripped)"
+          - "evidenceRefs: array — 0..3 MediaBlob refs blob:sha256-<base64url> (F15.S02.M03, ≤ 5 MiB, metadata stripped through F10.S02.M03 before storing, N9), attached end-to-end encrypted through F08.S01.M03"
           - "claimedAt: timestamp — signer's clock, a claim"
           - "receivedAtLocal: timestamp — local clock when verified, or creation time for own"
           - "direction: enum — own | peer"
@@ -95,11 +101,12 @@ processes:
           - "handedOverLegIds: array — 0..8 leg ids with a valid handed_over attestation"
           - "receivedLegIds: array — 0..8 leg ids with a valid received attestation"
           - "pendingLegIds: array — 0..8 leg ids with neither"
-          - "options: array — 0..12 items {optionId, kind return_item|compensation|waive|dispute, legId?, compensationLegId?, proposedBy did, proposalCid cid, status proposed|accepted|rejected|completed}"
-          - "dispositions: array — 0..8 items {legId, disposition converted|released} decided when resolved"
+          - "options: array — 0..12 items {optionId, kind return_item|compensation|waive|dispute, legId?, compensationLegId?, proposedBy did, proposalCid cid, requiredSignerIds did[] (return_item: giver and receiver of legId; compensation: payer and payee; waive: the party bearing the loss; dispute: the opener), acceptedBy [{did, actionCid}], status proposed|accepted|rejected|completed}"
+          - "dispositions: array — 0..8 items {legId, disposition converted|released|waived, backedBy {kind signed_acceptance|dispute_outcome, cids[]} — signed acceptance of that leg's giver and receiver, or a dispute outcome both acknowledged} decided when resolved"
           - "disputeCaseId?: uuidv7 — F09.S02.M02 case id when escalated"
           - "status: enum — open | escalated | resolved | closed_unresolved"
           - "outcome?: enum — agreed | dispute_outcome | unresolved"
+          - "participantIds: array — 2..8 DIDs of the cycle, copied for notification routing and review unlock"
           - "openedAt: timestamp — local clock"
           - "deadlineAt: timestamp — openedAt + 14 d, after which the UI states that only a dispute or waiver remains"
           - "lastActivityAt: timestamp — local clock"
@@ -110,7 +117,8 @@ processes:
         invariants:
           - At most one non-terminal RecoveryCase exists per cycle.
           - handedOverLegIds, receivedLegIds and pendingLegIds are disjoint or receivedLegIds is a subset of handedOverLegIds ∪ receivedLegIds, and their union covers all legs.
-          - status resolved implies every option with status accepted is completed or waived and every leg has a disposition.
+          - status resolved implies every option with status accepted is completed or waived and every leg has a disposition backed by that leg's giver and receiver or an acknowledged dispute outcome.
+          - An option has status accepted only when every DID in requiredSignerIds has a verified accept action in acceptedBy.
           - A closed case never reopens; a new problem opens a new case only if the cycle has none open.
     sql: |
       CREATE TABLE mutiny_handover_attestation (
@@ -124,7 +132,7 @@ processes:
   validation_rules:
     requirements:
       - Attestations are accepted only from the right party for the leg, in a cycle state that allows them, with a verified signature and a plausible claimed time.
-      - Recovery options are accepted only inside an open case and only from participants of the cycle; acceptance requires the counterparty named in the option.
+      - Recovery options are accepted only inside an open case and only from participants of the cycle; acceptance requires a signed accept from every participant in the option's requiredSignerIds.
       - Completion is derived from verified evidence and never from a message that says completed.
     rules:
       - "V01 | cycle status is committed or executing for handed_over, received and issue_reported; returned and return_confirmed require an open RecoveryCase with an accepted return_item option | MUTINY_ATTESTATION_NOT_ALLOWED"
@@ -134,16 +142,19 @@ processes:
       - "V05 | items equal the leg lines in id and quantity, except issue_reported which may name a non-empty subset | MUTINY_ATTESTATION_ITEMS_MISMATCH"
       - "V06 | no valid attestation of the same kind exists for the leg (handed_over, received) | MUTINY_ATTESTATION_DUPLICATE"
       - "V07 | issue_reported requires issueCode and either the giver's handed_over for the leg or at least 48 h since the local commit time | MUTINY_ISSUE_NOT_ALLOWED"
-      - "V08 | evidenceRefs ≤ 3 attachments, each with stripped metadata and ≤ 5 MiB, and note ≤ 280 code points | VALIDATION_FAILED"
+      - "V08 | evidenceRefs ≤ 3 MediaBlob refs (F15.S02.M03), each stripped through F10.S02.M03 and ≤ 5 MiB, and note ≤ 280 code points | VALIDATION_FAILED"
       - "V09 | recovery option proposer is a participant, option kind is one of return_item, compensation, waive, dispute, case has fewer than 12 options | MUTINY_RECOVERY_OPTION_INVALID"
-      - "V10 | option response is made by the counterparty named in the option and the option is proposed | MUTINY_RECOVERY_ROLE_INVALID"
+      - "V10 | option response is made by a DID in the option's requiredSignerIds and the option is proposed; the option becomes accepted only when every requiredSignerId signed accept | MUTINY_RECOVERY_ROLE_INVALID"
       - "V11 | acting on a resolved or closed case | CONFLICT_STATE"
+      - "V12 | a leg disposition is recorded only when backed by verified accept actions of that leg's giver and receiver, or by a dispute outcome both acknowledged (F09.S02.M02 acceptedBy), never by other participants alone | MUTINY_RECOVERY_DISPOSITION_UNSIGNED"
+      - "V13 | requiredSignerIds equal the derivation for the kind (return_item: giver and receiver of legId; compensation: payer and payee; waive: the party bearing the loss; dispute: the opener) and are participants of the cycle | MUTINY_RECOVERY_OPTION_INVALID"
   workflow_state_machine:
     requirements:
       - A cycle is completed in a vault only when every leg has a valid receiver attestation and every compensation leg is settled, as verified in that vault, and the verdict is re-evaluated whenever evidence arrives.
       - Issue reports, dropouts after handover and execution deadlines with partial evidence move the cycle to partially_executed and open exactly one RecoveryCase; nothing is cancelled or rerouted.
       - A RecoveryCase resolves only through signed agreement on options, a dispute outcome from F09.S02.M02, or by closing as unresolved after 30 days without activity.
       - No relay, moderator or counterparty can mark a leg received or a case resolved for someone else; only that party's signature counts.
+      - Every leg's disposition is backed by the signed acceptance of that leg's own giver and receiver or by a dispute outcome they acknowledged, so other participants of an N-party cycle can never settle a leg they are not part of.
     machines:
       - entity: RecoveryCase
         initial: open
@@ -151,10 +162,11 @@ processes:
         transitions:
           - "open -> open | option proposed, accepted, rejected or completed by signed statements | lastActivityAt updated; no state change"
           - "open -> escalated | mutiny.recovery.escalate by a participant | dispute opened in F09.S02.M02 with the evidence bundle; disputeCaseId stored"
-          - "open -> resolved | all accepted options completed or waived and every leg has a disposition | emits mutiny.recovery.resolved with outcome agreed"
-          - "escalated -> resolved | commerce.dispute.resolved consumed for disputeCaseId | emits mutiny.recovery.resolved with outcome dispute_outcome"
-          - "open -> closed_unresolved | no activity for 30 days on the local clock | emits mutiny.recovery.resolved with outcome unresolved"
-          - "escalated -> closed_unresolved | no dispute activity for 60 days on the local clock | emits mutiny.recovery.resolved with outcome unresolved"
+          - "open -> resolved | all accepted options completed or waived and every leg has a disposition backed per V12 | emits mutiny.recovery.resolved with outcome agreed and reviewUnlock"
+          - "escalated -> resolved | commerce.dispute.resolved consumed for disputeCaseId with a resolution other than lapsed | dispositions recorded only when both parties of each leg acknowledged the outcome; emits mutiny.recovery.resolved with outcome dispute_outcome and reviewUnlock"
+          - "escalated -> open | commerce.dispute.withdrawn consumed for disputeCaseId | disputeCaseId cleared; options and dispositions remain; lastActivityAt updated"
+          - "open -> closed_unresolved | no activity for 30 days on the local clock | emits mutiny.recovery.resolved with outcome unresolved and reviewUnlock with disputeFlag true (FLOW-08)"
+          - "escalated -> closed_unresolved | commerce.dispute.resolved with resolution lapsed, or no dispute activity for 60 days on the local clock | emits mutiny.recovery.resolved with outcome unresolved and reviewUnlock with disputeFlag true (FLOW-08)"
     timeouts:
       - "Recovery deadlineAt is 14 days after opening; unresolved closure after 30 days without activity (60 days when escalated), evaluated on vault open and every 60 s while open."
       - "Giver and receiver actions have no deadline of their own; the execution deadline (consentDeadline + executionWindowMs) is enforced by F02.S03.M03."
@@ -163,6 +175,8 @@ processes:
       - attest and the recovery commands propose_option, respond and escalate are vault commands that name the signed statements they produce; ingest commands verify other participants' statements and produce none.
       - Events are written in the same IndexedDB transaction as the records, and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
       - Completion and partial execution are local verdicts emitted as events, not commands and not signed facts.
+      - "Statement schemas and signer roles registered with the F11.S01.M01 registry (N2): classrup.mutiny.handover_attestation/v1 signed by the leg's giver (handed_over, returned), receiver (received, issue_reported) or original giver (return_confirmed); classrup.mutiny.recovery_action/v1 signed by a participant, accept counted only from requiredSignerIds; this module is the single ingest owner of both and drops statements from DIDs the principal blocked silently (N7)."
+      - "Completion and recovery events carry contextId, completionCid, parties [{did, role}] and legs [{legId, giverId, receiverId}] (N3), and every event carries the participant DIDs that notification routing needs (N4)."
     commands:
       - name: mutiny.attestation.attest
         capability: mutiny.attestation.attest
@@ -180,16 +194,16 @@ processes:
         idempotent: true
       - name: mutiny.recovery.propose_option
         capability: mutiny.recovery.propose_option
-        input: "{ recoveryCaseId, kind: return_item|compensation|waive|dispute, legId?, compensation?: { payerId, amount: Money }, expectedRevision } — vault command; produces statement classrup.mutiny.recovery_action/v1 (action propose) signed by the principal"
+        input: "{ recoveryCaseId, kind: return_item|compensation|waive|dispute, legId?, compensation?: { payerId, payeeId, amount: Money }, lossBearerId? (waive), expectedRevision } — vault command; derives requiredSignerIds; produces statement classrup.mutiny.recovery_action/v1 (action propose, requiredSignerIds) signed by the principal; a compensation option proposes a CompensationLeg (subjectType recovery_case) through F02.S04.M01"
         output: "{ recoveryCaseId, optionId, revision, syncState }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_RECOVERY_OPTION_INVALID]
         emits: []
         idempotent: true
       - name: mutiny.recovery.respond
         capability: mutiny.recovery.respond
-        input: "{ recoveryCaseId, optionId, decision: accept|reject, expectedRevision } — vault command; produces statement classrup.mutiny.recovery_action/v1 (action accept or reject) signed by the principal"
+        input: "{ recoveryCaseId, optionId, decision: accept|reject, expectedRevision } — vault command; produces statement classrup.mutiny.recovery_action/v1 (action accept or reject) signed by the principal; when the last requiredSignerId of a compensation option accepts, calls mutiny.compensation.activate (F02.S04.M01) in the same transaction"
         output: "{ recoveryCaseId, optionId, status, caseStatus, syncState }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_RECOVERY_ROLE_INVALID]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_RECOVERY_ROLE_INVALID, MUTINY_RECOVERY_DISPOSITION_UNSIGNED]
         emits: [mutiny.recovery.resolved]
         idempotent: true
       - name: mutiny.recovery.escalate
@@ -203,7 +217,7 @@ processes:
         capability: mutiny.recovery.ingest
         input: "{ envelope: classrup.mutiny.recovery_action/v1, provenance } — vault command; produces no statement"
         output: "{ accepted: boolean, recoveryCaseId?, quarantineReason? }"
-        errors: [MUTINY_ATTESTATION_STATEMENT_INVALID, MUTINY_RECOVERY_ROLE_INVALID, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
+        errors: [MUTINY_ATTESTATION_STATEMENT_INVALID, MUTINY_RECOVERY_ROLE_INVALID, MUTINY_RECOVERY_OPTION_INVALID, MUTINY_RECOVERY_DISPOSITION_UNSIGNED, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED]
         emits: [mutiny.recovery.resolved]
         idempotent: true
     queries:
@@ -223,12 +237,12 @@ processes:
         output: "{ items: RecoveryCase[], nextCursor? }"
         errors: []
     events_produced:
-      - {type: mutiny.leg.handed_over, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, attestationId, direction }"}
-      - {type: mutiny.leg.received, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, attestationId, inventoryItemIds, direction }"}
-      - {type: mutiny.cycle.completed, privacy: P2, payload: "{ cycleId, participantIds, completedAtLocal, compensationSettled }"}
-      - {type: mutiny.cycle.partially_executed, privacy: P2, payload: "{ cycleId, trigger, handedOverLegIds, receivedLegIds, pendingLegIds, recoveryCaseId }"}
-      - {type: mutiny.recovery.opened, privacy: P2, payload: "{ recoveryCaseId, cycleId, trigger, deadlineAt }"}
-      - {type: mutiny.recovery.resolved, privacy: P2, payload: "{ recoveryCaseId, cycleId, outcome, dispositions }"}
+      - {type: mutiny.leg.handed_over, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, participantIds, attestationId, attestationCid, direction }"}
+      - {type: mutiny.leg.received, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, participantIds, attestationId, attestationCid, inventoryItemIds, direction }"}
+      - {type: mutiny.cycle.completed, privacy: P2, payload: "{ cycleId, contextId (equals cycleId), contextType cycle, completionCid, receiptCids[], revisionHash, parties [{did, role: participant}], participantIds, legs [{legId, giverId, receiverId}], completedAtLocal, compensationSettled }"}
+      - {type: mutiny.cycle.partially_executed, privacy: P2, payload: "{ cycleId, participantIds, trigger, handedOverLegIds, receivedLegIds, pendingLegIds, recoveryCaseId }"}
+      - {type: mutiny.recovery.opened, privacy: P2, payload: "{ recoveryCaseId, cycleId, participantIds, trigger, deadlineAt }"}
+      - {type: mutiny.recovery.resolved, privacy: P2, payload: "{ recoveryCaseId, cycleId, contextId (equals cycleId), participantIds, parties [{did, role}], legs [{legId, giverId, receiverId}], outcome agreed|dispute_outcome|unresolved, dispositions, reviewUnlock { unlocked: true, disputeFlag: boolean (true for dispute_outcome and unresolved), evidenceCids[] } }"}
     events_consumed:
       - {type: mutiny.cycle.committed, effect: "enable attestations for the cycle and record the local commit time used by the 48 h issue rule"}
       - {type: mutiny.cycle.participant_dropped, effect: "when outcome is partially_executed, open a RecoveryCase and emit partially_executed; when cancelled, do nothing"}
@@ -236,7 +250,9 @@ processes:
       - {type: mutiny.compensation.settled, effect: "mark the compensation leg settled and re-evaluate completion"}
       - {type: commerce.payment.disputed, effect: "if the payment belongs to a compensation leg of an executing cycle, open or update a recovery case with a compensation dispute"}
       - {type: commerce.dispute.opened, effect: "link disputeCaseId to the escalated recovery case when the context ref matches"}
-      - {type: commerce.dispute.resolved, effect: "resolve an escalated recovery case with outcome dispute_outcome and record dispositions from the decision"}
+      - {type: commerce.dispute.resolved, effect: "for contextRef of this cycle: resolve an escalated case with outcome dispute_outcome and record dispositions that both parties of each leg acknowledged; resolution lapsed closes the case as unresolved"}
+      - {type: commerce.dispute.withdrawn, effect: "return the escalated recovery case whose disputeCaseId matches to open"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained attestations and cases with the deletion pseudonym and drop notes and evidence references of the erased author; signed statements stay verifiable"}
     errors:
       - "MUTINY_ATTESTATION_NOT_ALLOWED | 409 | no | the cycle state or recovery state does not allow this attestation kind"
       - "MUTINY_ATTESTATION_ROLE_INVALID | 403 | no | the signer does not have the required role on this leg"
@@ -245,15 +261,18 @@ processes:
       - "MUTINY_ATTESTATION_DUPLICATE | 409 | no | a valid attestation of this kind already exists for the leg"
       - "MUTINY_ISSUE_NOT_ALLOWED | 409 | no | an issue cannot be reported before the giver's attestation or 48 hours after commit"
       - "MUTINY_RECOVERY_OPTION_INVALID | 422 | no | the recovery option is not valid for this case"
-      - "MUTINY_RECOVERY_ROLE_INVALID | 403 | no | the signer is not the counterparty who may respond to this option"
+      - "MUTINY_RECOVERY_ROLE_INVALID | 403 | no | the signer is not one of the required signers who may respond to this option"
+      - "MUTINY_RECOVERY_DISPOSITION_UNSIGNED | 409 | no | a leg disposition lacks the signed acceptance of that leg's giver and receiver or an acknowledged dispute outcome"
     example: |
       # 3-party cycle Alice->Bob (lamp), Bob->Carol (desk), Carol->Alice (chair); all handovers happen in person
       mutiny.attestation.attest { "cycleId":"0192f432-…", "legId":"L0", "kind":"handed_over" }       # Alice's device; signed by Alice
       mutiny.attestation.attest { "cycleId":"0192f432-…", "legId":"L0", "kind":"received" }          # Bob's device; signed by Bob  -> mutiny.leg.received
-      ... after L1 and L2 are received in the viewing vault: mutiny.cycle.completed { "compensationSettled": true }
+      ... after L1 and L2 are received in the viewing vault: mutiny.cycle.completed { "contextId": "0192f432-…", "completionCid": "sha256-Cc1…", "receiptCids": ["sha256-R0…","sha256-R1…","sha256-R2…"],
+          "parties": [{"did":"did:key:z6MkAlice","role":"participant"}, …], "legs": [{"legId":"L0","giverId":"did:key:z6MkAlice","receiverId":"did:key:z6MkBob"}, …], "compensationSettled": true }
+      # completionCid = cid(JCS({cycleId, revisionHash, receipts: sorted receipt cids, settlements: []})), recomputable by every participant
       # 4-party: Dan drops after Alice's handed_over => RecoveryCase options: return_item (Bob returns Alice's item), compensation (Dan's leg paid by Dan 80.00 EUR), waive, dispute
-      mutiny.recovery.propose_option { "recoveryCaseId":"0192f450-…", "kind":"return_item", "legId":"L0", "expectedRevision":1 }
-      mutiny.recovery.respond { "recoveryCaseId":"0192f450-…", "optionId":"opt-1", "decision":"accept", "expectedRevision":2 }
+      mutiny.recovery.propose_option { "recoveryCaseId":"0192f450-…", "kind":"return_item", "legId":"L0", "expectedRevision":1 }   # requiredSignerIds = [Alice (giver of L0), Bob (receiver of L0)]
+      mutiny.recovery.respond { "recoveryCaseId":"0192f450-…", "optionId":"opt-1", "decision":"accept", "expectedRevision":2 }   # Bob; accepted once Alice also signed accept
       # N-party (6): same rules; completion needs 6 receiver attestations; any issue_reported opens one case for the whole cycle.
   authorization_capabilities:
     requirements:
@@ -265,7 +284,7 @@ processes:
       - "mutiny.attestation.ingest | principal | envelope signer has the claimed role on the leg with a non-revoked device key"
       - "mutiny.attestation.read | principal | cycle stored in this vault"
       - "mutiny.recovery.propose_option | principal | principal is a participant of the cycle; case open"
-      - "mutiny.recovery.respond | principal | principal is the counterparty named in the option; option proposed"
+      - "mutiny.recovery.respond | principal | principal is in the option's requiredSignerIds; option proposed"
       - "mutiny.recovery.escalate | principal | principal is a participant; case open"
       - "mutiny.recovery.ingest | principal | envelope signer is a participant of the cycle with a non-revoked device key"
       - "mutiny.recovery.read | principal | case stored in this vault"
@@ -286,9 +305,10 @@ processes:
       - Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
       - False attestations and issue reports are limited by signature accountability, the 48 h and giver-attestation rules for issues, and by disputes that compare signed statements.
       - The UI states that signatures evidence what each person asserts and that ClassRup does not verify delivery.
+      - The module registers ExportSectionPort (section mutiny.execution), DeletionPort and RetentionPurgePort with F10 (N6), annotates every HandoverAttestation and RecoveryCase field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained evidence.
     data:
       - "HandoverAttestation: P2; note and evidenceRefs may contain personal content and are never indexed."
-      - "RecoveryCase: P2; option amounts are claims between participants."
+      - "RecoveryCase: P2; option amounts are claims between participants; field classes annotated per F10.S02.M02."
     retention:
       - "RET-EVIDENCE 2 years after the last related activity; evidence attachments follow the attachment retention of F08.S01.M03."
     threats:
@@ -299,6 +319,7 @@ processes:
       - "T05 | Photo evidence leaks location | attachments are re-encoded and rejected if GPS or EXIF location remains (PRV-4)"
       - "T06 | Backdated claimedAt to defeat the 48 h rule | the rule uses the local commit time and local receive time, never the claim"
       - "T07 | Automatic reroute of leftover legs after partial execution | none exists; recovery options are only return, compensation, waive and dispute between the existing participants"
+      - "T08 | Majority of an N-party cycle settles a leg against its own giver or receiver | requiredSignerIds per option and V12: a leg disposition needs that leg's giver and receiver or an outcome they acknowledged"
     abuse_controls:
       - "Limits of 6 attestations per leg, 64 per cycle and 12 options per case."
       - "Recipients quarantine DIDs that send more than 30 execution statements per hour."
@@ -325,7 +346,7 @@ processes:
     tests:
       - "T01 | integration | 01.R01,03.R01,04.R03 | 3-party cycle with all handed_over and received attestations delivered | each vault emits leg.received per leg and completed after the third receipt"
       - "T02 | integration | 01.R04,03.R01 | 2-party cycle; receiver attests without giver attestation | leg received and cycle completes; giver evidence not required"
-      - "T03 | unit | 02.R01,02.R02,02.R03 | each rule V01..V11 violated in turn | documented error code and nothing stored"
+      - "T03 | unit | 02.R01,02.R02,02.R03 | each rule V01..V13 violated in turn | documented error code and nothing stored"
       - "T04 | property | 03.R01,03.R04,09.R03 | random interleavings of attestations, issues, drops and duplicates | completed only with all receiver attestations and settled compensation; cancelled and terminal states never reopen"
       - "T05 | integration | 03.R02,04.R03 | Dan drops in 4-party cycle after Alice's handed_over | cycle partially_executed, one RecoveryCase opened, no cancellation, no reroute"
       - "T06 | integration | 03.R02,06.R04 | receiver reports not_received after giver handed_over | issue recorded, partially_executed, both statements kept unmerged, options offered"
@@ -336,15 +357,21 @@ processes:
       - "T11 | abuse | 05.R01,05.R02,05.R03,07.R03 | forged attestation, wrong-role signer, replay on another leg, relay attempts to mark received | quarantined or FORBIDDEN; relay cannot alter any state"
       - "T12 | integration | 06.R01,06.R02,06.R03 | replay attest; duplicate received from second device; crash mid-transaction | single attestation; no partial state"
       - "T13 | integration | 06.R04,04.R03 | compensation acknowledged after items received | completion occurs at acknowledgement, not before; offline attestations delivered later"
-      - "T14 | abuse | 07.R01,07.R04 | issue reported before giver attestation and within 48 h; backdated claimedAt | MUTINY_ISSUE_NOT_ALLOWED; claim ignored for rules"
-      - "T15 | abuse | 07.R02 | photo with GPS metadata attached | rejected; stripped re-encoded photo accepted"
+      - "T14 | abuse | 07.R03 | issue reported before giver attestation and within 48 h; backdated claimedAt | MUTINY_ISSUE_NOT_ALLOWED; claim ignored for rules"
+      - "T15 | abuse | 07.R01 | photo with GPS metadata attached | rejected; stripped re-encoded photo accepted"
       - "T16 | integration | 07.R03,03.R04 | late handed_over arrives after cycle cancelled | cycle stays cancelled and standalone recovery case opens"
       - "T17 | load | 08.R02,08.R03 | attest and completion for 8 legs on emulated Moto G | within budgets"
       - "T18 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no identifiers or notes in diagnostics; every PS-024 requirement maps to a passing test"
-      - "T19 | e2e | 01.R03,02.R02 | two mobile browsers perform hand-over attestations | statement of what a signature means shown; payment labels as text; axe zero serious issues"
+      - "T19 | e2e | 07.R04 | two mobile browsers perform hand-over attestations | statement of what a signature means shown; payment labels as text; axe zero serious issues"
       - "T20 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | attestations and cases round-trip with signatures verified; imported open cases are frozen read-only"
+      - "T21 | integration | 07.R02,07.R05 | Carol erases her identity after a completed cycle; F10 export, deletion and retention sweep | section mutiny.execution exported; Carol's DID pseudonymized in attestations and cases; records retained; every signature and the completionCid still verify"
+      - "T22 | integration | 01.R03,07.R01 | relay fixture records every mailbox put during attestations and recovery actions | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time"
+      - "T23 | abuse | 02.R02,03.R05 | 6-party recovery: four participants accept a waive option on leg L2 without Carol (giver) and Dan (receiver); later Carol and Dan accept | no disposition for L2 and MUTINY_RECOVERY_DISPOSITION_UNSIGNED until Carol and Dan signed; then disposition recorded with backedBy signed_acceptance"
+      - "T24 | contract | 04.R04,04.R05,01.R05 | completion and recovery events against the registry | completed carries contextId, completionCid recomputed independently from the receipt cids, parties and legs; opened, partially_executed and resolved carry participantIds; registry signer roles match"
+      - "T25 | integration | 03.R03,04.R05 | escalated case: dispute withdrawn, then re-escalated and lapsed; separate open case without activity for 30 days | escalated -> open on commerce.dispute.withdrawn; closed_unresolved on lapsed; both resolved events carry reviewUnlock with disputeFlag true"
+      - "T26 | integration | 02.R02,03.R03 | compensation option payer Dan payee Alice 80.00 EUR accepted by Dan then Alice | option accepted only after both; mutiny.compensation.activate called once in the transaction of Alice's accept"
     acceptance:
-      - All tests T01–T20 pass in CI.
+      - All tests T01–T26 pass in CI.
       - No cycle is completed without a valid receiver attestation for every leg and settled compensation, and no state ever claims that goods were delivered, only that signers asserted it.
       - Dropout after handover always yields partially_executed with a RecoveryCase and never a silent reroute.
   import_export_backup_rollback:

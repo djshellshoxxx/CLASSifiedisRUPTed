@@ -9,11 +9,12 @@
 - **PS-026-07.R01** Legs, claims and references are P2, end-to-end encrypted in transit to the participants and never published; claimRef is free text and never indexed.
 - **PS-026-07.R02** The platform never holds funds or keys and the UI states 'Payments happen between you and the other person. ClassRup holds no money.'
 - **PS-026-07.R03** False claims and false acknowledgements are limited by signature accountability, payee-only acknowledgement and disputes.
+- **PS-026-07.R04** The module registers ExportSectionPort (section mutiny.compensation), DeletionPort and RetentionPurgePort with F10 (N6), annotates every CompensationLeg field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased party in retained legs.
 
 ## Specification
 
 **Data classification**
-- CompensationLeg: P2; claimRef may contain a transaction reference and is P2.
+- CompensationLeg: P2; claimRef may contain a transaction reference and is P2; field classes annotated per F10.S02.M02.
 
 **Retention**
 - RET-EVIDENCE 2 years after last related activity; payment claim records follow F09 retention.
@@ -38,11 +39,12 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-026-09.T09 | abuse | PS-026-05.R01, PS-026-05.R02, PS-026-05.R03, PS-026-07.R01 | payee tries to claim; non-participant acknowledges; forged claim | rejected; relay cannot alter any state |
 | TEST-PS-026-09.T11 | abuse | PS-026-07.R03, PS-026-07.R02 | payer claims falsely, payee disputes | disputed state, dispute outcome required; no custody feature exists in UI or API |
 | TEST-PS-026-09.T12 | unit | PS-026-03.R03, PS-026-07.R02 | leg without progress for 14 days with injected clock | expired and not counted as settled |
 | TEST-PS-026-09.T15 | e2e | PS-026-01.R04, PS-026-07.R02 | mobile payer and payee flow | status labels as text; notice that no funds are held; axe zero serious issues |
+| TEST-PS-026-09.T20 | integration | PS-026-07.R01, PS-026-01.R02 | relay fixture records every mailbox put during claim and Deal statements | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
+| TEST-PS-026-09.T23 | integration | PS-026-07.R04 | F10 export, deletion and retention sweep | section mutiny.compensation exported; erased DID pseudonymized and claimRef purged in retained legs |
 
 ## Dependencies
 
-Module depends on: F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S01.M03, F09.S02.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-029-05.R01** Vault policy - only the unlocked local principal who authored an offering may create, revise, publish or withdraw it; there is no server role.
-- **PS-029-05.R02** The signed projection is readable by anyone who fetches it from a relay; drafts never leave the vault. Relay policy decides whether a relay indexes or serves it.
+- **PS-029-05.R02** The signed projection is readable by anyone who fetches it from a relay; drafts and the full vault record never leave the vault. Relay policy decides whether a relay indexes or serves it.
 - **PS-029-05.R03** Foreign projections received from other authors are stored read-only with provenance only when the signature verifies against the listed author key; otherwise they are quarantined with a reason.
 
 ## Specification
@@ -15,8 +15,8 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | services.offering.create | principal | local principal owns the linked listing; local limit of 20 published offerings |
-| services.offering.revise | principal | offering.providerId = local principal |
-| services.offering.publish | principal | offering.providerId = local principal; relay access token or signed request only for the chosen relay upload |
+| services.offering.revise | principal | offering.providerId = local principal; a published revision also needs federation_publish consent per relay |
+| services.offering.publish | principal | offering.providerId = local principal; federation_publish consent per relay; relay access token or signed request only for the chosen relay upload |
 | services.offering.withdraw | principal | offering.providerId = local principal |
 | services.offering.read_public | principal, anonymous | any stored projection whose signature verified; unverified items are quarantined and not returned |
 | services.offering.read_own | principal | offering.providerId = local principal |
@@ -31,4 +31,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F18.S01.M03, F09.S03.M01, F06.S02.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F03.S01.M02, F18.S01.M03, F09.S03.M01, F06.S02.M01, F07.S01.M01, F11.S01.M01, F11.S01.M02, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

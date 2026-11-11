@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-021-01.R01** A Cycle is each vault's own view of one exchange ring of 2..8 participants, identified by a coordinator-generated UUIDv7 that equals the TradeProposal id when the cycle originates from an accepted two-party proposal.
-- **PS-021-01.R02** A CycleConsent stores one participant's signed consent (embedded ConsentStatement envelope), the revision hash it signed, the local receive time and a validity verdict; consents on any other hash are void evidence.
+- **PS-021-01.R02** A CycleConsent references one participant's ConsentStatement accepted by F08.S02.M02 (subjectType mutiny_cycle and statement key consent.mutiny.cycle.commit.v1, or mutiny_proposal and consent.mutiny.proposal.accept.v1 for consents imported from an accepted proposal), the revision number and digest it signed, the local receive time and a validity verdict; consents on any other number or hash, and revoked consents, are void evidence.
 - **PS-021-01.R03** Cycle composition is P2 and is exchanged only as end-to-end encrypted signed envelopes to the participants; the commit verdict is a local derivation and is never itself a signed fact.
 - **PS-021-01.R04** The deadline, execution window and every timestamp from other parties are claims; only the local clock decides expiry.
 
@@ -29,14 +29,16 @@ Schema `classrup.mutiny.cycle/v1` · storage **device** · privacy **P2** · ret
 | settlementCurrency | string — registered currency code (F09.S03.M01) |
 | headRevisionId | uuidv7 — current ProposalRevision (subjectType cycle, or trade_proposal for origin trade_proposal) |
 | headRevisionNo | int — 1..20 |
-| headRevisionHash | cid — digest all consents must sign |
-| consentDeadline | timestamp — claim from the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 7 d |
-| executionWindowMs | int — 86400000..2592000000, default 1209600000 |
+| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); consents sign the same 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash) |
+| consentDeadline | timestamp — claim from the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 7 d; at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16) |
+| executionWindowMs | int — 86400000..1987200000 (1 d..23 d), default 1209600000; (consentDeadline − revision time) + executionWindowMs ≤ 2592000000 (F02.S01.M04 V09) |
 | status | enum — opening \| proposed \| committed \| executing \| completed \| partially_executed \| declined \| cancelled \| frozen |
-| closeReason? | enum — declined \| consent_timeout \| participant_dropped \| lock_lost \| fork_detected \| conflicting_promise \| clock_disagreement \| execution_timeout \| completed \| recovery |
+| closeReason? | enum — declined \| consent_timeout \| participant_dropped \| lock_lost \| fork_detected \| equivocation \| consent_conflicted \| conflicting_promise \| clock_disagreement \| execution_timeout \| import_verification_failed \| completed \| recovery |
 | committedLocallyAt? | timestamp — local clock when this vault's verdict became committed |
 | lastFeasibilityReportId? | uuidv7 — report used for the verdict, must be ≤ 10 min old |
-| peerSync | object — per participant {consent: none\|received, reservation: none\|received, lastStatementCid} |
+| peerSync | object — per participant {consent: none\|received\|void\|revoked, reservation: none\|received, lastStatementCid} |
+| trust | array — one per participant {actorId, firstSeenDays int, completedTrades int (F07.S03.M01), keyLinkedWith did[] (N11), newIdentity boolean}, computed with the F02.S02.M03 trust function |
+| equivocation? | array — 0..8 items {revisionNo, hashes[2], consentIds[], signerDid} evidence of differing digests for the head revision number |
 | syncStates | object — per outgoing statement {cid: local_committed\|prepared\|transport_acknowledged\|peer_accepted} |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC, local clock |
@@ -44,7 +46,7 @@ Schema `classrup.mutiny.cycle/v1` · storage **device** · privacy **P2** · ret
 
 **Invariants**
 - participantIds are distinct, 2..8, and equal the roster of the head revision snapshot.
-- status committed implies a valid CycleConsent from every participant on headRevisionHash, a valid unexpired reservation from every giver, and a fresh non-infeasible report, all verified in this vault.
+- status committed implies a CycleConsent from every participant on headRevisionNo and headRevisionHash for which comms.consent.verify returned valid inside the committing transaction, a valid unexpired reservation from every giver, and a fresh non-infeasible report, all verified in this vault.
 - A new head revision sets every CycleConsent on the previous hash to void and returns committed-not-yet cycles to proposed.
 - Terminal states (completed, partially_executed, declined, cancelled, frozen) never change.
 
@@ -56,27 +58,30 @@ Schema `classrup.mutiny.cycle_consent/v1` · storage **device** · privacy **P2*
 |---|---|
 | id | uuidv7 — primary key |
 | tenantId | uuidv7 — vault tenant scope |
-| cycleId | uuidv7 — Cycle (or TradeProposal) id the consent is about |
+| cycleId | uuidv7 — Cycle (or TradeProposal) id the consent is about; equals the F08 subjectRef |
 | participantId | did — signer; one of participantIds |
-| revisionNo | int — revision signed |
-| revisionHash | cid — exact digest signed; must equal the statement's subject revision hash |
-| statementId | uuidv7 — F08.S02.M02 ConsentStatement id |
-| statement | object — embedded ConsentStatement envelope (signer, subject ref, revision hash, statement key mutiny.cycle.consent.v1, Ed25519 signature) ≤ 4 KiB |
-| acceptedImbalance? | Money — the signer's explicit acceptance of a gap above tolerance up to this amount |
+| subjectType | enum — mutiny_cycle \| mutiny_proposal (only for consents imported from an accepted proposal) |
+| statementKey | string — consent.mutiny.cycle.commit.v1, or consent.mutiny.proposal.accept.v1 for imported proposal consents |
+| kind | enum — consent \| decline |
+| revisionNo | int — F08 subjectRevision; counts only when equal to headRevisionNo |
+| revisionHash | cid — exact digest signed (contentHash); the F08 subjectRevisionHash is its lowercase hex form |
+| consentId | uuidv7 — F08.S02.M02 ConsentStatement id |
+| statement | object — embedded copy of the ConsentStatement accepted by F08.S02.M02 (≤ 4 KiB), kept for export as evidence |
 | direction | enum — own \| peer |
 | signedAtClaim | timestamp — signer's clock, a claim |
-| receivedAtLocal | timestamp — local clock when verified |
+| receivedAtLocal | timestamp — local clock when F08 accepted it |
 | relayReceiptAt? | timestamp — relay-signed receipt time, evidence of that relay's clock only |
-| status | enum — valid \| void \| late \| invalid |
-| voidReason? | enum — revision_changed \| declined \| cycle_closed \| key_revoked \| deadline_missed |
+| status | enum — valid \| void \| late \| invalid \| conflicted |
+| voidReason? | enum — revision_changed \| declined \| cycle_closed \| key_revoked \| deadline_missed \| consent_revoked \| conflicted \| equivocation |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC |
 | updatedAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
 - At most one valid consent per (cycleId, participantId, revisionHash).
-- A consent with signedAtClaim, receivedAtLocal or relayReceiptAt after the consent deadline has status late and never counts toward commit.
-- The signer of statement equals participantId and the statement's revision hash equals revisionHash.
+- A consent with receivedAtLocal, signedAtClaim or relayReceiptAt after the consent deadline has status late and never counts toward commit; claims and relay times can only shorten the window.
+- The signer of statement equals participantId, the statement's subjectRevision equals revisionNo and its subjectRevisionHash equals the hex of revisionHash.
+- A consent revoked through F08.S02.M02 has status void with voidReason consent_revoked and never counts again.
 
 ### Storage DDL
 
@@ -95,13 +100,15 @@ CREATE UNIQUE INDEX mutiny_cycle_consent_valid ON mutiny_cycle_consent(tenant_id
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-021-09.T01 | integration | PS-021-01.R01, PS-021-03.R01, PS-021-04.R03 | 3-party happy path across three vaults | each vault commits after verifying 3 consents and 3 reservations; committed event carries executionDeadline |
-| TEST-PS-021-09.T02 | integration | PS-021-01.R01, PS-021-03.R01 | 2-party accepted proposal opens cycle as committed | Cycle id equals proposal id and both vaults commit with imported consents re-verified |
+| TEST-PS-021-09.T01 | integration | PS-021-01.R01, PS-021-03.R01, PS-021-04.R03 | 3-party happy path across three vaults | each vault commits after verifying 3 consents and 3 reservations; committed event carries executionDeadline and parties |
+| TEST-PS-021-09.T02 | integration | PS-021-01.R01, PS-021-03.R01, PS-021-03.R05 | 2-party accepted proposal opens cycle | Cycle id equals proposal id; both mutiny_proposal consents re-verified on the same contentHash (V07 exception, V17) and both vaults commit |
 | TEST-PS-021-09.T05 | integration | PS-021-03.R02, PS-021-04.R02, PS-021-01.R03 | coordinator revises after two consents | all consents void, reservations superseded, only the coordinator can revise, participant change refused |
-| TEST-PS-021-09.T06 | integration | PS-021-01.R04, PS-021-03.R04, PS-021-07.R04 | 4-party with Dan's consent arriving after deadline on Alice's clock | no commit at Alice's vault, cycle expires, reservations released, disagreement counted expired |
-| TEST-PS-021-09.T16 | e2e | PS-021-07.R04, PS-021-01.R04 | mobile 3-party consent flow | disclosure that pseudonymity is not anonymity shown; consent statement text before Sign; axe zero serious issues |
-| TEST-PS-021-09.T19 | integration | PS-021-03.R02, PS-021-01.R02 | participant declines after consent; others not yet committed and already committed | declined at uncommitted vaults; committed vaults hand over to dropout handling |
+| TEST-PS-021-09.T06 | integration | PS-021-01.R04, PS-021-03.R04 | 4-party with Dan's consent arriving after deadline on Alice's clock | no commit at Alice's vault, cycle expires, reservations released, disagreement counted expired |
+| TEST-PS-021-09.T16 | e2e | PS-021-07.R04, PS-021-01.R04 | mobile 3-party consent flow | disclosure that pseudonymity is not anonymity shown; consent statement text before Sign; trust panel shown; axe zero serious issues |
+| TEST-PS-021-09.T19 | integration | PS-021-03.R02, PS-021-01.R02 | participant declines (F08 kind decline) after consent; others not yet committed and already committed | declined at uncommitted vaults with own reservation released; committed vaults hand over to dropout handling |
+| TEST-PS-021-09.T21 | integration | PS-021-03.R02, PS-021-02.R03, PS-021-01.R02 | 4-party: Bob revokes his consent through F08 before Dan's last consent arrives at Alice's vault | Bob's consent void with consent_revoked; comms.consent.verify inside the evaluating transaction returns revoked; Alice's vault never commits |
+| TEST-PS-021-09.T22 | integration | PS-021-07.R01, PS-021-01.R03 | relay fixture records every mailbox put during propose, consent and decline | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
 
 ## Dependencies
 
-Module depends on: F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S04.M02, F08.S02.M02, F07.S01.M01, F12.S03.M04, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S04.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F07.S03.M01, F12.S03.M04, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

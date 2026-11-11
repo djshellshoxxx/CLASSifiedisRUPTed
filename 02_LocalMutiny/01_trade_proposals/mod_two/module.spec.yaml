@@ -24,7 +24,7 @@ depends_on: [F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S02.M05, F02.S03.M02, F0
 user_stories:
   - As a member, I propose my guitar for a member's bicycle, review the exact terms I am signing, and see that it is sent only to that member in an encrypted envelope.
   - As a recipient, I can accept, reject or counter, and when I accept I see precisely what I reserved of my own and what the other person has signed.
-  - As either party, I see the true sync state of every statement: saved here, prepared, relay received, or acknowledged by the other person.
+  - "As either party, I see the true sync state of every statement: saved here, prepared, relay received, or acknowledged by the other person."
 edge_cases:
   - Both parties counter at the same time offline; the vaults detect the fork, freeze the proposal and the parties renegotiate as a new proposal.
   - The recipient accepts after the proposer's local deadline but before the recipient's own; each vault decides with its own clock and disagreement is treated as expired.
@@ -309,7 +309,7 @@ processes:
     fixtures: "Two in-memory vaults Alice and Bob with keys, items (Alice guitar I1, Bob bicycle I2), a fake relay that can drop, delay and duplicate, fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | integration | 01.R01,01.R03,03.R01 | Alice creates, Bob accepts, statements delivered | both vaults reach accepted after receiving the other's consent and reservation; acceptance event carries both statement ids"
-      - "T02 | unit | 02.R01,02.R02 | each rule V01..V12 violated in turn | documented error code returned and nothing stored or signed"
+      - "T02 | unit | 02.R01,02.R02 | each rule V01..V15 violated in turn | documented error code returned and nothing stored or signed"
       - "T03 | property | 03.R01,03.R03 | random interleavings of counters, accepts, rejects, drops and duplicates | accepted only with both valid consents on the head hash; terminal states never change"
       - "T04 | integration | 03.R02,02.R02 | counter after Bob signed consent on revision 1 | revision 2 voids Bob's consent; proposal returns to draft then open after author signs"
       - "T05 | integration | 03.R03,06.R03 | both parties counter revision 3 offline | fork detected in both vaults, proposal frozen, reservations released, no consent counted"

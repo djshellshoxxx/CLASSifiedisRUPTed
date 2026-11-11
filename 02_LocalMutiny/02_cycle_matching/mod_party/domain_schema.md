@@ -26,11 +26,12 @@ Schema `classrup.mutiny.matching_profile/v1` · storage **device** · privacy **
 | optInVersion? | string — disclosure text key accepted, e.g. mutiny.matching.optin.v1; required when optedIn |
 | optInAt? | timestamp — local clock for local record; a claim for peer mirrors |
 | maxCycleLength | int — 2..8, default 4 |
-| maxDistanceBucket | enum — lt5 \| 5_10 \| 10_25 \| 25_50 \| gt50, default 10_25 |
+| maxDistanceBucket | int — 0..4, ordinal of the F06.S02.M01 bucket enum (lt5=0, 5_10=1, 10_25=2, 25_50=3, gt50=4); default 2; discovery.bucket.* labels are display text only |
 | acceptsCompensation | boolean — default false |
 | pausedUntil? | timestamp — at most now + 90 d |
 | excludedActorIds | array — local only, ≤ 200 DIDs, never in the projection |
-| regionL1 | string — geohash4 of home region from F06.S02.M02; required when optedIn |
+| includeUnknownIdentities | boolean — local only, default false; when false the engine excludes counterparties with no history known to this vault (F02.S02.M03) |
+| regionL1 | string — geohash4 of home region from F06.S02.M02, validated with F06.S02.M01 assertPublicCell; used only to partition matching, never for pair distances; required when optedIn |
 | seq | int — projection sequence per CTR-FED-001 FED-3, starts at 1 |
 | prev? | cid — hash of previous projection envelope |
 | projectionCid? | cid — sha256 of the signed projection envelope |
@@ -59,10 +60,10 @@ CREATE UNIQUE INDEX mutiny_matching_profile_actor ON mutiny_matching_profile(ten
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-019-09.T01 | unit | PS-019-01.R01, PS-019-02.R01, PS-019-02.R02 | update with each of V01..V06 violated in turn | documented error code and nothing stored |
+| TEST-PS-019-09.T01 | unit | PS-019-01.R01, PS-019-02.R01, PS-019-02.R02 | update with each of V01..V06 violated (V07..V10 in T03 and T20) in turn | documented error code and nothing stored |
 | TEST-PS-019-09.T02 | contract | PS-019-01.R02, PS-019-04.R02, PS-019-07.R02, PS-019-09.R02, PS-019-09.R03 | opt in with 2 exclusions | projection validates against schema, contains exactly the public fields, excludedActorIds absent from projection, events and logs |
-| TEST-PS-019-09.T03 | unit | PS-019-01.R03, PS-019-02.R03 | ingest valid, bad signature, lower seq, broken prev, future createdAt | accepted once, other four quarantined or ignored with reasons |
+| TEST-PS-019-09.T03 | unit | PS-019-01.R03, PS-019-02.R03, PS-019-04.R04 | ingest valid, bad signature, lower seq, broken prev, future createdAt, and a projection of a DID the principal blocked | accepted once, other four quarantined or ignored with reasons, blocked DID dropped silently; signer role matches the F11.S01.M01 registry entry |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

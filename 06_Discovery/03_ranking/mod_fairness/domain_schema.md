@@ -6,13 +6,13 @@
 
 ## Requirements
 
-- **PS-050-01.R01** Input is a list of scored candidates with documentId, authorDid, score, promoted flag, authorFirstSeenAt and a score component breakdown; output is a re-ordered page list with explanation keys.
+- **PS-050-01.R01** Input is a list of scored candidates with documentId, projectionCid, sourceId, authorDid, score, recency anchor, promoted flag, authorFirstSeenAt and a score component breakdown, plus page parameters (pageSize, windowStart, carry, promotionEnabled); output is a re-ordered page list with explanation keys and the next window position and carry.
 - **PS-050-01.R02** The library has no persisted state; the only parameters are constants per CTR-UX-001 and this spec.
 - **PS-050-01.R03** Explanation entries are message keys with parameters so every locale can render them.
 
 ## Specification
 
-**Note:** Library module with no persisted entity. Constants - windowSize 200, defaultPageSize 20, maxPerAuthorPerPage 3, newAuthorWindowDays 30, newAuthorSlotsPer20 2, newAuthorMinScoreRatio 0.5, promotedMaxShare 0.20. Explanation keys - discovery.explain.text_match, discovery.explain.recent, discovery.explain.distance_bucket, discovery.explain.promoted, discovery.explain.new_author_slot, discovery.explain.only_seller, discovery.explain.default_ranking.
+**Note:** Library module with no persisted entity. Constants - windowSize 200, windowStarts 0, 200, 400 (query depth 500), maxCarry 200 positions (25-byte bitmap), defaultPageSize 20, maxPerAuthorPerPage 3, newAuthorWindowDays 30, newAuthorSlotsPer20 2, newAuthorMinScoreRatio 0.5, promotedMaxShare 0.20. Explanation keys - discovery.explain.text_match, discovery.explain.recent, discovery.explain.distance_bucket, discovery.explain.promoted, discovery.explain.new_author_slot, discovery.explain.only_seller, discovery.explain.default_ranking.
 
 ## Verification
 
@@ -22,7 +22,8 @@
 | TEST-PS-050-09.T02 | property | PS-050-01.R03, PS-050-03.R01 | random promoted flags | promoted count per page at most floor(0.2 times page size); every promoted item has a promoted explanation key |
 | TEST-PS-050-09.T03 | unit | PS-050-01.R02, PS-050-02.R02 | corpus with qualifying new authors and corpus without | 2 slots filled with qualifying items at positions 5 and 12; none filled when no candidate reaches 50 percent of the top score |
 | TEST-PS-050-09.T06 | unit | PS-050-01.R01, PS-050-04.R01 | page with a single author and page size 7 | cap relaxed with only_seller explanation; promoted cap 1 and new-author slots 1 |
-| TEST-PS-050-09.T14 | a11y | PS-050-04.R03, PS-050-01.R03 | render explanation keys in the search screen with axe-core | labels are text, localized and announced; zero serious or critical issues |
+| TEST-PS-050-09.T09 | abuse | PS-050-01.R02 | 50 new authors created in a burst with equal scores | only 2 slots per page are filled and the 50 percent ratio is enforced |
+| TEST-PS-050-09.T14 | a11y | PS-050-01.R03 | render explanation keys in the search screen with axe-core | labels are text, localized and announced; zero serious or critical issues |
 
 ## Dependencies
 

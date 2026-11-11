@@ -34,20 +34,25 @@ See the module test table below (all processes).
 | TEST-PS-018-09.T11 | integration | PS-018-04.R04, PS-018-03.R02 | consume want.withdrawn, block.added, cycle.declined | suggestions superseded, and declined cycleKey suppressed 30 days |
 | TEST-PS-018-09.T12 | abuse | PS-018-05.R01, PS-018-05.R02, PS-018-05.R03 | other principal calls commands, relay operator reads suggestions | FORBIDDEN or NOT_FOUND; relay stats contain no edges |
 | TEST-PS-018-09.T13 | abuse | PS-018-07.R01, PS-018-07.R04 | want younger than 15 minutes, implausible valuation, 7th run in an hour | excluded from graph and RATE_LIMITED respectively |
-| TEST-PS-018-09.T14 | integration | PS-018-07.R02, PS-018-07.R03 | suggestion older than 30 days; relay delivery | purged by retention sweep; relay envelope is ciphertext only |
+| TEST-PS-018-09.T14 | integration | PS-018-07.R02, PS-018-07.R03 | suggestion older than 30 days; relay compute_public delivery | purged by retention sweep; relay envelope is ciphertext only; relay ring store empty after delivery and absent from relay logs; no proposal or accept message is sent to the relay |
 | TEST-PS-018-09.T15 | chaos | PS-018-06.R03, PS-018-03.R03 | kill the vault mid-run | previous suggestion set intact after restart, no partial records |
 | TEST-PS-018-09.T16 | load | PS-018-08.R01, PS-018-08.R02, PS-018-08.R03 | gDense on reference relay, 100 runs | p95 ≤ 250 ms, truncation flagged when budget forced, metrics exported |
 | TEST-PS-018-09.T17 | property | PS-018-09.R02, PS-018-02.R02 | budget 100000 expansions on adversarial dense graph | expansions never exceed 100000 and truncated is expansions or time |
 | TEST-PS-018-09.T18 | unit | PS-018-09.R01 | traceability tool run | every PS-018 requirement maps to a passing test |
-| TEST-PS-018-09.T19 | e2e | PS-018-01.R03, PS-018-05.R03 | mobile user opens suggestion, dismisses it | ring diagram text alternative present, axe zero serious issues, no network call made |
+| TEST-PS-018-09.T19 | e2e | PS-018-05.R03 | mobile user opens suggestion, dismisses it | ring diagram text alternative present, badge reads 'rechecked against signed listings on this device' and never 'verified', axe zero serious issues, no network call made |
 | TEST-PS-018-09.T20 | integration | PS-018-10.R01, PS-018-10.R02, PS-018-10.R03 | export, import into fresh vault, schema rollback | unexpired suggestions round-trip as unverified until re-verified; graph caches absent |
+| TEST-PS-018-09.T21 | integration | PS-018-01.R03 | graph built at T0, clock injected to T0 + 24 h + 1 s | CompatibilityGraph purged by the retention sweep and get_stats returns NOT_FOUND for that run |
+| TEST-PS-018-09.T22 | abuse | PS-018-07.R04, PS-018-02.R02 | 2-Sybil ring: two fresh did:key identities sharing a device key form a 3-ring with a real member | with default settings the ring is not suggested; with includeUnknownIdentities on it is flagged keyLinked, trust panel shows first seen 0 days and 0 completed trades, MUTINY_RING_KEY_LINKED without confirmation, simultaneous handover recommended |
+| TEST-PS-018-09.T23 | unit | PS-018-02.R02, PS-018-01.R01 | pair distance from L2 cells u4pru and u4prv, an L1-only listing cell, and a 6-character cell | ordinal 0, at least 3, and DISCOVERY_PRECISION_FORBIDDEN rejection of the projection edge |
+| TEST-PS-018-09.T24 | contract | PS-018-04.R05 | registry entry of classrup.mutiny.cycle_suggestion/v1 and relay push hook | signer role relay; compute_public calls notify.notification.dispatch once per delivered envelope with no content |
+| TEST-PS-018-09.T25 | integration | PS-018-07.R05 | F10 export, deletion and retention sweep | section mutiny.suggestions exported; erased principal's suggestions and graphs deleted; graph caches purged at 24 h |
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI with seeds recorded.
+- All tests T01–T25 pass in CI with seeds recorded.
 - No suggestion is ever created as a proposal, reservation, consent or signed statement by the engine.
 - Same inputHash and parameters produce identical suggestions on two different devices.
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F11.S01.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

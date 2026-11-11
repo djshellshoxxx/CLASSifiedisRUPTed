@@ -4,34 +4,38 @@ scope: MVP
 summary: >-
   Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding
   per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers.
-  Receivers independently recompute the arithmetic. A quote's rate is only as trustworthy as its source, and the UI labels the source (relay-signed, manual operator rate, local). When a pinned quote expires before commit,
-  the record expires and the coordinator must issue a new revision, which voids earlier consents.
+  Receivers independently recompute the arithmetic. Quotes are requested with purpose barter_normalization and a lifetime of at most 24 h (N16) and are shown as 'pinned rate agreed by all parties' with their source
+  (relay-signed, manual operator rate, local). A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues
+  a quote_refresh revision, which voids earlier consents. When a pinned quote expires before commit, the record expires with the same consequence.
 responsibilities:
   - Compute normalization records for a subject from valuations and quotes, with settlement currency default from the vault's configuration (default EUR for a EUR tenant), at most 5 distinct currencies and 8 quotes per record.
-  - Request quotes with a time-to-live that covers the consent deadline plus 30 minutes where the source allows, and shorten the effective consent deadline to the earliest quote expiry otherwise.
+  - Request quotes from F09.S03.M02 with purpose barter_normalization and validForMs = min(consentDeadline − now + 30 min, 24 h) (N16), label each pinned rate 'pinned rate agreed by all parties' with its source, and require consentDeadline ≤ now + 24 h and ≤ earliestQuoteExpiry; otherwise re-quote and require fresh consent through a quote_refresh revision.
   - Verify and store peers' normalization data from signed revisions by recomputing every conversion, and flag mismatches.
-  - Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, and freeze records after commit.
+  - Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, freeze records after commit and close them when the subject ends, forks or freezes.
+  - When the settlement currency is not EUR, provide the tolerance reference quote EUR to settlement currency (purpose barter_normalization) that the revision pins as toleranceRef, used only to convert the profile's absolute minimum reference (F02.S02.M05 C05); its rate is part of the signed terms and its later expiry has no effect.
+  - Register the module's export section, deletion and retention purge handlers with F10 (N6).
 non_responsibilities:
   - Declared values and plausibility (F02.S04.M03) and tolerance comparison (F02.S02.M05).
   - Quote issuance, rate sources and manual operator rates (F09.S03.M02), currency registry (F09.S03.M01) and Money arithmetic (F09.S03.M03).
   - Compensation amounts (F02.S04.M01) and payments (F09.S01.M01).
   - "Future: multi-currency settlement per leg, rate-source quorum, and conversion of crypto assets with on-chain price oracles."
-depends_on: [F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a coordinator of a cycle with items valued in EUR, GBP and CHF, I see all values in EUR with the rates used, their source and when they expire.
   - As a participant, I can verify that the numbers I sign were converted correctly from the declared amounts and that the rate source is named.
   - As a coordinator, when a quote expires before everyone consented, I get a clear prompt to refresh it and I know that everyone must consent again.
 edge_cases:
-  - All items are already in the settlement currency; a record is still created with no quotes so the pinned numbers are explicit.
+  - All items are already in the settlement currency; no NormalizationRecord is referenced (normalizationId absent), the 24 h cross-currency deadline cap does not apply, and when the settlement currency is not EUR only the tolerance reference quote is pinned.
+  - The coordinator asks for a 72 h consent deadline on a cycle with EUR and GBP items; compute refuses with MUTINY_QUOTE_TOO_SHORT and offers 24 h, because barter quotes live at most 24 h.
   - A currency pair has no available quote; the record is refused and the user is told which pair is missing.
   - The only available rate is a manual operator rate; it is accepted but labelled manual and flagged as not independently sourced.
-  - A quote expires 10 minutes after the cycle was proposed; the record expires, the effective consent window ended early, and the coordinator must create a quote_refresh revision.
+  - A quote expires before everyone consented; the record expires, the effective consent window ended early, and the coordinator must re-quote and create a quote_refresh revision with fresh consent.
   - A participant's recomputation gives a different converted amount by one minor unit; the revision is flagged normalization_mismatch and cannot be consented.
   - A declared value is in a currency that is not in the registry; refused with the registry's currency error.
   - The settlement currency has zero decimals (JPY) while items are in EUR; the exponent difference is applied exactly as in MNY-4.
 ux:
   screens:
-    - "Values summary: each item with declared amount, rate used, converted amount and source label, plus a footer line 'Rates expire at 14:20; after that the proposal needs a refresh and new consent'."
+    - "Values summary: each item with declared amount, the rate labelled 'pinned rate agreed by all parties', converted amount and source label, plus a footer line 'Rates expire at 14:20; after that the proposal needs a refresh and new consent'."
     - "Rate source details sheet naming source, as-of time and whether the rate was signed by its source or stated by the proposer."
   states: [loading, current, expiring, expired, mismatch, frozen, error]
   a11y:
@@ -58,8 +62,9 @@ processes:
           - "origin: enum — local | peer_verified"
           - "settlementCurrency: string — registered currency code"
           - "items: array — 2..16 items {inventoryItemId uuidv7, valuationId uuidv7, declared Money, quoteId? uuidv7, converted Money, rounding HALF_EVEN}"
-          - "quotes: array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt, source label, sourceSigned boolean}"
-          - "earliestQuoteExpiry?: timestamp — min of quotes[].expiresAt; absent when no quotes"
+          - "quotes: array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt ≤ issuedAt + 24 h, purpose barter_normalization, source label, sourceSigned boolean}"
+          - "earliestQuoteExpiry?: timestamp — min of quotes[].expiresAt; absent when no quotes; the revision consentDeadline is ≤ this and ≤ creation + 24 h"
+          - "toleranceRef?: object — {quoteId, rate {num, den}, source} EUR to settlement currency, present when the settlement currency is not EUR; converts the absolute minimum reference only"
           - "normalizationHash: cid — sha256 of JCS(settlementCurrency, items, quotes)"
           - "status: enum — current | superseded | expired | frozen | closed"
           - "mismatch: boolean — true when a peer's recomputation differs"
@@ -79,12 +84,13 @@ processes:
     rules:
       - "V01 | every currency is registered in F09.S03.M01 | COMMERCE_CURRENCY_UNKNOWN"
       - "V02 | at most 5 distinct currencies and 8 quotes per record and at most 16 items | MUTINY_NORMALIZATION_LIMIT"
-      - "V03 | each required pair has a quote with expiresAt at least 30 minutes after the local clock | MUTINY_QUOTE_UNAVAILABLE"
-      - "V04 | consentDeadline of the revision is at or before earliestQuoteExpiry | MUTINY_QUOTE_TOO_SHORT"
+      - "V03 | each required pair has a quote of purpose barter_normalization from F09.S03.M02 whose expiresAt is at least 30 minutes after the local clock and not more than 24 h after issue | MUTINY_QUOTE_UNAVAILABLE"
+      - "V04 | when more than one currency is involved the revision consentDeadline is ≤ now + 24 h and ≤ earliestQuoteExpiry (N16), otherwise re-quote and fresh consent through a quote_refresh revision | MUTINY_QUOTE_TOO_SHORT"
       - "V05 | rate num and den are positive integers and the conversion formula is applied with a single HALF_EVEN rounding | VALIDATION_FAILED"
       - "V06 | peer record recomputes to identical converted amounts and normalizationHash | MUTINY_NORMALIZATION_MISMATCH"
       - "V07 | quote source label is present, and manual or proposer-stated rates are labelled sourceSigned false | MUTINY_QUOTE_SOURCE_UNLABELLED"
       - "V08 | no declared value is non-positive or above 1 000 000 000 000 minor units | VALIDATION_FAILED"
+      - "V09 | every pinned quote is displayed with the label 'pinned rate agreed by all parties' and its source before any consent can be signed | MUTINY_QUOTE_SOURCE_UNLABELLED"
   workflow_state_machine:
     requirements:
       - A record is current until a newer record supersedes it, its earliest quote expires, or its subject commits or closes.
@@ -98,7 +104,7 @@ processes:
           - "current -> superseded | mutiny.proposal.revised for the subject referencing a different record | newer record is the one in the head revision"
           - "current -> expired | local clock reaches earliestQuoteExpiry before the subject commits | emits mutiny.normalization.expired"
           - "current -> frozen | mutiny.cycle.committed or mutiny.proposal.accepted for the subject | numbers are consented; later quote expiry is ignored"
-          - "current -> closed | mutiny.cycle.declined, mutiny.cycle.cancelled, mutiny.proposal.rejected, mutiny.proposal.expired or mutiny.proposal.withdrawn | subject ended without commit"
+          - "current -> closed | mutiny.cycle.declined, mutiny.cycle.cancelled, mutiny.proposal.rejected, mutiny.proposal.expired, mutiny.proposal.withdrawn, mutiny.revision.forked or mutiny.lock.conflict_detected | subject ended or froze without commit"
     timeouts:
       - "Quote expiry is evaluated on vault open and every 60 s while open; a notice is raised 30 minutes before earliestQuoteExpiry."
   commands_queries_events:
@@ -106,11 +112,12 @@ processes:
       - compute and verify are vault commands that produce no signed statement, because the record travels inside the signed revision snapshot of F02.S01.M04.
       - Quotes are requested through F09.S03.M02 and pinned by id; the module never invents rates.
       - Events are written in the same IndexedDB transaction as the records.
+      - Every quote request names purpose barter_normalization and a lifetime of at most 24 h, and the module closes records of subjects that ended, forked or froze.
     commands:
       - name: mutiny.normalization.compute
         capability: mutiny.normalization.compute
-        input: "{ subjectType, subjectId, items: { inventoryItemId, valuationId }[2..16], settlementCurrency?, consentDeadline } — vault command; produces no statement"
-        output: "{ normalizationId, normalizationHash, settlementCurrency, earliestQuoteExpiry?, effectiveConsentDeadline, totals: { actorId, givesMinor, receivesMinor }[] }"
+        input: "{ subjectType, subjectId, items: { inventoryItemId, valuationId }[2..16], settlementCurrency?, consentDeadline } — vault command; requests F09.S03.M02 quotes {base, quote, purpose: barter_normalization, validForMs ≤ 86400000}; produces no statement"
+        output: "{ normalizationId?, normalizationHash?, settlementCurrency, earliestQuoteExpiry?, effectiveConsentDeadline (≤ now + 24 h when more than one currency), toleranceRef?, rateLabel: 'pinned rate agreed by all parties', totals: { actorId, givesMinor, receivesMinor }[] }"
         errors: [VALIDATION_FAILED, COMMERCE_CURRENCY_UNKNOWN, MUTINY_NORMALIZATION_LIMIT, MUTINY_QUOTE_UNAVAILABLE, MUTINY_QUOTE_TOO_SHORT, MUTINY_QUOTE_SOURCE_UNLABELLED, DEPENDENCY_UNAVAILABLE]
         emits: [mutiny.values.normalized]
         idempotent: true
@@ -144,20 +151,25 @@ processes:
       - {type: mutiny.cycle.cancelled, effect: "close the subject's current record"}
       - {type: mutiny.proposal.rejected, effect: "close the subject's current record"}
       - {type: mutiny.proposal.expired, effect: "close the subject's current record"}
-      - {type: commerce.fx_quote.issued, effect: "index the new quote so compute can reuse a quote with at least 30 minutes of life instead of requesting another"}
+      - {type: mutiny.proposal.withdrawn, effect: "close the subject's current record"}
+      - {type: mutiny.revision.forked, effect: "close the subject's current record; renegotiation is a new subject with a new record"}
+      - {type: mutiny.lock.conflict_detected, effect: "close the current records of the subjects named in subjectIds"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained records' local metadata; pinned numbers stay unchanged so revision digests verify"}
+      - {type: commerce.fx_quote.issued, effect: "index a new barter_normalization quote so compute can reuse a quote with at least 30 minutes of life instead of requesting another"}
     errors:
       - "MUTINY_NORMALIZATION_LIMIT | 422 | no | more than 5 currencies, 8 quotes or 16 items"
       - "MUTINY_QUOTE_UNAVAILABLE | 409 | yes | no quote with enough remaining life exists for a required pair"
-      - "MUTINY_QUOTE_TOO_SHORT | 422 | no | the consent deadline would be later than the earliest quote expiry"
+      - "MUTINY_QUOTE_TOO_SHORT | 422 | no | the consent deadline would be later than the earliest quote expiry or more than 24 h away for a cross-currency subject"
       - "MUTINY_QUOTE_SOURCE_UNLABELLED | 422 | no | a quote lacks a source label or a manual rate is not labelled"
       - "MUTINY_NORMALIZATION_MISMATCH | 409 | no | recomputed amounts differ from those presented in a revision"
     example: |
-      # 3-party cycle in EUR, GBP, CHF; settlement EUR; quotes pinned for 72 h + 30 min
-      mutiny.normalization.compute { "subjectType":"cycle", "subjectId":"0192f432-…", "consentDeadline":"2026-11-07T10:00:00.000Z",
+      # 3-party cycle in EUR, GBP, CHF; settlement EUR; local now 2026-11-04T10:00Z; cross-currency consent deadline 23 h 30 min; quotes purpose barter_normalization pinned for 24 h
+      mutiny.normalization.compute { "subjectType":"cycle", "subjectId":"0192f432-…", "consentDeadline":"2026-11-05T09:30:00.000Z",
         "items":[ {"inventoryItemId":"i1","valuationId":"v1"}, {"inventoryItemId":"i2","valuationId":"v2"}, {"inventoryItemId":"i3","valuationId":"v3"} ] }
       -> item i1: 12000 EUR stays 12000; item i2: 10000 GBP with quote GBP->EUR num 117 den 100 => 10000 x 117 x 10^2 / (100 x 10^2) = 11700 EUR (HALF_EVEN, exact);
          item i3: 10990 CHF with quote CHF->EUR num 1043 den 1000 => 11462.57 -> 11463 EUR minor units rounded once (HALF_EVEN)
-         earliestQuoteExpiry 2026-11-07T10:30:00.000Z, normalizationHash sha256-Nn4…
+         earliestQuoteExpiry 2026-11-05T10:00:00.000Z (24 h after issue), effectiveConsentDeadline 2026-11-05T09:30:00.000Z, normalizationHash sha256-Nn4…,
+         every rate shown as 'pinned rate agreed by all parties' with its source; a 72 h deadline would be refused with MUTINY_QUOTE_TOO_SHORT
       The same call with 2, 4 or N items (N ≤ 16 item lines across at most 8 legs) uses one quote per currency pair and the same rounding rule.
   authorization_capabilities:
     requirements:
@@ -183,9 +195,10 @@ processes:
       - Records are P2 and travel only inside signed end-to-end encrypted revision envelopes to the subject's parties.
       - Quote requests to rate sources carry only the currency pair and requested lifetime, never DIDs, items or amounts.
       - Rate manipulation by a proposer is limited by labelling sources, recomputation by every participant and each participant's own consent on displayed numbers.
+      - The module registers ExportSectionPort (section mutiny.normalizations), DeletionPort and RetentionPurgePort with F10 (N6), annotates every NormalizationRecord field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes local metadata while the pinned numbers stay verifiable.
     data:
-      - "NormalizationRecord: P2; includes declared amounts of items already public in valuations."
-      - "Quote requests: P0 pair and lifetime only."
+      - "NormalizationRecord: P2; includes declared amounts of items already public in valuations; field classes annotated per F10.S02.M02."
+      - "Quote requests: P0 pair, purpose barter_normalization and lifetime only."
     retention:
       - "RET-EVIDENCE 2 years after the last related activity of the subject."
     threats:
@@ -214,11 +227,11 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Conversion arithmetic is tested against a reference implementation for 10 000 random cases including negative exponents and zero-decimal currencies.
       - Expiry, refresh and mismatch behavior is tested with injected clocks.
-    fixtures: "Valuations v1 12000 EUR, v2 10000 GBP, v3 10990 CHF; quotes GBP->EUR 117/100, CHF->EUR 1043/1000 expiring 2026-11-07T10:30:00Z; JPY settlement variant; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Valuations v1 12000 EUR, v2 10000 GBP, v3 10990 CHF; quotes GBP->EUR 117/100, CHF->EUR 1043/1000, purpose barter_normalization, issued 2026-11-04T10:00:00Z and expiring 2026-11-05T10:00:00Z; EUR->JPY 163/1 reference quote; JPY settlement variant; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R02,09.R03 | compute the 3-currency example | converted amounts 12000, 11700, 11463 EUR minor; normalizationHash stable"
       - "T02 | property | 01.R02,02.R02 | 10 000 random conversions vs reference | identical results with single HALF_EVEN rounding; no floating point"
-      - "T03 | unit | 02.R01,02.R03 | each rule V01..V08 violated in turn | documented error code and nothing stored"
+      - "T03 | unit | 02.R01,02.R03 | each rule V01..V09 violated in turn | documented error code and nothing stored"
       - "T04 | unit | 01.R03,02.R03 | JPY settlement with EUR items | exponent difference applied exactly as in MNY-4"
       - "T05 | integration | 03.R01,03.R02 | quote expires before commit with injected clock | record expired, mutiny.normalization.expired emitted, coordinator must create quote_refresh revision"
       - "T06 | integration | 03.R02,03.R03 | subject commits then quote expires | record frozen and expiry ignored"
@@ -231,8 +244,12 @@ processes:
       - "T13 | load | 08.R02 | 16 items 4 quotes on emulated Moto G | p95 ≤ 60 ms"
       - "T14 | unit | 08.R01,08.R03,09.R01 | diagnostics and traceability tool | no amounts or DIDs in diagnostics; every PS-025 requirement maps to a passing test"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | records round-trip and keep hash; imported current records are marked expired when quotes lapsed"
+      - "T16 | contract | 04.R04,02.R03 | compute for the 3-currency example with consent deadlines of 23 h 30 min and 72 h | quote requests carry purpose barter_normalization and validForMs ≤ 86400000; 23 h 30 min accepted with every rate labelled 'pinned rate agreed by all parties'; 72 h refused with MUTINY_QUOTE_TOO_SHORT"
+      - "T17 | integration | 03.R01,04.R04 | mutiny.proposal.withdrawn, mutiny.revision.forked and mutiny.lock.conflict_detected for subjects with current records | each record closed; later compute for a new subject creates a new record"
+      - "T18 | unit | 01.R01,02.R01 | single-currency JPY subject | no NormalizationRecord referenced, no 24 h cap, toleranceRef EUR->JPY 163/1 returned"
+      - "T19 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.normalizations exported; erased DID pseudonymized in local metadata; normalizationHash unchanged"
     acceptance:
-      - All tests T01–T15 pass in CI.
+      - All tests T01–T19 pass in CI.
       - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
       - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.
   import_export_backup_rollback:

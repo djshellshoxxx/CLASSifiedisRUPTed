@@ -20,8 +20,8 @@ _None._
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `mutiny.cycle3.get_profile` | mutiny.cycle3.read_profile | { tenantId? default current } | { length: 3, toleranceBps, absoluteMinMajor, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, version, overridden: boolean } |  |
-| `mutiny.cycle3.explain` | mutiny.cycle3.read_explanation | { suggestionId } | { suggestionId, profileVersion, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket, bases[] }[3], summaryKey } | NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH |
+| `mutiny.cycle3.get_profile` | mutiny.cycle3.read_profile | { tenantId? default current } | { length: 3, toleranceBps, absoluteMinRef: Money, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, version, overridden: boolean } |  |
+| `mutiny.cycle3.explain` | mutiny.cycle3.read_explanation | { suggestionId } | { suggestionId, profileVersion, absoluteMinConverted: Money, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket 0..4 (label discovery.bucket.*), bases[] }[3], summaryKey } | NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH |
 
 ### Events produced
 
@@ -36,9 +36,7 @@ _None._
 
 ### Module errors
 
-| Code | HTTP | Retryable | Meaning |
-|---|---|---|---|
-| MUTINY_PROFILE_LENGTH_MISMATCH | 422 | no | the subject is not a 3-party suggestion |
+_None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -47,11 +45,12 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 ```
 # 3-party explanation (values EUR minor units): Alice gives guitar 12000, Bob gives bike 11800, Carol gives desk 11500
 mutiny.cycle3.explain { "suggestionId": "0192f3c0-…" }
--> { "profileVersion": "p3.1", "participants": [
+-> { "profileVersion": "p3.2", "participants": [
      { "actorId": "did:key:z6MkAlice", "gives": "12000", "receives": "11500", "gap": "500", "tolerance": "600", "withinTolerance": true, "distanceBucket": 1 },
      { "actorId": "did:key:z6MkBob",   "gives": "11800", "receives": "12000", "gap": "200", "tolerance": "600", "withinTolerance": true, "distanceBucket": 2 },
      { "actorId": "did:key:z6MkCarol", "gives": "11500", "receives": "11800", "gap": "300", "tolerance": "590", "withinTolerance": true, "distanceBucket": 1 } ] }
-# tolerance = max(500 bps of the larger side, 500 minor units): Alice max(600, 500)=600, Carol max(590, 500)=590.
+# tolerance = max(500 bps of the larger side, 5.00 EUR reference = 500 EUR minor, no conversion in EUR): Alice max(600, 500)=600, Carol max(590, 500)=590.
+# JPY settlement with pinned EUR->JPY 163/1: absolute minimum 500 x 163 x 10^0 / (1 x 10^2) = 815 JPY; BTC with EUR->BTC 1/60000: 500 x 10^8 / (60000 x 10^2) = 8333 satoshi.
 ```
 
 ## Verification
@@ -63,4 +62,4 @@ mutiny.cycle3.explain { "suggestionId": "0192f3c0-…" }
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

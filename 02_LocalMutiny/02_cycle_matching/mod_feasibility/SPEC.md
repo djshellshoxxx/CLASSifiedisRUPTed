@@ -6,13 +6,14 @@
 
 ## Purpose
 
-A pure, deterministic set of checks that tells a vault whether a suggestion, a direct proposal or a cycle revision can be proposed or consented to right now, and explains every failure with a stable check code. Checks cover participant uniqueness, item uniqueness, ownership and availability, value tolerance (MNY-5), quote freshness, distance, blocks, eligibility and deadlines. Each check states its basis, either verified locally, derived from a signed projection or only claimed by a peer, so the UI never presents a peer's claim as verified fact.
+A pure, deterministic set of checks that tells a vault whether a suggestion, a direct proposal or a cycle revision can be proposed or consented to right now, and explains every failure with a stable check code. Checks cover participant uniqueness, item uniqueness, ownership and availability, value tolerance (MNY-5), quote freshness, distance, blocks, eligibility and deadlines. Each check states its basis, either verified locally, derived from a signed projection or only claimed by a peer, so the UI never presents a peer's claim as verified fact. The module also holds the LengthProfile registry: F02.S02.M01, F02.S02.M02 and the engine default profile of F02.S02.M03 register into it, and the engine, the explanations and these checks read the effective profile from it, so no dependency cycle exists between profiles and engine.
 
 ## Responsibilities
 
 - Provide checkFeasibility(input, ports) as a pure function and the command that stores a FeasibilityReport for a subject.
 - Return overall feasible, feasible_with_conditions or infeasible with ordered check results and machine-readable reason codes.
 - Re-run before proposing, before signing consent, and before the local commit verdict, and mark reports older than 10 minutes stale.
+- Hold the LengthProfile registry (register(profile), get(length)) and accept an explicit effectiveProfile input in checkFeasibility; own MUTINY_PROFILE_LENGTH_MISMATCH and MUTINY_DEADLINE_INVALID (N1).
 
 ## Not responsible for
 
@@ -35,6 +36,8 @@ A pure, deterministic set of checks that tells a vault whether a suggestion, a d
 - Item quantity is 1 and a local reservation for another cycle holds it; the check fails with item_reserved_elsewhere without revealing the other cycle.
 - A peer's item cannot be verified because the listing projection is missing locally; basis is unverifiable and the overall result is feasible_with_conditions, never feasible.
 - The report was computed 11 minutes ago; consent is refused until a fresh report is stored.
+- A participant consents 40 minutes before the consent deadline of a 10-day trade proposal; C11 at consent time checks only that the local clock is before the deadline, so the consent is allowed.
+- A cross-currency cycle revision asks for a 30 h consent deadline; C11 at revision time fails because cross-currency deadlines are at most 24 h and never after the earliest pinned quote expiry.
 
 ## UX and accessibility
 
@@ -54,11 +57,11 @@ A pure, deterministic set of checks that tells a vault whether a suggestion, a d
 - Commands: `mutiny.feasibility.check`
 - Queries: `mutiny.feasibility.get`, `mutiny.feasibility.latest_for_subject`
 - Emits: `mutiny.cycle.feasibility_checked`
-- Consumes: `mutiny.proposal.revised`, `mutiny.values.normalized`
+- Consumes: `mutiny.proposal.revised`, `mutiny.values.normalized`, `mutiny.normalization.expired`, `mutiny.valuation.flagged`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
+F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -70,7 +73,7 @@ F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F0
 | PS-016-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-016-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-016-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-016-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-016-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-016-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-016-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-016-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -79,6 +82,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T22 pass in CI.
 - No peer claim is ever presented as verified and overall feasible is impossible with any unverifiable or peer_claim basis.
 - MNY-5 tolerance is exact at the boundary for bigint amounts.

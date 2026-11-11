@@ -8,7 +8,7 @@
 
 - **PS-044-04.R01** The module exposes functions only; it has no commands, queries or events.
 - **PS-044-04.R02** Callers (F06.S01.M02, relay query handler) are responsible for capability checks and idempotency.
-- **PS-044-04.R03** Error codes defined here are returned inside Result values and mapped by callers to HTTP problems.
+- **PS-044-04.R03** Error codes defined here are returned inside Result values and mapped by callers to HTTP problems; geo codes (DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN) are defined once in F06.S02.M01 and only referenced here (N1).
 
 ## Specification
 
@@ -35,18 +35,21 @@ _None._
 | DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range, of the wrong type or unknown |
 | DISCOVERY_FILTER_CURRENCY_REQUIRED | 422 | no | price filter without a currency |
 | DISCOVERY_FILTER_CENTER_REQUIRED | 422 | no | distance filter without a search center |
-| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module - no commands or queries; callers expose them.
+**Note:** Library module - no commands or queries; callers expose them. This module is the single owner of the filter codes (DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_CENTER_REQUIRED); DISCOVERY_FILTER_CENTER_REQUIRED is specific to a distanceKm filter without a center, while a proximity query without a center uses DISCOVERY_CENTER_REQUIRED from F06.S02.M03, because the caller fixes them differently (add a center to the filter versus choose a browse area).
 
 ### Example
 
 ```
-compileFilter({ listingKinds: ["sell"], price: { currency: "EUR", max: 30000 }, distanceKm: 10, postedWithin: "7d" }, now)
--> { sql: "d.listing_kind IN (?) AND d.currency = ? AND d.price_minor <= ? AND d.geo_cell5 IN (?,?,?) AND d.first_seen_at >= ?",
+compileFilter({ listingKinds: ["sell"], price: { currency: "EUR", max: 30000 }, distanceKm: 10, center: "u4pru", postedWithin: "7d" }, now)
+-> { sql: "d.listing_kind IN (?) AND d.currency = ? AND d.price_minor <= ? AND d.geo_cell IN (?,?,?) AND d.first_seen_at >= ?",
      params: ["sell", "EUR", 30000, "u4pru", "u4prv", "u4prs", "2026-10-28T10:00:00.000Z"] }
+compileFilter({ distanceKm: 25, center: "u4pru" }, now)
+-> { sql: "(d.geo_cell IN (?,…) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (?,…)))", params: [C5…, "u4pr", "u4px", …] }
+compileFilter({ distanceKm: 100, center: "u4pru" }, now)
+-> { sql: "d.geo_cell4 IN (?,…)", params: ["u4nz", "u4pr", "u4px", …] }
 ```
 
 ## Verification

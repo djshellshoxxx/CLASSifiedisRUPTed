@@ -8,7 +8,7 @@
 
 - **PS-015-01.R01** A TradeProposal is the local aggregate of one vault and stores the two parties, head revision pointer and hash, status, deadline claim and verified consent and reservation references, with the revision chain held by F02.S01.M04.
 - **PS-015-01.R02** The record is P2, retained as RET-EVIDENCE, and never stored or federated in plaintext on a relay; only signed envelopes encrypted to the two parties are exchanged.
-- **PS-015-01.R03** Consent and reservation facts are stored as references to the verified signed statements with their direction and local receive time, and the local receive time is the only time used for decisions.
+- **PS-015-01.R03** Consent and reservation facts are stored as references to the statements accepted by their owners (F08.S02.M02, F02.S03.M02) with their direction and local receive time; decisions use the local clock, and a relay receipt time can only shorten the deadline, never extend it.
 
 ## Specification
 
@@ -24,13 +24,13 @@ Schema `classrup.mutiny.trade_proposal/v1` · storage **device** · privacy **P2
 | counterpartyId | did — the other member; differs from proposerId |
 | headRevisionId | uuidv7 — current ProposalRevision id (F02.S01.M04) |
 | headRevisionNo | int — 1..20 |
-| headRevisionHash | cid — digest all consents must sign |
+| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); consents sign its 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash) |
 | headAuthorId | did — author of the head revision |
 | status | enum — draft \| open \| accepted \| rejected \| withdrawn \| expired \| frozen |
-| closeReason? | enum — rejected_by_peer \| withdrawn_by_author \| timeout \| item_unavailable \| blocked_locally \| fork_detected \| clock_disagreement |
-| expiresAt | timestamp — deadline claimed in the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 14 d |
-| consents | array — 0..2 items {actorId, statementId, revisionHash, direction own\|peer, signedAtClaim, receivedAtLocal, valid boolean} |
-| reservations | array — 0..2 items {actorId, lockId, expiresAt, direction own\|peer, valid boolean} |
+| closeReason? | enum — rejected_by_peer \| withdrawn_by_author \| timeout \| item_unavailable \| blocked_locally \| fork_detected \| conflicting_promise \| consent_conflicted \| clock_disagreement |
+| expiresAt | timestamp — consentDeadline claimed in the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 14 d, at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16) |
+| consents | array — 0..4 items {actorId, consentId (F08 ConsentStatement), kind consent\|decline, revisionNo, revisionHash, direction own\|peer, signedAtClaim, receivedAtLocal, relayReceiptAt?, status valid\|void, voidReason? revision_changed\|consent_revoked\|key_revoked\|deadline_missed\|conflicted} |
+| reservations | array — 0..2 items {actorId, lockId, reservationCid (classrup.bazaar.reservation/v1), expiresAt, direction own\|peer, valid boolean} |
 | hasCompensation | boolean — true when the head revision contains a compensation leg |
 | syncStates | object — per outgoing statement {statementCid: local_committed\|prepared\|transport_acknowledged\|peer_accepted} |
 | revision | int — CTR-ID-001 ID-4 |
@@ -39,8 +39,8 @@ Schema `classrup.mutiny.trade_proposal/v1` · storage **device** · privacy **P2
 
 **Invariants**
 - proposerId differs from counterpartyId and exactly these two DIDs are parties.
-- status accepted implies consents contains a valid consent from each party on headRevisionHash and reservations contains a valid unexpired reservation from each party, as verified in this vault.
-- A consent on any hash other than headRevisionHash has valid false and never counts.
+- status accepted implies consents contains a consent of each party on headRevisionHash and headRevisionNo for which comms.consent.verify returned valid inside the accepting transaction, and reservations contains a valid unexpired reservation from each party, as verified in this vault.
+- A consent on any other hash or revision number, or a revoked consent, has status void and never counts.
 - At most one non-terminal TradeProposal exists per (proposerId, counterpartyId, item-set hash).
 
 ### Storage DDL
@@ -57,8 +57,9 @@ CREATE INDEX mutiny_proposal_status ON mutiny_trade_proposal(tenant_id, status, 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-015-09.T01 | integration | PS-015-01.R01, PS-015-01.R03, PS-015-03.R01 | Alice creates, Bob accepts, statements delivered | both vaults reach accepted after receiving the other's consent and reservation; acceptance event carries both statement ids |
-| TEST-PS-015-09.T15 | e2e | PS-015-01.R02, PS-015-02.R03 | two mobile browsers propose and accept with 5.00 EUR compensation | UI shows prepared, relay received, acknowledged by peer truthfully; axe zero serious issues |
+| TEST-PS-015-09.T06 | integration | PS-015-03.R04, PS-015-01.R03 | Bob's deadline passes while Alice's has not, and relay receipt time later than deadline | each vault expires on its own clock; a later relay receipt makes the consent late and the proposal expires with clock_disagreement |
+| TEST-PS-015-09.T18 | integration | PS-015-07.R01, PS-015-01.R02 | relay fixture records every mailbox put during create, accept, counter and withdraw | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
 
 ## Dependencies
 
-Module depends on: F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S02.M05, F02.S03.M02, F01.S03.M01, F07.S01.M01, F07.S02.M02, F08.S02.M02, F12.S03.M04, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S02.M05, F02.S03.M02, F01.S03.M01, F07.S01.M01, F07.S02.M02, F08.S02.M02, F12.S03.M04, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

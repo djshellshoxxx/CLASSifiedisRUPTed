@@ -12,11 +12,11 @@
 
 ## Specification
 
-- **idempotency:** Local command id stored 24 h; replay of slot.hold with the same id returns the same holdId; summary statements are idempotent by cid.
-- **concurrency:** Web Locks lock services-calendar-<id> around every hold, commit and rule change; expectedRevision on rule changes; two devices of one provider that diverge are detected by the signed seq/prev chain and frozen for explicit merge, never last-writer-wins for commitments.
+- **idempotency:** Local command id stored 24 h; replay of slot.hold with the same id returns the same holdId; a repeated extend returns the stored expiresAt; summary statements are idempotent by cid; DeletionPort and RetentionPurgePort handlers are idempotent by request id.
+- **concurrency:** Web Locks lock services-calendar-<id> around every hold, extend, reconfirm, commit and rule change; expectedRevision on rule changes; two devices of one provider that diverge are detected by the signed seq/prev chain and frozen for explicit merge, never last-writer-wins for commitments.
 - **retries:** Summary upload retries 1 s, 2 s, 4 s, 8 s up to 8 attempts; local commands are not retried automatically.
 - **offline:** Everything except summary delivery works offline; delivery shows prepared, transport_acknowledged or peer_accepted and never more.
-- **partial failure:** If rule expansion fails for one DST edge case the previous generated set stays in force and the UI reports the failing date; if relay upload fails the calendar change is still committed locally.
+- **partial failure:** If rule expansion fails for one DST edge case the previous generated set stays in force and the UI reports the failing date; if a consent check or relay upload fails the calendar change is still committed locally, no summary is signed for a relay without consent, and the sync state shows the failure.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -26,8 +26,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 |---|---|---|---|---|
 | TEST-PS-028-09.T05 | integration | PS-028-03.R03, PS-028-06.R03 | crash injected between commit and booking confirmation | both or neither persisted |
 | TEST-PS-028-09.T06 | integration | PS-028-02.R03, PS-028-06.R02 | two tabs hold overlapping slots simultaneously | exactly one succeeds, other SERVICES_SLOT_UNAVAILABLE |
-| TEST-PS-028-09.T11 | integration | PS-028-06.R01, PS-028-07.R01, PS-028-07.R02 | replay hold command; inspect summary payload; advance clock 15 days | same holdId; summary has no client identity; expired summary dropped |
+| TEST-PS-028-09.T11 | integration | PS-028-06.R01, PS-028-07.R02 | replay hold command; advance clock 15 days after a summary | same holdId; expired summary dropped by the receiver |
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F08.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -2,43 +2,53 @@ id: F01.S01.M04
 scope: MVP
 summary: >-
   Ends the visible life of a listing in the owner's vault: automatic expiry at the publication deadline, owner
-  archive, restore within 90 days, and marking a listing sold, given, traded or fulfilled. Closing and archiving
-  first end the publication (tombstone statement to the relays that received it) through F01.S01.M03. Stale
-  sweeps close sold-out listings and archive old expired or closed ones. Removal from search happens because
-  relays and local indexes consume the signed tombstone and the local events; copies already fetched by others
-  cannot be recalled.
+  archive, restore within 90 days, and marking a listing sold, given, traded or fulfilled, also directly from
+  expired. Closing and archiving first end the publication (tombstone statement to the relays that received it)
+  through F01.S01.M03. The expiry sweep never expires a listing that still carries Deal-linked or cycle holds: it
+  renews within the publication cap or defers the local expiry. Holds are never released silently: the hold of the
+  Deal that closed the sale is converted and other Deal-linked holds need an explicit Deal cancellation. Stale
+  sweeps close sold-out listings and archive old expired or closed ones; purge keeps what offers, negotiations and
+  deals cite as evidence. Removal from search happens because relays and local indexes consume the signed
+  tombstone and the local events; copies already fetched by others cannot be recalled.
 responsibilities:
-  - Own ArchiveRecord, the end-of-life record of a listing (expired, closed or archived) with restoreUntil and purgeAt.
-  - Run the local expiry sweep (every 5 minutes while the app is open and at app start) that moves published listings past expiresAt to expired.
-  - Archive on request, auto-archive expired and closed listings after 30 days, restore archived listings within 90 days, and purge after 90 days.
-  - Mark listings sold, given, traded or fulfilled with an optional reference to the Deal or trade that closed them, and close sold-out listings after 7 days with no stock.
-  - Handle account deletion requests by ending publications and archiving all own listings.
+  - Own ArchiveRecord, the end-of-life record of a listing (deferred, expired, closed or archived) with restoreUntil, purgeAt and evidenceUntil.
+  - Run the local expiry sweep (every 5 minutes while the app is open and at app start) that moves published listings past expiresAt to expired, unless Deal-linked or cycle holds require renewal or deferral.
+  - Archive on request, auto-archive expired and closed listings after 30 days, restore archived listings within 90 days, and purge unreferenced content after 90 days.
+  - Mark listings sold, given, traded or fulfilled with an optional reference to the Deal or trade that closed them, converting the matching hold, and close sold-out listings after 7 days with no stock.
+  - Handle principal deletion requests by ending publications and archiving all own listings.
+  - Register the F10 privacy ports and pseudonymize retained evidence records after principal deletion (N6).
 non_responsibilities:
   - Listing record and status field (F01.S01.M01), publication and tombstone signing (F01.S01.M03).
-  - Inventory quantities and holds (F01.S03.M01); this module only reads whether stock is zero.
+  - Inventory quantities and holds (F01.S03.M01); this module reads holds and asks for conversion or release, it never edits them directly.
+  - Cycle holds (F02.S03.M02 is their only driver); a listing with an active cycle hold cannot be closed or archived here until the owner leaves the cycle in LocalMutiny.
   - Search index removal (F06.S01.M01 consumes the events).
-  - Deal completion and trade execution (F09, F02); a close reference is evidence supplied by the owner, not proof.
+  - Deal completion, cancellation semantics and trade execution (F09, F02); a close reference is evidence supplied by the owner, not proof.
   - "Future: bulk archive and automatic relisting rules."
-depends_on: [F01.S01.M01, F01.S01.M03, F01.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F01.S01.M01, F01.S01.M03, F01.S03.M01, F01.S04.M01, F01.S04.M02, F09.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a seller, I can mark my item sold and know buyers who had offers are told the listing is closed.
   - As a seller, I can archive a listing and restore it within 90 days without losing its history.
   - As a seller, I am told 3 days before my listing expires and can renew it.
   - As a giver, I can mark a giveaway as given to the chosen recipient.
+  - As a cycle participant, my listing does not expire under me while my item is reserved for a cycle I consented to.
 edge_cases:
   - The app was closed for a week; at start the expiry sweep expires every overdue listing in one batch and emits one event per listing.
-  - Owner marks a listing sold while it has an active inventory hold; the close is refused with BAZAAR_ARCHIVE_HOLD_ACTIVE unless the owner confirms releasing the hold.
+  - Owner marks a listing sold to the buyer of Deal D; the hold linked to D is converted and the close succeeds without releasing anything.
+  - Owner marks a listing sold while a hold is linked to a different open Deal; the close is refused with BAZAAR_ARCHIVE_HOLD_ACTIVE unless the owner also cancels that Deal, which sends a signed release to its buyer.
   - Restore is requested on day 91; BAZAAR_ARCHIVE_RESTORE_EXPIRED is returned and the owner can relist as a new draft copy.
   - Restore is requested while the owner already has 50 drafts or 100 publications; the restored listing becomes unpublished and publishing is limited by F01.S01.M03.
-  - Device clock jumps back; the sweep never un-expires and never expires earlier than expiresAt as seen in the last signed receipt time minus 24 h.
+  - Device clock jumps back or forward; the sweep never un-expires and never expires earlier than expiresAt judged against the median of the latest receipts of at least 2 relays; one relay with receipts far in the future is ignored.
   - Close command replayed after a crash; one ArchiveRecord and one tombstone exist.
   - Mark traded with a reference to a cycle that was not completed; the record stores the reference as owner-asserted and labels it unverified.
+  - A listing with a 14-day cycle hold reaches its expiry on day 10; the sweep renews the publication instead of expiring it, and records the extension.
+  - An expired listing is renewed through F01.S01.M03; the expired record closes as superseded and the listing is live again.
+  - A listing expired before the in-person sale; the owner closes it as sold directly from expired.
 ux:
   screens:
     - "My listings with tabs Active, Ended, Archived; actions Renew, Mark sold or given, Archive, Restore."
-    - "Mark as sheet: reason (sold, given, traded, fulfilled, other), optional link to a deal or trade, warning about active holds."
-    - "Expiry reminder banner 3 days before expiry with Renew button."
-  states: [loading, empty, saving-local, expiring-soon, expired, closed, archived, restorable, restore-expired, conflict]
+    - "Mark as sheet: reason (sold, given, traded, fulfilled, other), optional link to a deal or trade, list of active holds with what will happen to each (converted, Deal cancelled and buyer told, cycle hold blocks the close)."
+    - "Expiry reminder banner 3 days before expiry with Renew button; extended-because-reserved note when the sweep renewed or deferred."
+  states: [loading, empty, saving-local, expiring-soon, deferred, expired, closed, archived, restorable, restore-expired, conflict]
   a11y:
     - Tabs follow the ARIA tabs pattern and are keyboard operable.
     - Expiry countdown is text with a date, not only a visual bar; reminders are announced politely.
@@ -48,7 +58,7 @@ processes:
     requirements:
       - "An ArchiveRecord stores the end-of-life of one listing: kind of end, reason, optional reference, restoreUntil and purgeAt."
       - "References to deals or trades are owner assertions labelled unverified unless the referenced module provides a signed completion."
-      - "ArchiveRecords are P1 vault data retained as evidence and purged with the listing."
+      - "ArchiveRecords are P1 vault data; a record whose listing is cited by an Offer, Negotiation or Deal is kept for RET-EVIDENCE after the listing purge and pseudonymized on privacy.deletion.completed, and every other record is purged with the listing."
     entities:
       - name: ArchiveRecord
         schema: classrup.bazaar.archive_record/v1
@@ -59,82 +69,99 @@ processes:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
           - "listingId: uuidv7 — ref F01.S01.M01 Listing"
-          - "ownerId: did:key — local principal"
-          - "status: enum — expired | closed | archived | restored | purged"
+          - "ownerId: did:key — local principal; replaced by the deletion pseudonym in records kept as evidence"
+          - "status: enum — deferred | expired | closed | archived | restored | superseded | purged"
           - "closeReason?: enum — sold | given | traded | fulfilled | sold_out | other; set when status is closed"
-          - "closedWithRef?: object — {type: deal|proposal|cycle|giveaway_request, id: uuidv7, verified: boolean}"
+          - "closedWithRef?: object — {type: deal|proposal|cycle|giveaway_request, id: uuidv7, verified: boolean}; P1, never in events"
+          - "deferredSince?: timestamp — expiry deferred because Deal-linked or cycle holds were active and the renewal cap was reached"
+          - "autoExtensions: int — 0..3 renewals requested by the expiry sweep"
           - "endedAt: timestamp — RFC 3339 UTC of the first end event"
           - "archivedAt?: timestamp — RFC 3339 UTC"
           - "restoreUntil?: timestamp — archivedAt + 90 d"
-          - "purgeAt?: timestamp — restoreUntil"
+          - "deletionRequestedAt?: timestamp — set from privacy.deletion.requested"
+          - "purgeAt?: timestamp — min(restoreUntil, deletionRequestedAt + 30 d) for unreferenced content"
+          - "evidenceUntil?: timestamp — last related activity + 2 years when an Offer, Negotiation or Deal cites the listing"
           - "restoredAt?: timestamp — RFC 3339 UTC"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - At most one ArchiveRecord per listing is not in status restored or purged.
-          - status archived implies restoreUntil = archivedAt + 90 days exactly.
+          - At most one ArchiveRecord per listing is not in status restored, superseded or purged.
+          - status archived implies restoreUntil = archivedAt + 90 days exactly; purgeAt = min(restoreUntil, deletionRequestedAt + 30 d) for unreferenced content.
           - status closed implies closeReason is set and the listing has no active publication.
+          - status purged with evidenceUntil set keeps only id, listingId, status, closeReason, closedWithRef, endedAt and evidenceUntil; all listing content is gone.
+          - Field classes are annotated per F10.S02.M02 (all P1).
     sql: |
       CREATE TABLE bazaar_archive_record (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, owner_id TEXT NOT NULL,
         status TEXT NOT NULL, purge_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX bazaar_archive_open ON bazaar_archive_record(tenant_id, listing_id)
-        WHERE status IN ('expired','closed','archived');
+        WHERE status IN ('deferred','expired','closed','archived');
       CREATE INDEX bazaar_archive_purge ON bazaar_archive_record(tenant_id, status, purge_at);
   validation_rules:
     requirements:
       - "Each command validates the listing status, the owner and the 90-day restore window before any change."
-      - "Close requires a reason and refuses silently releasing inventory holds."
+      - "Close requires a reason and never silently releases inventory holds: the hold of the Deal named in closedWithRef is converted, other Deal-linked holds are released only together with commerce.deal.cancel and a signed reservation release, and cycle holds are never released here."
       - "Every violation maps to a stable error code."
+      - "The expiry sweep applies the same clock sanity rule as F01.S01.M03: it compares with the median of the latest receipts from at least 2 distinct relays, ignores receipts more than 24 h ahead of that median, and with fewer than 2 relays uses the device clock with a warning."
     rules:
       - "V01 | listing exists, owned by local principal, and status allows the requested action (see machine) | CONFLICT_STATE"
       - "V02 | close has closeReason in sold, given, traded, fulfilled, other (sold_out is system only) | VALIDATION_FAILED"
       - "V03 | closedWithRef, if present, has a valid type and uuidv7 id | VALIDATION_FAILED"
-      - "V04 | no active inventory hold on the listing unless releaseHolds is true | BAZAAR_ARCHIVE_HOLD_ACTIVE"
+      - "V04 | active holds on the listing: with closedWithRef.type deal the hold whose linkedDealId equals closedWithRef.id is converted; any other hold with a linkedDealId of an open Deal is refused unless cancelDeals is true (then commerce.deal.cancel runs and a signed classrup.bazaar.reservation_release/v1 is queued to its reservation audience); holds without a Deal are released only with releaseHolds true; holderType cycle is always refused | BAZAAR_ARCHIVE_HOLD_ACTIVE"
       - "V05 | restore requested now <= restoreUntil | BAZAAR_ARCHIVE_RESTORE_EXPIRED"
       - "V06 | expectedRevision matches ArchiveRecord or Listing revision | CONFLICT_REVISION"
       - "V07 | kind giveaway closes only with reason given or other; kind wanted only fulfilled or other | VALIDATION_FAILED"
+      - "V08 | expiry sweep: now >= expiresAt by the device clock and the device clock is not more than 24 h behind the median of the latest receipts of at least 2 distinct relays in the last 7 days (receipts more than 24 h ahead of the median are discarded) | PRECONDITION_FAILED"
+      - "V09 | expiry sweep: no active hold with linkedDealId or holderType cycle on the listing, otherwise renew within the F01.S01.M03 cap or defer | BAZAAR_ARCHIVE_HOLD_ACTIVE"
   workflow_state_machine:
     requirements:
       - "ArchiveRecord follows the declared machine; the pseudo-state live means the listing has no record yet."
       - "Every transition runs together with the matching Listing.apply_status call and, where a publication is active, with bazaar.publication.end, in one transaction."
       - "Restored listings return as unpublished and must go through publication checks again; restore never republishes automatically."
+      - "The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows, and otherwise defers the local expiry and records the deferral until the holds end."
+      - "An expired listing can be closed directly by the owner, and an expired listing that is renewed or republished closes its record as superseded."
     machines:
       - entity: ArchiveRecord
         initial: live
-        terminal: [restored, purged]
+        terminal: [restored, superseded, purged]
         transitions:
-          - "live -> expired | expiry sweep when expiresAt <= now | Listing published -> expired; emits bazaar.listing.expired"
-          - "live -> closed | bazaar.listing.close by owner or sold-out sweep | end publication first; Listing unpublished -> closed; emits bazaar.listing.closed"
-          - "live -> archived | bazaar.listing.archive by owner | end publication if active; Listing -> archived; emits bazaar.listing.archived"
+          - "live -> live | expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap | bazaar.publication.renew requestedBy expiry_deferral; autoExtensions counted in the next record"
+          - "live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached | Listing stays published locally; others see the signed expiresAt; deferredSince recorded"
+          - "live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired"
+          - "live -> closed | bazaar.listing.close by owner or sold-out sweep | holds handled per V04; end publication first; Listing unpublished -> closed; emits bazaar.listing.closed"
+          - "live -> archived | bazaar.listing.archive by owner | holds handled per V04; end publication if active; Listing -> archived; emits bazaar.listing.archived"
+          - "deferred -> expired | sweep finds no active Deal-linked or cycle hold | Listing published -> expired; emits bazaar.listing.expired"
+          - "deferred -> closed | bazaar.listing.close by owner | holds handled per V04; end publication; Listing -> closed; emits bazaar.listing.closed"
+          - "expired -> closed | bazaar.listing.close by owner | holds handled per V04; Listing expired -> closed; emits bazaar.listing.closed"
+          - "expired -> superseded | consumes bazaar.listing.published for the listing (renew or republish by F01.S01.M03) | record closed; the listing is live again and a later end creates a new record"
           - "expired -> archived | owner archive or 30 days after endedAt | emits bazaar.listing.archived"
           - "closed -> archived | owner archive or 30 days after endedAt | emits bazaar.listing.archived"
           - "archived -> restored | bazaar.listing.restore within 90 days | Listing archived -> unpublished; emits bazaar.listing.restored"
-          - "archived -> purged | purge sweep when purgeAt <= now, or owner deletion | Listing archived -> deleted"
+          - "archived -> purged | purge sweep when purgeAt <= now, or owner deletion | Listing archived -> deleted with keepEvidence; evidence-referenced records keep their evidence fields until evidenceUntil"
     timeouts:
-      - "Expiry sweep every 5 minutes and at app start."
+      - "Expiry sweep every 5 minutes and at app start; deferred records are re-checked on every run."
       - "Auto-archive sweep daily for expired and closed records older than 30 days."
-      - "Purge sweep daily for archived records past restoreUntil."
+      - "Purge sweep daily for archived records past purgeAt; evidence fields of referenced records are purged at evidenceUntil."
       - "Sold-out sweep daily: published listings whose stock has been zero for 7 days are closed with reason sold_out."
   commands_queries_events:
     requirements:
-      - "close, archive, restore and expire are vault commands; none produces a signed statement itself; the tombstone is produced by bazaar.publication.end in F01.S01.M03 when a publication is active."
+      - "close, archive, restore and expire are vault commands; none produces a signed statement itself; the tombstone is produced by bazaar.publication.end in F01.S01.M03 when a publication is active, and a reservation release by F01.S03.M01 when a Deal-linked hold is released with its Deal."
       - "Events expired, archived, restored and closed are emitted in the same transaction as the status change."
       - "Expiry also depends on the owner's own clock; other vaults apply the expiresAt inside the signed projection and treat relay receipt times as claims."
     commands:
       - name: bazaar.listing.close
         capability: bazaar.listing.close
-        input: "[vault-local] { listingId, expectedRevision, closeReason, closedWithRef?, releaseHolds? }"
-        output: "{ archiveRecordId, listingStatus: closed, tombstoneQueued }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_ARCHIVE_HOLD_ACTIVE]
+        input: "[vault-local] { listingId, expectedRevision, closeReason, closedWithRef?, releaseHolds?, cancelDeals? }"
+        output: "{ archiveRecordId, listingStatus: closed, tombstoneQueued, convertedHoldIds[], cancelledDealIds[] }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_ARCHIVE_HOLD_ACTIVE, PRECONDITION_FAILED]
         emits: [bazaar.listing.closed]
         idempotent: true
       - name: bazaar.listing.archive
         capability: bazaar.listing.archive
-        input: "[vault-local] { listingId, expectedRevision, releaseHolds? }"
+        input: "[vault-local] { listingId, expectedRevision, releaseHolds?, cancelDeals? }"
         output: "{ archiveRecordId, restoreUntil }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_ARCHIVE_HOLD_ACTIVE]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, BAZAAR_ARCHIVE_HOLD_ACTIVE, PRECONDITION_FAILED]
         emits: [bazaar.listing.archived]
         idempotent: true
       - name: bazaar.listing.restore
@@ -147,10 +174,11 @@ processes:
       - name: bazaar.listing.expire
         capability: bazaar.listing.expire
         input: "[vault-local, scheduler] { listingId }"
-        output: "{ archiveRecordId, expiredAt }"
-        errors: [NOT_FOUND, CONFLICT_STATE]
+        output: "{ archiveRecordId?, outcome: expired|renewed|deferred, expiredAt? }"
+        errors: [NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED]
         emits: [bazaar.listing.expired]
         idempotent: true
+    note: "Purge evidence check: before apply_status to deleted the purge sweep sets keepEvidence when closedWithRef is set, when bazaar.offer.list_for_listing or bazaar.negotiation.list_mine return any retained record for the listing, or when F01.S03.M01 holds an evidence hold (linkedDealId or holderType cycle). Privacy ports (N6): the module registers ExportSectionPort (section bazaar.archive_records), DeletionPort (plan: end publications, archive, pseudonymize ownerId in records kept as evidence) and RetentionPurgePort (purgeAt and evidenceUntil sweeps) with F10.S01.M03, F10.S01.M04 and F10.S01.M02."
     queries:
       - name: bazaar.archive_record.list_mine
         capability: bazaar.archive_record.read
@@ -166,26 +194,28 @@ processes:
       - {type: bazaar.listing.expired, privacy: P0, payload: "{ listingId, ownerId, expiredAt }"}
       - {type: bazaar.listing.archived, privacy: P1, payload: "{ listingId, ownerId, archiveRecordId, restoreUntil }"}
       - {type: bazaar.listing.restored, privacy: P1, payload: "{ listingId, ownerId, archiveRecordId }"}
-      - {type: bazaar.listing.closed, privacy: P0, payload: "{ listingId, ownerId, closeReason, closedWithRef? }"}
+      - {type: bazaar.listing.closed, privacy: P0, payload: "{ listingId, ownerId, closeReason }"}
     events_consumed:
       - {type: bazaar.inventory.depleted, effect: "start the 7-day sold-out timer for the listing when every variant is depleted with reason sold"}
       - {type: bazaar.inventory.restocked, effect: "cancel the sold-out timer"}
-      - {type: privacy.deletion.requested, effect: "end publications, archive all own listings, and set purgeAt = request time + 30 days"}
+      - {type: bazaar.listing.published, effect: "close an expired record of the listing as superseded (renew or republish)"}
+      - {type: privacy.deletion.requested, effect: "end publications, archive all own listings, and set deletionRequestedAt so purgeAt = min(restoreUntil, request time + 30 days)"}
+      - {type: privacy.deletion.completed, effect: "replace ownerId with the payload pseudonym in records kept until evidenceUntil"}
     errors:
-      - "BAZAAR_ARCHIVE_HOLD_ACTIVE | 409 | no | listing has active inventory holds; confirm release or wait"
+      - "BAZAAR_ARCHIVE_HOLD_ACTIVE | 409 | no | listing has active inventory holds that this action may not release; params.holds names each with the required action"
       - "BAZAAR_ARCHIVE_RESTORE_EXPIRED | 410 | no | the 90-day restore window has passed"
     example: |
       vault.dispatch("bazaar.listing.close", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 7,
         "closeReason": "sold", "closedWithRef": { "type": "deal", "id": "0192f3a9-..." } }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000041")
-      => { "archiveRecordId": "0192f3aa-...", "listingStatus": "closed", "tombstoneQueued": true }
-      event bazaar.listing.closed { listingId, ownerId, closeReason: "sold", closedWithRef: { type: "deal", id, verified: false } }
+      => { "archiveRecordId": "0192f3aa-...", "listingStatus": "closed", "tombstoneQueued": true, "convertedHoldIds": ["0192f3a6-..."], "cancelledDealIds": [] }
+      event bazaar.listing.closed { listingId, ownerId, closeReason: "sold" }   (closedWithRef stays in the ArchiveRecord)
   authorization_capabilities:
     requirements:
       - "Vault policy: only the local principal who owns the listing may close, archive, restore; expire runs from the vault scheduler."
       - "No relay role participates; relays remove content only when they receive the signed tombstone or by their own hosting policy."
       - "Reading archive records is limited to the owner."
     capabilities:
-      - "bazaar.listing.close | owner | listing.ownerId = local principal; status published, unpublished or expired"
+      - "bazaar.listing.close | owner | listing.ownerId = local principal; status published, unpublished, deferred or expired"
       - "bazaar.listing.archive | owner | listing.ownerId = local principal; status published, unpublished, expired or closed"
       - "bazaar.listing.restore | owner | record.ownerId = local principal; status archived; within 90 days"
       - "bazaar.listing.expire | system | vault scheduler; listing status published and expiresAt <= now"
@@ -193,28 +223,31 @@ processes:
   failure_recovery_idempotency:
     requirements:
       - "Commands are idempotent per CTR-IDM-001 and sweeps are safe to run twice."
-      - "Ending a publication, changing the Listing status and writing the ArchiveRecord commit together; the tombstone transport is a separate retried step."
+      - "Ending a publication, converting or releasing holds, cancelling Deals, changing the Listing status and writing the ArchiveRecord commit together; the tombstone and release transport is a separate retried step."
       - "Offline use is complete locally; nothing here claims relay delivery."
     idempotency: "Idempotency-Key required on close, archive and restore; sweeps use the natural key (listingId, target status) so a second run changes nothing."
-    concurrency: "expectedRevision on commands; a unique partial index allows one open ArchiveRecord per listing; two tabs closing the same listing give CONFLICT_REVISION to the second."
+    concurrency: "expectedRevision on commands; a unique partial index allows one open ArchiveRecord per listing; two tabs closing the same listing give CONFLICT_REVISION to the second. A hold that becomes active during a sweep run is seen by the next run because the sweep re-reads holds inside its transaction."
     retries: "Sweeps retry per batch of 100 listings after a transaction abort (max 3); tombstone transport follows IDM-4 backoff (base 500 ms, cap 30 s, 6 attempts)."
-    offline: "All commands work offline. Tombstones stay prepared in the sync outbox; the UI says the ended listing may still be visible on relays until they receive it."
-    partial_failure: "If ending the publication fails (signing key locked), the whole close is refused with PRECONDITION_FAILED and nothing changes; if tombstone transport fails later, the local close stands and delivery is retried."
+    offline: "All commands work offline. Tombstones and reservation releases stay prepared in the sync outbox; the UI says the ended listing may still be visible on relays until they receive it."
+    partial_failure: "If ending the publication fails (signing key locked) or commerce.deal.cancel fails, the whole close is refused with PRECONDITION_FAILED and nothing changes; if tombstone transport fails later, the local close stands and delivery is retried."
   privacy_retention_abuse:
     requirements:
       - "Close references and reasons are P1 vault data and are never put in public events beyond the reason enum."
-      - "Archived listings keep content for 90 days, then are purged and replaced by a tombstone kept 180 days (CTR-PRV-001)."
+      - "Archived listings keep content for 90 days; unreferenced content is then purged at purgeAt = min(restoreUntil, deletionRequestedAt + 30 d) and replaced by a tombstone kept 180 days (CTR-PRV-001), while records cited by an Offer, Negotiation or Deal keep their evidence fields until evidenceUntil."
       - "A sold marking is an owner assertion; the UI never presents it as verified payment or delivery."
+      - "The module registers ExportSectionPort (section bazaar.archive_records), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ArchiveRecord field with its F10.S02.M02 class, and pseudonymizes retained records on privacy.deletion.completed."
     data:
-      - "ArchiveRecord: P1; closedWithRef is an owner assertion unless verified is true."
-      - "bazaar.listing.closed payload: reason enum and optional reference id only."
+      - "ArchiveRecord: P1; closedWithRef is an owner assertion unless verified is true; field classes annotated per F10.S02.M02."
+      - "bazaar.listing.closed payload: listingId, ownerId and the reason enum only; no reference to a Deal, cycle or request."
     retention:
-      - "ArchiveRecord: RET-EVIDENCE; purge of listing content at restoreUntil (90 days after archive)."
+      - "ArchiveRecord: RET-EVIDENCE when referenced (until evidenceUntil, pseudonymized after principal deletion); otherwise purged with the listing content at purgeAt."
       - "Tombstone {id, type, deletedAt}: 180 days."
     threats:
       - "T01 | Fake sold marking to hide a listing from competitors or to fake popularity | marking is local, labelled owner-asserted, never feeds reputation without the counterparty's signed receipt (F09/F07)"
       - "T02 | Resurrecting a listing a relay removed under its policy | restore returns to unpublished; publication re-runs policy checks and each relay applies its own policy again"
-      - "T03 | Content kept after the owner asked for deletion | purge sweep at 30 days after privacy.deletion.requested; crypto-shred of blob keys"
+      - "T03 | Content kept after the owner asked for deletion | purge sweep at 30 days after privacy.deletion.requested; crypto-shred of blob keys; only evidence fields of referenced records remain, pseudonymized"
+      - "T04 | Public close event links a listing to a counterparty transaction | closedWithRef kept only in the P1 ArchiveRecord; contract test asserts the closed payload key set"
+      - "T05 | Close silently breaks a buyer's reservation | Deal-linked holds are converted for the closing Deal or released only with commerce.deal.cancel and a signed release to the buyer"
     abuse_controls:
       - "At most 100 close/archive/restore commands per hour per vault."
       - "Restore count per listing limited to 5 to prevent repost churn."
@@ -224,7 +257,8 @@ processes:
       - "Sweeps stay within battery-friendly time budgets on Moto G-class hardware."
       - "Overdue expiry lag is visible to the user in diagnostics."
     metrics:
-      - "classrup_bazaar_listings_ended_total{outcome=expired|closed|archived|restored|purged} (local)"
+      - "classrup_bazaar_listings_ended_total{outcome=expired|closed|archived|restored|superseded|purged} (local)"
+      - "classrup_bazaar_expiry_deferrals_total{outcome=renewed|deferred} (local)"
       - "classrup_bazaar_expiry_lag_ms (local gauge: now - oldest overdue expiresAt)"
       - "classrup_bazaar_sweep_duration_ms{sweep} (local histogram)"
     logs:
@@ -237,33 +271,38 @@ processes:
       - "Every requirement is covered by at least one automated test."
       - "Contract tests validate events against the schema registry; payloads must match what F01.S04.M01 and F06.S01.M01 consume."
       - "Sweeps are tested with an injected clock."
-    fixtures: "Vault with listings: A published expiring in 1 min, B published with active hold, C archived 89 days ago, D closed 31 days ago; clock 2026-11-04T10:00:00Z."
+    fixtures: "Vault with listings: A published expiring in 1 min, B published with an active hold linked to open Deal D1, C archived 89 days ago, D closed 31 days ago, E published expiring on day 10 with a 14-day cycle hold, F expired yesterday; relays R1, R2 and R3 (R3 receipts 3 days ahead); clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | close A with reason sold and a deal ref | ArchiveRecord closed, closedWithRef.verified false, Listing closed"
-      - "T02 | unit | 01.R03,07.R02 | read stored records and events | no content beyond P1 fields; event carries reason enum only"
-      - "T03 | unit | 02.R03 | violate each rule V01-V07 | documented error code returned and nothing changes"
-      - "T04 | property | 03.R01,03.R02 | random command and clock sequences | only declared transitions; at most one open record per listing"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | close A with reason sold and a deal ref | ArchiveRecord closed, closedWithRef.verified false, Listing closed"
+      - "T02 | contract | 07.R01 | close A and inspect bazaar.listing.closed | payload key set equals {listingId, ownerId, closeReason}; no closedWithRef or reference id"
+      - "T03 | unit | 02.R03 | violate each rule V01-V09 | documented error code returned and nothing changes"
+      - "T04 | property | 03.R01,03.R02,03.R05 | random command and clock sequences including close from expired and renew after expiry | only declared transitions; expired -> closed and expired -> superseded allowed; at most one open record per listing"
       - "T05 | integration | 03.R02,03.R03,06.R02 | close A with active publication | publication ended and tombstone queued in the same transaction; restore of C gives unpublished, never published"
       - "T06 | contract | 04.R01,04.R02,09.R02 | each command runs | events expired, archived, restored, closed validate; consumers in F01.S04.M01 accept them"
       - "T07 | integration | 04.R03 | expiry sweep with clock advanced one week | all overdue listings expired in one batch, one event each, expiresAt from the statement honoured"
       - "T08 | abuse | 05.R01,05.R02,05.R03 | other principal or UI context calls expire, restores foreign record | FORBIDDEN or NOT_FOUND"
       - "T09 | integration | 06.R01,06.R02 | replay close; run sweeps twice; two tabs | one record, one tombstone, no duplicate events; second tab CONFLICT_REVISION"
       - "T10 | chaos | 06.R03,02.R03 | signing key locked during close; later tombstone transport fails | close refused atomically; later local close stands and transport retries"
-      - "T11 | integration | 07.R01,07.R03 | privacy.deletion.requested then 30 days | listings archived and then purged with tombstones; UI never shows sold as verified"
+      - "T11 | integration | 07.R03 | mark sold and view the listing and its history | UI never shows sold as verified without a signed counterparty record"
       - "T12 | load | 08.R01,08.R02,08.R03 | sweep of 2 000 listings on Moto G profile | <= 500 ms, lag gauge returns to 0, no telemetry requests"
       - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-001 requirement maps to a passing test; injected clock used"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import record with restoreUntil in the past | records round-trip; stale archived record imported as purged candidate"
       - "T15 | integration | 04.R01 | stock zero for 7 days then restocked on day 6 in a second case | closed sold_out on day 7 in the first; timer cancelled in the second"
+      - "T16 | integration | 02.R02 | close B with closedWithRef D1; close B with a ref to another Deal; then with cancelDeals true | first converts the D1 hold; second BAZAAR_ARCHIVE_HOLD_ACTIVE; third calls commerce.deal.cancel and queues a signed reservation release to the buyer"
+      - "T17 | integration | 03.R04 | E reaches expiresAt on day 10 with the 14-day cycle hold; then the renewal cap is reached | publication renewed with requestedBy expiry_deferral and no bazaar.listing.expired; at the cap the record becomes deferred and expires only after the hold ends"
+      - "T18 | abuse | 02.R04 | R3 returns receipts 3 days ahead while R1 and R2 agree; then only R3 remains | R3 ignored and the sweep expires on time; with R3 alone the device clock is used and a warning is recorded"
+      - "T19 | integration | 01.R03,07.R02 | purge C with an accepted offer citing it and D without references, then privacy.deletion.requested and completed | C keeps evidence fields until evidenceUntil with ownerId pseudonymized and keepEvidence passed to F01.S01.M01; D purged at min(restoreUntil, request + 30 d) with a tombstone"
+      - "T20 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.archive_records present with field classes; deletion plan archives and pseudonymizes; purge honours purgeAt and evidenceUntil"
     acceptance:
-      - All tests T01-T15 pass in CI.
-      - Closing or archiving a published listing always ends its publication and queues a tombstone.
-      - Restore never republishes, and no sold marking is displayed as verified without a signed counterparty record.
+      - All tests T01-T20 pass in CI.
+      - Closing or archiving a published listing always ends its publication and queues a tombstone, and never releases a Deal-linked hold without the Deal's cancellation.
+      - Restore never republishes, no listing with an active cycle or Deal-linked hold expires under the sweep, and no sold marking is displayed as verified without a signed counterparty record.
   import_export_backup_rollback:
     requirements:
       - "The user export contains all ArchiveRecords of own listings."
       - "Import keeps restoreUntil and purgeAt as exported and immediately purges records already past purgeAt."
       - "Schema changes follow expand/contract and keep v1 readable for 180 days."
     export: "Section bazaar.archive_records in classrup-export/v1, one line per ArchiveRecord (schema classrup.bazaar.archive_record/v1)."
-    import: "Records whose listing is absent are held read-only; records past purgeAt are imported as purged without content; closed references stay unverified."
+    import: "Records whose listing is absent are held read-only; records past purgeAt are imported as purged without content (evidence fields kept until evidenceUntil); closed references stay unverified."
     backup: "Vault export is the primary backup (IOX-6); the app warns after 30 days without export."
-    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release, which ignores unknown fields."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release, which ignores unknown fields and the deferred and superseded statuses as closed records."

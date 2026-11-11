@@ -37,15 +37,14 @@
 |---|---|
 | `mutiny.proposal.revised` | mark earlier reports of the subject as superseded for decisions; a new check is required for the new revision hash |
 | `mutiny.values.normalized` | invalidate reports of the same subject so quote and tolerance checks re-run |
+| `mutiny.normalization.expired` | invalidate reports of the subject so C06 fails until a quote_refresh revision exists |
+| `mutiny.valuation.flagged` | invalidate reports of subjects containing the item so C12 re-runs |
+| `privacy.deletion.completed` | purge the erased principal's reports; reports are derived and regenerable |
 
 ### Module errors
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| MUTINY_PARTICIPANT_DUPLICATE | 422 | no | the same participant appears twice |
-| MUTINY_ITEM_DUPLICATE | 422 | no | the same inventory item appears in more than one leg |
-| MUTINY_ITEM_NOT_OWNED | 422 | no | the giver is not the owner of the item according to the available evidence |
-| MUTINY_ITEM_UNAVAILABLE | 409 | no | item quantity is reserved, sold, expired or unpublished |
 | MUTINY_VALUE_OUT_OF_TOLERANCE | 422 | no | value gap exceeds MNY-5 tolerance without compensation or acceptance |
 | MUTINY_QUOTE_STALE | 410 | no | a pinned FX quote is expired or about to expire |
 | MUTINY_DISTANCE_EXCEEDED | 422 | no | a participant pair is farther apart than allowed |
@@ -54,6 +53,7 @@
 | MUTINY_DEADLINE_INVALID | 422 | no | consent deadline or execution window out of range |
 | MUTINY_VALUATION_DISPUTED | 409 | no | a valuation is disputed and not acknowledged by its owner |
 | MUTINY_FEASIBILITY_STALE | 409 | yes | the report is older than 10 minutes |
+| MUTINY_PROFILE_LENGTH_MISMATCH | 422 | no | the subject's length does not match the requested length profile |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -76,7 +76,8 @@ mutiny.feasibility.check  { "subjectType": "cycle", "subjectId": "0192f3b0-…",
 |---|---|---|---|---|
 | TEST-PS-016-09.T07 | contract | PS-016-04.R01, PS-016-04.R02, PS-016-09.R02 | check command and event | output and event validate against registry |
 | TEST-PS-016-09.T08 | integration | PS-016-04.R03, PS-016-06.R01 | replay check with same key, then new key within same minute | stored report replayed, then same report returned by inputHash |
+| TEST-PS-016-09.T20 | unit | PS-016-01.R01, PS-016-04.R02 | registry with profiles 3 and 4 registered, get(5), explicit effectiveProfile, explanation of a 4-party suggestion with the 3-party profile | engine default for 5; explicit profile used; MUTINY_PROFILE_LENGTH_MISMATCH |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

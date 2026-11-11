@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section mutiny.cycles in classrup-export/v1; one line per Cycle (schema classrup.mutiny.cycle/v1) and per CycleConsent (schema classrup.mutiny.cycle_consent/v1) with embedded statements and provenance.
-- **import:** Terminal cycles import as read-only history; proposed and committed cycles import as frozen with closeReason recovery; reservations never revive.
+- **import:** Terminal cycles import as read-only history; opening, proposed and committed cycles import as frozen with closeReason recovery; reservations never revive.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext in mailboxes (IOX-7).
 - **migration rollback:** Additive optional fields only in v1; rollback to the previous release ignores unknown fields; the status enum only grows and unknown states read as frozen.
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S04.M02, F08.S02.M02, F07.S01.M01, F12.S03.M04, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S04.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F07.S03.M01, F12.S03.M04, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

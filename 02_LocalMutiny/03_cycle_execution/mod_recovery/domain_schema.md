@@ -10,6 +10,7 @@
 - **PS-024-01.R02** A RecoveryCase is the local aggregate that tracks which legs were handed over or received, which options were proposed, accepted or completed, any linked dispute, and the per-leg disposition of remaining reservations.
 - **PS-024-01.R03** Both records are P2, retained as RET-EVIDENCE, exchanged only as end-to-end encrypted signed envelopes to the cycle's participants, and verified by each vault before use.
 - **PS-024-01.R04** Local receive time is the only time used for decisions, and claimed times are shown as claims.
+- **PS-024-01.R05** completionCid = cid (sha256-base64url) of the RFC 8785 JCS bytes of {cycleId, revisionHash, receipts: ascending list of the cids of the valid received attestations, one per leg, settlements: ascending list of the compensation settlement evidence cids}; every participant can recompute it from the signed attestations delivered to them, so it is verifiable proof of what was attested, not of delivery.
 
 ## Specification
 
@@ -29,7 +30,7 @@ Schema `classrup.mutiny.handover_attestation/v1` · storage **device** · privac
 | items | array — 1..5 items {inventoryItemId uuidv7, quantity int 1..99} covered by the statement; must equal the leg lines unless issue_reported names a subset |
 | issueCode? | enum — not_received \| not_as_described \| damaged \| other; required for issue_reported |
 | note? | string — ≤ 280 code points, plain text |
-| evidenceRefs | array — 0..3 attachment ids (F08.S01.M03, metadata stripped) |
+| evidenceRefs | array — 0..3 MediaBlob refs blob:sha256-<base64url> (F15.S02.M03, ≤ 5 MiB, metadata stripped through F10.S02.M03 before storing, N9), attached end-to-end encrypted through F08.S01.M03 |
 | claimedAt | timestamp — signer's clock, a claim |
 | receivedAtLocal | timestamp — local clock when verified, or creation time for own |
 | direction | enum — own \| peer |
@@ -61,11 +62,12 @@ Schema `classrup.mutiny.recovery_case/v1` · storage **device** · privacy **P2*
 | handedOverLegIds | array — 0..8 leg ids with a valid handed_over attestation |
 | receivedLegIds | array — 0..8 leg ids with a valid received attestation |
 | pendingLegIds | array — 0..8 leg ids with neither |
-| options | array — 0..12 items {optionId, kind return_item\|compensation\|waive\|dispute, legId?, compensationLegId?, proposedBy did, proposalCid cid, status proposed\|accepted\|rejected\|completed} |
-| dispositions | array — 0..8 items {legId, disposition converted\|released} decided when resolved |
+| options | array — 0..12 items {optionId, kind return_item\|compensation\|waive\|dispute, legId?, compensationLegId?, proposedBy did, proposalCid cid, requiredSignerIds did[] (return_item: giver and receiver of legId; compensation: payer and payee; waive: the party bearing the loss; dispute: the opener), acceptedBy [{did, actionCid}], status proposed\|accepted\|rejected\|completed} |
+| dispositions | array — 0..8 items {legId, disposition converted\|released\|waived, backedBy {kind signed_acceptance\|dispute_outcome, cids[]} — signed acceptance of that leg's giver and receiver, or a dispute outcome both acknowledged} decided when resolved |
 | disputeCaseId? | uuidv7 — F09.S02.M02 case id when escalated |
 | status | enum — open \| escalated \| resolved \| closed_unresolved |
 | outcome? | enum — agreed \| dispute_outcome \| unresolved |
+| participantIds | array — 2..8 DIDs of the cycle, copied for notification routing and review unlock |
 | openedAt | timestamp — local clock |
 | deadlineAt | timestamp — openedAt + 14 d, after which the UI states that only a dispute or waiver remains |
 | lastActivityAt | timestamp — local clock |
@@ -77,7 +79,8 @@ Schema `classrup.mutiny.recovery_case/v1` · storage **device** · privacy **P2*
 **Invariants**
 - At most one non-terminal RecoveryCase exists per cycle.
 - handedOverLegIds, receivedLegIds and pendingLegIds are disjoint or receivedLegIds is a subset of handedOverLegIds ∪ receivedLegIds, and their union covers all legs.
-- status resolved implies every option with status accepted is completed or waived and every leg has a disposition.
+- status resolved implies every option with status accepted is completed or waived and every leg has a disposition backed by that leg's giver and receiver or an acknowledged dispute outcome.
+- An option has status accepted only when every DID in requiredSignerIds has a verified accept action in acceptedBy.
 - A closed case never reopens; a new problem opens a new case only if the cycle has none open.
 
 ### Storage DDL
@@ -100,8 +103,9 @@ CREATE UNIQUE INDEX mutiny_recovery_open ON mutiny_recovery_case(tenant_id, cycl
 | TEST-PS-024-09.T01 | integration | PS-024-01.R01, PS-024-03.R01, PS-024-04.R03 | 3-party cycle with all handed_over and received attestations delivered | each vault emits leg.received per leg and completed after the third receipt |
 | TEST-PS-024-09.T02 | integration | PS-024-01.R04, PS-024-03.R01 | 2-party cycle; receiver attests without giver attestation | leg received and cycle completes; giver evidence not required |
 | TEST-PS-024-09.T07 | integration | PS-024-03.R03, PS-024-01.R02 | return_item proposed by Alice, accepted by Bob, returned and return_confirmed attested | case resolved with dispositions released for returned legs |
-| TEST-PS-024-09.T19 | e2e | PS-024-01.R03, PS-024-02.R02 | two mobile browsers perform hand-over attestations | statement of what a signature means shown; payment labels as text; axe zero serious issues |
+| TEST-PS-024-09.T22 | integration | PS-024-01.R03, PS-024-07.R01 | relay fixture records every mailbox put during attestations and recovery actions | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
+| TEST-PS-024-09.T24 | contract | PS-024-04.R04, PS-024-04.R05, PS-024-01.R05 | completion and recovery events against the registry | completed carries contextId, completionCid recomputed independently from the receipt cids, parties and legs; opened, partially_executed and resolved carry participantIds; registry signer roles match |
 
 ## Dependencies
 
-Module depends on: F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F07.S01.M01, F07.S02.M02, F15.S01.M01, F15.S02.M03, F10.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

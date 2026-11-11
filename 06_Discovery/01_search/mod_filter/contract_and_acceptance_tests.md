@@ -14,23 +14,23 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds and 20 categories; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-044-09.T01 | unit | PS-044-01.R01, PS-044-02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden |
-| TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km | the documented error code each time with the field path |
+| TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km, distance 7 km and 200 km, 6-character center | DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CENTER_REQUIRED, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN, each with the field path |
 | TEST-PS-044-09.T03 | property | PS-044-01.R03 | random key order and equivalent values | canonicalize returns identical bytes and cache keys |
-| TEST-PS-044-09.T04 | unit | PS-044-01.R02, PS-044-03.R01 | compile each key alone and all together | SQL text and params equal golden fixtures |
+| TEST-PS-044-09.T04 | unit | PS-044-01.R02, PS-044-03.R01, PS-044-01.R04 | compile each key alone and all together, including distanceKm 5, 10, 25, 50 and 100 around u4pru and condition poor | SQL text and params equal golden fixtures; 25 km has the L1 prefix branch, 50 and 100 km use d.geo_cell4 IN (...) |
 | TEST-PS-044-09.T05 | property | PS-044-03.R02, PS-044-03.R03 | 200 runs of the same filter with the same clock | identical SQL and params; compile never reads the system clock |
-| TEST-PS-044-09.T06 | integration | PS-044-01.R02, PS-044-07.R01 | compiled filter run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data |
+| TEST-PS-044-09.T06 | integration | PS-044-01.R02, PS-044-07.R01, PS-044-01.R04 | compiled filters, including distanceKm 50 and 100 km and L1 documents, run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data and is non-empty for 50 and 100 km |
 | TEST-PS-044-09.T07 | abuse | PS-044-07.R02, PS-044-07.R03, PS-044-08.R01 | 10 000 fuzz strings with SQL metacharacters and 5 000-item lists | no SQL injection, errors for oversize lists, validation under 1 ms p95 |
 | TEST-PS-044-09.T08 | unit | PS-044-04.R01, PS-044-04.R02, PS-044-04.R03 | inspect module exports and error mapping | no commands, queries or events exist and errors map to documented codes |
 | TEST-PS-044-09.T09 | unit | PS-044-05.R01, PS-044-05.R02, PS-044-05.R03 | attempt to filter on a private column name | rejected as unknown key; no capability is defined |
 | TEST-PS-044-09.T10 | integration | PS-044-06.R01, PS-044-06.R02, PS-044-06.R03 | taxonomy port unavailable and stale snapshot | DEPENDENCY_UNAVAILABLE without partial output; stale snapshot validates with a hint |
-| TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance and category filters | index used, metrics counted by code without values |
+| TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance filters of 10 and 100 km and category filters | discovery_doc_cell and discovery_doc_cell4 used, metrics counted by code without values |
 | TEST-PS-044-09.T12 | unit | PS-044-09.R01, PS-044-09.R02, PS-044-09.R03 | traceability run over PS-044 | every requirement maps to a passing test; golden files unchanged |
 | TEST-PS-044-09.T13 | unit | PS-044-10.R01, PS-044-10.R02, PS-044-10.R03 | load a v1 filter stored inside a saved search export | parsed unchanged; unknown key rejected on import |
 

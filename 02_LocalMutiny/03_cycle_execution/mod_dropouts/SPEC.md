@@ -11,13 +11,15 @@ Handles every way a participant stops taking part in a cycle: signed withdrawal 
 ## Responsibilities
 
 - Record each dropout as an append-only DropoutRecord with reason, phase (before commit, committed without handover, after handover), outcome and evidence basis (signed statement or local clock).
-- Produce the principal's signed withdrawal statement when the principal leaves, and verify peers' withdrawal and decline statements.
+- Produce the principal's signed withdrawal statement when the principal leaves, and be the single ingest owner of peers' classrup.mutiny.cycle_withdrawal/v1; declines and revocations are F08 ConsentStatements ingested by F08.S02.M02, and this module reacts to their events for committed cycles.
 - Evaluate timeouts and loss signals lazily on vault open and every 60 s while open, cancel cycles with no handover evidence, and leave handover cases to F02.S03.M04.
 - Guarantee the no-silent-reroute rule by refusing every operation that would change a cycle's participant set.
+- Release the principal's own reservations through the F02.S03.M02 LockPort.releaseForSubject inside the same transaction as every cancellation, and run orphan reconciliation on vault open.
+- Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained dropout records.
 
 ## Not responsible for
 
-- Reservations and their release (F02.S03.M02 consumes the cancelled event) and consent (F02.S03.M01).
+- Reservation records and the mechanics of release (F02.S03.M02, called through LockPort.releaseForSubject in the same transaction) and consent before commit (F02.S03.M01).
 - Handover attestations and recovery options (F02.S03.M04).
 - Global suspension or takedown of an account; none exists (ADR-0016). A relay hosting policy may stop indexing someone, which is not a dropout signal here.
 - Future: pre-consented alternates and automatic re-matching after a cancellation; both would still require new explicit consent from every participant.
@@ -37,6 +39,8 @@ Handles every way a participant stops taking part in a cycle: signed withdrawal 
 - A participant's reservation expires before the execution deadline because their statement had a short expiry; their reservation is invalid for commit, but if already committed it is recorded as a lock_lost dropout.
 - The vault was closed over the consent deadline; on next open the timeout is evaluated before any other action.
 - The account holder erased their identity locally; dropout records are pseudonymized but remain as evidence.
+- A participant revokes their consent through F08 after my vault committed and before any handover; my vault records a dropout with public reason withdrew, cancels and releases my reservation in the same transaction.
+- A relay injects a withdrawal it signed itself, or a cancellation notice for a cycle; nothing is cancelled because only the participant's own signed withdrawal or this vault's clock counts.
 
 ## UX and accessibility
 
@@ -56,11 +60,11 @@ Handles every way a participant stops taking part in a cycle: signed withdrawal 
 - Commands: `mutiny.dropout.withdraw`, `mutiny.dropout.ingest`, `mutiny.dropout.evaluate`
 - Queries: `mutiny.dropout.list_for_cycle`, `mutiny.dropout.get`
 - Emits: `mutiny.cycle.participant_dropped`, `mutiny.cycle.cancelled`
-- Consumes: `mutiny.cycle.proposed`, `mutiny.cycle.committed`, `mutiny.cycle.declined`, `mutiny.cycle.unlocked`, `mutiny.leg.handed_over`, `mutiny.leg.received`, `identity.block.added`, `bazaar.listing.unpublished`, `bazaar.listing.expired`
+- Consumes: `mutiny.cycle.proposed`, `mutiny.cycle.committed`, `mutiny.cycle.declined`, `comms.consent.received`, `comms.consent.revoked`, `privacy.deletion.completed`, `mutiny.cycle.unlocked`, `mutiny.leg.handed_over`, `mutiny.leg.received`, `identity.block.added`, `bazaar.listing.unpublished`, `bazaar.listing.expired`
 
 ## Dependencies
 
-F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
+F02.S03.M01, F02.S03.M02, F02.S03.M04, F02.S01.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -69,10 +73,10 @@ F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F1
 | PS-022-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-022-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-022-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-022-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-022-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-022-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-022-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-022-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-022-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-022-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-022-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-022-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -81,6 +85,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T21 pass in CI.
 - Before any handover evidence a dropout always ends in cancellation with released reservations; after evidence it never cancels and always leads to partially_executed with recovery.
 - No code path changes or substitutes cycle participants and no signed statement or event exposes a private reason.

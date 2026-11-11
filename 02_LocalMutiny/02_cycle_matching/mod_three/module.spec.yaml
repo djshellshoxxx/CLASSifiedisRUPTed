@@ -8,7 +8,7 @@ summary: >-
   settlement currency with the subject's pinned quote, so it means the same value in EUR, JPY or BTC. The engine in the vault or on a relay remains the only
   producer of suggestions, and a suggestion remains advice.
 responsibilities:
-  - Define and register with the F02.S02.M05 registry the immutable-per-release length-3 profile: tolerance 500 basis points of the larger side (MNY-5 default 5 percent), absolute minimum reference 5.00 EUR (converted to the settlement currency with the pinned barter_normalization quote, MNY-4), maximum pair distance bucket 3 (25_50 in the F02.S02.M04 ordinal mapping), imbalance quantum 10 permille, minimum want age 15 minutes.
+  - "Define and register with the F02.S02.M05 registry the immutable-per-release length-3 profile: tolerance 500 basis points of the larger side (MNY-5 default 5 percent), absolute minimum reference 5.00 EUR (converted to the settlement currency with the pinned barter_normalization quote, MNY-4), maximum pair distance bucket 3 (25_50 in the F02.S02.M04 ordinal mapping), imbalance quantum 10 permille, minimum want age 15 minutes."
   - Allow tenant or vault settings to override the profile only inside bounds (tolerance 0..1000 bps, absolute minimum reference 0..100.00 EUR) and record the effective profile version used for each suggestion.
   - Produce the participant-facing explanation of a 3-party suggestion, naming for each participant what they give, what they receive, the value gap against tolerance, distance bucket and the facts that are only claims of others.
 non_responsibilities:
@@ -26,7 +26,7 @@ edge_cases:
   - A relay-imported suggestion was computed with a different profile version than the vault's; the vault shows both and re-verifies with its own profile.
   - Participant settlement currency has zero decimals (JPY); the absolute minimum is 5.00 EUR converted with the pinned EUR->JPY quote (163/1 gives 815 JPY), and the explanation uses the currency's own formatting.
   - Settlement currency is BTC (exponent 8); the same reference converts with a pinned EUR->BTC quote (1/60000 gives 8333 satoshi), never 5 BTC.
-  - Explanation requested for a suggestion of another length; the query returns VALIDATION_FAILED instead of a wrong explanation.
+  - Explanation requested for a suggestion of another length; the query returns MUTINY_PROFILE_LENGTH_MISMATCH instead of a wrong explanation.
 ux:
   screens:
     - "Explanation panel inside suggestion detail: three rows (one per participant) with gives, receives, gap, tolerance, distance bucket and a basis chip."
@@ -38,7 +38,7 @@ ux:
 processes:
   domain_schema:
     entities: []
-    note: "Library module. The length-3 profile is a typed constant LengthProfile {length: 3, toleranceBps: 500, absoluteMinRef: {amount: '500', currency: 'EUR'}, maxPairBucket: 3 (25_50 per the F02.S02.M04 ordinal mapping), imbalanceQuantumPermille: 10, minWantAgeMinutes: 15, version: 'p3.2'} registered with the F02.S02.M05 LengthProfile registry; absoluteMinRef is converted to the settlement currency with the subject's pinned barter_normalization quote (F02.S04.M02) using MNY-4 HALF_EVEN; overrides are tenant settings, not records owned here."
+    note: "Library module. The length-3 profile is a typed constant LengthProfile {length: 3, toleranceBps: 500, absoluteMinRef: {amount: '500', currency: 'EUR'}, maxPairBucket: 3 (25_50 per the F02.S02.M04 ordinal mapping), imbalanceQuantumPermille: 10, minWantAgeMinutes: 15, version: 'p3.2'} registered with the F02.S02.M05 LengthProfile registry; absoluteMinRef is converted to the settlement currency with the subject's pinned barter_normalization quote, or the toleranceRef rate sealed in the revision snapshot when no pinned quote covers EUR (F02.S04.M02), using MNY-4 HALF_EVEN; suggestions use the latest local quote and are advisory; overrides are tenant settings, not records owned here."
     requirements:
       - The length-3 profile is a typed, versioned constant with the numeric defaults stated in the responsibilities and is registered at startup with the F02.S02.M05 LengthProfile registry, which the engine reads.
       - Overrides are accepted only within the stated bounds and the effective values and profile version are copied into every suggestion's explanation so later changes never rewrite history.

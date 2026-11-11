@@ -3,16 +3,21 @@ scope: MVP
 summary: >-
   Pure re-ranking library applied after relevance scoring, identically in the vault and on a relay. It limits any one
   author to 3 results per page, reserves exposure slots for newly seen authors, caps promoted results at 20 percent of
-  a page, and attaches to every result an explanation made of localizable message keys. It is deterministic and uses
-  only public document fields and local first-seen times; it cannot see user identity, history or protected attributes.
+  a page, and attaches to every result an explanation made of localizable message keys. It works over sliding candidate
+  windows of 200 that cover the full query depth of 500, carrying deferred results from one window into the next so no
+  result is dropped. It also provides auditPage, which a vault runs on every relay page to check the same rules,
+  because a relay's ranking is only that relay's claim. It is deterministic and uses only public document fields and
+  local first-seen times; it cannot see user identity, history or protected attributes.
 responsibilities:
-  - Re-rank a scored candidate window of the top 200 results into pages of 20 (limit 1..50) with a maximum of 3 results per author per page.
+  - Re-rank scored candidate windows of 200 results (window starts 0, 200 and 400, covering query depth 500) into pages of 20 (limit 1..50) with a maximum of 3 results per author per page, carrying results deferred by the caps from window n into window n+1 through carry state stored in the caller's cursor as a bitmap of deferred window positions (at most 200 bits) resolved against the 15-minute query snapshot.
   - Reserve 2 exposure slots per 20-result page for new authors (first seen locally less than 30 days ago) when candidates with a score of at least 50 percent of the page's top score exist.
   - Enforce that promoted results are at most floor(20 percent of page size), each labelled 'Promoted', and demote excess promoted results to the next page.
   - Produce an explanation per result - ordered message keys with parameters such as text match, posted age, distance bucket, promoted, new author slot - never free text.
+  - Accept promoted candidates only when pageParams.promotionEnabled is true (always false for a vault's own ranking) and otherwise refuse with FAIRNESS_PROMOTION_NOT_ALLOWED.
+  - Provide auditPage(page, constants) so a vault can check a relay page (at most 3 per author, promoted at most floor(20 percent), every promoted item labelled) and label a relay that breaks the rules.
 non_responsibilities:
   - Scoring and configuration (F06.S03.M01).
-  - Persisting any state; cursors carry the window position (F06.S01.M02).
+  - Persisting any state; cursors carry the window position and the carry set (F06.S01.M02, F06.S02.M03).
   - Judging author trustworthiness or reputation; reputation is not an input in MVP.
   - "Future: seller-size neutral exposure experiments, category-level diversity, reputation-aware exposure with Sybil dampening."
 depends_on: [F06.S03.M01, F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-UX-001, CTR-TST-001]
@@ -20,7 +25,7 @@ user_stories:
   - As a buyer, my first page is not filled by one prolific seller's items.
   - As a new seller, my good listing gets a fair chance to appear on a results page.
   - As a buyer, I can see why a result is shown, including whether it is promoted or a new-author slot.
-  - As a relay operator, I know paid promotion can never exceed one fifth of a page.
+  - As a relay operator, I know promotion sold on my relay can never exceed one fifth of a page.
 edge_cases:
   - Only one author has matching items; the 3 per page cap would leave pages short, so the cap relaxes only when fewer than 20 items from other authors remain, and the explanation states 'only seller available'.
   - Candidate window has fewer than 20 items; the page is returned as is, no filler.
@@ -28,19 +33,23 @@ edge_cases:
   - A promoted item is also a new-author item; it counts once for the promoted cap and the slot is not consumed.
   - Many accounts are created by one person to game the new-author slots; the library cannot detect it and the spec states the limit; slots are 2 per page and bounded by the 50 percent score threshold.
   - Page size 7; promoted cap is floor(1.4) = 1 and new-author slots are 1 (at least 1 for pages of 5 or more).
-  - Two results tie on score and author; order falls back to firstSeenAt then documentId, never random.
+  - Two results tie on score and author; order falls back to the newer recency anchor then the lexicographically smaller projectionCid, never random and never a locally generated documentId.
+  - An author-capped or promoted result is pushed past the end of window 0; it is carried into window 200 and appears on a later page, never dropped.
+  - A promoted flag is supplied while promotionEnabled is false; rerank returns FAIRNESS_PROMOTION_NOT_ALLOWED and no page.
+  - A relay page has 5 results of one author; auditPage reports max_per_author and the vault labels the relay 'ranking policy not followed'.
 ux:
   notes: Library module. The search screen (F06.S01.M02) renders the explanation keys as localized text and shows a 'Promoted' label and a 'New seller' label as text badges.
 processes:
   domain_schema:
     requirements:
-      - Input is a list of scored candidates with documentId, authorDid, score, promoted flag, authorFirstSeenAt and a score component breakdown; output is a re-ordered page list with explanation keys.
+      - Input is a list of scored candidates with documentId, projectionCid, sourceId, authorDid, score, recency anchor, promoted flag, authorFirstSeenAt and a score component breakdown, plus page parameters (pageSize, windowStart, carry, promotionEnabled); output is a re-ordered page list with explanation keys and the next window position and carry.
       - The library has no persisted state; the only parameters are constants per CTR-UX-001 and this spec.
       - Explanation entries are message keys with parameters so every locale can render them.
     entities: []
     note: >-
-      Library module with no persisted entity. Constants - windowSize 200, defaultPageSize 20, maxPerAuthorPerPage 3,
-      newAuthorWindowDays 30, newAuthorSlotsPer20 2, newAuthorMinScoreRatio 0.5, promotedMaxShare 0.20. Explanation keys -
+      Library module with no persisted entity. Constants - windowSize 200, windowStarts 0, 200, 400 (query depth 500),
+      maxCarry 200 positions (25-byte bitmap), defaultPageSize 20, maxPerAuthorPerPage 3, newAuthorWindowDays 30, newAuthorSlotsPer20 2,
+      newAuthorMinScoreRatio 0.5, promotedMaxShare 0.20. Explanation keys -
       discovery.explain.text_match, discovery.explain.recent, discovery.explain.distance_bucket, discovery.explain.promoted,
       discovery.explain.new_author_slot, discovery.explain.only_seller, discovery.explain.default_ranking.
   validation_rules:
@@ -50,34 +59,44 @@ processes:
       - Parameters outside documented bounds are rejected, never clamped.
     rules:
       - "V01 | every candidate has a finite non-negative score and a unique documentId | VALIDATION_FAILED"
-      - "V02 | page limit is 1..50 and the window start is within the 200 candidate window | VALIDATION_FAILED"
-      - "V03 | promoted candidates come only from an index that has promotion enabled, otherwise the flag is ignored and recorded | FAIRNESS_PROMOTION_NOT_ALLOWED"
-      - "V04 | candidate list is already sorted by descending score with the documented tie-break | FAIRNESS_INPUT_UNSORTED"
+      - "V02 | page limit is 1..50, the window start is 0, 200 or 400, the page position lies inside that window, and the carry is a bitmap of at most 200 positions of the previous window | VALIDATION_FAILED"
+      - "V03 | a candidate with promoted true is supplied only when pageParams.promotionEnabled is true (always false in a vault's own ranking); otherwise rerank returns this error and no page | FAIRNESS_PROMOTION_NOT_ALLOWED"
+      - "V04 | candidate list is already sorted by descending score, then newer recency anchor, then ascending projectionCid | FAIRNESS_INPUT_UNSORTED"
+      - "V05 | every candidate has exactly the documented fields (documentId, projectionCid, sourceId, authorDid, score, recencyAnchor, promoted, authorFirstSeenAt, components) and no others | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - The library is a pure function over its input; there is no lifecycle.
       - The same input always yields the same output order and explanations.
       - Paging over the same snapshot never repeats or drops a result.
     machines: []
-    note: Pure function, no entity lifecycle. rerank(candidates, pageParams, constants) returns { items, nextWindowPosition }.
+    note: >-
+      Pure function, no entity lifecycle. rerank(candidates, pageParams { pageSize, windowStart, position, carry,
+      promotionEnabled }, constants) returns { items, nextPosition, nextWindowStart, carry }. Carry rule - results
+      deferred by the author cap or the promoted cap at the end of window n are placed first in the candidate order of
+      window n+1 (in their original score order); in the last window (400..499) deferred results fill the remaining
+      pages in score order, with pages shortened rather than breaking a cap, so every candidate up to depth 500 appears
+      exactly once. auditPage(page, constants) returns { followed, violations: max_per_author|promoted_share|promoted_unlabelled }.
     timeouts: []
   commands_queries_events:
     requirements:
       - The module exposes functions only and defines no commands, queries or events.
-      - Callers apply capability checks and pagination, and call rerank exactly once per snapshot window.
+      - Callers apply capability checks and pagination, call rerank exactly once per page of a snapshot window, and store the returned carry in their cursor.
       - Typed errors returned by rerank are mapped by callers to HTTP problems.
+      - auditPage(page, constants) is a pure check that a vault runs on each relay page and that returns which fairness rule the page breaks, without reordering it.
     commands: []
     queries: []
     events_produced: []
     events_consumed: []
-    note: Library module - no commands or queries.
+    note: Library module - no commands or queries. Exports rerank and auditPage; the vault query modules call auditPage on every relay page.
     errors:
-      - "FAIRNESS_PROMOTION_NOT_ALLOWED | 422 | no | a promoted flag was supplied where promotion is not enabled"
+      - "FAIRNESS_PROMOTION_NOT_ALLOWED | 422 | no | a promoted flag was supplied while pageParams.promotionEnabled is false; no page is produced"
       - "FAIRNESS_INPUT_UNSORTED | 422 | no | candidates are not sorted by descending score with the documented tie-break"
     example: |
-      rerank(candidates[200], { pageSize: 20, windowPosition: 0 })
+      rerank(candidates[200], { pageSize: 20, windowStart: 0, position: 0, carry: empty bitmap, promotionEnabled: true })
       -> items[20]: at most 3 per author, at most 4 promoted (each flagged promoted: true), 2 reserved new-author slots at positions 5 and 12 when qualifying
       -> items[0].explain = [{ key: "discovery.explain.text_match", params: { field: "title" } }, { key: "discovery.explain.distance_bucket", params: { bucket: "5_10" } }]
+      -> at position 180: nextWindowStart 200, carry = bitmap with positions 7 and 13 of window 0 set (author-capped results carried forward)
+      auditPage(relayPage[20]) -> { followed: false, violations: ["max_per_author"] }
   authorization_capabilities:
     requirements:
       - The library performs no authorization and reads only public document fields.
@@ -104,10 +123,11 @@ processes:
     retention:
       - "None; no state is kept."
     threats:
-      - "T01 | One author floods a page | max 3 results per author per page, 200-document relay cap per author in the index"
+      - "T01 | One author floods a page | max 3 results per author per page, 100-document relay cap per author in the index (F06.S01.M01)"
       - "T02 | Many throwaway authors capture new-author slots (Sybil, Douceur 2002) | only 2 slots per 20-result page, 50 percent minimum score ratio, 30 day window by local first-seen; honest limit - without a trusted identity authority the library cannot prove the authors are distinct people"
       - "T03 | Promotion crowds out organic results | promoted share at most 20 percent of a page, multiplier cap 1.25 in F06.S03.M01, mandatory label"
       - "T04 | Explanation used to deceive | explanation is generated from the same score components used for ranking, never free text from authors"
+      - "T05 | A self-hosted relay skips these rules in its own code | vaults run auditPage on every relay page and label the relay 'ranking policy not followed'"
     abuse_controls:
       - "Constants are code-level and need a decision record to change; relays cannot raise the promoted share above 20 percent."
   observability_performance:
@@ -133,19 +153,21 @@ processes:
       - "T01 | property | 01.R01,02.R01 | 200 random corpora | no page has more than 3 results from one author; no duplicates; no result dropped across pages"
       - "T02 | property | 01.R03,03.R01 | random promoted flags | promoted count per page at most floor(0.2 times page size); every promoted item has a promoted explanation key"
       - "T03 | unit | 01.R02,02.R02 | corpus with qualifying new authors and corpus without | 2 slots filled with qualifying items at positions 5 and 12; none filled when no candidate reaches 50 percent of the top score"
-      - "T04 | unit | 02.R03,03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, unsorted, promoted flag where not enabled | VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED or FAIRNESS_PROMOTION_NOT_ALLOWED"
-      - "T05 | property | 03.R01,03.R02,03.R03 | 200 runs of same input and paging through all pages | identical output, same order on repeated runs, windowed paging never repeats or drops"
+      - "T04 | unit | 02.R02,02.R03,03.R02 | invalid inputs - NaN score, duplicate ids, limit 51, window start 300, unsorted, a promoted flag with promotionEnabled false | VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, FAIRNESS_INPUT_UNSORTED, FAIRNESS_PROMOTION_NOT_ALLOWED; never a partial or reordered page"
+      - "T05 | property | 03.R01,03.R02,03.R03 | 200 runs of the same 500-candidate input, paging through all 25 pages across windows 0, 200 and 400 with the carry passed through the cursor | identical output on repeated runs; all 500 results appear exactly once; caps hold on every page including carried results"
       - "T06 | unit | 01.R01,04.R01 | page with a single author and page size 7 | cap relaxed with only_seller explanation; promoted cap 1 and new-author slots 1"
-      - "T07 | unit | 04.R01,04.R02,04.R03 | inspect exports | no commands, queries or events; typed errors only"
-      - "T08 | abuse | 05.R01,05.R02,05.R03,07.R01 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema; ranking identical with and without them"
-      - "T09 | abuse | 07.R02,07.R03 | 50 new authors created in a burst with equal scores | only 2 slots per page are filled and the 50 percent ratio is enforced"
+      - "T07 | unit | 04.R01,04.R02,04.R03 | inspect exports and map each rerank error through a caller harness | no commands, queries or events; only rerank and auditPage exported; typed errors map to the documented HTTP problems"
+      - "T08 | abuse | 05.R01,05.R02,05.R03,07.R01,07.R02 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema (V05); ranking identical with and without them"
+      - "T09 | abuse | 01.R02 | 50 new authors created in a burst with equal scores | only 2 slots per page are filled and the 50 percent ratio is enforced"
       - "T10 | unit | 06.R01,06.R02,06.R03 | repeat call after thrown error and during concurrent calls | no shared state; same result"
       - "T11 | load | 08.R01,08.R02,08.R03 | rerank 200 candidates 10 000 times on emulated device | p95 <= 5 ms"
       - "T12 | unit | 09.R01,09.R02,09.R03 | traceability run over PS-050 | every requirement maps to a passing test"
       - "T13 | unit | 10.R01,10.R02,10.R03 | check package exports persistence | none; constants version file hashed in the golden test"
-      - "T14 | a11y | 04.R03,01.R03 | render explanation keys in the search screen with axe-core | labels are text, localized and announced; zero serious or critical issues"
+      - "T14 | a11y | 01.R03 | render explanation keys in the search screen with axe-core | labels are text, localized and announced; zero serious or critical issues"
+      - "T15 | manual | 07.R03 | review the product help page against the constants file | the page lists 3 per author, 2 new-author slots per 20, the 50 percent ratio, the 30-day window, promoted at most 20 percent and the stated Sybil limit, matching the constants"
+      - "T16 | unit | 04.R04 | auditPage on relay pages with 4 results of one author, 5 promoted of 20, an unlabelled promoted item, and a compliant page | violations max_per_author, promoted_share, promoted_unlabelled, and followed true for the compliant page"
     acceptance:
-      - All tests T01-T14 pass in CI.
+      - All tests T01-T16 pass in CI (T15 is a release checklist item).
       - Constraint properties hold on 10 000 random corpora (nightly).
       - Explanation keys exist in every shipped locale catalog (i18n coverage test).
   import_export_backup_rollback:

@@ -9,12 +9,13 @@
 - **PS-016-07.R01** Reports contain pseudonym DIDs, item references and values already visible to the principal, and are never sent to relays or peers.
 - **PS-016-07.R02** Failure explanations never reveal block lists, exclusion lists or other cycles that reserve an item.
 - **PS-016-07.R03** Reports are purged after 30 days, except that the report hash cited in a signed proposal revision remains part of that revision's evidence.
+- **PS-016-07.R04** The module registers DeletionPort and RetentionPurgePort with F10 and an ExportSectionPort that declares the derived section mutiny.feasibility as excluded (N6), and annotates every FeasibilityReport field with its F10.S02.M02 class.
 
 ## Specification
 
 **Data classification**
 - FeasibilityReport: P2, derived, device only.
-- valueGaps: derived from public declared values and signed acceptedImbalance values.
+- valueGaps: derived from public declared values and the acceptedImbalances of the signed head snapshot; field classes annotated per F10.S02.M02.
 
 **Retention**
 - RET-SHORT 30 days after createdAt.
@@ -42,7 +43,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-016-09.T09 | abuse | PS-016-05.R01, PS-016-05.R02, PS-016-05.R03, PS-016-07.R02 | other principal reads report; blocked pair and elsewhere-reserved item | NOT_FOUND; generic messages with no names or cycle ids |
 | TEST-PS-016-09.T11 | unit | PS-016-07.R01 | participant list with excluded and blocked DIDs | no DID of the blocker in report; C12 blocks on disputed valuation |
 | TEST-PS-016-09.T12 | integration | PS-016-03.R03, PS-016-07.R03 | report cited by a signed revision, 30 days later | standalone report purged, cited hash retained in revision evidence |
+| TEST-PS-016-09.T21 | integration | PS-016-07.R04 | F10 export, deletion and retention sweep | section mutiny.feasibility declared excluded; erased principal's reports purged; reports purged after 30 days |
+| TEST-PS-016-09.T22 | unit | PS-016-02.R03, PS-016-07.R03 | gap above tolerance with an unsigned local acceptance, then with an acceptedImbalances entry in the signed snapshot | first fails C05; second passes C05 with basis signed_projection |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

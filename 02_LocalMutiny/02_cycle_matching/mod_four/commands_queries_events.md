@@ -20,8 +20,8 @@ _None._
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `mutiny.cycle4.get_profile` | mutiny.cycle4.read_profile | { tenantId? default current } | { length: 4, toleranceBps, absoluteMinMajor, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, maxOtherOpenCycles, version, overridden } |  |
-| `mutiny.cycle4.explain` | mutiny.cycle4.read_explanation | { suggestionId } | { suggestionId, profileVersion, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket, bases[] }[4], dropoutNoticeKey } | NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH |
+| `mutiny.cycle4.get_profile` | mutiny.cycle4.read_profile | { tenantId? default current } | { length: 4, toleranceBps, absoluteMinRef: Money, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, maxOtherOpenCycles, version, overridden } |  |
+| `mutiny.cycle4.explain` | mutiny.cycle4.read_explanation | { suggestionId } | { suggestionId, profileVersion, absoluteMinConverted: Money, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket 0..4 (label discovery.bucket.*), bases[] }[4], dropoutNoticeKey } | NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH |
 
 ### Events produced
 
@@ -38,10 +38,8 @@ _None._
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| MUTINY_PROFILE_LENGTH_MISMATCH | 422 | no | the subject is not a 4-party suggestion |
 | MUTINY_FOUR_LENGTH_PREFERENCE | 422 | no | a participant accepts fewer than 4 participants |
 | MUTINY_FOUR_DISTANCE | 422 | no | an adjacent pair is farther than 10-25 km |
-| MUTINY_PARTICIPANT_OVERLOADED | 409 | no | a participant already has more than 2 other open cycles |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -50,10 +48,11 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 ```
 # 4-party ring b1->b2->b3->b4->b1 values EUR minor: 20000, 19800, 19500, 19900
 mutiny.cycle4.explain { "suggestionId": "0192f3d0-…" }
--> participants: b1 gives 20000 receives 19900 gap 100 tolerance max(3% of 20000 = 600, 300)=600 within;
-                 b2 gives 19800 receives 20000 gap 200 tolerance 600 within;
-                 b3 gives 19500 receives 19800 gap 300 tolerance max(594, 300)=594 within;
-                 b4 gives 19900 receives 19500 gap 400 tolerance max(597, 300)=597 within
+-> participants: b1 gives 20000 receives 19900 gap 100 tolerance max(5% of 20000 = 1000, 500)=1000 within;
+                 b2 gives 19800 receives 20000 gap 200 tolerance 1000 within;
+                 b3 gives 19500 receives 19800 gap 300 tolerance max(990, 500)=990 within;
+                 b4 gives 19900 receives 19500 gap 400 tolerance max(995, 500)=995 within
+   (FLOW-05: 5 percent per leg; the stricter rule of this profile is the 10_25 pair distance)
    dropoutNoticeKey "mutiny.cycle4.dropout_notice" (one withdrawal before handover cancels all four trades; nothing is rerouted)
 ```
 
@@ -66,4 +65,4 @@ mutiny.cycle4.explain { "suggestionId": "0192f3d0-…" }
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

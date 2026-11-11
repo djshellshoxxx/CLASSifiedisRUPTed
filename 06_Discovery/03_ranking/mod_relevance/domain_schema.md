@@ -7,14 +7,14 @@
 ## Requirements
 
 - **PS-051-01.R01** A RankingConfig is an immutable numbered version with bounded numeric parameters, a signature by the publishing relay key, and exactly one active version per relay.
-- **PS-051-01.R02** The vault ships a default RankingConfig version 1 inside the app bundle and never edits it.
+- **PS-051-01.R02** The vault ships a default RankingConfig version 1 inside the app bundle and never edits it; relay configs fetched for display are stored only in a separate cache table and never used for local ranking.
 - **PS-051-01.R03** The promotion multiplier cap is a hard maximum of 1.25 that no configuration can exceed.
 
 ## Specification
 
 ### RankingConfig
 
-Schema `classrup.discovery.ranking_config/v1` · storage **relay+device** · privacy **P0** · retention **RET-STANDARD**
+Schema `classrup.discovery.ranking_config/v1` · storage **relay+device** · privacy **P0** · retention **RET-AUDIT**
 
 | Field | Type and constraints |
 |---|---|
@@ -41,6 +41,7 @@ Schema `classrup.discovery.ranking_config/v1` · storage **relay+device** · pri
 - Exactly one RankingConfig per relay (and exactly the bundled one in a vault) has status active.
 - Published versions are never edited; a change is a new version and a rollback is a new version copying an older one.
 - promotionBoost is at most 0.25 and weights sum to 1.0.
+- Relay configs cached by a vault live only in discovery_ranking_config_cache, never in discovery_ranking_config.
 
 ### Storage DDL
 
@@ -50,6 +51,10 @@ CREATE TABLE discovery_ranking_config (
   status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE UNIQUE INDEX discovery_ranking_config_version ON discovery_ranking_config(tenant_id, version);
 CREATE UNIQUE INDEX discovery_ranking_config_active ON discovery_ranking_config(tenant_id) WHERE status = 'active';
+-- vault only: display cache of relay configs fetched with get_active (24 h), keyed by relay
+CREATE TABLE discovery_ranking_config_cache (
+  tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, version INTEGER NOT NULL, statement_cid TEXT NOT NULL,
+  fetched_at TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (tenant_id, relay_id, version));
 ```
 
 ## Verification
@@ -58,9 +63,11 @@ CREATE UNIQUE INDEX discovery_ranking_config_active ON discovery_ranking_config(
 |---|---|---|---|---|
 | TEST-PS-051-09.T01 | unit | PS-051-01.R01, PS-051-02.R01 | publish valid config | version 4 active, previous version 3 retired, one active row |
 | TEST-PS-051-09.T03 | unit | PS-051-01.R02, PS-051-01.R03 | golden score vectors for text, recency, distance, promotion | final scores equal the golden values to 6 decimals; promoted multiplier never above 1.25 |
-| TEST-PS-051-09.T05 | property | PS-051-01.R02, PS-051-06.R03 | 200 runs of the same ranking | identical order; ties resolved by firstSeenAt then documentId |
-| TEST-PS-051-09.T09 | abuse | PS-051-07.R01, PS-051-07.R02, PS-051-01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label |
+| TEST-PS-051-09.T05 | property | PS-051-01.R02, PS-051-06.R03 | 200 runs of the same ranking on two simulated devices with different documentIds but the same projections and first-seen times | identical order; ties resolved by recency anchor then projectionCid |
+| TEST-PS-051-09.T09 | abuse | PS-051-07.R02, PS-051-01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label |
+| TEST-PS-051-09.T12 | integration | PS-051-01.R02, PS-051-06.R03 | vault without relay config | bundled default used and explanation says default ranking |
+| TEST-PS-051-09.T17 | unit | PS-051-01.R01, PS-051-02.R02 | browse query without center, document with empty cell, query without text | distance or text term dropped and remaining weights renormalised; golden values match |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

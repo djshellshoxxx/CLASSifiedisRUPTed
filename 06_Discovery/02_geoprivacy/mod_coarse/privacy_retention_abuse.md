@@ -35,6 +35,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
+| TEST-PS-047-09.T05 | unit | PS-047-02.R02, PS-047-07.R02 | assertPublicCell with 4, 5, 6 and 11 characters and empty string | accepted for 0, 4, 5; DISCOVERY_PRECISION_FORBIDDEN for 6 and 11 |
 | TEST-PS-047-09.T11 | abuse | PS-047-05.R02, PS-047-07.R01, PS-047-07.R02, PS-047-07.R03 | scan the public API for functions returning coordinates or cells longer than 5 characters | none found; contract helper fails a fake publisher that skips the guard |
 
 ## Dependencies

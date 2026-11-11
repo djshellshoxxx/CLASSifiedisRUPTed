@@ -12,8 +12,8 @@
 
 ## Specification
 
-- **export:** Section services.bookings in classrup-export/v1 with request, quote and booking lines plus a statements array of the original envelopes.
-- **import:** Verified terminal records import as history; open requests and quotes import as expired; awaiting_confirmation bookings import cancelled with reason system so no stale commitment is restored; confirmed and in_progress bookings import as is.
+- **export:** ExportSectionPort section services.bookings in classrup-export/v1 with request, quote and booking lines plus a statements array of the original envelopes and consent statements.
+- **import:** Verified terminal records import as history; open requests and quotes import as expired; awaiting_confirmation bookings import as is and the confirmation timeout runs at once, so an expired one is cancelled with a signed confirmation_timeout statement rather than silently; confirmed, in_progress, conflicted and disputed bookings import as is.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only ciphertext mailboxes (IOX-7).
 - **migration rollback:** Additive optional fields only in v1; rollback is safe because statements are immutable and older readers ignore unknown fields.
 
@@ -23,9 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-032-09.T13 | integration | PS-032-06.R01, PS-032-10.R01 | go offline, accept, sync later | UI shows prepared then transport_acknowledged; confirmed only after provider confirmation received |
 | TEST-PS-032-09.T14 | integration | PS-032-10.R01, PS-032-10.R02, PS-032-10.R03 | export, import into fresh vault, restore | records round-trip identical; in-flight statements re-enter outbox as prepared |
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F03.S01.M02, F09.S01.M01, F08.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S01.M01, F03.S01.M02, F08.S01.M01, F08.S01.M03, F08.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

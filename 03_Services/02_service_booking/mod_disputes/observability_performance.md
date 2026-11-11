@@ -13,8 +13,9 @@
 ## Specification
 
 **Metrics**
-- classrup_services_disputes_total{outcome=opened|linked|resolved|withdrawn|link_failed} (local counter)
+- classrup_services_disputes_total{outcome=opened|linked|resolved|withdrawn|merged|link_failed} (local counter)
 - classrup_services_dispute_link_latency_ms (local histogram from open to linked)
+- classrup_services_dispute_notices_quarantined_total{code} (local counter)
 
 **Logs**
 - info dispute.opened {linkId, scope, correlationId} in the local diagnostics log - no statement text and no evidence names.
@@ -33,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F03.S02.M01, F03.S02.M02, F09.S02.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S02.M01, F03.S02.M02, F09.S02.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F07.S01.M01, F07.S02.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

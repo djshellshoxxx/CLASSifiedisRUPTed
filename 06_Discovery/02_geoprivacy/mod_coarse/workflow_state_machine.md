@@ -23,8 +23,8 @@ _None._
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-047-09.T02 | property | PS-047-01.R02, PS-047-03.R01 | 10 000 random valid points | snap is idempotent, decode(snap(p)) bounds contain p, and all points in one cell snap to the same cell |
-| TEST-PS-047-09.T07 | property | PS-047-01.R03, PS-047-03.R02 | random center pairs | bucketBetween is symmetric, monotone in true distance, and a number is never returned |
-| TEST-PS-047-09.T08 | unit | PS-047-03.R03 | cellsForRadius at the antimeridian, near a pole and at the equator | sorted unique cells, wrap handled, count within 512 |
+| TEST-PS-047-09.T07 | property | PS-047-01.R03, PS-047-03.R02 | random center pairs of 4, 5 and 6 characters | bucketBetween is symmetric, monotone in true distance, uses cell centers only, and a number is never returned |
+| TEST-PS-047-09.T08 | unit | PS-047-03.R03, PS-047-06.R03 | cellsForRadius for every allowed radius at the antimeridian, near a pole and at the equator, with 4- and 5-character centers | sorted unique cells, wrap handled, count at most 512, operation count grows linearly with result length |
 
 ## Dependencies
 

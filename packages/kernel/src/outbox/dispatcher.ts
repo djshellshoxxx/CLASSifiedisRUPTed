@@ -64,20 +64,25 @@ function errorCode(e: unknown): string {
   return 'INTERNAL';
 }
 
+/** Stable, collision-free identity for one aggregate stream across tenants and entity types. */
+function aggregateKey(env: EventEnvelope): string {
+  return JSON.stringify([env.tenantId, env.aggregate.type, env.aggregate.id]);
+}
+
 /** Keeps the batch's interleaving across aggregates but orders each aggregate's events by revision. */
 function orderBatch(list: readonly EventEnvelope[]): EventEnvelope[] {
   const groups = new Map<string, EventEnvelope[]>();
   for (const e of list) {
-    const g = groups.get(e.aggregate.id);
+    const g = groups.get(aggregateKey(e));
     if (g) g.push(e);
-    else groups.set(e.aggregate.id, [e]);
+    else groups.set(aggregateKey(e), [e]);
   }
   for (const g of groups.values()) g.sort((a, b) => a.revision - b.revision);
   const cursor = new Map<string, number>();
   return list.map((e) => {
-    const i = cursor.get(e.aggregate.id) ?? 0;
-    cursor.set(e.aggregate.id, i + 1);
-    return groups.get(e.aggregate.id)?.[i] ?? e;
+    const i = cursor.get(aggregateKey(e)) ?? 0;
+    cursor.set(aggregateKey(e), i + 1);
+    return groups.get(aggregateKey(e))?.[i] ?? e;
   });
 }
 
@@ -170,9 +175,9 @@ export function createOutboxDispatcher(o: OutboxDispatcherOptions): OutboxDispat
     const pending = await o.storage.read((tx) => tx.outbox.pending(sub.name, sub.types, o.clock.now(), batch).map((p) => p.envelope));
     const blocked = new Set<string>();
     for (const env of orderBatch(pending)) {
-      if (blocked.has(env.aggregate.id)) continue;
+      if (blocked.has(aggregateKey(env))) continue;
       const outcome = await deliverTo(sub, env);
-      if (outcome === 'retry' || outcome === 'paused') blocked.add(env.aggregate.id);
+      if (outcome === 'retry' || outcome === 'paused') blocked.add(aggregateKey(env));
       const key = ({ delivered: 'delivered', duplicate: 'duplicates', retry: 'retried', dead: 'deadLettered', paused: 'paused' } as const)[outcome];
       stats[key] += 1;
     }

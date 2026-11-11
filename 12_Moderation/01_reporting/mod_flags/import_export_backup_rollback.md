@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.reports in classrup-export/v1: one line per report (reportId, relayId, targetType, reasonCode, syncState, status, outcome, receipts); details included because it is the user's own data; section moderation.advisory lists subscriptions.
-- **import:** Reports import as read-only history with status withdrawn unless a verified relay receipt shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected.
-- **backup:** Vault export is the backup; relay SQLite backups (CTR-IOX-001 IOX-3) hold only sealed report envelopes and receipts and losing a relay loses no vault data.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; reason code additions are tolerated as other by older readers.
+- **export:** Section moderation.reports in classrup-export/v1 through ExportSectionPort: one line per report (reportId, relayId, targetType, reasonCode, disclosure, syncState, status, outcome, receipts, link and outcome statements); details included because it is the user's own data; section moderation.advisory lists subscriptions.
+- **import:** Reports import as read-only history with status withdrawn unless a verified relay link statement shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected.
+- **backup:** Vault export is the backup; relay SQLite backups (CTR-IOX-001 IOX-3) hold only report headers, sealed bodies and receipts, and losing a relay loses no vault data.
+- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; reason code and target type additions are tolerated as other by older readers.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-094-09.T15 | integration | PS-094-07.R01, PS-094-07.R02, PS-094-10.R01, PS-094-10.R02, PS-094-10.R03 | export, restore into fresh vault, import imported open report | own reports round-trip; imported open reports become withdrawn; details stay sealed |
+| TEST-PS-094-09.T15 | integration | PS-094-10.R01, PS-094-10.R02, PS-094-10.R03 | export, restore into fresh vault, import an open report and a receipt with a broken signature; read a v1 record carrying an unknown reason code with the previous reader | own reports round-trip; imported open reports become withdrawn and nothing is re-sent; the broken receipt is rejected; the unknown reason displays as other |
 
 ## Dependencies
 
-Module depends on: F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

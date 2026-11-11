@@ -13,16 +13,16 @@
 ## Specification
 
 **Metrics**
-- classrup_federation_signature_verify_total{outcome=ok|invalid|malformed|unsupported_did}
+- classrup_federation_signature_verify_total{outcome=ok|invalid|cid_mismatch|malformed|unsupported_did}
 - classrup_federation_signature_verify_duration_ms (histogram)
-- classrup_federation_request_signature_total{outcome=ok|invalid|stale}
+- classrup_federation_request_signature_total{outcome=ok|invalid|stale|replayed}
 
 **Logs**
 - warn federation.signature.invalid {cidPrefix, authorPrefix(16), code, correlationId} — never the signature or payload.
 
 **Budgets**
 - verifyEnvelope p95 ≤ 2 ms for envelopes ≤ 4 KiB; ≤ 20 ms for envelopes up to 262144 bytes.
-- 100-envelope batch verify ≤ 250 ms on one worker.
+- 100-envelope batch verify ≤ 250 ms on one worker; verifyRequest p95 ≤ 1 ms excluding resolveKey.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -30,7 +30,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-085-09.T12 | load | PS-085-07.R02, PS-085-08.R01, PS-085-08.R02, PS-085-08.R03 | verify 100-envelope batches of 4 KiB for 60 s | p95 per envelope ≤ 2 ms, batch ≤ 250 ms, metrics exported |
+| TEST-PS-085-09.T12 | load | PS-085-07.R03, PS-085-08.R01, PS-085-08.R02, PS-085-08.R03 | verify 100-envelope batches of 4 KiB for 60 s | p95 per envelope ≤ 2 ms, batch ≤ 250 ms, metrics exported |
 
 ## Dependencies
 

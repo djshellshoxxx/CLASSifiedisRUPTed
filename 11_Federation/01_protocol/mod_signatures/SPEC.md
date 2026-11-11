@@ -6,36 +6,42 @@
 
 ## Purpose
 
-Shared library, used in the browser vault, the PWA service worker and relays (ADR-0016), that canonicalizes federation envelopes with RFC 8785 JCS (npm canonicalize 5.1.0, vendor-tested against the RFC 8785 test vectors), signs and verifies them with Ed25519 (RFC 8032), encodes and decodes did:key identifiers (multicodec ed25519-pub 0xed 0x01, base58btc with the z prefix) and signs relay-to-relay HTTP requests. A valid signature is evidence that the holder of the key asserted the content; it proves nothing about delivery, truthfulness or the real-world identity of the signer.
+Shared library, used in the browser vault, the PWA service worker and relays (ADR-0016), that parses envelopes strictly, canonicalizes them with RFC 8785 JCS (npm canonicalize 5.1.0, vendor-tested against the RFC 8785 test vectors), signs and verifies them with Ed25519 (RFC 8032), encodes and decodes did:key identifiers (multicodec ed25519-pub 0xed 0x01, base58btc with the z prefix) and signs and verifies HTTP requests with RFC 9421 HTTP Message Signatures. It holds the single normative definition of the envelope cid and signed bytes: the cid is computed over the envelope without sig and cid, and the signature covers the envelope without sig, so the cid itself is signed. The author of an envelope is the principal did:key; when ext.signerKey is present the signature is made by that device key, whose delegation F11.S01.M02 checks against the author's portable identity document. A valid signature is evidence that the holder of the key asserted the content; it proves nothing about delivery, truthfulness or the real-world identity of the signer.
 
 ## Responsibilities
 
-- Produce JCS bytes of an envelope without its sig member and compute the cid as "sha256-" plus base64url of SHA-256 over those bytes.
+- Produce the normative signed bytes and cid: cid = "sha256-" + base64url(SHA-256(JCS(envelope minus {sig, cid}))) and sig = Ed25519 over JCS(envelope minus {sig}), which includes cid; F11.S01.M02, F07 and CTR-ID-001 ID-3 reference this definition instead of restating it.
 - Sign and verify Ed25519 signatures encoded as unpadded base64url (64 bytes decoded) with strict canonical-S checking.
 - Encode a 32-byte Ed25519 public key to did:key:z6Mk... and decode it back, rejecting any other multicodec or length.
-- Sign and verify relay request headers (Date, Digest, Signature) for POST /fed/v1/inbox with a 300 s clock window.
+- Sign and verify relay and device requests as RFC 9421 HTTP Message Signatures (alg ed25519) covering @method, @target-uri (with the destination authority), content-digest (RFC 9530 sha-256), created, keyid and nonce = batchId, with a ±300 s created window and a 600 s (keyid, nonce) replay memory.
+- Resolve the verification key of an envelope (ext.signerKey when present, otherwise the author key) and return {cid, author, signerKey}; whether that key is delegated by the author is decided by F11.S01.M02 V14 with the F07 portable document.
+- Parse received envelope JSON text with a strict parser that rejects duplicate member names before any hashing.
+- Own the envelope and signature error codes (FED_SIGNATURE_INVALID, FEDERATION_REQUEST_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH, FEDERATION_ENVELOPE_NOT_CANONICALIZABLE, FEDERATION_DID_UNSUPPORTED); other F11 modules reference them through depends_on (N1).
 
 ## Not responsible for
 
 - Storing envelopes or provenance (F11.S01.M02 mod_records).
 - Holding user private keys; user device keys stay in the user's vault (non-extractable where the platform allows) and only an operator-held relay key is used on a relay.
-- Deciding whether a valid signer holds the right role for a statement (F11.S01.M01 registry and F11.S01.M02 enforcement).
-- Peer allowlists and key pinning decisions (F11.S03.M01 mod_trust).
-- Future: ActivityPub HTTP Signatures and AT Protocol repo signatures; only documented as mappings in F11.S03.M03.
+- Deciding whether a valid signer holds the right role for a statement or whether a device key is delegated by the author (F11.S01.M01 registry and F11.S01.M02 enforcement with F07.S02.M01).
+- Peer allowlists and key pinning decisions (F11.S03.M01 mod_trust); this library only calls the injected resolveKey callback.
+- Future: ActivityPub HTTP Signatures (cavage draft) and AT Protocol repo signatures; only documented as mappings in F11.S03.M03.
 
 ## User stories
 
-- As a relay operator, I can verify that an envelope received from a peer was signed by the did:key named in its author field.
-- As a developer, I can call one function to canonicalize, hash and sign an envelope on a device and get the same bytes on every platform.
-- As a security reviewer, I can run the vendored RFC 8785 test vectors and the RFC 8032 vectors in CI and see them pass.
+- As a relay operator, I can verify that an envelope received from a peer was signed by the did:key named in its author field or by a device key it names in ext.signerKey.
+- As a developer, I can call one function to canonicalize, hash and sign an envelope on a device and get the same bytes and the same cid on every platform.
+- As a security reviewer, I can run the vendored RFC 8785, RFC 8032 and RFC 9421 test vectors and the shared golden envelopes in CI and see them pass.
 
 ## Edge cases
 
-- Envelope contains a number such as 1e400, a lone surrogate in a string or a duplicate key after parsing; canonicalization rejects it with FEDERATION_ENVELOPE_NOT_CANONICALIZABLE.
+- Envelope contains a number such as 1e400 or a lone surrogate in a string; canonicalization rejects it with FEDERATION_ENVELOPE_NOT_CANONICALIZABLE.
+- Received JSON text repeats a member name (for example "seq" twice); the strict parser rejects it with FEDERATION_ENVELOPE_NOT_CANONICALIZABLE before any hash or signature work, so two platforms can never read different values from the same bytes.
 - Signature is a valid Ed25519 signature but with non-canonical S (malleable); verification rejects it as FED_SIGNATURE_INVALID.
-- author did:key uses a secp256k1 (0xe7) or P-256 multicodec; decode rejects it with FEDERATION_DID_UNSUPPORTED.
+- author or ext.signerKey did:key uses a secp256k1 (0xe7) or P-256 multicodec; decode rejects it with FEDERATION_DID_UNSUPPORTED.
 - Envelope with sig member plus an extra unknown top-level member; the unknown member is part of the signed bytes, so removing it invalidates the signature.
-- Relay request Date header is 301 s old or Digest does not match the body; request verification rejects it.
+- The claimed cid is replaced by another cid while the rest is unchanged; the cid check fails with FEDERATION_CID_MISMATCH and, because the cid is inside the signed bytes, the signature also fails.
+- Request created parameter is 301 s old, content-digest does not match the body, or the same (keyid, nonce) arrives again within 600 s; request verification rejects it with FEDERATION_REQUEST_SIGNATURE_INVALID.
+- A request signed for relay A is replayed to relay B; @target-uri covers the destination authority, so verification at B fails.
 - Same key signs the same envelope twice; Ed25519 is deterministic so both signatures are byte-identical and dedup is unaffected.
 
 ## UX and accessibility
@@ -63,10 +69,10 @@ CTR-FED-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-085-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-085-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-085-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-085-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-085-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-085-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-085-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-085-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-085-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-085-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -78,6 +84,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T14 pass in CI on Node 22 and Chromium.
-- Every RFC 8785 and RFC 8032 vector in the vendored fixtures passes.
-- No private key bytes appear in any log, metric or error output (abuse test).
+- All tests T01–T20 pass in CI on Node 22 and Chromium.
+- Every RFC 8785, RFC 8032 and RFC 9421 vector and every shared golden envelope passes.
+- No private key bytes appear in any log, metric or error output (abuse tests T11 and T17).

@@ -16,9 +16,10 @@
 **Data classification**
 - Public keys and signatures: P0 (published in envelopes).
 - Private keys: P4, never enter this library's outputs; relay key kept in the secrets store of F16.S02.
+- NonceStore entries (keyid, nonce, seenAt): RET-EPHEMERAL, 600 s.
 
 **Retention**
-- No data is retained by the library; logs hold only cid prefix (first 12 chars) and error code under RET-AUDIT.
+- No data is retained by the library; logs hold only cid prefix (first 12 chars) and error code under RET-AUDIT; nonce memory expires after 600 s.
 
 **Threats and controls**
 
@@ -26,12 +27,13 @@
 |---|---|---|
 | T01 | Signature malleability producing a second valid signature for the same content | strict canonical-S check on verify (V04) |
 | T02 | CPU exhaustion with huge or deeply nested JSON | size 262144 bytes and depth 32 limits before hashing or verifying (V01) |
-| T03 | Replay of a captured relay request | 300 s Date window plus nonce-bearing Digest; receivers also dedup by cid (F11.S02.M02) |
-| T04 | Canonicalization differences between platforms causing forged-looking or rejected valid records | single vendored canonicalize 5.1.0 tested against RFC 8785 vectors on Node and browser CI |
-| T05 | Downgrade to a weaker key type via did:key multicodec swap | only 0xed 0x01 accepted (V03) |
+| T03 | Replay of a captured relay request, or replay to another relay | RFC 9421 created within ±300 s, nonce = batchId remembered per keyid for 600 s, @target-uri binds the destination authority; receivers also dedup by cid (F11.S02.M02) |
+| T04 | Canonicalization or duplicate-member differences between platforms causing forged-looking or rejected valid records | single vendored canonicalize 5.1.0 tested against RFC 8785 vectors, strict parser rejecting duplicate members, shared golden envelopes on Node and browser CI |
+| T05 | Downgrade to a weaker key type via did:key multicodec swap | only 0xed 0x01 accepted for author and signerKey (V03, V07) |
+| T06 | cid substitution: attacker swaps the cid to collide dedup with another record | cid recomputed over the envelope minus sig and cid (V05) and the cid is inside the signed bytes |
 
 **Abuse controls**
-- Callers must count FED_SIGNATURE_INVALID per peer and feed the count to F11.S03.M01 health score; a peer with 20 invalid signatures in 10 minutes is suspended there.
+- Callers count FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH and FEDERATION_REQUEST_SIGNATURE_INVALID per sending peer and feed them to the F11.S03.M01 health score; a peer with 20 invalid signatures in 10 minutes is suspended there.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
@@ -39,8 +41,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-085-09.T11 | abuse | PS-085-07.R01, PS-085-07.R03, PS-085-07.R04 | induce errors with a seeded private key and capture logs, metrics and error JSON | key bytes never appear; did:key linkage warning present in docs build |
-| TEST-PS-085-09.T12 | load | PS-085-07.R02, PS-085-08.R01, PS-085-08.R02, PS-085-08.R03 | verify 100-envelope batches of 4 KiB for 60 s | p95 per envelope ≤ 2 ms, batch ≤ 250 ms, metrics exported |
+| TEST-PS-085-09.T11 | abuse | PS-085-07.R01, PS-085-07.R04 | induce every error with a seeded private key and capture logs, metrics and error JSON | key bytes never appear; did:key linkage warning present in docs build |
+| TEST-PS-085-09.T12 | load | PS-085-07.R03, PS-085-08.R01, PS-085-08.R02, PS-085-08.R03 | verify 100-envelope batches of 4 KiB for 60 s | p95 per envelope ≤ 2 ms, batch ≤ 250 ms, metrics exported |
+| TEST-PS-085-09.T18 | unit | PS-085-07.R02 | PWA bundle import scan and fetch/XHR/sendBeacon spies while running the full suite | no network or telemetry call from this library; counters exist only in the local diagnostics store |
 
 ## Dependencies
 

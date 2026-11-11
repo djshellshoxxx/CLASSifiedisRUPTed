@@ -7,8 +7,9 @@
 ## Requirements
 
 - **PS-090-03.R01** A move advances prepared, announced and effective and may be cancelled only before it becomes effective.
-- **PS-090-03.R02** The redirect and the rebinding of the author's origin relay start only at effective, never at announce.
+- **PS-090-03.R02** The redirect and the switch of the author's fetch hints start only at effective, never at announce, and no acceptance rule depends on them.
 - **PS-090-03.R03** Closed and cancelled are terminal; a later move creates a new record.
+- **PS-090-03.R04** Conflicting move statements for one subject open a commitment conflict in F11.S02.M03 through detect, hold both moves and activate no redirect until the conflict is resolved.
 
 ## Specification
 
@@ -18,19 +19,21 @@ Initial **prepared**; terminal **cancelled**, **closed**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| prepared -> announced | federation.migration.announce signed with a registered device key, copy step ≥ 99 percent | produces classrup.federation.move/v1 and queues it to old relay, new relay and peers |
+| prepared -> announced | federation.migration.announce signed with a device key active ≥ 24 h, copy step ≥ 99 percent | produces classrup.federation.move/v1 through F11.S01.M02 publish and queues it to old relay, new relay and peers |
+| prepared -> announced | federation.migration.receive_move of a verified observed move | effectiveAt computed on this receiver's clock (V04, V08); conflicting moves call federation.conflict.detect and set conflictId |
 | prepared -> cancelled | federation.migration.cancel or account deletion requested | no statement |
-| announced -> effective | 24 h veto window elapsed with no valid veto | emits federation.account.moved; old relay starts redirect for 180 days |
-| announced -> cancelled | valid veto from another registered device key, or cancel by the signer | produces classrup.federation.move_cancel/v1 |
+| announced -> effective | this receiver's effectiveAt reached with no valid veto, the signer key still active on re-check (V01) and no open conflict for the subject | emits federation.account.moved; old relay starts redirect for 180 days |
+| announced -> cancelled | valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, or federation.conflict.resolved drop_all for the subject | produces classrup.federation.move_cancel/v1 for own moves |
 | effective -> closed | redirectUntil reached | old relay removes redirect |
 
 ```mermaid
 stateDiagram-v2
   [*] --> prepared
-  prepared --> announced: federation.migration.announce signed with a registered device key, copy step ≥ 99 percent
+  prepared --> announced: federation.migration.announce signed with a device key active ≥ 24 h, copy step ≥ 99 percent
+  prepared --> announced: federation.migration.receive_move of a verified observed move
   prepared --> cancelled: federation.migration.cancel or account deletion requested
-  announced --> effective: 24 h veto window elapsed with no valid veto
-  announced --> cancelled: valid veto from another registered device key, or cancel by the signer
+  announced --> effective: this receiver's effectiveAt reached with no valid veto, the signer key still active on re-check (V01) and no open conflict for the subject
+  announced --> cancelled: valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, or federation.conflict.resolved drop_all for the subject
   effective --> closed: redirectUntil reached
   cancelled --> [*]
   closed --> [*]
@@ -38,7 +41,7 @@ stateDiagram-v2
 
 ### Timeouts and scheduled transitions
 
-- Veto window 24 h from announcedAt; sweep every 5 min promotes announced records whose effectiveAt ≤ now.
+- Veto window 24 h from this receiver's window start (own clock, first verified receipt or old relay receipt); sweep every 5 min promotes announced records whose effectiveAt ≤ now after re-checking the signer key.
 - Redirect expiry sweep daily closes effective records with redirectUntil ≤ now.
 - Prepared records idle for 14 days are cancelled.
 
@@ -46,12 +49,13 @@ stateDiagram-v2
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-090-09.T04 | integration | PS-090-03.R01, PS-090-03.R02, PS-090-02.R02 | veto from K2 at 23 h 59 min and at 24 h 01 min | first cancels the move; second ignored; redirect inactive after cancel |
+| TEST-PS-090-09.T04 | integration | PS-090-03.R01, PS-090-03.R02 | veto from K2 at 23 h 59 min and at 24 h 01 min after this receiver's first receipt | first cancels the move; second ignored; redirect inactive after cancel |
 | TEST-PS-090-09.T05 | property | PS-090-03.R01, PS-090-03.R03 | random command sequences on one record | only declared transitions succeed; cancelled and closed never change |
-| TEST-PS-090-09.T06 | integration | PS-090-03.R02, PS-090-04.R03 | observer R3 receives move before and after effectiveAt | rebinding of origin relay only after effective; F11.S01.M02 accepts records from R2 afterward |
-| TEST-PS-090-09.T13 | abuse | PS-090-07.R01, PS-090-03.R01 | replay of old move statement after a newer move | rejected by cid dedup and chain position; no move back |
-| TEST-PS-090-09.T17 | a11y | PS-090-03.R03, PS-090-01.R01 | operate wizard, countdown and veto prompt by keyboard and screen reader | steps announced, countdown text milestones announced, targets ≥ 44 px |
+| TEST-PS-090-09.T06 | integration | PS-090-03.R02, PS-090-04.R03 | observer R3 receives a move before and after its local effectiveAt | fetch hints and redirect switch only after effective; F11.S01.M02 accepts P's records from R2 both before and after, on signature alone |
+| TEST-PS-090-09.T13 | abuse | PS-090-03.R01 | replay of an old move statement after a newer effective move | rejected by cid dedup and the cool-down; no move back |
+| TEST-PS-090-09.T17 | a11y | PS-090-03.R01 | operate wizard, countdown and veto prompt by keyboard and screen reader | steps announced in order prepared, announced, effective; countdown text milestones announced; targets ≥ 44 px |
+| TEST-PS-090-09.T23 | integration | PS-090-04.R04, PS-090-03.R04 | two moves for P with different targets reach V3 | federation.conflict.detect called with statementClass commitment and subjectRef move:P; both held with no redirect; a drop_all resolution cancels both |
 
 ## Dependencies
 
-Module depends on: F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S03.M01, F07.S02.M01, F10.S01.M04, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S02.M03, F11.S03.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

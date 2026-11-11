@@ -6,24 +6,26 @@
 
 ## Purpose
 
-Private end-to-end encrypted messages between members, authored and stored in the users' local vaults and carried as signed encrypted envelopes through user-selected relay mailboxes (ADR-0016). The sender's vault encrypts text with a random per-message key (XChaCha20-Poly1305), wraps that key for each recipient device with x25519, signs the envelope with its Ed25519 device key and queues one copy per recipient mailbox. A relay mailbox stores only ciphertext and routing metadata until the recipient fetches and acknowledges it. Text is limited to 8 KiB. The MVP has no forward secrecy and no metadata protection from the relay; both are documented to users. Sync status shown to the sender never claims more than local committed, prepared, transport acknowledged or peer accepted.
+Private end-to-end encrypted messages between members, authored and stored in the users' local vaults and carried as signed encrypted envelopes through user-selected relay mailboxes (ADR-0016). The sender's vault encrypts text with a random per-message key K (XChaCha20-Poly1305), commits to K inside the signed statement, wraps K for each recipient device with x25519, signs the envelope with its Ed25519 device key and queues one copy per recipient mailbox through F11.S02.M01 delivery on the F15.S01.M01 sync outbox. This module is the single owner of relay mailboxes: it registers, rotates and closes them, accepts puts only with a proof signed by the sender's device key, and stores only ciphertext and routing metadata until the recipient fetches and acknowledges it. Delivery is tracked per recipient, and the message shows the lowest state reached across recipients with "k of n acknowledged"; peer accepted needs a receipt bound to the exact envelope digest. Each sender device keeps its own author chain, so a principal's devices never share a counter. Text is limited to 8 KiB. The MVP has no forward secrecy and no metadata protection from the relay; both are documented to users.
 
 ## Responsibilities
 
-- Own the Message record in the vault (plaintext, envelope, sync state) and its delete lifecycle.
-- Compose, encrypt, sign and queue envelopes per recipient mailbox through the vault sync outbox, with the sync states local committed, prepared, transport acknowledged, peer accepted.
-- Verify, decrypt and store inbound envelopes; quarantine envelopes with invalid signatures, unknown threads, blocked senders or undecryptable bodies.
-- Provide the relay mailbox commands put, fetch and acknowledge that store ciphertext envelopes for a recipient and delete them on acknowledgement or after 30 days.
-- Offer optional signed delivery and read acknowledgements that the recipient can switch off.
+- Own the Message record in the vault (plaintext, envelope, per-device author chain, per-recipient delivery rows) and its delete lifecycle.
+- Compose, encrypt, commit, sign and queue envelopes per recipient mailbox through F11.S02.M01 delivery on the F15.S01.M01 sync outbox, with the sync states local committed, prepared, transport acknowledged, peer accepted tracked per recipient.
+- Verify, decrypt and store inbound envelopes; quarantine envelopes with invalid signatures, revoked keys, unknown threads, failed key commitments, forked device chains or undecryptable bodies.
+- Provide the relay mailbox commands register, rotate, close, put, fetch and acknowledge; as the single owner of MailboxEnvelope it stores ciphertext envelopes for a recipient and deletes them on acknowledgement or after 30 days, and every other module and F11.S02.M01 delivery use these commands instead of their own mailboxes.
+- Offer optional signed delivery and read acknowledgements, bound to the exact envelope cid, that the recipient can switch off.
 - Delete a message locally and publish a signed delete request that recipient vaults honour on a best-effort basis.
+- Register the F10 privacy ports (ExportSectionPort, DeletionPort, RetentionPurgePort) so that account deletion signs remote deletes and closes mailboxes while the device keys still exist (N6).
 
 ## Not responsible for
 
 - Thread membership, context binding, mute and archive (F08.S01.M02 threads).
 - Encrypted image attachments (F08.S01.M03); a message only carries an attachment reference inside its encrypted body.
-- Device key generation, storage and revocation (F07.S01.M01 identity, F16.S02.M01 key lifecycle).
-- Alerts about new messages (F13 notifications consume comms.message.received locally; push through a relay is content-free).
-- Relay selection, relay registration and mailbox ID publication (F07 profile statements and F15 relay adapters).
+- Device key generation and storage (F07.S01.M01 identity, F16.S02.M01) and counterparty key status and revocation (F16.S02.M02 key registry).
+- Outbox scheduling, retry timers and expiry (F15.S01.M01 sync outbox, F11.S02.M01 delivery); this module provides the mailbox they deliver to and adds no timers of its own.
+- Alerts about new messages (F13 notifications consume comms.message.received locally; the content-free push after a mailbox put is sent by F13.S02.M01 notify.notification.dispatch through the relay hook).
+- Relay selection and publication of the mailbox ID in the portable profile (F15 relay adapters, F07.S02.M02 profile statements).
 - Future: forward secrecy via double ratchet, sealed sender, mailbox ID rotation per conversation, post-quantum hybrid key wrap, relay-to-relay mailbox forwarding.
 
 ## User stories
@@ -33,28 +35,35 @@ Private end-to-end encrypted messages between members, authored and stored in th
 - As a member who reopens the app after two days offline, I receive every missed message from my relay mailbox in sender order.
 - As a member, I can turn delivery receipts off so the other party cannot see when I read messages.
 - As a member, I can see that a relay outage leaves my messages queued as prepared instead of falsely marked as sent.
+- As a member of a three-party cycle thread, I see "1 of 2 acknowledged" until every recipient confirmed, never "acknowledged" on the strength of one recipient.
+- As a member using a phone and a laptop, I can write from both while offline without my own conversation freezing.
 
 ## Edge cases
 
 - Recipient adds a new device after the message was sent; the new device cannot read old messages because wrapped keys exist only for devices known at send time.
-- Sender's cached device list for the recipient is stale and omits a new device; that device cannot decrypt, the recipient's other device shows a notice, and the sender is asked to resend after refreshing the device list.
+- Sender's cached device list for the recipient is stale and omits a new device; that device cannot decrypt, the recipient's other device shows a notice, and the sender is asked to resend after refreshing the device list; the resend reuses the identical signed envelope and rebuilds only the wrapped keys.
 - Recipient device key is revoked before delivery; its wrapped key is ignored and remaining devices still decrypt.
 - Plaintext of exactly 8192 bytes is accepted; 8193 bytes is refused in the vault and a relay refuses mailbox put bodies over 16 384 bytes with PAYLOAD_TOO_LARGE.
 - Same envelope fetched twice because an acknowledgement was lost; the vault deduplicates on messageId and acknowledges again.
-- Sender is blocked by one recipient of a three-party thread; the blocker's vault drops the envelope silently, the others receive it, and the sender is never told.
-- Sender's clock is 3 hours wrong; the claimed createdAt is shown as a claim, local receivedAt and relay receipt time are stored separately, and per-sender seq orders messages.
-- Relay is unreachable for 4 days; messages stay prepared in the outbox, are retried with backoff, and expire after 14 days with a visible failed state and a resend button.
+- Sender is blocked by one recipient of a three-party thread; the blocker's vault drops the envelope silently, the others receive it, and the sender's vault state and responses are identical to the case without a block (that recipient's delivery row simply stays transport acknowledged).
+- Sender's clock is 3 hours wrong; the claimed createdAt is shown as a claim, local receivedAt and relay receipt time are stored separately, and messages are ordered by (createdAtClaim, senderDeviceId, seq).
+- Relay is unreachable for 8 days; delivery rows stay prepared, the user is prompted on day 6 and the F15.S01.M01 outbox expires the entries after 7 days; the message shows failed with a resend button that re-queues the identical envelope.
+- Two devices of one principal send in the same thread while offline; each extends its own device chain (seq 1, 2, ... per device), so both are accepted and nothing freezes.
+- A relay receipt is lost after a successful put and the sender resends; the identical envelope (same messageCid) is deduplicated by the mailbox and by the recipient vault.
+- A malicious sender crafts one ciphertext that decrypts to different text under two keys wrapped for two recipients; the key commitment check fails for at least one recipient and the message is quarantined there.
+- Fifty freshly generated DIDs flood a publicly advertised mailbox; each needs a put proof, unknown senders share an aggregate cap of 200 puts per day per mailbox, and known contacts keep 80 % of the capacity.
 
 ## UX and accessibility
 
-- Conversation view: message bubbles grouped by day, composer with 8 192-byte counter, send button, per-message sync state icon (saved on this device, queued, accepted by relay, acknowledged by recipient).
-- Message actions sheet: copy, delete, report (attaches decrypted text to the report only with the user's confirmation).
-- Encryption info sheet: states what is protected (message text, attachment content) and what the relay can see (sender and recipient mailbox identifiers, timestamps, sizes), that history is not protected if a device key is stolen, and that deletion cannot recall copies.
+- Conversation view: message bubbles grouped by day, composer with 8 192-byte counter, send button, per-message sync state icon showing the lowest state across recipients (saved on this device, queued, accepted by relay, acknowledged by recipient) plus 'k of n acknowledged' in group threads.
+- Message actions sheet: copy, delete, report (attaches decrypted text and the message key to the report only with the user's confirmation), delivery details per recipient.
+- Encryption info sheet: states what is protected (message text, attachment content) and what the relay can see (sender DID, recipient mailbox identifier, timestamps, padded sizes), that history is not protected if a device key is stolen, and that deletion cannot recall copies.
 - Receipts setting: two toggles, delivery receipts and read receipts, both off by default.
+- Message requests: messages from unknown senders wait here with Accept, Decline and Block.
 
-**States:** loading; empty; sending; local-committed; prepared-queued; transport-acknowledged; peer-accepted; failed-retry; deleted-tombstone; offline; decrypt-failed; quarantined
+**States:** loading; empty; sending; local-committed; prepared-queued; transport-acknowledged; partially-acknowledged; peer-accepted; failed-retry; deleted-tombstone; offline; decrypt-failed; quarantined; message-request
 
-**Accessibility:** New incoming messages are announced through an aria-live polite region with sender pseudonym and no message text unless the user enabled it.; Sync state is conveyed by text and icon together, never by color alone.; Composer has a visible label and a character counter exposed to screen readers when within 500 bytes of the limit.; Message actions are reachable by keyboard and by long press; all targets are at least 44 by 44 px.
+**Accessibility:** New incoming messages are announced through an aria-live polite region with sender pseudonym and no message text unless the user enabled it.; Sync state is conveyed by text and icon together, never by color alone, including the 'k of n acknowledged' count.; Composer has a visible label and a character counter exposed to screen readers when within 500 bytes of the limit.; Message actions are reachable by keyboard and by long press; all targets are at least 44 by 44 px.
 
 ## Owned data
 
@@ -64,35 +73,35 @@ Private end-to-end encrypted messages between members, authored and stored in th
 
 ## Interfaces
 
-- Commands: `comms.message.send`, `comms.message.delete`, `comms.message.acknowledge`, `comms.mailbox.put`, `comms.mailbox.fetch`, `comms.mailbox.ack`
+- Commands: `comms.message.send`, `comms.message.resend`, `comms.message.delete`, `comms.message.acknowledge`, `comms.mailbox.register`, `comms.mailbox.rotate`, `comms.mailbox.close`, `comms.mailbox.put`, `comms.mailbox.fetch`, `comms.mailbox.ack`
 - Queries: `comms.message.list_thread`
 - Emits: `comms.message.sent`, `comms.message.deleted`, `comms.message.received`
-- Consumes: `comms.thread.archived`, `identity.device_key.revoked`, `identity.device_key.added`, `identity.block.added`, `privacy.deletion.completed`
+- Consumes: `comms.thread.archived`, `security.key.registered`, `security.key.revoked`, `identity.device_key.added`, `identity.device_key.revoked`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F08.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001
+F08.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FED-001, CTR-IOX-001, CTR-UX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-060-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-060-02 | [Validation rules](validation_rules.md) | 3 |
-| PS-060-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-060-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-060-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-060-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-060-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
+| PS-060-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-060-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
-| PS-060-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-060-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-060-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
+| PS-060-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-060-08 | [Observability and performance](observability_performance.md) | 3 |
-| PS-060-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-060-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 4 |
 | PS-060-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
 Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/comms/src/messaging/private/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01 to T17 pass in CI.
+- All tests T01 to T25 pass in CI.
 - A relay database and log dump after test traffic contains no plaintext, message keys or private keys.
-- The sender UI never shows delivered or accepted before the matching relay receipt or signed peer acknowledgement exists.
+- The sender UI never shows delivered or accepted before the matching relay receipt or a signed peer acknowledgement of the exact envelope cid exists for every recipient counted.
 - Documentation shown in the encryption info sheet states no forward secrecy, relay-visible metadata and that deletion cannot recall copies.

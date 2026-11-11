@@ -22,7 +22,7 @@
 - relay warn rate.exceeded {capabilityClass, scope, prefix (/24 or /48), count, correlationId} — no actor key.
 
 **Budgets**
-- consume p95 ≤ 1 ms on a relay at 5 000 consumes per second; ≤ 0.2 ms in a vault.
+- consume p95 ≤ 1 ms on a relay at 5 000 consumes per second; ≤ 0.2 ms in a vault; dual-epoch lookup adds ≤ 0.1 ms.
 - 100 000 live buckets use at most 64 MiB of memory; snapshot of 100 000 buckets completes in ≤ 500 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -31,7 +31,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-099-09.T12 | load | PS-099-08.R01, PS-099-08.R02, PS-099-08.R03 | 5 000 consumes per second for 5 minutes with 100 000 live buckets | p95 ≤ 1 ms, memory ≤ 64 MiB, snapshot ≤ 500 ms |
+| TEST-PS-099-09.T12 | load | PS-099-08.R01, PS-099-08.R02, PS-099-08.R03 | 5 000 consumes per second for 5 minutes with 100 000 live buckets; snapshot persistence failure | p95 ≤ 1 ms, memory ≤ 64 MiB, snapshot ≤ 500 ms, snapshot age alert fires |
 
 ## Dependencies
 

@@ -12,8 +12,8 @@
 
 ## Specification
 
-- **export:** Nothing is exported by this module; the constants (24 h, 100, 50, 5000) are published in the build artifact federation-limits.json for audit.
-- **import:** On import F11.S01.M02 calls verifyChain() per author; chains that fail are quarantined and reported.
+- **export:** Nothing is exported by this module; the constants (24 h, 100, 50, 5, 500, 5000, 1000) are published in the build artifact federation-limits.json for audit.
+- **import:** On import F11.S01.M02 calls verifyChain() per chain key; segments are rebuilt with their anchors and gaps, forks are quarantined and reported.
 - **backup:** Nothing to back up; chain state is part of the F11.S01.M02 backup (CTR-IOX-001).
 - **migration rollback:** Pin to library version; rollback is a dependency revert because decisions are pure and no data format is owned here.
 

@@ -14,17 +14,18 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | ratePerMinute 1..6000, burst 1..1000, prefixMultiplier 1..20 | VALIDATION_FAILED |
+| V01 | limit 1..100000, periodMs 1000..2592000000, burst 1..1000 and at most limit for gcra, prefixMultiplier 1..20 | VALIDATION_FAILED |
 | V02 | capabilityClass is registered in the capability registry or is a built-in class | VALIDATION_FAILED |
-| V03 | classes relay.access, report.receive and key.register keep failMode closed | RATE_POLICY_FAIL_MODE_LOCKED |
+| V03 | classes relay.access, report.receive, report.receive.reduced and key.register keep failMode closed | MODERATION_RATE_POLICY_FAIL_MODE_LOCKED |
 | V04 | expectedRevision matches the stored policy revision | CONFLICT_REVISION |
 | V05 | bucket reset targets a key hash that exists and is requested by an operator | NOT_FOUND |
+| V06 | scope ip_prefix only with periodMs ≤ 86400000, window_counter only with periodMs ≥ 60000, and kind stock only with scope local | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-099-09.T03 | unit | PS-099-02.R01, PS-099-02.R02, PS-099-02.R03 | policy with rate 0, burst 2000, fail open on relay.access | VALIDATION_FAILED, VALIDATION_FAILED, RATE_POLICY_FAIL_MODE_LOCKED |
+| TEST-PS-099-09.T03 | unit | PS-099-02.R01, PS-099-02.R02, PS-099-02.R03 | policy with limit 0, burst 2000, periodMs of 31 days, ip_prefix scope on a 7-day window, fail open on relay.access; port called with malformed input | VALIDATION_FAILED four times, MODERATION_RATE_POLICY_FAIL_MODE_LOCKED; the port denies without throwing |
 
 ## Dependencies
 

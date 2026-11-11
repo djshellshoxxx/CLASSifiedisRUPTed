@@ -22,7 +22,7 @@ non_responsibilities:
   - Report intake and the report ledger used for conflict checks (F12.S01.M01).
   - Disputes between deal parties (F09.S02.M02).
   - "Future: independent external review bodies; cross-relay appeal escalation; appeals of dismissed reports by reporters."
-depends_on: [F12.S02.M01, F12.S01.M01, F12.S01.M02, F12.S02.M03, F07.S02.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+depends_on: [F12.S02.M01, F12.S01.M01, F12.S01.M02, F12.S02.M03, F07.S02.M01, F08.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
 user_stories:
   - As a member whose listing was removed from a relay's index, I can appeal with my explanation and see the evidence the relay relied on, even while my key is suspended on that relay.
   - As a relay moderator, I review appeals on decisions made by colleagues and record a reasoned decision with policy rule IDs, without my key being revealed to the appellant.

@@ -14,7 +14,7 @@
 
 - **export:** No user data is exported; relay configuration export contains thresholds and rulesVersion.
 - **import:** Thresholds import only within allowed ranges; out-of-range values are rejected with VALIDATION_FAILED.
-- **backup:** Index excluded from backup (rebuilt); configuration covered by relay backup (CTR-IOX-001 IOX-3).
+- **backup:** Indexes excluded from backup (rebuilt); configuration covered by relay backup (CTR-IOX-001 IOX-3).
 - **migration rollback:** A new rulesVersion runs in shadow mode for 7 days comparing scores before activation; rollback restores the previous version by configuration without data migration.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -23,8 +23,9 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-097-09.T13 | integration | PS-097-10.R01, PS-097-10.R02, PS-097-10.R03 | export, import and backup restore | index absent from export and rebuilt after restore; configuration round-trips |
+| TEST-PS-097-09.T13 | integration | PS-097-10.R01, PS-097-10.R02 | export, import and backup restore; import of out-of-range thresholds | index absent from export and rebuilt after restore; configuration round-trips; out-of-range values rejected |
+| TEST-PS-097-09.T14 | integration | PS-097-10.R03 | rulesVersion spam/1.3 in shadow mode for 7 days next to spam/1.2 | both versions score every input; only spam/1.2 emits events; comparison metrics exported; rollback by configuration; spam/1.2 results stay readable |
 
 ## Dependencies
 
-Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

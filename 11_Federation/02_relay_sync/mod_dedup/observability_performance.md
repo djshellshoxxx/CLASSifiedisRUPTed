@@ -13,16 +13,17 @@
 ## Specification
 
 **Metrics**
-- classrup_federation_dedup_decisions_total{outcome=duplicate|next|buffer|fork|reject}
+- classrup_federation_dedup_decisions_total{outcome=duplicate|anchor|next|backfill|buffer|reanchor|fork|held}
 - classrup_federation_gap_buffer_size (gauge)
 - classrup_federation_gap_buffer_age_ms (gauge: age of oldest buffered envelope)
+- classrup_federation_gap_buffer_evictions_total{reason=source_cap|fresh_share}
 
 **Logs**
 - debug federation.dedup.decision {kind, authorPrefix(16), seq, correlationId} — no payload; the PWA writes this only to local diagnostics.
 
 **Budgets**
 - decide() p95 ≤ 0.2 ms; drain() of 100 buffered envelopes ≤ 5 ms.
-- expired() over 5000 buffered envelopes ≤ 10 ms.
+- expired() over 5000 buffered envelopes ≤ 10 ms; evict() ≤ 1 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -30,7 +31,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-087-09.T10 | load | PS-087-08.R01, PS-087-08.R02, PS-087-08.R03 | 100 000 decisions and 5000-row expiry scan | decide p95 ≤ 0.2 ms, expired ≤ 10 ms, metrics exported |
+| TEST-PS-087-09.T10 | load | PS-087-08.R01, PS-087-08.R02, PS-087-08.R03 | 100 000 decisions and 5000-row expiry scan | decide p95 ≤ 0.2 ms, expired ≤ 10 ms, metrics exported, alert at 80 percent occupancy |
 
 ## Dependencies
 

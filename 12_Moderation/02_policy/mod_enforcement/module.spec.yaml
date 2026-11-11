@@ -390,8 +390,9 @@ processes:
       - "T23 | abuse | 05.R05,02.R04 | suspended key files an appeal, reads its appeal status, its own action and its evidence; apply with restrictedCapabilities containing moderation.appeal.receive or moderation.appeal.read_status_own | appeal accepted and reads allowed; MODERATION_CAPABILITY_PROTECTED for both"
       - "T24 | integration | 07.R05 | ExportSectionPort run and privacy.deletion.completed in the subject vault with keepEvidence true and false | section moderation.actions exported; statements deleted or pseudonymized"
       - "T25 | contract | 04.R05 | action.applied restrict_feature and action.reverted consumed by F12.S03.M04, F12.S03.M02 and F12.S01.M03 contract fixtures | each consumer resolves subject key, capabilities, expiry and reasonsIssuedAt from the payload without extra lookups"
+      - "T26 | integration | 07.R02,07.R01 | injected clock: case closed 181 days ago without appeal or hold; case and actions past RET-EVIDENCE with and without a legal hold | internal notes deleted at 180 days; RetentionPurgePort purges the unheld case and actions and keeps the held ones; nothing was ever sent off the relay except the documented statements"
     acceptance:
-      - All tests T01–T25 pass in CI.
+      - All tests T01–T26 pass in CI.
       - No action exists without in-force rule IDs, facts summary and a retrievable signed statement of reasons.
       - No moderation path produces any effect outside the issuing relay, and no federation tombstone is ever produced; statements say so.
   import_export_backup_rollback:

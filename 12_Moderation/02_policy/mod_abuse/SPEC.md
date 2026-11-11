@@ -6,13 +6,14 @@
 
 ## Purpose
 
-A relay's community and hosting policy as versioned rules with stable IDs (for example POL-FRAUD-001). Moderator actions, statements of reasons and appeals cite rule ID and version. A relay operator drafts, publishes and retires rules; each published rule version is signed by the relay as a public policy statement that vaults can fetch, pin and compare, so users can see what a relay enforces before they choose it. Rules describe what the relay hosts and indexes; they are not law and not a global standard. Prohibited goods rules are owned by F18 and are referenced here by ID.
+A relay's community and hosting policy as versioned rules with stable IDs (for example POL-FRAUD-001). Moderator actions, statements of reasons and appeals cite rule ID and version, and only a version in force at the decision time can be cited. A relay operator drafts, publishes and retires rules; each version declares its change type (initial adoption, restrictive or non-restrictive), restrictive changes need 14 days' notice, and each published version is signed by the relay as a public policy statement that vaults can fetch, pin and compare, so users can see what a relay enforces before they choose it. Rules describe what the relay hosts and indexes; they are not law and not a global standard. Prohibited goods rules are owned by F18 and are referenced here by ID.
 
 ## Responsibilities
 
-- [object Object]
-- Provide a seed set of 12 rule families that a relay can adopt, edit or replace before publishing.
-- Publish each rule version as a relay-signed statement (classrup.moderation.policy/v1) and an index of current versions.
+- Own the PolicyRule record: stable rule ID, immutable versions, change type, locale texts, severity and allowed action ladder.
+- Provide a seed set of 12 rule families that a relay can adopt, edit or replace before publishing, adopted as initial versions with a stated effective date.
+- Publish each rule version as a relay-signed statement (classrup.moderation.policy/v1) and an index of current versions with their derived in-force state.
+- Answer in-process whether a cited rule version was in force at a decision time (moderation.policyrule.check_citable) for F12.S02.M01 and F12.S01.M03.
 - Keep retired and superseded versions readable forever so old statements of reasons remain understandable.
 - Cross-reference prohibited-goods rules from F18.S01.M02 by rule ID without copying their content.
 
@@ -21,30 +22,34 @@ A relay's community and hosting policy as versioned rules with stable IDs (for e
 - Applying rules to content (F12.S02.M01) and detecting violations (F12.S02.M02).
 - Prohibited goods rule sets and jurisdiction logic (F18.S01.M02, F18.S01.M01).
 - Community decision-making on policy changes (F18.S02.M01); this module records the published result.
+- Relay signing key registry and rotation history (F16.S02.M02).
 - Future: per-community rule overlays; machine-readable rule tests; translations beyond the operator's locales.
 
 ## User stories
 
 - As a prospective member, I can read a relay's rules and their change history before I choose it.
-- As a relay operator, I publish a revised rule with a changelog and an effective date at least 14 days ahead for restrictive changes.
-- As a moderator, I pick a rule from a list with its full text and allowed actions when I decide a case.
+- As a relay operator, I publish a revised rule with a changelog and an effective date at least 14 days ahead for restrictive changes, and a new relay can adopt its first rule set with a stated effective date.
+- As a moderator, I pick a rule from a list with its full text and allowed actions when I decide a case, and only versions in force are offered.
 
 ## Edge cases
 
 - A rule is edited after actions cited it; editing creates a new version and old actions keep citing the older version, which stays readable.
 - Two operators publish different edits of one rule at once; the second returns CONFLICT_REVISION.
 - A restrictive rule is published with an effective date less than 14 days away; refused with MODERATION_POLICY_NOTICE_TOO_SHORT except for rules marked imminent_harm.
+- A fresh relay adopts the 12 seed families before its first in-force policy; they are initial versions and take effect at their stated effective date, which may be the publication time.
+- An operator labels a version non_restrictive although it adds an allowed action; refused with VALIDATION_FAILED because non_restrictive requires a subset of the previous allowed actions and no higher severity.
+- A moderator cites version 2 of a rule that is published but scheduled for next week; check_citable reports scheduled and the citation is refused by F12.S02.M01.
 - A rule text exists only in English but the user's locale is German; the vault shows the English text labelled with its language.
 - A rule references a prohibited-goods rule ID that F18 later retires; the reference shows 'retired' and moderators cannot cite the rule for new actions.
 - Relay signing key rotates; older rule statements stay verifiable through the key registry history in F16.S02.M02.
 
 ## UX and accessibility
 
-- Public policy page: rule list grouped by family, each with ID, current version, effective date, short and full text, changelog.
-- Operator rule editor: locale tabs, severity, allowed action ladder, effective date, changelog, preview of how it appears in a statement of reasons.
-- Moderator rule picker: searchable list showing ID, one-line summary and allowed actions.
+- Public policy page: rule list grouped by family, each with ID, current version, change type, effective date, in-force state, short and full text, changelog.
+- Operator rule editor: locale tabs, severity, allowed action ladder, change type (initial only before the first in-force policy), effective date, changelog, preview of how it appears in a statement of reasons.
+- Moderator rule picker: searchable list of versions in force now, showing ID, one-line summary and allowed actions.
 
-**States:** loading; draft; scheduled; in-force; retired; error
+**States:** loading; draft; scheduled; in-force; superseded; retired; error
 
 **Accessibility:** Policy page is a semantic heading hierarchy with a skip link to each family.; Version history is a list with dates in text form, not color-coded only.; Editor fields have labels, error messages linked by aria-describedby, and 44 by 44 px controls.
 
@@ -55,22 +60,22 @@ A relay's community and hosting policy as versioned rules with stable IDs (for e
 ## Interfaces
 
 - Commands: `moderation.policyrule.draft`, `moderation.policyrule.publish`, `moderation.policyrule.retire`
-- Queries: `moderation.policyrule.list_public`, `moderation.policyrule.get_version`
+- Queries: `moderation.policyrule.list_public`, `moderation.policyrule.get_version`, `moderation.policyrule.check_citable`
 - Emits: `moderation.policy.published`
 - Consumes: `governance.policy_proposal.decided`, `governance.prohibited_rule.changed`
 
 ## Dependencies
 
-F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001
+F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-095-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-095-02 | [Validation rules](validation_rules.md) | 3 |
-| PS-095-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-095-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-095-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-095-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-095-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
+| PS-095-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-095-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-095-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-095-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -82,6 +87,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T14 pass in CI.
+- All tests T01–T16 pass in CI.
 - Published rule versions are immutable and every action's citation resolves to the exact text in force at decision time.
-- Seed set of 12 rule families is available for adoption in a fresh relay.
+- Seed set of 12 rule families is available for adoption in a fresh relay, and restrictive changes always give 14 days' notice.

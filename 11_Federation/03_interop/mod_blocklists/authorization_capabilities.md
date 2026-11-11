@@ -29,8 +29,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-089-09.T08 | abuse | PS-089-05.R01, PS-089-05.R02, PS-089-05.R03 | other vault reads rules; external evaluate call; non-operator edits relay rules | NOT_FOUND or FORBIDDEN |
-| TEST-PS-089-09.T10 | integration | PS-089-06.R03, PS-089-05.R03 | rule added while a batch is in flight | batch uses start snapshot; next batch applies the rule |
 
 ## Dependencies
 
-Module depends on: F11.S01.M03, F07.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

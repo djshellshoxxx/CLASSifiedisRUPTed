@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section federation.migrations in classrup-export/v1 (schema classrup.federation.migration/v1) plus the vault's own signed envelopes and tombstones from F11.S01.M02.
-- **import:** Own envelopes and tombstones are re-verified and queued to the selected relay; observed moves are re-verified and applied only if still within their redirect period.
+- **export:** Section federation.migrations in classrup-export/v1 (schema classrup.federation.migration/v1) through the ExportSectionPort, plus the vault's own signed envelopes and tombstones from F11.S01.M02.
+- **import:** Own envelopes and tombstones are re-verified and queued to the selected relay; observed moves are re-verified and applied only if still within their redirect period, with windows recomputed on the importing device's clock.
 - **backup:** Vault export is the primary backup (IOX-6); relay data including redirects is covered by relay SQLite backup (CTR-IOX-001 IOX-3).
-- **migration rollback:** Additive fields only in v1; rollback is safe because pending moves can be cancelled and effective ones stay valid as signed statements; the redirect lookup can be disabled with the F11 flag without data loss.
+- **migration rollback:** Additive fields only in v1 (signerKey, firstReceivedAt, windowSource, conflictId); rollback is safe because pending moves can be cancelled and effective ones stay valid as signed statements; the redirect lookup can be disabled with the F11 flag without data loss.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S03.M01, F07.S02.M01, F10.S01.M04, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S02.M03, F11.S03.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

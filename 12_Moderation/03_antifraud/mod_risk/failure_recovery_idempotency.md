@@ -7,16 +7,16 @@
 ## Requirements
 
 - **PS-100-06.R01** Recompute is idempotent by inputDigest and creates at most one assessment per digest.
-- **PS-100-06.R02** The assessment row and the elevation event commit in one transaction.
+- **PS-100-06.R02** The assessment row and the level event commit in one transaction.
 - **PS-100-06.R03** Debounced recomputes tolerate duplicate and out-of-order signal events.
 
 ## Specification
 
 - **idempotency:** Unique (tenantId, subjectType, subjectRef, inputDigest); repeated recompute returns the stored assessment; local Idempotency-Key replay returns the stored response for 24 h.
 - **concurrency:** Concurrent recomputes race on the unique digest index; the loser reads the winner; hysteresis reads the latest committed previous level in the same transaction.
-- **retries:** Event consumer retries per EVT-6; callers retry DEPENDENCY_UNAVAILABLE and RISK_ASSESSMENT_STALE with refresh.
+- **retries:** Event consumer retries per EVT-6; callers retry DEPENDENCY_UNAVAILABLE and MODERATION_RISK_ASSESSMENT_STALE with refresh.
 - **offline:** The vault computes assessments offline from local signals; relay assessments need the relay.
-- **partial failure:** If signal reads fail the recompute aborts and the previous assessment stays valid until validUntil; frictions never auto-escalate on failure.
+- **partial failure:** If signal reads fail the recompute aborts and the previous assessment stays valid until validUntil; frictions never auto-escalate on failure; a missed crossing time is caught by the next scheduler run within 24 h.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -24,7 +24,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-100-09.T09 | integration | PS-100-06.R01, PS-100-06.R02, PS-100-06.R03 | same digest recompute twice; signal store failure; crash after assessment before event | single row; previous assessment valid; event delivered once after recovery |
+| TEST-PS-100-09.T09 | integration | PS-100-06.R01, PS-100-06.R02, PS-100-06.R03 | same digest recompute twice; signal store failure; crash after assessment before event; out-of-order signal events | single row; previous assessment valid; event delivered once after recovery; same final level |
 
 ## Dependencies
 

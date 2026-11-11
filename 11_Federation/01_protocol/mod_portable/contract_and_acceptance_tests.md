@@ -1,6 +1,6 @@
 # PS-083-09 — Contract and acceptance tests: Portable record packaging
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M01 Portable record packaging](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/portable` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M01 Portable record packaging](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/portable` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -14,35 +14,41 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Listing, profile and offering fixtures with P0..P3 fields populated including a home address, exact lat/lon, geohash 7 and a GPS-tagged image; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Listing, profile and offering fixtures with P0..P3 fields populated including a home address, exact lat/lon, geohash 7 and a GPS-tagged image; a pinned relay key R and a user principal U with device key D in a portable-document stub; shared golden envelopes from F11.S01.M03; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-083-09.T01 | unit | PS-083-01.R01, PS-083-01.R02, PS-083-02.R01, PS-083-09.R02 | build drafts for the three record types | payload members equal the allowlist subset; classification annotations present |
-| TEST-PS-083-09.T02 | property | PS-083-01.R03, PS-083-02.R01, PS-083-07.R01, PS-083-09.R03 | random records with random extra fields and geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5 |
-| TEST-PS-083-09.T03 | unit | PS-083-02.R01, PS-083-07.R02, PS-083-09.R02 | record with homeAddress, email, exact lat/lon, geohash 7 | export refused or truncated per V03/V04 and codes returned |
-| TEST-PS-083-09.T04 | unit | PS-083-02.R03, PS-083-02.R01 | record with opt-in false, then opt-in revoked between preview and build | FEDERATION_NOT_OPTED_IN |
-| TEST-PS-083-09.T05 | unit | PS-083-02.R02, PS-083-02.R03 | inbound payload with extra member, 65537 bytes, unknown type version | FEDERATION_PAYLOAD_INVALID, PAYLOAD_TOO_LARGE, UNSUPPORTED_SCHEMA_VERSION |
-| TEST-PS-083-09.T06 | unit | PS-083-01.R03, PS-083-02.R01 | image referenced with GPS tag present | FEDERATION_EXPORT_FORBIDDEN_FIELD |
-| TEST-PS-083-09.T07 | contract | PS-083-03.R01, PS-083-03.R02, PS-083-04.R01, PS-083-04.R02 | exercise each exported function | signatures and Result shapes match the schema registry; error params contain no values |
-| TEST-PS-083-09.T08 | unit | PS-083-04.R03, PS-083-05.R01 | inspect module for event emission and authorization calls | none present; opt-in read happens at build time |
-| TEST-PS-083-09.T09 | integration | PS-083-03.R03, PS-083-05.R02, PS-083-05.R03 | draft then sign then ingest then toMirrorView | mirror view equals source P0 fields, labelled remote, no private fields |
-| TEST-PS-083-09.T10 | unit | PS-083-06.R01, PS-083-06.R02, PS-083-06.R03 | identical inputs twice; concurrent builds with same head; missing head | identical drafts; second ingest returns CONFLICT_STATE; missing head returns VALIDATION_FAILED |
+| TEST-PS-083-09.T01 | unit | PS-083-01.R01, PS-083-01.R02, PS-083-02.R01, PS-083-09.R02 | build drafts for the three record types | payload members equal the allowlist subset; classification annotations present; drafts carry no seq or prev |
+| TEST-PS-083-09.T02 | property | PS-083-01.R03, PS-083-02.R01, PS-083-07.R01 | random records with random extra fields and outbound geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5 and equal to the prefix of the source cell (snapped); assertPublicCell called once per draft |
+| TEST-PS-083-09.T03 | unit | PS-083-02.R04, PS-083-07.R02 | outbound record with geohash 7 only; with exact lat/lon; with homeAddress and email | geohash 7 is snapped to its 5-character L2 cell with level L2 (export succeeds); lat/lon, homeAddress and email each refuse the export with FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| TEST-PS-083-09.T04 | unit | PS-083-02.R03, PS-083-02.R01 | record with opt-in false | FEDERATION_NOT_OPTED_IN; error params contain no field values |
+| TEST-PS-083-09.T05 | unit | PS-083-02.R02, PS-083-02.R03 | inbound payload with extra member, 65537 bytes, unknown type version listing/v2 | FEDERATION_PAYLOAD_INVALID, PAYLOAD_TOO_LARGE (and not PAYLOAD_INVALID), UNSUPPORTED_SCHEMA_VERSION |
+| TEST-PS-083-09.T06 | unit | PS-083-01.R02, PS-083-02.R01 | image referenced with GPS tag present | FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| TEST-PS-083-09.T07 | contract | PS-083-03.R01, PS-083-03.R02, PS-083-04.R01, PS-083-04.R02 | exercise each exported function | signatures and Result shapes match the schema registry; error params contain no values; toMirrorView refuses envelopes that F11.S01.M02 has not stored |
+| TEST-PS-083-09.T08 | unit | PS-083-03.R03, PS-083-04.R03, PS-083-05.R01 | inspect module for event emission, stored lifecycle state and authorization calls | none present |
+| TEST-PS-083-09.T09 | integration | PS-083-03.R02, PS-083-05.R03, PS-083-09.R03 | draft then F11.S01.M02 publish then receive in a second vault then toMirrorView | mirror view equals source P0 fields, labelled remote, readable anonymously, no private fields |
+| TEST-PS-083-09.T10 | unit | PS-083-06.R01, PS-083-06.R02, PS-083-06.R03 | identical inputs twice; failing draft; two concurrent publishes of drafts from one device | identical drafts; failure leaves no state; F11.S01.M02 assigns seq n+1 and n+2 and no caller-supplied seq exists in the API |
 | TEST-PS-083-09.T11 | a11y | PS-083-07.R03 | open consent preview with screen reader and keyboard only | every field and the linkability notice are announced, controls ≥ 44 px |
-| TEST-PS-083-09.T12 | abuse | PS-083-07.R02, PS-083-07.R03 | inbound payload with script tag and long link text | stored as plain text and rendered escaped |
+| TEST-PS-083-09.T12 | abuse | PS-083-02.R02, PS-083-07.R03 | inbound payload with script tag and long link text | stored as plain text and rendered escaped |
 | TEST-PS-083-09.T13 | load | PS-083-08.R02, PS-083-08.R01 | 10 000 draft builds of 4 KiB records | p95 ≤ 1 ms, counters exported |
-| TEST-PS-083-09.T14 | unit | PS-083-08.R03, PS-083-09.R01 | coverage and traceability tools run | allowlist report produced; every PS-083 requirement maps to a passing test |
-| TEST-PS-083-09.T16 | unit | PS-083-01.R04, PS-083-02.R01 | roleFor for listing, acceptance and consent statement types with correct and wrong signers | correct signer accepted; wrong signer yields a rule that makes F11.S01.M02 quarantine |
-| TEST-PS-083-09.T15 | unit | PS-083-10.R01, PS-083-10.R02, PS-083-10.R03 | upgrade allowlist v1 to v1 plus optional field; read older drafts | older mirror views still validate; rollback keeps v1 behavior |
+| TEST-PS-083-09.T14 | unit | PS-083-08.R03, PS-083-09.R01 | coverage and traceability tools run | allowlist and registry report produced; every PS-083 requirement maps to a passing test |
+| TEST-PS-083-09.T16 | unit | PS-083-01.R04, PS-083-04.R04 | roleFor for every registry row (three portable types and every F11 type) with the correct signer and with a wrong signer of the same key class | correct signer resolves its role; wrong signer yields a rule that makes F11.S01.M02 quarantine; every row has audience, role, resolution, schema and maxAge |
+| TEST-PS-083-09.T15 | unit | PS-083-10.R01, PS-083-10.R02, PS-083-10.R03 | upgrade allowlist v1 to v1 plus optional field; read older drafts; downgrade | older mirror views still validate; rollback keeps v1 behavior and rejects newer members |
+| TEST-PS-083-09.T17 | integration | PS-083-05.R02 | opt-in revoked between buildDraft and F11.S01.M02 publish; opt-in revoked after publish while deliveries are prepared | first refused with FEDERATION_NOT_OPTED_IN and nothing signed; second cancels the prepared deliveries and queues a tombstone for delivered copies |
+| TEST-PS-083-09.T18 | unit | PS-083-07.R02, PS-083-09.R02 | release privacy suite over every source record type with P1-P4 fields, home address and contact details | none appears in any draft |
+| TEST-PS-083-09.T19 | unit | PS-083-01.R05, PS-083-01.R06 | listing signed by pinned relay key R as author; peer_accept signed by user device key D; type classrup.federation.unknown/v1 | each quarantined with FEDERATION_SIGNER_ROLE_INVALID; V01 runs and fails independently of V08 |
+| TEST-PS-083-09.T20 | property | PS-083-02.R02, PS-083-02.R04 | inbound payloads with geohash lengths 6-12 and with latitude or longitude members | every one rejected with FEDERATION_PAYLOAD_INVALID; assertPublicCell invoked on the inbound path |
+| TEST-PS-083-09.T21 | contract | PS-083-01.R07 | producer stubs (listing publication, profile, offering, peer, blocklist, migration) call StatementPublisherPort.publish and issueTombstone | every call reaches the F11.S01.M02 implementation, which allocates seq; no producer signs through another path |
+| TEST-PS-083-09.T22 | unit | PS-083-01.R06, PS-083-02.R03 | tombstone, ack, peer_offer and move payloads, and a participants ciphertext payload of 12288 and 12289 bytes | per-type schemas checked; portable allowlist (V08) and opt-in (V02) never applied to them; 12289 bytes rejected with FEDERATION_PAYLOAD_INVALID |
 
 ## Acceptance criteria
 
-- All tests T01–T15 pass in CI.
-- No P1-P4 field, exact coordinate or home address appears in any draft (privacy suite on fixtures).
-- A record whose owner has not opted in can never produce a draft.
+- All tests T01–T22 pass in CI, including the signer-role tests T16 and T19.
+- No P1-P4 field, exact coordinate or home address appears in any draft, and no inbound cell finer than L2 is accepted (privacy suite on fixtures).
+- A public record whose owner has not opted in can never produce a signed statement.
 
 ## Dependencies
 
-Module depends on: F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001, CTR-ID-001. Predecessor: [domain_schema.md](domain_schema.md).

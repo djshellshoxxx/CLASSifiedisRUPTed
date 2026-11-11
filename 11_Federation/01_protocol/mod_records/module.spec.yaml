@@ -457,7 +457,7 @@ processes:
     tests:
       - "T01 | contract | 01.R01,01.R03,04.R01 | ingest valid public listing envelope from peer B | FederatedRecord accepted with sourceKind peer_relay, receivedFromRelay B, via [B], verifiedAt and signerKey set, schema valid; the relay has no participants rows"
       - "T02 | unit | 02.R03,02.R01 | each rule V01–V17 violated in turn | documented code per rule; nothing beyond a cid stub stored; V14 quarantines instead of rejecting"
-      - "T03 | integration | 02.R01,02.R02 | blocked author, blocked cid and blocked peer envelopes | stored count unchanged, response is FEDERATION_NOT_ACCEPTED for all three with the same shape"
+      - "T03 | integration | 02.R01,02.R02 | reject rules on an author, a cid and a peer; then a tombstone and a move statement by the blocked author through an allowed peer and through the blocked peer | stored count unchanged and FEDERATION_NOT_ACCEPTED with the same shape for the three blocked envelopes; the tombstone and move bypass the author rule and are applied via the allowed peer and refused via the blocked peer"
       - "T04 | property | 03.R01,03.R03 | random sequences of arrivals, gaps, forks, tombstones, hide and reject rules, discards and releases | only declared transitions occur; terminal states never change; only accepted records are readable; hidden records return to accepted with their envelope when rules are removed"
       - "T05 | integration | 01.R05,03.R02 | anchored public chain: seq 7 before seq 6, then seq 6 | seq 7 buffered and not served, then both accepted in order; events emitted in seq order"
       - "T06 | integration | 03.R04 | seq 7 buffered and 24 h pass without seq 6 | one catch-up fetch attempted, then seq 7 accepted with chainGap true and never dropped"

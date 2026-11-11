@@ -16,15 +16,15 @@
 
 ### Timeouts and scheduled transitions
 
-- Daily purge sweep at 04:00 UTC (relay) or on app idle once per 24 h (vault) removes rows past expiresAt and writes counts per kind to a rollup row.
+- Daily purge sweep at 04:00 UTC (relay) or on app idle once per 24 h (vault) removes rows past expiresAt through the RetentionPurgePort and writes counts per kind to a rollup row.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-101-09.T02 | property | PS-101-01.R03, PS-101-03.R01, PS-101-03.R02 | random signal sets and times | decayed weight equals w × 0.5^(age/h); order of ingestion does not change totals |
-| TEST-PS-101-09.T08 | integration | PS-101-01.R02, PS-101-03.R03, PS-101-07.R02 | daily sweep at expiry and subject deletion | rows purged, rollup counts kept; vault signals removed on deletion |
+| TEST-PS-101-09.T02 | property | PS-101-01.R03, PS-101-03.R01, PS-101-03.R02 | random signal sets and times | decayed weight equals w × 0.5^(age/h); order of ingestion does not change totals; no row changes after insert |
+| TEST-PS-101-09.T08 | integration | PS-101-03.R03, PS-101-07.R02 | injected clock past expiresAt; counterparty B's deletion tombstone; P's own privacy.deletion.completed; relay applies B's signed deletion request | rows purged through the RetentionPurgePort and rollup counts kept; B's tombstone removes nothing in P's vault; P's deletion removes P's vault signals; relay signals about B pseudonymized |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

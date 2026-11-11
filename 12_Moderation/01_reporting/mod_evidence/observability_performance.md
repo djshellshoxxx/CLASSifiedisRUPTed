@@ -16,14 +16,15 @@
 - classrup_moderation_evidence_captures_total{outcome=ok|too_large|signature_invalid|missing} (relay)
 - classrup_moderation_evidence_integrity_failures_total (relay)
 - classrup_moderation_evidence_reads_total{purpose} (relay)
+- classrup_moderation_evidence_blobs_shredded_total (relay)
 - classrup_moderation_evidence_bytes (relay gauge per tenant)
 
 **Logs**
-- relay info evidence.captured {snapshotId, targetType, bytes, correlationId} — no content.
+- relay info evidence.captured {snapshotId, targetType, disclosure, bytes, correlationId} — no content.
 - relay error evidence.integrity_failed {snapshotId, correlationId}; vault writes the same to local diagnostics.
 
 **Budgets**
-- relay capture p95 ≤ 300 ms and vault capture p95 ≤ 150 ms for ≤ 256 KiB; read p95 ≤ 150 ms; verify of one snapshot ≤ 50 ms.
+- relay capture p95 ≤ 300 ms and vault capture p95 ≤ 150 ms for ≤ 256 KiB; read p95 ≤ 150 ms; verify of one snapshot ≤ 50 ms; disclosure preview ≤ 100 ms for 64 KiB of text.
 - Sweep verifies 10 000 snapshots in ≤ 120 s on a relay.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -36,4 +37,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M03, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

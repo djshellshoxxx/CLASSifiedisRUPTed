@@ -13,10 +13,10 @@
 ## Specification
 
 - **idempotency:** Policy set replays by Idempotency-Key for 24 h; consume is not idempotent by design and a retried request spends tokens again, which clients avoid by honoring retryAfterMs.
-- **concurrency:** In-memory buckets are updated with a per-key critical section (single-threaded relay event loop or compare-and-swap on persisted rows); persisted updates use UPDATE with tat monotonic guard.
+- **concurrency:** In-memory buckets are updated with a per-key critical section (single-threaded relay event loop or compare-and-swap on persisted rows); persisted updates use UPDATE with a tat monotonic guard and window sub-counter increments in the same statement.
 - **retries:** Clients honor retryAfterMs and CTR-IDM-001 backoff with full jitter (base 500 ms, cap 30 s, max 6 attempts).
-- **offline:** The vault queues commands in the outbox and local throttles are advisory; relay limits apply when the outbox replays, and replay uses jitter to avoid synchronized bursts.
-- **partial failure:** If snapshot persistence fails, in-memory limits continue and an alert fires; after restart buckets restart empty, which can loosen limits by at most one burst per key.
+- **offline:** The vault queues commands in the outbox and local guards are advisory; relay limits apply when the outbox replays, and replay uses jitter to avoid synchronized bursts.
+- **partial failure:** If snapshot persistence fails, in-memory limits continue and an alert fires; after restart buckets restart from the last snapshot, which can loosen limits by at most one burst or 5 seconds of arrivals per key; reduced markers are persisted rows and survive restarts; a missed signal event is redelivered by the outbox (EVT-2).
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -24,7 +24,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-099-09.T09 | chaos | PS-099-06.R01, PS-099-06.R02, PS-099-06.R03 | counter store down for reads and for relay.access; restart mid-run | reads fail open at half rate; relay.access closed 30 s; loosening ≤ one burst |
+| TEST-PS-099-09.T09 | chaos | PS-099-06.R01, PS-099-06.R02, PS-099-06.R03 | concurrent consumes on one key; counter store down for reads and for relay.access; restart mid-run | never above burst; reads fail open at half rate; relay.access closed 30 s; loosening ≤ one burst |
 
 ## Dependencies
 

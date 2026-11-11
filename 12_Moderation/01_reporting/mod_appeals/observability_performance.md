@@ -14,6 +14,7 @@
 
 **Metrics**
 - classrup_moderation_appeals_total{outcome=filed|upheld|overturned|reduced|withdrawn|moot}
+- classrup_moderation_appeal_reassignments_total{reason}
 - classrup_moderation_appeal_age_ms (gauge: now - oldest undecided appeal)
 - classrup_moderation_appeals_overdue_total
 
@@ -31,8 +32,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-092-09.T12 | load | PS-092-08.R01, PS-092-08.R02, PS-092-08.R03 | 50 req/s mixed receive and decide for 5 minutes; assign 1 000 appeals | p95 ≤ 300 ms, assignment ≤ 5 s, metrics exported |
+| TEST-PS-092-09.T12 | load | PS-092-08.R01, PS-092-08.R02, PS-092-08.R03 | 50 req/s mixed receive and decide for 5 minutes; assign 1 000 appeals; 20 appeals pass day 14 undecided | p95 ≤ 300 ms, assignment ≤ 5 s, overdue metric counts 20, no statement text in logs |
 
 ## Dependencies
 
-Module depends on: F12.S02.M01, F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S02.M01, F12.S01.M01, F12.S01.M02, F12.S02.M03, F07.S02.M01, F08.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

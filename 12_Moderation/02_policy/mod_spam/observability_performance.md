@@ -13,7 +13,7 @@
 ## Specification
 
 **Metrics**
-- classrup_moderation_spam_evaluations_total{outcome=clean|detected|degraded}
+- classrup_moderation_spam_evaluations_total{mode,outcome=clean|detected|degraded}
 - classrup_moderation_spam_score_bucket (histogram 0..100)
 - classrup_moderation_spam_index_entries (gauge)
 
@@ -30,8 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-097-09.T11 | load | PS-097-08.R01, PS-097-08.R02, PS-097-08.R03 | 200 evaluations per second for 5 minutes at 20000 code points; rebuild 100 000 entries | p95 ≤ 20 ms relay, rebuild ≤ 5 minutes, metrics exported |
+| TEST-PS-097-09.T11 | load | PS-097-08.R01, PS-097-08.R02, PS-097-08.R03 | 200 evaluations per second for 5 minutes at 20000 code points; rebuild 100 000 entries; degraded episode | p95 ≤ 20 ms relay, rebuild ≤ 5 minutes, degraded and index metrics exported |
 
 ## Dependencies
 
-Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

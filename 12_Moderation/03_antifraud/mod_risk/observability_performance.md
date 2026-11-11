@@ -14,14 +14,14 @@
 
 **Metrics**
 - classrup_moderation_risk_assessments_total{level,outcome=created|unchanged}
-- classrup_moderation_risk_elevations_total{from,to}
+- classrup_moderation_risk_level_changes_total{from,to}
 - classrup_moderation_risk_recompute_ms (histogram)
 
 **Logs**
-- relay info risk.elevated {assessmentId, previousLevel, level, correlationId} — no subject key, no factors.
+- relay info risk.level_changed {assessmentId, previousLevel, level, correlationId} — no subject key, no factors.
 
 **Budgets**
-- recompute p95 ≤ 50 ms; get p95 ≤ 100 ms; daily sweep of 10 000 elevated subjects ≤ 60 s.
+- recompute p95 ≤ 50 ms; get p95 ≤ 100 ms; assess p95 ≤ 20 ms in-process; crossing scheduler run over 10 000 subjects ≤ 60 s.
 - Vault recompute on Moto G profile ≤ 150 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -30,7 +30,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-100-09.T11 | load | PS-100-08.R01, PS-100-08.R02, PS-100-08.R03 | 200 recomputes per second for 5 minutes; sweep 10 000 subjects | p95 ≤ 50 ms, sweep ≤ 60 s |
+| TEST-PS-100-09.T11 | load | PS-100-08.R01, PS-100-08.R02, PS-100-08.R03 | 200 recomputes per second for 5 minutes; scheduler run over 10 000 subjects | p95 ≤ 50 ms, run ≤ 60 s, level change metric exported without keys |
 
 ## Dependencies
 

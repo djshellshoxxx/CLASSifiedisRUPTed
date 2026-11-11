@@ -6,35 +6,41 @@
 
 ## Requirements
 
-- **PS-094-07.R01** Reporter key and details are P3 in the vault and travel only sealed to the chosen relay's moderation key, never in federation payloads or public projections.
+- **PS-094-07.R01** Reporter key and details are P2 between the reporter and the addressed relay's moderation role, travel only in the report statement to that relay (details sealed), and never appear in federation payloads, public projections, events or logs.
 - **PS-094-07.R02** Reports are retained under RET-EVIDENCE; on the relay the retention is the relay's published policy, never less than the case duration.
-- **PS-094-07.R03** Report abuse (mass reporting, retaliation, spoofed outcomes) is limited by per-key and per-prefix relay caps, dedupe, signature checks and local-only effects of advisories.
+- **PS-094-07.R03** Report abuse (mass reporting, retaliation, spoofed outcomes, forwarded reports) is limited by per-key and per-prefix relay caps, dedupe, relay binding, signature checks and local-only effects of advisories.
+- **PS-094-07.R04** A report on a P2 target (message, offer, cycle_proposal) carries only metadata (targetCid, sender key, sender signature, reason) by default; plaintext travels only in a participant disclosure the reporter approved after a redacted preview (F12.S01.M02), and the sheet warns that the reported party can infer who reported a private message.
+- **PS-094-07.R05** The module meets N6 by registering ExportSectionPort, DeletionPort and RetentionPurgePort with F10, classifying every Report and AdvisorySubscription field per F10.S02.M02, and consuming privacy.deletion.completed.
 
 ## Specification
 
 **Data classification**
-- Report: P3 (reporter vault; moderators of the addressed relay after opening).
-- details: P3 free text; sealed; treated as untrusted content by moderators.
+- Report statement header (reportId, relayId, reporterKey, subjectKey, target, reasonCode): P2 (reporter; moderation role of the addressed relay).
+- details and evidence body: P2 sealed to the relay moderation key; untrusted content for moderators.
+- Local-only Report fields (hideLocally, block choice, syncState): P3, never sent.
 - AdvisorySubscription: P3 (device only); reveals the user's moderation preferences so it is never synced.
 
 **Retention**
-- Resolved and withdrawn reports in the vault: RET-EVIDENCE (2 years after last related activity), user may delete earlier from the vault.
-- Relay copy: per relay policy, default RET-EVIDENCE; signed tombstones from the reporter are honoured only for the details field when no case is open.
+- Resolved and withdrawn reports in the vault: RET-EVIDENCE (2 years after last related activity) through the RetentionPurgePort; the user may delete earlier from the vault.
+- Relay copy: per relay policy, default RET-EVIDENCE; signed withdrawal statements from the reporter erase the sealed details when no case is open.
 
 **Threats and controls**
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Mass reporting to take down a competitor's listing | relay caps 20 reports per day per key and 60 per /24 prefix, no automatic removal from report count alone, human or deterministic rule decides on that relay only |
-| T02 | Reported party deduces the reporter | relay policy omits reporter from notices; the UI states that the relay operator can see the reporting key and pseudonymity is not anonymity; reporters may use a fresh per-relay device key |
-| T03 | Forged outcome statement shows 'content removed' to the reporter | outcomes accepted only with valid relay signature over the report id; invalid ones are quarantined |
-| T04 | Malicious advisory feed hides a competitor's listings in many vaults | advisories are opt-in per publisher, show the publisher name, can be undone, and have local effect only |
+| T01 | Mass reporting to take down a competitor's listing | relay caps 20 reports per 24 h per key and 60 per /24 prefix, no automatic removal from report count alone, human or deterministic rule decides on that relay only |
+| T02 | Reported party deduces the reporter | relay policy omits reporter from notices, events and case records; the UI states that the relay operator can see the reporting key and pseudonymity is not anonymity; reporters may use a fresh per-relay device key |
+| T03 | Forged outcome statement shows 'content removed' to the reporter | outcomes accepted only with valid relay signature over the report id and digest; invalid ones are quarantined |
+| T04 | Malicious advisory feed hides a competitor's listings in many vaults | advisories are opt-in per publisher, show the publisher name, can be undone, expire, can be retracted, and have local effect only |
 | T05 | Report details used to smuggle links or private data to moderators | details is plain text capped at 1000 code points, links rendered inert, scanned by F12.S02.M02 |
-| T06 | Relay replays an old receipt to fake acknowledgement | receipts bind reportId and a relay sequence number; replay of a stale sequence is rejected |
+| T06 | Relay replays an old receipt to fake acknowledgement | receipts bind reportId, statementDigest and a relay sequence number; replay of a stale sequence is rejected |
+| T07 | A relay forwards a signed report to other relays, exposing the reporter key and multiplying reports | signed relayId and sealing key bind the report to one relay (V09); reportId is deduplicated for the life of the report |
+| T08 | Reporting a private message leaks third-party plaintext or reveals the reporter | metadata-only by default, redacted participant disclosure only after explicit approval, inference warning on the sheet |
+| T09 | Stale labels after an appeal overturn or expiry | advisories carry expiresAt and are removed on verified retraction or expiry |
 
 **Abuse controls**
-- Bad-faith signal: five reports dismissed by one relay within 30 days sends a report_dismissed_bad_faith signal in that relay's F12.S03.M02 store and lowers that key's cap to 3 per day; minor_safety and imminent-harm reasons are exempt.
-- Vault UX throttle: more than 10 reports per hour from one vault asks for confirmation (local convenience guard, not security).
+- Bad-faith control: each report a relay dismissed (case closed no_action) produces moderation.report.dismissed; F12.S03.M02 records report_dismissed_bad_faith only once a key reaches 5 non-exempt dismissals in 30 days, and F12.S03.M03 then serves that key from class report.receive.reduced (3 per 24 h); minor_safety reports are exempt.
+- Vault UX throttle: more than 10 reports per hour from one vault asks for confirmation (F12.S03.M03 local guard, convenience only, not security).
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
@@ -42,10 +48,11 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-094-09.T07 | abuse | PS-094-05.R01, PS-094-05.R03, PS-094-07.R01, PS-094-09.R03 | outcome signed by a different key; non-moderator queries relay reports | outcome quarantined; NOT_FOUND and no reporter key in any response or event to the author |
-| TEST-PS-094-09.T11 | abuse | PS-094-07.R03 | 21 reports by one key in a day; key with five dismissed reports files a 4th | 21st and 4th return RATE_LIMITED; minor_safety exempt |
-| TEST-PS-094-09.T15 | integration | PS-094-07.R01, PS-094-07.R02, PS-094-10.R01, PS-094-10.R02, PS-094-10.R03 | export, restore into fresh vault, import imported open report | own reports round-trip; imported open reports become withdrawn; details stay sealed |
+| TEST-PS-094-09.T11 | abuse | PS-094-07.R03 | 21 reports by one key in 24 h; key with a report_dismissed_bad_faith signal files a 4th in 24 h; same key files minor_safety | 21st and 4th return RATE_LIMITED; minor_safety accepted |
+| TEST-PS-094-09.T20 | abuse | PS-094-07.R01 | privacy suite after filing reports: scan federation payloads, public projections, relay logs, events and subject-facing statements | no reporterKey, details or snapshot body appears in any of them |
+| TEST-PS-094-09.T21 | abuse | PS-094-07.R04 | report an end-to-end message without disclosure, then with an approved redacted disclosure | relay receives only targetCid, sender key, sender signature and reason, then only the approved redacted bytes; the sheet shows the inference warning |
+| TEST-PS-094-09.T22 | integration | PS-094-07.R02, PS-094-07.R05 | injected clock past RET-EVIDENCE for a resolved report; privacy.deletion.completed with keepEvidence true and false; relay DeletionPort applied | report purged through RetentionPurgePort; reporterKey pseudonymized or reports deleted; relay copy pseudonymized; export section listed before deletion |
 
 ## Dependencies
 
-Module depends on: F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

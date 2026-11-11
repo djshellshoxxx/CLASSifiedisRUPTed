@@ -203,6 +203,7 @@ processes:
       - {type: mutiny.cycle.cancelled, effect: "cancel meetups whose context is the cycle"}
       - {type: services.booking.cancelled, effect: "cancel meetups whose context is the booking"}
       - {type: rentals.reservation.cancelled, effect: "cancel meetups whose context is the reservation"}
+      - {type: privacy.deletion.completed, effect: "replace remaining references to the deleted principal by the payload pseudonym in meetups and signed proposal and cancellation statements kept under RET-EVIDENCE"}
     errors:
       - "COMMS_MEETUP_WINDOW_INVALID | 422 | no | window length is outside 15 minutes to 4 hours, or starts too soon or too far ahead"
       - "COMMS_MEETUP_PLACE_INVALID | 422 | no | place is not a verified active safe spot or a valid L3 area label without an address"

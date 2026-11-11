@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.ratepolicy in the relay configuration export and in the vault export for local throttles; buckets not exported.
-- **import:** Policies import after bounds validation; invalid rows are rejected with VALIDATION_FAILED and the rest are applied; local throttle import affects only the importing vault.
-- **backup:** Policies covered by relay SQLite backup (CTR-IOX-001 IOX-3); buckets excluded and recreated empty after restore.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown classes use the default policy.
+- **export:** Section moderation.ratepolicy in the relay configuration export and in the vault export for local guards; buckets and salts not exported.
+- **import:** Policies import after bounds validation; invalid rows are rejected with VALIDATION_FAILED and the rest are applied; local guard import affects only the importing vault.
+- **backup:** Policies covered by relay SQLite backup (CTR-IOX-001 IOX-3); buckets and salts excluded and recreated empty after restore.
+- **migration rollback:** Expand step converts v1 ratePerMinute rows to limit = ratePerMinute and periodMs 60000 and keeps ratePerMinute readable for 180 days; rollback is safe because older readers ignore new optional fields and unknown classes use the default policy.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,7 +23,7 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-099-09.T14 | integration | PS-099-10.R01, PS-099-10.R02, PS-099-10.R03 | export policy, import, restore backup | policies round-trip; buckets absent and recreated empty |
+| TEST-PS-099-09.T14 | integration | PS-099-10.R01, PS-099-10.R02, PS-099-10.R03 | export policy, import with an out-of-bounds row, restore backup; v1 policy row with ratePerMinute 30 | valid policies round-trip and the invalid row is rejected; the expand step stores limit 30 periodMs 60000; buckets absent and recreated empty |
 
 ## Dependencies
 

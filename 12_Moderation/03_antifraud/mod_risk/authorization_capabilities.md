@@ -17,6 +17,7 @@
 | moderation.riskassessment.recompute | local principal, moderator, operator | vault unlocked, or relay role; subject permitted by V04 |
 | moderation.riskassessment.read | local principal, moderator | vault unlocked, or relay moderator with open case on the subject |
 | moderation.riskassessment.read_own | local principal, member | vault unlocked, or member reading own key on a relay |
+| moderation.risk.assess | local principal, moderator | in-process only: vault unlocked for a transaction of the principal or its own listing publication, or relay moderator with an open case; not routable over HTTP |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

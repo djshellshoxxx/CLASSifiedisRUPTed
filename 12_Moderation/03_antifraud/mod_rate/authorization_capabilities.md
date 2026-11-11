@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-099-05.R01** Relay policy: only relay operators change policy and reset buckets; any caller can read the status of their own bucket.
-- **PS-099-05.R02** Vault policy: only the local principal changes local UX throttles, and local throttles never apply to or report on other parties.
+- **PS-099-05.R02** Vault policy: only the local principal changes local UX guards, and local guards never apply to or report on other parties.
 - **PS-099-05.R03** The consume port runs for every request including anonymous ones, keyed by IP prefix only for anonymous requests.
 
 ## Specification

@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.signals in classrup-export/v1 (vault only): one line per unexpired signal including reason text for manual ones.
-- **import:** Signals import with sourceModule import and weight clamped to ±20; duplicates by (kind, sourceEventId) are skipped; expired ones are dropped.
+- **export:** Section moderation.signals in classrup-export/v1 (vault only, ExportSectionPort): one line per unexpired signal including sourceKey and reason text for manual ones.
+- **import:** Signals import with sourceModule import and weight clamped to ±20; duplicates by (kind, sourceEventId) are skipped; expired ones are dropped; signals about the importing principal are dropped.
 - **backup:** Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) covers relay signals.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0.
+- **migration rollback:** Additive fields only in v1 (sourceKey, kinds refund_agreed and report_dismissed); the mapping table moves from signals/1 to signals/2 for new events only; rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-101-09.T13 | integration | PS-101-10.R01, PS-101-10.R02, PS-101-10.R03 | vault export, import into fresh vault, relay backup restore | signals round-trip with original observedAt; imported signals marked source import with weight cap |
+| TEST-PS-101-09.T13 | integration | PS-101-10.R01, PS-101-10.R02, PS-101-10.R03 | vault export, import into fresh vault, relay backup restore; read a v1 row with an unknown kind with the previous reader | signals round-trip with original observedAt; imported signals marked source import with weight cap 20; unknown kind counts as manual_concern with weight 0 |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

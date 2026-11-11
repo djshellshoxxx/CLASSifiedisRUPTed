@@ -6,14 +6,17 @@
 
 ## Requirements
 
-- **PS-086-07.R01** Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference encrypted statements by cid and never store plaintext on a relay.
-- **PS-086-07.R02** A relay operator sees only public projections and ciphertext metadata and therefore resolves only public_projection conflicts on that relay.
+- **PS-086-07.R01** Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference participant statements by cid, never store plaintext and never exist on a relay.
+- **PS-086-07.R02** A relay operator sees only public projections and therefore resolves only public_projection conflicts on that relay.
 - **PS-086-07.R03** Attackers must not be able to freeze someone else's trade with unsigned or role-less statements.
+- **PS-086-07.R04** The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort), classifies fields with F10.S02.M02 and pseudonymizes the author DID of retained conflict evidence on privacy.deletion.completed.
+- **PS-086-07.R05** Forks are attributed to the author; after 20 open conflicts the author's further envelopes are quarantined, and forwarding relays are never penalized for an author's equivocation.
 
 ## Specification
 
 **Data classification**
-- ConflictRecord: P1; candidate cids, claimed and receipt times, author did.
+- ConflictRecord commitment class: P2, vault only; logs carry IDs only.
+- ConflictRecord public_projection class: P1 to the relay operator; candidate cids, claimed and receipt times, author did.
 - Candidate payloads stay in F11.S01.M02 under their own class.
 
 **Retention**
@@ -24,13 +27,15 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | Griefing: attacker injects a second statement to freeze a victim's trade | detect requires a verified signature by the victim's authorized key or a listed participant; role-less statements are quarantined by F11.S01.M02 and never open a conflict |
-| T02 | Equivocating author or relay shows different histories to different peers | both versions retained as evidence; author's chain marked forked; peers receive health signal via federation.conflict.detected |
-| T03 | Operator abuse: resolving in favor of a friendly author | resolution recorded with decidedBy and note; both signed candidates remain; audit entry under RET-AUDIT |
-| T04 | Clock-claim manipulation to look earlier | claimed times labelled claims; only relay receipts count as evidence and only of that relay's clock; origin-wins uses arrival from the bound relay, not claimed time |
+| T02 | Equivocating author shows different histories to different peers | both versions retained as evidence; the author's chain marked forked; author-level limit of 20 open conflicts then author quarantine; forwarding relays are not blamed |
+| T03 | Operator abuse: resolving in favor of a friendly author | operators resolve public projections only; resolution recorded with decidedBy and note; both signed candidates remain; audit entry under RET-AUDIT |
+| T04 | Clock-claim manipulation to look earlier, or a relay claiming to be the author's home | claimed times labelled claims; origin-wins uses this receiver's receipt from a relay listed in the author's own portable document, never claimed time or a relay binding |
+| T05 | One party settling a double promise alone | commitments accept only drop_all (local release) or a renegotiated digest signed by every required signer (V04) |
+| T06 | Freeze failing open while the detected event is in transit | candidates quarantined in the detecting transaction; domain modules call is_frozen synchronously and fail closed |
 
 **Abuse controls**
-- At most 20 open conflicts per author per relay; the 21st quarantines the author's further envelopes with a health signal to F11.S03.M01.
-- Commitment freezes can always be lifted by the local principal choosing drop_all, so no counterparty can lock a vault indefinitely.
+- At most 20 open conflicts per author per tenant; the 21st detection puts the author's further envelopes in author-level quarantine with no peer health signal.
+- Commitment freezes can always be lifted locally by the vault principal choosing drop_all, so no counterparty can lock a vault indefinitely.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
@@ -38,11 +43,11 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-086-09.T04 | integration | PS-086-03.R02, PS-086-04.R03, PS-086-07.R02 | public conflict untouched for 7 days with a bound origin | auto_resolved origin_wins keeps the first-received-from-origin cid; event emitted |
-| TEST-PS-086-09.T09 | abuse | PS-086-05.R01, PS-086-05.R02, PS-086-05.R03, PS-086-07.R03 | non-operator resolves on relay; external request calls detect; third party reads conflict | FORBIDDEN or NOT_FOUND; operator resolution logged with decidedBy |
-| TEST-PS-086-09.T10 | abuse | PS-086-07.R01, PS-086-07.R03 | attacker signs a statement as a non-participant for a victim's proposal | quarantined, no conflict opened, trade not frozen |
-| TEST-PS-086-09.T13 | integration | PS-086-07.R02, PS-086-03.R03 | relay with ciphertext commitment statements | relay stores no plaintext and refuses to resolve commitment conflicts |
+| TEST-PS-086-09.T10 | abuse | PS-086-07.R03, PS-086-01.R04 | attacker signs a statement as a non-participant for a victim's proposal | quarantined by F11.S01.M02 V14, no conflict opened, trade not frozen |
+| TEST-PS-086-09.T13 | integration | PS-086-07.R02, PS-086-02.R05 | relay harness: operator calls resolve on a public conflict and on a commitment conflict id injected into the relay store; inspect relay storage | first succeeds with audit; second FORBIDDEN; relay holds no commitment record and no plaintext |
+| TEST-PS-086-09.T22 | abuse | PS-086-07.R05 | malicious author forks 21 times, each fork delivered through two honest relays | the 21st returns FEDERATION_CONFLICT_AUTHOR_LIMIT and quarantines the author's later envelopes; detected events carry no peer blame and no peer health changes |
+| TEST-PS-086-09.T23 | unit | PS-086-07.R04, PS-086-07.R01 | export, deletion and retention ports called by F10; privacy.deletion.completed; log capture for a commitment conflict | sections and plans returned; author DID pseudonymized in retained records; logs hold IDs only |
 
 ## Dependencies
 
-Module depends on: F11.S02.M02, F11.S01.M03, F11.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S02.M02, F11.S01.M03, F11.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

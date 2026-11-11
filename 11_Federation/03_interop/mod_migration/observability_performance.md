@@ -13,7 +13,7 @@
 ## Specification
 
 **Metrics**
-- classrup_federation_migrations_total{outcome=announced|effective|cancelled|vetoed|closed}
+- classrup_federation_migrations_total{outcome=announced|effective|cancelled|vetoed|closed|held}
 - classrup_federation_migration_copy_failed_total
 - classrup_federation_redirect_lookups_total{result=moved|none}
 
@@ -30,8 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-090-09.T15 | load | PS-090-08.R01, PS-090-08.R02, PS-090-08.R03 | 60 redirect lookups per minute and 1000 observed moves | p95 ≤ 150 ms, rate limit enforced, metrics exported |
+| TEST-PS-090-09.T15 | load | PS-090-08.R01, PS-090-08.R02, PS-090-08.R03 | 60 redirect lookups per minute and 1000 observed moves | p95 ≤ 150 ms, rate limit enforced, metrics exported, veto alert above 5 in 24 h |
 
 ## Dependencies
 
-Module depends on: F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S03.M01, F07.S02.M01, F10.S01.M04, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S02.M03, F11.S03.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

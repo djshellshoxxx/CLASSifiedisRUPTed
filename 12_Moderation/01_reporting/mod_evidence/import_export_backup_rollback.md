@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.evidence in classrup-export/v1: snapshot metadata, decrypted body and media (it is the owner's own data), access log rows; relay case bundles are sealed to the moderation key.
-- **import:** Bundles import as read-only evidence; each body hash and author signature is recomputed; mismatches are rejected with VALIDATION_FAILED; keys are re-wrapped under the target store key.
-- **backup:** Vault export is the primary backup (IOX-6); relay SQLite and blob backups (CTR-IOX-001 IOX-3) hold only evidence received in reports; restore re-runs the integrity sweep.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; relay migrations re-create the access log trigger on down scripts.
+- **export:** Section moderation.evidence in classrup-export/v1 through ExportSectionPort: snapshot metadata, decrypted body and copied media (the owner's own data), P0 media as blob:sha256 references, access log rows; relay case bundles are sealed to the moderation key.
+- **import:** Bundles import as read-only evidence; each body hash and author signature is recomputed; mismatches are rejected with VALIDATION_FAILED; blobs are re-encrypted under new per-blob keys of the target store and reference counts rebuilt.
+- **backup:** Vault export is the primary backup (IOX-6); relay SQLite and blob backups (CTR-IOX-001 IOX-3) hold only evidence received in reports; restore re-runs the integrity sweep and recomputes reference counts.
+- **migration rollback:** v1 moves from per-snapshot keys to per-blob keys by an expand step that creates EvidenceBlob rows with refCount 1 per existing snapshot; rollback is safe because older readers ignore new optional fields; relay migrations re-create the access log trigger on down scripts.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M03, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

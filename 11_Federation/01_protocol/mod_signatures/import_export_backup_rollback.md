@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-085-10.R01** The library stores nothing, so there is no export, import or backup of its own.
-- **PS-085-10.R02** Envelopes created by any past release must keep verifying; the signed-bytes definition is frozen for envelope v=1.
+- **PS-085-10.R02** Envelopes created by any past release must keep verifying; the signed-bytes and cid definitions are frozen for envelope v=1.
 - **PS-085-10.R03** A change to canonicalization or hashing requires a new envelope version number and never alters v=1 behavior.
 
 ## Specification
@@ -23,7 +23,7 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-085-09.T14 | unit | PS-085-10.R01, PS-085-10.R02, PS-085-10.R03 | verify golden envelopes created by the previous release | all verify Ok after upgrade; downgrade test passes |
+| TEST-PS-085-09.T14 | unit | PS-085-10.R01, PS-085-10.R02, PS-085-10.R03 | verify golden envelopes created by the previous release; feed a v=2 envelope | all v=1 envelopes verify Ok after upgrade; v=2 is refused until a new version is defined; downgrade test passes |
 
 ## Dependencies
 

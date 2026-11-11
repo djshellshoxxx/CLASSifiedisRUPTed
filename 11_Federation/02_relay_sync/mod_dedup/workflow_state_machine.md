@@ -6,13 +6,13 @@
 
 ## Requirements
 
-- **PS-087-03.R01** The library has no state of its own; the lifecycle of a buffered envelope is the FederatedRecord machine of F11.S01.M02.
-- **PS-087-03.R02** Decision precedence is fixed as duplicate, then reject, then fork, then next, then buffer.
+- **PS-087-03.R01** The library has no state of its own; the lifecycle of a buffered or held envelope is the FederatedRecord machine of F11.S01.M02.
+- **PS-087-03.R02** Decision precedence is fixed as duplicate, then held_on_fork, then fork, then anchor, then next, then backfill, then reanchor, then buffer.
 - **PS-087-03.R03** The decision for a given input never depends on arrival order of unrelated authors.
 
 ## Specification
 
-**Note:** Stateless; the 24 h buffer timeout is enforced by the sweep in F11.S01.M02 using expired() from this module.
+**Note:** Stateless; the 24 h buffer window is enforced by the sweep in F11.S01.M02 using expired() from this module, which releases expired rows with chainGap instead of dropping them; held_on_fork rows have no time limit and follow the conflict resolution.
 
 ### Timeouts and scheduled transitions
 
@@ -22,9 +22,9 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-087-09.T02 | property | PS-087-01.R02, PS-087-03.R01, PS-087-03.R02, PS-087-09.R03 | random permutations and duplicates of a 50-envelope chain through decide and drain | final accepted order equals seq order; every arrival yields at most one next per seq |
-| TEST-PS-087-09.T05 | unit | PS-087-02.R01, PS-087-03.R03, PS-087-04.R01 | order of unrelated authors permuted | each author's decision identical regardless of order |
-| TEST-PS-087-09.T07 | unit | PS-087-03.R01, PS-087-06.R01, PS-087-06.R02 | expired() with buffer rows at 23 h 59 min and 24 h 00 min; backwards clock jump | only the 24 h row expires; jump does not extend the window |
+| TEST-PS-087-09.T02 | property | PS-087-03.R01, PS-087-03.R02, PS-087-09.R02 | random permutations and duplicates of a 50-envelope chain arriving at a fresh receiver | anchor at the first arrival; final accepted set equals the chain in seq order; every arrival yields at most one placement per seq; nothing lost |
+| TEST-PS-087-09.T05 | unit | PS-087-03.R03, PS-087-04.R01 | order of unrelated authors permuted | each author's decision identical regardless of order |
+| TEST-PS-087-09.T16 | unit | PS-087-03.R02 | open conflict at (X, k1, pub, 7) with candidates A and B; envelope seq 8 with prev = A | held_on_fork, not buffered and not released at 24 h; after resolution keeping A it drains as next |
 
 ## Dependencies
 

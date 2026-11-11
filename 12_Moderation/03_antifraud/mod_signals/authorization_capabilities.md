@@ -16,7 +16,7 @@
 |---|---|---|
 | moderation.signal.record_manual | local principal, moderator | vault unlocked, or relay moderator with open case; subject differs from actor |
 | moderation.signal.read_as_reviewer | local principal, moderator | vault unlocked, or relay moderator with open case on the subject |
-| moderation.signal.read_summary | local principal, moderator, operator | vault unlocked, or relay role; used by F12.S03.M01 in-process |
+| moderation.signal.read_summary | local principal, moderator, operator | vault unlocked, or relay role; used in-process by F12.S03.M01 |
 | moderation.signal.read_categories | local principal, member | vault unlocked, or subject reading own categories on a relay |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
@@ -29,4 +29,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

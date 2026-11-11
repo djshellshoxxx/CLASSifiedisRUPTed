@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Not exported (derived); relay configuration export contains model version and thresholds.
-- **import:** Assessments are not imported; after signals import, the daily sweep recomputes them; thresholds import only within allowed ranges.
+- **export:** Not exported (derived); relay configuration export contains model version, points table and thresholds.
+- **import:** Assessments are not imported; after signals import, the crossing scheduler recomputes them; thresholds import only within allowed ranges.
 - **backup:** Derived data excluded from backup (CTR-IOX-001 IOX-3 and IOX-6); restore recomputes.
-- **migration rollback:** A new model version runs in shadow for 7 days with comparison metrics; rollback restores the previous version by configuration; stored rows with older versions stay readable.
+- **migration rollback:** A new model version runs in shadow for 7 days with comparison metrics; rollback restores the previous version by configuration; stored rows with older versions stay readable; the query alias moderation.riskassessment.assess_transaction is removed after one release.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,7 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-100-09.T13 | integration | PS-100-10.R01, PS-100-10.R02, PS-100-10.R03 | export, import, backup restore | assessments excluded from export and recomputed after restore with identical results |
+| TEST-PS-100-09.T13 | integration | PS-100-10.R01, PS-100-10.R02 | export, import, backup restore; thresholds out of range on import | assessments excluded from export and recomputed after restore with identical results; out-of-range thresholds rejected |
+| TEST-PS-100-09.T16 | integration | PS-100-10.R03 | model risk/2 in shadow for 7 days next to risk/1 | both computed; only risk/1 emits events and frictions; comparison metrics exported; rollback by configuration keeps risk/1 rows readable |
 
 ## Dependencies
 

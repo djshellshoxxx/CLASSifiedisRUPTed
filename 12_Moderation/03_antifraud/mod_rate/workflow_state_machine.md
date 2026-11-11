@@ -6,9 +6,10 @@
 
 ## Requirements
 
-- **PS-099-03.R01** Bucket state evolves only by the GCRA or token bucket arithmetic, and a bucket idle for its full refill time is equivalent to a new bucket.
+- **PS-099-03.R01** Bucket state evolves only by the GCRA, token bucket or window counter arithmetic, and a bucket idle for its full window is equivalent to a new bucket.
 - **PS-099-03.R02** Penalties from spam throttles expire after at most 1 hour and never accumulate beyond factor 0.25.
 - **PS-099-03.R03** Policy changes take effect for new consume calls within 5 seconds without resetting buckets.
+- **PS-099-03.R04** Counting survives salt rotation, because consume looks a key up under the current and the previous epoch salt and sums window counters across both until the previous epoch has left the window, after which the previous salt is destroyed.
 
 ## Specification
 
@@ -16,16 +17,18 @@
 
 ### Timeouts and scheduled transitions
 
-- Idle bucket eviction every 60 s removes buckets whose state equals full capacity; hard retention 24 h.
+- Idle bucket eviction every 60 s removes buckets whose state equals full capacity or whose expiresAt has passed.
 - Counter snapshots are persisted every 5 s.
+- Class salt epochs rotate every max(24 h, periodMs); the previous salt is destroyed when the oldest counter keyed under it is older than the window.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-099-09.T02 | property | PS-099-01.R01, PS-099-03.R01 | random arrival sequences against reference GCRA and token bucket models | decisions identical; tokens within [0, capacity]; tat monotonic |
-| TEST-PS-099-09.T05 | integration | PS-099-03.R02, PS-099-04.R03 | spam.detected with throttle ttl 2 hours; denial storm of 1 000 calls | factor 0.25 for 1 hour only; one rate.exceeded event per key per minute |
-| TEST-PS-099-09.T08 | integration | PS-099-03.R01, PS-099-03.R03 | policy change at runtime; idle eviction | takes effect ≤ 5 s without resetting buckets; full-capacity buckets evicted |
+| TEST-PS-099-09.T02 | property | PS-099-01.R01, PS-099-03.R01 | random arrival sequences against reference GCRA, token bucket and window counter models | decisions identical; tokens within [0, capacity]; tat monotonic; window sums never exceed the limit |
+| TEST-PS-099-09.T05 | integration | PS-099-03.R02, PS-099-04.R03, PS-099-04.R04 | spam.detected with subjectKey and throttle ttl 2 hours; denial storm of 1 000 calls | the key's write buckets found through this module's own HMAC get factor 0.25 for 1 hour only; one rate.exceeded event per key per minute |
+| TEST-PS-099-09.T08 | integration | PS-099-03.R03, PS-099-04.R02 | operator policy change at runtime; vault sets a local guard through the same command; idle eviction | takes effect ≤ 5 s without resetting buckets; local guard stored in scope local; full-capacity buckets evicted |
+| TEST-PS-099-09.T16 | property | PS-099-03.R04, PS-099-01.R03 | 20-per-30-days window_counter with arrivals spread over 60 days and a salt rotation on day 15 | at most 20 allowed in any 30-day window across the rotation; previous salt destroyed once its last counter leaves the window |
 
 ## Dependencies
 

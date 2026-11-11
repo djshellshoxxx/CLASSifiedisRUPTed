@@ -6,18 +6,19 @@
 
 ## Requirements
 
-- **PS-100-07.R01** Assessments are P3 derived data kept 30 days and contain only factor kinds and counts, never content or counterparties' identities beyond the subject key.
+- **PS-100-07.R01** Assessments are derived data (P3 in a vault, P2 on a relay) kept 30 days and contain only factor kinds and counts, never content or counterparties' identities beyond the subject key.
 - **PS-100-07.R02** Consumers receive the minimum, level and factor kinds, not signal sources.
 - **PS-100-07.R03** Misuse of levels (as a de facto ban, or to shame) is limited by friction-only semantics, subject visibility and no federation.
 
 ## Specification
 
 **Data classification**
-- RiskAssessment: P3 derived (vault owner; relay moderators with case; subject on relay).
-- moderation.risk.elevated: P3, consumed by F12.S03.M04 and by local UI only.
+- RiskAssessment: P3 in a vault (owner only); P2 on a relay (subject and that relay's moderators with a case).
+- moderation.risk.elevated and moderation.risk.lowered: P2 store-local, consumed by F12.S03.M04, F12.S02.M01 and local UI only.
+- First-seen map: P2 derived, store-local, hashed keys.
 
 **Retention**
-- Assessments: 30 days (RET-SHORT).
+- Assessments: 30 days (RET-SHORT) through the store sweep.
 - Level history rows for hysteresis: the latest one is always kept.
 
 **Threats and controls**
@@ -25,10 +26,11 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | Silent shadow penalty | frictions are enumerated and shown to the subject; no friction hides content or blocks access; schema forbids ban-like friction values |
-| T02 | Gaming the model by farming positive signals | positive credit capped at 20 points and only from completed dealings; negative signals dominate by design |
+| T02 | Gaming the model by farming positive signals | deal credit capped at −20 points (10 completed dealings) and only from deal_completed signals; negative signals dominate by design |
 | T03 | Using levels to defame | levels never leave the store; relay does not publish them; the UI says levels are not findings |
-| T04 | Model drift or opacity | fixed versioned model risk/1 with published formula, input digest, factors that sum to the score |
+| T04 | Model drift or opacity | fixed versioned model risk/1 with the published points table, input digest and factors that sum to the score |
 | T05 | Flapping levels cause UI churn or friction oscillation | hysteresis thresholds (70/60 and 35/25) and 5 second debounce |
+| T06 | Frictions kept after the level dropped | crossing scheduler and moderation.risk.lowered lift them when the drop happens |
 
 **Abuse controls**
 - Recompute is rate limited to 60 per hour per principal (F12.S03.M03) to prevent probing of the model with fake signals.
@@ -40,8 +42,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-100-09.T08 | abuse | PS-100-07.R01, PS-100-07.R02, PS-100-07.R03 | schema with a ban-like friction value; 61 recomputes in an hour | schema rejects; 61st RATE_LIMITED |
-| TEST-PS-100-09.T10 | unit | PS-100-07.R02, PS-100-01.R02 | assessment retention at 30 days and consumer payload | purged; payload has level and kinds only |
+| TEST-PS-100-09.T08 | abuse | PS-100-07.R01, PS-100-07.R03 | schema with a ban-like friction value; 61 recomputes in an hour | schema rejects; 61st RATE_LIMITED |
+| TEST-PS-100-09.T10 | unit | PS-100-07.R02, PS-100-01.R02 | injected clock 31 days after computation; consumer payload | assessment purged; payload has level and kinds only |
+| TEST-PS-100-09.T15 | abuse | PS-100-07.R01, PS-100-01.R02 | F12 privacy suite after recomputes in a vault and on a relay: scan federation payloads, public projections, notifications and logs | no assessment field, score, level or factor appears in any of them |
 
 ## Dependencies
 

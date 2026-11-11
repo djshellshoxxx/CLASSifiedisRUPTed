@@ -15,7 +15,9 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | federation.peer.propose | local principal, operator | vault policy: unlocked vault owner for selected_relay; relay policy: operator role of this relay for peer_relay, with audit entry |
+| federation.peer.receive_offer | anonymous | relay policy: unauthenticated endpoint for relays not yet allowlisted; offer verified (V08–V10) and rate limited; creates only an inbound proposed Peer that needs operator action |
 | federation.peer.accept | local principal, operator | same as propose; requires fingerprintConfirmed |
+| federation.peer.receive_accept | anonymous | relay policy: accepted only for a proposed outbound Peer whose offerStatementCid matches and whose pinned key signed it |
 | federation.peer.suspend | local principal, operator, system | system only for automatic health or equivocation suspension |
 | federation.peer.reinstate | local principal, operator | same as propose |
 | federation.peer.remove | local principal, operator | same as propose |
@@ -33,4 +35,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F11.S01.M03, F15.S04.M02, F07.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F15.S04.M02, F07.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -14,7 +14,7 @@
 
 **Metrics**
 - classrup_federation_outbox_entries{state}
-- classrup_federation_delivery_total{outcome=receipt|peer_accepted|failed|retry}
+- classrup_federation_delivery_total{outcome=receipt|delivered|peer_accepted|failed|retry}
 - classrup_federation_outbox_oldest_age_ms (gauge)
 - classrup_federation_delivery_duration_ms (histogram)
 
@@ -32,9 +32,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-088-09.T10 | chaos | PS-088-06.R03, PS-088-08.R03 | relay down for 2 h then back; kill app mid-batch | local record unchanged; entries retry with IDM-4 backoff; lease expires after 60 s; no loss |
-| TEST-PS-088-09.T15 | load | PS-088-08.R01, PS-088-08.R02 | 10 000 entries dispatched in batches of 100 across 5 destinations | batch build p95 ≤ 500 ms, metrics exported, alert at 15 min age |
+| TEST-PS-088-09.T15 | load | PS-088-08.R01, PS-088-08.R02 | 10 000 entries dispatched in batches of 100 across 5 destinations | batch build p95 ≤ 500 ms, metrics exported |
+| TEST-PS-088-09.T22 | integration | PS-088-08.R03 | oldest prepared PeerOutbox entry reaches 15 min 1 s; one peer fails 21 percent of deliveries over 15 minutes | both alerts fire |
 
 ## Dependencies
 
-Module depends on: F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S01.M01, F15.S04.M02, CTR-FED-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S01.M01, F15.S04.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

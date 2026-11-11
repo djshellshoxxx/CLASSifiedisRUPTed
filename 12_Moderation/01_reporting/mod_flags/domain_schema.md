@@ -6,42 +6,52 @@
 
 ## Requirements
 
-- **PS-094-01.R01** A Report stores reporter key, relay target, content target (id, content id and revision seen), reason code, optional details, evidence snapshot reference, sync state and status, with tenant and revision per CTR-ID-001.
-- **PS-094-01.R02** Reports are P3 in the reporter's vault and are sent only as an envelope sealed to the relay's moderation key, so the relay stores ciphertext until a moderator opens it; the relay copy is retained under RET-EVIDENCE per relay policy.
+- **PS-094-01.R01** A Report stores reporter key, relay target, content target (id, content id and revision seen), subject key, reason code, optional details, evidence snapshot reference, disclosure mode, sync state and status, with tenant and revision per CTR-ID-001.
+- **PS-094-01.R02** The report statement sent to a relay is P2 between the reporter and that relay's moderation role: a signed header the relay reads (reportId, relayId, reporterKey, subjectKey, targetType, targetId, targetCid, reasonCode) drives dedupe, caps and case linking, only the details and evidence body are sealed to the relay's moderation key, local-only fields stay P3 in the vault, and the relay copy is retained under RET-EVIDENCE per relay policy.
 - **PS-094-01.R03** A report is immutable after filing except for sync state, status, case reference and outcome; details cannot be edited, only withdrawn and refiled.
-- **PS-094-01.R04** An AdvisorySubscription stores a publisher key, mode and last verified sequence, is P3 and local to the vault, and changes only through the subscription command.
+- **PS-094-01.R04** An AdvisorySubscription stores a publisher key, mode and last verified sequence, is P3 and local to the vault, and changes only through the subscription commands.
+- **PS-094-01.R05** Advisory labels are applied only from verified advisories that are unexpired and unretracted; a verified retraction from the same publisher or the advisory's expiresAt removes the label without touching local records.
 
 ## Specification
 
 ### Report
 
-Schema `classrup.moderation.report/v1` · storage **relay+device** · privacy **P3** · retention **RET-EVIDENCE**
+Schema `classrup.moderation.report/v1` · storage **relay+device** · privacy **P2** · retention **RET-EVIDENCE**
 
 | Field | Type and constraints |
 |---|---|
-| id | uuidv7 — primary key, generated in the vault |
+| id | uuidv7 — primary key (reportId), generated in the vault; header field |
 | tenantId | uuidv7 — relay hosting scope the report is addressed to (the vault's own scope locally) |
-| reporterKey | did:key — pseudonymous principal that signs the statement; P3 |
-| relayId | string — user-selected destination relay, did:key of the relay |
-| targetType | enum — listing \| message \| profile \| review \| bid \| offer \| attachment \| cycle_proposal |
+| reporterKey | did:key — pseudonymous principal that signs the header; P2 to the addressed relay's moderation role only |
+| relayId | string — did:key of the user-selected destination relay; signed header field bound to the receiving relay |
+| moderationKeyId | string — id of the relay moderation key the body is sealed to |
+| subjectKey | did:key — author or sender key of the target envelope; header field |
+| targetType | enum — listing \| auction \| message \| profile \| review \| bid \| offer \| attachment \| cycle_proposal |
 | targetId | uuidv7 — id of the reported content |
 | targetCid | string — content id (sha256-…) of the signed author envelope held by the reporter |
 | targetRevision | int — revision of the target at report time |
 | reasonCode | enum — spam \| scam_fraud \| prohibited_item \| harassment \| hate \| sexual_content \| violence \| counterfeit \| privacy_leak \| impersonation \| minor_safety \| other |
-| details? | string — plain text, 0..1000 code points, sealed to the relay |
-| evidenceSnapshotId | uuidv7 — ref F12.S01.M02 EvidenceSnapshot in the vault |
-| syncState | enum — local_committed \| prepared \| transport_acknowledged \| peer_accepted |
-| caseRef? | string — relay case reference from the signed report receipt |
+| details? | string — plain text, 0..1000 code points, sealed body |
+| evidenceSnapshotId | uuidv7 — ref F12.S01.M02 EvidenceSnapshot in the storing store |
+| snapshotHash | string — contentHash of the snapshot as sent, 64 hex |
+| disclosure | enum — public_target \| metadata_only \| participant_disclosure \| reporter_claim |
+| statementDigest | string — SHA-256 hex of the JCS bytes of the signed statement; dedupe and receipt binding |
+| syncState | enum — local_committed \| prepared \| transport_acknowledged \| peer_accepted (vault copy only) |
+| relayReceivedAt? | timestamp — relay receive time from the receipt (relay-clock claim) |
+| receiptId? | uuidv7 — id of the relay-signed classrup.moderation.reportreceipt/v1 |
+| caseRef? | string — relay case reference from the verified reportlinked statement |
 | status | enum — filed \| linked \| resolved \| withdrawn |
 | outcome? | enum — actioned \| no_action \| duplicate \| content_removed_by_owner |
+| hideLocally | boolean — local-only P3 choice, never sent |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC, local device clock (a claim, not evidence) |
 | updatedAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
 - At most one report with status filed or linked per (reporterKey, relayId, targetType, targetId, reasonCode).
-- syncState peer_accepted implies a verified relay-signed receipt is stored; transport_acknowledged implies a relay receipt time recorded as relay-clock evidence only.
-- status linked or resolved implies caseRef is set; a report always has an evidenceSnapshotId.
+- syncState transport_acknowledged implies a relay transport acknowledgement was recorded; peer_accepted implies a verified relay-signed receipt bound to id and statementDigest is stored.
+- status linked implies caseRef is set; a report always has an evidenceSnapshotId and a snapshotHash.
+- disclosure participant_disclosure implies the referenced snapshot reached export prepared in F12.S01.M02; disclosure reporter_claim implies targetType message.
 
 ### AdvisorySubscription
 
@@ -50,36 +60,40 @@ Schema `classrup.moderation.advisorysubscription/v1` · storage **device** · pr
 | Field | Type and constraints |
 |---|---|
 | id | uuidv7 — primary key |
-| publisherKey | did:key — signer of advisory statements |
+| publisherKey | did:key — signer of advisory and retraction statements |
 | mode | enum — label \| hide \| ignore |
 | lastSeq | int — highest verified advisory sequence number (CTR-FED-001 FED-3) |
 | publisherStatus | enum — active \| revoked \| unreachable |
+| activeAdvisories | object[] — derived label index { advisoryCid, seq, targetCid, ruleRef, label, expiresAt? }, at most 10 000, rebuilt from verified statements |
 | createdAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
 - Advisory items are applied only if their signature verifies against publisherKey and the key is not revoked in the vault's key registry.
 - An advisory never deletes local records; mode hide only filters views and can be undone.
+- activeAdvisories never contains an advisory whose expiresAt has passed or that a verified retraction of the same publisher references.
 
 ### Storage DDL
 
 ```sql
 CREATE TABLE moderation_report (
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, reporter_key TEXT NOT NULL, relay_id TEXT NOT NULL,
-  target_type TEXT NOT NULL, target_id TEXT NOT NULL, reason_code TEXT NOT NULL, sync_state TEXT NOT NULL,
-  status TEXT NOT NULL, revision INTEGER NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
+  subject_key TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, reason_code TEXT NOT NULL,
+  statement_digest TEXT NOT NULL, sync_state TEXT, status TEXT NOT NULL, case_ref TEXT, revision INTEGER NOT NULL,
+  created_at TEXT NOT NULL, data TEXT NOT NULL);
 CREATE UNIQUE INDEX moderation_report_open ON moderation_report(reporter_key, relay_id, target_type, target_id, reason_code)
   WHERE status IN ('filed','linked');
 CREATE INDEX moderation_report_target ON moderation_report(tenant_id, target_type, target_id, status);
+CREATE INDEX moderation_report_case ON moderation_report(tenant_id, case_ref);
 ```
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-094-09.T01 | unit | PS-094-01.R01, PS-094-01.R03, PS-094-02.R01 | file a valid scam report in the vault | Report stored with syncState local_committed, snapshot reference set, details unchanged |
-| TEST-PS-094-09.T12 | unit | PS-094-01.R04, PS-094-04.R01 | subscribe to advisory feed then revoke publisher key | labels applied, then dropped after verified revocation; no local record deleted |
-| TEST-PS-094-09.T16 | e2e | PS-094-01.R02, PS-094-04.R01 | mobile reporter files a report offline then reconnects | single report, delivery status progresses honestly, axe zero serious issues |
+| TEST-PS-094-09.T01 | unit | PS-094-01.R01, PS-094-01.R03 | file a valid scam report in the vault, then try to edit details | Report stored with syncState local_committed, subjectKey from the envelope, snapshot reference and hash set; details edit refused with CONFLICT_STATE |
+| TEST-PS-094-09.T12 | unit | PS-094-01.R04, PS-094-01.R05 | subscribe to an advisory feed, publisher retracts one advisory, another reaches expiresAt, then publisher key revoked | labels applied, retracted and expired labels removed, all labels dropped after verified revocation; no local record deleted |
+| TEST-PS-094-09.T18 | integration | PS-094-04.R04, PS-094-01.R02 | relay receives a valid report | relay copy stores the readable header and the sealed body; moderation.report.received is emitted in the receipt transaction with receiptId, subjectKey and snapshotId and without reporterKey or details; no moderation.report.filed exists on the relay; F12.S02.M01 opens one case |
 
 ## Dependencies
 
-Module depends on: F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

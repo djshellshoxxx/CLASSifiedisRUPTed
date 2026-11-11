@@ -113,7 +113,7 @@ processes:
       - "V02 | destination: vault — an active selected relay (F11.S03.M01 Peer kind selected_relay) or a recipient mailbox from ext.recipients, the recipient's latest verified portable document or a public-projection mailbox hint; relay — an active allowlisted peer relay with direction outbound or both | FEDERATION_PEER_NOT_ALLOWED"
       - "V03 | audience participants goes only to recipient_mailbox; audience public goes only to selected_relay (vault) or peer_relay (relay, flag F11 on); a record received from a peer relay is never queued to a peer relay | FEDERATION_DESTINATION_INVALID"
       - "V04 | batch has ≤ 100 envelopes and body ≤ 4194304 bytes | FEDERATION_BATCH_TOO_LARGE"
-      - "V05 | transport receipt signature verifies against the destination relay's pinned key, names the cid and carries a per-envelope outcome | FEDERATION_RECEIPT_INVALID"
+      - "V05 | transport receipt signature verifies against the destination relay's pinned key, names the cid and carries a per-envelope outcome; two verified receipts by one peer key for one cid with different outcomes fail the entry with reason receipt_equivocation | FEDERATION_RECEIPT_INVALID"
       - "V06 | acknowledgement is a classrup.federation.ack/v1 accepted by F11.S01.M02, signed by a principal named in ext.recipients of the acknowledged statement, over the exact cid | FEDERATION_RECEIPT_INVALID"
       - "V07 | destination quota available (6000 envelopes/hour, 10 batches/minute default, F11.S03.M01) | FEDERATION_QUOTA_EXCEEDED"
       - "V08 | destination is not blocked by an active peer block rule (F11.S03.M02) | FEDERATION_NOT_ACCEPTED"
@@ -198,7 +198,7 @@ processes:
         output: "{ envelopes: Envelope[≤100] (public only), nextCursor }"
         errors: [FEDERATION_PEER_NOT_ALLOWED, RATE_LIMITED, FEATURE_DISABLED]
     events_produced:
-      - {type: federation.delivery.failed, privacy: P1, payload: "{ entryId, cid, destinationKind: peer_relay, destinationId, reason, attempts }"}
+      - {type: federation.delivery.failed, privacy: P1, payload: "{ entryId, cid, destinationKind: peer_relay, destinationId, reason: timeout|unreachable|server_error|rejected|expired|receipt_equivocation, code?, attempts }"}
     events_consumed:
       - {type: federation.record.accepted, effect: "vault: when local (authored by this vault's principal) route it: audience public to every active selected relay after V09, audience participants to each recipient mailbox in recipients; when type is classrup.federation.ack/v1 call federation.outbox.acknowledge. Relay: when audience public, sourceKind hosted_device and flag F11 on, enqueue PeerOutbox entries for active peer_relay peers with direction outbound or both; never for sourceKind peer_relay"}
       - {type: federation.tombstone.applied, effect: "author tombstones: relay enqueues to every peer whose entry for the target reached transport_acknowledged or delivered and cancels still-prepared target entries; vault routes own tombstones to every selected relay that received the target. relay_removal advisories are never forwarded to peers"}
@@ -253,6 +253,7 @@ processes:
       - "PeerOutbox: P1 relay operational data (which public statement went to which peer)."
       - "Vault recipient routes on F15 entries: P2 (who a participant statement is addressed to)."
       - "Receipts and acknowledgements: P2 signed evidence kept with the statement."
+      - "Sealed participant wrappers on relays: F08.S01.M01 MailboxEnvelope holding only {v, mailboxId, ciphertext, size, sentAt}; deleted after fetch and acknowledgement or after RET-SHORT 30 days."
     retention:
       - "PeerOutbox entries RET-SHORT (30 days after reaching delivered, failed or cancelled); receipts and acks are kept with the statement under its own retention; vault entries follow F15.S01.M01."
     threats:

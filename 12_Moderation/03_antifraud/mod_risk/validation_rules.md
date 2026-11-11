@@ -14,18 +14,19 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | subjectType and subjectRef are well-formed (did:key or uuidv7 reference) | VALIDATION_FAILED |
+| V01 | subjectType and subjectRef are well-formed (did:key or uuidv7 reference) and no unknown fields are present | VALIDATION_FAILED |
 | V02 | modelVersion is supported (risk/1) | VALIDATION_FAILED |
 | V03 | transaction assessment includes two distinct party keys and amountBucket in small, medium, large | VALIDATION_FAILED |
-| V04 | the requester may assess this subject (own vault, or relay moderator with case, or subject on own key) | FORBIDDEN |
-| V05 | stored assessment is not older than validUntil unless refresh is requested | RISK_ASSESSMENT_STALE |
+| V04 | the requester may assess this subject (own vault, relay moderator with case, subject on own key, or listing_publication only for the local principal's own key) | FORBIDDEN |
+| V05 | stored assessment is not older than validUntil unless refresh is requested | MODERATION_RISK_ASSESSMENT_STALE |
+| V06 | listing_publication input carries spamScore 0..100 from moderation.spam.evaluate and publicationsLast24h ≥ 0 counted from the principal's own records | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-100-09.T01 | unit | PS-100-01.R01, PS-100-01.R03, PS-100-02.R01, PS-100-02.R02 | compute assessment for fixture | score equals documented sum of factor points; level per thresholds; model risk/1 recorded |
-| TEST-PS-100-09.T03 | unit | PS-100-02.R03 | invalid subject, unknown model, transaction without two keys, stale read | documented error codes |
+| TEST-PS-100-09.T01 | unit | PS-100-01.R01, PS-100-01.R03, PS-100-02.R01, PS-100-02.R02 | key assessment of B; transaction assessment of B with amountBucket medium | key: no_show 17, dispute_opened 8, deal_credit −6, score 19, low; transaction: plus amount_bucket 5, score 24, low; model risk/1 recorded; frictions empty |
+| TEST-PS-100-09.T03 | unit | PS-100-02.R03 | invalid subject, unknown model, transaction without two keys, stale read, listing_publication for another key | documented error codes |
 
 ## Dependencies
 

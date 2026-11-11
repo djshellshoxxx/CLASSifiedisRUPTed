@@ -13,15 +13,16 @@
 ## Specification
 
 **Metrics**
-- classrup_federation_conflicts_total{outcome=detected|resolved|auto_resolved|superseded}
+- classrup_federation_conflicts_total{outcome=detected|resolved|auto_resolved|superseded, class}
 - classrup_federation_conflicts_open (gauge)
 - classrup_federation_conflict_age_ms (gauge: oldest open)
+- classrup_federation_conflict_check_unavailable_total
 
 **Logs**
-- warn federation.conflict.detected {conflictId, kind, authorPrefix(16), correlationId} — no payload.
+- warn federation.conflict.detected {conflictId, kind, statementClass, authorPrefix(16), correlationId} — IDs only, no payload or subject content.
 
 **Budgets**
-- detect and resolve p95 ≤ 300 ms; list p95 ≤ 150 ms for ≤ 50 items.
+- detect and resolve p95 ≤ 300 ms; list p95 ≤ 150 ms for ≤ 50 items; is_frozen p95 ≤ 2 ms.
 - Auto-resolution sweep of 1000 expired conflicts ≤ 5 s.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -30,9 +31,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-086-09.T12 | chaos | PS-086-06.R03, PS-086-08.R03 | kill process between conflict write and event; consumer unavailable for 90 s | freeze event delivered after restart; UI warning shown above 60 s lag |
 | TEST-PS-086-09.T14 | load | PS-086-08.R01, PS-086-08.R02 | 1000 conflicts detected and resolved in a minute | p95 ≤ 300 ms and gauges exported |
+| TEST-PS-086-09.T21 | integration | PS-086-08.R03 | relay with one public conflict open 8 days and 1 minute, then 51 open conflicts | both alerts fire |
 
 ## Dependencies
 
-Module depends on: F11.S02.M02, F11.S01.M03, F11.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S02.M02, F11.S01.M03, F11.S01.M01, F07.S02.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,6 +1,6 @@
 # PS-059-10 — Import, export, backup and rollback: Message attachments
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M03 Message attachments](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/attachments` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M03 Message attachments](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/attachments` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -12,9 +12,9 @@
 
 ## Specification
 
-- **export:** Section comms.attachments in classrup-export/v1; one line per Attachment (schema classrup.comms.attachment/v1) with blobs as separate files named by attachment ID in the archive.
+- **export:** Section comms.attachments in classrup-export/v1, registered through ExportSectionPort; one line per Attachment (schema classrup.comms.attachment/v1) with blobs as separate files named by attachment ID in the archive.
 - **import:** Hash is recomputed per blob; mismatches or oversize items are rejected; existing IDs are skipped; imported items get status uploaded only when the thread exists and is active, otherwise expired.
-- **backup:** The vault export is the primary backup (IOX-6); relay blobs and rows are covered by relay SQLite plus blob directory backup (IOX-3, IOX-7) and contain ciphertext only; losing a relay loses no user-owned record.
+- **backup:** The vault export is the primary backup (IOX-6); relay attachment rows are covered by the relay SQLite backup (IOX-3, IOX-7) while the attachment MediaBlobs are excluded from relay backups; losing a relay loses no user-owned record.
 - **migration rollback:** Additive fields only in v1; rollback is safe because older versions ignore unknown fields and still read chunkSize 65 536 attachments.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F08.S01.M01, F08.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F08.S01.M01, F08.S01.M02, F15.S02.M03, F10.S02.M03, F11.S02.M01, F15.S01.M01, F16.S02.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

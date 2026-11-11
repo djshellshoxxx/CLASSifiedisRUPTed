@@ -13,12 +13,13 @@
 ## Specification
 
 **Metrics**
-- classrup_moderation_signals_total{kind,outcome=recorded|duplicate|capped}
+- classrup_moderation_signals_total{kind,outcome=recorded|duplicate|capped|unresolved_subject}
 - classrup_moderation_signal_ingest_lag_ms
 - classrup_moderation_signal_summarize_ms (histogram)
+- classrup_moderation_signal_dead_letters_total
 
 **Logs**
-- relay info signal.recorded {signalId, kind, sourceModule, correlationId} — no subject key.
+- relay info signal.recorded {signalId, kind, sourceModule, correlationId} — no subject or source key.
 
 **Budgets**
 - record and ingest p95 ≤ 100 ms; summarize p95 ≤ 50 ms for 5 000 signals; list p95 ≤ 150 ms for 100 items.
@@ -30,8 +31,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-101-09.T11 | load | PS-101-08.R01, PS-101-08.R02, PS-101-08.R03 | 200 ingests per second for 5 minutes; summarize 5 000-signal subject; purge 100 000 rows | p95 targets met, purge ≤ 30 s |
+| TEST-PS-101-09.T11 | load | PS-101-08.R01, PS-101-08.R02, PS-101-08.R03 | 200 ingests per second for 5 minutes; summarize 5 000-signal subject; purge 100 000 rows; a dead-lettered event | p95 targets met, purge ≤ 30 s, dead-letter metric alerts, no keys in logs |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

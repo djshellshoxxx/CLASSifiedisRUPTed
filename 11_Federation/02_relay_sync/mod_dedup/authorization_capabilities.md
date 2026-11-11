@@ -20,8 +20,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-087-09.T06 | unit | PS-087-05.R03, PS-087-09.R02, PS-087-04.R02, PS-087-04.R03, PS-087-05.R01 | inspect exports and signatures | only pure functions; no events; Result type; VerifiedEnvelope required by type |
-| TEST-PS-087-09.T08 | unit | PS-087-06.R03, PS-087-05.R02 | repeat decide 1000 times and drain twice | identical results; second drain returns duplicates; no state written |
+| TEST-PS-087-09.T06 | unit | PS-087-04.R02, PS-087-04.R03, PS-087-05.R01, PS-087-05.R02, PS-087-05.R03 | inspect exports and signatures | only pure functions; no events; Result type; VerifiedEnvelope required by type; no key material reachable |
 
 ## Dependencies
 

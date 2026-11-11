@@ -1,51 +1,65 @@
 id: F11.S03.M01
 scope: MVP
 summary: >-
-  Keeps the explicit, opt-in list of relays a vault or relay exchanges signed statements with. A peer is
-  active only after both sides opted in through signed peer-offer and peer-accept statements; there is no
-  auto-discovery. Each peer has a pinned relay key (did:key), a trust level, per-peer quotas and a health
-  score that falls on invalid signatures, forks and abuse and suspends the peer automatically below 40. In a
-  vault the same list holds the user-selected relays. Relay-to-relay federation is behind a flag that is off
-  by default; trust here is operational (rate and acceptance), never a claim that a peer's users are honest.
+  Keeps the explicit, opt-in list of relays a vault or relay exchanges signed statements with. A relay peer is
+  active only after both sides opted in through signed peer_offer and peer_accept statements that arrive on dedicated
+  inbound endpoints, and after an operator confirmed the key fingerprint; there is no auto-discovery. In a vault the
+  same list holds the user-selected relays, which activate on the relay's signed identity and hosting-policy statement
+  plus the user's fingerprint confirmation, without any per-user acceptance. Each peer has a pinned relay key
+  (did:key), a trust level, per-peer quotas and a health score that falls only on faults the peer relay itself is
+  responsible for (invalid signatures it forwarded, invalid requests, traffic relays never forward, quota breaches,
+  equivocation signed by its own key) and suspends the peer automatically below 40. An author's forks or a local
+  policy rejection never count against the relay that merely forwarded them. Relay-to-relay federation is behind a
+  flag that is off by default; trust here is operational (rate and acceptance), never a claim that a peer's users are
+  honest, and no relay is authoritative for any user's records.
 responsibilities:
-  - Own Peer records (relay id, did:key relay key, base URL, kind, direction, trust level, quotas, health score, status, opt-in flags for both sides).
-  - Run the opt-in handshake with signed classrup.federation.peer_offer/v1 and classrup.federation.peer_accept/v1 statements; activate only when both are verified and the operator or user confirmed the key fingerprint.
-  - Resolve a request key id to an active peer and enforce quotas (default 6000 envelopes/hour, 10 batches/minute, 2 GiB stored per peer) for F11.S01.M02 and F11.S02.M01.
-  - Maintain the health score from rejection, fork and delivery-failure events and suspend automatically below 40 or on 20 invalid signatures in 10 minutes.
+  - Own Peer records (relay id, did:key relay key, base URL, kind, proposal origin, direction, trust level, quotas, health score, status, opt-in flags for both sides, identity-document listing for selected relays).
+  - Run the opt-in handshake with classrup.federation.peer_offer/v1 and classrup.federation.peer_accept/v1 statements, including the inbound endpoints POST /fed/v1/peer-offer and /fed/v1/peer-accept; activate only when both are verified and the operator confirmed the key fingerprint.
+  - Activate a vault's selected relay from the relay's verified classrup.federation.relay_identity/v1 statement and the user's fingerprint confirmation.
+  - "Resolve a request key id to an active peer and enforce quotas (default 6000 envelopes/hour, 10 batches/minute, 2 GiB stored per peer) for F11.S01.M02 and F11.S02.M01, owning FEDERATION_PEER_NOT_ALLOWED and FEDERATION_QUOTA_EXCEEDED (N1)."
+  - Maintain the health score from relay-attributable faults only and suspend automatically below 40 or on 20 invalid signatures in 10 minutes.
   - Support key rotation through a rotation statement signed by the old key with a 7-day overlap, and refuse unexpected key changes with FEDERATION_KEY_MISMATCH.
+  - Register the N6 privacy ports for the vault's selected-relay list.
 non_responsibilities:
   - Verifying envelopes and requests cryptographically (F11.S01.M03) and storing records (F11.S01.M02).
+  - Signing peer statements; they are signed through the StatementPublisherPort implemented by F11.S01.M02.
   - Content-level blocking by author, cid or hash (F11.S03.M02).
   - Delivery queues and retries (F11.S02.M01).
-  - Reputation of individual users (F07 identity).
+  - Attributing an author's forks (F11.S02.M03 author-level limit) and reputation of individual users (F07 identity).
+  - Publishing the user's listed relays in the portable identity document (F07.S02.M01 reads listInIdentityDoc from here).
   - "Future: peer discovery directories, transitive trust and relay reputation feeds; MVP is manual allowlist only."
-depends_on: [F11.S01.M03, F15.S04.M02, F07.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001]
+depends_on: [F11.S01.M01, F11.S01.M03, F15.S04.M02, F07.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001]
 user_stories:
-  - As a user, I can choose a relay, see its key fingerprint and policy, confirm it, and remove it later without losing any local record.
+  - As a user, I can choose a relay, see its key fingerprint and hosting policy, confirm it, choose whether it is listed in my identity document, and remove it later without losing any local record.
   - As a relay operator, I can propose peering to another relay, compare fingerprints out of band, and see the peering go active only when the other operator accepts.
-  - As a relay operator, I can see a peer's health score and quotas and suspend it with a reason.
+  - As a relay operator, I see unsolicited peering offers from relays I have not allowlisted in a review queue, and I can accept or reject each one.
+  - As a relay operator, I can see a peer's health score and quotas and suspend it with a reason, and I know an author's misbehaviour forwarded by an honest peer does not lower that peer's score.
 edge_cases:
   - Peer presents a different key than the pinned one without a rotation statement; requests rejected with FEDERATION_KEY_MISMATCH and the peer is suspended with reason key_mismatch.
-  - Both operators propose to each other at the same time; the two proposals merge into one Peer in proposed state and activation needs one accept.
+  - Both operators propose to each other at the same time; each side's receive_offer merges the inbound offer with its own outbound proposal into one proposed Peer, and activation needs one verified accept plus the fingerprint confirmation.
+  - A relay that is not allowlisted sends 6 peer offers in one day from the same /24 prefix; the 6th is refused with RATE_LIMITED and an offer over 8 KiB with PAYLOAD_TOO_LARGE.
   - Base URL resolves to a private IP address or redirects to http; refused with FEDERATION_PEER_URL_INVALID on every request, including after DNS changes.
   - Proposal not accepted within 14 days; the Peer becomes expired and a new proposal is required.
   - Health score reaches 39 during a batch; the current batch finishes and the peer is suspended before the next request.
+  - An author forks twice in 24 h and both forks reach this relay through two honest peers; no peer loses health, and the author is limited by F11.S02.M03.
+  - The previous key of a rotated peer is used 7 days and 1 minute after the rotation; refused with FEDERATION_KEY_MISMATCH.
   - Operator lowers a quota below current usage; existing records stay, new envelopes are refused with FEDERATION_QUOTA_EXCEEDED until usage falls.
-  - Flag F11 is off; peers stay in the table dormant and their health score is frozen.
+  - Flag F11 is off; peer relays stay in the table dormant and their health score is frozen, while selected relays keep working.
 ux:
   screens:
-    - "Relay chooser (vault): list of relays with name, policy summary, key fingerprint in 8 groups of 4 characters, 'Use this relay' and 'Remove'."
-    - "Peer list (relay operator): status, direction, trust level, health score bar with number, quota use, last activity, suspend and reinstate actions."
+    - "Relay chooser (vault): list of relays with name, hosting policy summary from the signed identity statement, key fingerprint in 8 groups of 4 characters, 'Use this relay', 'List in my identity document' toggle and 'Remove'."
+    - "Peer list (relay operator): status, origin, direction, trust level, health score bar with number, quota use, last activity, suspend and reinstate actions."
     - "Add peer wizard: base URL, fetch identity statement, compare fingerprint, send proposal, waiting for acceptance."
-  states: [loading, empty, proposed, active, suspended, removed, expired, flag-off]
+    - "Inbound offers queue (relay operator): offering relay id, base URL, fingerprint, received time and expiry, 'Accept after comparing fingerprint' and 'Reject'."
+  states: [loading, empty, proposed, inbound-offer, active, suspended, removed, expired, flag-off]
   a11y:
     - Fingerprints are shown as monospace groups with a copy button and are read by screen readers group by group.
     - Health score is shown as text and number, not colour alone, and status changes are announced via aria-live polite.
-    - Suspend, reinstate and remove buttons are ≥ 44×44 px and confirm in a focus-trapping dialog that names the peer.
+    - Suspend, reinstate, accept, reject and remove buttons are ≥ 44×44 px and confirm in a focus-trapping dialog that names the peer.
 processes:
   domain_schema:
     requirements:
-      - A Peer stores identity (relay id and did:key), URL, kind, opt-in flags for both sides, trust level, quotas, health score and status with tenant and revision per CTR-ID-001.
+      - A Peer stores identity (relay id and did:key), URL, kind, proposal origin, opt-in flags for both sides, trust level, quotas, health score and status, and for selected relays whether the user lists it in the identity document, with tenant and revision per CTR-ID-001.
       - Peer records are relay-local or vault-local operational data classed P1 and are never federated or exported to other users.
       - The pinned key history keeps the current and the previous key for 7 days so rotation can overlap without accepting arbitrary keys.
     entities:
@@ -59,12 +73,14 @@ processes:
           - "tenantId: uuidv7 — tenant scope (vault id in the browser vault)"
           - "relayId: string — stable relay identifier, unique per tenant"
           - "kind: enum — peer_relay | selected_relay"
+          - "origin: enum — outbound | inbound (inbound = created by receive_offer and waiting for operator action)"
           - "baseUrl: string — https origin on port 443, ≤ 200 chars"
           - "relayKey: string — did:key of the relay signing key (Ed25519)"
           - "previousKey?: string — prior did:key valid until previousKeyUntil"
           - "previousKeyUntil?: timestamp — rotation overlap end, rotatedAt + 7 days"
           - "localOptIn: boolean — this side opted in"
-          - "remoteOptIn: boolean — verified peer_accept or peer_offer statement from the other side"
+          - "remoteOptIn: boolean — verified peer_accept (outbound), verified peer_offer (inbound), or for selected_relay the verified relay_identity hosting-policy statement"
+          - "fingerprintConfirmedAt?: timestamp — when an operator or the user confirmed the key fingerprint"
           - "direction: enum — inbound | outbound | both"
           - "trustLevel: enum — observer | standard | trusted"
           - "quotaEnvelopesPerHour: int — 600 observer, 6000 standard, 18000 trusted by default; range 100..60000"
@@ -73,73 +89,101 @@ processes:
           - "healthScore: int — 0..100, starts at 80"
           - "status: enum — proposed | active | suspended | removed | expired"
           - "suspendReason?: enum — operator | health | key_mismatch | equivocation | compromise"
-          - "offerStatementCid?: string — cid of the signed peer_offer or peer_accept statement"
+          - "offerStatementCid?: string — cid of the signed peer_offer this record started from"
+          - "peerStatement?: json — the verified peer_offer, peer_accept or relay_identity envelope from the other side"
+          - "offerExpiresAt?: timestamp — proposal or inbound offer expiry, createdAt + 14 days"
+          - "listInIdentityDoc: boolean — selected_relay only; default false; at most 5 listed per vault"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - status active implies localOptIn and remoteOptIn are both true and a key fingerprint confirmation was recorded.
+          - status active implies localOptIn and remoteOptIn are both true and fingerprintConfirmedAt is set.
           - relayId is unique per tenant and relayKey changes only through a verified rotation statement.
           - healthScore stays between 0 and 100 and status active implies healthScore ≥ 40.
           - trustLevel observer never receives pushes of non-public data and inbound quota 600 envelopes/hour by default.
+          - At most 5 selected relays per vault have listInIdentityDoc true.
     sql: |
       CREATE TABLE fed_peer (
-        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, kind TEXT NOT NULL, base_url TEXT NOT NULL,
-        relay_key TEXT NOT NULL, status TEXT NOT NULL, health_score INTEGER NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL,
+        base_url TEXT NOT NULL, relay_key TEXT NOT NULL, status TEXT NOT NULL, health_score INTEGER NOT NULL,
+        offer_expires_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX fed_peer_relay ON fed_peer(tenant_id, relay_id);
       CREATE INDEX fed_peer_key ON fed_peer(relay_key);
+      CREATE INDEX fed_peer_offer_expiry ON fed_peer(status, offer_expires_at) WHERE status = 'proposed';
   validation_rules:
     requirements:
       - Peer input is validated strictly; unknown fields are rejected and URLs are checked on every connection, not only at creation.
-      - Activation needs verified statements from both sides and a recorded fingerprint confirmation.
+      - Activation needs verified statements from both sides (for a selected relay, the relay's signed identity and hosting-policy statement) and a recorded fingerprint confirmation.
       - Every violation maps to one stable error code with a localized message key.
+      - Unsolicited peer offers are bounded; each is at most 8 KiB, at most 5 per day are accepted per source IP prefix and per relay id, each is verified before it is stored, and unanswered ones expire after 14 days.
     rules:
       - "V01 | baseUrl is https on port 443, host resolves to public addresses only (no loopback, link-local or private ranges), no redirects to other hosts | FEDERATION_PEER_URL_INVALID"
-      - "V02 | relayKey is a did:key Ed25519 and the identity statement from baseUrl is signed by that key | FEDERATION_KEY_MISMATCH"
-      - "V03 | at most 200 peers per tenant and relayId not already present | FEDERATION_PEER_LIMIT"
-      - "V04 | peer_accept statement is signed by the pinned relayKey and references the offer cid | FED_SIGNATURE_INVALID"
+      - "V02 | relayKey is a did:key Ed25519 and the relay_identity statement from baseUrl is signed by that key | FEDERATION_KEY_MISMATCH"
+      - "V03 | at most 200 peers per tenant and relayId not already present (an inbound offer for an existing outbound proposal merges instead) | FEDERATION_PEER_LIMIT"
+      - "V04 | peer_accept statement is signed by the pinned relayKey of the accepting relay and references the offerStatementCid of this Peer | FED_SIGNATURE_INVALID"
       - "V05 | fingerprintConfirmed is true before activation | PRECONDITION_FAILED"
       - "V06 | quota values within the documented ranges | VALIDATION_FAILED"
-      - "V07 | rotation statement signed by the current key with newKey and effective time within 7 days | FEDERATION_KEY_MISMATCH"
+      - "V07 | rotation statement signed by the current key with newKey and effective time within 7 days; the previous key is accepted only until previousKeyUntil | FEDERATION_KEY_MISMATCH"
+      - "V08 | inbound peer offer or accept body ≤ 8192 bytes | PAYLOAD_TOO_LARGE"
+      - "V09 | inbound peer offers: at most 5 per day per source IP prefix (/24 or /48) and per offering relay id, through F12.S03.M03 RateLimitPort | RATE_LIMITED"
+      - "V10 | inbound peer offer is self-signed by the relayKey it names, its targetRelayId is this relay and its baseUrl passes V01 | FED_SIGNATURE_INVALID"
+      - "V11 | at most 5 selected relays per vault are listed in the identity document | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - A peer activates only when both sides opted in, and suspension or removal takes effect on the next request.
       - Suspended peers keep their pinned key and history and can be reinstated by an explicit action, never automatically.
       - Removed and expired are terminal; peering again creates a new Peer record.
+      - The handshake has an inbound path on both sides; a verified peer_offer creates or merges an inbound proposed Peer that needs operator action, and a verified peer_accept matching the offer cid activates the proposer once its fingerprint is confirmed.
     machines:
       - entity: Peer
         initial: proposed
         terminal: [removed, expired]
         transitions:
-          - "proposed -> active | federation.peer.accept verified, both opt-in flags true, fingerprint confirmed | emits federation.peer.added"
-          - "proposed -> expired | 14 days without remote acceptance | no event"
-          - "proposed -> removed | federation.peer.remove | no event"
-          - "active -> suspended | federation.peer.suspend, health below 40, key mismatch, equivocation or compromise | emits federation.peer.suspended"
+          - "proposed -> active | outbound: federation.peer.receive_accept verified (V04) with fingerprint confirmed; inbound: federation.peer.accept by the operator with fingerprint confirmed, which signs and sends peer_accept; selected_relay: user confirms the fingerprint of a verified relay_identity statement | both opt-in flags true; emits federation.peer.added"
+          - "proposed -> expired | offerExpiresAt (14 days) reached without acceptance | no event"
+          - "proposed -> removed | federation.peer.remove, including the operator rejecting an inbound offer | no event"
+          - "active -> suspended | federation.peer.suspend, health below 40, key mismatch, equivocation signed by the peer's relay key or compromise | emits federation.peer.suspended"
           - "suspended -> active | federation.peer.reinstate by operator or user with fresh fingerprint check | emits federation.peer.reinstated"
           - "active -> removed | federation.peer.remove | emits federation.peer.removed"
           - "suspended -> removed | federation.peer.remove | emits federation.peer.removed"
     timeouts:
-      - "Proposal expiry sweep every 1 h moves proposed peers older than 14 days to expired."
+      - "Proposal expiry sweep every 1 h moves proposed peers (outbound proposals and inbound offers) with offerExpiresAt ≤ now to expired."
       - "Health recovery job every 10 min adds 1 point per 100 clean envelopes since the last run, up to 100."
-      - "Key rotation overlap ends 7 days after rotation; the previous key is then removed."
+      - "Key rotation overlap ends 7 days after rotation; the previous key is then removed and refused."
   commands_queries_events:
     requirements:
-      - The module exposes propose, accept, suspend, reinstate, remove and update commands plus list, get and resolve queries.
+      - The module exposes propose, receive_offer, accept, receive_accept, suspend, reinstate, remove and update commands plus list, get and resolve queries.
       - Each command states whether it is vault-local, produces a signed statement, or is a relay command, and emits its events in the same local transaction.
-      - The module consumes rejection, fork and delivery failure events to maintain health scores and the flag event to pause peering.
+      - The module consumes rejection, conflict and delivery failure events to maintain health scores for relay-attributable faults only, plus the flag and deletion events.
+      - Health penalties apply only to relay-attributable faults (invalid signatures, cids or canonical forms it forwarded, invalid request signatures, forwarding traffic relays never forward, quota breaches, receipts it signed that contradict each other, and equivocation signed by its own relay key); author forks, local-policy rejections and gap or buffer codes never change a peer's health.
+      - Peer statements and signer roles are registered with F11.S01.M01 (N2); peer_offer by the proposing relay key, peer_accept by the accepting relay key, key_rotation by the current pinned key and relay_identity by the relay key it names, all signed through the StatementPublisherPort.
     commands:
       - name: federation.peer.propose
         capability: federation.peer.propose
-        input: "[vault-local or relay-local command; produces signed statement classrup.federation.peer_offer/v1] { baseUrl, kind, direction, trustLevel? default standard }"
-        output: "{ peerId, status: proposed, offerStatementCid, fingerprint }"
-        errors: [FEDERATION_PEER_URL_INVALID, FEDERATION_KEY_MISMATCH, FEDERATION_PEER_LIMIT, VALIDATION_FAILED, FEATURE_DISABLED]
+        input: "[relay-local command; produces signed statement classrup.federation.peer_offer/v1 through the StatementPublisherPort and posts it to the target's POST /fed/v1/peer-offer; in the vault it starts a selected_relay record] { baseUrl, kind, direction, trustLevel? default standard }"
+        output: "{ peerId, status: proposed, offerStatementCid?, fingerprint }"
+        errors: [FEDERATION_PEER_URL_INVALID, FEDERATION_KEY_MISMATCH, FEDERATION_PEER_LIMIT, VALIDATION_FAILED, FEATURE_DISABLED, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: federation.peer.receive_offer
+        capability: federation.peer.receive_offer
+        input: "[relay command, POST /fed/v1/peer-offer, open to relays not yet allowlisted; consumes classrup.federation.peer_offer/v1] { offer: Envelope ≤ 8 KiB }"
+        output: "{ peerId, status: proposed, origin: inbound|merged, offerExpiresAt }"
+        errors: [FED_SIGNATURE_INVALID, PAYLOAD_TOO_LARGE, RATE_LIMITED, FEDERATION_PEER_URL_INVALID, FEDERATION_PEER_LIMIT, VALIDATION_FAILED, FEATURE_DISABLED]
         emits: []
         idempotent: true
       - name: federation.peer.accept
         capability: federation.peer.accept
-        input: "[vault-local or relay-local command; consumes and produces peer_accept statements classrup.federation.peer_accept/v1] { peerId, expectedRevision, fingerprintConfirmed: true }"
+        input: "[relay-local command on an inbound proposed Peer; produces classrup.federation.peer_accept/v1 through the StatementPublisherPort and posts it to the proposer's POST /fed/v1/peer-accept; vault-local for selected_relay after the identity statement verified] { peerId, expectedRevision, fingerprintConfirmed: true, listInIdentityDoc? }"
         output: "{ peerId, revision, status: active }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FED_SIGNATURE_INVALID, PRECONDITION_FAILED, FEATURE_DISABLED]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FED_SIGNATURE_INVALID, PRECONDITION_FAILED, VALIDATION_FAILED, FEATURE_DISABLED]
+        emits: [federation.peer.added]
+        idempotent: true
+      - name: federation.peer.receive_accept
+        capability: federation.peer.receive_accept
+        input: "[relay command, POST /fed/v1/peer-accept; consumes classrup.federation.peer_accept/v1] { accept: Envelope ≤ 8 KiB } matched to a proposed outbound Peer by offerStatementCid"
+        output: "{ peerId, status: proposed|active, awaitingFingerprint: boolean }"
+        errors: [NOT_FOUND, FED_SIGNATURE_INVALID, PAYLOAD_TOO_LARGE, CONFLICT_STATE, PRECONDITION_FAILED]
         emits: [federation.peer.added]
         idempotent: true
       - name: federation.peer.suspend
@@ -165,7 +209,7 @@ processes:
         idempotent: true
       - name: federation.peer.update
         capability: federation.peer.update
-        input: "[vault-local or relay-local command; key rotation consumes a statement classrup.federation.key_rotation/v1] { peerId, expectedRevision, trustLevel?, quotas?, rotation?: Envelope }"
+        input: "[vault-local or relay-local command; key rotation consumes a statement classrup.federation.key_rotation/v1] { peerId, expectedRevision, trustLevel?, quotas?, listInIdentityDoc?, rotation?: Envelope }"
         output: "{ peerId, revision }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, FEDERATION_KEY_MISMATCH]
         emits: []
@@ -173,7 +217,7 @@ processes:
     queries:
       - name: federation.peer.list
         capability: federation.peer.read
-        input: "{ status?, kind?, cursor?, limit ≤ 50 }"
+        input: "{ status?, kind?, origin?, cursor?, limit ≤ 50 }"
         output: "{ items: Peer[], nextCursor? }"
         errors: []
       - name: federation.peer.get
@@ -185,28 +229,30 @@ processes:
         capability: federation.peer.resolve
         input: "{ keyId }"
         output: "{ peerId, relayId, status, trustLevel, quotaRemaining } or none"
-        errors: [FEDERATION_PEER_NOT_ALLOWED]
+        errors: [FEDERATION_PEER_NOT_ALLOWED, FEDERATION_QUOTA_EXCEEDED]
     events_produced:
       - {type: federation.peer.added, privacy: P1, payload: "{ peerId, relayId, kind, direction, trustLevel }"}
       - {type: federation.peer.suspended, privacy: P1, payload: "{ peerId, relayId, reason }"}
       - {type: federation.peer.reinstated, privacy: P1, payload: "{ peerId, relayId }"}
       - {type: federation.peer.removed, privacy: P1, payload: "{ peerId, relayId }"}
     events_consumed:
-      - {type: federation.record.rejected, effect: "lower the sending peer's health score by 5 per FED_SIGNATURE_INVALID (max 25 per hour), 2 per other code (max 10 per hour)"}
-      - {type: federation.conflict.detected, effect: "lower health by 20 for each peer that delivered a candidate and suspend with reason equivocation when two forks occur within 24 h"}
-      - {type: federation.delivery.failed, effect: "lower health by 1 per failed entry to the peer (max 10 per hour)"}
+      - {type: federation.record.rejected, effect: "relay-attributable codes only: lower the sending peer's health by 5 per FED_SIGNATURE_INVALID, FEDERATION_CID_MISMATCH or FEDERATION_ENVELOPE_NOT_CANONICALIZABLE it forwarded (max 25 per hour) and by 2 per FEDERATION_REQUEST_SIGNATURE_INVALID or FEDERATION_ORIGIN_MISMATCH (max 10 per hour); FEDERATION_NOT_ACCEPTED, FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_TOMBSTONED, FEDERATION_RECORD_TIME_INVALID, FEDERATION_PAYLOAD_INVALID, gap and buffer codes are ignored"}
+      - {type: federation.conflict.detected, effect: "only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks and commitment conflicts are ignored"}
+      - {type: federation.delivery.failed, effect: "transport reasons (timeout, unreachable, 5xx) lower the destination peer's health by 1 per entry (max 10 per hour); reason receipt_equivocation (two receipts signed by the peer key for one cid with different outcomes) lowers it by 20; per-envelope rejections by the peer's own policy are ignored"}
       - {type: platform.flag.changed, effect: "when F11 turns off, freeze health scores and mark peer_relay peers dormant; selected_relay peers are unaffected"}
+      - {type: privacy.deletion.completed, effect: "vault: delete the deleted principal's selected-relay list after the DeletionPort plan ran; relay peer records hold no user data and are unchanged"}
     errors:
       - "FEDERATION_PEER_URL_INVALID | 422 | no | base URL is not https on 443, resolves to a non-public address or redirects"
-      - "FEDERATION_KEY_MISMATCH | 409 | no | peer key differs from the pinned key without a valid rotation statement"
+      - "FEDERATION_KEY_MISMATCH | 409 | no | peer key differs from the pinned key without a valid rotation statement, or the rotation overlap ended"
       - "FEDERATION_PEER_LIMIT | 409 | no | 200 peers per tenant reached or relay id already present"
-      - "FED_SIGNATURE_INVALID | 400 | no | peer statement signature check failed"
-      - "FEDERATION_PEER_NOT_ALLOWED | 403 | no | key id does not resolve to an active peer"
+      - "FEDERATION_PEER_NOT_ALLOWED | 403 | no | key id does not resolve to an active allowlisted peer or registered device key"
+      - "FEDERATION_QUOTA_EXCEEDED | 429 | yes | peer exceeded its envelope, batch or storage quota; retryAfterMs set"
     example: |
-      federation.peer.propose { baseUrl: "https://relay.example", kind: "peer_relay", direction: "both" }
-      -> { peerId: "0192f3d0-...", status: "proposed", offerStatementCid: "sha256-Zk...", fingerprint: "7F3A 91C2 0B5D E418 ..." }
-      federation.peer.accept { peerId: "0192f3d0-...", expectedRevision: 1, fingerprintConfirmed: true }
-      -> { peerId: "0192f3d0-...", revision: 2, status: "active" }   emits federation.peer.added
+      relay A: federation.peer.propose { baseUrl: "https://relay-b.example", kind: "peer_relay", direction: "both" }
+      -> { peerId: "0192f3d0-...", status: "proposed", offerStatementCid: "sha256-Zk...", fingerprint: "7F3A 91C2 0B5D E418 ..." }   POST https://relay-b.example/fed/v1/peer-offer
+      relay B: federation.peer.receive_offer { offer } -> { peerId: "0192f3d9-...", status: "proposed", origin: "inbound", offerExpiresAt: "2026-11-18T10:00:00.000Z" }
+      relay B operator: federation.peer.accept { peerId: "0192f3d9-...", expectedRevision: 1, fingerprintConfirmed: true } -> { status: "active" }   POST https://relay-a.example/fed/v1/peer-accept
+      relay A: federation.peer.receive_accept { accept } -> { peerId: "0192f3d0-...", status: "active", awaitingFingerprint: false }   emits federation.peer.added
   authorization_capabilities:
     requirements:
       - In a vault only the unlocked local principal manages the selected-relay list.
@@ -214,7 +260,9 @@ processes:
       - resolve_key is internal to F11.S01.M02 and F11.S02.M01 code paths and not exposed to external requests.
     capabilities:
       - "federation.peer.propose | local principal, operator | vault policy: unlocked vault owner for selected_relay; relay policy: operator role of this relay for peer_relay, with audit entry"
+      - "federation.peer.receive_offer | anonymous | relay policy: unauthenticated endpoint for relays not yet allowlisted; offer verified (V08–V10) and rate limited; creates only an inbound proposed Peer that needs operator action"
       - "federation.peer.accept | local principal, operator | same as propose; requires fingerprintConfirmed"
+      - "federation.peer.receive_accept | anonymous | relay policy: accepted only for a proposed outbound Peer whose offerStatementCid matches and whose pinned key signed it"
       - "federation.peer.suspend | local principal, operator, system | system only for automatic health or equivocation suspension"
       - "federation.peer.reinstate | local principal, operator | same as propose"
       - "federation.peer.remove | local principal, operator | same as propose"
@@ -226,29 +274,33 @@ processes:
       - All commands are idempotent per CTR-IDM-001 and mutating commands require expectedRevision.
       - Quota counters are updated in the same transaction as the acceptance they count, so a crash cannot grant free capacity.
       - If peer data cannot be read, requests fail closed with DEPENDENCY_UNAVAILABLE rather than accepting traffic.
-    idempotency: "Idempotency-Key on every command (24 h replay); propose with the same baseUrl and key returns the existing proposed Peer."
-    concurrency: "expectedRevision on state changes; unique index on (tenant, relayId); health score updates use atomic increments clamped to 0..100; simultaneous proposals merge."
-    retries: "Fetching the peer identity statement retries 3 times with backoff 1 s, 5 s, 30 s; other commands are local and not retried."
+    idempotency: "Idempotency-Key on every command (24 h replay); propose with the same baseUrl and key returns the existing proposed Peer; receive_offer and receive_accept are idempotent by statement cid."
+    concurrency: "expectedRevision on state changes; unique index on (tenant, relayId); health score updates use atomic increments clamped to 0..100; simultaneous outbound and inbound proposals for one relay merge."
+    retries: "Fetching the peer identity statement and posting peer_offer or peer_accept retry 3 times with backoff 1 s, 5 s, 30 s; other commands are local and not retried."
     offline: "A vault can edit its relay list offline; activation needs a live identity fetch so it stays proposed until the relay answers."
-    partial_failure: "If the identity fetch succeeds but the proposal statement cannot be delivered, the Peer stays proposed and the UI offers retry; no half-active peer exists."
+    partial_failure: "If the identity fetch succeeds but the proposal or acceptance statement cannot be delivered, the Peer stays proposed and the UI offers retry; no half-active peer exists."
   privacy_retention_abuse:
     requirements:
       - Peer records contain no user data; they hold relay identity, quotas and health only.
-      - A user's chosen relays are P1 vault data and are not shared with other users or relays, and the user is told which metadata a relay can observe (mailbox ID, size, time, IP).
+      - A user's selected relays are vault data; only relays the user marks 'List in my identity document' (at most 5) are published in the portable identity document (F07.S02.M01, P0, readable by anyone who holds the document), unlisted relays are never shared with other users or relays, and the user is told which metadata a relay can observe (mailbox ID, size, time, IP).
       - Pseudonymity is not anonymity, so the relay chooser states that a relay sees the IP address of connecting devices and the did:key of each author.
+      - The module registers the N6 ports (ExportSectionPort for the selected-relay list, DeletionPort, RetentionPurgePort for RET-AUDIT peers) and classifies fields with F10.S02.M02.
     data:
       - "Peer: P1; relay id, URL, key, quotas, health."
+      - "listInIdentityDoc selection: P1 in the vault; listed relays become P0 once the portable document is published."
       - "Audit log entries for peer changes: RET-AUDIT."
     retention:
-      - "Peers RET-AUDIT (1 year after removal); suspended and removed peers keep keys and reasons for the audit period."
+      - "Peers RET-AUDIT (1 year after removal); suspended and removed peers keep keys and reasons for the audit period; expired inbound offers are deleted after 30 days."
     threats:
-      - "T01 | Malicious peer floods or forges provenance | explicit allowlist, per-peer quotas, health score auto-suspend, origin binding in F11.S01.M02"
-      - "T02 | Peer key substitution (man in the middle at first contact) | fingerprint confirmation out of band before activation; key pinned; rotation only via statement signed by the old key"
+      - "T01 | Malicious peer floods or forges provenance | explicit allowlist, per-peer quotas, health score auto-suspend for relay-attributable faults; provenance is display-only in F11.S01.M02 and grants no authority"
+      - "T02 | Peer key substitution (man in the middle at first contact) | fingerprint confirmation out of band before activation; key pinned; rotation only via statement signed by the old key; previous key refused after 7 days"
       - "T03 | SSRF through base URL (private IPs, redirects, DNS rebinding) | V01 checked on every connection; no redirects; resolved addresses validated at connect time"
-      - "T04 | Equivocating or replaying relay | health -20 per fork, suspension on second fork within 24 h, replay handled by cid dedup"
+      - "T04 | Equivocating or replaying relay | health -20 per conflict among statements signed by the relay's own key or per contradictory receipt, suspension on the second within 24 h, replay handled by cid dedup"
       - "T05 | Rogue operator adds themselves as peer to harvest public data | peer needs both sides' opt-in; only public P0 owner-opted-in data is ever pushed; audit log of every peer change"
+      - "T06 | Honest relays punished for authors' behaviour (forks via throwaway did:keys, local-policy rejections) | only relay-attributable codes and relay-key equivocation change health; author forks are limited by F11.S02.M03"
+      - "T07 | Flood of unsolicited peering offers | 8 KiB cap, 5 per day per IP prefix and relay id, verification before storage, 14-day expiry, operator action required"
     abuse_controls:
-      - "At most 200 peers per tenant; at most 10 proposals per hour."
+      - "At most 200 peers per tenant; at most 10 outbound proposals per hour; at most 5 inbound offers per day per source IP prefix and per relay id."
       - "Quota breach returns FEDERATION_QUOTA_EXCEEDED with retryAfterMs and reduces health by 2 per 10 breaches."
   observability_performance:
     requirements:
@@ -260,45 +312,52 @@ processes:
       - "classrup_federation_peer_health_score{peer} (gauge, cardinality ≤ 200)"
       - "classrup_federation_peer_quota_rejections_total"
       - "classrup_federation_peer_suspensions_total{reason}"
+      - "classrup_federation_peer_offers_total{outcome=stored|merged|rate_limited|invalid}"
     logs:
       - "warn federation.peer.suspended {peerId, relayId, reason, correlationId} — no keys beyond did prefix (16 chars)."
     budgets:
       - "resolve_key p95 ≤ 2 ms with an in-memory cache refreshed on change; writes p95 ≤ 300 ms."
-      - "Health event processing keeps up with 500 events/s."
+      - "Health event processing keeps up with 500 events/s; receive_offer p95 ≤ 50 ms."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
-      - Security tests cover SSRF, key substitution, health-based suspension and opt-in on both sides.
+      - Security tests cover SSRF, key substitution, health-based suspension, unsolicited offers and opt-in on both sides.
       - Contract tests validate commands, statements, events and the Peer record against registry schemas.
-    fixtures: "Relays A and B with fixed key seeds, vault V with selected relay A, fake clock 2026-11-04T10:00:00Z, DNS stub returning public and private addresses."
+    fixtures: "Relays A and B with fixed key seeds, vault V with selected relay A, author X forking through A and B, fake clock 2026-11-04T10:00:00Z, DNS stub returning public and private addresses."
     tests:
-      - "T01 | integration | 01.R01,01.R02,04.R02 | A proposes to B; B accepts with fingerprint confirmed | both Peer rows active with both opt-in flags; federation.peer.added emitted"
-      - "T02 | unit | 02.R01,02.R03 | each rule V01–V07 violated | documented error code and no Peer created or changed"
+      - "T01 | integration | 03.R04,01.R01,04.R02 | A proposes to B; B's receive_offer stores an inbound proposed Peer; B's operator accepts with fingerprint confirmed; A's receive_accept verifies it | both Peer rows active with both opt-in flags and fingerprintConfirmedAt; federation.peer.added emitted on both sides"
+      - "T02 | unit | 02.R01,02.R03 | each rule V01–V11 violated | documented error code and no Peer created or changed"
       - "T03 | abuse | 02.R01,07.R03 | base URL with private IP, http scheme, redirect and DNS rebinding after creation | FEDERATION_PEER_URL_INVALID on each request"
-      - "T04 | abuse | 02.R02,07.R03 | peer presents different key with and without rotation statement | mismatch refused and suspended; valid rotation accepted for 7 day overlap"
+      - "T04 | abuse | 02.R02,09.R02 | peer presents different key with and without rotation statement | mismatch refused and suspended; valid rotation accepted for the 7-day overlap"
       - "T05 | property | 03.R01,03.R02,03.R03 | random command sequences on one Peer | only declared transitions succeed; removed and expired never change; active requires both opt-ins"
-      - "T06 | integration | 03.R01,06.R02 | proposal not accepted for 14 days | status expired by sweep"
-      - "T07 | integration | 04.R03,07.R01 | 6 invalid-signature rejections, then a fork event | health drops by 25 cap then 20; suspension below 40 and federation.peer.suspended emitted"
-      - "T08 | contract | 04.R01,04.R02,09.R03 | each command, query and event | validate against registry schemas; statements validate against classrup.federation.peer_offer/v1 and peer_accept/v1"
+      - "T06 | integration | 03.R03 | outbound proposal and inbound offer not accepted for 14 days | both expired by the sweep; a new proposal creates a new Peer"
+      - "T07 | integration | 04.R03,07.R01,09.R02 | peer P forwards 6 envelopes with invalid signatures, then two conflicts among statements signed by P's relay key within 24 h | health drops by 25 (cap) then 20; suspension with reason equivocation and federation.peer.suspended emitted"
+      - "T08 | contract | 04.R01,04.R05,09.R03 | each command, query and event; peer_offer, peer_accept, key_rotation and relay_identity statements | validate against registry schemas and signer roles of F11.S01.M01"
       - "T09 | abuse | 05.R01,05.R02,05.R03 | non-operator manages peers on relay; external call to resolve_key; other vault reads relay list | FORBIDDEN or FEDERATION_PEER_NOT_ALLOWED or NOT_FOUND; operator change logged"
-      - "T10 | integration | 06.R01,06.R03 | replay propose and accept with same Idempotency-Key; identity fetch ok but delivery fails | original responses replayed; Peer remains proposed"
-      - "T11 | chaos | 06.R02,06.R03 | kill process between quota counter update and record acceptance; peer store unavailable | counter and acceptance commit together; DEPENDENCY_UNAVAILABLE fail closed"
-      - "T12 | abuse | 07.R01,07.R02 | inspect peer rows, logs and relay chooser UI | no user data in peer rows; chooser states IP and did:key visibility"
-      - "T13 | abuse | 07.R03,07.R01 | 11 proposals in an hour; quota breach 10 times | rate limit on the 11th; health reduced by 2 per 10 breaches"
-      - "T14 | load | 08.R01,08.R02,08.R03 | 500 health events per second and 10 000 resolve_key calls | resolve_key p95 ≤ 2 ms, gauges exported"
-      - "T15 | a11y | 01.R03,03.R02 | operate relay chooser by keyboard and screen reader | fingerprint read in groups, targets ≥ 44 px, status announced"
-      - "T16 | unit | 09.R01,09.R02 | traceability tool run and flag-off scenario | every PS-091 requirement maps to a passing test; flag off freezes health and keeps selected relays working"
+      - "T10 | integration | 06.R01,06.R03 | replay propose and accept with same Idempotency-Key; identity fetch ok but offer delivery fails | original responses replayed; Peer remains proposed"
+      - "T11 | chaos | 06.R03 | peer store unavailable during inbox handling | DEPENDENCY_UNAVAILABLE fail closed; nothing accepted"
+      - "T12 | abuse | 07.R01,07.R02,01.R02 | inspect peer rows, logs, federation payloads and the relay chooser; toggle 'List in my identity document' on for one relay and off for another | no user data in peer rows; chooser states IP and did:key visibility and exactly which relays the identity document publishes; only the listed relay appears in the next portable document"
+      - "T13 | abuse | 02.R04,07.R03 | 11 outbound proposals in an hour; 6 inbound offers in a day from one /24; an 8193-byte offer; an offer self-signed by a different key; quota breach 10 times | rate limit on the 11th and the 6th, PAYLOAD_TOO_LARGE, FED_SIGNATURE_INVALID with nothing stored; health reduced by 2 per 10 breaches"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 500 health events per second and 10 000 resolve_key calls | resolve_key p95 ≤ 2 ms, gauges exported, alert on automatic suspension"
+      - "T15 | a11y | 03.R02 | operate relay chooser, inbound offer queue and reinstate dialog by keyboard and screen reader | fingerprint read in groups, targets ≥ 44 px, status announced, reinstate requires a fresh fingerprint check"
+      - "T16 | unit | 09.R01 | traceability tool run | every PS-091 requirement maps to a passing test"
       - "T17 | integration | 10.R01,10.R02,10.R03 | export peers, import into fresh relay, restore backup | peers import as proposed or suspended and require re-confirmation; no active peer is created by import"
+      - "T18 | unit | 01.R03 | rotate peer key, then sign with the previous key 6 days 23 h later and 7 days 1 min later | first accepted; second FEDERATION_KEY_MISMATCH"
+      - "T19 | abuse | 04.R04 | malicious author forks twice via honest relays A and B; throwaway did:keys trigger FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_NOT_ACCEPTED and gap codes through peer A | no health change and no suspension for A or B"
+      - "T20 | integration | 02.R02,03.R04 | vault selects relay R: fetch and verify its relay_identity statement, user confirms fingerprint; then a tampered identity statement | active without any per-user accept; the tampered one FEDERATION_KEY_MISMATCH"
+      - "T21 | integration | 06.R02 | crash injected after an envelope acceptance but before commit, and after commit | neither counter nor acceptance persisted in the first case, both in the second; counted envelopes equal accepted envelopes"
+      - "T22 | unit | 07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed in a vault | selected-relay section exported without secrets; list deleted; relay peers untouched"
+      - "T23 | integration | 04.R03 | flag F11 off then on | peer_relay health frozen and peers dormant; selected relays keep working; scores resume"
     acceptance:
-      - All tests T01–T17 pass in CI.
-      - No peer becomes active without both sides' signed opt-in and a recorded fingerprint confirmation.
-      - SSRF and key substitution tests pass.
+      - All tests T01–T23 pass in CI.
+      - No peer becomes active without both sides' signed opt-in (or a selected relay's signed identity statement) and a recorded fingerprint confirmation.
+      - SSRF, key substitution and unsolicited-offer tests pass, and no honest relay is penalized for an author's fork.
   import_export_backup_rollback:
     requirements:
-      - A vault export contains the user's selected relays without secrets; an operator export contains peers with keys and quotas.
+      - A vault export contains the user's selected relays and their listing choice without secrets; an operator export contains peers with keys and quotas.
       - Imported peers never become active automatically; they import as proposed or suspended and need fresh opt-in confirmation.
       - Schema changes follow expand/contract and v1 stays readable for 180 days.
-    export: "Section federation.peers in classrup-export/v1, one line per Peer (schema classrup.federation.peer/v1), without health history."
-    import: "Active and suspended peers import as suspended with reason operator until a human reinstates them after re-checking the fingerprint; proposed peers import as proposed."
+    export: "Section federation.peers in classrup-export/v1 through the ExportSectionPort, one line per Peer (schema classrup.federation.peer/v1), without health history."
+    import: "Active and suspended peers import as suspended with reason operator until a human reinstates them after re-checking the fingerprint; proposed peers import as proposed; expired inbound offers are not imported."
     backup: "Vault export is the primary backup (IOX-6); relay peers are covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
-    migration_rollback: "Additive fields only in v1; rollback is safe because unknown optional fields are ignored and pinned keys are unchanged."
+    migration_rollback: "Additive fields only in v1 (origin, fingerprintConfirmedAt, peerStatement, offerExpiresAt, listInIdentityDoc); rollback is safe because unknown optional fields are ignored and pinned keys are unchanged."

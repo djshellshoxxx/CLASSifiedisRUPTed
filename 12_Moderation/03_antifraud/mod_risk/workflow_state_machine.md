@@ -8,7 +8,8 @@
 
 - **PS-100-03.R01** Assessments have no transitions; a new computation creates a new row only when its inputDigest differs from the latest one.
 - **PS-100-03.R02** Level rises are applied immediately and level drops use hysteresis so that borderline scores do not flap.
-- **PS-100-03.R03** Recomputation is triggered by moderation.signal.recorded after a 5 second debounce per subject and by a daily decay sweep for subjects with level other than low.
+- **PS-100-03.R03** Recomputation is triggered by moderation.signal.recorded after a 5 second debounce per subject and at the stored nextCrossingAt of decaying signals (at most 24 h after the last computation), so a level drop is detected when it happens.
+- **PS-100-03.R04** Every level rise emits moderation.risk.elevated and every level drop that hysteresis allows emits moderation.risk.lowered, each in the same transaction as the new assessment.
 
 ## Specification
 
@@ -16,16 +17,17 @@
 
 ### Timeouts and scheduled transitions
 
-- Daily decay sweep at 03:00 UTC (relay) or on app idle once per 24 h (vault) recomputes assessments whose level is medium or high.
-- Transaction assessments expire after 15 minutes and are recomputed on demand.
+- Crossing scheduler: relay timer at nextCrossingAt; vault on the first app use after nextCrossingAt and at most once per 24 h on idle.
+- Transaction and listing publication assessments expire after 15 minutes and are recomputed on demand.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-100-09.T02 | property | PS-100-01.R03, PS-100-03.R02 | random signal sets and times | factors sum to score before clamping; level function of score and hysteresis state; same digest same output |
-| TEST-PS-100-09.T04 | integration | PS-100-03.R01, PS-100-03.R03 | burst of 20 signal events within 5 seconds | one recompute; assessment unique per digest |
-| TEST-PS-100-09.T06 | integration | PS-100-04.R03, PS-100-03.R02 | score crossing 70 up and 60 down | elevated event once on rise; level stays high until below 60 |
+| TEST-PS-100-09.T04 | integration | PS-100-03.R01, PS-100-03.R03 | burst of 20 signal events within 5 seconds; signals of a high subject decaying past 60 with the clock advanced to nextCrossingAt | one recompute for the burst; assessment unique per digest; a recompute runs at nextCrossingAt without waiting for a daily sweep |
+| TEST-PS-100-09.T06 | integration | PS-100-04.R03, PS-100-03.R02, PS-100-03.R04 | score crossing 70 up, 65, then below 60, then below 25 | elevated once on rise; no event at 65; lowered to medium below 60 and lowered to low below 25, each in the assessment transaction |
+| TEST-PS-100-09.T18 | contract | PS-100-03.R04 | moderation.risk.elevated high then moderation.risk.lowered low consumed by the F12.S03.M04 and F12.S02.M01 contract fixtures | limits move to 0.5× then back to base on the lowered event; a risk_review case is opened only on the rise |
 
 ## Dependencies
 

@@ -13,15 +13,15 @@
 ## Specification
 
 **Metrics**
-- classrup_moderation_policy_versions_total{outcome=published|retired}
+- classrup_moderation_policy_versions_total{outcome=published|retired,changeType}
 - classrup_moderation_policy_in_force (gauge: number of rules in force)
 - classrup_moderation_policy_index_age_ms (gauge)
 
 **Logs**
-- relay info policy.published {ruleId, version, correlationId}.
+- relay info policy.published {ruleId, version, changeType, correlationId}.
 
 **Budgets**
-- list_public p95 ≤ 150 ms for 100 rules; publish p95 ≤ 300 ms.
+- list_public p95 ≤ 150 ms for 100 rules; publish p95 ≤ 300 ms; check_citable p95 ≤ 2 ms in-process.
 - In-force index refresh ≤ 1 s after effectiveAt.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -34,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

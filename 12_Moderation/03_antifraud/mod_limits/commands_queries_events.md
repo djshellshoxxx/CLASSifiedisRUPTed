@@ -6,9 +6,11 @@
 
 ## Requirements
 
-- **PS-098-04.R01** The module exposes override set and clear commands and two queries, plus an in-process check used by the relay bus.
+- **PS-098-04.R01** The module exposes override, clear-override and completion-submission relay commands, the member's own limits read, and the in-process check used by the relay bus.
 - **PS-098-04.R02** Every effective value change emits moderation.limit.changed in the same transaction as the row.
-- **PS-098-04.R03** The module consumes risk, deal and account events to keep tier and multiplier current.
+- **PS-098-04.R03** The module consumes risk level rises and drops, enforcement action applied and reverted events and relay session starts to keep multiplier, restriction and first-seen current, and consumes no vault-local deal or account events.
+- **PS-098-04.R04** restrictedCapabilities of moderation.action.applied are mapped to limit keys by the documented capability-to-limit table (federation.record.ingest, comms.mailbox.put to a new recipient, auctions.bid.place), and other capabilities never change limits.
+- **PS-098-04.R05** Completion submission verifies every party signature on the deal_completion/v1 body, counts it once per key, and never learns amounts or obligations.
 
 ## Specification
 
@@ -18,45 +20,50 @@
 |---|---|---|---|---|---|---|
 | `moderation.accountlimit.override` | moderation.accountlimit.override | { subjectKey, limitKey, overrideValue, reason, expiresInMs, expectedRevision? } | { accountLimitId, effectiveValue, revision } | VALIDATION_FAILED, CONFLICT_REVISION, FORBIDDEN | moderation.limit.changed | yes (Idempotency-Key) |
 | `moderation.accountlimit.clear_override` | moderation.accountlimit.clear_override | { accountLimitId, expectedRevision } | { accountLimitId, effectiveValue, revision } | NOT_FOUND, CONFLICT_REVISION, FORBIDDEN | moderation.limit.changed | yes (Idempotency-Key) |
+| `moderation.accountlimit.submit_completion` | moderation.accountlimit.submit_completion | { completion: { dealId, dealCid, completionCid, outcome: completed }, signatures: { did, sig }[] (2..10) } | { counted: boolean, reason?: counterparty_too_new\|pair_counted_recently\|same_principal, completedDeals, tier } | VALIDATION_FAILED, FORBIDDEN, PRECONDITION_FAILED | moderation.limit.changed | yes (Idempotency-Key) |
 
 ### Queries
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `moderation.accountlimit.check` | moderation.accountlimit.check | { subjectKey, limitKey, currentCount?, cost?: 1 } | { allowed, effectiveValue, used?, resetsAt?, reasons[] } | VALIDATION_FAILED, ACCOUNT_LIMIT_REACHED |
-| `moderation.accountlimit.list_mine` | moderation.accountlimit.read_own | { includeAdjustments?: boolean } | { items: { limitKey, tier, effectiveValue, used?, adjustments[], nextTier? }[] } |  |
+| `moderation.accountlimit.check` | moderation.accountlimit.check | { subjectKey, limitKey, cost?: 1 } | { allowed, effectiveValue, used, resetsAt, reasons[] } | VALIDATION_FAILED, MODERATION_ACCOUNT_LIMIT_REACHED |
+| `moderation.accountlimit.list_mine` | moderation.accountlimit.read_own | { includeAdjustments?: boolean } | { items: { limitKey, tier, effectiveValue, used, adjustments[], nextTier? }[] } |  |
 
 ### Events produced
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `moderation.limit.changed` | P2 | { accountLimitId, subjectKey, limitKey, previousValue, effectiveValue, cause: tier\|risk\|override\|override_expired\|policy } |
+| `moderation.limit.changed` | P2 | { accountLimitId, subjectKey, limitKey, previousValue, effectiveValue, cause: tier\|risk\|override\|override_expired\|policy\|action_restriction\|action_reverted\|action_expired } — relay-local |
 
 ### Events consumed
 
 | Type | Effect |
 |---|---|
-| `moderation.risk.elevated` | set riskMultiplier 0.75 for medium and 0.5 for high on the subject's limits; recovery is recomputed by the daily sweep and signal events |
-| `commerce.deal.completed` | increment completedDeals for both parties on this relay and re-evaluate tier |
-| `identity.account.created` | set firstSeenAt for the key on this relay if not present |
-| `moderation.action.applied` | restrict_feature actions naming a limit key set effectiveValue 0 for the action duration |
+| `moderation.risk.elevated` | relay, subjectType key: set riskLevel and riskMultiplier (medium 0.75, high 0.5) on the subject's limits at once |
+| `moderation.risk.lowered` | relay, subjectType key: set riskLevel and riskMultiplier for the new level (medium 0.75, low 1.0) at once, restoring the base value immediately at low |
+| `moderation.action.applied` | relay origin, kind restrict_feature: map each restrictedCapabilities entry through the capability-to-limit table and set actionRestriction { actionId, until: expiresAt } on the matching limits (effective value 0); unmapped capabilities and other kinds change nothing |
+| `moderation.action.reverted` | relay origin: clear actionRestriction for that actionId and recompute; cause action_expired for reason expired, action_reverted otherwise |
+| `identity.session.started` | relay, kind relay_token: set firstSeenAt for did if absent; the relay bus's in-process first-observation hook (LimitsPort.observe) does the same on the first verified signed request without a session |
+| `privacy.deletion.completed` | vault: delete cached limit snapshots fetched from relays; relay rows of the subject are deleted 30 days after the relay applies the subject's signed deletion request (DeletionPort), override history stays in the audit log |
 
 ### Module errors
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| ACCOUNT_LIMIT_REACHED | 429 | no | the key reached its limit; params.limitKey, params.effectiveValue and params.resetsAt where it applies |
+| MODERATION_ACCOUNT_LIMIT_REACHED | 429 | no | the key reached its limit; params.limitKey, params.effectiveValue and params.resetsAt |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Statement registry (N2, F11.S01.M01): inbound classrup.commerce.deal_completion/v1 (F09.S01.M01 schema; signer role: each party listed in the completion, verified per signature); no statements are produced. Privacy ports (N6): ExportSectionPort (section moderation.limits, the vault's cached snapshots), DeletionPort and RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02. The relay never trusts counts supplied by the subject's vault; caps on open offers and open cycle proposals are F12.S03.M03 local guards.
 
 ### Example
 
 ```
-query moderation.accountlimit.check  (relay bus call before bazaar.listing.publish)
-{ "subjectKey": "did:key:z6MkMemberExample", "limitKey": "listings_per_day" }
--> { "allowed": false, "effectiveValue": 5, "used": 5, "resetsAt": "2026-11-05T09:12:00Z", "reasons": ["tier new: 5 per day; becomes 20 after 7 days and 3 completed deals"] }
+query moderation.accountlimit.check  (in-process relay bus call before federation.record.ingest of a hosted vault's signed listing projection)
+{ "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day" }
+-> { "allowed": false, "effectiveValue": 5, "used": 5, "resetsAt": "2026-11-05T09:12:00Z", "reasons": ["tier new: 5 per day; becomes 20 after 7 days and 3 counted completed deals"] }
 POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderator token)
-{ "subjectKey": "did:key:z6MkMemberExample", "limitKey": "listings_per_day", "overrideValue": 30, "reason": "Verified shop selling stock", "expiresInMs": 2592000000 }
+{ "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day", "overrideValue": 30, "reason": "Shop with long trading history on this relay", "expiresInMs": 2592000000 }
 -> 200 { "accountLimitId": "0192f410-aaaa-7000-8000-00000000000a", "effectiveValue": 30, "revision": 2 }
 ```
 
@@ -64,11 +71,13 @@ POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderat
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-098-09.T04 | integration | PS-098-03.R01, PS-098-03.R03, PS-098-04.R03 | deal.completed events and 7-day sweep; override expiry | tier promoted once both conditions hold; limit.changed emitted on expiry |
-| TEST-PS-098-09.T05 | integration | PS-098-03.R02, PS-098-04.R03 | risk.elevated medium then high then recovery | effective value 0.75×, 0.5×, then base; one event per distinct value |
-| TEST-PS-098-09.T06 | contract | PS-098-04.R01, PS-098-04.R02, PS-098-09.R02 | commands, queries and event | validate against registry schemas; check output matches examples |
-| TEST-PS-098-09.T15 | e2e | PS-098-01.R02, PS-098-04.R01 | mobile member hits the daily listing limit | limit sheet shows used, allowed, reset time and next tier; axe zero serious issues |
+| TEST-PS-098-09.T05 | integration | PS-098-03.R02, PS-098-04.R03 | risk.elevated medium, then high, then risk.lowered medium, then risk.lowered low | 0.75×, 0.5×, 0.75× and base, each immediately on its event; one limit.changed per distinct value |
+| TEST-PS-098-09.T06 | contract | PS-098-04.R01, PS-098-04.R02, PS-098-09.R02 | commands, queries and event | validate against registry schemas; check output matches the example |
+| TEST-PS-098-09.T15 | e2e | PS-098-01.R02, PS-098-04.R01 | mobile member hits the daily index-write limit | limit sheet shows used, allowed, reset time and next tier; axe zero serious issues |
+| TEST-PS-098-09.T16 | integration | PS-098-03.R04, PS-098-04.R04 | restrict_feature with restrictedCapabilities [federation.record.ingest, auctions.bid.place, bazaar.offer.receive] for 7 days, overturned after 2 days; another such action reaches expiry | index_writes and bids 0 while active, new recipients unchanged, bazaar.offer.receive ignored; restored with cause action_reverted; second restored with cause action_expired |
+| TEST-PS-098-09.T17 | abuse | PS-098-04.R05, PS-098-07.R04 | submit_completion: valid B–C statement; same completionCid again; one signature invalid; submitter not a party; A with counterparty first seen 2 days ago; second B–C completion within 30 days; A–D completion | counted once; duplicate returns the stored result; FORBIDDEN twice; PRECONDITION_FAILED with counterparty_too_new, pair_counted_recently and same_principal; no amount ever stored |
+| TEST-PS-098-09.T19 | integration | PS-098-04.R03 | identity.session.started relay_token for a new key delivered twice; a first verified signed request from another key without a session | firstSeenAt set once from the relay's own observation for each; no identity.account.created or commerce.deal.completed consumer exists |
 
 ## Dependencies
 
-Module depends on: F12.S03.M01, F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S03.M03, F07.S02.M01, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

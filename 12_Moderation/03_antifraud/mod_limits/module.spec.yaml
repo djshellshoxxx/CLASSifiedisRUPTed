@@ -173,7 +173,7 @@ processes:
       - {type: privacy.deletion.completed, effect: "vault: delete cached limit snapshots fetched from relays; relay rows of the subject are deleted 30 days after the relay applies the subject's signed deletion request (DeletionPort), override history stays in the audit log"}
     errors:
       - "MODERATION_ACCOUNT_LIMIT_REACHED | 429 | no | the key reached its limit; params.limitKey, params.effectiveValue and params.resetsAt"
-    note: "Privacy ports (N6): ExportSectionPort (section moderation.limits, the vault's cached snapshots), DeletionPort and RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02. The relay never trusts counts supplied by the subject's vault; caps on open offers and open cycle proposals are F12.S03.M03 local guards."
+    note: "Statement registry (N2, F11.S01.M01): inbound classrup.commerce.deal_completion/v1 (F09.S01.M01 schema; signer role: each party listed in the completion, verified per signature); no statements are produced. Privacy ports (N6): ExportSectionPort (section moderation.limits, the vault's cached snapshots), DeletionPort and RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02. The relay never trusts counts supplied by the subject's vault; caps on open offers and open cycle proposals are F12.S03.M03 local guards."
     example: |
       query moderation.accountlimit.check  (in-process relay bus call before federation.record.ingest of a hosted vault's signed listing projection)
       { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day" }

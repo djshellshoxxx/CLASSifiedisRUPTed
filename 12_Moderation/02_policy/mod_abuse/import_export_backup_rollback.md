@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.policy in the relay configuration export: all versions, texts, statements and changelogs; users can download the current policy as JSON from the public page.
-- **import:** Importing another relay's policy creates drafts only, with changelog 'adopted from <relay>'; original signatures are kept as provenance but never as this relay's statements.
-- **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring re-verifies all statement signatures.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown families display as 'other'.
+- **export:** Section moderation.policy in the relay configuration export: all versions, change types, texts, statements and changelogs; users can download the current policy as JSON from the public page.
+- **import:** Importing another relay's policy creates drafts only, with changelog 'adopted from <relay>' and changeType initial when the importing relay has no in-force policy, otherwise restrictive; original signatures are kept as provenance but never as this relay's statements.
+- **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring re-verifies all statement signatures and recomputes inForce.
+- **migration rollback:** Additive fields only in v1 (changeType defaults to restrictive for existing versions after the first, initial for version 1 rows published before the first in-force policy; publishedAt; inForce derived); rollback is safe because older readers ignore new optional fields and unknown families display as 'other'.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-095-09.T13 | integration | PS-095-10.R01, PS-095-10.R02, PS-095-10.R03 | export policy, import into fresh relay, restore backup | all versions and statements verify; ruleIds unchanged |
+| TEST-PS-095-09.T13 | integration | PS-095-10.R01, PS-095-10.R02, PS-095-10.R03 | export policy, import into fresh relay, restore backup | all versions and statements verify; ruleIds unchanged; imports become drafts |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

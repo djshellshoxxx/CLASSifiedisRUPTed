@@ -28,7 +28,7 @@ non_responsibilities:
   - Blocking people (F07.S02.M02 owns block lists); hide here only affects content visibility.
   - Signal weights and bad-faith derivation (F12.S03.M02); request limits (F12.S03.M03).
   - "Future: trusted-flagger relationships; cross-relay report forwarding."
-depends_on: [F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+depends_on: [F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
 user_stories:
   - As a member, I can report a listing as a scam to the relay that serves it, and I see whether my report is only saved on my device, sent to the relay, acknowledged by the relay, linked to a case or resolved.
   - As a member, I can hide content or an author on my device immediately, even when no relay is reachable.
@@ -288,6 +288,8 @@ processes:
       classrup.moderation.reportoutcome/v1 (signer role: the addressed relay key pinned when the user selected the relay);
       inbound classrup.moderation.advisory/v1 and classrup.moderation.advisoryretraction/v1 (F12.S02.M01 schemas, signer
       role the subscribed publisher key). Statements from blocked DIDs are dropped through F07.S02.M02 filterBlocked (N7).
+      Relay statements to reporters travel through F08.S01.M01 comms.mailbox.put with a content-free push through
+      notify.notification.dispatch (N17) and are also returned by moderation.report.status_for_reporter.
       Privacy ports (N6): ExportSectionPort (sections moderation.reports and moderation.advisory), DeletionPort and
       RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
     example: |

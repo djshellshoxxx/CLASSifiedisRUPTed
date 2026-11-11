@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-088-10.R01** Vault export includes queued and recent terminal entries so that a restore on another device continues delivery.
-- **PS-088-10.R02** Import restores non-terminal entries as prepared and relies on receiver dedup for any envelope that was already delivered.
+- **PS-088-10.R01** Relay operator export includes PeerOutbox entries; the vault outbox is exported by F15.S01.M01 and this module exports only the vault's recipient routes.
+- **PS-088-10.R02** Import restores non-terminal PeerOutbox entries as prepared and relies on receiver dedup for any envelope that was already delivered.
 - **PS-088-10.R03** Schema changes follow expand/contract and v1 stays readable for 180 days.
 
 ## Specification
 
-- **export:** Section federation.outbox in classrup-export/v1, one line per PeerOutbox (schema classrup.federation.peer_outbox/v1), excluding payloads.
-- **import:** Non-terminal entries import as prepared with nextAttemptAt = now; entries whose envelope is missing import as cancelled with a warning in the import report.
+- **export:** Relay: PeerOutbox entries as JSON lines (schema classrup.federation.peer_outbox/v1) in the operator export, excluding payloads. Vault: section federation.routes in classrup-export/v1 (recipient routes only).
+- **import:** Non-terminal PeerOutbox entries import as prepared with nextAttemptAt = now; entries whose envelope is missing import as cancelled with a warning in the import report; vault routes are re-resolved on import.
 - **backup:** Vault export is the primary backup (IOX-6); relay queues are covered by relay SQLite backup (CTR-IOX-001 IOX-3).
-- **migration rollback:** Additive fields only in v1; rollback is safe because unknown optional fields are ignored and in-flight leases expire within 60 s.
+- **migration rollback:** Additive fields only in v1 (kind, pausedReason, delivered state); rollback keeps delivered entries as terminal history, unknown optional fields are ignored and in-flight leases expire within 60 s.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-088-09.T17 | integration | PS-088-10.R01, PS-088-10.R02, PS-088-10.R03 | export vault with 20 queued entries, import into fresh vault | non-terminal entries restored as prepared and re-sent; terminal ones kept as history |
+| TEST-PS-088-09.T17 | integration | PS-088-10.R01, PS-088-10.R02, PS-088-10.R03 | relay operator export of 20 PeerOutbox entries and import into a fresh relay; vault export | non-terminal entries restored as prepared and re-sent; terminal ones kept as history; the vault export carries routes only and F15.S01.M01 exports its own entries |
 
 ## Dependencies
 
-Module depends on: F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S01.M01, F15.S04.M02, CTR-FED-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S01.M01, F15.S04.M02, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

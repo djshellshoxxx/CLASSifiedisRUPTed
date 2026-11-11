@@ -20,7 +20,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-085-09.T10 | unit | PS-085-03.R01, PS-085-03.R02, PS-085-03.R03, PS-085-04.R01, PS-085-04.R03, PS-085-05.R01, PS-085-05.R02, PS-085-05.R03, PS-085-06.R01 | call every function twice with identical input and inspect module for I/O | identical outputs, no network or filesystem access, Result returned, no event emitted |
+| TEST-PS-085-09.T10 | unit | PS-085-01.R01, PS-085-03.R01, PS-085-03.R02, PS-085-03.R03, PS-085-04.R01, PS-085-04.R03, PS-085-05.R01, PS-085-05.R03 | call every function twice with identical input and inspect module for I/O and key-store access | identical outputs, no network or filesystem access, no event emitted, private keys only received as call arguments |
+| TEST-PS-085-09.T17 | abuse | PS-085-05.R02 | relay signing service loaded with the relay key; call every exported API, every error path and the diagnostics export | key bytes never appear in responses, logs, metrics or the diagnostics bundle; signing is reachable only through the signing service handle |
 
 ## Dependencies
 

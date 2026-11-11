@@ -1,0 +1,14 @@
+{
+  "encode": [
+    { "lat": 42.6, "lon": -5.6, "precision": 5, "cell": "ezs42" },
+    { "lat": 57.64911, "lon": 10.40744, "precision": 5, "cell": "u4pru" },
+    { "lat": 0, "lon": 0, "precision": 5, "cell": "s0000" },
+    { "lat": -90, "lon": -180, "precision": 4, "cell": "0000" },
+    { "lat": 90, "lon": 180, "precision": 4, "cell": "zzzz" },
+    { "lat": 57.64911, "lon": 10.40744, "precision": 4, "cell": "u4pr" },
+    { "lat": 57.64911, "lon": 10.40744, "precision": 6, "cell": "u4pruy" },
+    { "lat": 42.6, "lon": -5.6, "precision": 4, "cell": "ezs4" },
+    { "lat": 42.6, "lon": -5.6, "precision": 6, "cell": "ezs42e" }
+  ],
+  "encode11": { "lat": 57.64911, "lon": 10.40744, "cell": "u4pruydqqvj" }
+}

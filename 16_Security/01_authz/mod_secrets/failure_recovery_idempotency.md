@@ -16,7 +16,7 @@
 - **concurrency:** Secret cache is swapped by replacing one immutable object reference, so readers see either the old or the new set; rotation batches use transactions of 1 000 objects.
 - **retries:** File reads retry up to 3 times with 100 ms spacing for transient IO errors; permission and ambiguity errors are never retried.
 - **offline:** Not applicable to vaults; relay secrets load from local files and need no network.
-- **partial failure:** If rotation stops midway, objects wrapped under either key version stay readable because both versions are kept until the rotation completes and a verify pass reports zero remaining on the old version.
+- **partial failure:** If rotation stops midway, objects wrapped under either key version stay readable because both versions stay loaded until the verify pass reports zero objects on the old version; there is no time-based overlap for data-wrapping keys, and removing the old version early makes startup refuse with SECURITY_SECRET_MISSING.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -24,8 +24,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-127-09.T06 | integration | PS-127-03.R01, PS-127-03.R02, PS-127-03.R03, PS-127-06.R01, PS-127-06.R02 | SIGHUP reload with overlap 120 s; failed reload; key rotation interrupted and resumed | atomic swap; old value valid within overlap only; failed reload keeps previous; rotation resumes without double work |
-| TEST-PS-127-09.T09 | chaos | PS-127-06.R03, PS-127-08.R01 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; one log line per secret without values |
+| TEST-PS-127-09.T06 | integration | PS-127-03.R02, PS-127-06.R01, PS-127-06.R02 | SIGHUP reload of SMTP_PASSWORD with overlap 120 s; failed reload | atomic swap; old value valid within overlap only; failed reload keeps previous values |
+| TEST-PS-127-09.T09 | chaos | PS-127-03.R01, PS-127-06.R03, PS-127-08.R01, PS-127-07.R02 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; resumed run skips finished objects; one log line per secret without values |
 
 ## Dependencies
 

@@ -9,6 +9,7 @@
 - **PS-127-04.R01** loadSecret returns a Secret or a typed error and never returns the raw string to callers outside reveal().
 - **PS-127-04.R02** equalConstantTime compares byte arrays of equal length in time independent of content and returns false immediately only for length mismatch.
 - **PS-127-04.R03** The scanner CLI exits 0 with no findings and 1 with findings, printing rule ID, path and line but not the matched value.
+- **PS-127-04.R04** The verify-rewrap CLI reports the number of objects per data-key version and exits non-zero while any object remains on a version marked for removal.
 
 ## Specification
 
@@ -32,7 +33,7 @@ _None._
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| SECURITY_SECRET_MISSING | 500 | no | a required secret is not configured; relay refuses to start |
+| SECURITY_SECRET_MISSING | 500 | no | a required secret or a data-key version still in use is not configured; relay refuses to start |
 | SECURITY_SECRET_AMBIGUOUS | 500 | no | both environment and file forms are set for one secret |
 | SECURITY_SECRET_PERMISSIONS | 500 | no | secret file permissions, ownership or type are unsafe |
 | SECURITY_SECRET_WEAK | 500 | no | secret shorter than the manifest minimum |
@@ -40,13 +41,14 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module with no commands, queries or events. API is loadSecret, Secret.reveal, equalConstantTime, hashToken, redact and the CI scanner CLI.
+**Note:** Library module with no commands, queries or events. API is loadSecret, checkSecretFile, Secret.reveal, equalConstantTime, hashToken, redact, the data-key rotation CLI (relay secrets rotate-data-key, relay secrets verify-rewrap) and the CI scanner CLI.
 
 ### Example
 
 ```
-CLASSRUP_SECRET_RELAY_SIGNING_KEY_FILE=/run/secrets/relay_signing_key node apps/relay/dist/main.js
--> startup: relay_signing_key loaded (file, 32 bytes)   [value never printed]
+RELAY_SECRET_DATA_KEY_V2_FILE=/run/secrets/data_key_v2 RELAY_SECRET_DATA_KEY_V1_FILE=/run/secrets/data_key_v1 node apps/relay/dist/main.js
+-> startup: data_key v2 loaded (file, 32 bytes); data_key v1 loaded (file, 32 bytes; 1 200 objects still wrapped)   [values never printed]
+$ relay secrets verify-rewrap -> v1: 0 objects, v2: 48 211 objects; v1 may be removed
 logger.info("session", { token: secret })           -> {"msg":"session","token":"[REDACTED]"}
 pnpm secrets:scan  -> SECURITY_SECRET_LEAK_DETECTED rule=classrup-secret-literal path=apps/relay/.env.example line=3 fingerprint=4f2a
 ```
@@ -55,8 +57,10 @@ pnpm secrets:scan  -> SECURITY_SECRET_LEAK_DETECTED rule=classrup-secret-literal
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-127-09.T04 | unit | PS-127-03.R02, PS-127-04.R01, PS-127-04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch |
-| TEST-PS-127-09.T07 | integration | PS-127-04.R03, PS-127-02.R02, PS-127-09.R02 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file |
+| TEST-PS-127-09.T02 | unit | PS-127-02.R01, PS-127-02.R03, PS-127-04.R01, PS-127-05.R01 | missing, ambiguous, permissive, symlinked, short secrets; checkSecretFile on a 0644 relay key file | documented SECURITY_SECRET_* code each; relay does not start |
+| TEST-PS-127-09.T04 | unit | PS-127-04.R02 | equalConstantTime across equal, different and length-mismatched inputs; timing harness over 100 000 runs | correct results; no statistically significant timing difference between early and late mismatch |
+| TEST-PS-127-09.T07 | integration | PS-127-04.R03, PS-127-09.R03 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file |
+| TEST-PS-127-09.T13 | integration | PS-127-03.R03, PS-127-03.R04, PS-127-04.R04 | rotate data key with 2 000 objects, interrupt at 1 200, SIGHUP after 301 s, remove v1 before verify reports zero, finish and verify | v1 stays loaded beyond 300 s; startup refuses with SECURITY_SECRET_MISSING naming v1 and 800 objects; verify-rewrap exits 1 then 0; v1 removable afterwards |
 
 ## Dependencies
 

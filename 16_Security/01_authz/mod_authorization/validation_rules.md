@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-126-02.R01** Role commands are validated strictly, including role vocabulary, expiry bounds and the two-person rule for admin.
+- **PS-126-02.R01** Role commands are validated strictly, including role and scope vocabulary, expiry bounds, the signed two-person rule for admin and the bootstrap preconditions.
 - **PS-126-02.R02** authorize() inputs are validated structurally and any malformed input returns Deny without throwing.
 - **PS-126-02.R03** Every violation maps to one stable error code.
 
@@ -14,22 +14,26 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | role is moderator, operator or admin and subjectKey is a well-formed did:key | VALIDATION_FAILED |
-| V02 | moderator and operator assignments carry expiresAt within 365 days | VALIDATION_FAILED |
-| V03 | granting admin when two or more admins exist carries approvedBy, a different active admin | SECURITY_APPROVAL_REQUIRED |
-| V04 | grantor is an active admin and is not the subject | FORBIDDEN |
+| V01 | role is moderator, operator, relay_operator or admin; scope is relay or tenant:<uuidv7> of a tenant on this relay and the pair is valid (admin and relay_operator at relay, operator at tenant, moderator at either); subjectKey is a well-formed Ed25519 did:key that KeyStatusPort does not report as a device key of another DID | VALIDATION_FAILED |
+| V02 | moderator, operator and relay_operator assignments carry expiresAt within 365 days; admin assignments carry no expiresAt | VALIDATION_FAILED |
+| V03 | an admin grant while two or more active admins exist goes through propose and approve, and approve carries a classrup.security.role_approval/v1 statement signed by a device key active for a different active admin principal (neither proposer nor subject) before approvalDeadline; assign with role admin, or any request naming approvedBy without that signed statement, is refused | SECURITY_APPROVAL_REQUIRED |
+| V04 | grantor is an active relay-scope admin of this relay signing with a device key active in its portable identity document, and is not the subject | FORBIDDEN |
 | V05 | revoking must leave at least one active admin | SECURITY_LAST_ADMIN |
 | V06 | expectedRevision matches the assignment revision | CONFLICT_REVISION |
 | V07 | audit query range spans at most 90 days per request | VALIDATION_FAILED |
+| V08 | bootstrap runs only from the local relay CLI with filesystem access to RELAY_DATA_DIR, and only when no active admin exists or with a break-glass reason of 20..500 code points | SECURITY_BOOTSTRAP_REFUSED |
+| V09 | activating an imported assignment is requested by an active relay-scope admin of this relay, and the imported subject, role, scope and expiry pass V01 and V02 | FORBIDDEN |
+| V10 | a role is exercised only when the request's signing device key is active for the subject principal at the relay's receipt time per KeyStatusPort and the subject DID is not contested | FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-126-09.T01 | unit | PS-126-01.R01, PS-126-01.R02, PS-126-01.R03, PS-126-02.R01 | assign moderator for 90 days | assignment stored, statement signed, expiry set |
-| TEST-PS-126-09.T02 | unit | PS-126-02.R02, PS-126-02.R03 | each rule V02–V07 violated | documented error code and nothing stored |
-| TEST-PS-126-09.T03 | property | PS-126-02.R02, PS-126-06.R01 | generated actors, capabilities, resources and malformed inputs | authorize never throws, is deterministic, and every unlisted combination denies |
+| TEST-PS-126-09.T01 | unit | PS-126-01.R01, PS-126-01.R03, PS-126-02.R01 | assign moderator at scope relay for 90 days and operator O3 at scope tenant:T1 | assignments stored active with scope, role statements signed by the relay key, expiry set |
+| TEST-PS-126-09.T02 | unit | PS-126-02.R01, PS-126-02.R03 | each rule V01–V10 violated, including admin with expiresAt, operator at scope relay, relay_operator at tenant scope, unknown tenant and a malformed did:key | documented error code and nothing stored |
+| TEST-PS-126-09.T03 | property | PS-126-02.R02, PS-126-06.R01, PS-126-09.R02 | generated actors, capabilities, resources, scopes and malformed inputs | authorize never throws, is deterministic, every unlisted combination denies, and a tenant-scope role never matches another tenant's resource |
+| TEST-PS-126-09.T17 | integration | PS-126-02.R01, PS-126-03.R04 | A1 proposes admin S with A2 approving within 24 h; a proposal left 25 h; assign naming A2 as approvedBy without a signed approval; approval signed by the proposer | S active with approvalStatementCid; expired with approval_expired; SECURITY_APPROVAL_REQUIRED; SECURITY_APPROVAL_REQUIRED |
 
 ## Dependencies
 
-Module depends on: CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M02, F10.S02.M02, CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

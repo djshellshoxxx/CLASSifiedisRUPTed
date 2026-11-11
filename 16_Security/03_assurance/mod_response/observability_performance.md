@@ -15,15 +15,15 @@
 **Metrics**
 - classrup_security_read_only (gauge 0 or 1)
 - classrup_security_federation_enabled (gauge 0 or 1)
-- classrup_security_containment_change_total{switch,state}
+- classrup_security_containment_change_total{switch,state,via=command|host}
 - classrup_security_containment_propagation_ms{switch} (histogram)
 
 **Logs**
-- relay warn containment.changed {switch, state, reasonLength, correlationId} — reason text stays in the audit entry.
+- relay warn containment.changed {switch, state, via, reasonLength, correlationId} — reason text stays in the audit entry.
 
 **Budgets**
-- read-only propagation ≤ 5 s; federation kill ≤ 60 s; rejection overhead ≤ 0.1 ms per request.
-- Linter runtime ≤ 30 s on the repository.
+- read-only propagation ≤ 5 s; federation kill ≤ 60 s; rejection overhead ≤ 0.1 ms per request; sentinel poll ≤ 0.05 ms.
+- Linter and inventory generation runtime ≤ 30 s on the repository.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -32,8 +32,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-132-09.T11 | load | PS-132-08.R01, PS-132-08.R02, PS-132-08.R03 | 1 000 requests per second during toggle on a staging relay | propagation ≤ 5 s; overhead ≤ 0.1 ms; gauges correct |
-| TEST-PS-132-09.T14 | unit | PS-132-02.R03, PS-132-08.R03 | drill record dated 7 months ago | SECURITY_RUNBOOK_DRILL_STALE and gate failed |
+| TEST-PS-132-09.T14 | unit | PS-132-08.R03 | drill record dated 7 months ago | SECURITY_RUNBOOK_DRILL_STALE and gate failed |
 
 ## Dependencies
 
-Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F15.S04.M02, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

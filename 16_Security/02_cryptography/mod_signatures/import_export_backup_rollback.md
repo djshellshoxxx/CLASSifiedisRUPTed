@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Envelopes are exported inside the records that embed them (consents, receipts, attestations); the context registry version used is recorded in the export manifest.
-- **import:** Each envelope is re-verified on import; failures are stored as unverified with the failure code; envelopes with unknown versions are kept opaque and flagged.
+- **export:** Envelopes are exported inside the records that embed them (consents, receipts) with their payloads; the inventory version used is recorded in the export manifest.
+- **import:** Each envelope is re-verified on import with the payload from the record; failures are stored as unverified with the failure code; envelopes with unknown versions are kept opaque and flagged.
 - **backup:** No module-specific backup; envelopes are backed up with their records (vault export IOX-6, relay IOX-3).
-- **migration rollback:** A new context version (for example classrup/consent/v2) is added beside v1 and v1 stays verifiable; rollback to an older client leaves v2 envelopes opaque and flagged rather than misread.
+- **migration rollback:** A new context version (for example classrup/consent/v2) is added beside v1 and v1 stays verifiable; the header form of v1 replaces the earlier prefix-concatenation form before any release, so no published envelope uses the old bytes; rollback to an older client leaves unknown envelopes opaque and flagged rather than misread.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-130-09.T13 | integration | PS-130-10.R01, PS-130-10.R02, PS-130-10.R03 | export consents with envelopes, import to fresh vault, version downgrade attempt | envelopes re-verify identically; unknown envelope version rejected |
+| TEST-PS-130-09.T13 | integration | PS-130-10.R01, PS-130-10.R02, PS-130-10.R03, PS-130-05.R02 | export consents with envelopes, import to a fresh vault holding no secret, version downgrade attempt | envelopes re-verify identically from public keys and key status only; unknown envelope version kept opaque and flagged |
 
 ## Dependencies
 
-Module depends on: F16.S02.M02, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

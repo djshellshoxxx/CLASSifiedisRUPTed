@@ -12,9 +12,9 @@
 
 ## Specification
 
-- **export:** pnpm security:runbooks:export writes RB-01 to RB-07, templates and drill records as markdown and JSON; relay configuration export includes containment switch status with last change time.
+- **export:** pnpm security:runbooks:export writes RB-01 to RB-07, templates, the generated inventory and drill records as markdown and JSON; relay configuration export includes containment switch status with last change time.
 - **import:** pnpm security:runbooks:check --input dir validates an external runbook set; nothing is applied automatically.
-- **backup:** Documents are covered by repository history; sentinel files and flags are part of relay configuration backup (CTR-IOX-001 IOX-3) and are deliberately restored in their last state so a restored relay does not silently lift containment.
+- **backup:** Documents are covered by repository history; containment sentinel files are part of the relay data directory backup (CTR-IOX-001 IOX-3) and are deliberately restored in their last state so a restored relay does not silently lift containment.
 - **migration rollback:** Runbook schema is versioned in front matter; rollback is a revert of the pull request; the sentinel contract is stable across releases and unknown future switches default to off.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-132-09.T13 | integration | PS-132-10.R01, PS-132-10.R02, PS-132-10.R03 | export runbooks and templates, import into fork, schema bump | linter results identical; old version parsed for 180 days |
+| TEST-PS-132-09.T13 | integration | PS-132-10.R01, PS-132-10.R02, PS-132-10.R03 | export runbooks and templates, import into fork, schema bump; restore a relay backup taken while read-only | linter results identical; old version parsed for 180 days; restored relay stays read-only |
 
 ## Dependencies
 
-Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F15.S04.M02, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

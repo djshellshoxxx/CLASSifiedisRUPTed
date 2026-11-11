@@ -1,6 +1,6 @@
 # PS-131-10 — Import, export, backup and rollback: Incident records
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M02 Incident records](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/incident` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M02 Incident records](SPEC.md) · **Scope:** MVP · **Code:** `apps/relay/src/ops/incident` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section security.incidents in the relay operator export: incident rows with timeline, severity history, notification decisions and postmortem links.
+- **export:** Section security.incidents in the relay operator export: incident rows with timeline rows (redacted rows carry only redacted_hash), severity history, notification decisions, notice counts and postmortem links.
 - **import:** Incidents import into a fresh relay as closed or triaged history; open automatic incidents are not re-armed; text is re-scanned and flagged entries are rejected.
 - **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3); losing a relay loses no user-owned private data (IOX-7).
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown categories display as other.
+- **migration rollback:** Additive fields only in v1; the timeline moves from an embedded array to security_incident_timeline before any release, so no stored v1 record uses the old form; rollback is safe because older readers ignore new optional fields and unknown categories display as other.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-131-09.T14 | integration | PS-131-10.R01, PS-131-10.R02, PS-131-10.R03 | export incidents, import to fresh relay, restore backup | records round-trip; imported open incidents become triaged history with a note |
+| TEST-PS-131-09.T14 | integration | PS-131-10.R01, PS-131-10.R02, PS-131-10.R03 | export incidents, import to fresh relay, restore backup | records round-trip without redacted text; imported open incidents become triaged history with a note |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, F16.S02.M02, F16.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F16.S01.M02, F16.S02.M02, F16.S02.M03, F16.S03.M01, F18.S01.M01, F08.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

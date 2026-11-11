@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-128-05.R01** Only code running in the vault's origin can call the library, and sign requests from any other context are impossible.
-- **PS-128-05.R02** The library never exposes raw private key bytes to callers, including the application code, and exposes only sign and agree.
+- **PS-128-05.R02** The library never exposes raw private key bytes to callers, including the application code, and exposes only sign and agree on separate root and device handles.
 - **PS-128-05.R03** Auto-lock and unlock lockouts are enforced by the library regardless of caller.
 
 ## Specification
@@ -20,9 +20,10 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
+| TEST-PS-128-09.T06 | integration | PS-128-03.R01, PS-128-03.R03, PS-128-05.R03, PS-128-06.R02 | idle timer, tab hidden, 3 wrong unlocks | auto-lock at 15 min, hidden lock at 5 min, delays 1 s then 2 s then 4 s capped at 60 s, no wipe |
 | TEST-PS-128-09.T09 | abuse | PS-128-04.R02, PS-128-05.R01, PS-128-05.R02, PS-128-07.R01 | application code requests key bytes; sign while locked; call from other origin | no API returns key bytes; SECURITY_VAULT_LOCKED; unreachable cross-origin |
-| TEST-PS-128-09.T10 | integration | PS-128-05.R03, PS-128-06.R02 | two tabs unlock concurrently; lock in one tab | one unlock proceeds at a time; other tab locks via BroadcastChannel |
+| TEST-PS-128-09.T10 | integration | PS-128-05.R03 | two tabs unlock concurrently; lock in one tab | one unlock proceeds at a time; other tab locks via BroadcastChannel |
 
 ## Dependencies
 
-Module depends on: CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M02, F16.S02.M03, F15.S01.M01, F07.S01.M01, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

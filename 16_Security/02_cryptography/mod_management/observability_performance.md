@@ -7,19 +7,21 @@
 ## Requirements
 
 - **PS-129-08.R01** Relay registry operations and list polls are measured per CTR-OBS-001 without key material labels; the vault keeps local diagnostics only.
-- **PS-129-08.R02** get_status meets p95 ≤ 5 ms in a vault and ≤ 10 ms on a relay at 1 000 queries per second.
-- **PS-129-08.R03** Freshness age distribution is observable to detect stale revocation sources.
+- **PS-129-08.R02** get_status meets p95 ≤ 5 ms in a vault and ≤ 10 ms on a relay at 1 000 queries per second, including the KeyStatusPort call for user keys.
+- **PS-129-08.R03** Freshness age distribution and detected list replays are observable to spot stale or misbehaving revocation sources.
 
 ## Specification
 
 **Metrics**
-- classrup_security_key_registry_keys{status} (gauge, relay)
-- classrup_security_key_revocations_total{reason}
+- classrup_security_key_registry_keys{status,relationship} (gauge, relay)
+- classrup_security_key_revocations_total{reason,clamped}
 - classrup_security_revocation_poll_age_ms{source_class=relay|peer} (gauge)
+- classrup_security_revocation_list_replays_total
 - classrup_security_key_status_queries_total{freshness=fresh|stale|unknown}
 
 **Logs**
 - relay info key.revoked {keyRecordId, reason, correlationId} — no public key bytes beyond ID.
+- relay warn revocation_list.replay {relayIdHash, storedSeq, receivedSeq} — no entries.
 
 **Budgets**
 - get_status p95 ≤ 5 ms (vault) and ≤ 10 ms (relay); register and revoke p95 ≤ 300 ms.
@@ -31,8 +33,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-129-09.T13 | load | PS-129-08.R01, PS-129-08.R02, PS-129-08.R03 | 1 000 status queries per second for 5 minutes; list of 100 000 revocations | p95 targets met; list served ≤ 2 s |
+| TEST-PS-129-09.T13 | load | PS-129-08.R01, PS-129-08.R02, PS-129-08.R03 | 1 000 status queries per second for 5 minutes; list of 100 000 revocations | p95 targets met; list served ≤ 2 s; replay and age metrics exported |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F16.S02.M03, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

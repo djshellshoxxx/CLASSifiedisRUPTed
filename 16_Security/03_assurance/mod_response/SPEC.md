@@ -6,47 +6,50 @@
 
 ## Purpose
 
-Incident response runbooks kept under docs/security/response, written for a relay operator and for users who hold their own keys. Runbooks cover key compromise (a user's device key, a relay's keys), relay breach, personal data leak notification, the per-relay global read-only switch, the per-relay federation kill switch, compromise of the static distributor or release signing key, and the blameless postmortem template. Each runbook has trigger, roles, numbered steps with time targets, verification and communication text. The switches affect only the relay that applies them; no switch reaches other relays or users' vaults. Procedures are practiced in drills and checked by a documentation linter. No claim of external audit or certification is made.
+Incident response runbooks kept under docs/security/response, written for a relay operator and for users who hold their own keys, and the two relay-local containment switches. Runbooks cover key compromise (a user's device key through the F07 identity flow; a relay's identity key through its pre-signed revocation certificate and a new identity), relay breach with a user notice whose data inventory is generated from the module specs, personal data leak notification, the relay-wide read-only switch, the federation kill switch that stops only relay-to-relay traffic, compromise of the static distributor or release signing key, and the blameless postmortem template. Each runbook has trigger, roles, numbered steps with time targets, verification and communication text. The switches are set with security.containment.set by a relay_operator or admin of that relay (or from the host when the database is down), take effect only on that relay, and never reach other relays or users' vaults. Procedures are practiced in drills and checked by a documentation linter. No claim of external audit or certification is made.
 
 ## Responsibilities
 
 - Maintain seven runbooks (RB-01 key compromise, RB-02 relay breach, RB-03 data leak notification, RB-04 read-only switch, RB-05 federation kill switch, RB-06 distributor or release key compromise, RB-07 postmortem) and the incident communication templates.
 - Keep each runbook structured as trigger, severity mapping to F16.S03.M02, roles, steps with time targets, verification checks, rollback and communication.
-- Define the containment switch contracts that other modules honor (read-only sentinel and federation flag) and their exemptions and propagation targets.
-- Run documentation lint in CI (structure, links, referenced capabilities, flags and error codes exist) and require a tabletop drill at least every 6 months and before the first public launch.
+- Define and own the containment switch contracts that other modules honor (read-only sentinel, federation kill sentinel), the command security.containment.set, their exemptions by exact command ID and their propagation targets.
+- Generate the relay data inventory used by the RB-02 notice from the module specs and run documentation lint in CI (structure, links, referenced capabilities, error codes, modules and inventory exist and match), and require a tabletop drill at least every 6 months and before the first public launch.
 
 ## Not responsible for
 
 - Incident records and detection hooks (F16.S03.M02) and the threat register (F16.S03.M01).
-- Implementing the read-only check and federation gating (F15.S02.M02 command bus, F15.S04.M02 flags, F11 modules); this module specifies the contract they follow.
+- Implementing the read-only check (F15.S02.M02 command bus) and the federation gating (F11.S01.M02 inbox and F11.S02.M01 delivery); this module specifies the contract they follow.
+- Relay identity revocation and new identities (F15.S02.M01), device key revocation and rotation (F07.S01.M01, F16.S02.M01) and role bootstrap (F16.S01.M01), which runbooks call.
 - Legal advice and regulator filings; runbooks provide checklists and templates for the operator.
 - Future: automated runbook execution from the incident record; status page integration; user-side one-tap key revocation broadcast.
 
 ## User stories
 
-- As a relay operator who suspects the relay signing key leaked, I follow RB-01 and rotate within the time targets, and users receive a signed notice from the new key confirmed through a second channel.
+- As a relay operator who suspects the relay identity key leaked, I follow RB-01 and revoke it with the pre-signed certificate, start a new identity within the time targets, and users see the signed notice from the new relay marked unverified until they confirm its fingerprint through a second channel.
 - As a relay operator under attack, I switch the relay to read-only in under 5 minutes and everything users already hold on their devices stays usable.
-- As an operator after a data leak, I follow RB-03 to decide and record notification within the due times and send a plain notice to affected users.
+- As an operator after a data leak, I follow RB-03 to decide and record notification within the due times and send a plain notice to affected users that lists exactly the data classes the relay held.
 
 ## Edge cases
 
-- The only admin's credentials are suspected leaked; RB-01 includes a break-glass step using the offline recovery of the relay admin key kept by a second person, and the incident cannot be closed until two admins exist.
-- The relay database is unavailable so flags cannot be read; the read-only sentinel is a file or environment value read without the database, so RB-04 still works.
-- Federation kill switch applied while outbound deliveries are in flight; in-flight batches finish or abort within 60 seconds and queued deliveries stay in the outbox up to 7 days.
+- The only admin's identity is suspected compromised; RB-01 uses the break-glass step relay roles bootstrap --break-glass (security.roleassignment.bootstrap, F16.S01.M01) from the host, then revokes the compromised admin, and the SEV1 incident cannot be closed until two admins exist.
+- The relay database is unavailable so roles cannot be checked; classrup-relay containment read-only on --local writes the sentinel with host filesystem access, records the OS user and reason, and the audit entry is appended at the next start.
+- Federation kill switch applied while outbound deliveries are in flight; in-flight batches finish or abort within 60 seconds and queued deliveries stay in the outbox up to 7 days, while mailboxes, consent and publishing on the relay keep working.
 - Users are offline for days; RB-03 and RB-01 notices wait in mailboxes with the relay-signed issue time, and the runbook states that offline users learn later and revocation lag exists.
 - Static distributor compromise is suspected but unconfirmed; RB-06 prescribes a safe default of pausing update activation by publishing a signed hold statement and advising users not to update, without declaring a breach prematurely.
-- A runbook references a flag or capability that was renamed; the documentation linter fails the CI job with the runbook ID and the missing reference.
+- A runbook references a capability, command or error code that was renamed; the documentation linter fails the CI job with the runbook ID and the missing reference.
+- The relay restarts while read-only is active; the sentinel file survives the restart and the relay comes up read-only; an environment value RELAY_CONTAINMENT_READ_ONLY=1 left set re-applies the switch at start and startup warns about it.
+- A new module stores push subscriptions on relays but the RB-02 template inventory does not list them; the linter fails with SECURITY_RUNBOOK_INVENTORY_MISMATCH.
 
 ## UX and accessibility
 
-- Relay admin containment screen: read-only mode toggle with reason field, federation kill switch toggle with reason field, current status with since-time and who changed it, propagation check result.
-- User notice display: relay name, signed statement, what happened, data classes involved, what the user should do, issue time from the relay clock.
+- Relay admin containment screen: read-only mode toggle with reason field, federation kill switch toggle with reason field, current status with since-time and who changed it (or the OS user for host changes), propagation check result.
+- User notice display: relay name, signed statement, what happened, data classes involved, what the user should do, issue time from the relay clock, and 'unverified until confirmed out of band' for a successor relay.
 
 **States:** normal; read-only; federation-killed; both; propagating
 
 **Accessibility:** Toggles have text labels stating the effect and a confirmation dialog with focus trap and buttons of at least 44 by 44 px.; Status banners are announced in an aria-live assertive region once on change.; Runbooks are plain markdown with headings, numbered steps and tables with headers.
 
-Documentation and tooling module. Outputs are markdown runbooks RB-01 to RB-07, templates (internal timeline, user notice, postmortem), and a CI lint report. Operator-visible surfaces in the product are the relay admin 'Containment' screen (two switches with status and last change) and the signed notice displayed to users.
+Documentation and tooling module plus one relay command. Outputs are markdown runbooks RB-01 to RB-07, templates (internal timeline, user notice, postmortem), the generated relay data inventory, and a CI lint report. Operator-visible surfaces in the product are the relay admin 'Containment' screen (two switches with status and last change) and the signed notice displayed to users.
 
 ## Owned data
 
@@ -54,23 +57,23 @@ _No persisted entities (library/view module)._
 
 ## Interfaces
 
-- Commands: none
-- Queries: none
+- Commands: `security.containment.set`
+- Queries: `security.containment.get_status`
 - Emits: none
 - Consumes: none
 
 ## Dependencies
 
-F16.S03.M02, F16.S03.M01, F16.S02.M02, F15.S04.M02, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
+F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-132-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-132-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-132-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-132-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-132-03 | [Workflow state machine](workflow_state_machine.md) | 7 |
-| PS-132-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-132-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-132-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-132-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-132-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -83,5 +86,5 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 ## Acceptance criteria
 
 - All automated tests pass in CI and a drill record dated within 6 months exists for the release.
-- Read-only mode takes effect within 5 seconds and federation kill within 60 seconds in the staging test.
-- Runbooks contain no dangling references and no claim of audit or certification.
+- Read-only mode takes effect within 5 seconds and federation kill within 60 seconds in the staging test, and the kill switch leaves mailboxes and consent working.
+- Runbooks contain no dangling references, no claim of audit or certification, and an RB-02 inventory that matches the module specs.

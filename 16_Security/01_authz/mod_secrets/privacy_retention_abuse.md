@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-127-07.R01** Secret values are P4 and are never logged, never serialized, never in metrics labels, never in error messages, and never in crash reports.
-- **PS-127-07.R02** Secret metadata (name, source, length, loaded time) is not secret and may be logged.
+- **PS-127-07.R02** Secret metadata (name, source, length, loaded time, objects per data-key version) is not secret and may be logged.
 - **PS-127-07.R03** Leak attempts through logs, errors, process listings, core dumps and repository history are addressed by redaction, file loading, disabled core dumps and scanning.
 
 ## Specification
@@ -30,6 +30,7 @@
 | T04 | Environment variables exposed via process listing or crash dump | file-based loading recommended and default in container manifests; core dumps disabled; /proc access restricted by deployment guide |
 | T05 | Stolen token database | only SHA-256 hashes of 256-bit tokens stored; tokens are never recoverable |
 | T06 | Weak operator-chosen secrets | manifest minimum lengths enforced at startup (32 bytes for keys) |
+| T07 | Data loss from removing a data key too early | old data-key versions stay loaded until verify-rewrap reports zero objects; startup refuses if a version in use is missing |
 
 **Abuse controls**
 - Failed secret loads do not retry in a loop: the relay exits non-zero after one attempt so orchestrators surface the failure.
@@ -42,7 +43,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-127-09.T03 | property | PS-127-01.R02, PS-127-07.R01, PS-127-07.R03 | random secrets interpolated into logs, errors, JSON and inspect output | output never contains the secret or its base64url or hex forms |
-| TEST-PS-127-09.T08 | abuse | PS-127-05.R01, PS-127-05.R02, PS-127-05.R03, PS-127-07.R02 | attempt to read secrets via any command or query; scanner run with write token | no route exposes secrets; scanner cannot publish |
+| TEST-PS-127-09.T09 | chaos | PS-127-03.R01, PS-127-06.R03, PS-127-08.R01, PS-127-07.R02 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; resumed run skips finished objects; one log line per secret without values |
 
 ## Dependencies
 

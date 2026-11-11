@@ -23,7 +23,6 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03, PS-133-10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
 | TEST-PS-133-09.T13 | integration | PS-133-10.R01, PS-133-10.R02, PS-133-10.R03 | export register as JSON, import into the checker in a fresh checkout, bump schema version | identical results; old version still parsed for 180 days |
 
 ## Dependencies

@@ -6,14 +6,14 @@
 
 ## Purpose
 
-The security threat model for the local-first architecture, kept as a reviewed document under docs/security/threat_model. It applies STRIDE (spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege) to each trust boundary: the static distributor and PWA host, the user's vault on the device, a relay, federation peers, wallets and chains, and the physical exchange of goods. It also covers three cross-cutting hazards, malicious or altered code delivered by a static distributor, forked vaults, and offline revocation lag. Every threat row names a control, the module that owns it and the test that proves it. The model states residual risk honestly and claims no external audit.
+The security threat model for the local-first architecture, kept as a reviewed document under docs/security/threat_model. It applies STRIDE (spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege) to each trust boundary: the static distributor and PWA host, the user's vault on the device, a relay, federation peers, wallets and chains, and the physical exchange of goods. It also covers three cross-cutting hazards, malicious or altered code delivered by a static distributor, forked vaults, and offline revocation lag. Every threat row names a control, the module that owns it and the test that proves it. Where a control only detects an attack (for example a malicious distributor replacing the app), the row says so and states the residual risk. Relay boundaries describe exactly what relays hold, as derived from the module specs, and every relay-side control is relay-local. The model claims no external audit.
 
 ## Responsibilities
 
 - Maintain the trust boundary diagram and asset list (keys, vault contents, signed statements, relay data, release artifacts) with data classes from CTR-PRV-001.
 - [object Object]
 - Review the model at every release (gate in F17.S03.M02) and on every new boundary, and record the review with date, reviewers and changed rows.
-- Keep the model synchronized with module specs through a traceability check that every control and test reference exists.
+- Keep the model synchronized with module specs through a traceability check that every control and test reference exists and that every relay-held entity of class P2 or higher is named in a B3 information-disclosure row.
 - Publish a user-readable summary of what the architecture protects and what it does not.
 
 ## Not responsible for
@@ -36,6 +36,8 @@ The security threat model for the local-first architecture, kept as a reviewed d
 - A threat is accepted as residual risk; the row must state the accepted risk text, owner and review date no later than 6 months ahead.
 - Two reviewers disagree on severity; the more severe rating stands until a recorded decision with reasoning is added.
 - A vulnerability report arrives for a documented residual risk; the incident process (F16.S03.M02) is used and the threat row is updated with the finding.
+- A new module adds a relay-stored entity of class P2 (for example a bid or a push subscription) without naming it in a B3 information-disclosure row; the check fails with SECURITY_THREATMODEL_COVERAGE_GAP naming the entity.
+- The user summary says relays never hold plaintext without listing the exceptions; the forbidden-claim lint fails until the sentence names its exceptions or narrows its subject.
 
 ## UX and accessibility
 
@@ -68,7 +70,7 @@ F16.S01.M01, F16.S02.M02, F16.S02.M03, F12.S03.M03, CTR-PRV-001, CTR-CAP-001, CT
 | ID | Process | Requirements |
 |---|---|---|
 | PS-133-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-133-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-133-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-133-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-133-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-133-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -82,6 +84,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T14 pass in CI and the register has zero dangling references.
+- All tests T01–T18 pass in CI and the register has zero dangling references.
 - Every boundary B1 to B6 has all six STRIDE categories covered or a recorded reason, and X1 and X2 have rows.
-- No document claims third-party audit, certification or guaranteed security.
+- No document claims third-party audit, certification, guaranteed security or a relay that never holds plaintext without its exceptions, and every relay-held P2+ entity is named in a B3 row.

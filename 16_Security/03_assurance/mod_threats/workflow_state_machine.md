@@ -23,9 +23,10 @@
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-133-09.T04 | integration | PS-133-03.R01, PS-133-03.R02 | change a control module ID in a spec; add a module touching keys without register rows | dangling reference error; out-of-cycle review flag raised |
+| TEST-PS-133-09.T04 | integration | PS-133-03.R02, PS-133-02.R01 | change a control module ID in a spec; add a module touching keys without register rows | dangling reference error; out-of-cycle review flag raised with a 14-day due date |
 | TEST-PS-133-09.T05 | integration | PS-133-03.R03, PS-133-08.R03 | residual risk with review date 7 months old | SECURITY_THREATMODEL_REVIEW_STALE and gate failed state shown in the report |
-| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03, PS-133-10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
+| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
+| TEST-PS-133-09.T15 | integration | PS-133-01.R03, PS-133-03.R01, PS-133-07.R02 | tag the reviewed model at a release; run the gate when the last tagged review is older than the previous release; inspect repository history | release tag present and older versions retained in history; gate fails with the review date |
 
 ## Dependencies
 

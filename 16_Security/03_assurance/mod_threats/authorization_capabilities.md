@@ -20,7 +20,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-133-09.T07 | abuse | PS-133-05.R01, PS-133-05.R02, PS-133-05.R03, PS-133-07.R03 | author self-approves register change; document containing 'externally audited'; draft with exploit details | merge blocked by required reviewers; SECURITY_THREATMODEL_FORBIDDEN_CLAIM; flagged by review checklist |
+| TEST-PS-133-09.T07 | abuse | PS-133-05.R01, PS-133-05.R03, PS-133-07.R03 | author self-approves register change; document containing 'externally audited'; draft with exploit details | merge blocked by required reviewers; SECURITY_THREATMODEL_FORBIDDEN_CLAIM; flagged by review checklist and kept in the private advisory |
+| TEST-PS-133-09.T16 | integration | PS-133-09.R03, PS-133-05.R02 | release gate with a passing register and with a failing one; publish the report and summary | gate passes then fails; report and summary readable without repository write access |
 
 ## Dependencies
 

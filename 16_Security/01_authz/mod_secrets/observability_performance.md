@@ -16,6 +16,7 @@
 - classrup_security_secrets_loaded{source=env|file} (gauge)
 - classrup_security_secret_reload_total{outcome=ok|failed}
 - classrup_security_log_redactions_total
+- classrup_security_data_key_objects{version} (gauge)
 
 **Logs**
 - info secret.loaded {name, source, bytes} — never the value.
@@ -31,7 +32,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-127-09.T09 | chaos | PS-127-06.R03, PS-127-08.R01 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; one log line per secret without values |
+| TEST-PS-127-09.T09 | chaos | PS-127-03.R01, PS-127-06.R03, PS-127-08.R01, PS-127-07.R02 | process killed mid-rotation; startup with one secret missing | no half-open listener; progress recorded; resumed run skips finished objects; one log line per secret without values |
 | TEST-PS-127-09.T10 | load | PS-127-08.R02, PS-127-08.R03 | 100 000 hashToken calls and 100 000 log lines; scan of 10 000-commit repository | latency budgets met; full-history scan ≤ 10 minutes |
 
 ## Dependencies

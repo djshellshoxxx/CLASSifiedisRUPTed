@@ -7,16 +7,16 @@
 ## Requirements
 
 - **PS-130-06.R01** sign and verify are deterministic and idempotent, since Ed25519 signatures are deterministic for the same key and bytes.
-- **PS-130-06.R02** A failure in registry lookup produces freshness unknown rather than a valid-fresh result.
-- **PS-130-06.R03** Canonicalization is total and returns an error value instead of throwing on hostile input.
+- **PS-130-06.R02** A missing or failed key status input produces keyStatus unknown and accepted false, never an accepted result.
+- **PS-130-06.R03** Canonicalization errors from F11.S01.M03 are returned as error values and verify never throws on hostile input.
 
 ## Specification
 
-- **idempotency:** Signing the same payload and context with the same key yields the identical envelope bytes; callers deduplicate on content ID.
-- **concurrency:** Pure functions with no shared state; the context registry is an immutable frozen table.
+- **idempotency:** Signing the same payload, context and signedAt with the same key yields identical envelope bytes; callers deduplicate on content ID.
+- **concurrency:** Pure functions with no shared state; the inventory is an immutable frozen table.
 - **retries:** No retries inside the library; callers retry the surrounding network operations under CTR-IDM-001.
-- **offline:** Everything works offline; only the freshness of revocation knowledge depends on connectivity, and it is reported in the result.
-- **partial failure:** If the key registry is unavailable, verify returns the cryptographic result plus keyStatus unknown and freshness unknown, never an unqualified valid.
+- **offline:** Everything works offline; only the freshness of the caller-supplied key status depends on connectivity, and it is reported in the result.
+- **partial failure:** If the caller cannot obtain key status, verify returns signatureValid with keyStatus unknown and accepted false, never an unqualified acceptance.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -24,9 +24,9 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-130-09.T08 | chaos | PS-130-06.R01, PS-130-06.R02, PS-130-06.R03, PS-130-03.R03 | registry lookup throws or times out | result valid cryptographically with keyStatus unknown and freshness unknown; never plain valid-fresh |
-| TEST-PS-130-09.T09 | integration | PS-130-06.R01, PS-130-07.R02 | sign same payload twice; verify embedded envelopes in a stored consent | identical envelope bytes; library writes nothing |
+| TEST-PS-130-09.T08 | chaos | PS-130-06.R01, PS-130-06.R02, PS-130-06.R03 | key status input missing, throwing or late; hostile envelope bytes | accepted false with keyStatus unknown, never accepted; no exception |
+| TEST-PS-130-09.T09 | integration | PS-130-06.R01, PS-130-07.R02 | sign the same payload twice; verify embedded envelopes in a stored consent | identical envelope bytes; library writes nothing |
 
 ## Dependencies
 
-Module depends on: F16.S02.M02, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

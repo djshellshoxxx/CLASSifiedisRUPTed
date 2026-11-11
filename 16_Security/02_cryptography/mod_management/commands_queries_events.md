@@ -7,8 +7,10 @@
 ## Requirements
 
 - **PS-129-04.R01** Every command declares whether it is vault-local, a signed statement or a relay command, and the signatures below do so.
-- **PS-129-04.R02** Register and revoke emit security.key.registered and security.key.revoked in the same transaction as the record.
-- **PS-129-04.R03** The module consumes identity key events locally and peer events on relays to keep records current.
+- **PS-129-04.R02** Register, revoke, record_revocation and the event ingestion emit security.key.registered and security.key.revoked in the same transaction as the record.
+- **PS-129-04.R03** The module consumes own-key identity events, received identity documents, peer events and relay identity events to keep records current, and never decides user-key validity itself.
+- **PS-129-04.R04** security.keyrecord.get returns publicKey, algorithm and purpose for a keyId, and get_status for a user key is one call to F07.S02.M01 KeyStatusPort.keyStatus(did, publicKey, at) with this module's freshness added; F16.S02.M03 callers pass that result to verify.
+- **PS-129-04.R05** Relay revocation lists are a signed head { relayId, listSeq, issuedAt, nextUpdateBy, headHash, entryCount } under classrup/revocation-list/v1 plus entries that point to root-signed identity documents or relay-signed revocations, and a relay's signature is never the authority for a user key.
 
 ## Specification
 
@@ -16,61 +18,70 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `security.keyrecord.register` | security.keyrecord.register | { statement, signatures[] } | { keyRecordId, keyId, status, revision: 1 } | VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, SECURITY_KEY_LIMIT, CONFLICT_STATE | security.key.registered | yes (Idempotency-Key) |
-| `security.keyrecord.revoke` | security.keyrecord.revoke | { keyId, reason, effectiveFrom?, expectedRevision } | { keyRecordId, revision, revocationStatementCid } | NOT_FOUND, SECURITY_KEY_UNAUTHORIZED, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED | security.key.revoked | yes (Idempotency-Key) |
-| `security.keyrecord.record_revocation` | security.keyrecord.record_revocation | { revocationStatement, signature, source } | { keyRecordId?, applied: boolean, pending: boolean } | VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, CONFLICT_STATE | security.key.revoked | yes (Idempotency-Key) |
+| `security.keyrecord.register` | security.keyrecord.register | { purpose: vapid, publicKey, algorithm: ecdsa_p256, notAfter? } | { keyRecordId, keyId, status, revision: 1 } | VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, SECURITY_KEY_LIMIT, CONFLICT_STATE | security.key.registered | yes (Idempotency-Key) |
+| `security.keyrecord.revoke` | security.keyrecord.revoke | { keyId, reason, effectiveFrom?, expectedRevision } | { keyRecordId, revision, revocationStatementCid, listSeq } | NOT_FOUND, SECURITY_KEY_UNAUTHORIZED, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED | security.key.revoked | yes (Idempotency-Key) |
+| `security.keyrecord.record_revocation` | security.keyrecord.record_revocation | { revocationStatement, signature, source, relayReceipt? } | { keyRecordId?, applied: boolean, inRevokedSet: boolean, refreshHint: boolean, effectiveFromClamped: boolean } | VALIDATION_FAILED, SECURITY_KEY_UNAUTHORIZED, CONFLICT_STATE | security.key.revoked | yes (Idempotency-Key) |
+| `security.keyrecord.ingest_list` | security.keyrecord.ingest_list | { relayId, head: classrup/revocation-list/v1 envelope, entries[] (≤ 500 per call), cursor? } | { accepted: boolean, listSeq, replayDetected: boolean, applied: int, refreshHints: int } | VALIDATION_FAILED, SECURITY_REVOCATION_LIST_STALE, SECURITY_SIGNATURE_INVALID | security.key.revoked | yes (Idempotency-Key) |
 
 ### Queries
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `security.keyrecord.get_status` | security.keyrecord.read_status | { keyId, asOfReceiptTime? } | { status, algorithm, purpose, revokedAt?, revocationEffectiveFrom?, freshnessCheckedAt, freshnessAgeMs, freshnessClass: fresh\|stale\|unknown } | NOT_FOUND |
-| `security.keyrecord.list_revocations` | security.keyrecord.read_public | { since?, cursor?, limit ≤ 500 } | { items: revocation statements, listHash, listSignature (relay key over classrup/revocation-list/v1), nextCursor? } |  |
+| `security.keyrecord.get_status` | security.keyrecord.read_public_status | { keyId } or { did, publicKey }, at? (the statement's first-seen time), highStakes?: boolean | { status, algorithm, purpose, relationship, authority, revokedAt?, revocationEffectiveFrom?, effectiveFromClamped, freshnessCheckedAt, freshnessIssuedAt, freshnessAgeMs, independentSources, freshnessClass: fresh\|stale\|unknown } | NOT_FOUND |
+| `security.keyrecord.get` | security.keyrecord.read_public_status | { keyId } | { keyId, publicKey, algorithm, purpose, ownerPrincipal, relationship, status } | NOT_FOUND |
+| `security.keyrecord.list_revocations` | security.keyrecord.read_public | { sinceSeq?, cursor?, limit ≤ 500 } | { head: classrup/revocation-list/v1 envelope { relayId, listSeq, issuedAt, nextUpdateBy, headHash, entryCount }, items: [{ keyHash, did?, docSeq?, docCid?, revocationStatementCid?, reason, revokedAt, effectiveFrom }], nextCursor? } |  |
 | `security.keyrecord.list_own` | security.keyrecord.read_own | { includeRevoked?: boolean } | { items: KeyRecord[] } |  |
 
 ### Events produced
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `security.key.registered` | P1 | { keyRecordId, keyId, algorithm, purpose, ownerPrincipal, relationship } |
-| `security.key.revoked` | P1 | { keyRecordId, keyId, ownerPrincipal, reason, revokedAt, revocationEffectiveFrom, source } |
+| `security.key.registered` | P1 | { keyRecordId, keyId, publicKey, algorithm, purpose, ownerPrincipal, relationship, authority, docSeq? } |
+| `security.key.revoked` | P1 | { keyRecordId, keyId, ownerPrincipal, purpose, relationship, reason, revokedAt, revocationEffectiveFrom, effectiveFromClamped, source } |
 
 ### Events consumed
 
 | Type | Effect |
 |---|---|
-| `identity.device_key.added` | register the new device key as own or counterparty key after verifying its linking statement |
-| `identity.device_key.revoked` | record the revocation locally and mark the key revoked |
-| `federation.peer.added` | register the peer relay transport key as peer_relay with freshness source set to the peer |
-| `federation.account.moved` | register the successor key chain and link the old principal key to its successor via the verified move statement |
+| `identity.device_key.added` | own keys only - cache the local principal's new device key as relationship own from its root-signed device link and emit security.key.registered |
+| `identity.device_key.revoked` | own keys only - mark the local principal's key revoked as F07.S01.M01 decided, add its hash to the revoked-key set and emit security.key.revoked |
+| `identity.portable_doc.published` | origin received (vault) or relay_stored (relay) - cache addedKeys as counterparty or relay_hosted keys and apply revokedKeys[].revokesEffectiveAt as revocations clamped per V04, record docSeq, docCid and the providing relay as a freshness source; status contested marks the DID's keys contested; origin own is ignored |
+| `federation.peer.added` | read the pinned relay key through PeerKeyPort.resolveKey(peerId) and record it as peer_relay with freshness source the peer |
+| `federation.peer.removed` | move the peer's key record to expired so it is no longer trusted for new statements |
+| `platform.relay_identity.rotated` | mirror this relay's transport key history - a rotation records the new key as relay_owned relay_transport and expires the retired key at the rotation time; a revocation revokes the key with the given reason |
 
 ### Module errors
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | SECURITY_KEY_UNAUTHORIZED | 403 | no | the signer is not authorized to register or revoke this key |
-| SECURITY_KEY_LIMIT | 409 | no | more than 10 active device keys for one principal on this relay |
-| SECURITY_KEY_REVOKED | 422 | no | the key is revoked and cannot be used for this operation |
+| SECURITY_KEY_LIMIT | 409 | no | more than 10 active device keys for one principal or 20 relay-owned keys on this relay |
+| SECURITY_REVOCATION_LIST_STALE | 409 | no | the revocation list head is older than or replays the one already stored for that relay |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Statements (N2): classrup.security.keyrevocation/v1 (owned here; F07.S01.M01 produces it for device keys) { keyId, publicKey, ownerPrincipal, reason, effectiveFrom?, revokedByKey } signed by the revoked key itself or the DID root key (immediate), another active device key (pending 7 days), or for relay_owned keys the relay key, registered in F11.S01.M01 with those signer roles; the revocation list head is an F16.S02.M03 envelope with context classrup/revocation-list/v1 signed by the relay key. Injected ports (wired by the composition roots because the implementers depend on this module): KeyStatusPort.keyStatus and IdentityRefreshPort.refresh(did, relays) of F07.S02.M01, PeerKeyPort.resolveKey(peerId) of F11.S03.M01 (read on federation.peer.added and at most 60 s cached on verification, so pinned-key rotations are picked up). Privacy duties (N6, N6a): fields carry F10.S02.M02 classification annotations; the vault registers ExportSectionPort (security.keys), DeletionPort (the vault erase step removes KeyRecords and the local revoked-key set; relay-native records are untouched) and RetentionPurgePort (RET-EVIDENCE purge that never touches the revoked-key set) with the F10.S01.M03, F10.S01.M04 and F10.S01.M02 registries injected by the composition root.
 
 ### Example
 
 ```
-vault command security.keyrecord.revoke (local; produces statement)
-{ "keyId": "Qm9b…43chars", "reason": "lost", "effectiveFrom": "2026-11-03T18:00:00Z", "expectedRevision": 3 }
--> { "keyRecordId": "0192f420-bbbb-7000-8000-00000000000b", "revision": 4, "revocationStatementCid": "sha256-ff90…" }
-query security.keyrecord.get_status { "keyId": "Qm9b…" } (verifier, vault)
--> { "status": "revoked", "revokedAt": "2026-11-04T10:00:00Z", "revocationEffectiveFrom": "2026-11-03T18:00:00Z", "freshnessCheckedAt": "2026-11-04T10:00:00Z", "freshnessAgeMs": 0, "freshnessClass": "fresh" }
+relay command security.keyrecord.revoke (relay_operator; produces statement signed by the relay key)
+{ "keyId": "Qm9b…43chars", "reason": "compromised", "expectedRevision": 3 }
+-> { "keyRecordId": "0192f420-bbbb-7000-8000-00000000000b", "revision": 4, "revocationStatementCid": "sha256-ff90…", "listSeq": 812 }
+vault query security.keyrecord.get_status { "did": "did:key:z6MkQ…", "publicKey": "…", "at": "2026-11-04T09:55:00Z", "highStakes": true }
+-> calls KeyStatusPort.keyStatus(did, publicKey, at) once
+-> { "status": "active", "relationship": "counterparty", "authority": "f07_identity", "freshnessIssuedAt": "2026-11-04T07:00:00Z", "freshnessAgeMs": 10500000, "independentSources": 2, "freshnessClass": "fresh" }
 ```
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-129-09.T06 | contract | PS-129-04.R01, PS-129-04.R02, PS-129-09.R02 | commands, queries, events and revocation list | validate against registry schemas; list signature verifies with relay key |
-| TEST-PS-129-09.T07 | integration | PS-129-04.R03 | identity.device_key.added and revoked, federation.peer.added delivered twice | one record each; statuses correct |
+| TEST-PS-129-09.T01 | unit | PS-129-01.R01, PS-129-01.R02, PS-129-01.R04, PS-129-04.R02 | identity.portable_doc.published (received) adding Kq for Q; identity.device_key.added for own K2 | counterparty and own KeyRecords stored active with authority f07_identity, keyId equals thumbprint, security.key.registered carries publicKey |
+| TEST-PS-129-09.T06 | contract | PS-129-04.R01, PS-129-04.R05, PS-129-09.R03 | commands, queries, events and the revocation list head | validate against registry schemas; the head verifies with the relay key under classrup/revocation-list/v1 and its entries reference identity documents |
+| TEST-PS-129-09.T07 | integration | PS-129-04.R03 | identity.device_key.added and revoked, identity.portable_doc.published received twice, federation.peer.added and removed, platform.relay_identity.rotated | one record each; statuses correct; peer key read through PeerKeyPort; retired relay key expired at the rotation time |
+| TEST-PS-129-09.T16 | integration | PS-129-04.R04, PS-129-01.R05 | get for a keyId; get_status for a user key; lookup of an agreement key | publicKey, algorithm and purpose returned; KeyStatusPort called exactly once with (did, publicKey, at) and freshness added; no agreement record exists |
 
 ## Dependencies
 
-Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S01.M01, F16.S02.M03, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells, 15 percent with inStock false, 30 percent barterAcceptable, and 120 wanted documents spread over the 6 want_min_condition values; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -33,10 +33,11 @@ See the module test table below (all processes).
 | TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance filters of 10 and 100 km and category filters | discovery_doc_cell and discovery_doc_cell4 used, metrics counted by code without values |
 | TEST-PS-044-09.T12 | unit | PS-044-09.R01, PS-044-09.R02, PS-044-09.R03 | traceability run over PS-044 | every requirement maps to a passing test; golden files unchanged |
 | TEST-PS-044-09.T13 | unit | PS-044-10.R01, PS-044-10.R02, PS-044-10.R03 | load a v1 filter stored inside a saved search export | parsed unchanged; unknown key rejected on import |
+| TEST-PS-044-09.T14 | integration | PS-044-01.R05, PS-044-02.R01 | compile and run inStock true, barterAcceptable true, wantAcceptsCondition for each of the 6 conditions, and inStock "yes" and wantAcceptsCondition "mint" against the seed index | SQL text and params equal golden fixtures; returned sets equal a brute-force JavaScript filter (good returns wants with minCondition good, fair, poor or for_parts); the two bad values are DISCOVERY_FILTER_INVALID with their field paths |
 
 ## Acceptance criteria
 
-- All tests T01-T13 pass in CI.
+- All tests T01-T14 pass in CI.
 - Compiled queries return exactly the brute-force result on the 1 000 document fixture.
 - No filter value can alter SQL structure (fuzz suite green).
 

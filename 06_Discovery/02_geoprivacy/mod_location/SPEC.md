@@ -38,6 +38,7 @@ Keeps the user's location choices inside the vault. The user sets a home region 
 - The user changes the home cell a 4th time within 24 hours; the app asks for confirmation (DISCOVERY_HOME_CHANGE_CONFIRM_REQUIRED until confirmed), which is a guard against mis-taps, not a security control.
 - A share is requested for a counterparty the user has blocked; refused with BLOCKED_PARTY.
 - A precise share or one-shot GPS is requested without location_precise consent; refused with PRECONDITION_FAILED and the sheet asks for consent inline.
+- location_precise consent is granted but the user never opens the share sheet; nothing is shared, and every later L3 or L4 share still needs its own grant naming one counterparty, a precision and a duration of at most 24 h.
 - An incoming share claims an expiry 5 days ahead; the recipient clamps it to receipt time plus 24 h and marks it clamped.
 - An incoming share claims an issue time 11 minutes in the future, or an expiry already in the past at receipt; refused with DISCOVERY_SHARE_TIME_INVALID or EXPIRED.
 - The sender revokes while the recipient is offline; the revoke statement waits in the sync outbox (prepared, then transport_acknowledged) and the recipient's copy ends when it arrives or at expiry, whichever is first.
@@ -82,7 +83,7 @@ F06.S02.M01, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F1
 | PS-048-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-048-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-048-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
-| PS-048-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
+| PS-048-05 | [Authorization and capabilities](authorization_capabilities.md) | 5 |
 | PS-048-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-048-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-048-08 | [Observability and performance](observability_performance.md) | 3 |
@@ -93,6 +94,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T22 pass in CI.
 - No location finer than L2 appears in any public projection, event class below P3, log or relay-readable payload.
 - Every share ends by expiry or revocation locally within 30 seconds with its per-share key deleted, and the UI states what the other device may still hold.

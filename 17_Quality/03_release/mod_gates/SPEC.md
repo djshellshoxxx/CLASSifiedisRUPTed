@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Release checklist automation (tools/gates). Before a release tag, one command evaluates the gates and prints a verdict with evidence: requirement-to-test traceability at 100 percent (tools/trace reads TEST-PS-NNN-PP.Tnn titles), no critical or high production vulnerabilities (pnpm audit --prod), accessibility with zero serious violations, performance budgets from the load and PWA budget reports, spec completeness (specgen check --strict --report GO), compatibility from reports/compat.json, and a changelog entry for the version. Manual test rows count only through signed checklists. Any failed gate blocks the release; all evidence must come from the release commit, which the F17.S03.M01 release workflow regenerates before the gates run.
+Release checklist automation (tools/gates). Before a release tag, one command evaluates the gates and prints a verdict with evidence: requirement-to-test traceability at 100 percent (tools/trace reads TEST-PS-NNN-PP.Tnn titles), no critical or high production vulnerabilities (pnpm audit --prod), accessibility with zero serious violations, performance budgets from the load and PWA budget reports, spec completeness (specgen check --strict --report GO), compatibility from reports/compat.json, and a changelog entry for the version. Manual test rows count only through signed checklists, and a test-to-requirement mapping counts only when the test text shares a key term with the requirement or a code-owner approved mapping review is recorded for it. Any failed gate blocks the release; all evidence must come from the release commit, which the F17.S03.M01 release workflow regenerates before the gates run.
 
 ## Responsibilities
 
@@ -17,12 +17,14 @@ Release checklist automation (tools/gates). Before a release tag, one command ev
 - Changelog gate: CHANGELOG.md contains a section for the version being released with at least one entry and a link to the release notes.
 - Spec gate: run node tools/specgen/specgen.mjs check --strict --report for the release commit and pass only with 0 errors and GO in SPEC_COMPLETENESS_REPORT.md.
 - Compat gate: read reports/compat.json (F17.S03.M03) for the release commit and pass only when it shows no QUALITY_COMPAT_* failure and every browser cell passes or is policy-unsupported, including the manual real-Safari and iOS checklist cells; a missing report fails closed.
+- Mapping relevance check (finding 47): tools/trace accepts a covers entry of a test row only when the test text (scenario and expected cells plus the code test title after its ID) shares at least one key term with the requirement text, or when gates/mapping-reviews.yaml holds a code-owner approved review of that exact mapping whose text hash still matches; any other mapping is rejected with QUALITY_GATE_TRACE_MAPPING and does not count as coverage.
 
 ## Not responsible for
 
 - Running the tests and generating reports (F17.S01, F17.S02); this module only reads their outputs.
 - Deployment of relays or hosting of the PWA.
 - Legal and policy review gates (F18).
+- Changes to the spec validator tools/specgen, which keeps checking only the covers syntax and existence; the semantic mapping check runs in tools/trace inside this release gate.
 - Future: SBOM generation and signed release provenance.
 
 ## User stories
@@ -44,6 +46,8 @@ Release checklist automation (tools/gates). Before a release tag, one command ev
 - The spec report says NO-GO or the strict check prints one error; the spec gate fails with QUALITY_GATE_SPEC.
 - A waiver or checklist file was committed without code-owner approval; the gate fails with QUALITY_GATE_WAIVER_UNAPPROVED and prints the committer.
 - A test listed in tests/quarantine.yaml has an active entry; the trace gate lists it as waived; once the entry is expired it fails as an expired waiver.
+- A test row lists 03.R02 in covers but its scenario and expected text share no key term with that requirement; the mapping is rejected with QUALITY_GATE_TRACE_MAPPING unless a matching approved mapping review exists.
+- A requirement text is rewritten after its mapping review was recorded; the stored text hash no longer matches, the review is stale and the mapping fails with QUALITY_GATE_TRACE_MAPPING until it is reviewed again.
 
 ## UX and accessibility
 
@@ -71,7 +75,7 @@ CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F1
 | ID | Process | Requirements |
 |---|---|---|
 | PS-143-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-143-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-143-02 | [Validation rules](validation_rules.md) | 6 |
 | PS-143-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-143-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-143-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -90,3 +94,4 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 - Any serious accessibility violation or exceeded budget blocks the release.
 - The gate report is attached to every release and waivers expire within 14 days.
 - A spec NO-GO, a compatibility failure, a missing compat report or a missing manual checklist blocks the release.
+- A test-to-requirement mapping without a shared key term and without a valid approved mapping review does not count as coverage and blocks the release.

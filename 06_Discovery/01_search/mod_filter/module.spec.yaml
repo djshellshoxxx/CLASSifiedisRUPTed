@@ -2,7 +2,8 @@ id: F06.S01.M03
 scope: MVP
 summary: >-
   Pure, isomorphic library that defines the typed search filter object (category, listing kind, price range per
-  currency, condition, distance bucket, barter-acceptable, posted-within), validates it, and compiles it into a
+  currency, condition, distance bucket, barter-acceptable, in-stock, condition accepted by a wanted listing,
+  posted-within), validates it, and compiles it into a
   parameterized SQL fragment over the SearchDocument columns. The same code runs in the vault and on a relay, so
   filters mean the same thing everywhere. It owns no data and sends nothing.
 responsibilities:
@@ -10,6 +11,7 @@ responsibilities:
   - Compile a validated filter to a WHERE fragment with bound parameters only; no value is ever concatenated into SQL.
   - Map distance filters to cell sets through F06.S02.M01 and never to numeric distances, compiling mixed precision correctly - precision-5 cells against geo_cell, precision-4 cells against the stored geo_cell4 column - so 50 and 100 km filters and L1 (4-character) documents match.
   - Provide a canonical form (sorted keys, normalized values) used for cache keys and saved search equality.
+  - Filter on the barterAcceptable, inStock and want.minCondition values that F06.S01.M01 copies from the signed listing projection into the barter, in_stock and want_min_condition columns.
 non_responsibilities:
   - Running queries, ranking and pagination (F06.S01.M02, F06.S03.M01).
   - Owning the category taxonomy (F18 governance catalog) and currency registry (F09.S03.M01); the library receives them as read ports.
@@ -29,6 +31,8 @@ edge_cases:
   - A 50 or 100 km distance filter yields precision-4 cells; they compile to d.geo_cell4 IN (...) so L1 and L2 documents in those cells match instead of nothing.
   - A listing published at L1 (4-character cell) is filtered with 10 km around an L2 center; it is not matched because its position is coarser than the radius, and it is matched from 25 km upward.
   - distanceKm is 7 or 200; rejected with DISCOVERY_RADIUS_NOT_ALLOWED, while 3 is rejected with DISCOVERY_RADIUS_TOO_SMALL.
+  - wantAcceptsCondition good is combined with listingKinds sell; nothing matches, because only wanted listings carry want_min_condition, and the filter is still valid.
+  - inStock is given as the string "yes" or wantAcceptsCondition as "mint"; rejected with DISCOVERY_FILTER_INVALID.
 ux:
   notes: Library module with no screens. Filter chips in the search screen (F06.S01.M02) render the canonical filter and show the localized label for each active filter with a remove button.
 processes:
@@ -38,14 +42,19 @@ processes:
       - Compilation output is a pair of SQL text and an ordered parameter array, with SQL text drawn only from a fixed set of fragments.
       - The canonical form of a filter is deterministic so equal filters produce equal cache keys and saved search comparisons.
       - Distance filters compile by cell precision - precision-5 cells match geo_cell exactly, precision-4 cells match the stored and indexed geo_cell4 column, and documents with a 4-character (L1) cell match only radii of 25 km or more.
+      - The keys inStock (boolean, compiled to d.in_stock = ?) and wantAcceptsCondition (one condition value, compiled to d.want_min_condition IN (...) over the minimum conditions that accept an item of that condition) filter the columns F06.S01.M01 copies from the projection's inStock and want.minCondition, next to barterAcceptable (d.barter = ?).
     entities: []
     note: >-
       Library module. It defines the Filter value object (schema classrup.discovery.filter/v1, embedded in queries and
       SavedSearch) but owns no persisted entity. Keys - categoryIds (1..10), listingKinds (1..6 of sell, wanted, giveaway,
       service, rental, auction), price {currency, min?, max?} in integer minor units 0..1 000 000 000 000, conditions
       (1..6 of new, like_new, good, fair, poor, for_parts, matching F01.S01.M01 and the F06.S01.M01 index), distanceKm
-      (one of 5, 10, 25, 50, 100) with a center cell of 4 or 5 characters, barterAcceptable (boolean), postedWithin (one
-      of 24h, 7d, 30d). Distance compile rule over cellsForRadius(center, distanceKm) from F06.S02.M01 - 5 and 10 km give
+      (one of 5, 10, 25, 50, 100) with a center cell of 4 or 5 characters, barterAcceptable (boolean, d.barter = ?),
+      inStock (boolean, d.in_stock = ?), wantAcceptsCondition (one condition value; the condition order from best to
+      worst is new, like_new, good, fair, poor, for_parts, and a want accepts an item at its minCondition or better, so
+      the value compiles to d.want_min_condition IN (the value and every worse value), for example good gives good, fair,
+      poor and for_parts; only wanted listings carry want_min_condition), postedWithin (one of 24h, 7d, 30d). Distance
+      compile rule over cellsForRadius(center, distanceKm) from F06.S02.M01 - 5 and 10 km give
       precision-5 cells C5 compiled to d.geo_cell IN (C5); 25 km gives precision-5 cells C5 compiled to (d.geo_cell IN
       (C5) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (P4))) where P4 are the distinct 4-character prefixes of C5;
       50 and 100 km give precision-4 cells C4 compiled to d.geo_cell4 IN (C4), served by index discovery_doc_cell4.
@@ -64,6 +73,7 @@ processes:
       - "V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum (new, like_new, good, fair, poor, for_parts) | DISCOVERY_FILTER_INVALID"
       - "V08 | distanceKm is one of the allowed radii 5, 10, 25, 50, 100 (F06.S02.M01 V06) | DISCOVERY_RADIUS_NOT_ALLOWED"
       - "V09 | the center cell passes F06.S02.M01 assertPublicCell (at most 5 characters) | DISCOVERY_PRECISION_FORBIDDEN"
+      - "V10 | barterAcceptable and inStock are booleans and wantAcceptsCondition is one of new, like_new, good, fair, poor, for_parts | DISCOVERY_FILTER_INVALID"
   workflow_state_machine:
     requirements:
       - The library is stateless; validate and compile are pure functions with no lifecycle.
@@ -99,6 +109,10 @@ processes:
       -> { sql: "(d.geo_cell IN (?,…) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (?,…)))", params: [C5…, "u4pr", "u4px", …] }
       compileFilter({ distanceKm: 100, center: "u4pru" }, now)
       -> { sql: "d.geo_cell4 IN (?,…)", params: ["u4nz", "u4pr", "u4px", …] }
+      compileFilter({ listingKinds: ["sell"], inStock: true, barterAcceptable: true }, now)
+      -> { sql: "d.listing_kind IN (?) AND d.in_stock = ? AND d.barter = ?", params: ["sell", 1, 1] }
+      compileFilter({ listingKinds: ["wanted"], wantAcceptsCondition: "good" }, now)
+      -> { sql: "d.listing_kind IN (?) AND d.want_min_condition IN (?,?,?,?)", params: ["wanted", "good", "fair", "poor", "for_parts"] }
   authorization_capabilities:
     requirements:
       - The library performs no authorization; it is pure and may be called by any caller that is itself authorized.
@@ -146,7 +160,7 @@ processes:
       - Every requirement is covered by at least one automated test, including property tests on canonicalization.
       - A golden test fixes the SQL fragment text and parameter order for each filter key.
       - Injection and limit tests run against a real SQLite database.
-    fixtures: "Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Seed index of 1 000 SearchDocuments across 3 currencies, 6 kinds, 20 categories and 6 conditions, 10 percent with 4-character (L1) cells, 15 percent with inStock false, 30 percent barterAcceptable, and 120 wanted documents spread over the 6 want_min_condition values; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden"
       - "T02 | unit | 02.R02,02.R03 | price without currency, min above max, distance without center, distance 3 km, distance 7 km and 200 km, 6-character center | DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CENTER_REQUIRED, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN, each with the field path"
@@ -161,8 +175,9 @@ processes:
       - "T11 | integration | 08.R02,08.R03 | explain query plan for distance filters of 10 and 100 km and category filters | discovery_doc_cell and discovery_doc_cell4 used, metrics counted by code without values"
       - "T12 | unit | 09.R01,09.R02,09.R03 | traceability run over PS-044 | every requirement maps to a passing test; golden files unchanged"
       - "T13 | unit | 10.R01,10.R02,10.R03 | load a v1 filter stored inside a saved search export | parsed unchanged; unknown key rejected on import"
+      - "T14 | integration | 01.R05,02.R01 | compile and run inStock true, barterAcceptable true, wantAcceptsCondition for each of the 6 conditions, and inStock \"yes\" and wantAcceptsCondition \"mint\" against the seed index | SQL text and params equal golden fixtures; returned sets equal a brute-force JavaScript filter (good returns wants with minCondition good, fair, poor or for_parts); the two bad values are DISCOVERY_FILTER_INVALID with their field paths"
     acceptance:
-      - All tests T01-T13 pass in CI.
+      - All tests T01-T14 pass in CI.
       - Compiled queries return exactly the brute-force result on the 1 000 document fixture.
       - No filter value can alter SQL structure (fuzz suite green).
   import_export_backup_rollback:

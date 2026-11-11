@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); fixed commit SHA a1b2c3d.
+**Fixtures:** Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); a test row whose covers lists a requirement it shares no key term with, with no review, with an approved review and with a review whose text hash is stale; fixed commit SHA a1b2c3d.
 
 ## Verification
 
@@ -39,6 +39,9 @@ See the module test table below (all processes).
 | TEST-PS-143-09.T17 | unit | PS-143-02.R05 | a manual test row with a signed passing checklist for this commit, one with a checklist for another commit, and one without any | first counts as covered; the other two fail with QUALITY_GATE_MANUAL_MISSING |
 | TEST-PS-143-09.T18 | abuse | PS-143-05.R02, PS-143-02.R05 | a waiver commit and a checklist commit without code-owner approval, then the same with approval | unapproved commits fail with QUALITY_GATE_WAIVER_UNAPPROVED naming the committer; approved ones pass and the report prints the approver from git metadata |
 | TEST-PS-143-09.T19 | unit | PS-143-02.R01, PS-143-03.R03 | an active tests/quarantine.yaml entry for a failing test, then the same entry after its expiresAt | active entry listed as waived and the gate passes; expired entry fails with QUALITY_GATE_WAIVER_EXPIRED |
+| TEST-PS-143-09.T20 | unit | PS-143-02.R06 | test rows covering a requirement with a shared key term, with no shared key term and no review, with no shared key term and an approved mapping review, and with a review whose text hash is stale after the requirement text changed | shared key term counts; no overlap without review and stale review fail with QUALITY_GATE_TRACE_MAPPING and do not count; approved matching review counts and is listed in the report |
+| TEST-PS-143-09.T21 | unit | PS-143-02.R06 | key term extraction on texts with stopwords, short tokens, plural and ing forms, error codes and mixed case | only tokens of 4 or more characters outside tools/gates/stopwords.txt remain, case-folded and with the trailing s, es, ed or ing removed; error codes stay single tokens; same input gives the same terms |
+| TEST-PS-143-09.T22 | abuse | PS-143-02.R06, PS-143-05.R02 | mapping review commit without code-owner approval, then the same review with approval | unapproved review fails with QUALITY_GATE_WAIVER_UNAPPROVED and the mapping is not counted; approved review counts and its approver is printed from git metadata |
 
 ## Acceptance criteria
 
@@ -47,6 +50,7 @@ See the module test table below (all processes).
 - Any serious accessibility violation or exceeded budget blocks the release.
 - The gate report is attached to every release and waivers expire within 14 days.
 - A spec NO-GO, a compatibility failure, a missing compat report or a missing manual checklist blocks the release.
+- A test-to-requirement mapping without a shared key term and without a valid approved mapping review does not count as coverage and blocks the release.
 
 ## Dependencies
 

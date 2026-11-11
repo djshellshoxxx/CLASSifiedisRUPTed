@@ -23,6 +23,7 @@
 | V07 | postedWithin is one of 24h, 7d, 30d and condition values are in the enum (new, like_new, good, fair, poor, for_parts) | DISCOVERY_FILTER_INVALID |
 | V08 | distanceKm is one of the allowed radii 5, 10, 25, 50, 100 (F06.S02.M01 V06) | DISCOVERY_RADIUS_NOT_ALLOWED |
 | V09 | the center cell passes F06.S02.M01 assertPublicCell (at most 5 characters) | DISCOVERY_PRECISION_FORBIDDEN |
+| V10 | barterAcceptable and inStock are booleans and wantAcceptsCondition is one of new, like_new, good, fair, poor, for_parts | DISCOVERY_FILTER_INVALID |
 
 ## Verification
 
@@ -30,6 +31,7 @@
 |---|---|---|---|---|
 | TEST-PS-044-09.T01 | unit | PS-044-01.R01, PS-044-02.R01 | validate a filter with every key valid | Result ok and canonical form equals golden |
 | TEST-PS-044-09.T02 | unit | PS-044-02.R02, PS-044-02.R03 | price without currency, min above max, distance without center, distance 3 km, distance 7 km and 200 km, 6-character center | DISCOVERY_FILTER_CURRENCY_REQUIRED, DISCOVERY_FILTER_INVALID, DISCOVERY_FILTER_CENTER_REQUIRED, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_PRECISION_FORBIDDEN, each with the field path |
+| TEST-PS-044-09.T14 | integration | PS-044-01.R05, PS-044-02.R01 | compile and run inStock true, barterAcceptable true, wantAcceptsCondition for each of the 6 conditions, and inStock "yes" and wantAcceptsCondition "mint" against the seed index | SQL text and params equal golden fixtures; returned sets equal a brute-force JavaScript filter (good returns wants with minCondition good, fair, poor or for_parts); the two bad values are DISCOVERY_FILTER_INVALID with their field paths |
 
 ## Dependencies
 

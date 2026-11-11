@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Principal P with DID, counterparties Q and R, fake geolocation returning 57.64911,10.40744, fake consent port, fake F11 record intake, fake relay mailbox, fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Principal P with DID, counterparties Q and R, fake geolocation returning 57.64911,10.40744, fake consent port, the F10.S01.M01 T20 cross-module contract harness with its F13.S02.M03 double, fake F11 record intake, fake relay mailbox, network capture, fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -41,10 +41,11 @@ See the module test table below (all processes).
 | TEST-PS-048-09.T19 | load | PS-048-08.R02 | 1 000 set_home and 1 000 grant calls on the reference Moto G-class device | set_home p95 <= 100 ms and grant p95 <= 300 ms excluding transport |
 | TEST-PS-048-09.T20 | abuse | PS-048-08.R01 | network capture during set_home, grant, revoke, receive and expiry | no telemetry or analytics request; the only network traffic is sealed statements through the outbox |
 | TEST-PS-048-09.T21 | unit | PS-048-01.R03, PS-048-07.R01 | end a share, then try to decrypt the stored ciphertext; scan IndexedDB, logs and events after a GPS-once | per-share key absent from the keystore and decryption fails; no raw point stored or logged |
+| TEST-PS-048-09.T22 | contract | PS-048-05.R05, PS-048-05.R04 | cross-module contract test F10.S01.M01 T20 run with the real module: grant location_precise and advance the clock 1 h; then an explicit L4 grant to Q with ttl 2 h; then a grant input naming Q and R, a grant with ttl 25 h, and a second location_precise grant while the share is active | consent alone creates no LocationShare, no statement, no outbox entry and no network request; the explicit grant creates exactly one share to Q with effectiveExpiresAt at most creation plus 24 h; two recipients VALIDATION_FAILED; ttl 25 h DISCOVERY_SHARE_TTL_INVALID; the second consent grant leaves the share's effectiveExpiresAt unchanged |
 
 ## Acceptance criteria
 
-- All tests T01-T21 pass in CI.
+- All tests T01-T22 pass in CI.
 - No location finer than L2 appears in any public projection, event class below P3, log or relay-readable payload.
 - Every share ends by expiry or revocation locally within 30 seconds with its per-share key deleted, and the UI states what the other device may still hold.
 

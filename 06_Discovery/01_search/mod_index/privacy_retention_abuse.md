@@ -29,15 +29,15 @@
 |---|---|---|
 | T01 | Index leaks a location finer than L2 through a buggy or hostile source | V02 assertPublicCell on every upsert, SQL CHECK length IN (0,4,5), contract test with 6-character cells, refusal recorded as a local diagnostic |
 | T02 | Tombstoned or unpublished content stays searchable | removal deletes the FTS row in the same transaction, 5 s removal budget, daily reconciliation against retained signed tombstones |
-| T03 | A hostile author floods a relay index or fills a vault cache | 100 active documents per author on a relay (newest refused as author_cap), 5 000 document vault cap with eviction of fetched documents only, per-author fairness cap in F06.S03.M02 |
+| T03 | A hostile author floods a relay index or fills a vault cache | tenant maxIndexedListingsPerPublisher active documents per author on a relay (default 100, newest refused as author_cap), 5 000 document vault cap with eviction of fetched documents only, per-author fairness cap in F06.S03.M02 |
 | T04 | Forged or tampered projection injected through a relay | F11.S01.M02 verification plus V03 re-check of Ed25519 signature over JCS bytes and signer role, kernel quarantine on failure, relay-signed receipt time treated as evidence of that relay clock only |
 | T05 | Author backdates or post-dates claimedPublishedAt to gain recency | the recency anchor is the claim clamped by firstSeenAt (min(claim, firstSeenAt)), so a claim can only make a document look older, never newer, than first seen |
-| T06 | One relay's hosting decision removes a listing from vaults, including the author's own listing and copies from other relays (signer-role confusion on tombstones) | branch on tombstone issuer kind; a relay-signed tombstone only drops that relay's provenance in a vault and never touches own or imported documents (ADR-0016 decisions 3 and 8) |
+| T06 | One relay's hosting decision removes a listing from vaults, including the author's own listing and copies from other relays (signer-role confusion on tombstones) | branch on the kind and issuerKind of federation.tombstone.applied; a relay_removal advisory only drops that relay's provenance in a vault, removes nothing on other relays and never touches own or imported documents (ADR-0016 decisions 3 and 8, FED-9) |
 | T07 | Author undoes a hosting-policy removal or a tombstone by editing or resubmitting | sticky removedReason guard (V08) and 180-day stubs after purge |
 | T08 | Relay operator shows unlabelled promotion or promotion without a final or acknowledged claim | promotion only through set_promotion bound to a final or acknowledged claim, cleared on reorg or expiry, promoted flag exported to rankers which cap and label it |
 
 **Abuse controls**
-- Per-author active cap 100 on a relay (newest refused with removedReason author_cap) and relay hosting-policy removal with a statement of reasons; vault users hide content or authors locally through F12.S01.M01 at query time.
+- Per-author active cap on a relay equal to the tenant maxIndexedListingsPerPublisher (default 100, newest refused with removedReason author_cap), tenant allowedCurrencies on every relay index write, and relay hosting-policy removal with a statement of reasons; vault users hide content or authors locally through F12.S01.M01 at query time.
 - Relay ingestion quotas are enforced at F11 federation.record.ingest and by the F01.S01.M03 relay_index_write quota (default 100 projections per key); the vault accepts at most 1 000 new documents per hour from pulls, and list_by_cell is limited by RateLimitPort class read.search.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
@@ -47,12 +47,12 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-045-09.T10 | integration | PS-045-04.R02, PS-045-07.R02, PS-045-03.R04 | author-signed tombstone then later republish of the same cid | document removed with reason tombstoned, republish refused with DISCOVERY_SOURCE_REMOVED |
-| TEST-PS-045-09.T12 | abuse | PS-045-07.R03 | author with 101 active documents on a relay; claimedPublishedAt 3 years ahead | 101st (newest) refused with stub author_cap and DISCOVERY_INDEX_CAP diagnostic; recency anchor equals firstSeenAt |
+| TEST-PS-045-09.T12 | abuse | PS-045-07.R03 | author with 101 active documents on a relay whose tenant keeps the default maxIndexedListingsPerPublisher of 100; claimedPublishedAt 3 years ahead | 101st (newest) refused with stub author_cap and DISCOVERY_INDEX_CAP diagnostic; recency anchor equals firstSeenAt |
 | TEST-PS-045-09.T13 | integration | PS-045-05.R03, PS-045-07.R01 | query layer asks for a document from a removed row | no title or body is ever returned |
-| TEST-PS-045-09.T21 | integration | PS-045-03.R04, PS-045-07.R02 | relay A signs a tombstone for a listing the vault fetched from relays A and B, and for the user's own listing | relay A dropped from provenance, document stays active from B; own listing untouched; no refusal for B copies |
+| TEST-PS-045-09.T21 | integration | PS-045-03.R04, PS-045-07.R02 | relay A issues a relay_removal advisory (kind relay_removal, issuerKind origin_relay, advisory true) for a listing the vault fetched from relays A and B, and for the user's own listing | relay A dropped from provenance, document stays active from B; own listing untouched; no refusal for B copies |
 | TEST-PS-045-09.T26 | abuse | PS-045-07.R01 | vault indexes 1 000 events under network capture and outbox inspection | zero network requests and zero outbox entries written by the index |
 | TEST-PS-045-09.T30 | integration | PS-045-01.R05, PS-045-07.R04 | vault at 5 000 documents receives new ones; deletion executes the registered DeletionPort plan; retention purge run | fetched documents with oldest last view evicted, own and imported kept; own documents removed with reason deleted; field classifications present for every column |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

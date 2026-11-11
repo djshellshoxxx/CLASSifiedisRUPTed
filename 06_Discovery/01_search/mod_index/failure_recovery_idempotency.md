@@ -16,7 +16,7 @@
 - **concurrency:** Single writer per vault (one IndexedDB or SQLite transaction per event); on a relay one writer per aggregate by (aggregate.id, revision) order; rebuild builds shadow tables, copies firstSeenAt and authorFirstSeenAt from the live table by source key and authorDid, applies concurrent events to both, and swaps in one transaction.
 - **retries:** Handler retries use base 500 ms, cap 30 s, full jitter, max 8 attempts, then dead_letter; the vault shows 'search data needs repair' with a Rebuild button.
 - **offline:** The local index is fully functional offline; the relay index is simply not queried. Projections fetched later are indexed on arrival in creation order after F11.S01.M02 accepts them.
-- **partial failure:** If a projection cannot be verified because the author's identity document is unavailable, F11.S01.M02 buffers or quarantines it and this module indexes nothing; removals never depend on verification, only on the tombstone, unpublish or moderation event. If an enrichment projection arrives before its listing, it is retried for 24 h and then dropped with a local diagnostic.
+- **partial failure:** If a projection cannot be verified because the author's identity document is unavailable, F11.S01.M02 buffers or quarantines it and this module indexes nothing; removals never depend on verification, only on the tombstone, unpublish or moderation event. If an enrichment projection arrives before its listing, it is retried for 24 h and then dropped with a local diagnostic. If F15.S04.M03 TenantPort.limits cannot be read on a relay, new projections are not admitted (the handler retries with backoff) and indexed documents stay unchanged.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -29,4 +29,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

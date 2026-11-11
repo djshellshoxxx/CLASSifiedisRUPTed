@@ -14,7 +14,7 @@
 
 **Metrics**
 - classrup_discovery_index_documents{status=active|removed} (relay export; vault local counter)
-- classrup_discovery_index_apply_total{outcome=upserted|removed|ignored_stale|rejected|refused_sticky}
+- classrup_discovery_index_apply_total{outcome=upserted|removed|ignored_stale|rejected|refused_sticky|refused_cap|refused_currency}
 - classrup_discovery_index_freshness_ms (histogram: now - event occurredAt at commit)
 - classrup_discovery_index_rebuild_duration_ms
 - classrup_discovery_index_promotions_active (gauge, relay)
@@ -39,4 +39,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

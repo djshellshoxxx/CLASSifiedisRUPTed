@@ -42,8 +42,9 @@ _None._
 | QUALITY_GATE_WAIVER_EXPIRED | 422 | no | a waiver is expired or longer than 14 days (exit 1) |
 | QUALITY_GATE_SPEC | 422 | no | spec check has errors or NO-GO (exit 1) |
 | QUALITY_GATE_COMPAT | 422 | no | compat report missing, stale, from another commit or showing a QUALITY_COMPAT_* failure or failed browser cell (exit 1) |
-| QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine or manual checklist commit lacks code-owner approval (exit 1) |
+| QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine, manual checklist or mapping review commit lacks code-owner approval (exit 1) |
 | QUALITY_GATE_MANUAL_MISSING | 422 | no | a level manual test row has no signed passing checklist for this release commit (exit 1) |
+| QUALITY_GATE_TRACE_MAPPING | 422 | no | a test-to-requirement mapping shares no key term with the requirement and has no valid approved mapping review (exit 1) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -54,7 +55,7 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 ```
 $ pnpm gates:release --version 0.3.0
   spec          specgen --strict --report: 0 errors, GO  PASS
-  traceability  1432/1432 requirements covered (2 waived, 1 quarantined, 4 manual checklists signed by @release-owner)  PASS
+  traceability  1432/1432 requirements covered (2 waived, 1 quarantined, 4 manual checklists signed by @release-owner; 6 mappings by approved review, 0 rejected)  PASS
   audit         0 critical, 0 high, 3 moderate  PASS
   a11y          serious 0, critical 0  PASS
   budgets       relay OBS-4 PASS (reports/load.json), PWA OBS-5 LCP 1.9 s INP 140 ms CLS 0.03 JS 131 KiB PASS (reports/pwa-budgets.json)

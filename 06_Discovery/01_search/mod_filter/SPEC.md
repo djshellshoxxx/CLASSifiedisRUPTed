@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Pure, isomorphic library that defines the typed search filter object (category, listing kind, price range per currency, condition, distance bucket, barter-acceptable, posted-within), validates it, and compiles it into a parameterized SQL fragment over the SearchDocument columns. The same code runs in the vault and on a relay, so filters mean the same thing everywhere. It owns no data and sends nothing.
+Pure, isomorphic library that defines the typed search filter object (category, listing kind, price range per currency, condition, distance bucket, barter-acceptable, in-stock, condition accepted by a wanted listing, posted-within), validates it, and compiles it into a parameterized SQL fragment over the SearchDocument columns. The same code runs in the vault and on a relay, so filters mean the same thing everywhere. It owns no data and sends nothing.
 
 ## Responsibilities
 
@@ -14,6 +14,7 @@ Pure, isomorphic library that defines the typed search filter object (category, 
 - Compile a validated filter to a WHERE fragment with bound parameters only; no value is ever concatenated into SQL.
 - Map distance filters to cell sets through F06.S02.M01 and never to numeric distances, compiling mixed precision correctly - precision-5 cells against geo_cell, precision-4 cells against the stored geo_cell4 column - so 50 and 100 km filters and L1 (4-character) documents match.
 - Provide a canonical form (sorted keys, normalized values) used for cache keys and saved search equality.
+- Filter on the barterAcceptable, inStock and want.minCondition values that F06.S01.M01 copies from the signed listing projection into the barter, in_stock and want_min_condition columns.
 
 ## Not responsible for
 
@@ -38,6 +39,8 @@ Pure, isomorphic library that defines the typed search filter object (category, 
 - A 50 or 100 km distance filter yields precision-4 cells; they compile to d.geo_cell4 IN (...) so L1 and L2 documents in those cells match instead of nothing.
 - A listing published at L1 (4-character cell) is filtered with 10 km around an L2 center; it is not matched because its position is coarser than the radius, and it is matched from 25 km upward.
 - distanceKm is 7 or 200; rejected with DISCOVERY_RADIUS_NOT_ALLOWED, while 3 is rejected with DISCOVERY_RADIUS_TOO_SMALL.
+- wantAcceptsCondition good is combined with listingKinds sell; nothing matches, because only wanted listings carry want_min_condition, and the filter is still valid.
+- inStock is given as the string "yes" or wantAcceptsCondition as "mint"; rejected with DISCOVERY_FILTER_INVALID.
 
 ## UX and accessibility
 
@@ -64,7 +67,7 @@ F06.S02.M01, CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-PRV-001, CTR-MNY-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-044-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-044-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-044-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-044-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-044-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
@@ -79,6 +82,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T13 pass in CI.
+- All tests T01-T14 pass in CI.
 - Compiled queries return exactly the brute-force result on the 1 000 document fixture.
 - No filter value can alter SQL structure (fuzz suite green).

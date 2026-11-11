@@ -1,6 +1,6 @@
 id: F17.S03.M02
 scope: MVP
-summary: 'Release checklist automation (tools/gates). Before a release tag, one command evaluates the gates and prints a verdict with evidence: requirement-to-test traceability at 100 percent (tools/trace reads TEST-PS-NNN-PP.Tnn titles), no critical or high production vulnerabilities (pnpm audit --prod), accessibility with zero serious violations, performance budgets from the load and PWA budget reports, spec completeness (specgen check --strict --report GO), compatibility from reports/compat.json, and a changelog entry for the version. Manual test rows count only through signed checklists. Any failed gate blocks the release; all evidence must come from the release commit, which the F17.S03.M01 release workflow regenerates before the gates run.'
+summary: 'Release checklist automation (tools/gates). Before a release tag, one command evaluates the gates and prints a verdict with evidence: requirement-to-test traceability at 100 percent (tools/trace reads TEST-PS-NNN-PP.Tnn titles), no critical or high production vulnerabilities (pnpm audit --prod), accessibility with zero serious violations, performance budgets from the load and PWA budget reports, spec completeness (specgen check --strict --report GO), compatibility from reports/compat.json, and a changelog entry for the version. Manual test rows count only through signed checklists, and a test-to-requirement mapping counts only when the test text shares a key term with the requirement or a code-owner approved mapping review is recorded for it. Any failed gate blocks the release; all evidence must come from the release commit, which the F17.S03.M01 release workflow regenerates before the gates run.'
 responsibilities:
 - Implement pnpm gates:release which runs the gates spec, traceability, audit, a11y, budgets, compat and changelog, each producing a machine-readable result in reports/gates.json.
 - 'Traceability gate: tools/trace maps each requirement ID PS-NNN-PP.Rnn from module.spec.yaml to test titles in code and to passing results in the JUnit reports of the release commit; rows with level manual count through a signed checklist under gates/manual/<version>/ instead of JUnit; an active tests/quarantine.yaml entry (F17.S01.M01) counts as a waiver; any requirement without a passing test (and without a documented untested reason) fails the gate.'
@@ -9,10 +9,12 @@ responsibilities:
 - 'Changelog gate: CHANGELOG.md contains a section for the version being released with at least one entry and a link to the release notes.'
 - 'Spec gate: run node tools/specgen/specgen.mjs check --strict --report for the release commit and pass only with 0 errors and GO in SPEC_COMPLETENESS_REPORT.md.'
 - 'Compat gate: read reports/compat.json (F17.S03.M03) for the release commit and pass only when it shows no QUALITY_COMPAT_* failure and every browser cell passes or is policy-unsupported, including the manual real-Safari and iOS checklist cells; a missing report fails closed.'
+- 'Mapping relevance check (finding 47): tools/trace accepts a covers entry of a test row only when the test text (scenario and expected cells plus the code test title after its ID) shares at least one key term with the requirement text, or when gates/mapping-reviews.yaml holds a code-owner approved review of that exact mapping whose text hash still matches; any other mapping is rejected with QUALITY_GATE_TRACE_MAPPING and does not count as coverage.'
 non_responsibilities:
 - Running the tests and generating reports (F17.S01, F17.S02); this module only reads their outputs.
 - Deployment of relays or hosting of the PWA.
 - Legal and policy review gates (F18).
+- 'Changes to the spec validator tools/specgen, which keeps checking only the covers syntax and existence; the semantic mapping check runs in tools/trace inside this release gate.'
 - 'Future: SBOM generation and signed release provenance.'
 depends_on:
 - CTR-TST-001
@@ -38,6 +40,8 @@ edge_cases:
 - The spec report says NO-GO or the strict check prints one error; the spec gate fails with QUALITY_GATE_SPEC.
 - A waiver or checklist file was committed without code-owner approval; the gate fails with QUALITY_GATE_WAIVER_UNAPPROVED and prints the committer.
 - A test listed in tests/quarantine.yaml has an active entry; the trace gate lists it as waived; once the entry is expired it fails as an expired waiver.
+- A test row lists 03.R02 in covers but its scenario and expected text share no key term with that requirement; the mapping is rejected with QUALITY_GATE_TRACE_MAPPING unless a matching approved mapping review exists.
+- A requirement text is rewritten after its mapping review was recorded; the stored text hash no longer matches, the review is stale and the mapping fails with QUALITY_GATE_TRACE_MAPPING until it is reviewed again.
 ux:
   notes: Headless CLI. Output is a table of gates with PASS or FAIL, evidence links and exit code; reports/gates.json and reports/gates.md are produced for the release notes.
 processes:
@@ -55,6 +59,7 @@ processes:
     - The a11y, budget and compat gates fail when any report is missing, older than 24 hours, from another commit SHA, or shows a violation, exceeded budget or compatibility failure.
     - 'The spec gate runs node tools/specgen/specgen.mjs check --strict --report for this commit and passes only with 0 errors and GO; the compat gate reads reports/compat.json for this commit and passes only when no QUALITY_COMPAT_* failure is present and every browser cell passes or is policy-unsupported, including the manual Safari and iOS checklist cells.'
     - 'Manual tests count only through a signed checklist file gates/manual/<version>/<testId>.yaml with result pass, approver handle, date, device, OS and engine version, and the release commit SHA, committed with code-owner approval; it replaces JUnit only for rows with level manual, and waiver and checklist commits print their approver from git metadata.'
+    - 'Mapping relevance: each covers entry counts only when the test text (scenario and expected cells of the spec row plus the code test title after its ID) and the requirement text share at least one key term, where key terms are the lowercase tokens split on characters other than letters, digits and underscore, at least 4 characters long, not in the fixed stopword list tools/gates/stopwords.txt, with a trailing s, es, ed or ing removed; otherwise it counts only through an entry in gates/mapping-reviews.yaml with testId, requirementId, reviewer handle, date and the SHA-256 of both normalized texts, committed with code-owner approval; a review whose hash no longer matches is stale, and a mapping without overlap or a valid review fails with QUALITY_GATE_TRACE_MAPPING.'
     rules:
     - V01 | Every requirement has a passing test with a matching title and covers entry, or a documented untested reason | QUALITY_GATE_TRACE_GAP
     - V02 | No test ID is used twice and every test title refers to an existing requirement | QUALITY_GATE_TRACE_DUPLICATE
@@ -66,8 +71,9 @@ processes:
     - V08 | Waivers (gates/waivers.yaml and tests/quarantine.yaml entries) are unexpired and at most 14 days long | QUALITY_GATE_WAIVER_EXPIRED
     - V09 | node tools/specgen/specgen.mjs check --strict --report reports GO with 0 errors for this commit | QUALITY_GATE_SPEC
     - V10 | reports/compat.json for this commit shows no QUALITY_COMPAT_* failure and every browser cell passes or is policy-unsupported | QUALITY_GATE_COMPAT
-    - V11 | Every waiver, quarantine and manual checklist commit is approved by a code owner and its approver is printed from git metadata | QUALITY_GATE_WAIVER_UNAPPROVED
+    - V11 | Every waiver, quarantine, manual checklist and mapping review commit is approved by a code owner and its approver is printed from git metadata | QUALITY_GATE_WAIVER_UNAPPROVED
     - V12 | Every level manual test row has a signed checklist entry with result pass, approver and this release commit SHA under gates/manual/<version>/ | QUALITY_GATE_MANUAL_MISSING
+    - V13 | Every covers entry shares a key term between test text and requirement text or has an approved mapping review with a matching text hash in gates/mapping-reviews.yaml | QUALITY_GATE_TRACE_MAPPING
   workflow_state_machine:
     requirements:
     - There is no entity lifecycle; the release process is a sequence of gates, each pass or fail, with the final verdict GO only when all pass.
@@ -96,13 +102,14 @@ processes:
     - QUALITY_GATE_WAIVER_EXPIRED | 422 | no | a waiver is expired or longer than 14 days (exit 1)
     - QUALITY_GATE_SPEC | 422 | no | spec check has errors or NO-GO (exit 1)
     - QUALITY_GATE_COMPAT | 422 | no | compat report missing, stale, from another commit or showing a QUALITY_COMPAT_* failure or failed browser cell (exit 1)
-    - QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine or manual checklist commit lacks code-owner approval (exit 1)
+    - QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine, manual checklist or mapping review commit lacks code-owner approval (exit 1)
     - QUALITY_GATE_MANUAL_MISSING | 422 | no | a level manual test row has no signed passing checklist for this release commit (exit 1)
+    - QUALITY_GATE_TRACE_MAPPING | 422 | no | a test-to-requirement mapping shares no key term with the requirement and has no valid approved mapping review (exit 1)
     note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
     example: |-
       $ pnpm gates:release --version 0.3.0
         spec          specgen --strict --report: 0 errors, GO  PASS
-        traceability  1432/1432 requirements covered (2 waived, 1 quarantined, 4 manual checklists signed by @release-owner)  PASS
+        traceability  1432/1432 requirements covered (2 waived, 1 quarantined, 4 manual checklists signed by @release-owner; 6 mappings by approved review, 0 rejected)  PASS
         audit         0 critical, 0 high, 3 moderate  PASS
         a11y          serious 0, critical 0  PASS
         budgets       relay OBS-4 PASS (reports/load.json), PWA OBS-5 LCP 1.9 s INP 140 ms CLS 0.03 JS 131 KiB PASS (reports/pwa-budgets.json)
@@ -112,7 +119,7 @@ processes:
   authorization_capabilities:
     requirements:
     - 'Gates are read-only against the repository and run with contents: read; no token or secret is needed. Attaching reports/gates.md is done after GO by the separate release-publish job, the only job allowed contents: write by the F17.S03.M01 per-job allowlist.'
-    - Waivers, quarantine entries and manual checklists require a code-owner approved commit; the gate prints the approver from git metadata and fails an unapproved commit with QUALITY_GATE_WAIVER_UNAPPROVED.
+    - Waivers, quarantine entries, manual checklists and mapping reviews require a code-owner approved commit; the gate prints the approver from git metadata and fails an unapproved commit with QUALITY_GATE_WAIVER_UNAPPROVED.
     - Audit calls use the public registry endpoint only and send no repository content.
     capabilities: []
     notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
@@ -140,6 +147,7 @@ processes:
     - T01 | Release forced through by editing the gate or waivers | gates and waivers are code-owned, waivers expire in 14 days and are listed in the report
     - T02 | Fake test titles to satisfy traceability | gate counts only tests present in a JUnit report as passed and whose spec row lists the requirement
     - T03 | Stale green reports reused | evidence must match the commit SHA and be under 24 h old
+    - T04 | Coverage padded by listing unrelated requirements in a test row covers | a mapping counts only with a shared key term or a code-owner approved mapping review whose text hash still matches (QUALITY_GATE_TRACE_MAPPING)
     abuse_controls:
     - A gate may not be disabled by environment variable in the release workflow; only waivers are allowed.
     - 'The audit gate ignores nothing silently: ignored advisories need a waiver.'
@@ -152,6 +160,7 @@ processes:
     - classrup_quality_gates_verdict{gate,outcome}
     - classrup_quality_trace_coverage_ratio{module}
     - classrup_quality_gates_duration_ms
+    - classrup_quality_trace_mappings{outcome} (outcome is overlap, review or rejected)
     logs:
     - JSON line per gate {ts, level, msg, module, gate, outcome, durationMs, code?} with counts only.
     budgets:
@@ -162,7 +171,7 @@ processes:
     - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
     - 'Gate logic is tested with synthetic repositories: full coverage, one missing test, one skipped test, a duplicate ID, an expired waiver.'
     - The audit gate is tested with recorded audit JSON for critical, high, moderate and unavailable cases.
-    fixtures: 'Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); fixed commit SHA a1b2c3d.'
+    fixtures: 'Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); a test row whose covers lists a requirement it shares no key term with, with no review, with an approved review and with a review whose text hash is stale; fixed commit SHA a1b2c3d.'
     tests:
     - T01 | unit | 01.R01,01.R03,06.R01 | generate gates.json on the full-coverage repo | schema valid; no user data fields; verdict GO
     - 'T02 | unit | 01.R02,02.R01,09.R02 | synthetic repos: gap, skipped test, duplicate ID | QUALITY_GATE_TRACE_GAP and QUALITY_GATE_TRACE_DUPLICATE; skipped test not counted'
@@ -183,18 +192,22 @@ processes:
     - T17 | unit | 02.R05 | a manual test row with a signed passing checklist for this commit, one with a checklist for another commit, and one without any | first counts as covered; the other two fail with QUALITY_GATE_MANUAL_MISSING
     - T18 | abuse | 05.R02,02.R05 | a waiver commit and a checklist commit without code-owner approval, then the same with approval | unapproved commits fail with QUALITY_GATE_WAIVER_UNAPPROVED naming the committer; approved ones pass and the report prints the approver from git metadata
     - T19 | unit | 02.R01,03.R03 | an active tests/quarantine.yaml entry for a failing test, then the same entry after its expiresAt | active entry listed as waived and the gate passes; expired entry fails with QUALITY_GATE_WAIVER_EXPIRED
+    - 'T20 | unit | 02.R06 | test rows covering a requirement with a shared key term, with no shared key term and no review, with no shared key term and an approved mapping review, and with a review whose text hash is stale after the requirement text changed | shared key term counts; no overlap without review and stale review fail with QUALITY_GATE_TRACE_MAPPING and do not count; approved matching review counts and is listed in the report'
+    - 'T21 | unit | 02.R06 | key term extraction on texts with stopwords, short tokens, plural and ing forms, error codes and mixed case | only tokens of 4 or more characters outside tools/gates/stopwords.txt remain, case-folded and with the trailing s, es, ed or ing removed; error codes stay single tokens; same input gives the same terms'
+    - T22 | abuse | 02.R06,05.R02 | mapping review commit without code-owner approval, then the same review with approval | unapproved review fails with QUALITY_GATE_WAIVER_UNAPPROVED and the mapping is not counted; approved review counts and its approver is printed from git metadata
     acceptance:
     - The release gate fails when any requirement lacks a passing test and passes at 100 percent traceability.
     - A critical or high production vulnerability or an unavailable audit blocks the release.
     - Any serious accessibility violation or exceeded budget blocks the release.
     - The gate report is attached to every release and waivers expire within 14 days.
     - A spec NO-GO, a compatibility failure, a missing compat report or a missing manual checklist blocks the release.
+    - A test-to-requirement mapping without a shared key term and without a valid approved mapping review does not count as coverage and blocks the release.
   import_export_backup_rollback:
     requirements:
     - reports/gates.json, reports/trace.json and reports/gates.md are the exports and are attached to the release.
-    - Gate input formats are JUnit XML, load report v1 (reports/load.json), PWA budget report v1 (reports/pwa-budgets.json), axe JSON, compat report v1 (reports/compat.json), the specgen check --strict --report output (SPEC_COMPLETENESS_REPORT.md), signed manual checklists (gates/manual/<version>/), tests/quarantine.yaml, gates/waivers.yaml and the audit JSON; unknown fields are ignored and unknown major versions are rejected.
+    - Gate input formats are JUnit XML, load report v1 (reports/load.json), PWA budget report v1 (reports/pwa-budgets.json), axe JSON, compat report v1 (reports/compat.json), the specgen check --strict --report output (SPEC_COMPLETENESS_REPORT.md), signed manual checklists (gates/manual/<version>/), tests/quarantine.yaml, gates/waivers.yaml, gates/mapping-reviews.yaml and the audit JSON; unknown fields are ignored and unknown major versions are rejected.
     - Rollback is a git revert of tools/gates; the release workflow then fails closed on a missing command.
     export: reports/gates.json, reports/trace.json and reports/gates.md attached to each release.
     backup: Release artifacts retain reports for 1 year; sources in git.
     migration_rollback: Report schema versioned; revert tools/gates by git revert and the release workflow fails closed.
-    import: Inputs are JUnit XML, load report v1, PWA budget report v1, axe JSON, compat report v1, the spec completeness report, signed manual checklists, quarantine and waiver files and audit JSON from the release commit, all downloaded into one reports/ directory by the release workflow; other inputs are ignored and unknown major versions rejected.
+    import: Inputs are JUnit XML, load report v1, PWA budget report v1, axe JSON, compat report v1, the spec completeness report, signed manual checklists, quarantine, waiver and mapping review files and audit JSON from the release commit, all downloaded into one reports/ directory by the release workflow; other inputs are ignored and unknown major versions rejected.

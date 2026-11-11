@@ -33,6 +33,7 @@ edge_cases:
   - The user changes the home cell a 4th time within 24 hours; the app asks for confirmation (DISCOVERY_HOME_CHANGE_CONFIRM_REQUIRED until confirmed), which is a guard against mis-taps, not a security control.
   - A share is requested for a counterparty the user has blocked; refused with BLOCKED_PARTY.
   - A precise share or one-shot GPS is requested without location_precise consent; refused with PRECONDITION_FAILED and the sheet asks for consent inline.
+  - location_precise consent is granted but the user never opens the share sheet; nothing is shared, and every later L3 or L4 share still needs its own grant naming one counterparty, a precision and a duration of at most 24 h.
   - An incoming share claims an expiry 5 days ahead; the recipient clamps it to receipt time plus 24 h and marks it clamped.
   - An incoming share claims an issue time 11 minutes in the future, or an expiry already in the past at receipt; refused with DISCOVERY_SHARE_TIME_INVALID or EXPIRED.
   - The sender revokes while the recipient is offline; the revoke statement waits in the sync outbox (prepared, then transport_acknowledged) and the recipient's copy ends when it arrives or at expiry, whichever is first.
@@ -260,6 +261,7 @@ processes:
       - There is no relay role and no relay command in this module; relays carry the encrypted envelope as opaque ciphertext and cannot read, create or alter shares.
       - A blocked party can never create an incoming share on this vault.
       - Precise sharing and one-shot GPS require a granted privacy.consent.check for purpose location_precise (N6); without it the command is refused with PRECONDITION_FAILED.
+      - A granted location_precise consent only enables precise sharing and never creates, renews, extends or widens a share; every L3 or L4 share still needs its own explicit discovery.location_share.grant by the principal for exactly one counterparty with a TTL of at most 24 h, and this module takes part in the F10.S01.M01 T20 cross-module contract test that proves it.
     capabilities:
       - "discovery.location_setting.write_own | principal | unlocked local principal; device_gps_once additionally needs location_precise consent"
       - "discovery.location_setting.read_own | principal | unlocked local principal"
@@ -317,7 +319,7 @@ processes:
       - Every requirement is covered by at least one automated test with an injected clock and a fake geolocation provider.
       - Contract tests check statements and events against the schema registry.
       - Privacy tests prove that no raw coordinates, L3 or L4 data appears in logs, events other than the share events, exports of others, or relay requests in readable form.
-    fixtures: "Principal P with DID, counterparties Q and R, fake geolocation returning 57.64911,10.40744, fake consent port, fake F11 record intake, fake relay mailbox, fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Principal P with DID, counterparties Q and R, fake geolocation returning 57.64911,10.40744, fake consent port, the F10.S01.M01 T20 cross-module contract harness with its F13.S02.M03 double, fake F11 record intake, fake relay mailbox, network capture, fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | set home from GPS once with level L1 and consent granted | stored homeCell5 u4pru, publicCell u4pr (assertPublicCell passed), raw coordinates absent from storage"
       - "T02 | unit | 02.R01 | 6-character cell, level L3, and a 4th change within 24 h without and with confirmFrequentChange | DISCOVERY_PRECISION_FORBIDDEN with nothing stored; DISCOVERY_HOME_CHANGE_CONFIRM_REQUIRED, then saved after confirmation"
@@ -340,8 +342,9 @@ processes:
       - "T19 | load | 08.R02 | 1 000 set_home and 1 000 grant calls on the reference Moto G-class device | set_home p95 <= 100 ms and grant p95 <= 300 ms excluding transport"
       - "T20 | abuse | 08.R01 | network capture during set_home, grant, revoke, receive and expiry | no telemetry or analytics request; the only network traffic is sealed statements through the outbox"
       - "T21 | unit | 01.R03,07.R01 | end a share, then try to decrypt the stored ciphertext; scan IndexedDB, logs and events after a GPS-once | per-share key absent from the keystore and decryption fails; no raw point stored or logged"
+      - "T22 | contract | 05.R05,05.R04 | cross-module contract test F10.S01.M01 T20 run with the real module: grant location_precise and advance the clock 1 h; then an explicit L4 grant to Q with ttl 2 h; then a grant input naming Q and R, a grant with ttl 25 h, and a second location_precise grant while the share is active | consent alone creates no LocationShare, no statement, no outbox entry and no network request; the explicit grant creates exactly one share to Q with effectiveExpiresAt at most creation plus 24 h; two recipients VALIDATION_FAILED; ttl 25 h DISCOVERY_SHARE_TTL_INVALID; the second consent grant leaves the share's effectiveExpiresAt unchanged"
     acceptance:
-      - All tests T01-T21 pass in CI.
+      - All tests T01-T22 pass in CI.
       - No location finer than L2 appears in any public projection, event class below P3, log or relay-readable payload.
       - Every share ends by expiry or revocation locally within 30 seconds with its per-share key deleted, and the UI states what the other device may still hold.
   import_export_backup_rollback:

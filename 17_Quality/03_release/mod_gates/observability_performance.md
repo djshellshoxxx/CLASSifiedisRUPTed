@@ -16,6 +16,7 @@
 - classrup_quality_gates_verdict{gate,outcome}
 - classrup_quality_trace_coverage_ratio{module}
 - classrup_quality_gates_duration_ms
+- classrup_quality_trace_mappings{outcome} (outcome is overlap, review or rejected)
 
 **Logs**
 - JSON line per gate {ts, level, msg, module, gate, outcome, durationMs, code?} with counts only.

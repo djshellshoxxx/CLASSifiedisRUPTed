@@ -50,6 +50,10 @@ compileFilter({ distanceKm: 25, center: "u4pru" }, now)
 -> { sql: "(d.geo_cell IN (?,…) OR (length(d.geo_cell) = 4 AND d.geo_cell IN (?,…)))", params: [C5…, "u4pr", "u4px", …] }
 compileFilter({ distanceKm: 100, center: "u4pru" }, now)
 -> { sql: "d.geo_cell4 IN (?,…)", params: ["u4nz", "u4pr", "u4px", …] }
+compileFilter({ listingKinds: ["sell"], inStock: true, barterAcceptable: true }, now)
+-> { sql: "d.listing_kind IN (?) AND d.in_stock = ? AND d.barter = ?", params: ["sell", 1, 1] }
+compileFilter({ listingKinds: ["wanted"], wantAcceptsCondition: "good" }, now)
+-> { sql: "d.listing_kind IN (?) AND d.want_min_condition IN (?,?,?,?)", params: ["wanted", "good", "fair", "poor", "for_parts"] }
 ```
 
 ## Verification

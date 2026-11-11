@@ -26,6 +26,7 @@
 | T01 | Release forced through by editing the gate or waivers | gates and waivers are code-owned, waivers expire in 14 days and are listed in the report |
 | T02 | Fake test titles to satisfy traceability | gate counts only tests present in a JUnit report as passed and whose spec row lists the requirement |
 | T03 | Stale green reports reused | evidence must match the commit SHA and be under 24 h old |
+| T04 | Coverage padded by listing unrelated requirements in a test row covers | a mapping counts only with a shared key term or a code-owner approved mapping review whose text hash still matches (QUALITY_GATE_TRACE_MAPPING) |
 
 **Abuse controls**
 - A gate may not be disabled by environment variable in the release workflow; only waivers are allowed.

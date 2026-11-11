@@ -6,11 +6,11 @@
 
 ## Purpose
 
-Providers keep service offerings in their local vault as P3 records (skills from the shared taxonomy, an hourly or fixed rate, a coarse L2 service area, self-attested credentials) attached to a service-type listing. Publishing checks federation_publish consent for each user-selected relay, signs a public P0 projection (statement classrup.services.offering/v1, fields from the F11.S01.M01 allowlist) and hands it to those relays for indexing; revising a published offering or revoking its signing key re-signs the projection with seq+1 and prev. Withdrawing a published offering emits services.offering.withdrawn, from which F11.S01.M02 issues the single signed tombstone; withdrawing a never-published draft stays inside the vault. Credentials are claims by the provider and are always labelled self-attested; nobody verifies licences. Scheduling is F03.S01.M02 (read at publish for the provider time zone), quotes and bookings F03.S02.M01. Per ADR-0016 the vault is authoritative; a relay only hosts the signed projection and may refuse or remove it by its own policy, which is recorded only as that relay's sync state.
+Providers keep service offerings in their local vault as P3 records (skills from the shared taxonomy, an hourly or fixed rate, a coarse L2 service area, self-attested credentials) attached to a service-type listing. Publishing checks federation_publish consent for each user-selected relay, builds a public P0 projection (statement classrup.services.offering/v1, fields from the F11.S01.M01 allowlist), has it signed and stored through the F11.S01.M01 StatementPublisherPort (implemented by F11.S01.M02, which signs with an authorized device key of the provider and allocates the envelope seq and prev) and hands it to those relays for indexing; revising a published offering or revoking its signing key republishes the projection through the same port with the offering's own seq+1 and prev. Withdrawing a published offering emits services.offering.withdrawn, from which F11.S01.M02 issues the single signed tombstone; withdrawing a never-published draft stays inside the vault. Credentials are claims by the provider and are always labelled self-attested; nobody verifies licences. Scheduling is F03.S01.M02 (read at publish for the provider time zone), quotes and bookings F03.S02.M01. Per ADR-0016 the vault is authoritative; a relay only hosts the signed projection and may refuse or remove it by its own policy, which is recorded only as that relay's sync state.
 
 ## Responsibilities
 
-- Own the ServiceOffering record in the provider vault and its lifecycle draft, published, withdrawn; sign the public projection with the provider device key and re-sign it on every published revision and on revocation of the signing key.
+- Own the ServiceOffering record in the provider vault and its lifecycle draft, published, withdrawn; publish the public projection through the F11.S01.M01 StatementPublisherPort (signed by F11.S01.M02 with an authorized device key of the provider) and republish it on every published revision and on revocation of the signing key; this module never calls a signing primitive, holds a key or allocates an envelope seq.
 - Validate skill codes against the taxonomy (F18.S01.M03), rate Money against the currency registry (F09.S03.M01) and the service area as exactly L2 (geohash 5) through F06.S02.M01 assertPublicCell.
 - Store credentials as self-attested claims with an optional evidence attachment reference; never mark them verified.
 - Enforce local limits - 10 skills, 10 credentials, 20 published offerings per provider vault.
@@ -23,7 +23,7 @@ Providers keep service offerings in their local vault as P3 records (skills from
 - Weekly slots, exceptions and holds (F03.S01.M02 availability).
 - Quotes, bookings and milestones (F03.S02.M01, F03.S02.M02); F03.S02.M01 closes open quotes when it consumes services.offering.withdrawn.
 - Search ranking and indexing (F06.S01.M01 consumes services.offering.published).
-- Tombstone issuing and relay storage of the projection as a FederatedRecord (F11.S01.M02).
+- Signing statements, allocating envelope seq and prev, tombstone issuing and relay storage of the projection as a FederatedRecord (F11.S01.M02 behind the F11.S01.M01 StatementPublisherPort); this module keeps only the offering's own projection seq and prev as payload members.
 - Central suspension or takedown of providers; none exists (N20, ADR-0016 section 8), and a relay's refusal or removal is recorded only in that relay's sync state.
 - Future: third-party credential verification and licence registry lookups.
 
@@ -79,7 +79,7 @@ F01.S01.M01, F01.S01.M03, F03.S01.M02, F18.S01.M03, F09.S03.M01, F06.S02.M01, F0
 | PS-029-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-029-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-029-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-029-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-029-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-029-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-029-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-029-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -91,6 +91,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T21 pass in CI.
 - No credential is ever displayed without the self-attested label and no verified flag exists in any payload.
 - No public payload carries a service area other than a geohash 5 cell, and every published revision is re-signed with a higher seq.

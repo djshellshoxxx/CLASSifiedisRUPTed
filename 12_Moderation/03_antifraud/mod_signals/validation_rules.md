@@ -22,6 +22,7 @@
 | V05 | manual signals carry a reason of 10..500 code points and the author is the local principal or a relay moderator | FORBIDDEN |
 | V06 | total manual weight per subject within 30 days is at most 20 in absolute value | MODERATION_SIGNAL_MANUAL_CAP |
 | V07 | the subject of an event-derived signal comes from a named payload field of the source event and differs from the vault's local principal | VALIDATION_FAILED |
+| V08 | SignalPort.record names a kind of the module table registered for the calling module (proximity_pattern for F06.S02.M03), a did:key subjectKey, a sourceRef of 1..128 characters and an evidenceRef without location cells, and runs on a relay | VALIDATION_FAILED |
 
 ## Verification
 
@@ -32,6 +33,7 @@
 | TEST-PS-101-09.T14 | integration | PS-101-02.R04, PS-101-01.R02 | commerce.deal.completed with parties [P, B]; payment.disputed where P is the payer; auctions.result.voided without subjectKeys in a vault | deal_completed recorded only for B; no signal about P; nothing recorded for the void; unresolved_subject metric increments |
 | TEST-PS-101-09.T17 | abuse | PS-101-07.R01, PS-101-02.R04 | F12 privacy suite: scan federation payloads, public projections, notifications, relay and vault logs after ingesting every mapped event | no Signal field, subject key, source key or weight appears in any of them |
 | TEST-PS-101-09.T19 | integration | PS-101-02.R04 | commerce.dispute.resolved refund_claimed, then no_fault_close for another case, then withdrawn for a third | refund_agreed against the respondent of the matching dispute_opened signal; compensations for the other two; no dispute_lost kind exists |
+| TEST-PS-101-09.T20 | contract | PS-101-04.R06, PS-101-02.R04 | F06.S02.M03 contract fixture calls SignalPort.record with proximity_pattern for a token caller twice with one sourceRef, for an anonymous caller without did:key, with an unregistered kind, with a cell in evidenceRef, and over HTTP | one signal weight 10 half-life 7 days and duplicate true on the repeat, moderation.signal.recorded once; VALIDATION_FAILED three times; no route |
 
 ## Dependencies
 

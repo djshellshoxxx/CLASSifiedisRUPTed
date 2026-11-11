@@ -26,13 +26,13 @@ Schema `classrup.mutiny.cycle_lock/v1` · storage **device** · privacy **P2** �
 | kind | enum — reserve \| release |
 | direction | enum — own \| peer |
 | revisionHash | cid — head revision digest the reservation was made against, carried in the statement extension ext.revisionHash |
-| items | array — 1..5 items {inventoryItemId uuidv7, listingId uuidv7, listingCid cid, variantId? uuidv7, quantity int 1..99, holdId? uuidv7}; listingId, variantId and quantity form the InventoryPort line; holdId only on own |
+| items | array — 1..5 items {inventoryItemId uuidv7, listingId uuidv7, listingCid cid, variantId? uuidv7, quantity int 1..99, holdId? uuidv7}; inventoryItemId and quantity form the InventoryPort line {inventoryItemId, quantity}; listingId, listingCid and variantId are the statement item references; holdId only on own |
 | expiresAt | timestamp — absolute; min(consentDeadline + executionWindowMs, issue time + 30 d), never extended; evaluated on the local clock |
 | holdRenewedUntil? | timestamp — own only; current expiry of the local hold, renewed internally up to expiresAt and never past the hold's maxExpiresAt |
 | issuedAtClaim | timestamp — signer's clock, a claim |
 | status | enum — active \| recovery_held \| released \| converted \| expired \| superseded \| conflicted |
 | releaseReason? | enum — declined \| withdrawn \| cancelled \| completed \| recovered \| item_lost \| fork_frozen \| superseded \| subject_ended |
-| reservationCid | cid — cid of the classrup.bazaar.reservation/v1 statement (kind reserve) or of the classrup.mutiny.reservation_release/v1 notice (kind release) |
+| reservationCid | cid — cid of the classrup.bazaar.reservation/v1 statement (kind reserve) or of the release notice (kind release): classrup.mutiny.reservation_release/v1, the alias of classrup.bazaar.reservation_release/v1 |
 | supersedesCid? | cid — earlier reservation of the same signer and subject that this one replaces (statement extension) |
 | releasesCid? | cid — required when kind is release; the reservation the notice releases |
 | sig | string — Ed25519 signature (base64url) per CTR-FED-001 FED-2 |
@@ -65,6 +65,7 @@ CREATE UNIQUE INDEX mutiny_lock_cid ON mutiny_cycle_lock(tenant_id, reservation_
 | TEST-PS-023-09.T04 | integration | PS-023-06.R02, PS-023-01.R02, PS-023-09.R03 | two concurrent reserves of the same quantity-1 item for different subjects | exactly one succeeds, the other MUTINY_LOCK_CONFLICT without naming the first |
 | TEST-PS-023-09.T16 | integration | PS-023-04.R03, PS-023-01.R01 | 2-, 3-, 4- and 6-party fixtures | all-givers-reserved flag true only when every giver has a valid unexpired statement |
 | TEST-PS-023-09.T18 | integration | PS-023-03.R01, PS-023-01.R03 | 17-day reservation with injected clock across day 13 and day 17 | hold renewed once with bazaar.inventory.renew, no statement re-signed, lock expires at the absolute expiresAt |
+| TEST-PS-023-09.T23 | contract | PS-023-04.R06, PS-023-04.R05, PS-023-01.R01 | reserve with lines {inventoryItemId, quantity} and audience [{did, mailboxId}]; release after decline, after fork_frozen and after an F01 release with reason deal_cancelled; ingest of an alias notice and of a bazaar release with holder cycle | hold and issue_reservation called with those shapes; notices typed classrup.mutiny.reservation_release/v1 with payload {releasesCid, holder {type: cycle, id}, reason} and reasons released, frozen and deal_cancelled; the registry resolves the alias to classrup.bazaar.reservation_release/v1; both notices release the peer lock and reach record_peer_reservation; no notice for converted locks or at the signed expiresAt |
 
 ## Dependencies
 

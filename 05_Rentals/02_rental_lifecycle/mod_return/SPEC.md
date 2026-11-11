@@ -65,7 +65,7 @@ When the handoff is attested, each vault starts a return record due at the reser
 - Commands: `rentals.return.report`, `rentals.return.attest`, `rentals.return.record_received`, `rentals.return.contest`, `rentals.return.adjust_late_fee`, `rentals.return.waive_damage`, `rentals.return.declare_not_returned`, `rentals.return.sign_completion`, `rentals.return.renegotiate`, `rentals.return.receive`
 - Queries: `rentals.return.get`, `rentals.return.get_for_reservation`
 - Emits: `rentals.return.attested`, `rentals.rental.overdue`, `rentals.rental.closed`
-- Consumes: `rentals.handoff.attested`, `rentals.damage.claimed`, `rentals.damage.resolved`, `rentals.deposit.agreed`, `rentals.deposit.funded`, `rentals.deposit.released`, `commerce.deal.cancelled`, `comms.attachment.deleted`, `identity.block.added`, `privacy.deletion.completed`
+- Consumes: `rentals.handoff.attested`, `rentals.damage.claimed`, `rentals.damage.resolved`, `rentals.deposit.agreed`, `rentals.deposit.funded`, `rentals.deposit.released`, `commerce.deal.cancelled`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -78,7 +78,7 @@ F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F1
 | PS-043-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-043-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-043-03 | [Workflow state machine](workflow_state_machine.md) | 7 |
-| PS-043-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-043-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-043-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-043-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-043-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |

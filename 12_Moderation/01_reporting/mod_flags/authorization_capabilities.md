@@ -24,6 +24,10 @@
 | moderation.report.read_status_own | member | signed request by the reporterKey of the report on this relay |
 | moderation.report.read_ledger | operator | in-process relay call by F12.S02.M01 and F12.S01.M03 conflict checks; not routable over HTTP |
 | moderation.report.link_case | operator | in-process relay call by F12.S02.M01 case intake; receipt exists on this relay; not routable over HTTP |
+| moderation.localhide.add | local principal | vault unlocked; the hidden author is not the local principal |
+| moderation.localhide.remove | local principal | vault unlocked; the hide row belongs to this vault |
+| moderation.localhide.read_own | local principal | vault unlocked |
+| moderation.localhide.filter | local principal | in-process vault read by local views (F06.S01.M02, F06.S02.M03) for the unlocked local principal; not routable over HTTP and never available on a relay |
 | moderation.advisorysubscription.set | local principal | vault unlocked; publisher key not revoked |
 | moderation.advisorysubscription.sync | local principal | vault unlocked; subscription exists |
 | moderation.advisorysubscription.read_own | local principal | vault unlocked |

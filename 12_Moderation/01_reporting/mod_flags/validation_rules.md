@@ -26,6 +26,8 @@
 | V09 | receive side: the signed relayId equals the receiving relay DID and the body is sealed to its current moderation key | FORBIDDEN |
 | V10 | receive side: a reportId already held with a different statementDigest is refused; the same digest returns the stored receipt | IDEMPOTENCY_KEY_REUSED |
 | V11 | a target of type message, offer or cycle_proposal is sent metadata_only unless the reporter approved a participant disclosure preview that reached export prepared (F12.S01.M02) | PRECONDITION_FAILED |
+| V12 | a message report seals the message key K only when disclosure is participant_disclosure, the approved redact/1 preview removed nothing and F12.S01.M02 recorded commitmentStatus verified; metadata_only, reporter_claim and redacted disclosures never carry K | PRECONDITION_FAILED |
+| V13 | localhide.add names exactly one of targetRef { type, id, cid? } (a target type of the report taxonomy) or authorDid (did:key), which is not the local principal | VALIDATION_FAILED |
 
 ## Verification
 
@@ -34,6 +36,8 @@
 | TEST-PS-094-09.T02 | unit | PS-094-02.R01, PS-094-02.R02, PS-094-02.R03 | a report with an unknown field in the vault and at the relay; each rule V02–V11 violated in turn on vault and relay | unknown field returns VALIDATION_FAILED in both stores; the documented error code is returned and nothing is stored; unknown relay returns MODERATION_RELAY_UNKNOWN and a 513 KiB statement PAYLOAD_TOO_LARGE |
 | TEST-PS-094-09.T17 | abuse | PS-094-02.R04 | relay X forwards a received report statement to relay Y; X receives a replay inside a new outer request | Y refuses with FORBIDDEN; X returns the stored receipt; no second case anywhere |
 | TEST-PS-094-09.T23 | unit | PS-094-02.R02 | reporterClaim on an unsigned message; reporterClaim on a listing | message filed with disclosure reporter_claim and labelled; listing refused with MODERATION_TARGET_UNAVAILABLE |
+| TEST-PS-094-09.T27 | contract | PS-094-04.R07, PS-094-01.R06, PS-094-03.R05, PS-094-02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault |
+| TEST-PS-094-09.T28 | integration | PS-094-04.R08, PS-094-02.R02 | report message M metadata-only, with a redacted disclosure (phone removed) and with an unredacted disclosure; then force K onto the redacted disclosure | header targetCid equals messageCid and the metadata carries the signed envelope without wrapped keys; no K in the first two; the third seals K and the relay records commitment verified; the forced case returns PRECONDITION_FAILED |
 
 ## Dependencies
 

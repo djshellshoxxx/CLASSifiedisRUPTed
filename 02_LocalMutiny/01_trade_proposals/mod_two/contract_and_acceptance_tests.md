@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-015-09.R01** Every requirement of this module is covered by at least one automated test.
-- **PS-015-09.R02** Contract tests verify the withdrawal statement schema, the F08 consent fields this module relies on (subjectType, statement key, hex digest), the reservation holder and the sync-state progression against fake relays.
+- **PS-015-09.R02** Contract tests verify the withdrawal statement schema, the F08 consent fields this module relies on (subjectType, statement key, statement locale, subjectRevisionHash as the contentHash cid, aliasOf), the reservation holder and the sync-state progression against fake relays.
 - **PS-015-09.R03** The two-vault flow is tested end to end with two in-memory vaults, a fake relay and an injected clock, including forks and clock disagreement.
 
 ## Specification
@@ -43,12 +43,13 @@ See the module test table below (all processes).
 | TEST-PS-015-09.T21 | integration | PS-015-06.R03, PS-015-04.R03 | Bob counters (own lock superseded); a peer double promise names the proposal | counter does not withdraw the proposal; conflict_detected freezes it and own reservation is released with fork_frozen |
 | TEST-PS-015-09.T22 | unit | PS-015-02.R02, PS-015-02.R03 | V01 with the principal's own block, and a proposal sent to a recipient who blocked the proposer | BLOCKED_PARTY for the own block; recipient vault drops the proposal silently and emits nothing |
 | TEST-PS-015-09.T23 | integration | PS-015-07.R04, PS-015-07.R02 | F10 export, deletion and retention sweep with a pseudonymized erased counterparty | section mutiny.proposals exported; erased DID replaced by the deletion pseudonym; signatures still verify; quarantined statements purged after 30 days |
-| TEST-PS-015-09.T24 | contract | PS-015-04.R04 | F11.S01.M01 registry lookup for each statement schema named here | registered signer role matches; consent uses subjectType mutiny_proposal and key consent.mutiny.proposal.accept.v1 with hex digest equal to the base64url-decoded contentHash |
+| TEST-PS-015-09.T24 | contract | PS-015-04.R04 | F11.S01.M01 registry lookup for each statement schema named here | registered signer role matches; consent uses subjectType mutiny_proposal and key consent.mutiny.proposal.accept.v1 with subjectRevisionHash equal to the contentHash cid; a hex-encoded digest is not counted |
 | TEST-PS-015-09.T25 | integration | PS-015-03.R02, PS-015-02.R02 | Bob tries to accept an imbalance not in the head snapshot, then counters with acceptedImbalances naming himself | first refused; Alice's vault verifies Bob's consent on the new digest as his signed acceptance and feasibility C05 passes |
+| TEST-PS-015-09.T26 | contract | PS-015-04.R05, PS-015-09.R02 | F08 shared SubjectCanonicalizerPort conformance suite against the mutiny_proposal registration; comms.consent.received for Bob's consent followed by a duplicate whose aliasOf names it | canonicalBytes equals F02.S01.M04 canonicalBytes and its ID-3 cid equals headRevisionHash; currentRevision returns the head; partyRole returns party for Alice and Bob and none for Carol; isCommitted false while open and true after acceptance; statementLocale recorded; the alias is attached and Bob's consent counts once |
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - A party is never shown as bound to a revision unless a valid signature on that exact hash was verified in the viewing vault.
 - Forks and clock disagreement always end in frozen or expired, never in acceptance.
 

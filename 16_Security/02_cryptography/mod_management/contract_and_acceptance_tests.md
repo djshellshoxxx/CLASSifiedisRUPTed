@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-129-09.T01 | unit | PS-129-01.R01, PS-129-01.R02, PS-129-01.R04, PS-129-04.R02 | identity.portable_doc.published (received) adding Kq for Q; identity.device_key.added for own K2 | counterparty and own KeyRecords stored active with authority f07_identity, keyId equals thumbprint, security.key.registered carries publicKey |
-| TEST-PS-129-09.T02 | unit | PS-129-02.R01, PS-129-02.R03 | each rule V01–V08 violated | documented error code and nothing stored |
+| TEST-PS-129-09.T02 | unit | PS-129-02.R01, PS-129-02.R03 | each rule V01–V09 violated | documented error code and nothing stored |
 | TEST-PS-129-09.T03 | property | PS-129-01.R03, PS-129-03.R01, PS-129-09.R02 | random sequences of revocations, pending periods, counter-revocations, root decisions, expiries and purges | revoked and expired never change; a revoked key never returns, also after its KeyRecord is purged |
 | TEST-PS-129-09.T04 | integration | PS-129-03.R03, PS-129-06.R03 | expiry sweep missed for a VAPID key; revocation of peer key Z arrives before federation.peer.added | verification refuses the expired key; Z's hash is in the revoked-key set and the key is recorded revoked when it appears |
 | TEST-PS-129-09.T05 | integration | PS-129-03.R02, PS-129-03.R04 | F07 reports K3 revoking K1 (pending), K1 counter-revoking K3 (contested) and a root decision; a test injects a revocation without any F07 event | the cache mirrors revocation_pending for 7 days, contested and the root outcome; the injected change is refused |
@@ -38,10 +38,15 @@ See the module test table below (all processes).
 | TEST-PS-129-09.T16 | integration | PS-129-04.R04, PS-129-01.R05 | get for a keyId; get_status for a user key; lookup of an agreement key | publicKey, algorithm and purpose returned; KeyStatusPort called exactly once with (did, publicKey, at) and freshness added; no agreement record exists |
 | TEST-PS-129-09.T17 | unit | PS-129-07.R01 | content scan of a published revocation list | only key hashes, DIDs, document references, reasons and times; no IPs, handles, labels or notes |
 | TEST-PS-129-09.T18 | integration | PS-129-07.R02 | purge a revoked KeyRecord after RET-EVIDENCE, then present the same key again | KeyRecord gone; revoked-key set entry kept; CONFLICT_STATE |
+| TEST-PS-129-09.T19 | integration | PS-129-01.R06, PS-129-04.R07 | relay records P's account_deleted revocation of K1 listing cids c1 and c2 through record_revocation, then receives statements c1 and c3 signed by K1; get_status with statementCid c1 and c3; F07 later reports K1 revoked by the root key for compromise | c1 finalListed true and accepted by F16.S02.M03 verify; c3 finalListed false and refused with SECURITY_KEY_REVOKED; after the compromise report c1 finalListed false |
+| TEST-PS-129-09.T20 | unit | PS-129-01.R06, PS-129-02.R01 | account_deleted revocation with 121 cids; finalCids on a revocation with reason lost; a valid one with 120 cids serialized as a CTR-FED-001 envelope | VALIDATION_FAILED twice; the 120-cid statement verifies and stays under the 8 KiB relay statement limit |
+| TEST-PS-129-09.T21 | contract | PS-129-04.R06 | security.key.revoked for a VAPID key and for a device key; a consumer stub that matches on purpose | both payloads carry keyId, purpose and relationship; the stub expires the VAPID subscriptions without a get_status call |
+| TEST-PS-129-09.T22 | unit | PS-129-01.R07 | own key list, counterparty key detail, relay operator view and revoke confirmation rendered for F07.S01.M01 fingerprint vectors | every fingerprint equals fingerprintOf (16 base58btc characters, or the 8-word form on request); no keyId or did:key prefix is shown |
+| TEST-PS-129-09.T23 | unit | PS-129-02.R01, PS-129-03.R02 | revocation signed by the root key decrypted from a recovery kit; by another active device key, then confirmed by the root key; by the revoked key itself; two device keys revoking each other | immediate; pending until the root confirmation, then revoked; immediate; both contested until a root-key decision |
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI.
+- All tests T01–T23 pass in CI.
 - A revoked key can never become active again, also after its record is purged, and verification always reports freshness of revocation knowledge from list issuedAt.
 - User-key status never differs from F07.S02.M01, and a stolen linked device key cannot revoke or add keys on its own.
 

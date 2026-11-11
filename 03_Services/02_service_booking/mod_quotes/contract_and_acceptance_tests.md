@@ -39,7 +39,7 @@ See the module test table below (all processes).
 | TEST-PS-032-09.T17 | property | PS-032-01.R02 | random hourly rates and estimatedMinutes | total equals rate times estimatedMinutes divided by 60 rounded HALF_EVEN through F09.S03.M03 and is computed once |
 | TEST-PS-032-09.T18 | integration | PS-032-04.R01 | crash injected between statement signing and the sync outbox write for every command | neither the state change nor the outbox entry persists |
 | TEST-PS-032-09.T19 | integration | PS-032-03.R04 | two vaults; provider confirmation delayed by 8 h past the client timeout, and a second run with skewed clocks | client signs a confirmation_timeout cancellation at 24 h; provider refuses confirm after receipt plus 24 h minus 5 min; a crossing confirmation moves the provider booking to conflicted with the slot committed and the client booking shows both statements; nothing quarantined |
-| TEST-PS-032-09.T20 | integration | PS-032-03.R05 | dispute opened on confirmed and on in_progress bookings, then each F09 resolution (no_fault_close, refund_claimed, return_agreed, enforcement_referral, lapsed) and a withdrawal | booking returns to its pre-dispute status; no obligation or fee changes; completed and cancelled bookings get only the overlay |
+| TEST-PS-032-09.T20 | integration | PS-032-03.R05 | dispute opened on confirmed and on in_progress bookings, then each F09 resolution (no_fault_close, refund_claimed, return_agreed, enforcement_referral, lapsed), a resolution carrying a cancelled disposition, and a withdrawal | booking returns to its pre-dispute status; the cancelled disposition only prompts a mutual cancellation; no obligation or fee changes; completed and cancelled bookings get only the overlay |
 | TEST-PS-032-09.T21 | integration | PS-032-03.R06 | propose mutual cancellation of an in_progress booking, counter-sign it, and a run where verify reports conflicted | cancelled only when verify is valid for both; conflicted consent moves the booking to conflicted |
 | TEST-PS-032-09.T22 | integration | PS-032-03.R03 | quote valid 72 h accepted at hour 71 and confirmed at hour 80 | hold extended on acceptance receipt; booking confirmed with the slot committed |
 | TEST-PS-032-09.T23 | abuse | PS-032-05.R02 | provider-signed booking_cancellation with reason client_request; client-signed quote_decline with reason provider_request | both quarantined with SERVICES_STATEMENT_INVALID; no fee assigned |
@@ -49,10 +49,11 @@ See the module test table below (all processes).
 | TEST-PS-032-09.T27 | integration | PS-032-07.R05 | block added then statements from the blocked DID; privacy.deletion.completed for the counterparty; export | statements dropped with no reply; counterparty pseudonymized; export section services.bookings present |
 | TEST-PS-032-09.T28 | abuse | PS-032-07.R06 | request description containing a street address; L4 share sent after booking | warning shown before sending; share TTL ≤ 24 h, purged at TTL and absent from the evidence pack |
 | TEST-PS-032-09.T29 | abuse | PS-032-01.R03 | booking_confirmation whose plan changes one milestone amount | quarantined with SERVICES_STATEMENT_INVALID; booking stays awaiting_confirmation |
+| TEST-PS-032-09.T30 | contract | PS-032-04.R05 | provider confirms a booking and the client vault ingests the confirmation; both services.booking.confirmed events checked against the F07.S03.M01 consumer schema | each carries contextId = bookingId, contextType booking, contextCid = confirmationCid and parties with exactly one client and one provider DID; both vaults emit identical values |
 
 ## Acceptance criteria
 
-- All tests T01–T29 pass in CI.
+- All tests T01–T30 pass in CI.
 - No booking is ever shown as confirmed without the provider's verified signed confirmation held in the vault.
 - Duplicated, reordered or replayed statements never change state twice, and a booking never stays disputed after its case is resolved or withdrawn.
 

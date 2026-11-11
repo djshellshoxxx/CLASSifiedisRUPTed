@@ -15,7 +15,7 @@
 - **export:** Section moderation.signals in classrup-export/v1 (vault only, ExportSectionPort): one line per unexpired signal including sourceKey and reason text for manual ones.
 - **import:** Signals import with sourceModule import and weight clamped to ±20; duplicates by (kind, sourceEventId) are skipped; expired ones are dropped; signals about the importing principal are dropped.
 - **backup:** Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) covers relay signals.
-- **migration rollback:** Additive fields only in v1 (sourceKey, kinds refund_agreed and report_dismissed); the mapping table moves from signals/1 to signals/2 for new events only; rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0.
+- **migration rollback:** Additive fields only in v1 (sourceKey, kinds refund_agreed, report_dismissed, damage_agreed and proximity_pattern); the mapping table moves from signals/2 to signals/3 for new events only (rentals.damage.resolved replaces rentals.damage.claimed, whose stored damage_claimed rows are read as damage_agreed until they expire; no-show contradictions; host-policy actions skipped; module table); rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

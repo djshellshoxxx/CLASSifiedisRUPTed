@@ -11,6 +11,7 @@
 - **PS-107-03.R03** Expiry happens 365 days after grant and is enforced by the relay sweep independent of the app; the vault applies it from its own clock or from the relay-signed withdrawal receipt with via expired.
 - **PS-107-03.R04** Withdrawals made at the relay (unsubscribe link, verified complaint, relay policy, expiry) reach the vault as relay-signed withdrawal receipts fetched with notify.channel.list_changes and applied with notify.channel.apply_relay_change.
 - **PS-107-03.R05** During a pending deletion the consent shows paused, derived from privacy.deletion.assert_not_pending with nothing stored, and at execution the DeletionPort sign step signs withdrawals with via account_deletion for every granted consent and queues them to each relay before any key is revoked or destroyed.
+- **PS-107-03.R06** The 365-day expiry asks the user to reconfirm the channel only - reconfirmation creates a new ChannelConsent and statement linked to the still-granted F10 consent of the same purpose and relay, never re-asks, re-grants or withdraws that F10 consent, and an expiry (via expired) leaves the F10 consent granted; if that F10 consent was withdrawn meanwhile, the reconfirm control is replaced by the F10 grant flow.
 
 ## Specification
 
@@ -21,7 +22,7 @@ Initial **granted**; terminal **withdrawn**, **expired**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | granted -> withdrawn | notify.channel.opt_out (settings); notify.channel.apply_relay_change with via unsubscribe_link or relay_policy; privacy.consent.withdrawn for the matching purpose and relay (privacy_withdrawal); DeletionPort sign step (account_deletion) | withdrawal statement queued unless the change came from the relay; emits notify.channel.opted_out (vault-local) with via |
-| granted -> expired | expiresAt reached on the vault clock, or apply_relay_change with via expired | vault prompts reconfirmation; emits notify.channel.opted_out with via expired |
+| granted -> expired | expiresAt reached on the vault clock, or apply_relay_change with via expired | vault prompts reconfirmation of the channel only; the F10 consent is unchanged; emits notify.channel.opted_out with via expired |
 
 ```mermaid
 stateDiagram-v2
@@ -53,7 +54,7 @@ stateDiagram-v2
 ### Timeouts and scheduled transitions
 
 - Relay sweep every 5 minutes marks consents past expiresAt as expired.
-- Vault prompts reconfirmation 14 days before expiry.
+- Vault prompts reconfirmation of the channel 14 days before expiry; the F10 consent is not re-asked.
 - The vault calls notify.channel.list_changes at app open, every 15 minutes while open and on each service-worker wake.
 
 ## Verification
@@ -64,6 +65,7 @@ stateDiagram-v2
 | TEST-PS-107-09.T07 | integration | PS-107-06.R01, PS-107-06.R02, PS-107-06.R03, PS-107-03.R04 | register twice, unsubscribe twice, vault offline during a relay unsubscribe then list_changes | single registration and one receipt; peer_accepted only after the acceptance signature; apply_relay_change withdraws with via unsubscribe_link |
 | TEST-PS-107-09.T16 | integration | PS-107-03.R05, PS-107-04.R06 | deletion requested, cancel on day 13; a second request executed; DeletionPort plan, export section and retention purge with F10 doubles | during grace consents show paused and nothing reaches relays; cancel restores granted with no event; at execution withdrawals with via account_deletion are queued to every relay before destroy_keys; section exported; records pseudonymized when kept |
 | TEST-PS-107-09.T17 | integration | PS-107-03.R03 | consent passes expiresAt while the app is closed | relay sweep expires it, issues a receipt with via expired and emits relay-local opted_out; vault applies it on next sync with via expired |
+| TEST-PS-107-09.T20 | integration | PS-107-03.R06, PS-107-03.R03 | push consent at R reaches 351 days, then expiresAt, with PC1 still granted; user reconfirms; a second run where PC1 was withdrawn before reconfirmation | prompt names the channel only; reconfirmation creates a new record and statement linked to PC1 without any F10 prompt or change; opted_out via expired leaves PC1 granted; with PC1 withdrawn the F10 grant flow is shown instead of reconfirm |
 
 ## Dependencies
 

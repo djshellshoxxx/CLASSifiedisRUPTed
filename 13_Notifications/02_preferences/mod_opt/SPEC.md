@@ -15,7 +15,7 @@ Per-channel consent for push and email notifications. The user's vault records a
 - Require the F10 link - call privacy.consent.check at opt-in, match privacy.consent.withdrawn by purpose and scope.relayId, and re-link on privacy.consent.granted for the same purpose and scope.
 - Derive and verify one-click unsubscribe tokens at the relay, serve UnsubscribeTokenPort and RelayWithdrawalPort to F13.S01.M02, and sign classrup.notify.channel_withdrawal_receipt/v1 with the relay key for every withdrawal made at the relay.
 - Serve notify.channel.list_changes so vaults fetch relay receipts, and apply them in the vault with notify.channel.apply_relay_change.
-- Expire each consent 365 days after grant at the relay and prompt the user to reconfirm.
+- Expire each consent 365 days after grant at the relay and prompt the user to reconfirm the channel only, leaving the linked F10 consent as it is.
 
 ## Not responsible for
 
@@ -78,9 +78,9 @@ F10.S01.M01, F07.S01.M01, F07.S02.M01, F11.S01.M01, F11.S03.M01, F15.S01.M01, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-107-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-107-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-107-02 | [Validation rules](validation_rules.md) | 5 |
-| PS-107-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
+| PS-107-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
 | PS-107-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-107-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-107-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
@@ -93,6 +93,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T18 pass in CI.
+- All tests T01 to T20 pass in CI.
 - No push or email is ever sent without a granted, unexpired, registered consent.
 - Unsubscribe works with one click and no login, cannot grant consent, and reaches the vault as a relay-signed receipt.

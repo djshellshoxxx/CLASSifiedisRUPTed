@@ -3,8 +3,8 @@ id: F02.S03.M01
 scope: MVP
 summary: >-
   Turns a suggestion (or an accepted two-party proposal) into a Cycle that every participant holds in their own vault. Each participant consents through
-  F08.S02.M02 comms.consent.sign (subjectType mutiny_cycle, statement key consent.mutiny.cycle.commit.v1) on the exact immutable revision digest, carried as the
-  lowercase hex of the 32 bytes of the revision contentHash (F02.S01.M04), and each vault decides on its own whether the cycle is committed. A vault commits only
+  F08.S02.M02 comms.consent.sign (subjectType mutiny_cycle, statement key consent.mutiny.cycle.commit.v1) on the exact immutable revision digest, carried as
+  subjectRevisionHash equal to the revision contentHash cid itself (CTR-ID-001 ID-3 form sha256-<base64url>, F02.S01.M04, N13), and each vault decides on its own whether the cycle is committed. A vault commits only
   when comms.consent.verify reports every participant's consent on the head digest and head revision number valid, every giver's classrup.bazaar.reservation/v1
   (F02.S03.M02) is valid and unexpired, feasibility is fresh, and the vault's own clock is before the consent deadline (default 72 h, range 1 h to 7 d, at most 24 h
   when more than one currency is involved). Any clock disagreement counts as expired. There is no distributed lock and no atomic cross-vault commit. A signature
@@ -17,6 +17,7 @@ responsibilities:
   - Freeze the cycle on forks, coordinator equivocation, conflicted consents or conflicting promises, and mirror terminal states reported by dropout and recovery modules.
   - Enforce the consent-time overload guard of the length profile from local counts only, show a trust panel per participant, and cap open cycle proposals from identities with no history across all senders.
   - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained evidence.
+  - "Register the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_cycle by inverted registration: canonicalBytes(ref, rev) from F02.S01.M04, currentRevision(ref), partyRole(ref, did) and isCommitted(ref)."
 non_responsibilities:
   - Matching and suggestions (F02.S02.M03) and feasibility checks (F02.S02.M05).
   - Consent statement format, ingest, revocation and key verification primitives (F08.S02.M02, F16.S02.M03, F07.S01.M01).
@@ -74,7 +75,7 @@ processes:
           - "settlementCurrency: string — registered currency code (F09.S03.M01)"
           - "headRevisionId: uuidv7 — current ProposalRevision (subjectType cycle, or trade_proposal for origin trade_proposal)"
           - "headRevisionNo: int — 1..20"
-          - "headRevisionHash: cid — contentHash of the head revision (F02.S01.M04); consents sign the same 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash)"
+          - "headRevisionHash: cid — contentHash of the head revision (F02.S01.M04); F08 consents carry this same cid as subjectRevisionHash (CTR-ID-001 ID-3 form sha256-<base64url>, N13), never a hex form"
           - "consentDeadline: timestamp — claim from the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 7 d; at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16)"
           - "executionWindowMs: int — 86400000..1987200000 (1 d..23 d), default 1209600000; (consentDeadline − revision time) + executionWindowMs ≤ 2592000000 (F02.S01.M04 V09)"
           - "status: enum — opening | proposed | committed | executing | completed | partially_executed | declined | cancelled | frozen"
@@ -107,8 +108,10 @@ processes:
           - "statementKey: string — consent.mutiny.cycle.commit.v1, or consent.mutiny.proposal.accept.v1 for imported proposal consents"
           - "kind: enum — consent | decline"
           - "revisionNo: int — F08 subjectRevision; counts only when equal to headRevisionNo"
-          - "revisionHash: cid — exact digest signed (contentHash); the F08 subjectRevisionHash is its lowercase hex form"
+          - "revisionHash: cid — exact digest signed (contentHash); equals the F08 subjectRevisionHash (same ID-3 cid)"
+          - "statementLocale: string — F08 statementLocale, BCP 47 locale of the wording the signer saw"
           - "consentId: uuidv7 — F08.S02.M02 ConsentStatement id"
+          - "aliasIds: array — 0..8 cids of F08 duplicates whose aliasOf names consentId; attached as evidence, never counted"
           - "statement: object — embedded copy of the ConsentStatement accepted by F08.S02.M02 (≤ 4 KiB), kept for export as evidence"
           - "direction: enum — own | peer"
           - "signedAtClaim: timestamp — signer's clock, a claim"
@@ -122,7 +125,7 @@ processes:
         invariants:
           - At most one valid consent per (cycleId, participantId, revisionHash).
           - A consent with receivedAtLocal, signedAtClaim or relayReceiptAt after the consent deadline has status late and never counts toward commit; claims and relay times can only shorten the window.
-          - The signer of statement equals participantId, the statement's subjectRevision equals revisionNo and its subjectRevisionHash equals the hex of revisionHash.
+          - The signer of statement equals participantId, the statement's subjectRevision equals revisionNo and its subjectRevisionHash equals revisionHash (the same ID-3 cid).
           - A consent revoked through F08.S02.M02 has status void with voidReason consent_revoked and never counts again.
     sql: |
       CREATE TABLE mutiny_cycle (
@@ -136,7 +139,7 @@ processes:
   validation_rules:
     requirements:
       - Proposing a cycle requires a verified suggestion, a fresh feasibility report, no infeasible check, reachable participants and the coordinator's own reservation.
-      - A consent is valid only if F08.S02.M02 accepted it with subjectType mutiny_cycle and statement key consent.mutiny.cycle.commit.v1 from a non-revoked registered device key of the signer, it names this cycle, the head revision number and the hex of the head digest, comms.consent.verify reports it valid, and it arrived before the deadline on the local clock.
+      - A consent is valid only if F08.S02.M02 accepted it with subjectType mutiny_cycle and statement key consent.mutiny.cycle.commit.v1 from a non-revoked registered device key of the signer, it names this cycle, the head revision number and the head digest cid as subjectRevisionHash, comms.consent.verify reports it valid, and it arrived before the deadline on the local clock.
       - Commit requires every condition simultaneously and is re-checked inside the same transaction that records the last piece of evidence.
       - Equivocation, overload and unknown-sender limits are evaluated only from data held in this vault and never disclose another vault's data or another participant's counts.
     rules:
@@ -145,7 +148,7 @@ processes:
       - "V03 | length 2..8 and participants unique with mailbox hints and no party in the principal's own block list (F07.S02.M02, own list only) | MUTINY_CYCLE_INFEASIBLE"
       - "V04 | consentDeadline between now + 1 h and now + 7 d (default 72 h); when more than one currency is involved it is ≤ now + 24 h and ≤ the earliest pinned quote expiry (N16), otherwise re-quote and fresh consent; executionWindowMs between 86400000 and 1987200000 and (consentDeadline − now) + executionWindowMs ≤ 2592000000 (F02.S01.M04 V09, F02.S03.M02 V02) | MUTINY_CYCLE_DEADLINE_INVALID"
       - "V05 | principal has ≤ 5 non-terminal cycles and proposals combined and is within the F12.S03.M04 local limit | MUTINY_CYCLE_LIMIT"
-      - "V06 | a counted consent has subjectRevision equal to headRevisionNo and subjectRevisionHash equal to the hex of headRevisionHash; the consent command presents revisionNo and revisionHash equal to the head | MUTINY_CONSENT_STALE_REVISION"
+      - "V06 | a counted consent has subjectRevision equal to headRevisionNo and subjectRevisionHash equal to headRevisionHash (the same ID-3 cid, never hex); the consent command presents revisionNo and revisionHash equal to the head | MUTINY_CONSENT_STALE_REVISION"
       - "V07 | the consent was accepted by F08.S02.M02 (own comms.consent.signed or peer comms.consent.received), the signer is a participant, subjectRef equals the cycle id, subjectType is mutiny_cycle and statementKey is consent.mutiny.cycle.commit.v1; exception: for origin trade_proposal the two consents with subjectType mutiny_proposal and statementKey consent.mutiny.proposal.accept.v1 on the same head contentHash, imported when the cycle is opened, count | MUTINY_CONSENT_STATEMENT_INVALID"
       - "V08 | local now < consentDeadline, and receivedAtLocal, signedAtClaim and every relayReceiptAt of a counted consent are ≤ consentDeadline; each can only shorten the window and none extends it | MUTINY_CONSENT_LATE"
       - "V09 | the principal's own items were reserved through F02.S03.M02 (classrup.bazaar.reservation/v1, holder {type: cycle, id: cycleId}) for this head hash before the consent was signed | MUTINY_CYCLE_RESERVATION_FAILED"
@@ -153,7 +156,7 @@ processes:
       - "V11 | acting on a terminal or frozen cycle | MUTINY_CYCLE_FROZEN"
       - "V12 | a decline counts only as an F08 ConsentStatement of kind decline accepted by F08.S02.M02 and signed by a participant of the cycle | FORBIDDEN"
       - "V13 | inside the committing transaction comms.consent.verify returns valid for every participant on the head digest; stale or revoked results void the consent, missing blocks the commit and conflicted freezes the cycle | MUTINY_CONSENT_STALE_REVISION"
-      - "V14 | a correctly signed participant consent accepted by F08 whose subjectRevision equals headRevisionNo but whose subjectRevisionHash differs from the hex of headRevisionHash is equivocation evidence: both hashes are stored, mutiny.revision.report_fork is called (F02.S01.M04 emits mutiny.revision.forked), the cycle freezes and the conflicting revision may be requested from the signer | MUTINY_CONSENT_EQUIVOCATION"
+      - "V14 | a correctly signed participant consent accepted by F08 whose subjectRevision equals headRevisionNo but whose subjectRevisionHash differs from headRevisionHash is equivocation evidence: both hashes are stored, mutiny.revision.report_fork is called (F02.S01.M04 emits mutiny.revision.forked), the cycle freezes and the conflicting revision may be requested from the signer | MUTINY_CONSENT_EQUIVOCATION"
       - "V15 | the principal's own count of other non-terminal cycles in this vault is ≤ the effective length profile's maxOtherOpenCycles (2 for length 4, F02.S02.M02) before the principal's consent is signed; the count is never sent or shown to others | MUTINY_PARTICIPANT_OVERLOADED"
       - "V16 | at most 3 non-terminal incoming cycles per vault, across all senders, have a coordinator with no history in this vault (projection first seen < 30 d and no completed trade known through F07.S03.M01); further ones are kept quarantined silently until the user opts in | MUTINY_CYCLE_LIMIT"
       - "V17 | opening from mutiny.proposal.accepted re-verifies both mutiny_proposal consents with comms.consent.verify on the same head contentHash and both reservations active in F02.S03.M02; any failure moves opening to frozen | MUTINY_CONSENT_STATEMENT_INVALID"
@@ -194,17 +197,19 @@ processes:
       - Events produced here drive local consumers only; nothing leaves the device except the signed statements.
       - "Statement schemas and signer roles registered with the F11.S01.M01 registry (N2): consents and declines use classrup.comms.consent/v1 (subjectType mutiny_cycle, key consent.mutiny.cycle.commit.v1) signed by a cycle participant, ingest owner F08.S02.M02; reservations use classrup.bazaar.reservation/v1 signed by the item owner, ingest owner F02.S03.M02; revisions use classrup.mutiny.proposal_revision/v1 signed by the coordinator, ingest owner F02.S01.M04; classrup.mutiny.cycle/v1 and classrup.mutiny.cycle_consent/v1 are local records and are never sent. Statements from DIDs the principal blocked are dropped silently by their owners (N7)."
       - Every event payload carries the participant DIDs (participantIds or parties) that notification routing needs to resolve recipients (N4).
+      - "mutiny.cycle.committed carries legs [{legId, giverId, receiverId}] in ring order, giverId and receiverId being DIDs as in mutiny.cycle.completed, together with parties [{did, role}] and revisionHash, which consumers use as contextCid, so F07.S03.M01 issues review tickets only to leg-connected counterparties."
+      - "The module registers the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_cycle (inverted registration; F08.S02.M02 never depends on F02): canonicalBytes(cycleId, rev) returns F02.S01.M04 canonicalBytes of the cycle's revision chain (subjectType cycle, or trade_proposal for origin trade_proposal); currentRevision(cycleId) returns {revisionNo: headRevisionNo, revisionHash: headRevisionHash}; partyRole(cycleId, did) returns participant for a DID in participantIds and none otherwise; isCommitted(cycleId) is true once this vault's verdict reached committed (committedLocallyAt set). It reads comms.consent.signed and comms.consent.received with the N13 field names subjectType, subjectRef, subjectRevision, subjectRevisionHash (ID-3 cid), statementKey, statementLocale, kind and aliasOf, and a received record with aliasOf is attached to the kept consent it names and never counted twice."
     commands:
       - name: mutiny.cycle.propose
         capability: mutiny.cycle.propose
-        input: "{ suggestionId, consentDeadlineMs? (default 259200000), executionWindowMs? (default 1209600000), settlementCurrency?, confirmKeyLinked? } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1, via F02.S01.M04), classrup.bazaar.reservation/v1 (coordinator reservation, holder {type: cycle, id: cycleId}, via F02.S03.M02) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_cycle, statementKey consent.mutiny.cycle.commit.v1, subjectRevision 1, subjectRevisionHash hex of the digest)"
+        input: "{ suggestionId, consentDeadlineMs? (default 259200000), executionWindowMs? (default 1209600000), settlementCurrency?, confirmKeyLinked? } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1, via F02.S01.M04), classrup.bazaar.reservation/v1 (coordinator reservation, holder {type: cycle, id: cycleId}, via F02.S03.M02) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_cycle, statementKey consent.mutiny.cycle.commit.v1, subjectRevision 1, subjectRevisionHash = the revision contentHash cid, statementLocale of the shown wording)"
         output: "{ cycleId, revisionNo: 1, revisionHash, participantIds, consentDeadline, syncState: local_committed | prepared }"
         errors: [VALIDATION_FAILED, MUTINY_CYCLE_SUGGESTION_UNUSABLE, MUTINY_CYCLE_INFEASIBLE, MUTINY_CYCLE_DEADLINE_INVALID, MUTINY_CYCLE_LIMIT, MUTINY_CYCLE_RESERVATION_FAILED, MUTINY_RING_KEY_LINKED, MUTINY_PARTICIPANT_OVERLOADED, BLOCKED_PARTY, RATE_LIMITED]
         emits: [mutiny.cycle.proposed]
         idempotent: true
       - name: mutiny.cycle.consent
         capability: mutiny.cycle.consent
-        input: "{ cycleId, revisionNo, revisionHash, expectedRevision } — vault command; produces classrup.bazaar.reservation/v1 (own reservation through F02.S03.M02, if the principal is a giver) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_cycle, statementKey consent.mutiny.cycle.commit.v1, subjectRevision headRevisionNo, subjectRevisionHash hex of headRevisionHash) signed by the principal; an imbalance is accepted only through an acceptedImbalances entry of the head snapshot"
+        input: "{ cycleId, revisionNo, revisionHash, expectedRevision } — vault command; produces classrup.bazaar.reservation/v1 (own reservation through F02.S03.M02, if the principal is a giver) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_cycle, statementKey consent.mutiny.cycle.commit.v1, subjectRevision headRevisionNo, subjectRevisionHash = headRevisionHash, statementLocale of the shown wording) signed by the principal; an imbalance is accepted only through an acceptedImbalances entry of the head snapshot"
         output: "{ cycleId, consentId, localVerdict: awaiting_others | committed, syncState }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, MUTINY_CONSENT_STALE_REVISION, MUTINY_CONSENT_LATE, MUTINY_CYCLE_INFEASIBLE, MUTINY_CYCLE_RESERVATION_FAILED, MUTINY_CYCLE_FROZEN, MUTINY_PARTICIPANT_OVERLOADED, COMMS_CONSENT_STALE]
         emits: [mutiny.cycle.consent_recorded, mutiny.cycle.committed]
@@ -242,7 +247,7 @@ processes:
     events_produced:
       - {type: mutiny.cycle.proposed, privacy: P2, payload: "{ cycleId, origin, suggestionId?, coordinatorId, participantIds, parties [{did, role: coordinator|participant}], length, revisionNo, revisionHash, consentDeadline }"}
       - {type: mutiny.cycle.consent_recorded, privacy: P2, payload: "{ cycleId, participantId, participantIds, consentId, kind, revisionNo, revisionHash, direction, status, voidReason? }"}
-      - {type: mutiny.cycle.committed, privacy: P2, payload: "{ cycleId, revisionNo, revisionHash, participantIds, parties [{did, role}], executionDeadline, sourceType, sourceId? }"}
+      - {type: mutiny.cycle.committed, privacy: P2, payload: "{ cycleId, revisionNo, revisionHash (contextCid for consumers), participantIds, parties [{did, role}], legs [{legId, giverId, receiverId}] (DIDs, ring order), executionDeadline, sourceType, sourceId? }"}
       - {type: mutiny.cycle.declined, privacy: P2, payload: "{ cycleId, participantId (decliner), participantIds, afterOwnConsent, consentId, cycleKey? }"}
     events_consumed:
       - {type: mutiny.proposal.accepted, effect: "open a Cycle with origin trade_proposal and id equal to the proposal id; import both mutiny_proposal consents and reservations by reference, re-verify them (V17) and commit, or freeze when verification fails"}
@@ -250,7 +255,7 @@ processes:
       - {type: mutiny.cycle.locked, effect: "record that a giver's reservation (lockId, reservationCid) accepted by F02.S03.M02 is present and re-evaluate the commit verdict"}
       - {type: mutiny.cycle.unlocked, effect: "re-evaluate the verdict; a reservation that expired or was released before commit blocks the commit; ignore reason superseded when a newer active lock of the same giver exists"}
       - {type: comms.consent.signed, effect: "own statements only: record the principal's consent or decline for subjectType mutiny_cycle and this cycleId; a decline moves the cycle to declined"}
-      - {type: comms.consent.received, effect: "peer consent or decline accepted by F08 for subjectType mutiny_cycle and this cycleId: check V06, V07, V08 and V14, store a CycleConsent and re-evaluate the verdict; a decline moves a proposed cycle to declined"}
+      - {type: comms.consent.received, effect: "peer consent or decline accepted by F08 for subjectType mutiny_cycle and subjectRef this cycleId: read consentId, signerDid, subjectRevision, subjectRevisionHash (ID-3 cid), statementKey, statementLocale, kind and aliasOf; check V06, V07, V08 and V14, store a CycleConsent (a record with aliasOf is attached to the kept consent as aliasIds and not counted again) and re-evaluate the verdict; a decline moves a proposed cycle to declined"}
       - {type: comms.consent.revoked, effect: "before commit mark the consent void with voidReason consent_revoked and re-evaluate the verdict; after local commit the revocation is handled by F02.S03.M03 as a dropout"}
       - {type: mutiny.revision.forked, effect: "freeze the cycle"}
       - {type: mutiny.lock.conflict_detected, effect: "freeze the cycles named in subjectIds"}
@@ -292,7 +297,7 @@ processes:
       mutiny.cycle.consent { "cycleId": "0192f432-…", "revisionNo": 1, "revisionHash": "sha256-Zk8…", "expectedRevision": 2 }   # on Bob's device
       -> 200 { "consentId": "0192f433-…", "localVerdict": "awaiting_others", "syncState": "prepared" }
       consent via comms.consent.sign (F08.S02.M02) on Bob's device:
-      { "subjectType":"mutiny_cycle", "subjectRef":"0192f432-…", "subjectRevision":1, "subjectRevisionHash":"<lowercase hex of the 32 bytes of sha256-Zk8…>",
+      { "subjectType":"mutiny_cycle", "subjectRef":"0192f432-…", "subjectRevision":1, "subjectRevisionHash":"sha256-Zk8…", "statementLocale":"en",
         "statementKey":"consent.mutiny.cycle.commit.v1", "kind":"consent", "readConfirmed":true }
   authorization_capabilities:
     requirements:
@@ -322,7 +327,7 @@ processes:
       - Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
       - Coercion and spam through unwanted cycle proposals are limited by recipient-side muting, per-sender quarantine, the per-vault cap on open cycles from identities with no history, and the proposer's cap of 5 open cycles and proposals.
       - The UI states that pseudonymity is not anonymity and that counterparties can see the public items, pseudonyms and the distance bucket.
-      - The module registers ExportSectionPort (section mutiny.cycles), DeletionPort and RetentionPurgePort with F10 (N6), annotates every Cycle and CycleConsent field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained cycles.
+      - "The module registers ExportSectionPort (section mutiny.cycles), DeletionPort and RetentionPurgePort with F10 (N6), annotates every Cycle and CycleConsent field with its F10.S02.M02 class, reports every committed or executing cycle of the principal as a DeletionPort.plan() blocker {kind: cycle, ref: cycleId, counterparties: the other participantIds}, and on privacy.deletion.completed pseudonymizes the erased participant in retained cycles."
       - "Sybil rings are made visible rather than claimed impossible: each participant has a trust panel, key-linked rings need explicit confirmation, and the review screen recommends a simultaneous handover for legs adjacent to new identities."
     data:
       - "Cycle and CycleConsent: P2, device only; field classes annotated per F10.S02.M02 (DIDs P2, trust panel P2 derived, syncStates P2)."
@@ -389,13 +394,16 @@ processes:
       - "T20 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, schema rollback | cycles and consents round-trip with signatures verified; open cycles import as frozen"
       - "T21 | integration | 03.R02,02.R03,01.R02 | 4-party: Bob revokes his consent through F08 before Dan's last consent arrives at Alice's vault | Bob's consent void with consent_revoked; comms.consent.verify inside the evaluating transaction returns revoked; Alice's vault never commits"
       - "T22 | integration | 07.R01,01.R03 | relay fixture records every mailbox put during propose, consent and decline | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time"
-      - "T23 | contract | 04.R05,02.R02 | F11.S01.M01 registry lookup and comms.consent.sign payload | registered signer roles match; consent uses subjectType mutiny_cycle, key consent.mutiny.cycle.commit.v1, subjectRevision equal to the head number and hex digest equal to the base64url-decoded contentHash; declines are kind decline"
+      - "T23 | contract | 04.R05,02.R02 | F11.S01.M01 registry lookup and comms.consent.sign payload | registered signer roles match; consent uses subjectType mutiny_cycle, key consent.mutiny.cycle.commit.v1, subjectRevision equal to the head number and subjectRevisionHash equal to the head contentHash cid (a hex-encoded digest is not counted); declines are kind decline"
       - "T24 | integration | 03.R05,03.R02 | opening from an accepted proposal whose imported consent no longer verifies; opening whose consent deadline passes on the local clock | opening -> frozen with import_verification_failed and own reservation released; opening -> cancelled"
       - "T25 | unit | 02.R04,04.R06 | principal with 2 other open cycles consents to a 4-party cycle; with 1 other open cycle | MUTINY_PARTICIPANT_OVERLOADED only in the principal's own vault and no count in any statement or event; second consent allowed; declined event carries participantIds"
       - "T26 | abuse | 07.R06,02.R04 | 2-Sybil ring: two fresh did:key identities sharing a device key invite a real member into a 3-party cycle | trust panel shows first seen 0 days and 0 completed trades, key-linked warning, consent requires confirmation, simultaneous handover recommended; quarantined when the unknown-coordinator cap is reached"
       - "T27 | integration | 02.R03,02.R02 | Carol's consent sits above tolerance without an acceptedImbalances entry, then the coordinator revises with acceptedImbalances naming Carol and Carol consents | first not committable (C05 fails); after the revision every vault verifies Carol's consent on the new digest as her signed acceptance and commits"
+      - "T28 | contract | 04.R08,02.R02 | F08 shared SubjectCanonicalizerPort conformance suite against the mutiny_cycle registration for C3 and C2 (origin trade_proposal); comms.consent.received for Bob's consent then a duplicate whose aliasOf names it | canonicalBytes equals F02.S01.M04 canonicalBytes and its ID-3 cid equals headRevisionHash for both; currentRevision returns the head; partyRole returns participant for Alice, Bob and Carol and none for Dan; isCommitted false while proposed and true after the local commit; statementLocale stored; the alias is attached as aliasIds and Bob counts once"
+      - "T29 | contract | 04.R07,04.R06 | C4 commits at Alice's vault | mutiny.cycle.committed carries legs [{legId, giverId, receiverId}] A to B, B to C, C to D, D to A in ring order with DIDs, parties and revisionHash, and validates against the F07.S03.M01 consumer expectation"
+      - "T30 | integration | 07.R05,06.R02 | F10 deletion plan while C3 is executing, C4 proposed and C2 completed | plan() lists exactly one blocker {kind: cycle, ref: C3, counterparties: the two other participants}; C4 and C2 are not blockers; after C3 completes the plan has no blocker"
     acceptance:
-      - All tests T01–T27 pass in CI.
+      - All tests T01–T30 pass in CI.
       - A cycle is committed in a vault only when every participant's valid signed consent on the head number and hash and every giver's valid unexpired reservation statement were verified in that vault before the deadline on its own clock.
       - No code path adds, removes or replaces a participant of an existing cycle, and forks, equivocation or conflicting promises always freeze rather than merge.
   import_export_backup_rollback:

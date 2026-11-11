@@ -93,7 +93,7 @@ processes:
           - "createdAt: timestamp — RFC 3339 UTC, appellant device clock (a claim, never used for the window)"
         invariants:
           - At most one appeal exists per (tenantId, actionId).
-          - The reviewer's principal (all keys linked through F07.S02.M01 and the relay moderator registry) differs from the decider's principal, the subject's principal and the principal of every reporter of a report linked to the action's case.
+          - The reviewer's principal (all keys linked through F07.S02.M01 and the relay moderator registry) differs from the decider's principal, the proposer's principal of a host-policy action (F12.S02.M01 proposerKey), the subject's principal and the principal of every reporter of a report linked to the action's case.
           - status decided implies outcome is upheld, overturned or reduced and decisionReasons, decisionRuleIds and decisionStatementCid are set and the relay signature verified; status moot implies outcome moot, mootReason and mootNoticeCid are set and no decisionRuleIds exist.
           - outcome reduced implies reducedTo is set, its kind is no more severe, its expiresAt no later and its restrictedCapabilities a subset of the contested action's.
           - reviewerKey never appears in the vault copy, in a statement to the appellant or in an event payload.
@@ -115,7 +115,7 @@ processes:
       - "V02 | appellantKey equals the subject key of the action and a verified statement of reasons exists | NOT_FOUND"
       - "V03 | the relay's receive time of the first delivery is ≤ deadlineAt (reasonsIssuedAt + 30 days on the relay clock); the appellant's createdAt is ignored | MODERATION_APPEAL_WINDOW_CLOSED"
       - "V04 | no appeal with a different appealId exists for the action | MODERATION_APPEAL_DUPLICATE"
-      - "V05 | the reviewer's principal (F07.S02.M01 identity.portable_doc.key_set and find_by_key, relay moderator registry) differs from the decider's and the subject's principal and from every reporter in F12.S01.M01 moderation.report.ledger_for_case | MODERATION_APPEAL_REVIEWER_CONFLICT"
+      - "V05 | the reviewer's principal (F07.S02.M01 identity.portable_doc.key_set and find_by_key, relay moderator registry) differs from the decider's, the host-policy proposer's (proposerKey, when set) and the subject's principal and from every reporter in F12.S01.M01 moderation.report.ledger_for_case | MODERATION_APPEAL_REVIEWER_CONFLICT"
       - "V06 | decision reasons 50..2000 code points and at least one decisionRuleId that F12.S02.M03 moderation.policyrule.check_citable reports in force at the decision time | VALIDATION_FAILED"
       - "V07 | the signature on the appeal or withdrawal statement verifies against appellantKey | FORBIDDEN"
       - "V08 | reducedTo has a kind no more severe than the contested action, an expiresAt no later than its expiry, restrictedCapabilities that are a subset of its own and none of the capabilities protected by F12.S02.M01 V08 | VALIDATION_FAILED"
@@ -244,7 +244,7 @@ processes:
       - {type: moderation.appeal.filed, privacy: P2, payload: "{ appealId, actionId, appellantKey, deadlineAt, relayReceivedAt } — relay-local (EVT-8)"}
       - {type: moderation.appeal.decided, privacy: P2, payload: "{ appealId, actionId, origin: relay|vault, appellantKey, outcome: upheld|overturned|reduced, reducedTo?: { kind, expiresAt?, restrictedCapabilities? }, ruleIds, decisionStatementCid, decidedAt } — never reviewerKey; relay-local on the relay, derived in the appellant's vault from the verified decision statement (EVT-9, actor.kind federated); moot closures never emit it"}
     events_consumed:
-      - {type: moderation.action.applied, effect: "relay origin: store actionId, subjectKey, deciderKey and deadlineAt = reasonsIssuedAt + 30 days for window and independence checks; vault origin: store the deadline for the appellant's UI"}
+      - {type: moderation.action.applied, effect: "relay origin: store actionId, subjectKey, deciderKey, proposerKey (host-policy records such as auction voids from F04.S02.M03) and deadlineAt = reasonsIssuedAt + 30 days for window and independence checks; vault origin: store the deadline for the appellant's UI"}
       - {type: moderation.action.reverted, effect: "relay: reason moderator_decision or error_correction closes an open appeal on the action as moot with mootReason action_reverted, reason expired as moot with mootReason action_expired, and queues a relay-signed appealmoot/v1; reasons appeal_overturned and appeal_reduced come from this module's decision and change nothing; never emits moderation.appeal.decided"}
       - {type: security.role.revoked, effect: "relay: when role moderator is revoked for a key that reviews in_review appeals, move them to awaiting_reviewer through moderation.appeal.reassign with reason reviewer_role_lost"}
       - {type: privacy.deletion.completed, effect: "vault: appeals are deleted, or kept as evidence with appellantKey replaced by the payload pseudonym when the request kept evidence (DeletionPort); relay copies are pseudonymized by the DeletionPort when the relay applies the signed deletion request and stay for RET-EVIDENCE"}
@@ -361,7 +361,7 @@ processes:
       - "T15 | e2e | 01.R02,04.R01 | mobile appellant files offline and reconnects | appeal reaches the relay, timeline shows honest states, axe zero serious issues"
       - "T16 | integration | 03.R05 | reviewer M2 loses the moderator role (security.role.revoked); another appeal reaches day 10 in review; operator reassigns a third | each returns to awaiting_reviewer, reviewer recorded in the audit log, a new eligible reviewer is assigned; reassignCount increments"
       - "T17 | abuse | 05.R03 | decide an appeal and inspect the decision envelope, status statements, events and the vault copy; read the relay audit log as operator | only the relay key signed the statements; reviewer key absent everywhere except the relay copy and audit log"
-      - "T18 | abuse | 05.R04,02.R03 | assign M1 via second key K1b; assign M3 who filed report R; assign a moderator whose key set lists the subject's key | MODERATION_APPEAL_REVIEWER_CONFLICT in each case; M2 assigned"
+      - "T18 | abuse | 05.R04,02.R03 | assign M1 via second key K1b; assign M3 who filed report R; assign a moderator whose key set lists the subject's key; assign the proposer of a host-policy auction void action | MODERATION_APPEAL_REVIEWER_CONFLICT in each case; M2 assigned"
       - "T19 | integration | 05.R05 | key of A suspended on relay X files an appeal and reads its status | appeal accepted and status returned"
       - "T20 | unit | 01.R04 | decide reduced with a more severe kind, a later expiry, an extra capability, and a valid warn | VALIDATION_FAILED three times; valid reduced stored with typed reducedTo"
       - "T21 | integration | 02.R04,06.R04 | first delivery on day 29 with the receipt lost and a retry on day 32; same appealId with a changed digest; appeal forwarded to relay Y | stored receipt returned on day 32; IDEMPOTENCY_KEY_REUSED; relay Y refuses with FORBIDDEN"

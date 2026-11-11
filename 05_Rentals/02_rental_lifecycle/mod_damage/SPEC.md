@@ -62,7 +62,7 @@ After a rental the owner can claim damage or non-return as a signed statement th
 - Commands: `rentals.damage.claim`, `rentals.damage.respond`, `rentals.damage.accept_counter`, `rentals.damage.withdraw`, `rentals.damage.escalate`, `rentals.damage.renegotiate`, `rentals.damage.receive`
 - Queries: `rentals.damage.compare_reports`, `rentals.damage.get`
 - Emits: `rentals.damage.claimed`, `rentals.damage.resolved`
-- Consumes: `rentals.handoff.attested`, `rentals.return.attested`, `rentals.rental.overdue`, `rentals.rental.closed`, `rentals.deposit.released`, `commerce.dispute.opened`, `commerce.dispute.resolved`, `commerce.dispute.withdrawn`, `commerce.payment.acknowledged`, `commerce.payment.finalized`, `comms.attachment.deleted`, `identity.block.added`, `privacy.deletion.completed`
+- Consumes: `rentals.handoff.attested`, `rentals.return.attested`, `rentals.rental.overdue`, `rentals.rental.closed`, `rentals.deposit.released`, `commerce.dispute.opened`, `commerce.dispute.resolved`, `commerce.dispute.withdrawn`, `commerce.payment.acknowledged`, `commerce.payment.finalized`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -75,7 +75,7 @@ F05.S02.M01, F05.S02.M02, F05.S01.M01, F05.S01.M02, F09.S01.M01, F09.S01.M03, F0
 | PS-041-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-041-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-041-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
-| PS-041-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-041-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-041-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-041-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-041-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |

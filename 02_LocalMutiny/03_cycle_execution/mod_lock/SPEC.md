@@ -6,13 +6,13 @@
 
 ## Purpose
 
-Each participant reserves only their own items in their own vault, all-or-nothing, through the F01.S03.M01 InventoryPort with holder {type: cycle, id: subjectId} (trade proposals use the same holder type and their proposal id, which later becomes the cycle id), and issues the single signed reservation statement of ClassRup, classrup.bazaar.reservation/v1, through bazaar.inventory.issue_reservation, with an absolute expiresAt and the revision digest in its extension (N14). The statement's expiry is never extended; this module renews the local hold behind it internally under the same absolute expiry, up to the F01 hold lifetime. This module is the single caller of the InventoryPort for cycle holds and the single ingest owner of cycle reservations and release notices. A reservation prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented. A subject can be committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects. The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement.
+Each participant reserves only their own items in their own vault, all-or-nothing, through the F01.S03.M01 InventoryPort with holder {type: cycle, id: subjectId} (trade proposals use the same holder type and their proposal id, which later becomes the cycle id), and issues the single signed reservation statement of ClassRup, classrup.bazaar.reservation/v1, through bazaar.inventory.issue_reservation, with an absolute expiresAt and the revision digest in its extension (N14). The statement's expiry is never extended; this module renews the local hold behind it internally under the same absolute expiry, up to the F01 hold lifetime. This module is the single caller of the InventoryPort for cycle holds and the single ingest owner of cycle reservations and release notices. A reservation prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented. A subject can be committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects. The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement. F01.S03.M01 sends no release for holderType cycle, so this module signs the cycle release notice classrup.mutiny.reservation_release/v1, registered as an alias of classrup.bazaar.reservation_release/v1 and carrying exactly its payload {releasesCid, holder, reason}.
 
 ## Responsibilities
 
-- Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d).
+- Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {inventoryItemId, quantity} taken from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation {holdIds, audience [{did, mailboxId}], expiresAt, ext} with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d).
 - Renew the local hold internally with bazaar.inventory.renew before it lapses, up to the statement's absolute expiresAt and never beyond the hold's maxExpiresAt, without re-signing.
-- Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1.
+- Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1 (alias of classrup.bazaar.reservation_release/v1) whenever an own reservation ends before its expiresAt without conversion.
 - Verify peers' reservation statements and release notices (storing the generic statement through bazaar.inventory.record_peer_reservation), detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
 - Provide the LockPort releaseForSubject used inside the transactions of F02.S01.M01, F02.S03.M01 and F02.S03.M03.
 - Enforce a cap of 5 active own reservation sets per vault and evaluate expiry lazily on vault open and every 60 s while open.
@@ -74,7 +74,7 @@ F01.S03.M01, F01.S01.M01, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F1
 | PS-023-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-023-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-023-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-023-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-023-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-023-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-023-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-023-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -86,6 +86,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - A reservation never leaves a partial item set, and no module claims that a peer's reservation prevents that peer from double-promising.
 - Expiry is always evaluated on the local clock and terminal lock states never reopen.

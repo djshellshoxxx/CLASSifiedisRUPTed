@@ -22,7 +22,7 @@ _None._
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `moderation.spam.evaluate` | moderation.spam.evaluate | { mode: author_presign\|relay_intake\|vault_filter, subjectKey: did:key, targetType, targetId?, targetCid?, text, links?: string[], receivedAt (store clock), claimedCreatedAt? } | { score: 0..100, heuristics: { name, value, threshold, points }[], throttle?: { capabilityClass, ttlMs ≤ 3600000 }, rulesVersion, degraded: boolean } | VALIDATION_FAILED, PAYLOAD_TOO_LARGE, FORBIDDEN |
+| `moderation.spam.evaluate` | moderation.spam.evaluate | { mode: author_presign\|relay_intake\|vault_filter, subjectKey: did:key, targetType (listing_publication for the F01.S01.M03 author_presign call, the projection type otherwise), targetId?, targetCid?, text, links?: string[], receivedAt (store clock), claimedCreatedAt? } | { score: 0..100, heuristics: { name, value, threshold, points }[], throttle?: { capabilityClass, ttlMs ≤ 3600000 }, rulesVersion, degraded: boolean } | VALIDATION_FAILED, PAYLOAD_TOO_LARGE, FORBIDDEN |
 
 ### Events produced
 

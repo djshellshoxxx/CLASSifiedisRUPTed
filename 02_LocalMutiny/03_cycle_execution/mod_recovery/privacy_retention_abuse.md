@@ -10,7 +10,7 @@
 - **PS-024-07.R02** Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
 - **PS-024-07.R03** False attestations and issue reports are limited by signature accountability, the 48 h and giver-attestation rules for issues, and by disputes that compare signed statements.
 - **PS-024-07.R04** The UI states that signatures evidence what each person asserts and that ClassRup does not verify delivery.
-- **PS-024-07.R05** The module registers ExportSectionPort (section mutiny.execution), DeletionPort and RetentionPurgePort with F10 (N6), annotates every HandoverAttestation and RecoveryCase field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained evidence.
+- **PS-024-07.R05** The module registers ExportSectionPort (section mutiny.execution), DeletionPort and RetentionPurgePort with F10 (N6), annotates every HandoverAttestation and RecoveryCase field with its F10.S02.M02 class, reports every open or escalated RecoveryCase as a DeletionPort.plan() blocker {kind: cycle, ref: cycleId, counterparties: the other participantIds}, and on privacy.deletion.completed pseudonymizes the erased participant in retained evidence.
 
 ## Specification
 
@@ -51,6 +51,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-024-09.T19 | e2e | PS-024-07.R04 | two mobile browsers perform hand-over attestations | statement of what a signature means shown; payment labels as text; axe zero serious issues |
 | TEST-PS-024-09.T21 | integration | PS-024-07.R02, PS-024-07.R05 | Carol erases her identity after a completed cycle; F10 export, deletion and retention sweep | section mutiny.execution exported; Carol's DID pseudonymized in attestations and cases; records retained; every signature and the completionCid still verify |
 | TEST-PS-024-09.T22 | integration | PS-024-01.R03, PS-024-07.R01 | relay fixture records every mailbox put during attestations and recovery actions | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
+| TEST-PS-024-09.T28 | integration | PS-024-07.R05 | F10 deletion plan with an open RecoveryCase on C4, an escalated one on C6 and a resolved one on C3 | plan() lists blockers {kind: cycle, ref: C4} and {kind: cycle, ref: C6} with the other participants as counterparties; the resolved case is not a blocker |
 
 ## Dependencies
 

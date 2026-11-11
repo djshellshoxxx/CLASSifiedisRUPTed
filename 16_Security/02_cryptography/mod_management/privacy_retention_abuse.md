@@ -34,6 +34,7 @@
 | T06 | Stale knowledge treated as safe offline | freshness class from list head issuedAt shown on every verification result; high-stakes actions require fresh from two sources or an explicit user acknowledgement |
 | T07 | Freeze attack - a relay replays an older valid list head | listSeq must increase and issuedAt must not go back; a regression is recorded as a replay and never refreshes freshness |
 | T08 | Relay substitutes an agreement key | agreement keys are never registered; senders derive them from listed Ed25519 device keys (F16.S02.M01) |
+| T09 | Holder of a stolen device key signs an account_deleted revocation whose finalCids list statements it forged | finalCids only waive the revocation check for statements whose signature by that key verifies, are capped at 120, and are ignored once the account root key revokes the key for compromise |
 
 **Abuse controls**
 - Relay-owned key registration limited to 20 per day per relay and revocation recording to 50 per day per source via F12.S03.M03.

@@ -14,7 +14,7 @@
 
 - **export:** Section notify.push in classrup-export/v1 through ExportSectionPort; one line per push target (schema classrup.notify.push_target/v1); no relay copy is exported.
 - **import:** Push targets import as expired; the app shows Re-enable push per relay and re-creates the relay copy with a new browser subscription only after the user confirms.
-- **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) holds encrypted secrets; on restore every subscription older than 7 days is probed and expired on failure; the vault export is the user's backup (IOX-6).
+- **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) holds encrypted secrets; consumers are excluded from restore re-delivery (externalSideEffects true), so on restore subscriptions without a granted registered consent or with a revoked creating key are revoked first, then every subscription older than 7 days is probed and expired on failure; the vault export is the user's backup (IOX-6).
 - **migration rollback:** Additive fields only in v1; rollback is safe because older relays ignore unknown fields and subscriptions continue to work with aes128gcm; retained VAPID keys are kept through a rollback.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F16.S02.M01, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

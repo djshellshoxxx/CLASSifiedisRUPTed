@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Turns a suggestion (or an accepted two-party proposal) into a Cycle that every participant holds in their own vault. Each participant consents through F08.S02.M02 comms.consent.sign (subjectType mutiny_cycle, statement key consent.mutiny.cycle.commit.v1) on the exact immutable revision digest, carried as the lowercase hex of the 32 bytes of the revision contentHash (F02.S01.M04), and each vault decides on its own whether the cycle is committed. A vault commits only when comms.consent.verify reports every participant's consent on the head digest and head revision number valid, every giver's classrup.bazaar.reservation/v1 (F02.S03.M02) is valid and unexpired, feasibility is fresh, and the vault's own clock is before the consent deadline (default 72 h, range 1 h to 7 d, at most 24 h when more than one currency is involved). Any clock disagreement counts as expired. There is no distributed lock and no atomic cross-vault commit. A signature evidences an assertion, not delivery of goods, and nothing is ever silently rerouted. This module ingests no envelope itself: consents, declines and revocations are accepted by F08.S02.M02, reservations by F02.S03.M02, revisions by F02.S01.M04 and withdrawals by F02.S03.M03, and this module reacts to their events.
+Turns a suggestion (or an accepted two-party proposal) into a Cycle that every participant holds in their own vault. Each participant consents through F08.S02.M02 comms.consent.sign (subjectType mutiny_cycle, statement key consent.mutiny.cycle.commit.v1) on the exact immutable revision digest, carried as subjectRevisionHash equal to the revision contentHash cid itself (CTR-ID-001 ID-3 form sha256-<base64url>, F02.S01.M04, N13), and each vault decides on its own whether the cycle is committed. A vault commits only when comms.consent.verify reports every participant's consent on the head digest and head revision number valid, every giver's classrup.bazaar.reservation/v1 (F02.S03.M02) is valid and unexpired, feasibility is fresh, and the vault's own clock is before the consent deadline (default 72 h, range 1 h to 7 d, at most 24 h when more than one currency is involved). Any clock disagreement counts as expired. There is no distributed lock and no atomic cross-vault commit. A signature evidences an assertion, not delivery of goods, and nothing is ever silently rerouted. This module ingests no envelope itself: consents, declines and revocations are accepted by F08.S02.M02, reservations by F02.S03.M02, revisions by F02.S01.M04 and withdrawals by F02.S03.M03, and this module reacts to their events.
 
 ## Responsibilities
 
@@ -16,6 +16,7 @@ Turns a suggestion (or an accepted two-party proposal) into a Cycle that every p
 - Freeze the cycle on forks, coordinator equivocation, conflicted consents or conflicting promises, and mirror terminal states reported by dropout and recovery modules.
 - Enforce the consent-time overload guard of the length profile from local counts only, show a trust panel per participant, and cap open cycle proposals from identities with no history across all senders.
 - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained evidence.
+- Register the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_cycle by inverted registration: canonicalBytes(ref, rev) from F02.S01.M04, currentRevision(ref), partyRole(ref, did) and isCommitted(ref).
 
 ## Not responsible for
 
@@ -78,7 +79,7 @@ F02.S03.M02, F02.S02.M03, F02.S02.M05, F02.S01.M02, F02.S01.M03, F02.S01.M04, F0
 | PS-021-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-021-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-021-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-021-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-021-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-021-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-021-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-021-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
@@ -90,6 +91,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T27 pass in CI.
+- All tests T01–T30 pass in CI.
 - A cycle is committed in a vault only when every participant's valid signed consent on the head number and hash and every giver's valid unexpired reservation statement were verified in that vault before the deadline on its own clock.
 - No code path adds, removes or replaces a participant of an existing cycle, and forks, equivocation or conflicting promises always freeze rather than merge.

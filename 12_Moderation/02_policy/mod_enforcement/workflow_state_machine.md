@@ -20,18 +20,18 @@ Initial **open**; terminal **resolved**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| open -> assigned | moderation.case.assign by moderator or operator | assigneeKey set |
+| open -> assigned | moderation.case.assign by moderator or operator, or moderation.action.record_host_policy | assigneeKey set (the confirming moderator for a host-policy record) |
 | assigned -> open | moderation.case.assign with empty assignee | assignee cleared |
 | open -> resolved | moderation.case.close | outcome no_action, duplicate or content_removed_by_owner; emits moderation.case.closed |
-| assigned -> resolved | moderation.case.close, or moderation.action.apply with closeCase true | outcome set (actioned needs at least one action); emits moderation.case.closed |
+| assigned -> resolved | moderation.case.close, or moderation.action.apply or moderation.action.record_host_policy with closeCase true | outcome set (actioned needs at least one action); emits moderation.case.closed |
 
 ```mermaid
 stateDiagram-v2
   [*] --> open
-  open --> assigned: moderation.case.assign by moderator or operator
+  open --> assigned: moderation.case.assign by moderator or operator, or moderation.action.record_host_policy
   assigned --> open: moderation.case.assign with empty assignee
   open --> resolved: moderation.case.close
-  assigned --> resolved: moderation.case.close, or moderation.action.apply with closeCase true
+  assigned --> resolved: moderation.case.close, or moderation.action.apply or moderation.action.record_host_policy with closeCase true
   resolved --> [*]
 ```
 

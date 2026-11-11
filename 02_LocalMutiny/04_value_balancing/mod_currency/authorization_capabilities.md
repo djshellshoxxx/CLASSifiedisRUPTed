@@ -26,6 +26,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 |---|---|---|---|---|
 | TEST-PS-025-09.T09 | abuse | PS-025-05.R01, PS-025-05.R02, PS-025-07.R02 | peer revision with altered converted amount by one minor unit | MUTINY_NORMALIZATION_MISMATCH and consent blocked |
 | TEST-PS-025-09.T10 | abuse | PS-025-05.R03, PS-025-07.R01, PS-025-07.R03 | manual rate presented as signed; request payload inspected | MUTINY_QUOTE_SOURCE_UNLABELLED; request contains only pair and lifetime |
+| TEST-PS-025-09.T20 | contract | PS-025-04.R05, PS-025-02.R02, PS-025-05.R02 | received revision embedding a relay-signed quote, a manual quote presented as sourceSigned true, a direct-provider ecb-daily quote with an invented rate and a quote with a broken relay signature | verify_embedded called once per quote with the revision author and local receive time; quoteChecks give sourceSigned true, then issuerSigned true with sourceSigned false and MUTINY_QUOTE_SOURCE_UNLABELLED for the false claim, then 'source asserted by <issuer pseudonym>, not verifiable' with the ECB deviation, then COMMERCE_RATE_SIGNATURE_INVALID; normalizationHash still recomputes; consent is blocked for the false sourceSigned claim and the broken signature, while the direct-provider quote stays consentable with its label and deviation shown |
 
 ## Dependencies
 

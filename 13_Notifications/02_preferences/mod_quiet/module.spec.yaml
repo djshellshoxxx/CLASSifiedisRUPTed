@@ -15,7 +15,7 @@ summary: >-
 responsibilities:
   - Own the vault DeferredNotification (classrup.notify.deferred/v1) and the relay DeferredNotification (classrup.notify.deferred_relay/v1); the relay record never holds a reference, template key or collapse key of a vault-originated alert.
   - Implement NotificationDispatchPort for F13.S01.M03 and the single decision order caller authentication, deletion pause, mute, collapse, consent or browser permission, matrix cell, single-producer arrival rule, urgency, quiet hours, rate - identical in vault and relay where both apply.
-  - Seal vault-originated push content per target device to its x25519 agreement key and derive opaque collapse tags, so relays and push services cannot read or link alerts.
+  - Seal vault-originated push content per target device to the X25519 agreement key that F16.S02.M01 agreementPublicKeyOf derives from that device's listed Ed25519 key and derive opaque collapse tags, so relays and push services cannot read or link alerts.
   - Release deferred items at the end of the quiet window with jitter of 0 to 300 s in batch loops, collapse items with the same collapse key or tag and replace more than 5 due items for one user and channel by one digest alert.
   - Re-evaluate deferred items when the schedule, a channel consent or a preference changes, cancel items the user already read through the relay command notify.notification.cancel, and re-defer items whose checks cannot be read.
   - Enforce the urgent security class rule - only category security may be urgent, and urgent alerts skip quiet hours and the digest but are still subject to consent and the security cell of that channel.
@@ -25,7 +25,7 @@ non_responsibilities:
   - Block filtering, which F13.S01.M03 applies through F07.S02.M02 before any decision reaches this gate; relay hooks carry no counterparty data and the service worker routes wake-ups through F13.S01.M03.
   - Do-not-disturb of the operating system; the gate cannot override device-level focus modes.
   - "Future: per-category quiet windows, adaptive digest timing, delivery-time optimization."
-depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F08.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F16.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
 user_stories:
   - As a member, I do not get a push at 03:00 about a new offer and I see a single summary when my quiet hours end.
   - As a member, I still get a push on my other devices when a new device key is added to my account at 03:00.
@@ -182,7 +182,7 @@ processes:
       - Dispatch is one command with three modes - the vault mode receives routing decisions through NotificationDispatchPort, the sealed relay mode receives requests signed by a device key of the user, and the hook mode receives in-process calls from relay hooks (mailbox put, auction host, cycle matching, moderation).
       - Release is an internal sweep in both environments and cancel is a relay command signed by a device key; release emits its event in the same transaction as the record change.
       - The vault instance consumes vault-local inbox, schedule, consent, preference and deletion events, and the relay instance consumes the relay-local consent, quiet-hours and preference events emitted by the registration and mirror commands, as labelled per environment under events_consumed.
-      - For vault-originated push the gate seals {v, tpl, ref, ck} per target device with the F08.S01.M01 envelope construction to that device's x25519 agreement key and sends the relay only {userDid, channel, urgency, dispatchId, notBefore?, collapseTag, boxes}; email requests carry no box and select a generic template by urgency.
+      - For vault-originated push the gate seals {v, tpl, ref, ck} per target device with an ephemeral X25519 key and XChaCha20-Poly1305 to the X25519 agreement key that F16.S02.M01 agreementPublicKeyOf derives from that device's Ed25519 key listed active in the principal's portable identity document (F07.S02.M01), and sends the relay only {userDid, channel, urgency, dispatchId, notBefore?, collapseTag, boxes}; email requests carry no box and select a generic template by urgency.
       - When notify.notification.read arrives the vault cancels its local items and calls the relay command notify.notification.cancel for items it handed off, so a deferred push is never sent for a notification already read.
       - The module registers ExportSectionPort (section notify.deferred, counts only), DeletionPort (purge step) and RetentionPurgePort (kind notify.deferred) with F10 (N6), classifies every field with F10.S02.M02, calls privacy.consent.check in the vault, holds non-security decisions while privacy.deletion.assert_not_pending reports a pending deletion, and routes limits through RateLimitPort (N18).
     commands:
@@ -225,8 +225,11 @@ processes:
       device's agreement key, userDid || collapseKey)), so two users never share a tag. Hook mode - the mailbox hook
       always uses category activity and template notify.tpl.activity.wake and is collapsed when any push reached the
       user in the last 60 s; the mailbox hook also evaluates the activity email cell (default off) and queues at most
-      one activity notice per user per 6 hours; other hooks may carry only the auction, cycle suggestion or moderation
-      identifiers the relay already holds. Relays never see privacy.consent.check; they rely only on the registered
+      one activity notice per user per 6 hours, because sealed-sender mailbox wrappers do not tell the relay whether a put
+      holds a message, an offer or another statement; other hooks may carry only the auction, cycle suggestion or
+      moderation identifiers the relay already holds. Hook callers (F04 auction host modules, F08.S01.M01 mailbox put)
+      may list this module in depends_on and call dispatch in-process; this module depends on none of them. Push boxes are
+      opened on the target device with F16.S02.M01 agree(ephemeralPub). Relays never see privacy.consent.check; they rely only on the registered
       channel consent whose statement carries the F10 consent ID and purpose. No statement is produced; requests are
       signed relay requests checked against F16.S02.M02. Privacy ports (N6): ExportSectionPort section notify.deferred
       (counts per category and channel only); DeletionPort plan {willDelete: vault deferred rows, willPseudonymize: none,

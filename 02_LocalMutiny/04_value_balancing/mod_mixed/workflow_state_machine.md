@@ -75,6 +75,7 @@ stateDiagram-v2
 | TEST-PS-026-09.T18 | integration | PS-026-03.R05, PS-026-04.R04 | recovery compensation option Dan to Alice 80.00 EUR accepted by Dan only, then by Alice | leg stays proposed, then mutiny.compensation.activate moves it to due and opens a Deal with contextRef id recoveryCaseId |
 | TEST-PS-026-09.T19 | integration | PS-026-03.R04 | disputed leg: dispute withdrawn; second leg: recovery closes unresolved; third leg: 30 days without dispute activity with injected clock | claimed again; expired; expired; none counted as settled |
 | TEST-PS-026-09.T22 | integration | PS-026-03.R02, PS-026-04.R04 | cycle cancelled before handover with due legs; commerce.deal.cancelled received for another Deal | commerce.deal.cancel called once; legs withdrawn in both cases |
+| TEST-PS-026-09.T24 | integration | PS-026-07.R04, PS-026-03.R04 | F10 deletion plan with a due leg Dan to Alice, a claimed leg Alice to Bob, a settled leg and a proposed leg | plan() of Alice's vault lists exactly two blockers {kind: deal, ref: dealId} with counterparties [Dan] and [Bob]; settled and proposed legs are not blockers; after acknowledgement the claimed leg is no longer a blocker |
 
 ## Dependencies
 

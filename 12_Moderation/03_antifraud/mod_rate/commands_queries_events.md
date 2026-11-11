@@ -12,6 +12,8 @@
 - **PS-099-04.R04** Consuming moderation.spam.detected derives the bucket key from the payload subjectKey with this module's own HMAC and applies the penalty to that key's write buckets.
 - **PS-099-04.R05** For class report.receive, consume uses class report.receive.reduced while the key carries a reduced marker, which this module sets from moderation.signal.recorded of kind report_dismissed_bad_faith (F12.S03.M02) for 30 days from the signal's observedAt, unless the caller marks the request exempt (minor_safety).
 - **PS-099-04.R06** Vault scope local provides flow guards (offers and reports per hour) and stock guards (open offers, open cycle proposals) counted from the vault's own records; they are UX confirmations, never security controls, and relays never receive their counts.
+- **PS-099-04.R07** RatePolicyRegistry.register({ capabilityClass, ownerModule, algorithm, limit, periodMs, burst?, longWindow?, scopes, failMode, failModeLocked }) is the in-process registration port owner modules call at relay composition (F06.S02.M03 registers read.proximity.query.anonymous, read.proximity.query.token, read.proximity.center_seen and read.proximity.center_new with its own numbers); this module seeds a tenant RatePolicy row from the defaults when none exists, and owners depend on this module, never the reverse.
+- **PS-099-04.R08** Every relay-scope consume also charges the actor key's request.default bucket once per request (the first consume carrying the request's correlationId), so the per-tenant default request rate applies to every relay command and query without a second bus call; anonymous requests charge it by IP prefix.
 
 ## Specification
 
@@ -51,7 +53,7 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** RateLimitPort.consume({ tenantId, capabilityClass, actorKey?, ipPrefix?, cost, exempt?, limitOverride? }) receives the actor key and the truncated prefix in memory only and hashes them before any state access; limitOverride is accepted only from the in-process F12.S03.M04 limits check.
+**Note:** RateLimitPort.consume({ tenantId, capabilityClass, actorKey?, ipPrefix?, discriminator?, cost, exempt?, limitOverride?, correlationId? }) receives the actor key, the truncated prefix and any discriminator (for example the center cell of read.proximity.center_seen) in memory only and hashes them before any state access; limitOverride is accepted only from the in-process F12.S03.M04 limits check; correlationId lets request.default be charged once per request. RatePolicyRegistry.register is called only from the relay composition root; F12.S03.M03 depends on no module that registers classes.
 
 ### Example
 
@@ -73,6 +75,8 @@ POST https://relay.example/api/v1/cmd/moderation.ratepolicy.set  (relay command,
 | TEST-PS-099-09.T08 | integration | PS-099-03.R03, PS-099-04.R02 | operator policy change at runtime; vault sets a local guard through the same command; idle eviction | takes effect ≤ 5 s without resetting buckets; local guard stored in scope local; full-capacity buckets evicted |
 | TEST-PS-099-09.T15 | e2e | PS-099-04.R06 | mobile user sends the 11th offer in an hour with the local guard at 10 and opens an 11th open offer | confirmation dialogs appear; no count is sent to any relay; axe zero serious issues |
 | TEST-PS-099-09.T17 | integration | PS-099-04.R05 | moderation.signal.recorded report_dismissed_bad_faith observed 10 days ago (delivered twice) for reporter key R; R files 4 reports in 24 h; one more marked exempt (minor_safety); clock advanced 21 more days | one marker row; 4th RATE_LIMITED under report.receive.reduced; exempt one allowed under report.receive; after the marker expires report.receive applies again |
+| TEST-PS-099-09.T19 | contract | PS-099-04.R07, PS-099-01.R05, PS-099-02.R04 | F06.S02.M03 contract fixture registers the four proximity classes with its v1 numbers (20 per minute and 200 per hour, 60 per minute and 600 per hour, a center_seen probe of 1 per 24 h, 2 new centers per hour and 5 per 24 h with failModeLocked); a second module registers read.proximity.center_new again; an operator sets failMode open on it | tenant rows seeded with ownerModule F06.S02.M03 and longWindow; VALIDATION_FAILED for the duplicate owner; MODERATION_RATE_POLICY_FAIL_MODE_LOCKED |
+| TEST-PS-099-09.T22 | integration | PS-099-04.R08, PS-099-01.R05, PS-099-02.R04 | request.default at 120 per minute; one request consuming three classes; anonymous caller; set request.default to 5 and to 1500; tenant migration with requestRatePerMinutePerKey 300 | the request charges request.default once; the 121st request in a minute is RATE_LIMITED whatever its class; anonymous charged by prefix; VALIDATION_FAILED twice; expand step writes limit 300 periodMs 60000 |
 
 ## Dependencies
 

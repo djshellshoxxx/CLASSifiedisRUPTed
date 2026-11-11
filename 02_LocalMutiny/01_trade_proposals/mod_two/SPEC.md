@@ -15,6 +15,7 @@ A direct item-for-item(s) proposal between two members, with an optional compens
 - Ingest only the proposal withdrawal statement (classrup.mutiny.proposal_response/v1); react to the events of the single ingest owner of every other statement type (revisions F02.S01.M04, consents, declines and revocations F08.S02.M02, reservations F02.S03.M02) and re-evaluate the local acceptance verdict.
 - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased parties in retained evidence.
 - Expire proposals by the local clock (default 72 h, range 1 h to 14 d) and treat any clock disagreement as expired.
+- Register the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_proposal by inverted registration: canonicalBytes(ref, rev) from F02.S01.M04, currentRevision(ref), partyRole(ref, did) and isCommitted(ref).
 
 ## Not responsible for
 
@@ -73,7 +74,7 @@ F02.S01.M02, F02.S01.M03, F02.S01.M04, F02.S02.M05, F02.S03.M02, F01.S03.M01, F0
 | PS-015-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-015-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-015-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-015-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-015-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-015-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-015-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-015-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -85,6 +86,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - A party is never shown as bound to a revision unless a valid signature on that exact hash was verified in the viewing vault.
 - Forks and clock disagreement always end in frozen or expired, never in acceptance.

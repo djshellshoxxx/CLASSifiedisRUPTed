@@ -21,7 +21,7 @@ Initial **open**; terminal **resolved**, **closed_unresolved**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | open -> open | option proposed, accepted, rejected or completed by signed statements | lastActivityAt updated; no state change |
-| open -> escalated | mutiny.recovery.escalate by a participant | dispute opened in F09.S02.M02 with the evidence bundle; disputeCaseId stored |
+| open -> escalated | mutiny.recovery.escalate by a participant | dispute opened with commerce.dispute.open contextRef {type: cycle, id: cycleId} and the evidence bundle; disputeCaseId stored |
 | open -> resolved | all accepted options completed or waived and every leg has a disposition backed per V12 | emits mutiny.recovery.resolved with outcome agreed and reviewUnlock |
 | escalated -> resolved | commerce.dispute.resolved consumed for disputeCaseId with a resolution other than lapsed | dispositions recorded only when both parties of each leg acknowledged the outcome; emits mutiny.recovery.resolved with outcome dispute_outcome and reviewUnlock |
 | escalated -> open | commerce.dispute.withdrawn consumed for disputeCaseId | disputeCaseId cleared; options and dispositions remain; lastActivityAt updated |
@@ -63,6 +63,7 @@ stateDiagram-v2
 | TEST-PS-024-09.T23 | abuse | PS-024-02.R02, PS-024-03.R05 | 6-party recovery: four participants accept a waive option on leg L2 without Carol (giver) and Dan (receiver); later Carol and Dan accept | no disposition for L2 and MUTINY_RECOVERY_DISPOSITION_UNSIGNED until Carol and Dan signed; then disposition recorded with backedBy signed_acceptance |
 | TEST-PS-024-09.T25 | integration | PS-024-03.R03, PS-024-04.R05 | escalated case: dispute withdrawn, then re-escalated and lapsed; separate open case without activity for 30 days | escalated -> open on commerce.dispute.withdrawn; closed_unresolved on lapsed; both resolved events carry reviewUnlock with disputeFlag true |
 | TEST-PS-024-09.T26 | integration | PS-024-02.R02, PS-024-03.R03 | compensation option payer Dan payee Alice 80.00 EUR accepted by Dan then Alice | option accepted only after both; mutiny.compensation.activate called once in the transaction of Alice's accept |
+| TEST-PS-024-09.T27 | contract | PS-024-04.R06, PS-024-03.R03 | F09.S02.M02 DisputeContextPort conformance for type cycle on C4 (committed), an unknown cycle id and a proposed cycle without RecoveryCase; then escalate C4's case twice | resolve returns the four participants with role participant and contextCid equal to the committed revisionHash; unknown for the other two; commerce.dispute.open is called with contextRef {type: cycle, id: C4}, reason not_received, evidence cids and idempotencyRef recoveryCaseId, and the repeat returns the same case; commerce.dispute.resolved for that contextRef resolves the case |
 
 ## Dependencies
 

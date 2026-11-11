@@ -39,10 +39,12 @@ See the module test table below (all processes).
 | TEST-PS-107-09.T16 | integration | PS-107-03.R05, PS-107-04.R06 | deletion requested, cancel on day 13; a second request executed; DeletionPort plan, export section and retention purge with F10 doubles | during grace consents show paused and nothing reaches relays; cancel restores granted with no event; at execution withdrawals with via account_deletion are queued to every relay before destroy_keys; section exported; records pseudonymized when kept |
 | TEST-PS-107-09.T17 | integration | PS-107-03.R03 | consent passes expiresAt while the app is closed | relay sweep expires it, issues a receipt with via expired and emits relay-local opted_out; vault applies it on next sync with via expired |
 | TEST-PS-107-09.T18 | e2e | PS-107-07.R03, PS-107-07.R01 | fresh vault opens Channels settings and the opt-in sheet, refuses, reopens after 1 and 31 days; inspect the consent record | both channels not enabled by default; sheet text names the relay and what it learns; no re-prompt before 30 days; record holds no address or endpoint |
+| TEST-PS-107-09.T19 | contract | PS-107-01.R05, PS-107-04.R04 | opt in to email at R; register a statement lacking privacyConsentId, one lacking privacyPurpose and a valid one; capture all relay-bound traffic | record, statement and registration carry privacyConsentId and privacyPurpose notify_email; incomplete statements refused at the relay; the only relay-facing consent artifact is classrup.notify.channel_consent_statement/v1 and no F10 statement is sent |
+| TEST-PS-107-09.T20 | integration | PS-107-03.R06, PS-107-03.R03 | push consent at R reaches 351 days, then expiresAt, with PC1 still granted; user reconfirms; a second run where PC1 was withdrawn before reconfirmation | prompt names the channel only; reconfirmation creates a new record and statement linked to PC1 without any F10 prompt or change; opted_out via expired leaves PC1 granted; with PC1 withdrawn the F10 grant flow is shown instead of reconfirm |
 
 ## Acceptance criteria
 
-- All tests T01 to T18 pass in CI.
+- All tests T01 to T20 pass in CI.
 - No push or email is ever sent without a granted, unexpired, registered consent.
 - Unsubscribe works with one click and no login, cannot grant consent, and reaches the vault as a relay-signed receipt.
 

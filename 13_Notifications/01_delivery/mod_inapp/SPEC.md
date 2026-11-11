@@ -24,6 +24,7 @@ The in-app notification inbox. It runs in the user's vault while the app is open
 - Message content; the inbox shows only templates and references and the thread screens show content.
 - Mute per thread (F08.S01.M02) beyond reading it as an input to the routing rule for comms.message.received.
 - Block list storage (F07.S02.M02); this module only calls its filter functions.
+- Producing the routed events; producers (for example F08.S01.M01 messages and F08.S03.M03 meetups) are not dependencies because this module only consumes their events, which keeps the edge F08.S01.M01 -> F13.S02.M01 for the mailbox push hook (N17) acyclic.
 - Future: synchronized read state across the user's devices, rich actions inside notifications, a discovery category for saved-search matches.
 
 ## User stories
@@ -67,11 +68,11 @@ The in-app notification inbox. It runs in the user's vault while the app is open
 - Commands: `notify.notification.create`, `notify.notification.mark_read`, `notify.notification.mark_all_read`
 - Queries: `notify.notification.list_mine`, `notify.notification.unread_count`
 - Emits: `notify.notification.created`, `notify.notification.read`
-- Consumes: `bazaar.offer.made`, `bazaar.offer.accepted`, `bazaar.offer.rejected`, `bazaar.offer.expired`, `bazaar.offer.withdrawn`, `bazaar.negotiation.countered`, `commerce.deal.opened`, `commerce.payment.claimed`, `commerce.payment.acknowledged`, `commerce.payment.disputed`, `commerce.deal.completed`, `comms.message.received`, `mutiny.cycle.proposed`, `mutiny.cycle.committed`, `mutiny.cycle.declined`, `mutiny.cycle.participant_dropped`, `mutiny.cycle.cancelled`, `mutiny.cycle.completed`, `mutiny.recovery.opened`, `mutiny.proposal.revised`, `auctions.bid.outbid`, `auctions.auction.won`, `auctions.auction.unsold`, `auctions.auction.closed`, `auctions.result.voided`, `services.quote.issued`, `services.quote.accepted`, `services.booking.confirmed`, `services.booking.cancelled`, `services.booking.completed`, `services.milestone.submitted`, `services.milestone.approved`, `services.dispute.opened`, `rentals.reservation.requested`, `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.rental.overdue`, `rentals.damage.claimed`, `rentals.rental.closed`, `comms.meetup.proposed`, `comms.meetup.agreed`, `comms.meetup.cancelled`, `comms.meetup.no_show`, `moderation.action.applied`, `moderation.appeal.decided`, `identity.device_key.added`, `identity.device_key.revoked`, `identity.session.revoked`, `identity.recovery.completed`, `identity.recovery.kit_created`, `federation.account.moved`, `privacy.export.ready`, `notify.email.bounced`, `notify.preference.changed`, `identity.block.added`, `privacy.deletion.completed`
+- Consumes: `bazaar.offer.made`, `bazaar.offer.accepted`, `bazaar.offer.rejected`, `bazaar.offer.expired`, `bazaar.offer.withdrawn`, `bazaar.negotiation.countered`, `commerce.deal.opened`, `commerce.payment.claimed`, `commerce.payment.acknowledged`, `commerce.payment.disputed`, `commerce.deal.completed`, `comms.message.received`, `mutiny.cycle.proposed`, `mutiny.cycle.committed`, `mutiny.cycle.declined`, `mutiny.cycle.participant_dropped`, `mutiny.cycle.cancelled`, `mutiny.cycle.completed`, `mutiny.recovery.opened`, `mutiny.recovery.resolved`, `mutiny.proposal.revised`, `mutiny.proposal.rejected`, `mutiny.proposal.withdrawn`, `mutiny.proposal.expired`, `auctions.bid.outbid`, `auctions.auction.won`, `auctions.auction.unsold`, `auctions.auction.closed`, `auctions.result.voided`, `auctions.result.second_chance_offered`, `auctions.result.non_payment`, `services.quote.issued`, `services.quote.accepted`, `services.quote.declined`, `services.quote.expired`, `services.booking.confirmed`, `services.booking.cancelled`, `services.booking.completed`, `services.milestone.submitted`, `services.milestone.approved`, `services.milestone.changes_requested`, `services.dispute.opened`, `services.dispute.closed`, `rentals.reservation.requested`, `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.rental.overdue`, `rentals.damage.claimed`, `rentals.rental.closed`, `comms.meetup.proposed`, `comms.meetup.agreed`, `comms.meetup.cancelled`, `comms.meetup.no_show`, `moderation.action.applied`, `moderation.appeal.decided`, `identity.device_key.added`, `identity.device_key.revoked`, `identity.session.revoked`, `identity.recovery.completed`, `identity.recovery.kit_created`, `federation.account.moved`, `privacy.export.ready`, `notify.email.bounced`, `notify.preference.changed`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F13.S02.M04, F07.S02.M02, F08.S01.M01, F08.S01.M02, F08.S03.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
+F13.S02.M04, F07.S02.M02, F08.S01.M02, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -80,7 +81,7 @@ F13.S02.M04, F07.S02.M02, F08.S01.M01, F08.S01.M02, F08.S03.M03, F12.S03.M03, F1
 | PS-103-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-103-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-103-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-103-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-103-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-103-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-103-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-103-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -92,7 +93,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T18 pass in CI.
+- All tests T01 to T19 pass in CI.
 - Every routed event exists in the catalog, every routing field exists in its producer payload, and the inbox never stores text content.
 - Security notifications are created regardless of the in-app preference and for changes made on the user's other devices.
 - Duplicate event delivery never creates a second row and never retries.

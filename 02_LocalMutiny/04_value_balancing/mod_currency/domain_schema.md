@@ -28,6 +28,7 @@ Schema `classrup.mutiny.normalization_record/v1` · storage **device** · privac
 | quotes | array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt ≤ issuedAt + 24 h, purpose barter_normalization, source label, sourceSigned boolean} |
 | earliestQuoteExpiry? | timestamp — min of quotes[].expiresAt; absent when no quotes; the revision consentDeadline is ≤ this and ≤ creation + 24 h |
 | toleranceRef? | object — {quoteId, rate {num, den}, source} EUR to settlement currency, present when the settlement currency is not EUR; converts the absolute minimum reference only |
+| quoteChecks | array — 0..8 local results {quoteId, sourceSigned, issuerSigned, verificationLabel, label, expired, reDerivedDeviationBps?}; for peer_verified records the output of commerce.fx_quote.verify_embedded, for local records the issued FxQuote's flags; not covered by normalizationHash and the only source of the labels shown |
 | normalizationHash | cid — sha256 of JCS(settlementCurrency, items, quotes) |
 | status | enum — current \| superseded \| expired \| frozen \| closed |
 | mismatch | boolean — true when a peer's recomputation differs |

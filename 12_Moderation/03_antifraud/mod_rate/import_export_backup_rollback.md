@@ -15,7 +15,7 @@
 - **export:** Section moderation.ratepolicy in the relay configuration export and in the vault export for local guards; buckets and salts not exported.
 - **import:** Policies import after bounds validation; invalid rows are rejected with VALIDATION_FAILED and the rest are applied; local guard import affects only the importing vault.
 - **backup:** Policies covered by relay SQLite backup (CTR-IOX-001 IOX-3); buckets and salts excluded and recreated empty after restore.
-- **migration rollback:** Expand step converts v1 ratePerMinute rows to limit = ratePerMinute and periodMs 60000 and keeps ratePerMinute readable for 180 days; rollback is safe because older readers ignore new optional fields and unknown classes use the default policy.
+- **migration rollback:** Expand step converts v1 ratePerMinute rows to limit = ratePerMinute and periodMs 60000 and keeps ratePerMinute readable for 180 days; a second expand step writes one request.default row per tenant from the former F15.S04.M03 Tenant.limits.requestRatePerMinutePerKey value (default 120, clamped to 10..1200); rollback is safe because older readers ignore new optional fields and unknown classes use the default policy.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

@@ -10,7 +10,7 @@
 - **PS-012-01.R02** The snapshot carries parties, legs with item references and declared values, compensation legs, accepted imbalances, normalization with quote ids and rates, deadlines and the cited feasibility report hash, and the digest covers subject type, subject id, revision number, prev and author together with the snapshot.
 - **PS-012-01.R03** Revisions of one subject form a chain by prev hash and number with at most 20 entries, and the head is the revision with the highest number that is not part of a fork.
 - **PS-012-01.R04** Revisions are P2 and travel only as end-to-end encrypted envelopes addressed to the subject's parties (PRV-5).
-- **PS-012-01.R05** contentHash = cid (sha256-base64url) of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); canonicalBytes returns exactly these JCS bytes, and the F08 subjectRevisionHash is the lowercase hex of the same 32 SHA-256 bytes (hex = base64url-decode of the contentHash digest), so one digest is compared in one encoding everywhere.
+- **PS-012-01.R05** contentHash = cid (sha256-base64url) of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); canonicalBytes returns exactly these JCS bytes, and the F08 subjectRevisionHash is the contentHash cid itself (CTR-ID-001 ID-3 form sha256-<base64url>, N13), so one digest is compared in one encoding everywhere and a hex-encoded hash never matches.
 
 ## Specification
 
@@ -29,7 +29,7 @@ Schema `classrup.mutiny.proposal_revision/v1` · storage **device** · privacy *
 | authorId | did — signer; must be a party of the subject |
 | reason | enum — initial \| counter \| compensation_added \| quote_refresh \| deadline_change \| acceptance_policy_change |
 | snapshot | object — canonical terms ≤ 64 KiB: {parties[{did, role, position}], legs[], compensation[], acceptedImbalances[{actorId, maxAmount Money}] (0..8, each a participant's signed acceptance of a gap through its consent on this digest), settlementCurrency, normalization, toleranceRef? {quoteId, rate, source} (EUR to settlement currency, present when the settlement currency is not EUR, F02.S04.M02), consentDeadline, executionWindowMs, feasibilityReportHash?} |
-| contentHash | cid — sha256-base64url of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); the digest all consents sign (F08 hex form = the same 32 bytes) |
+| contentHash | cid — sha256-base64url of JCS({subjectType, subjectId, revisionNo, prev, authorId, snapshot}); the digest all consents sign; equals the F08 subjectRevisionHash (same cid form) |
 | legIds | array — 1..8 uuidv7 of TradeLeg ids sealed by this revision |
 | compensationLegIds | array — 0..8 uuidv7 of CompensationLeg ids sealed by this revision |
 | normalizationId? | uuidv7 — NormalizationRecord id when more than one currency is involved |
@@ -73,7 +73,7 @@ CREATE INDEX mutiny_revision_hash ON mutiny_proposal_revision(tenant_id, content
 | TEST-PS-012-09.T17 | a11y | PS-012-01.R04 | diff and history screens | axe zero serious issues; text labels for added, removed, changed |
 | TEST-PS-012-09.T18 | property | PS-012-01.R05, PS-012-01.R02, PS-012-03.R01 | random revision chains where revision k restores the terms of an earlier revision | every revision has a distinct contentHash; consents on the earlier digest stay void |
 | TEST-PS-012-09.T19 | integration | PS-012-02.R04, PS-012-01.R03 | same-number concurrent revision, revision 5 before 4, exact duplicate, wrong prev | fork detected (not MUTINY_REVISION_LIMIT); 5 buffered with MUTINY_REVISION_GAP and applied after 4; duplicate skipped; MUTINY_REVISION_CHAIN_INVALID |
-| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | hex digest equals base64url-decoded contentHash; registered signer role is party, coordinator for cycle |
+| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | the ID-3 cid of canonicalBytes equals contentHash and the F08 subjectRevisionHash, and a hex encoding of the same digest is refused; registered signer role is party, coordinator for cycle |
 
 ## Dependencies
 

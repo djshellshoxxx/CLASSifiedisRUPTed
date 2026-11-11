@@ -10,6 +10,8 @@
 - **PS-096-01.R02** An EnforcementAction stores kind, target, scope, policy rule IDs with versions, facts summary, decider, expiry, statement-of-reasons content id and issue time, and status; actions are never silent and always carry rule IDs.
 - **PS-096-01.R03** Cases and actions are P2 between the relay's moderators and the subject, retained under RET-EVIDENCE, and never federated; the only outward statements are the subject's statement of reasons and reversal and the opt-in advisory with its retraction.
 - **PS-096-01.R04** A case can carry several actions (for example removal plus a warning) and stays assigned after an action until a moderator closes it, unless the apply asks to close it.
+- **PS-096-01.R05** Every action stores targetRef { type, id, cid? } naming exactly the content it concerns (cid is the signed projection's content id when known, for a listing its statementCid), so index and hosting consumers act only on that item, and type account is the only form that concerns every document of the subject key.
+- **PS-096-01.R06** A host-policy action recorded for a hosting module is an ordinary relay action with caseSource auction_review, kind remove_from_index, targetRef { type auction, id auctionId }, the seller as subjectKey, in-force ruleRefs, a factsSummary, the confirming moderator as deciderKey and the proposing moderator as proposerKey, so it has a statement of reasons and an appeal route like any other action.
 
 ## Specification
 
@@ -27,7 +29,7 @@ Schema `classrup.moderation.case/v1` · storage **relay** · privacy **P2** · r
 | reportRefs | string[] — up to 200 report receipt IDs from F12.S01.M01; reporter identities not stored here |
 | snapshotIds | uuidv7[] — up to 20 EvidenceSnapshot IDs |
 | actionIds | uuidv7[] — up to 10 EnforcementAction IDs applied on this case |
-| source | enum — report \| spam_detection \| shill_suspicion \| risk_review \| operator |
+| source | enum — report \| spam_detection \| shill_suspicion \| risk_review \| operator \| auction_review |
 | openReason? | string — 10..500 code points, operator-opened cases |
 | assigneeKey? | did:key — moderator working the case |
 | status | enum — open \| assigned \| resolved |
@@ -55,11 +57,14 @@ Schema `classrup.moderation.enforcementaction/v1` · storage **relay+device** ·
 | subjectKey | did:key — affected key |
 | targetType | enum — as ModerationCase.targetType |
 | targetId | string — content id or subject key for account actions |
-| targetRef? | string — content id (cid) removed from the index |
+| targetRef | object — { type: targetType, id: targetId, cid?: content id (sha256-…) of the exact signed projection the action concerns, for a listing the projection statementCid }; always set; type account means every document of subjectKey on this relay |
 | restrictedCapabilities? | string[] — relay capabilities denied, 1..20, never the protected appeal, own-read, export or deletion capabilities |
 | ruleRefs | string[] — policy rule IDs with versions in force at appliedAt, e.g. POL-SPAM-001@2, 1..5 required |
 | factsSummary | string — 50..2000 code points shown to the subject |
 | deciderKey? | did:key — moderator who decided; relay copy only, recorded for appeal independence; absent in the vault copy |
+| proposerKey? | did:key — host-policy records only: the moderator who proposed the decision the decider confirmed (F04.S02.M03 two-moderator rule); relay copy only, checked for appeal independence like deciderKey |
+| caseSource | enum — the case source at apply (report \| spam_detection \| shill_suspicion \| risk_review \| operator \| auction_review); auction_review marks a host-policy record |
+| hostRef? | string — host-policy records only: id of the hosting module record (auction review id), unique per (tenantId, caseSource) |
 | automated | boolean — true only for deterministic velocity throttles; others always have a human decider |
 | expiresAt? | timestamp — max 365 days for restrict, 90 days for suspend by moderators, absent only for operator-applied permanent suspension |
 | reasonsStatementCid | string — content id of the relay-signed statement of reasons |
@@ -77,6 +82,7 @@ Schema `classrup.moderation.enforcementaction/v1` · storage **relay+device** ·
 - kind is never a hidden or shadow restriction; the subject can always retrieve the statement of reasons.
 - deciderKey's principal differs from the subject's and from the reviewer of any appeal on the action.
 - status expired implies revertReason expired; a replacement action references a contested action whose revertReason is appeal_reduced.
+- caseSource auction_review implies kind remove_from_index, targetRef.type auction, hostRef, deciderKey and proposerKey set with different principals, and at most one action per (tenantId, hostRef).
 
 ### Storage DDL
 
@@ -101,6 +107,9 @@ CREATE INDEX moderation_action_case ON moderation_action(tenant_id, case_id);
 | TEST-PS-096-09.T12 | integration | PS-096-01.R03, PS-096-07.R01, PS-096-07.R02 | subject's signed deletion request applied on the relay after an action; legal hold present; outbound traffic captured | pseudonymized case kept; hold prevents purge; only reasons, reversal, advisory and retraction statements ever left the relay |
 | TEST-PS-096-09.T17 | integration | PS-096-01.R04, PS-096-04.R02 | operator opens an account case with moderation.case.open; moderator applies remove_from_index then warn on that case; then closes it actioned | case.opened emitted; two actions on one case; case resolved actioned only by the close |
 | TEST-PS-096-09.T19 | integration | PS-096-03.R05, PS-096-01.R03 | action with advisory expires; another is overturned on appeal; subscriber vault syncs the feed | advisories carry expiresAt; retraction published with seq and advisory cid; subscriber drops both labels |
+| TEST-PS-096-09.T27 | integration | PS-096-01.R06, PS-096-04.R08, PS-096-02.R05, PS-096-05.R06 | F04.S02.M03 contract fixture confirms a void (seller_fraud) for auction A with no open case and for auction B with a report case open; a record whose proposer equals the decider; an HTTP request to record_host_policy | A: case opened with source auction_review and assigned to the confirming moderator, remove_from_index with targetRef { auction, A }, subject the seller, reasons statement queued, actionId returned, case resolved actioned; B: action attached to the open case; VALIDATION_FAILED; no route |
+| TEST-PS-096-09.T29 | contract | PS-096-01.R05, PS-096-04.R06 | apply remove_from_index on listing L with targetCid, apply on an account case, then revert both; inspect events and statements with the F06.S01.M01 and F01.S01.M03 contract fixtures | applied and reverted carry targetRef { listing, L, cid } or { account, subjectKey } and caseSource; reasons/v1 and reversal/v1 carry relayId, actionId and targetRef with the listingId and projection statementCid; the index fixture removes only L's document; the publication fixture binds each notice to one delivery |
+| TEST-PS-096-09.T31 | integration | PS-096-01.R06, PS-096-04.R08 | the host-policy action is appealed through F12.S01.M03 and overturned | moderation.appeal.decided carries the actionId the hosting module stored; the action is reverted with appeal_overturned and a reversal statement; the reviewer's principal differs from proposer and decider |
 
 ## Dependencies
 

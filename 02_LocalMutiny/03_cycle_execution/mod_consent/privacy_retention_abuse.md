@@ -10,7 +10,7 @@
 - **PS-021-07.R02** Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
 - **PS-021-07.R03** Coercion and spam through unwanted cycle proposals are limited by recipient-side muting, per-sender quarantine, the per-vault cap on open cycles from identities with no history, and the proposer's cap of 5 open cycles and proposals.
 - **PS-021-07.R04** The UI states that pseudonymity is not anonymity and that counterparties can see the public items, pseudonyms and the distance bucket.
-- **PS-021-07.R05** The module registers ExportSectionPort (section mutiny.cycles), DeletionPort and RetentionPurgePort with F10 (N6), annotates every Cycle and CycleConsent field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained cycles.
+- **PS-021-07.R05** The module registers ExportSectionPort (section mutiny.cycles), DeletionPort and RetentionPurgePort with F10 (N6), annotates every Cycle and CycleConsent field with its F10.S02.M02 class, reports every committed or executing cycle of the principal as a DeletionPort.plan() blocker {kind: cycle, ref: cycleId, counterparties: the other participantIds}, and on privacy.deletion.completed pseudonymizes the erased participant in retained cycles.
 - **PS-021-07.R06** Sybil rings are made visible rather than claimed impossible: each participant has a trust panel, key-linked rings need explicit confirmation, and the review screen recommends a simultaneous handover for legs adjacent to new identities.
 
 ## Specification
@@ -53,6 +53,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-021-09.T16 | e2e | PS-021-07.R04, PS-021-01.R04 | mobile 3-party consent flow | disclosure that pseudonymity is not anonymity shown; consent statement text before Sign; trust panel shown; axe zero serious issues |
 | TEST-PS-021-09.T22 | integration | PS-021-07.R01, PS-021-01.R03 | relay fixture records every mailbox put during propose, consent and decline | mailbox contents are ciphertext only and metadata is limited to recipient mailbox id, size and time |
 | TEST-PS-021-09.T26 | abuse | PS-021-07.R06, PS-021-02.R04 | 2-Sybil ring: two fresh did:key identities sharing a device key invite a real member into a 3-party cycle | trust panel shows first seen 0 days and 0 completed trades, key-linked warning, consent requires confirmation, simultaneous handover recommended; quarantined when the unknown-coordinator cap is reached |
+| TEST-PS-021-09.T30 | integration | PS-021-07.R05, PS-021-06.R02 | F10 deletion plan while C3 is executing, C4 proposed and C2 completed | plan() lists exactly one blocker {kind: cycle, ref: C3, counterparties: the two other participants}; C4 and C2 are not blockers; after C3 completes the plan has no blocker |
 
 ## Dependencies
 

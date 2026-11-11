@@ -87,7 +87,7 @@ processes:
     requirements:
       - The module exposes library functions and no vault or relay commands, queries or events.
       - Functions return strings or Result values and never throw for bad input.
-      - Push alert text is rendered on the device by the service worker from the tpl key with t(); relays never render push text. Only the generic email templates of F13.S01.M02 (no user content, no amounts) may be rendered by the user-selected email relay.
+      - "Push alert text is rendered on the device by the service worker from the template key of one of the three F13.S01.M01 push payload forms - the tpl inside the opened sealed box {v, tpl, ref, ck} of a sealed payload {v, urg, s}, the tpl of a relay-hook payload {v, urg, tpl, ref?, ck?}, or tp(notify.tpl.system.digest, n) for a digest payload {v, urg, tpl: notify.tpl.system.digest, n}; relays never render push text. Only the generic email templates of F13.S01.M02 (no user content, no amounts) may be rendered by the user-selected email relay."
     commands: []
     queries: []
     note: >-
@@ -171,7 +171,7 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Property tests cover plural selection for every shipped locale against CLDR data via Intl.PluralRules.
       - Pseudolocale end-to-end runs prove no clipping with expansion and correct mirroring in RTL.
-    fixtures: "Catalogs en, de, fr, es plus generated en-XA and ar-XB; a broken fixture catalog set (missing key, parameter mismatch, missing plural, 501-character message, nested braces, ICU select syntax); lint fixtures with left and right CSS and a call site missing a declared parameter; LocalSettings fixtures with defaultLocale de, de-AT and pt-BR; a received listing title containing U+202E; a push payload with tpl notify.tpl.offers.made."
+    fixtures: "Catalogs en, de, fr, es plus generated en-XA and ar-XB; a broken fixture catalog set (missing key, parameter mismatch, missing plural, 501-character message, nested braces, ICU select syntax); lint fixtures with left and right CSS and a call site missing a declared parameter; LocalSettings fixtures with defaultLocale de, de-AT and pt-BR; a received listing title containing U+202E; three F13.S01.M01 push payloads - a sealed payload {v, urg, s} whose box opens on the device to {v, tpl: notify.tpl.offers.made, ref, ck}, a relay-hook payload {v, urg, tpl: notify.tpl.activity.wake} from the mailbox hook and a digest payload {v, urg, tpl: notify.tpl.system.digest, n: 7}."
     tests:
       - "T01 | unit | 01.R02,01.R03,02.R01 | validate the shipped catalogs, the broken fixtures and a parser fixture set with {name}, nested braces, ICU plural and select syntax and HTML markup | shipped pass; each broken fixture fails with V01, V02, V03, V04 or V08; only {name} placeholders accepted"
       - "T02 | unit | 01.R01,02.R02,06.R01 | negotiate with LocalSettings.defaultLocale de-AT; with pt-BR stored and browser en-GB; with xx-YY, malformed and empty lists; before unlock; with a selected relay whose Tenant.defaultLocale is fr | de, en via the browser, en, en, en; navigator.languages only before unlock; LocalSettings read only through platform.local_settings.get; Tenant.defaultLocale never consulted; no exception"
@@ -187,7 +187,7 @@ processes:
       - "T12 | load | 08.R01,08.R02,08.R03 | 100 000 t() calls; catalog load on 4G profile; bundle size check | p95 ≤ 0.05 ms, switch ≤ 300 ms, load ≤ 1 s, catalogs ≤ 30 KiB gzip"
       - "T13 | unit | 09.R01 | traceability tool run | every PS-113 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | add a key and a locale; export and import F15.S04.M03 LocalSettings with defaultLocale de and with pt-BR; roll back a release | new keys fall back to en until translated; de restored after import; pt-BR kept while the browser language or en is used; this module adds no export section; rollback keeps users on a shipped locale"
-      - "T15 | contract | 04.R03 | service worker receives the push payload {v, ref, tpl: notify.tpl.offers.made, ck, urg} with the vault in de; render every F13.S01.M02 email template with the relay build of the catalogs | alert text rendered on the device by t(tpl) in German; payload carries no text; no relay code path renders push text; email templates declare no parameter carrying user content or Money"
+      - "T15 | contract | 04.R03 | with the vault in de the service worker receives each of the three F13.S01.M01 push payload forms - a sealed payload {v, urg, s} that opens on the device to {v, tpl: notify.tpl.offers.made, ref, ck}, a relay-hook payload {v, urg, tpl: notify.tpl.activity.wake} from the mailbox hook and a digest payload {v, urg, tpl: notify.tpl.system.digest, n: 7}; render every F13.S01.M02 email template with the relay build of the catalogs | sealed alert text rendered on the device by t(tpl) from the opened box in German; hook alert text rendered by t(tpl) in German; digest rendered by tp(notify.tpl.system.digest, 7) with the de plural form; no form carries text; no relay code path renders push text; email templates declare no parameter carrying user content or Money"
     acceptance:
       - All tests T01–T15 pass in CI.
       - No user ever sees a raw key or an empty string for a missing translation or a missing parameter.

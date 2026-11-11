@@ -34,7 +34,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 |---|---|---|---|---|
 | TEST-PS-092-09.T07 | abuse | PS-092-05.R01, PS-092-05.R02, PS-092-05.R03 | stranger files; decider decides; appellant queries its appeal and inspects every statement | FORBIDDEN, MODERATION_APPEAL_REVIEWER_CONFLICT, reviewer key absent from responses and statements |
 | TEST-PS-092-09.T17 | abuse | PS-092-05.R03 | decide an appeal and inspect the decision envelope, status statements, events and the vault copy; read the relay audit log as operator | only the relay key signed the statements; reviewer key absent everywhere except the relay copy and audit log |
-| TEST-PS-092-09.T18 | abuse | PS-092-05.R04, PS-092-02.R03 | assign M1 via second key K1b; assign M3 who filed report R; assign a moderator whose key set lists the subject's key | MODERATION_APPEAL_REVIEWER_CONFLICT in each case; M2 assigned |
+| TEST-PS-092-09.T18 | abuse | PS-092-05.R04, PS-092-02.R03 | assign M1 via second key K1b; assign M3 who filed report R; assign a moderator whose key set lists the subject's key; assign the proposer of a host-policy auction void action | MODERATION_APPEAL_REVIEWER_CONFLICT in each case; M2 assigned |
 | TEST-PS-092-09.T19 | integration | PS-092-05.R05 | key of A suspended on relay X files an appeal and reads its status | appeal accepted and status returned |
 
 ## Dependencies

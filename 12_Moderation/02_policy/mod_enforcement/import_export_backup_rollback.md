@@ -15,7 +15,7 @@
 - **export:** Section moderation.actions in classrup-export/v1 (vault, ExportSectionPort): signed statements of reasons and reversals received by the user; relay operator export: cases and actions as JSON lines without notes.
 - **import:** Statements import after signature verification as read-only history; relay import restores cases and actions with original IDs and re-arms expiry; conflicting IDs are rejected.
 - **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring recomputes active restrictions before accepting traffic.
-- **migration rollback:** Additive fields only in v1 (targetType, targetId, reasonsIssuedAt, noticeState, advisoryCid, replacesActionId, actionIds); rollback is safe because new optional fields are ignored by older readers, and new action kinds fall back to warn display.
+- **migration rollback:** Additive fields only in v1 (targetType, targetId, reasonsIssuedAt, noticeState, advisoryCid, replacesActionId, actionIds, proposerKey, caseSource, hostRef); targetRef changes from the optional cid string to the object { type, id, cid? } by an expand step that builds it from targetType, targetId and the stored cid, with caseSource taken from the case source; readers of the earlier draft read targetRef.cid; rollback is safe because new optional fields are ignored by older readers, and new action kinds fall back to warn display.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

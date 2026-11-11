@@ -9,6 +9,7 @@
 - **PS-102-06.R01** Enable, disable, add, verify and remove are idempotent, and send is idempotent per dispatchRef with a 10-minute dedupe window.
 - **PS-102-06.R02** Transport failures retry 3 times over 6 hours with the Message-ID unchanged so duplicate submissions collapse at the receiver.
 - **PS-102-06.R03** A relay restart resumes queued deliveries from the database and never sends a delivery already marked sent.
+- **PS-102-06.R04** Every event consumer of this module is registered with externalSideEffects true, so F15.S03.M03 restore re-delivery excludes it (V11) and no email is sent twice after a relay restore; instead, before the first send after a restore, the relay marks removed and erases every address whose email consent is not granted in the restored registrations and cancels its queued deliveries.
 
 ## Specification
 
@@ -25,7 +26,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-102-09.T08 | integration | PS-102-06.R01, PS-102-06.R02, PS-102-06.R03 | verify twice, retry on 4xx, crash after SMTP accept, dispatchRef repeated | one verified transition, 3 attempts max, one repeated submission with the same Message-ID, one delivery per dispatchRef |
+| TEST-PS-102-09.T21 | chaos | PS-102-06.R04, PS-102-04.R03 | restore the relay from a backup taken before an email withdrawal, with archived notify.channel.opted_out events in the replay range; then dispatch to the user | the restore report lists this module's consumers as excluded; nothing is re-delivered to them and no email is sent twice; the withdrawn address is removed, its ciphertext erased and its queued deliveries cancelled before the first send |
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -4,7 +4,7 @@
 
 - [x] [PS-030-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
 - [x] [PS-030-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
-- [x] [PS-030-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
+- [x] [PS-030-03 Workflow state machine](workflow_state_machine.md) — 4 requirements, tests mapped
 - [x] [PS-030-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped
 - [x] [PS-030-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-030-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped

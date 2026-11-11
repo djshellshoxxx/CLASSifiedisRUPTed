@@ -78,7 +78,7 @@ processes:
           - "counterAnswerBy?: timestamp — signed in the counter; counter createdAt + 7 d + 72 h"
           - "agreedAmount?: Money — amount fixed by acceptance, accepted counter or a both-accepted dispute outcome"
           - "retainedFromDeposit?: Money — amount retained for this claim, from rentals.deposit.released with this damageClaimId"
-          - "excessDealId?: uuidv7 — F09 Deal for contextRef {rental_damage, claimId} over agreedAmount minus retainedFromDeposit"
+          - "excessDealId?: uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_damage, claimId} over agreedAmount minus retainedFromDeposit"
           - "disputeCaseId?: uuidv7 — ref F09.S02.M02 DisputeCase for contextRef {rental_damage, claimId}"
           - "disputeOpenerRole?: enum — owner | renter"
           - "escalatedFrom?: enum — claimed | countered | escalation_due"
@@ -168,6 +168,7 @@ processes:
       - One ingestion command applies inbound statements, deduplicates by cid, recomputes the comparison, derives local events with actor.kind federated and quarantines failures.
       - Payment status of an agreed amount is derived from F09 events whose contextRef is {rental_damage, claimId} of this module; the module never creates a PaymentClaim itself.
       - The excess over the deposit is a separate commerce.deal.open with contextRef {rental_damage, claimId} and contextCid the acceptance, counter acceptance or dispute outcome cid, the dispute contextRef is {rental_damage, claimId}, and every statement schema is registered with its signer role in F11.S01.M01.
+      - A referenced evidence photo is detected as missing only when comms.attachment.download returns NOT_FOUND during ingestion or a re-fetch; it keeps claim, respond and accept_counter refused with RENTALS_EVIDENCE_MISSING and is re-requested from the author through the thread, and comms.attachment.deleted, which F08.S01.M03 emits only in the uploader vault, is not consumed.
     commands:
       - name: rentals.damage.claim
         capability: rentals.damage.claim
@@ -187,7 +188,7 @@ processes:
         capability: rentals.damage.decide
         input: "[statement classrup.rentals.damage_counter_acceptance/v1 signed by owner over the response cid] { claimId, expectedRevision, responseCid }"
         output: "{ claimId, revision, agreedAmount: Money, syncState }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, RENTALS_EVIDENCE_MISSING]
         emits: [rentals.damage.resolved]
         idempotent: true
       - name: rentals.damage.withdraw
@@ -244,7 +245,6 @@ processes:
       - {type: commerce.dispute.withdrawn, effect: "for contextRef exactly {rental_damage, claimId}, return the claim to escalatedFrom"}
       - {type: commerce.payment.acknowledged, effect: "for contextRef {rental_damage, claimId} record payment proof acknowledged"}
       - {type: commerce.payment.finalized, effect: "for contextRef {rental_damage, claimId} record payment proof final (F09.S01.M03)"}
-      - {type: comms.attachment.deleted, effect: "no effect on evidence photo copies already stored; a photo not yet fetched is marked missing and re-requested"}
       - {type: identity.block.added, effect: "suppress notifications for the counterparty through filterBlocked; damage statements for reservations confirmed before the block are still verified and stored"}
       - {type: privacy.deletion.completed, effect: "replace the deleted party's DID in retained claims and statement metadata with the deletion pseudonym; signed statements and evidence copies are kept so signatures and hashes still verify"}
     errors:
@@ -280,7 +280,7 @@ processes:
       - Escalation requests the F09 case only on the designated party's explicit action, before the state change, and retries that request on failure, so a claim is never escalated without a case request in flight and a crash never leaves a half-applied escalation.
     idempotency: "Local command id stored 24 h; statements deduplicated by cid in the inbox table; unique (reservation, kind) index returns the existing claim for a repeated claim command; the F09 case request carries the claim id as reference; commerce.deal.open with the deterministic contextRef returns the existing Deal."
     concurrency: "Web Locks lock rentals-damage-<reservationId> around commands and sweeps; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the claim; only the designated opener's vault can open a case, so two cases for one claim cannot arise."
-    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; a case request the user started retries 10 s, 60 s, 10 minutes; evidence photos are fetched again and re-requested from the author when missing."
+    retries: "Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; a case request the user started retries 10 s, 60 s, 10 minutes; an evidence photo whose comms.attachment.download returns NOT_FOUND (blob expired or deleted by its uploader) is marked missing and re-requested from the author."
     offline: "Claim, respond, accept, withdraw and escalate work offline and commit locally; deadlines are the absolute values in the signed statements, so a late delivery within 72 h never changes the outcome; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the other party saw a statement before the signed acknowledgement."
     partial_failure: "If the case port fails during the user's escalation the claim stays in its state with the escalation request pending and a visible note; if commerce.deal.open fails for the excess a retry job opens it with the same contextRef; if relay delivery fails the local state stands and the sync state shows the failure."
   privacy_retention_abuse:
@@ -352,7 +352,7 @@ processes:
       - "T21 | unit | 01.R03 | modify a signed claim; counter and withdraw | signed bytes cannot change; the counter and withdrawal are new statements naming the claim cid"
       - "T22 | integration | 07.R02 | owner waives damage at return, then claims within 7 days from the owner vault and from a modified owner client sending directly to the renter | RENTALS_DAMAGE_WINDOW in the owner vault and the claim quarantined with RENTALS_DAMAGE_WINDOW in the renter vault"
       - "T23 | integration | 02.R02,07.R02 | owner_only return, claim filed, then the renter files a return report | provenance owner_only shown on compare and response screens; recomputation against the renter's report flags the conflict"
-      - "T24 | integration | 07.R04 | relay blob of an evidence photo expired before the renter fetched it; owner deletes the thread message after the renter stored the photos | respond refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify after deletion"
+      - "T24 | integration | 07.R04,04.R05 | relay blob of an evidence photo expired before the renter fetched it; owner deletes the thread message after the renter stored the photos; no comms.attachment.deleted reaches the renter vault | the download returns NOT_FOUND and the photo is re-requested; respond refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify after deletion"
       - "T25 | integration | 07.R05 | privacy.deletion.completed for the renter; export; retention purge after RET-EVIDENCE | DIDs replaced by the pseudonym with signatures intact; section rentals.damage exported; purge removes terminal records"
       - "T26 | abuse | 07.R06 | owner blocks the renter after the return, files a claim, then the renter's contest arrives | contest verified and stored and the renter's escalation accepted; the claim does not reach escalation_due by silence; notifications suppressed"
     acceptance:

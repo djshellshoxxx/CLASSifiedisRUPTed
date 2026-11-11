@@ -23,6 +23,7 @@
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-130-09.T06 | integration | PS-130-03.R01, PS-130-03.R02, PS-130-03.R03 | key status inputs active-fresh, revoked before first sight, active with freshness unknown after 9 days, unknown key; backdated signedAt | accepted; SECURITY_KEY_REVOKED; accepted with freshness unknown never upgraded; SECURITY_SIGNER_UNKNOWN; clock claim flagged without changing key status |
+| TEST-PS-130-09.T19 | unit | PS-130-02.R04, PS-130-03.R01 | statement c1 by key K1 verified with status revoked and finalListed true; statement c3 by K1 with status revoked and finalListed false; status active with finalListed true | accepted true with flag finalStatement; accepted false with SECURITY_KEY_REVOKED; accepted true without the flag |
 
 ## Dependencies
 

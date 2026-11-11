@@ -2,12 +2,12 @@
 
 **Status:** SPECIFIED. > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-- [x] [PS-096-01 Domain schema](domain_schema.md) — 4 requirements, tests mapped
-- [x] [PS-096-02 Validation rules](validation_rules.md) — 4 requirements, tests mapped
+- [x] [PS-096-01 Domain schema](domain_schema.md) — 6 requirements, tests mapped
+- [x] [PS-096-02 Validation rules](validation_rules.md) — 5 requirements, tests mapped
 - [x] [PS-096-03 Workflow state machine](workflow_state_machine.md) — 5 requirements, tests mapped
-- [x] [PS-096-04 Commands, queries and events](commands_queries_events.md) — 5 requirements, tests mapped
-- [x] [PS-096-05 Authorization and capabilities](authorization_capabilities.md) — 5 requirements, tests mapped
-- [x] [PS-096-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped
+- [x] [PS-096-04 Commands, queries and events](commands_queries_events.md) — 8 requirements, tests mapped
+- [x] [PS-096-05 Authorization and capabilities](authorization_capabilities.md) — 6 requirements, tests mapped
+- [x] [PS-096-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 4 requirements, tests mapped
 - [x] [PS-096-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 5 requirements, tests mapped
 - [x] [PS-096-08 Observability and performance](observability_performance.md) — 3 requirements, tests mapped
 - [x] [PS-096-09 Contract and acceptance tests](contract_and_acceptance_tests.md) — 3 requirements, tests mapped

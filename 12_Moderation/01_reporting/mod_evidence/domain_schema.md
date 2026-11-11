@@ -10,6 +10,7 @@
 - **PS-093-01.R02** Snapshot bodies are P2 between the store owner and the moderators of the relay that received them and retained under RET-EVIDENCE; each body and copied media item lives in an encrypted evidence blob with its own key, destroyed by deleting that key once no active snapshot references the blob.
 - **PS-093-01.R03** Snapshots are immutable; only the integrity flag, lifecycle and legal-hold fields change and every change is recorded in the access log.
 - **PS-093-01.R04** Evidence blobs are declared in this module's store (EvidenceBlob rows with blob id, SHA-256, size, key id and reference count) and P0 media is referenced by blob:sha256 from F15.S02.M03 MediaBlob (N9) instead of being copied.
+- **PS-093-01.R05** A message snapshot records the F08.S01.M01 messageCid as targetCid and the sender-signed envelope without wrapped keys (nonce, ciphertext, key commitment, signature) as its metadata, and keeps the message key K inside its encrypted body only for an approved participant disclosure whose redact/1 preview removed nothing, with commitmentStatus verified once K has been checked.
 
 ## Specification
 
@@ -23,7 +24,7 @@ Schema `classrup.moderation.evidencesnapshot/v1` · storage **relay+device** · 
 | tenantId | uuidv7 — store scope (vault scope or relay hosting scope) |
 | targetType | enum — listing \| auction \| message \| profile \| review \| bid \| offer \| attachment \| cycle_proposal |
 | targetId | uuidv7 — captured content identity |
-| targetCid | string — content id (sha256-…) of the author's signed envelope |
+| targetCid | string — content id (sha256-…) of the author's signed envelope; for targetType message the F08.S01.M01 messageCid |
 | targetRevision | int — revision of the target when captured |
 | authorKey | did:key — signer of the captured envelope |
 | authorSignatureStatus | enum — valid \| invalid \| absent_reporter_claim |
@@ -32,6 +33,8 @@ Schema `classrup.moderation.evidencesnapshot/v1` · storage **relay+device** · 
 | disclosureState? | enum — previewed \| export_prepared (P2 targets only) |
 | redactionRulesVersion? | string — redact/1 when a disclosure preview ran |
 | redactions? | object[] — { rule, count } applied by the preview |
+| messageKey? | bytes — 32-byte per-message key K of F08.S01.M01, only for targetType message with disclosure participant_disclosure and every redaction count 0; stored inside the encrypted body blob, never in an event, log, index or access row |
+| commitmentStatus? | enum — verified \| not_checkable (message snapshots: verified when K recomputes the signed key commitment and decrypts the signed ciphertext to exactly the disclosed plaintext; not_checkable for metadata_only, reporter_claim and redacted disclosures) |
 | contentHash | string — hex SHA-256 over JCS bytes of the stored canonical object (full body, metadata object or redacted disclosure), 64 chars |
 | bodyBlobId | uuidv7 — EvidenceBlob holding the encrypted canonical object, ≤ 256 KiB |
 | mediaRefs | object[] — up to 10 { ref: blob:sha256-… of a P0 MediaBlob (F15.S02.M03) or evidenceBlobId of a copied P2 item, sha256, bytes ≤ 5 MiB, alt? } |
@@ -46,6 +49,7 @@ Schema `classrup.moderation.evidencesnapshot/v1` · storage **relay+device** · 
 - Body and media of a snapshot never change after capture; a new capture creates a new record.
 - lifecycle purged implies the snapshot holds no blob references and legalHold is false; an EvidenceBlob key is destroyed only when the blob's reference count is 0, so a snapshot under hold keeps its blob readable.
 - disclosure participant_disclosure implies disclosureState export_prepared; a P2 target is never stored with disclosure public_target.
+- messageKey is present only when targetType is message, disclosure is participant_disclosure, every redaction count is 0 and commitmentStatus is verified.
 
 ### EvidenceAccess
 
@@ -99,6 +103,7 @@ CREATE TRIGGER moderation_evidence_access_no_update BEFORE UPDATE ON moderation_
 | TEST-PS-093-09.T04 | integration | PS-093-01.R02, PS-093-03.R03, PS-093-04.R03 | RetentionPurgePort run at RET-EVIDENCE end with and without a relay legal hold | privacy.legal_hold.check called per snapshot; key destroyed and blob deleted only without hold; no purge happens on a privacy.retention.purged event |
 | TEST-PS-093-09.T09 | integration | PS-093-06.R01, PS-093-01.R04 | same Idempotency-Key replayed; two captures of identical content | original response replayed; one EvidenceBlob with refCount 2 and two snapshot rows |
 | TEST-PS-093-09.T16 | integration | PS-093-01.R04, PS-093-03.R03, PS-093-07.R02 | two snapshots share one blob, one under relay legal hold, both past retention | unheld snapshot purged and refCount drops to 1; blob key survives; after hold release and the next run the blob key is destroyed and the blob deleted |
+| TEST-PS-093-09.T23 | unit | PS-093-01.R05, PS-093-02.R05 | approve an unredacted disclosure of message M with its K, with a wrong K, and a redacted disclosure with K; relay ingests the first bundle and a bundle whose disclosed text was altered | first stored with messageKey and commitmentStatus verified; MODERATION_EVIDENCE_COMMITMENT_MISMATCH for the wrong K, the redacted disclosure and the altered text; metadata of every message snapshot holds messageCid and the signed envelope without wrapped keys |
 
 ## Dependencies
 

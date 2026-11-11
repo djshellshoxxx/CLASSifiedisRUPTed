@@ -46,7 +46,7 @@ Schema `classrup.rentals.return/v1` · storage **device** · privacy **P2** · r
 | conditionVerdict? | enum — matches_handoff \| differences_noted |
 | lateMinutes | int — 0 or more, after grace, up to effectiveReturnedAt |
 | lateFee | Money — CTR-MNY-001; ≥ 0; ≤ cap; only decreasing by owner adjustment |
-| lateFeeDealId? | uuidv7 — F09 Deal for contextRef {rental_late_fee, returnId} |
+| lateFeeDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_late_fee, returnId} |
 | damageWindowEndsAt? | timestamp — attestedAtClaim plus 7 days |
 | waiverCid? | string — cid of a verified return_waiver |
 | declarationCid? | string — cid of a not_returned_declaration |

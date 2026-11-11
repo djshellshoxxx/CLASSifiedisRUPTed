@@ -15,6 +15,7 @@ Owners list rentable items (hourly and/or daily rate, quantity, buffers, lead ti
 - On confirmation, store the signed confirmation and copy the terms the renter signed in the request (rent, late fee, cancellation policy, declared value) and the checklist template of that offering revision; at handoff the owner vault opens the rent Deal through commerce.deal.open with contextRef {type rental_reservation, id reservationId} and contextCid requestCid.
 - Track reservation status from handoff, return and closure events, shorten the occupied interval on early return, extend it while overdue and end it at closure for an item that is never returned.
 - Expire requests on the signed absolute expiresAt in both vaults, never cancel a confirmed reservation automatically while a signed handoff report may exist, and freeze forked or equivocal owner promises for explicit renegotiation.
+- Emit rentals.offering.withdrawn locally when a published offering is paused, archived or loses its listing, so the local discovery index (F06.S01.M01) removes the rental listing; copies of the signed projection already held by relays and other vaults end through the listing unpublish, an author tombstone or the projection expiry.
 
 ## Not responsible for
 
@@ -48,10 +49,11 @@ Owners list rentable items (hourly and/or daily rate, quantity, buffers, lead ti
 - Owner blocks the renter after confirmation; lifecycle statements for the reservation are still verified and stored, notifications are suppressed, and no statement ever carries the reason blocked.
 - Renter's clock is wrong; interval times are UTC instants chosen in the UI by date pickers, and the owner vault validates them against its own clock for lead time.
 - Quantity is 3 and three overlapping rentals exist; a fourth overlapping request is refused, a request overlapping only two is allowed.
+- Owner pauses a published offering while one request is open; rentals.offering.withdrawn with reason paused is emitted once, the open request is answered with a signed decline (offering_unavailable), confirmed reservations are unaffected, and pausing a never-published draft emits nothing.
 
 ## UX and accessibility
 
-- Offering editor: item details from the listing, hourly rate, daily rate, quantity, minimum and maximum duration, buffer before and after, lead time, blackout dates, cancellation policy (free until N hours before start, fee), declared item value, condition checklist template (up to 30 labels), auto-confirm switch (works only while the owner's app is open), late-fee terms.
+- Offering editor: item details from the listing, hourly rate, daily rate, quantity, minimum and maximum duration, buffer before and after, lead time, blackout dates, cancellation policy (free until N hours before start, fee), declared item value, condition checklist template (up to 30 labels), auto-confirm switch (works only while the owner's app is open), late-fee terms, Pause and Archive actions with a notice that copies other people already fetched cannot be recalled.
 - Date picker for renters: shows busy blocks from the owner's latest signed busy summary, with a note that only the owner's confirmation reserves the dates, and a terms summary (rent, late fee, cancellation fee, declared value) that the request signs.
 - Owner calendar: month and agenda views of reservations with status chips and conflict warnings; Confirm and Decline buttons with the exact interval; frozen reservations show Renegotiate and Cancel.
 
@@ -66,9 +68,9 @@ Owners list rentable items (hourly and/or daily rate, quantity, buffers, lead ti
 
 ## Interfaces
 
-- Commands: `rentals.offering.create`, `rentals.offering.revise`, `rentals.offering.publish`, `rentals.availability.publish_busy`, `rentals.reservation.request`, `rentals.reservation.confirm`, `rentals.reservation.cancel`, `rentals.reservation.renegotiate`, `rentals.reservation.receive`
+- Commands: `rentals.offering.create`, `rentals.offering.revise`, `rentals.offering.publish`, `rentals.offering.withdraw`, `rentals.availability.publish_busy`, `rentals.reservation.request`, `rentals.reservation.confirm`, `rentals.reservation.cancel`, `rentals.reservation.renegotiate`, `rentals.reservation.receive`
 - Queries: `rentals.offering.get`, `rentals.availability.list_busy`, `rentals.reservation.get`, `rentals.reservation.list_mine`
-- Emits: `rentals.reservation.requested`, `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.offering.published`
+- Emits: `rentals.reservation.requested`, `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.offering.published`, `rentals.offering.withdrawn`
 - Consumes: `rentals.handoff.attested`, `rentals.rental.overdue`, `rentals.return.attested`, `rentals.rental.closed`, `bazaar.listing.unpublished`, `identity.block.added`, `comms.consent.revoked`, `commerce.deal.cancelled`, `privacy.deletion.completed`
 
 ## Dependencies
@@ -82,7 +84,7 @@ F01.S01.M01, F01.S01.M03, F09.S01.M01, F09.S03.M01, F09.S03.M03, F08.S01.M01, F0
 | PS-039-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-039-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-039-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
-| PS-039-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-039-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-039-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-039-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-039-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -94,6 +96,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T28 pass in CI.
 - No renter is ever shown a confirmed reservation without the owner's verified signed confirmation and consent held in the vault.
 - In the owner vault no instant ever exceeds the offering quantity outside detected fork excess, verified against the brute-force model, and a confirmed reservation is never cancelled automatically while a signed handoff report may exist.

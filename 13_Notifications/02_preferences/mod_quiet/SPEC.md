@@ -12,7 +12,7 @@ The dispatch gate for outbound notification channels and the owner of deferral, 
 
 - Own the vault DeferredNotification (classrup.notify.deferred/v1) and the relay DeferredNotification (classrup.notify.deferred_relay/v1); the relay record never holds a reference, template key or collapse key of a vault-originated alert.
 - Implement NotificationDispatchPort for F13.S01.M03 and the single decision order caller authentication, deletion pause, mute, collapse, consent or browser permission, matrix cell, single-producer arrival rule, urgency, quiet hours, rate - identical in vault and relay where both apply.
-- Seal vault-originated push content per target device to its x25519 agreement key and derive opaque collapse tags, so relays and push services cannot read or link alerts.
+- Seal vault-originated push content per target device to the X25519 agreement key that F16.S02.M01 agreementPublicKeyOf derives from that device's listed Ed25519 key and derive opaque collapse tags, so relays and push services cannot read or link alerts.
 - Release deferred items at the end of the quiet window with jitter of 0 to 300 s in batch loops, collapse items with the same collapse key or tag and replace more than 5 due items for one user and channel by one digest alert.
 - Re-evaluate deferred items when the schedule, a channel consent or a preference changes, cancel items the user already read through the relay command notify.notification.cancel, and re-defer items whose checks cannot be read.
 - Enforce the urgent security class rule - only category security may be urgent, and urgent alerts skip quiet hours and the digest but are still subject to consent and the security cell of that channel.
@@ -73,7 +73,7 @@ The dispatch gate for outbound notification channels and the owner of deferral, 
 
 ## Dependencies
 
-F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F08.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001
+F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F16.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 

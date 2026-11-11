@@ -7,8 +7,9 @@
 ## Requirements
 
 - **PS-029-04.R01** The module exposes create, revise, publish and withdraw as vault commands (publish, and revise of a published offering, additionally produce a signed projection statement) and two local queries.
-- **PS-029-04.R02** Each command writes its local events to the vault outbox in the same IndexedDB transaction as the state change per EVT-8; only publish, a revision of a published offering and the key-revocation re-sign create a signed statement (EVT-9), and the withdrawal tombstone is issued by F11.S01.M02 from services.offering.withdrawn.
+- **PS-029-04.R02** Each command writes its local events to the vault outbox in the same IndexedDB transaction as the state change per EVT-8; only publish, a revision of a published offering and the key-revocation re-sign create a signed statement (EVT-9), always through StatementPublisherPort.publish, and the withdrawal tombstone is issued by F11.S01.M02 from services.offering.withdrawn.
 - **PS-029-04.R03** The module consumes listing, device key and deletion events so that offerings never stay published locally without a published listing or with a revoked signature; relay moderation never arrives as an event because it changes nothing locally.
+- **PS-029-04.R04** Every classrup.services.offering/v1 projection is signed and stored only through the F11.S01.M01 StatementPublisherPort.publish implemented by F11.S01.M02, the stored projectionCid and the projectionCid of services.offering.published equal the cid that call returns, and the module never calls a signing primitive, holds a key, keeps an envelope chain counter or calls issueTombstone.
 
 ## Specification
 
@@ -17,8 +18,8 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `services.offering.create` | services.offering.create | [vault-local] { listingId, skillCodes[], rateType, rate: Money, minBillableMinutes?, serviceAreaCell, remoteCapable, credentials? } | { offeringId, revision: 1 } | VALIDATION_FAILED, SERVICES_SKILL_INVALID, SERVICES_AREA_TOO_PRECISE, SERVICES_LISTING_NOT_SERVICE, RATE_LIMITED |  | yes (Idempotency-Key) |
-| `services.offering.revise` | services.offering.revise | [vault-local; for a published offering plus statement classrup.services.offering/v1 with seq+1 and prev] { offeringId, expectedRevision, patch: partial of create fields } | { offeringId, revision, projectionCid?, seq? } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_SKILL_INVALID, SERVICES_AREA_TOO_PRECISE, SERVICES_RATE_IMMUTABLE, SERVICES_PUBLISH_CONSENT_MISSING | services.offering.revised, services.offering.published | yes (Idempotency-Key) |
-| `services.offering.publish` | services.offering.publish | [vault-local plus statement classrup.services.offering/v1 signed by the provider device key after privacy.consent.check(federation_publish, relayId) per relay] { offeringId, expectedRevision, relayIds? (user-selected relays, max 5), prv6Acknowledged: true } | { offeringId, revision, publishedAt, projectionCid, seq, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_OFFERING_LIMIT, SERVICES_LISTING_NOT_SERVICE, SERVICES_PUBLISH_CONSENT_MISSING, PRECONDITION_FAILED, DEPENDENCY_UNAVAILABLE | services.offering.published | yes (Idempotency-Key) |
+| `services.offering.revise` | services.offering.revise | [vault-local; for a published offering plus statement classrup.services.offering/v1 with seq+1 and prev, published through StatementPublisherPort.publish] { offeringId, expectedRevision, patch: partial of create fields } | { offeringId, revision, projectionCid?, seq? } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_SKILL_INVALID, SERVICES_AREA_TOO_PRECISE, SERVICES_RATE_IMMUTABLE, SERVICES_PUBLISH_CONSENT_MISSING | services.offering.revised, services.offering.published | yes (Idempotency-Key) |
+| `services.offering.publish` | services.offering.publish | [vault-local plus statement classrup.services.offering/v1 published through StatementPublisherPort.publish {type: classrup.services.offering/v1, audience: public, payload: F11.S01.M01 allowlist draft} -> {cid, seq, chainKey}, signed by F11.S01.M02 with an authorized device key of the provider, after privacy.consent.check(federation_publish, relayId) per relay] { offeringId, expectedRevision, relayIds? (user-selected relays, max 5), prv6Acknowledged: true } | { offeringId, revision, publishedAt, projectionCid, seq, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, SERVICES_OFFERING_LIMIT, SERVICES_LISTING_NOT_SERVICE, SERVICES_PUBLISH_CONSENT_MISSING, PRECONDITION_FAILED, DEPENDENCY_UNAVAILABLE | services.offering.published | yes (Idempotency-Key) |
 | `services.offering.withdraw` | services.offering.withdraw | [vault-local; no statement is signed here - for a published offering F11.S01.M02 issues the FED-4 tombstone from services.offering.withdrawn, a draft withdrawal stays in the vault] { offeringId, expectedRevision } | { offeringId, revision, withdrawReason } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | services.offering.withdrawn | yes (Idempotency-Key) |
 
 ### Queries
@@ -32,7 +33,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `services.offering.published` | P0 | { offeringId, providerId, listingId, skillCodes, rateType, rate, serviceAreaCell, providerTimeZone, remoteCapable, projectionCid, seq, publishedAt } |
+| `services.offering.published` | P0 | { offeringId, providerId, listingId, skillCodes, rateType, rate, serviceAreaCell, providerTimeZone, remoteCapable, projectionCid (cid returned by StatementPublisherPort.publish, so consumers such as F06.S01.M01 verify the projection by cid before using it), seq, publishedAt } |
 | `services.offering.withdrawn` | P0 | { offeringId, providerId, listingId, reason: provider\|listing_unavailable, tombstoneReason: owner_withdrawn\|listing_expired, projectionCid } |
 | `services.offering.revised` | P3 | { offeringId, providerId, changedFields[], published: boolean, projectionCid?, seq? } |
 
@@ -42,7 +43,7 @@
 |---|---|
 | `bazaar.listing.unpublished` | withdraw the linked published offering with reason listing_unavailable (any F01 reason, including policy_changed) and tombstoneReason owner_withdrawn; a linked draft is withdrawn vault-locally |
 | `bazaar.listing.expired` | withdraw the linked published offering with reason listing_unavailable and tombstoneReason listing_expired; a linked draft is withdrawn vault-locally |
-| `identity.device_key.revoked` | re-sign every published projection signed by the revoked key with a current key (same content, seq+1, prev) and queue it to the same relays; emits services.offering.published |
+| `identity.device_key.revoked` | republish every published projection signed by the revoked key through StatementPublisherPort.publish, which signs with a current key (same content, seq+1, prev), and queue it to the same relays; emits services.offering.published |
 | `privacy.deletion.completed` | replace the erased principal's DID in the provenance of stored foreign projections with the deletion pseudonym or drop those projections; the local principal's own offerings were withdrawn and purged by the DeletionPort plan |
 
 ### Module errors
@@ -57,7 +58,7 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statement registry (N2): classrup.services.offering/v1 has signer role provider (offering.providerId) and carries only the F11.S01.M01 allowlist {offeringId, providerId, listingId, skillCodes, rateType, rate, minBillableMinutes, serviceAreaCell, providerTimeZone, remoteCapable, credentials without evidence references, seq, prev, publishedAt}; receivers keep the highest seq per offering (FED-3). The tombstone classrup.federation.tombstone/v1 for a withdrawn published offering is issued only by F11.S01.M02 with target projectionCid and reason owner_withdrawn (withdrawReason provider or listing unpublished) or listing_expired (listing expired). Drafts produce no statement.
+**Note:** Statement registry (N2): classrup.services.offering/v1 has signer role provider (offering.providerId), is signed and stored only through the F11.S01.M01 StatementPublisherPort.publish (F11.S01.M02 signs with an authorized device key of the provider named in ext.signerKey and allocates the envelope chain seq and prev, which are separate from the offering's own payload seq and prev; projectionCid is the cid the port returns) and carries only the F11.S01.M01 allowlist {offeringId, providerId, listingId, skillCodes, rateType, rate, minBillableMinutes, serviceAreaCell, providerTimeZone, remoteCapable, credentials without evidence references, seq, prev, publishedAt}; receivers keep the highest seq per offering (FED-3). The tombstone classrup.federation.tombstone/v1 for a withdrawn published offering is issued only by F11.S01.M02 with target projectionCid and reason owner_withdrawn (withdrawReason provider or listing unpublished) or listing_expired (listing expired). Drafts produce no statement.
 
 ### Example
 
@@ -78,6 +79,7 @@ vault command services.offering.publish { "offeringId": "0192f3a5-1111-…", "ex
 | TEST-PS-029-09.T06 | contract | PS-029-04.R01, PS-029-04.R02, PS-029-09.R02 | execute each command and read both queries | outputs and event payloads (including projectionCid, seq, publishedAt and providerTimeZone) validate against registry schemas |
 | TEST-PS-029-09.T17 | integration | PS-029-03.R01, PS-029-04.R02 | revise the rate of a published offering, then revoke the signing key | new projection with seq+1 and prev = old cid; relay and client views carry the new projectionCid and rate; after revocation the same content is re-signed with a current key |
 | TEST-PS-029-09.T19 | integration | PS-029-04.R02, PS-029-07.R04 | withdraw a never-published draft and a published offering | draft produces no outbound statement, no tombstone and no event; published produces one services.offering.withdrawn with tombstoneReason and projectionCid and this module signs no tombstone |
+| TEST-PS-029-09.T21 | contract | PS-029-04.R04, PS-029-04.R02 | publish, revise a published offering and re-sign after key revocation against a StatementPublisherPort spy, then withdraw | every projection is created by StatementPublisherPort.publish with type classrup.services.offering/v1 and audience public; stored projectionCid and the services.offering.published projectionCid equal the returned cid; no signing primitive or issueTombstone is called and no envelope seq is kept by the module; withdraw calls the port not at all |
 
 ## Dependencies
 

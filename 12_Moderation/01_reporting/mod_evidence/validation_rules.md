@@ -10,6 +10,7 @@
 - **PS-093-02.R02** Size limits are enforced before any storage so evidence is never truncated, and they are at least the listing limits (10 media items of 5 MiB each).
 - **PS-093-02.R03** Verification and read requests are validated against the accessor's purpose and case context.
 - **PS-093-02.R04** A P2 target is captured metadata_only unless the reporter runs the disclosure preview, whose rules redact/1 remove L3/L4 location shares, geohash cells longer than 5 characters, email addresses, phone numbers and attachments before approval.
+- **PS-093-02.R05** A message key K is accepted only for an unredacted message disclosure and only when HMAC-SHA256(K, 'classrup.comms.msg.commit.v1' || messageId) equals the signed key commitment and the XChaCha20-Poly1305 decryption of the signed ciphertext (additional data thread ID, message ID, sender device ID), unpadded, equals the disclosed plaintext; a redacted disclosure never carries K because K and the ciphertext would reveal what was redacted.
 
 ## Specification
 
@@ -23,6 +24,7 @@
 | V06 | snapshot lifecycle is not purged | EXPIRED |
 | V07 | approve_disclosure carries the digest of the latest preview of this snapshot and redact/1 completed on it | PRECONDITION_FAILED |
 | V08 | a P2 target (message, offer, cycle_proposal) is stored with disclosure metadata_only or reporter_claim unless a disclosure reached export_prepared | VALIDATION_FAILED |
+| V09 | a messageKey (approve_disclosure in the vault, ingest_bundle on the relay) comes with an unredacted message disclosure, recomputes the signed key commitment and decrypts the signed ciphertext to exactly the disclosed plaintext | MODERATION_EVIDENCE_COMMITMENT_MISMATCH |
 
 Rules redact/1 (deterministic, versioned): location share objects of level L3 or L4 are removed; geohash strings longer than 5 characters are truncated to 5; email addresses (local@domain.tld) become '[email]'; phone numbers (7 or more digits with optional +, spaces, dots or dashes) become '[phone]'; attachments are dropped and replaced by '[attachment n of m]'. Each rule reports its count in redactions.
 
@@ -34,6 +36,7 @@ Rules redact/1 (deterministic, versioned): location share objects of level L3 or
 | TEST-PS-093-09.T03 | unit | PS-093-02.R02, PS-093-02.R03 | each rule V02–V08 violated in turn | documented error code and no row stored; forged author signature refused |
 | TEST-PS-093-09.T17 | integration | PS-093-02.R02, PS-093-04.R04 | report listing L with 10 photos of 5 MiB and a message with 2 P2 photos; relay ingests both bundles | listing reportable with 10 blob:sha256 references and no copies; P2 photos copied into evidence blobs; relay re-verifies hashes and resolves P0 media by reference |
 | TEST-PS-093-09.T18 | unit | PS-093-02.R04, PS-093-03.R04 | disclosure preview of message M; approve with a stale digest; approve with the latest digest | each item redacted by its redact/1 rule and counted; PRECONDITION_FAILED; export_prepared with disclosure participant_disclosure |
+| TEST-PS-093-09.T23 | unit | PS-093-01.R05, PS-093-02.R05 | approve an unredacted disclosure of message M with its K, with a wrong K, and a redacted disclosure with K; relay ingests the first bundle and a bundle whose disclosed text was altered | first stored with messageKey and commitmentStatus verified; MODERATION_EVIDENCE_COMMITMENT_MISMATCH for the wrong K, the redacted disclosure and the altered text; metadata of every message snapshot holds messageCid and the signed envelope without wrapped keys |
 
 ## Dependencies
 

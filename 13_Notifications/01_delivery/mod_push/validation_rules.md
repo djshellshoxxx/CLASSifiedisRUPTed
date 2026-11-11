@@ -21,7 +21,7 @@
 | V04 | the user has fewer than 10 active subscriptions at this relay | NOTIFY_PUSH_SUBSCRIPTION_LIMIT |
 | V05 | payload JSON is at most 1 024 bytes before RFC 8291 encryption | PAYLOAD_TOO_LARGE |
 | V06 | collapseTag is 1..64 characters of A-Z a-z 0-9 - _ . and the derived Topic matches ^[A-Za-z0-9_-]{1,32}$; hook and digest tpl match notify.tpl.<category>.<name> from the template registry | VALIDATION_FAILED |
-| V07 | subscribe, unsubscribe and list are signed (classrup/relay-request/v1) by a device key of userDid that F16.S02.M02 reports active at the relay receipt time, the signing time is not after the key's revocationEffectiveFrom, and vapidKeyId is held in RelayKeyStorePort | UNAUTHENTICATED |
+| V07 | subscribe, unsubscribe and list carry an F11.S01.M03 RFC 9421 HTTP Message Signature (tag classrup/relay-request/v1) by a device key of userDid that F16.S02.M02 reports active at the relay receipt time, the signing time is not after the key's revocationEffectiveFrom, and vapidKeyId is held in RelayKeyStorePort | UNAUTHENTICATED |
 | V08 | RateLimitPort.consume (F12.S03.M03) allows the call - 10 subscribe calls per user per day per relay and 60 list calls per user per hour | RATE_LIMITED |
 | V09 | the payload has exactly the keys of one form - sealed {v, urg, s} with at most 10 boxes, one per target deviceKeyId with an active subscription; hook {v, urg, tpl, ref?, ck?}; digest {v, urg, tpl, n} | VALIDATION_FAILED |
 | V10 | at send time the endpoint host is resolved, the connection is pinned to a resolved address that is not private, loopback, link-local or unique-local, and redirects are not followed | NOTIFY_PUSH_ENDPOINT_REJECTED |
@@ -38,4 +38,4 @@
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F16.S02.M01, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

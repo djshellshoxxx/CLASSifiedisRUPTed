@@ -42,10 +42,11 @@ See the module test table below (all processes).
 | TEST-PS-093-09.T20 | integration | PS-093-07.R06 | ExportSectionPort run, then privacy.deletion.completed in the vault with keepEvidence true and false | export section moderation.evidence produced; evidence purged or pseudonymized as documented |
 | TEST-PS-093-09.T21 | integration | PS-093-04.R03 | privacy.legal_hold.placed then released on a relay | snapshots of the held author flagged after privacy.legal_hold.check; flag cleared on release; purge only afterwards |
 | TEST-PS-093-09.T22 | abuse | PS-093-07.R01, PS-093-07.R04 | F12 privacy suite after captures, ingests, disclosures and purges in a vault and on a relay: scan federation payloads, public projections, relay and vault logs, events and notification payloads | no snapshot body, media reference of a P2 item, accessorId or redacted value appears in any of them; events carry only ids, hashes and enums |
+| TEST-PS-093-09.T23 | unit | PS-093-01.R05, PS-093-02.R05 | approve an unredacted disclosure of message M with its K, with a wrong K, and a redacted disclosure with K; relay ingests the first bundle and a bundle whose disclosed text was altered | first stored with messageKey and commitmentStatus verified; MODERATION_EVIDENCE_COMMITMENT_MISMATCH for the wrong K, the redacted disclosure and the altered text; metadata of every message snapshot holds messageCid and the signed envelope without wrapped keys |
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - Every read, verify, export and purge of a snapshot produces exactly one access row (property and abuse tests).
 - A modified snapshot body, media or author signature is always detected by verification, and no P2 plaintext reaches a relay without an approved disclosure.
 

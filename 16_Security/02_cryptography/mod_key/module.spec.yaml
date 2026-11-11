@@ -39,6 +39,7 @@ edge_cases:
   - Passphrase change while another device is linked; the wrap is rewritten with a new salt and nonce; other devices are unaffected because each device has its own key.
   - Device rotation interrupted after the new key is generated but before the root-signed device link is recorded; the old key stays active, the new key is unused, the vault shows 'rotation pending' and resumes from the persisted progress.
   - Passphrase appears on a list of commonly used passphrases; creation is refused with SECURITY_PASSPHRASE_WEAK and explains how to choose a longer phrase.
+  - A user pastes the passphrase from a password manager or lets it autofill the unlock field; the field accepts it, because no handler cancels paste, drop or input events, and validation runs only on the entered value.
   - Rotation is started on a linked device that does not hold the root key; the new key and its possession signature are prepared there and the vault shows 'waiting for approval on your root device', because only the root key signs the device link.
   - A relay-served mailbox hint carries an X25519 key for a contact that differs from the one derived from the contact's listed device key; the hint is ignored and messages are wrapped only to the derived key.
   - Application code asks the root handle to sign a listing, or a device handle to sign a portable identity document; both are refused with SECURITY_KEY_ROLE_FORBIDDEN.
@@ -47,10 +48,10 @@ ux:
   screens:
     - "Create vault: passphrase and confirmation with strength meter (minimum 12 code points and not on the 10 000-entry common list), explicit text about what happens if the passphrase is lost, backup file download prompt."
     - "Unlock screen: passphrase field, progress while deriving the key (scrypt takes 1 to 8 seconds on typical devices), cancel button, lockout countdown after failures."
-    - "Security settings: auto-lock timeout, change passphrase, rotate this device's key (overlap 0 to 7 days, root-device approval step on linked devices), export encrypted backup, fingerprint from F07.S01.M01 fingerprintOf as 16 characters, 8-word spoken form and QR code."
+    - "Security settings: auto-lock timeout, change passphrase, rotate this device's key (overlap 0 to 7 days, root-device approval step on linked devices), export and import encrypted backup (passphrase entry with paste and password-manager autofill allowed), fingerprint from F07.S01.M01 fingerprintOf as 16 characters, 8-word spoken form and QR code."
   states: [no-vault, locked, unlocking, unlocked, lockout, rotating, rotation-pending, awaiting-root-approval, backup-needed]
   a11y:
-    - Passphrase fields use autocomplete=current-password or new-password and have visible labels and show/hide toggles with accessible names.
+    - Passphrase fields on create, unlock, change-passphrase and backup export and import use autocomplete=current-password (existing secret) or new-password (new secret), have visible labels and show/hide toggles with accessible names, never cancel paste, drop or input events and allow password-manager autofill (CTR-UX-001 UX-5, checked by F14.S01.M03 V07).
     - Progress during key derivation is announced politely and cancel is keyboard reachable.
     - Fingerprint is available as text and as a word list, not only a QR code.
 processes:
@@ -67,6 +68,7 @@ processes:
       - Passphrases are validated for minimum length and a bundled common-passphrase list before any key is created or wrapped.
       - KDF parameters read from a stored blob are validated against allowed minimums before use, so a tampered blob cannot lower the cost.
       - Every violation maps to one stable error code.
+      - Passphrase inputs on create, unlock, change-passphrase and backup export and import accept paste, drop and password-manager autofill - no handler cancels paste, drop or input events - keep autocomplete current-password or new-password and a show/hide toggle, and validation runs only on the entered value (CTR-UX-001 UX-5, checked by F14.S01.M03 V07).
     rules:
       - "V01 | passphrase is at least 12 Unicode code points after NFKC normalization and not in the common list | SECURITY_PASSPHRASE_WEAK"
       - "V02 | blob KDF is scrypt with N ≥ 131072, r ≥ 8, p ≥ 1 and salt of 16 bytes | SECURITY_WRAPPED_KEY_INVALID"
@@ -191,8 +193,9 @@ processes:
       - "T16 | abuse | 01.R04,02.R02 | relay-served mailbox hint with a substituted X25519 key for contact C; caller passes a raw agreement key to agree | the hint is ignored and the wrap targets the key derived from C's listed Ed25519 device key; SECURITY_AGREEMENT_KEY_UNBOUND"
       - "T17 | unit | 01.R02,04.R02 | root handle signs a listing draft; device handle signs a portable identity document and a device link; root handle signs a keyrevocation | SECURITY_KEY_ROLE_FORBIDDEN three times; the keyrevocation is signed"
       - "T18 | integration | 03.R04,07.R04 | 23 months after a rotation, verify an exported consent signed by the old device key; look for a root rotation entry point | old key, its device link and superseded revocation are retained and the consent verifies through the chain; no root rotation API exists"
+      - "T19 | a11y | 02.R04 | create, unlock, change-passphrase, backup export and backup import screens: paste, drop, input and a password-manager autofill into each passphrase field, then the F14.S01.M03 V07 check | each value is accepted and no event is cancelled; autocomplete is current-password or new-password as fitting; the show/hide toggle has an accessible name; V07 passes"
     acceptance:
-      - All tests T01–T18 pass in CI with the pinned noble versions and standard known-answer vectors.
+      - All tests T01–T19 pass in CI with the pinned noble versions and standard known-answer vectors.
       - Private key bytes are never returned by any API, logged or sent over the network (abuse and network tests), and agreement keys are only ever derived from listed device keys.
       - Unlock meets 8 s p95 on the Moto G profile without blocking the main thread beyond 50 ms per task.
   import_export_backup_rollback:

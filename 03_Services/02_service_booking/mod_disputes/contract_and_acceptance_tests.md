@@ -42,10 +42,11 @@ See the module test table below (all processes).
 | TEST-PS-030-09.T20 | unit | PS-030-02.R01 | payment_not_received on a cancelled booking with an approved unsettled milestone; no_show with a milestoneId; quality without one | first allowed; the other two VALIDATION_FAILED |
 | TEST-PS-030-09.T21 | abuse | PS-030-05.R02 | notice from a locally blocked party of an existing booking | quarantined for review with no notification, not dropped |
 | TEST-PS-030-09.T22 | integration | PS-030-07.R04 | privacy.deletion.completed for the counterparty; export | counterparty pseudonymized; export section services.disputes present |
+| TEST-PS-030-09.T23 | integration | PS-030-03.R04, PS-030-04.R03 | commerce.dispute.resolved carrying dispositions continue, settled with agreedAmount EUR 45.00 favouring the client, settled favouring the provider, cancelled, waived on a cancellation_fee dispute, refund_claimed with disposition continue, a disposition whose favouredDid is not a booking party, and refund_claimed without disposition | disposition stored and the effect follows its kind (restore; new_refund_deal; new_settlement_deal; mutual_cancellation; lateFeeClaim labelled waived with the amount unchanged), refund_claimed with continue restores without a refund prompt, the foreign favouredDid falls back to the outcome-type mapping with a warning, the last uses the outcome-type mapping; services.dispute.closed carries the disposition; no obligation or Deal changed |
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - No dispute outcome is ever decided by this module; only F09 resolution and withdrawal events close a linked link, and no effect changes an obligation.
 - Every opened dispute freezes approvals and fee claims exactly once, produces exactly one non-withdrawn case and is unfrozen exactly once when the case closes.
 

@@ -29,7 +29,7 @@ Schema `classrup.mutiny.cycle/v1` · storage **device** · privacy **P2** · ret
 | settlementCurrency | string — registered currency code (F09.S03.M01) |
 | headRevisionId | uuidv7 — current ProposalRevision (subjectType cycle, or trade_proposal for origin trade_proposal) |
 | headRevisionNo | int — 1..20 |
-| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); consents sign the same 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash) |
+| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); F08 consents carry this same cid as subjectRevisionHash (CTR-ID-001 ID-3 form sha256-<base64url>, N13), never a hex form |
 | consentDeadline | timestamp — claim from the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 7 d; at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16) |
 | executionWindowMs | int — 86400000..1987200000 (1 d..23 d), default 1209600000; (consentDeadline − revision time) + executionWindowMs ≤ 2592000000 (F02.S01.M04 V09) |
 | status | enum — opening \| proposed \| committed \| executing \| completed \| partially_executed \| declined \| cancelled \| frozen |
@@ -64,8 +64,10 @@ Schema `classrup.mutiny.cycle_consent/v1` · storage **device** · privacy **P2*
 | statementKey | string — consent.mutiny.cycle.commit.v1, or consent.mutiny.proposal.accept.v1 for imported proposal consents |
 | kind | enum — consent \| decline |
 | revisionNo | int — F08 subjectRevision; counts only when equal to headRevisionNo |
-| revisionHash | cid — exact digest signed (contentHash); the F08 subjectRevisionHash is its lowercase hex form |
+| revisionHash | cid — exact digest signed (contentHash); equals the F08 subjectRevisionHash (same ID-3 cid) |
+| statementLocale | string — F08 statementLocale, BCP 47 locale of the wording the signer saw |
 | consentId | uuidv7 — F08.S02.M02 ConsentStatement id |
+| aliasIds | array — 0..8 cids of F08 duplicates whose aliasOf names consentId; attached as evidence, never counted |
 | statement | object — embedded copy of the ConsentStatement accepted by F08.S02.M02 (≤ 4 KiB), kept for export as evidence |
 | direction | enum — own \| peer |
 | signedAtClaim | timestamp — signer's clock, a claim |
@@ -80,7 +82,7 @@ Schema `classrup.mutiny.cycle_consent/v1` · storage **device** · privacy **P2*
 **Invariants**
 - At most one valid consent per (cycleId, participantId, revisionHash).
 - A consent with receivedAtLocal, signedAtClaim or relayReceiptAt after the consent deadline has status late and never counts toward commit; claims and relay times can only shorten the window.
-- The signer of statement equals participantId, the statement's subjectRevision equals revisionNo and its subjectRevisionHash equals the hex of revisionHash.
+- The signer of statement equals participantId, the statement's subjectRevision equals revisionNo and its subjectRevisionHash equals revisionHash (the same ID-3 cid).
 - A consent revoked through F08.S02.M02 has status void with voidReason consent_revoked and never counts again.
 
 ### Storage DDL

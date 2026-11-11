@@ -91,7 +91,7 @@ statement to Bob and Carol (E2E encrypted, via their mailbox relays):
 | TEST-PS-012-09.T05 | integration | PS-012-03.R03, PS-012-04.R03 | revise after accepted and after cancelled | CONFLICT_STATE; all earlier consents voided on an accepted revision of a different open subject |
 | TEST-PS-012-09.T06 | contract | PS-012-04.R01, PS-012-04.R02, PS-012-09.R02 | create and ingest | statement validates against classrup.mutiny.proposal_revision/v1 and events against registry |
 | TEST-PS-012-09.T15 | unit | PS-012-04.R03, PS-012-01.R01 | diff between revision 1 and 2 of 3-party cycle | exactly the compensation line added; all earlier consents void |
-| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | hex digest equals base64url-decoded contentHash; registered signer role is party, coordinator for cycle |
+| TEST-PS-012-09.T22 | contract | PS-012-04.R04, PS-012-01.R05 | canonicalBytes for a mutiny_cycle revision compared with an independent JCS and F08 subjectRevisionHash; registry lookup for classrup.mutiny.proposal_revision/v1 | the ID-3 cid of canonicalBytes equals contentHash and the F08 subjectRevisionHash, and a hex encoding of the same digest is refused; registered signer role is party, coordinator for cycle |
 | TEST-PS-012-09.T23 | integration | PS-012-04.R04, PS-012-03.R02 | mutiny.revision.report_fork called with a signed consent on a different digest at the head revision number | forked set, mutiny.revision.forked emitted once with evidence consent, further revisions refused |
 
 ## Dependencies

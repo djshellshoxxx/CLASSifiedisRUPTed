@@ -14,14 +14,14 @@
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | items has 1..5 lines with quantity 1..99, each maps to an InventoryPort line {listingId of the item's local listing, variantId?, quantity} owned by the principal, and bazaar.inventory.hold succeeds for all lines at once | MUTINY_LOCK_UNAVAILABLE |
+| V01 | items has 1..5 lines with quantity 1..99, each is an InventoryPort line {inventoryItemId, quantity} of an item owned by the principal, and bazaar.inventory.hold succeeds for all lines at once | MUTINY_LOCK_UNAVAILABLE |
 | V02 | expiresAt = min(consentDeadline + executionWindowMs, now + 30 d) and the head revision satisfies the F02.S01.M04 V09 cap ((consentDeadline − revision time) + executionWindowMs ≤ 30 d), so expiresAt normally equals consentDeadline + executionWindowMs; the hold is taken with ttlMs = min(expiresAt − now, 14 d) | MUTINY_LOCK_EXPIRY_INVALID |
 | V03 | the principal has fewer than 5 active own reservation sets | MUTINY_LOCK_LIMIT |
 | V04 | revisionHash equals the subject's head revision hash | MUTINY_LOCK_REVISION_STALE |
 | V05 | peer classrup.bazaar.reservation/v1 has holder {type: cycle, id: subjectId}, signature verifies Ed25519 and the signer is the listing owner (F01.S03.M01 V11) and a giver in the head revision's legs, ext.revisionHash equals the head digest, and supersedesCid, when present, names an earlier active reservation of the same signer and subject | MUTINY_LOCK_STATEMENT_INVALID |
 | V06 | peer reservation expiresAt ≥ head consentDeadline + executionWindowMs and is still in the future on the local clock | MUTINY_LOCK_STATEMENT_INVALID |
 | V07 | conflict counts only peer and own reservations that are active, unexpired on the local clock and whose subject is non-terminal in this vault; another such reservation of the same item for a different subject that exceeds the quantity is a conflict | MUTINY_LOCK_CONFLICT |
-| V08 | a release notice classrup.mutiny.reservation_release/v1 carries releasesCid naming an active reservation of the same signer and subject; it is accepted only from that signer and only while that reservation is active, and a notice naming any other cid is ignored | CONFLICT_STATE |
+| V08 | a release notice (classrup.mutiny.reservation_release/v1, alias of classrup.bazaar.reservation_release/v1, or classrup.bazaar.reservation_release/v1 itself with holder.type cycle) has exactly the payload {releasesCid, holder {type: cycle, id: subjectId}, reason} and releasesCid names an active reservation of the same signer and subject; it is accepted only from that signer and only while that reservation is active, and a notice naming any other cid is ignored | CONFLICT_STATE |
 | V09 | issuedAtClaim is not more than 5 minutes after the local clock | MUTINY_LOCK_STATEMENT_INVALID |
 | V10 | a local hold renewal never sets holdRenewedUntil past the statement's expiresAt or the hold's maxExpiresAt and never re-signs the statement | MUTINY_LOCK_EXPIRY_INVALID |
 

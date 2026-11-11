@@ -38,10 +38,11 @@ See the module test table below (all processes).
 | TEST-PS-128-09.T16 | abuse | PS-128-01.R04, PS-128-02.R02 | relay-served mailbox hint with a substituted X25519 key for contact C; caller passes a raw agreement key to agree | the hint is ignored and the wrap targets the key derived from C's listed Ed25519 device key; SECURITY_AGREEMENT_KEY_UNBOUND |
 | TEST-PS-128-09.T17 | unit | PS-128-01.R02, PS-128-04.R02 | root handle signs a listing draft; device handle signs a portable identity document and a device link; root handle signs a keyrevocation | SECURITY_KEY_ROLE_FORBIDDEN three times; the keyrevocation is signed |
 | TEST-PS-128-09.T18 | integration | PS-128-03.R04, PS-128-07.R04 | 23 months after a rotation, verify an exported consent signed by the old device key; look for a root rotation entry point | old key, its device link and superseded revocation are retained and the consent verifies through the chain; no root rotation API exists |
+| TEST-PS-128-09.T19 | a11y | PS-128-02.R04 | create, unlock, change-passphrase, backup export and backup import screens: paste, drop, input and a password-manager autofill into each passphrase field, then the F14.S01.M03 V07 check | each value is accepted and no event is cancelled; autocomplete is current-password or new-password as fitting; the show/hide toggle has an accessible name; V07 passes |
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI with the pinned noble versions and standard known-answer vectors.
+- All tests T01–T19 pass in CI with the pinned noble versions and standard known-answer vectors.
 - Private key bytes are never returned by any API, logged or sent over the network (abuse and network tests), and agreement keys are only ever derived from listed device keys.
 - Unlock meets 8 s p95 on the Moto G profile without blocking the main thread beyond 50 ms per task.
 

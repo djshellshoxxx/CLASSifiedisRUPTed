@@ -14,7 +14,7 @@ Either party of a service booking can open a service-specific dispute in their o
 - Assemble the evidence pack automatically - list of statement cids and attachment references with hashes - and let the opener add up to 5 more references and a statement of up to 2000 characters.
 - Enforce eligibility - parties only, booking and milestone states allowed for the scope, within 30 days after the later of booking end, last milestone activity and cancellation, one open dispute per booking (matching the F09 one-case-per-context-and-opener rule), one per scope key and at most 3 per booking - in the opener's vault and again in the receiving vault.
 - Emit services.dispute.opened locally once the link has a verified case so F03.S02.M01 and F03.S02.M02 freeze approvals and fee claims, and emit services.dispute.closed on every terminal transition.
-- Own the resolution mapping from F09 resolutions, outcome types and withdrawals to service effects; every effect restores the pre-dispute state and none changes an obligation.
+- Own the resolution mapping from F09 resolutions, the advisory disposition carried by commerce.dispute.resolved (read first when present), outcome types and withdrawals to service effects; every effect restores the pre-dispute state and none changes an obligation.
 
 ## Not responsible for
 
@@ -75,7 +75,7 @@ F03.S02.M01, F03.S02.M02, F09.S02.M02, F09.S01.M01, F08.S01.M01, F08.S01.M03, F0
 |---|---|---|
 | PS-030-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-030-02 | [Validation rules](validation_rules.md) | 3 |
-| PS-030-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-030-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-030-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-030-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-030-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
@@ -88,6 +88,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - No dispute outcome is ever decided by this module; only F09 resolution and withdrawal events close a linked link, and no effect changes an obligation.
 - Every opened dispute freezes approvals and fee claims exactly once, produces exactly one non-withdrawn case and is unfrozen exactly once when the case closes.

@@ -46,13 +46,15 @@ See the module test table below (all processes).
 | TEST-PS-018-09.T23 | unit | PS-018-02.R02, PS-018-01.R01 | pair distance from L2 cells u4pru and u4prv, an L1-only listing cell, and a 6-character cell | ordinal 0, at least 3, and DISCOVERY_PRECISION_FORBIDDEN rejection of the projection edge |
 | TEST-PS-018-09.T24 | contract | PS-018-04.R05 | registry entry of classrup.mutiny.cycle_suggestion/v1 and relay push hook | signer role relay; compute_public calls notify.notification.dispatch once per delivered envelope with no content |
 | TEST-PS-018-09.T25 | integration | PS-018-07.R05 | F10 export, deletion and retention sweep | section mutiny.suggestions exported; erased principal's suggestions and graphs deleted; graph caches purged at 24 h |
+| TEST-PS-018-09.T26 | unit | PS-018-02.R05, PS-018-02.R02 | own want from list_open and peer want projection with minCondition good against items in like_new, good and fair; a want with budgetVisible false whose private maxBudget is below the item value; the same want with budgetVisible true | edges for like_new and good only; the private budget is ignored and the edge is built in vault and relay mode alike; with budgetVisible true the edge is refused with reason MUTINY_EDGE_INVALID |
+| TEST-PS-018-09.T27 | contract | PS-018-02.R04, PS-018-02.R01 | relay tenant with maxCycleLength 3 and default 5; compute_public with lmax 4, without lmax, and with a TenantPort stub that fails; vault generate with lmax 8 | lmax 4 refused with MUTINY_LMAX_INVALID; without lmax the run uses lmax 3 and returns no 4-cycle, and with the default limit it uses lmax 5; failing TenantPort gives DEPENDENCY_UNAVAILABLE and no run; vault run with lmax 8 allowed |
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI with seeds recorded.
+- All tests T01–T27 pass in CI with seeds recorded.
 - No suggestion is ever created as a proposal, reservation, consent or signed statement by the engine.
 - Same inputHash and parameters produce identical suggestions on two different devices.
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F15.S04.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

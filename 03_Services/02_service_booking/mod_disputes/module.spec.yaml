@@ -16,7 +16,7 @@ responsibilities:
   - Assemble the evidence pack automatically - list of statement cids and attachment references with hashes - and let the opener add up to 5 more references and a statement of up to 2000 characters.
   - Enforce eligibility - parties only, booking and milestone states allowed for the scope, within 30 days after the later of booking end, last milestone activity and cancellation, one open dispute per booking (matching the F09 one-case-per-context-and-opener rule), one per scope key and at most 3 per booking - in the opener's vault and again in the receiving vault.
   - Emit services.dispute.opened locally once the link has a verified case so F03.S02.M01 and F03.S02.M02 freeze approvals and fee claims, and emit services.dispute.closed on every terminal transition.
-  - Own the resolution mapping from F09 resolutions, outcome types and withdrawals to service effects; every effect restores the pre-dispute state and none changes an obligation.
+  - Own the resolution mapping from F09 resolutions, the advisory disposition carried by commerce.dispute.resolved (read first when present), outcome types and withdrawals to service effects; every effect restores the pre-dispute state and none changes an obligation.
 non_responsibilities:
   - Case handling, evidence review, arbitration and resolution statements (F09.S02.M02 DisputeCase).
   - Payment claims and receipts (F09.S01.M01, F09.S02.M01).
@@ -78,6 +78,7 @@ processes:
           - "state: enum — pending_link | linked | resolved | withdrawn | link_failed"
           - "resolution?: enum — no_fault_close | refund_claimed | return_agreed | enforcement_referral | lapsed (the F09 resolution enum)"
           - "outcomeType?: enum — no_fault_close | refund_claimed | return_agreed | enforcement_referral; F09 outcome type when present"
+          - "disposition?: object — {kind: continue | settled | cancelled | waived, favouredDid?, agreedAmount?: Money}; the advisory, non-executable F09 disposition copied from commerce.dispute.resolved when present; ignored with a warning when favouredDid is not the client or provider of the booking"
           - "closeReason?: enum — resolved | withdrawn | case_withdrawn | link_failed | merged"
           - "noticeCid?: string — cid of the signed dispute notice"
           - "withdrawalCid?: string — cid of the signed dispute withdrawal"
@@ -91,6 +92,7 @@ processes:
           - At most one link per scopeKey among links that are not withdrawn or link_failed, and at most one open link per booking in a vault.
           - evidencePack always contains the cids of the booking confirmation statement and of the quote that the booking derives from.
           - No field maps a resolution to an executable money or obligation change.
+          - When disposition is stored, the effect recorded for the link is the one its kind maps to, never the outcome-type effect.
     sql: |
       CREATE TABLE services_dispute_link (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, booking_id TEXT NOT NULL, scope_key TEXT NOT NULL, state TEXT NOT NULL,
@@ -118,6 +120,7 @@ processes:
       - Links move pending_link, linked, resolved; withdrawn and link_failed are terminal exits, link_failed happens only before a case is linked and never blocks a new open.
       - Resolution is reported only by F09 resolution and withdrawal events and mapped to service effects by the table in the note below; this module never decides an outcome and no effect changes an obligation.
       - Opening emits services.dispute.opened exactly once per link, when the link becomes linked to a verified case, so downstream freezes are idempotent; every terminal transition emits services.dispute.closed exactly once.
+      - When commerce.dispute.resolved carries the advisory F09 disposition {kind continue|settled|cancelled|waived, favouredDid?, agreedAmount?}, the service effect follows the disposition kind per the mapping note; only when it is absent, or ignored because favouredDid is not a party of the booking, does the outcome-type mapping apply, and neither path changes an obligation.
     machines:
       - entity: ServiceDisputeLink
         initial: pending_link
@@ -126,9 +129,9 @@ processes:
           - "pending_link -> linked | the F09 port returned caseId in the opener vault, or commerce.dispute.opened consumed matching (contextRef.id = bookingId, openerId) or the stored caseId | disputeCaseId and preDisputeState stored; emits services.dispute.opened"
           - "pending_link -> withdrawn | services.dispute.withdraw by the opener before a case exists, a verified dispute_withdrawal from the opener, or the merge rule for the larger noticeCid | withdrawal statement sent when this vault is the opener; emits services.dispute.closed with reason withdrawn or merged"
           - "pending_link -> link_failed | 3 failed case-creation attempts in the opener vault, or 7 days without a matching commerce.dispute.opened in the counterparty vault | nothing was frozen; emits services.dispute.closed with reason link_failed"
-          - "linked -> resolved | commerce.dispute.resolved consumed for disputeCaseId | resolution and outcomeType stored, effect per the mapping; emits services.dispute.closed with reason resolved"
+          - "linked -> resolved | commerce.dispute.resolved consumed for disputeCaseId | resolution, outcomeType and disposition stored, effect per the mapping (disposition kind when present, else outcome type); emits services.dispute.closed with reason resolved"
           - "linked -> withdrawn | services.dispute.withdraw by the opener (calls commerce.dispute.withdraw), commerce.dispute.withdrawn consumed for disputeCaseId, or the merge rule for the larger noticeCid | emits services.dispute.closed with reason withdrawn, case_withdrawn or merged"
-    note: "Resolution mapping, owned here and applied by F03.S02.M01 and F03.S02.M02 on the same F09 events matched by caseId. no_fault_close (party-accepted or mediator-only), enforcement_referral and lapsed - lift the freeze and restore the stored pre-dispute status (booking confirmed or in_progress, milestone submitted or approved). refund_claimed - lift the freeze and restore, then prompt the provider to open a new Deal for the advisory refund if they agree (F09.S01.M01); the existing milestone Deal is never changed. return_agreed - lift the freeze and restore, then prompt both parties to sign a mutual booking cancellation (consent.services.booking.cancel.v1) or, for approved milestones, a mutual Deal cancellation. commerce.dispute.withdrawn, services.dispute.withdraw and a merge - lift the freeze and restore. Every effect is non-executable; obligations change only through mutually signed services or commerce statements, and no outcome cancels a payment obligation."
+    note: "Resolution mapping, owned here and applied by F03.S02.M01 and F03.S02.M02 on the same F09 events matched by caseId. Disposition first - when commerce.dispute.resolved carries a disposition whose favouredDid, if any, is the client or provider of the booking, its kind decides the effect: continue - lift the freeze and restore the pre-dispute status (effect restore); settled with agreedAmount - lift the freeze and restore, show favouredDid and agreedAmount and prompt the party that is not favoured to open a new Deal for agreedAmount payable to favouredDid (F09.S01.M01; new_refund_deal when the client is favoured, new_settlement_deal when the provider is favoured), the existing milestone Deals are never changed (effect restore_then_renegotiate); settled without agreedAmount - as continue; cancelled - lift the freeze and restore, then prompt both parties to sign a mutual booking cancellation (consent.services.booking.cancel.v1) or, for an approved milestone in scope, a mutual Deal cancellation (effect restore_then_renegotiate); waived - lift the freeze and restore, label the claim in scope (the cancellation lateFeeClaim or the disputed milestone payment) as waived in favour of favouredDid without rewriting the stored amount, and for an approved milestone in scope prompt both parties to sign a mutual Deal cancellation (effect restore_then_renegotiate when such a milestone exists, else restore). Outcome-type mapping, used only when no disposition is present or it was ignored: no_fault_close (party-accepted or mediator-only), enforcement_referral and lapsed - lift the freeze and restore the stored pre-dispute status (booking confirmed or in_progress, milestone submitted or approved). refund_claimed - lift the freeze and restore, then prompt the provider to open a new Deal for the advisory refund if they agree (F09.S01.M01); the existing milestone Deal is never changed. return_agreed - lift the freeze and restore, then prompt both parties to sign a mutual booking cancellation (consent.services.booking.cancel.v1) or, for approved milestones, a mutual Deal cancellation. commerce.dispute.withdrawn, services.dispute.withdraw and a merge - lift the freeze and restore. Every effect is non-executable; obligations change only through mutually signed services or commerce statements, and no outcome cancels a payment obligation."
     timeouts:
       - "Case creation in the opener vault is retried at 10 s, 60 s and 10 minutes with the link id as idempotency reference; after the third failure the link becomes link_failed."
       - "A counterparty pending_link without a matching commerce.dispute.opened for 7 days becomes link_failed; a commerce.dispute.opened for a booking context without a notice is kept unmatched for 7 days and then left to F09 alone."
@@ -164,7 +167,7 @@ processes:
       - name: services.dispute.get
         capability: services.dispute.read_own
         input: "[vault-local] { linkId }"
-        output: "{ link: ServiceDisputeLink, allowedNextSteps: [mutual_cancellation | new_refund_deal | none] }"
+        output: "{ link: ServiceDisputeLink, allowedNextSteps: [mutual_cancellation | mutual_deal_cancellation | new_refund_deal | new_settlement_deal | none] }"
         errors: [NOT_FOUND]
       - name: services.dispute.preview_evidence
         capability: services.dispute.read_own
@@ -174,10 +177,10 @@ processes:
     note: "Statement registry (N2): classrup.services.dispute_notice/v1 signer role opener (client or provider of the booking); classrup.services.dispute_withdrawal/v1 signer role the opener of the referenced notice. Scope to F09 reason - not_delivered to not_received; quality to not_as_described; payment_not_received to payment_not_acknowledged; no_show to no_show; scope_change, cancellation_fee and other to other. Single case-creation path: the services.dispute.open port call in the opener vault; F09.S02.M02 must not create a case from services.dispute.opened, and an opened event with origin federated is never acted on by F09."
     events_produced:
       - {type: services.dispute.opened, privacy: P2, payload: "{ linkId, bookingId, milestoneId?, scope, openerId, counterpartyId, clientId, providerId, disputeCaseId, preDisputeState, origin: local|federated }"}
-      - {type: services.dispute.closed, privacy: P2, payload: "{ linkId, bookingId, milestoneId?, disputeCaseId?, clientId, providerId, reason: withdrawn|link_failed|case_withdrawn|resolved|merged, resolution?, outcomeType?, effect: restore|restore_then_renegotiate|none }"}
+      - {type: services.dispute.closed, privacy: P2, payload: "{ linkId, bookingId, milestoneId?, disputeCaseId?, clientId, providerId, reason: withdrawn|link_failed|case_withdrawn|resolved|merged, resolution?, outcomeType?, disposition?: {kind, favouredDid?, agreedAmount?}, effect: restore|restore_then_renegotiate|none }"}
     events_consumed:
       - {type: commerce.dispute.opened, effect: "for contextRef {type: booking, id} matching a link on (contextRef.id = bookingId, openerId) or the stored caseId, store the case id and move pending_link to linked; it never creates a link by itself"}
-      - {type: commerce.dispute.resolved, effect: "for disputeCaseId move linked to resolved, store resolution and outcomeType, and apply the resolution mapping"}
+      - {type: commerce.dispute.resolved, effect: "for disputeCaseId move linked to resolved, store resolution, outcomeType and the advisory disposition when present, and apply the resolution mapping - the disposition kind when present and valid for the booking parties, otherwise the outcome-type mapping"}
       - {type: commerce.dispute.withdrawn, effect: "for disputeCaseId move linked to withdrawn with closeReason case_withdrawn"}
       - {type: privacy.deletion.completed, effect: "replace the erased counterparty DID with the deletion pseudonym in retained links; notice signatures are kept and marked unverifiable-after-pseudonymization"}
     errors:
@@ -276,8 +279,9 @@ processes:
       - "T20 | unit | 02.R01 | payment_not_received on a cancelled booking with an approved unsettled milestone; no_show with a milestoneId; quality without one | first allowed; the other two VALIDATION_FAILED"
       - "T21 | abuse | 05.R02 | notice from a locally blocked party of an existing booking | quarantined for review with no notification, not dropped"
       - "T22 | integration | 07.R04 | privacy.deletion.completed for the counterparty; export | counterparty pseudonymized; export section services.disputes present"
+      - "T23 | integration | 03.R04,04.R03 | commerce.dispute.resolved carrying dispositions continue, settled with agreedAmount EUR 45.00 favouring the client, settled favouring the provider, cancelled, waived on a cancellation_fee dispute, refund_claimed with disposition continue, a disposition whose favouredDid is not a booking party, and refund_claimed without disposition | disposition stored and the effect follows its kind (restore; new_refund_deal; new_settlement_deal; mutual_cancellation; lateFeeClaim labelled waived with the amount unchanged), refund_claimed with continue restores without a refund prompt, the foreign favouredDid falls back to the outcome-type mapping with a warning, the last uses the outcome-type mapping; services.dispute.closed carries the disposition; no obligation or Deal changed"
     acceptance:
-      - All tests T01–T22 pass in CI.
+      - All tests T01–T23 pass in CI.
       - No dispute outcome is ever decided by this module; only F09 resolution and withdrawal events close a linked link, and no effect changes an obligation.
       - Every opened dispute freezes approvals and fee claims exactly once, produces exactly one non-withdrawn case and is unfrozen exactly once when the case closes.
   import_export_backup_rollback:

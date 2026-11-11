@@ -12,7 +12,7 @@ Optional email notifications, available only through a relay whose operator offe
 
 - Own the vault email target (classrup.notify.email_target/v1), the relay EmailAddress service copy (classrup.notify.email_address/v1) and the relay EmailDelivery record (classrup.notify.email_delivery/v1); the vault record is authoritative and the relay copy is rebuilt from it.
 - Run the vault commands enable, disable and sync_status that check privacy.consent.check for notify_email and the registered channel consent, seal the address to the relay key, and mirror relay status into the vault.
-- Add, verify and remove addresses at the relay through sealed requests signed by an active device key and a public verification link.
+- Add, verify and remove addresses at the relay through sealed requests signed with the F11.S01.M03 RFC 9421 profile (tag classrup/relay-request/v1) by an active device key, and a public verification link.
 - Send emails from the fixed email template registry through EmailTransportPort with List-Unsubscribe and List-Unsubscribe-Post headers from UnsubscribeTokenPort, a VERP return path per delivery, SPF, DKIM and DMARC alignment required of the operator, and retries on temporary failures.
 - Accept only authenticated bounce and complaint reports, mark an address bouncing only on the documented bounce thresholds, and turn a verified complaint into a registered withdrawal through F13.S02.M03.
 - Emit relay-local notify.email.sent and notify.email.bounced, and the vault-local notify.email.bounced when the vault learns that delivery stopped, without addresses in any payload.
@@ -73,18 +73,18 @@ Optional email notifications, available only through a relay whose operator offe
 
 ## Dependencies
 
-F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
+F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-102-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-102-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-102-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-102-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
 | PS-102-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-102-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
-| PS-102-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-102-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-102-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-102-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-102-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 4 |
@@ -94,7 +94,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T19 pass in CI.
+- All tests T01 to T21 pass in CI.
 - No email is sent without a verified address and a granted registered consent, and each email carries one-click unsubscribe headers and a VERP return path.
 - Emails contain no listing, message, name or amount content in any test.
 - Addresses never appear in logs, events, relay exports or query results, and no unauthenticated report changes an address or a consent.

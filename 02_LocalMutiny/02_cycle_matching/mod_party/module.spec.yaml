@@ -19,7 +19,7 @@ non_responsibilities:
   - Block list storage (F07.S02.M02); this module only reads it.
   - Global suspension; there is none (ADR-0016). A relay's hosting policy may stop indexing a projection, which only removes the projection from that relay.
   - "Future: per-category opt-in, time-of-day availability windows, and reputation thresholds."
-depends_on: [F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F07.S01.M01, F07.S02.M02, F06.S02.M01, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a member, I opt in to matching after reading plainly what is published (my coarse preferences, not my exclusions), and I can opt out at any time with a signed tombstone.
   - As a member, I limit cycles to at most 3 participants within 10 km and exclude two people I do not want to trade with, without those people ever being told.
@@ -69,7 +69,7 @@ processes:
           - "pausedUntil?: timestamp — at most now + 90 d"
           - "excludedActorIds: array — local only, ≤ 200 DIDs, never in the projection"
           - "includeUnknownIdentities: boolean — local only, default false; when false the engine excludes counterparties with no history known to this vault (F02.S02.M03)"
-          - "regionL1: string — geohash4 of home region from F06.S02.M02, validated with F06.S02.M01 assertPublicCell; used only to partition matching, never for pair distances; required when optedIn"
+          - "regionL1: string — geohash4 home region: the first 4 characters of publicCell of the last consumed discovery.location.updated event (no build dependency on its producer) or a manual entry, validated with F06.S02.M01 assertPublicCell; used only to partition matching, never for pair distances; required when optedIn"
           - "seq: int — projection sequence per CTR-FED-001 FED-3, starts at 1"
           - "prev?: cid — hash of previous projection envelope"
           - "projectionCid?: cid — sha256 of the signed projection envelope"
@@ -97,7 +97,7 @@ processes:
       - "V01 | maxCycleLength is an integer in 2..8 | VALIDATION_FAILED"
       - "V02 | maxDistanceBucket is an integer 0..4 of the ordinal mapping defined here | VALIDATION_FAILED"
       - "V03 | optedIn true requires optInVersion equal to the current disclosure key and an explicit confirmation flag | MUTINY_OPTIN_REQUIRED"
-      - "V04 | optedIn true requires regionL1 from F06.S02.M02 (manual entry allowed) | MUTINY_PROFILE_REGION_REQUIRED"
+      - "V04 | optedIn true requires regionL1, taken from the last consumed discovery.location.updated publicCell or entered manually | MUTINY_PROFILE_REGION_REQUIRED"
       - "V05 | excludedActorIds has ≤ 200 unique DIDs and does not contain the principal | MUTINY_EXCLUSION_LIMIT"
       - "V06 | pausedUntil is in the future and ≤ now + 90 d | VALIDATION_FAILED"
       - "V07 | peer projection signature verifies (Ed25519 over JCS), author DID matches signer, seq greater than stored and prev equals stored projectionCid | MUTINY_PROJECTION_INVALID"
@@ -166,7 +166,7 @@ processes:
     events_consumed:
       - {type: identity.block.added, effect: "no profile change; eligibility function reads the block list at evaluation time"}
       - {type: identity.block.removed, effect: "no profile change; eligibility re-evaluated on next read"}
-      - {type: discovery.location.updated, effect: "if the principal is opted in and regionL1 changed, update regionL1 (assertPublicCell) and publish projection seq+1"}
+      - {type: discovery.location.updated, effect: "keep the first 4 characters of publicCell as the region candidate (none at publicLevel L0); if the principal is opted in and regionL1 changed, update regionL1 (assertPublicCell) and publish projection seq+1; at L0 an opted-in principal keeps the last regionL1 until changing it manually"}
       - {type: privacy.consent.withdrawn, effect: "for purpose federation_publish and a relay: queue a signed tombstone to that relay and publish nothing further there"}
       - {type: privacy.deletion.completed, effect: "purge the local profile including exclusions after the tombstone was queued; peer mirrors of the erased DID are deleted"}
     errors:

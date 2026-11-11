@@ -40,6 +40,7 @@ Schema `classrup.rentals.offering/v1` · storage **device** · privacy **P3** ·
 | autoConfirm | boolean — confirm automatically when the owner's app is open and the interval is free |
 | pickupAreaCell | string — geohash of length 4 or 5 checked by F06.S02.M01 assertPublicCell; never finer |
 | status | enum — draft \| active \| paused \| archived |
+| withdrawReason? | enum — paused \| archived \| listing_unavailable; set when a published offering leaves active and carried in rentals.offering.withdrawn |
 | projectionCid? | string — cid of the signed public projection |
 | revision | int — CTR-ID-001 ID-4 |
 
@@ -81,8 +82,9 @@ Schema `classrup.rentals.reservation/v1` · storage **device** · privacy **P2**
 | requestConsentCid | string — cid of the renter's comms.consent statement (consent.rentals.reservation.request.v1) |
 | confirmationCid? | string — cid of the owner's rental_confirmation |
 | confirmConsentCid? | string — cid of the owner's comms.consent statement (consent.rentals.reservation.confirm.v1) |
-| dealId? | uuidv7 — rent Deal in F09.S01.M01 for contextRef {rental_reservation, reservationId}, opened at handoff |
-| feeDealId? | uuidv7 — cancellation-fee Deal for contextRef {rental_cancellation_fee, reservationId} |
+| consentRevocationId? | string — revocationId of the comms.consent.revoked whose revokedIds[] named requestConsentCid or confirmConsentCid and froze the reservation |
+| dealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); rent Deal for contextRef {rental_reservation, reservationId}, opened at handoff |
+| feeDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); cancellation-fee Deal for contextRef {rental_cancellation_fee, reservationId} |
 | dealCancelPending? | boolean — a commerce.deal.cancel statement awaits the counterparty's signature |
 | syncState | map — per peer {state: prepared \| transport_acknowledged \| peer_accepted, at} |
 | revision | int — CTR-ID-001 ID-4 |

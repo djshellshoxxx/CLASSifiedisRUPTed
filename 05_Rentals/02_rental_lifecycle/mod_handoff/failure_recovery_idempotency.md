@@ -14,7 +14,7 @@
 
 - **idempotency:** Local command id stored 24 h; statements deduplicated by cid in the inbox table; a second attest by the same signer on the same cid returns the original attestation.
 - **concurrency:** Web Locks lock rentals-handoff-<reservationId> around commands; expectedRevision on every command; owner and renter reports of the same revision resolve owner-canonical; forked devices of one party are detected through the signed seq/prev chain and freeze the handoff.
-- **retries:** Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; photos are uploaded whole under the F08.S01.M03 slot rules and fetched again on failure; a photo whose relay blob expired is re-requested from the author through the thread.
+- **retries:** Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; photos are uploaded whole under the F08.S01.M03 slot rules and fetched again on failure; a photo whose comms.attachment.download returns NOT_FOUND (blob expired or deleted by its uploader) is marked missing and re-requested from the author through the thread.
 - **offline:** All commands work offline and both parties can sign at the meeting and sync later; inbound statements are judged by signed createdAt within the 72 h receipt bound; the UI shows prepared, transport_acknowledged or peer_accepted and shows attested only when both signatures are held locally.
 - **partial failure:** If metadata stripping or re-encoding of a photo fails the report is not signed and the item shows an error; if a photo cannot be fetched the attest button stays disabled with RENTALS_EVIDENCE_MISSING; if relay delivery fails the local signature stands and the sync state shows the failure.
 

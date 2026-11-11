@@ -7,7 +7,7 @@
 - [x] [PS-104-03 Workflow state machine](workflow_state_machine.md) — 4 requirements, tests mapped
 - [x] [PS-104-04 Commands, queries and events](commands_queries_events.md) — 5 requirements, tests mapped
 - [x] [PS-104-05 Authorization and capabilities](authorization_capabilities.md) — 4 requirements, tests mapped
-- [x] [PS-104-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 4 requirements, tests mapped
+- [x] [PS-104-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 5 requirements, tests mapped
 - [x] [PS-104-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 4 requirements, tests mapped
 - [x] [PS-104-08 Observability and performance](observability_performance.md) — 3 requirements, tests mapped
 - [x] [PS-104-09 Contract and acceptance tests](contract_and_acceptance_tests.md) — 4 requirements, tests mapped

@@ -62,7 +62,7 @@ CREATE UNIQUE INDEX rentals_handoff_reservation ON rentals_handoff(tenant_id, re
 | TEST-PS-042-09.T01 | unit | PS-042-01.R01, PS-042-01.R02, PS-042-01.R03, PS-042-02.R03 | build a report with 20 photos, strip metadata through F10.S02.M03 before encryption, sign it | MediaBlob ids computed over the stripped bytes; no metadata in stored or sent bytes; cid stable |
 | TEST-PS-042-09.T04 | integration | PS-042-03.R02, PS-042-01.R03 | attest revision 2 after revision 3 exists; request changes then re-attest | RENTALS_REPORT_STALE; new revision clears attestations; attested only on the exact cid |
 | TEST-PS-042-09.T15 | e2e | PS-042-01.R01, PS-042-04.R01 | mobile owner and renter complete a handoff in two browsers | both show attested with the same fingerprint; axe zero serious issues |
-| TEST-PS-042-09.T18 | integration | PS-042-07.R04, PS-042-01.R02 | relay blob of one photo expired before the renter fetched it; author deletes the thread message after the renter stored the other photos | attest refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify against their MediaBlob ids after the deletion |
+| TEST-PS-042-09.T18 | integration | PS-042-07.R04, PS-042-01.R02, PS-042-04.R05 | relay blob of one photo expired before the renter fetched it; author deletes the thread message after the renter stored the other photos; no comms.attachment.deleted reaches the renter vault | the download returns NOT_FOUND, the photo is listed in missingPhotos[] and re-requested, and attest is refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify against their MediaBlob ids after the deletion |
 
 ## Dependencies
 

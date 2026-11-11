@@ -40,6 +40,7 @@ Client library for the user's own keys in the browser vault. It generates the ac
 - Passphrase change while another device is linked; the wrap is rewritten with a new salt and nonce; other devices are unaffected because each device has its own key.
 - Device rotation interrupted after the new key is generated but before the root-signed device link is recorded; the old key stays active, the new key is unused, the vault shows 'rotation pending' and resumes from the persisted progress.
 - Passphrase appears on a list of commonly used passphrases; creation is refused with SECURITY_PASSPHRASE_WEAK and explains how to choose a longer phrase.
+- A user pastes the passphrase from a password manager or lets it autofill the unlock field; the field accepts it, because no handler cancels paste, drop or input events, and validation runs only on the entered value.
 - Rotation is started on a linked device that does not hold the root key; the new key and its possession signature are prepared there and the vault shows 'waiting for approval on your root device', because only the root key signs the device link.
 - A relay-served mailbox hint carries an X25519 key for a contact that differs from the one derived from the contact's listed device key; the hint is ignored and messages are wrapped only to the derived key.
 - Application code asks the root handle to sign a listing, or a device handle to sign a portable identity document; both are refused with SECURITY_KEY_ROLE_FORBIDDEN.
@@ -49,11 +50,11 @@ Client library for the user's own keys in the browser vault. It generates the ac
 
 - Create vault: passphrase and confirmation with strength meter (minimum 12 code points and not on the 10 000-entry common list), explicit text about what happens if the passphrase is lost, backup file download prompt.
 - Unlock screen: passphrase field, progress while deriving the key (scrypt takes 1 to 8 seconds on typical devices), cancel button, lockout countdown after failures.
-- Security settings: auto-lock timeout, change passphrase, rotate this device's key (overlap 0 to 7 days, root-device approval step on linked devices), export encrypted backup, fingerprint from F07.S01.M01 fingerprintOf as 16 characters, 8-word spoken form and QR code.
+- Security settings: auto-lock timeout, change passphrase, rotate this device's key (overlap 0 to 7 days, root-device approval step on linked devices), export and import encrypted backup (passphrase entry with paste and password-manager autofill allowed), fingerprint from F07.S01.M01 fingerprintOf as 16 characters, 8-word spoken form and QR code.
 
 **States:** no-vault; locked; unlocking; unlocked; lockout; rotating; rotation-pending; awaiting-root-approval; backup-needed
 
-**Accessibility:** Passphrase fields use autocomplete=current-password or new-password and have visible labels and show/hide toggles with accessible names.; Progress during key derivation is announced politely and cancel is keyboard reachable.; Fingerprint is available as text and as a word list, not only a QR code.
+**Accessibility:** Passphrase fields on create, unlock, change-passphrase and backup export and import use autocomplete=current-password (existing secret) or new-password (new secret), have visible labels and show/hide toggles with accessible names, never cancel paste, drop or input events and allow password-manager autofill (CTR-UX-001 UX-5, checked by F14.S01.M03 V07).; Progress during key derivation is announced politely and cancel is keyboard reachable.; Fingerprint is available as text and as a word list, not only a QR code.
 
 ## Owned data
 
@@ -75,7 +76,7 @@ F16.S02.M02, F16.S02.M03, F15.S01.M01, F07.S01.M01, CTR-ID-001, CTR-ERR-001, CTR
 | ID | Process | Requirements |
 |---|---|---|
 | PS-128-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-128-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-128-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-128-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-128-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-128-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -89,6 +90,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI with the pinned noble versions and standard known-answer vectors.
+- All tests T01–T19 pass in CI with the pinned noble versions and standard known-answer vectors.
 - Private key bytes are never returned by any API, logged or sent over the network (abuse and network tests), and agreement keys are only ever derived from listed device keys.
 - Unlock meets 8 s p95 on the Moto G profile without blocking the main thread beyond 50 ms per task.

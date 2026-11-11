@@ -11,13 +11,15 @@ summary: >-
   signed advisory feeds that label or hide content, with no relay involved. A relay's moderators decide only
   what that relay indexes; there is no global takedown. Reporter pseudonymity is not anonymity: the relay
   operator sees the reporting key, and the relay's hosting policy (not cryptography) promises not to reveal it
-  to the reported party.
+  to the reported party. Local hides are vault records that local views (F06 search and proximity results) apply
+  at query time through the in-process LocalHidePort (isHidden, filterHidden), and the user removes them with an
+  explicit unhide.
 responsibilities:
   - Own the Report record in the reporter's vault (device) and its relay-side copy on the relay that received it, with sync states local committed, prepared, transport_acknowledged and peer_accepted.
   - Offer the 12-code reason taxonomy and produce the report statement addressed to one user-selected relay, bound to that relay's DID and current moderation key.
   - Deduplicate reports (one open report per reporter key, target and reason) in the vault and again at the relay, and cap reports per relay policy through F12.S03.M03.
   - On the relay, verify received reports, store the readable header and sealed body, return a signed receipt, emit moderation.report.received (and moderation.report.dismissed for reports on cases closed without action), and send signed reportlinked and reportoutcome statements to reporters.
-  - Provide local hide (never leaves the device) and advisory-feed subscriptions that label or hide matching content in local views, removing labels on verified retraction or expiry.
+  - Provide local hide records (never leave the device) with explicit hide and unhide commands, the in-process LocalHidePort (isHidden by targetRef or authorDid, filterHidden over result items) used by F06.S01.M02 and F06.S02.M03 at query time, and advisory-feed subscriptions that label or hide matching content in local views, removing labels on verified retraction or expiry.
   - Show the reporter honest delivery state and a coarse outcome (actioned on that relay, no action, duplicate, removed by owner) from verified relay statements.
   - Keep the relay-side report ledger (reporter keys per case) used in-process for conflict-of-interest checks (F12.S02.M01, F12.S01.M03) and report-abuse controls.
 non_responsibilities:
@@ -34,6 +36,7 @@ user_stories:
   - As a member, I can hide content or an author on my device immediately, even when no relay is reachable.
   - As a member, I can subscribe to a relay's or community's signed advisory feed and choose whether matching content is labelled or hidden, and labels disappear when the publisher retracts them or they expire.
   - As a member reporting a private message, I am told that by default only its metadata is sent, and I choose whether to disclose a redacted copy.
+  - As a member, I can see what I hid on this device and unhide an item or an author, and my searches show it again at once.
 edge_cases:
   - The same reporter key reports the same target for the same reason twice; the vault returns the existing Report (MODERATION_REPORT_DUPLICATE with params.reportId) and sends nothing.
   - The relay is unreachable; the report stays prepared in the sync outbox for up to 7 days and the UI says 'saved on this device, not delivered'; the user may export the report file to send to another relay or moderator.
@@ -45,6 +48,9 @@ edge_cases:
   - The first receipt is lost and the vault retries on day 3; the relay returns the stored signed receipt for the same reportId and digest instead of a duplicate error.
   - A relay forwards a report statement it received to another relay; the second relay refuses it because the signed relayId and sealing key are not its own.
   - The reported private message came from the only counterparty; the sheet warns that the reported party can infer who reported it.
+  - A member hides author A and later one listing of author B; filterHidden drops every result item of A and only that listing of B, and unhiding A restores A's items in the next query without touching the search index.
+  - A message disclosure preview removed a phone number; the report carries the redacted copy without the message key K, because K and the ciphertext would reveal the removed number, and the relay shows 'redacted copy, commitment not checkable'.
+  - A message disclosure preview removed nothing; the sealed body carries K so the relay recomputes the key commitment and checks that the ciphertext decrypts to the disclosed text.
 ux:
   screens:
     - "Report sheet from any content item: relay picker (default the relay that served the content), reason radio list (12 reasons), optional details (max 1000 characters), toggles 'hide on this device' and 'also block this author', submit."
@@ -52,7 +58,8 @@ ux:
     - "Delivery status line under each report: Saved on this device, Sent to relay, Relay acknowledged, Linked to a case, Resolved; each with timestamp labelled as 'this device' or 'relay clock'."
     - "Settings > Safety > Advisory feeds: add publisher, per-feed mode (label, hide, ignore), last update, revoke state, number of active, retracted and expired advisories."
     - "Honest notice on the sheet: your reporting key is visible to the relay's moderators; the person reported is not told by the relay's policy; copies already fetched by others cannot be recalled."
-  states: [loading, empty, saved-locally, sent, acknowledged, linked, resolved, duplicate, relay-unreachable, quarantined-outcome, disclosure-preview]
+    - "Settings > Safety > Hidden on this device: hidden items and authors with the time hidden and an Unhide button each; the note says hides stay on this device and are never sent."
+  states: [loading, empty, saved-locally, sent, acknowledged, linked, resolved, duplicate, relay-unreachable, quarantined-outcome, disclosure-preview, hidden-locally, unhidden]
   a11y:
     - Reason list is a radiogroup with arrow-key navigation and per-option descriptions.
     - Delivery state changes are announced in an aria-live polite region and are never conveyed by color alone.
@@ -65,6 +72,8 @@ processes:
       - A report is immutable after filing except for sync state, status, case reference and outcome; details cannot be edited, only withdrawn and refiled.
       - An AdvisorySubscription stores a publisher key, mode and last verified sequence, is P3 and local to the vault, and changes only through the subscription commands.
       - Advisory labels are applied only from verified advisories that are unexpired and unretracted; a verified retraction from the same publisher or the advisory's expiresAt removes the label without touching local records.
+      - "A LocalHide row stores exactly one of targetRef { type, id, cid? } or authorDid, an optional reportId when it came from filing, and the creation time; it is P3, device-only, never synced or sent, and exists until the user unhides it or deletes their vault."
+    note: "LocalHide (vault-local table, not a catalog entity; P3, storage device, RET-STANDARD; fields classified per F10.S02.M02): id uuidv7, tenantId, targetType? and targetId? and targetCid? (the targetRef), authorDid? (did:key), reportId? (uuidv7, set when created by moderation.report.file with hideLocally true), createdAt; unique per (tenantId, targetType, targetId) and per (tenantId, authorDid). LocalHidePort.isHidden and filterHidden read it together with the hide-mode advisory index of AdvisorySubscription."
     entities:
       - name: Report
         schema: classrup.moderation.report/v1
@@ -80,7 +89,7 @@ processes:
           - "subjectKey: did:key — author or sender key of the target envelope; header field"
           - "targetType: enum — listing | auction | message | profile | review | bid | offer | attachment | cycle_proposal"
           - "targetId: uuidv7 — id of the reported content"
-          - "targetCid: string — content id (sha256-…) of the signed author envelope held by the reporter"
+          - "targetCid: string — content id (sha256-…) of the signed author envelope held by the reporter; for targetType message the F08.S01.M01 messageCid of the exact signed envelope"
           - "targetRevision: int — revision of the target at report time"
           - "reasonCode: enum — spam | scam_fraud | prohibited_item | harassment | hate | sexual_content | violence | counterfeit | privacy_leak | impersonation | minor_safety | other"
           - "details?: string — plain text, 0..1000 code points, sealed body"
@@ -94,7 +103,8 @@ processes:
           - "caseRef?: string — relay case reference from the verified reportlinked statement"
           - "status: enum — filed | linked | resolved | withdrawn"
           - "outcome?: enum — actioned | no_action | duplicate | content_removed_by_owner"
-          - "hideLocally: boolean — local-only P3 choice, never sent"
+          - "hideLocally: boolean — local-only P3 choice, never sent; true writes a LocalHide row for the target in the file transaction"
+          - "messageKeyDisclosed: boolean — true only for a message participant_disclosure whose approved redact/1 preview removed nothing; the sealed body then carries the 32-byte message key K read from F08.S01.M01 so the reviewer can recompute the key commitment and check Dec(K, C) = P; false for metadata_only, reporter_claim and redacted disclosures"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC, local device clock (a claim, not evidence)"
           - "updatedAt: timestamp — RFC 3339 UTC"
@@ -103,6 +113,7 @@ processes:
           - syncState transport_acknowledged implies a relay transport acknowledgement was recorded; peer_accepted implies a verified relay-signed receipt bound to id and statementDigest is stored.
           - status linked implies caseRef is set; a report always has an evidenceSnapshotId and a snapshotHash.
           - disclosure participant_disclosure implies the referenced snapshot reached export prepared in F12.S01.M02; disclosure reporter_claim implies targetType message.
+          - messageKeyDisclosed true implies targetType message, disclosure participant_disclosure and a snapshot whose redaction counts are all 0 and whose commitmentStatus is verified (F12.S01.M02).
       - name: AdvisorySubscription
         schema: classrup.moderation.advisorysubscription/v1
         storage: device
@@ -148,12 +159,15 @@ processes:
       - "V09 | receive side: the signed relayId equals the receiving relay DID and the body is sealed to its current moderation key | FORBIDDEN"
       - "V10 | receive side: a reportId already held with a different statementDigest is refused; the same digest returns the stored receipt | IDEMPOTENCY_KEY_REUSED"
       - "V11 | a target of type message, offer or cycle_proposal is sent metadata_only unless the reporter approved a participant disclosure preview that reached export prepared (F12.S01.M02) | PRECONDITION_FAILED"
+      - "V12 | a message report seals the message key K only when disclosure is participant_disclosure, the approved redact/1 preview removed nothing and F12.S01.M02 recorded commitmentStatus verified; metadata_only, reporter_claim and redacted disclosures never carry K | PRECONDITION_FAILED"
+      - "V13 | localhide.add names exactly one of targetRef { type, id, cid? } (a target type of the report taxonomy) or authorDid (did:key), which is not the local principal | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Reports follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
       - Sync state advances only through local committed, prepared, transport_acknowledged (relay transport 2xx or mailbox acknowledgement) and peer_accepted (verified relay receipt bound to reportId and statement digest), and the UI never shows more than the reached state.
       - A reporter can withdraw a report while it is filed or linked; withdrawal sends a signed withdrawal statement but cannot recall evidence the relay already holds.
       - The relay sends a signed reportlinked statement when it attaches a received report to a case and a signed reportoutcome statement when that case closes, so the reporter's vault can reach linked and resolved and see the outcome actioned or no_action.
+      - A local hide is active from hide until the user's explicit unhide, which deletes the row so the item or author shows again at the next query; hiding again creates a new row, and withdrawing a report does not unhide its target.
     machines:
       - entity: Report
         initial: filed
@@ -171,6 +185,11 @@ processes:
           - "local_committed -> prepared | sync outbox builds and seals the statement for the addressed relay | statement bytes and statementDigest fixed; UI 'Saved on this device'"
           - "prepared -> transport_acknowledged | relay HTTP 2xx for moderation.report.receive or mailbox put acknowledgement | relayReceivedAt stored as a relay-clock claim; UI 'Sent to relay'"
           - "transport_acknowledged -> peer_accepted | verified classrup.moderation.reportreceipt/v1 bound to reportId and statementDigest | receipt stored; UI 'Relay acknowledged'"
+      - entity: LocalHide
+        initial: active
+        terminal: [removed]
+        transitions:
+          - "active -> removed | moderation.localhide.remove by the local principal (explicit unhide) | row deleted; isHidden and filterHidden stop matching it at the next call"
     note: "A 2xx response that already carries the signed receipt records transport_acknowledged and then peer_accepted as two ordered writes in one vault transaction, so each state has its own trigger and no step is skipped."
     timeouts:
       - "Prepared statements retry delivery with CTR-IDM-001 backoff for up to 7 days, then show 'not delivered' with export and resend actions."
@@ -184,6 +203,8 @@ processes:
       - moderation.report.receive verifies the statement, stores the relay copy and the signed receipt, and emits the relay-local moderation.report.received with receiptId, subjectKey and snapshotId in the same relay transaction; only this event opens or extends a case in F12.S02.M01, and moderation.report.filed never leaves the reporter's vault (EVT-8).
       - When a case closes with outcome no_action, the relay emits moderation.report.dismissed { reportId, reporterKey, relayId, reasonCode, caseId, exempt } for every received report linked to it, relay-local and P3, consumed in-process only by F12.S03.M02; minor_safety reports carry exempt true.
       - F12.S02.M01 calls the in-process moderation.report.link_case in its intake transaction whenever it opens a case for a received report or merges one into an open case, so every linked reporter receives exactly one reportlinked statement.
+      - "LocalHidePort is the in-process vault read port behind moderation.localhide.check (isHidden({ targetRef? | authorDid? }) → { hidden, by: local_hide|advisory, hideId? }) and moderation.localhide.filter (filterHidden(items[{ targetRef, authorDid }]) → { visible, hiddenCount, labels }); F06.S01.M02 and F06.S02.M03 call it at query time instead of removing index documents, and moderation.localhide.add and moderation.localhide.remove are the explicit hide and unhide vault commands."
+      - "A message report carries the F08.S01.M01 messageCid as targetCid and the sender-signed envelope (nonce, ciphertext, key commitment, signature, without wrapped keys) in its metadata, and the message key K travels only inside the sealed body of an approved participant disclosure whose redact/1 preview removed nothing (PRV-9), so the relay moderator can check the key commitment and Dec(K, C) = P without receiving more plaintext than the reporter approved."
     commands:
       - name: moderation.report.file
         mode: "statement classrup.moderation.report/v1: header signed by the reporter device key, body sealed to the relay moderation key"
@@ -225,6 +246,22 @@ processes:
         errors: [FORBIDDEN, NOT_FOUND, CONFLICT_STATE]
         emits: []
         idempotent: true
+      - name: moderation.localhide.add
+        mode: "vault-local; never leaves the device"
+        capability: moderation.localhide.add
+        input: "{ targetRef?: { type, id, cid? }, authorDid? }"
+        output: "{ hideId, createdAt }"
+        errors: [VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: moderation.localhide.remove
+        mode: "vault-local; explicit unhide"
+        capability: moderation.localhide.remove
+        input: "{ hideId }"
+        output: "{ hideId, removed: true }"
+        errors: [NOT_FOUND]
+        emits: []
+        idempotent: true
       - name: moderation.advisorysubscription.set
         mode: "vault-local"
         capability: moderation.advisorysubscription.set
@@ -262,6 +299,21 @@ processes:
         input: "{ caseRef }"
         output: "{ items: { reportId, receiptId, reporterKey, reasonCode, status, outcome? }[] }"
         errors: []
+      - name: moderation.localhide.list
+        capability: moderation.localhide.read_own
+        input: "{ kind?: target|author, cursor?, limit ≤ 100 }"
+        output: "{ items: { hideId, targetRef?, authorDid?, reportId?, createdAt }[], nextCursor? }"
+        errors: []
+      - name: moderation.localhide.check
+        capability: moderation.localhide.filter
+        input: "{ targetRef?: { type, id, cid? }, authorDid? } — LocalHidePort.isHidden, in-process"
+        output: "{ hidden: boolean, by?: local_hide|advisory, hideId?, advisoryCid? }"
+        errors: [VALIDATION_FAILED]
+      - name: moderation.localhide.filter
+        capability: moderation.localhide.filter
+        input: "{ items: { targetRef: { type, id, cid? }, authorDid }[] ≤ 500 } — LocalHidePort.filterHidden, in-process"
+        output: "{ visible: index[], hiddenCount, labels: { index, advisoryCid, label }[] } — hidden items are dropped, label-mode advisories are returned as labels"
+        errors: [VALIDATION_FAILED]
       - name: moderation.advisorysubscription.list
         capability: moderation.advisorysubscription.read_own
         input: "{ includeRevoked?: boolean }"
@@ -274,7 +326,7 @@ processes:
     events_consumed:
       - {type: moderation.case.opened, effect: "relay only, idempotent fallback to link_case: for every receipt in reportRefs not yet linked, set the relay copy linked and queue a relay-signed classrup.moderation.reportlinked/v1 { reportId, caseRef } to the reporter's mailbox"}
       - {type: moderation.case.closed, effect: "relay only: set the case's linked reports resolved with the case outcome (actioned, no_action, duplicate or content_removed_by_owner) and queue classrup.moderation.reportoutcome/v1 to each reporter; for outcome no_action also emit moderation.report.dismissed per linked received report, with exempt true when reasonCode is minor_safety"}
-      - {type: privacy.deletion.completed, effect: "vault: delete AdvisorySubscriptions and filed, linked or withdrawn reports; resolved reports kept as evidence (keepEvidence) get reporterKey replaced by the payload pseudonym; relay copies are pseudonymized by the DeletionPort when the relay applies the signed deletion request"}
+      - {type: privacy.deletion.completed, effect: "vault: delete LocalHide rows, AdvisorySubscriptions and filed, linked or withdrawn reports; resolved reports kept as evidence (keepEvidence) get reporterKey replaced by the payload pseudonym; relay copies are pseudonymized by the DeletionPort when the relay applies the signed deletion request"}
     errors:
       - "MODERATION_TARGET_UNAVAILABLE | 409 | no | the vault does not hold the target with a verifiable author signature and it is not a reportable reporter claim"
       - "MODERATION_REPORT_SELF | 422 | no | authors cannot report their own content"
@@ -290,7 +342,7 @@ processes:
       role the subscribed publisher key). Statements from blocked DIDs are dropped through F07.S02.M02 filterBlocked (N7).
       Relay statements to reporters travel through F08.S01.M01 comms.mailbox.put with a content-free push through
       notify.notification.dispatch (N17) and are also returned by moderation.report.status_for_reporter.
-      Privacy ports (N6): ExportSectionPort (sections moderation.reports and moderation.advisory), DeletionPort and
+      Privacy ports (N6): ExportSectionPort (sections moderation.reports, moderation.advisory and moderation.hides), DeletionPort and
       RetentionPurgePort are registered with F10.S01.M03, F10.S01.M04 and F10.S01.M02.
     example: |
       vault command moderation.report.file (local, Idempotency-Key 0192f3a4-0000-7000-8000-000000000a01)
@@ -316,6 +368,10 @@ processes:
       - "moderation.report.read_status_own | member | signed request by the reporterKey of the report on this relay"
       - "moderation.report.read_ledger | operator | in-process relay call by F12.S02.M01 and F12.S01.M03 conflict checks; not routable over HTTP"
       - "moderation.report.link_case | operator | in-process relay call by F12.S02.M01 case intake; receipt exists on this relay; not routable over HTTP"
+      - "moderation.localhide.add | local principal | vault unlocked; the hidden author is not the local principal"
+      - "moderation.localhide.remove | local principal | vault unlocked; the hide row belongs to this vault"
+      - "moderation.localhide.read_own | local principal | vault unlocked"
+      - "moderation.localhide.filter | local principal | in-process vault read by local views (F06.S01.M02, F06.S02.M03) for the unlocked local principal; not routable over HTTP and never available on a relay"
       - "moderation.advisorysubscription.set | local principal | vault unlocked; publisher key not revoked"
       - "moderation.advisorysubscription.sync | local principal | vault unlocked; subscription exists"
       - "moderation.advisorysubscription.read_own | local principal | vault unlocked"
@@ -324,7 +380,7 @@ processes:
       - Vault commands are idempotent per CTR-IDM-001 using local idempotency keys, and mutating commands require expectedRevision.
       - Filing is atomic in the vault with the evidence snapshot and local outbox event; a failed capture leaves no report.
       - Delivery is at-least-once through the sync outbox; the relay deduplicates on reportId for as long as it retains the report and returns the stored signed receipt for a retry with the same statement digest, so retries never create duplicate cases.
-    idempotency: "Local Idempotency-Key per vault command. On the relay the IDM-1 24 h key cache serves only HTTP replays; report dedupe on (relayId, reportId) lasts as long as the relay retains the report: same reportId and statementDigest returns the stored signed receipt, same reportId with a different digest returns IDEMPOTENCY_KEY_REUSED, and a different reportId for the same open (reporterKey, targetType, targetId, reasonCode) returns MODERATION_REPORT_DUPLICATE with params.reportId."
+    idempotency: "Local Idempotency-Key per vault command. On the relay the IDM-1 24 h key cache serves only HTTP replays; report dedupe on (relayId, reportId) lasts as long as the relay retains the report: same reportId and statementDigest returns the stored signed receipt, same reportId with a different digest returns IDEMPOTENCY_KEY_REUSED, and a different reportId for the same open (reporterKey, targetType, targetId, reasonCode) returns MODERATION_REPORT_DUPLICATE with params.reportId. LocalHide rows carry no revision: localhide.add is idempotent on the target or author (it returns the existing hideId) and localhide.remove on hideId (removing an absent row after a replay returns the stored response)."
     concurrency: "expectedRevision on withdraw; file runs report insert, snapshot reference and outbox write in one IndexedDB transaction; two tabs filing the same report are serialized by the unique open-report index; relay receive inserts the copy, receipt and event in one transaction under BEGIN IMMEDIATE."
     retries: "Sync outbox retries network errors and DEPENDENCY_UNAVAILABLE with CTR-IDM-001 backoff (base 500 ms, cap 30 s, 6 attempts per run, runs resume on reconnect up to 7 days); RATE_LIMITED honors retryAfterMs; the vault polls moderation.report.status_for_reporter every 6 h while a report is filed or linked and online."
     offline: "File and withdraw work offline and show 'saved on this device'; hide and advisory settings apply immediately; the UI never claims delivery before transport_acknowledged and never claims acknowledgement before peer_accepted."
@@ -336,11 +392,14 @@ processes:
       - Report abuse (mass reporting, retaliation, spoofed outcomes, forwarded reports) is limited by per-key and per-prefix relay caps, dedupe, relay binding, signature checks and local-only effects of advisories.
       - A report on a P2 target (message, offer, cycle_proposal) carries only metadata (targetCid, sender key, sender signature, reason) by default; plaintext travels only in a participant disclosure the reporter approved after a redacted preview (F12.S01.M02), and the sheet warns that the reported party can infer who reported a private message.
       - The module meets N6 by registering ExportSectionPort, DeletionPort and RetentionPurgePort with F10, classifying every Report and AdvisorySubscription field per F10.S02.M02, and consuming privacy.deletion.completed.
+      - Local hides are P3 device-only preferences that are never synced, sent, logged or shown to anyone, are applied only at query time in the owner's vault, and are included in the owner's export and removed by the owner's deletion.
     data:
       - "Report statement header (reportId, relayId, reporterKey, subjectKey, target, reasonCode): P2 (reporter; moderation role of the addressed relay)."
       - "details and evidence body: P2 sealed to the relay moderation key; untrusted content for moderators."
       - "Local-only Report fields (hideLocally, block choice, syncState): P3, never sent."
       - "AdvisorySubscription: P3 (device only); reveals the user's moderation preferences so it is never synced."
+      - "LocalHide: P3 (device only); reveals what the user chose not to see, so it is never synced or sent."
+      - "Message key K in a report: P2 sealed to the addressed relay's moderation key, only in a participant disclosure whose preview removed nothing."
     retention:
       - "Resolved and withdrawn reports in the vault: RET-EVIDENCE (2 years after last related activity) through the RetentionPurgePort; the user may delete earlier from the vault."
       - "Relay copy: per relay policy, default RET-EVIDENCE; signed withdrawal statements from the reporter erase the sealed details when no case is open."
@@ -354,6 +413,8 @@ processes:
       - "T07 | A relay forwards a signed report to other relays, exposing the reporter key and multiplying reports | signed relayId and sealing key bind the report to one relay (V09); reportId is deduplicated for the life of the report"
       - "T08 | Reporting a private message leaks third-party plaintext or reveals the reporter | metadata-only by default, redacted participant disclosure only after explicit approval, inference warning on the sheet"
       - "T09 | Stale labels after an appeal overturn or expiry | advisories carry expiresAt and are removed on verified retraction or expiry"
+      - "T10 | Message key in a report leaks redacted or unreported plaintext | K is sealed only with an unredacted participant disclosure (V12); metadata_only and redacted disclosures never carry K"
+      - "T11 | Fabricated plaintext attributed to a sender in a message report | the relay checks the signed key commitment and Dec(K, C) = P before showing commitment verified; without K the copy is labelled not checkable"
     abuse_controls:
       - "Bad-faith control: each report a relay dismissed (case closed no_action) produces moderation.report.dismissed; F12.S03.M02 records report_dismissed_bad_faith only once a key reaches 5 non-exempt dismissals in 30 days, and F12.S03.M03 then serves that key from class report.receive.reduced (3 per 24 h); minor_safety reports are exempt."
       - "Vault UX throttle: more than 10 reports per hour from one vault asks for confirmation (F12.S03.M03 local guard, convenience only, not security)."
@@ -406,8 +467,11 @@ processes:
       - "T24 | chaos | 06.R02,04.R02 | evidence blob write fails during file | no Report row, no outbox entry, no moderation.report.filed, MODERATION_EVIDENCE_FAILED returned"
       - "T25 | integration | 04.R05 | case with three received reports (one minor_safety) closed no_action; same case.closed delivered twice | three moderation.report.dismissed events, the minor_safety one with exempt true, each carrying reporterKey only in the in-process payload; no duplicates on redelivery; no reporterKey in logs"
       - "T26 | integration | 04.R06,03.R04 | a second reporter's report arrives after case C is open and is merged by F12.S02.M01; moderation.case.opened redelivered | link_case called in the intake transaction; the second reporter's vault receives one reportlinked for C and reaches linked; the fallback consumer sends nothing twice"
+      - "T27 | contract | 04.R07,01.R06,03.R05,02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault"
+      - "T28 | integration | 04.R08,02.R02 | report message M metadata-only, with a redacted disclosure (phone removed) and with an unredacted disclosure; then force K onto the redacted disclosure | header targetCid equals messageCid and the metadata carries the signed envelope without wrapped keys; no K in the first two; the third seals K and the relay records commitment verified; the forced case returns PRECONDITION_FAILED"
+      - "T29 | abuse | 07.R06 | F12 privacy suite after hides and unhides: scan sync outbox, relay requests, federation payloads, logs and notifications; export and delete the vault | no LocalHide field appears anywhere outside the vault; section moderation.hides exported; rows deleted with the vault"
     acceptance:
-      - All tests T01–T26 pass in CI.
+      - All tests T01–T29 pass in CI.
       - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
       - The UI never shows sent, acknowledged, linked or resolved before the matching verified state is reached.
   import_export_backup_rollback:
@@ -415,7 +479,7 @@ processes:
       - The vault export contains the user's reports and advisory subscriptions, and the export is the primary backup (IOX-6).
       - Import validates IDs, schema version and signatures of stored receipts; open reports are not re-sent automatically.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
-    export: "Section moderation.reports in classrup-export/v1 through ExportSectionPort: one line per report (reportId, relayId, targetType, reasonCode, disclosure, syncState, status, outcome, receipts, link and outcome statements); details included because it is the user's own data; section moderation.advisory lists subscriptions."
-    import: "Reports import as read-only history with status withdrawn unless a verified relay link statement shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected."
+    export: "Section moderation.reports in classrup-export/v1 through ExportSectionPort: one line per report (reportId, relayId, targetType, reasonCode, disclosure, syncState, status, outcome, receipts, link and outcome statements); details included because it is the user's own data, message keys never included; section moderation.advisory lists subscriptions; section moderation.hides lists LocalHide rows."
+    import: "LocalHide rows import as-is for the importing principal (duplicates by target or author skipped). Reports import as read-only history with status withdrawn unless a verified relay link statement shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected."
     backup: "Vault export is the backup; relay SQLite backups (CTR-IOX-001 IOX-3) hold only report headers, sealed bodies and receipts, and losing a relay loses no vault data."
     migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields; reason code and target type additions are tolerated as other by older readers."

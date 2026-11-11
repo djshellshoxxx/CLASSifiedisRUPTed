@@ -15,6 +15,7 @@
 | Capability | Granted to | Conditions |
 |---|---|---|
 | moderation.signal.record_manual | local principal, moderator | vault unlocked, or relay moderator with open case; subject differs from actor |
+| moderation.signal.record_module | operator | in-process relay call by a module registered for the kind in the module table (F06.S02.M03 for proximity_pattern); not routable over HTTP |
 | moderation.signal.read_as_reviewer | local principal, moderator | vault unlocked, or relay moderator with open case on the subject |
 | moderation.signal.read_summary | local principal, moderator, operator | vault unlocked, or relay role; used in-process by F12.S03.M01 |
 | moderation.signal.read_categories | local principal, member | vault unlocked, or subject reading own categories on a relay |

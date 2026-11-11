@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-129-03.R01** Key records follow the declared lifecycle, revoked and expired are final, and any other transition is refused with CONFLICT_STATE.
-- **PS-129-03.R02** A revocation by another device key waits 7 days as revocation_pending, ending in revoked at the timeout or on root confirmation and in contested on a counter-revocation, and a contested key leaves only by a DID root key or recovery kit decision.
+- **PS-129-03.R02** A revocation by another device key waits 7 days as revocation_pending, ending in revoked at the timeout or on root confirmation and in contested on a counter-revocation, and a contested key leaves only by a decision of the account root key (the recovery-key role, from the root device or the recovery kit).
 - **PS-129-03.R03** Expiry is evaluated at verification time as well as by the sweep, so a missed sweep never extends a key.
 - **PS-129-03.R04** Transitions of cached user keys follow F07 events and identity documents only and never run ahead of or against them; native records follow this module's own commands and mirrored relay and peer events.
 
@@ -19,14 +19,14 @@ Initial **active**; terminal **revoked**, **expired**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| active -> revoked | keyrevocation by the key itself or the DID root key as F07 reports it; relay key revocation of a relay_owned key; F15.S02.M01 relay identity revocation mirrored | revokedAt = receipt time; effectiveFrom clamped per V04; key hash added to the revoked-key set; emits security.key.revoked |
+| active -> revoked | keyrevocation by the key itself or the DID root key as F07 reports it; relay key revocation of a relay_owned key; F15.S02.M01 relay identity revocation mirrored | revokedAt = receipt time; effectiveFrom clamped per V04; finalCids stored for reason account_deleted; key hash added to the revoked-key set; emits security.key.revoked |
 | active -> revocation_pending | keyrevocation signed by another active device key of the same principal, as F07 reports it | pendingUntil = recorded time + 7 days; statements still verify with a pending warning |
 | active -> expired | notAfter passed at the sweep or at verification, peer removed, or relay transport key retired | local status only; signatures first seen before notAfter stay verifiable |
 | revocation_pending -> revoked | root key confirms, or pendingUntil passes without a counter-revocation or root decision | emits security.key.revoked |
 | revocation_pending -> active | root key rejects the revocation by revoking the revoking key | pending entry closed |
 | revocation_pending -> contested | this key revokes the revoking key, or two device keys revoke each other concurrently | both keys frozen for key management; routine statements verify with a contested warning |
-| contested -> revoked | DID root key or recovery kit decision revokes this key | emits security.key.revoked |
-| contested -> active | DID root key or recovery kit decision keeps this key | the other key's revocation stands |
+| contested -> revoked | account root key decision (root device or recovery kit) revokes this key | emits security.key.revoked |
+| contested -> active | account root key decision (root device or recovery kit) keeps this key | the other key's revocation stands |
 
 ```mermaid
 stateDiagram-v2
@@ -37,8 +37,8 @@ stateDiagram-v2
   revocation_pending --> revoked: root key confirms, or pendingUntil passes without a counter-revocation or root decision
   revocation_pending --> active: root key rejects the revocation by revoking the revoking key
   revocation_pending --> contested: this key revokes the revoking key, or two device keys revoke each other concurrently
-  contested --> revoked: DID root key or recovery kit decision revokes this key
-  contested --> active: DID root key or recovery kit decision keeps this key
+  contested --> revoked: account root key decision (root device or recovery kit) revokes this key
+  contested --> active: account root key decision (root device or recovery kit) keeps this key
   revoked --> [*]
   expired --> [*]
 ```
@@ -56,6 +56,7 @@ stateDiagram-v2
 | TEST-PS-129-09.T03 | property | PS-129-01.R03, PS-129-03.R01, PS-129-09.R02 | random sequences of revocations, pending periods, counter-revocations, root decisions, expiries and purges | revoked and expired never change; a revoked key never returns, also after its KeyRecord is purged |
 | TEST-PS-129-09.T04 | integration | PS-129-03.R03, PS-129-06.R03 | expiry sweep missed for a VAPID key; revocation of peer key Z arrives before federation.peer.added | verification refuses the expired key; Z's hash is in the revoked-key set and the key is recorded revoked when it appears |
 | TEST-PS-129-09.T05 | integration | PS-129-03.R02, PS-129-03.R04 | F07 reports K3 revoking K1 (pending), K1 counter-revoking K3 (contested) and a root decision; a test injects a revocation without any F07 event | the cache mirrors revocation_pending for 7 days, contested and the root outcome; the injected change is refused |
+| TEST-PS-129-09.T23 | unit | PS-129-02.R01, PS-129-03.R02 | revocation signed by the root key decrypted from a recovery kit; by another active device key, then confirmed by the root key; by the revoked key itself; two device keys revoking each other | immediate; pending until the root confirmation, then revoked; immediate; both contested until a root-key decision |
 
 ## Dependencies
 

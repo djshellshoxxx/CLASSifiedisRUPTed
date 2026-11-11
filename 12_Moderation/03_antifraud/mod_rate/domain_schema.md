@@ -10,6 +10,7 @@
 - **PS-099-01.R02** A RatePolicy stores per-tenant limits per capability class with algorithm, limit, period, burst, allowed scopes, prefix multiplier, fail mode and version, and is retained as configuration under RET-STANDARD.
 - **PS-099-01.R03** Raw IP addresses and keys are never stored; they are hashed under a per-class salt whose epoch is at least the policy window, the previous epoch's salt is kept only until its last counter leaves the window, and IP-prefix scopes are limited to windows of at most 24 h so prefix salts are destroyed at most 48 h after creation.
 - **PS-099-01.R04** A policy expresses any limit from 1 per 30 days to 100 000 per second as { limit, periodMs, burst }, and GCRA uses the emission interval periodMs / limit.
+- **PS-099-01.R05** A RatePolicy may carry one longWindow { limit, periodMs } so one class expresses two limits such as 20 per minute and 200 per hour, records the ownerModule of a class registered through RatePolicyRegistry.register and whether its fail mode is locked, and every tenant has a request.default policy row (the per-tenant default request rate per actor key formerly held as Tenant.limits.requestRatePerMinutePerKey).
 
 ## Specification
 
@@ -28,6 +29,7 @@ Schema `classrup.moderation.ratebucket/v1` · storage **relay+device** · privac
 | tat? | int — GCRA theoretical arrival time in monotonic milliseconds, when gcra |
 | tokens? | number — current tokens (0..capacity), when token_bucket |
 | windowCounters? | object — sub-bucket start to count (1 minute for windows ≤ 1 h, 1 hour for ≤ 24 h, 1 day above), when window_counter |
+| discriminatorHashed | boolean — true when keyHash also covers a caller-supplied discriminator such as a center cell (probe classes like read.proximity.center_seen) |
 | penaltyFactor | number — 0.25..1.0, default 1.0 |
 | penaltyUntil? | timestamp — RFC 3339 UTC, at most 1 hour after setting |
 | reducedUntil? | timestamp — RFC 3339 UTC, only on marker rows of class report.receive.reduced: signal observedAt + 30 days |
@@ -52,6 +54,9 @@ Schema `classrup.moderation.ratepolicy/v1` · storage **relay+device** · privac
 | limit | int — 1..100000 requests per period |
 | periodMs | int — 1000..2592000000 (1 second to 30 days) |
 | burst | int — 1..1000; gcra burst tolerance and token bucket capacity; unused by window_counter |
+| longWindow? | object — { limit 1..100000, periodMs greater than the class periodMs and at most 2592000000 }; a second window counted with window_counter sub-buckets in the same consume; a request is allowed only when both windows allow |
+| ownerModule? | string — module ID that registered the class through RatePolicyRegistry.register (absent for built-in classes) |
+| failModeLocked | boolean — true for built-in sensitive classes and for registered classes whose owner locked the fail mode |
 | scopes | string[] — subset of actor, ip_prefix, tenant, local |
 | prefixMultiplier | int — 1..20, default 5 |
 | failMode | enum — open \| closed |
@@ -61,10 +66,10 @@ Schema `classrup.moderation.ratepolicy/v1` · storage **relay+device** · privac
 
 **Invariants**
 - For gcra the emission interval is periodMs / limit and burst is at most limit; ip_prefix appears in scopes only when periodMs ≤ 86400000.
-- Classes relay.access, report.receive, report.receive.reduced and key.register always have failMode closed.
+- Classes relay.access, report.receive, report.receive.reduced, key.register and every class with failModeLocked (read.proximity.center_new) always have failMode closed.
 - Stock policies exist only in scope local and count the vault's own records; relays never receive their counts.
 
-**Note:** Built-in classes (relay defaults): relay.access gcra 5 per minute per key and 10 per minute per prefix (closed); key.register gcra 3 per hour (closed); report.receive window_counter 20 per 24 h per key and 60 per 24 h per /24 (closed); report.receive.reduced window_counter 3 per 24 h per key (closed); appeal.receive.day 5 per 24 h and appeal.receive.30d 20 per 30 days per key; evidence.capture 60 per hour; moderation.action.apply 50 per 24 h per moderator; policy.publish 20 per 24 h; accountlimit.override 30 per 24 h; signal.manual 10 per 24 h; risk.recompute 60 per hour; write.index gcra 20 per hour burst 5; write.mailbox.new_recipient and write.bid window_counter per key per 24 h with the per-key limit from F12.S03.M04; read.search token bucket 60 per minute per key and 120 per minute per /24. Vault local guards: local.offer.sent 10 per hour, local.report.filed 10 per hour, local.offer.open stock 10 and local.cycle_proposal.open stock 3, all confirmations only.
+**Note:** Built-in classes (relay defaults): request.default gcra 120 per minute per actor key and the prefix multiplier per /24 or /48 (operator range 10..1200 per minute; charged once per relay request in addition to its own class; replaces Tenant.limits.requestRatePerMinutePerKey); relay.access gcra 5 per minute per key and 10 per minute per prefix (closed); key.register gcra 3 per hour (closed); report.receive window_counter 20 per 24 h per key and 60 per 24 h per /24 (closed); report.receive.reduced window_counter 3 per 24 h per key (closed); appeal.receive.day 5 per 24 h and appeal.receive.30d 20 per 30 days per key; evidence.capture 60 per hour; moderation.action.apply 50 per 24 h per moderator; policy.publish 20 per 24 h; accountlimit.override 30 per 24 h; signal.manual 10 per 24 h; risk.recompute 60 per hour; write.index gcra 20 per hour burst 5; write.mailbox.new_recipient and write.bid window_counter per key per 24 h with the per-key limit from F12.S03.M04; read.search token bucket 60 per minute per key and 120 per minute per /24. Vault local guards: local.offer.sent 10 per hour, local.report.filed 10 per hour, local.offer.open stock 10 and local.cycle_proposal.open stock 3, all confirmations only. Registered classes (RatePolicyRegistry.register by the owner module at relay composition; numbers defined once by the owner): read.proximity.query.anonymous and read.proximity.query.token (window_counter with longWindow, per caller key, read fail-open default), read.proximity.center_seen (probe keyed by caller key and center cell as discriminator) and read.proximity.center_new (window_counter with longWindow, failModeLocked closed: the documented exception to the fail-open default for read classes), all owned by F06.S02.M03.
 
 ### Storage DDL
 
@@ -72,7 +77,8 @@ Schema `classrup.moderation.ratepolicy/v1` · storage **relay+device** · privac
 CREATE TABLE moderation_rate_policy (
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, capability_class TEXT NOT NULL, algorithm TEXT NOT NULL,
   limit_count INTEGER NOT NULL, period_ms INTEGER NOT NULL, burst INTEGER NOT NULL, scopes TEXT NOT NULL,
-  prefix_multiplier INTEGER NOT NULL, fail_mode TEXT NOT NULL, kind TEXT NOT NULL, revision INTEGER NOT NULL, updated_at TEXT NOT NULL);
+  prefix_multiplier INTEGER NOT NULL, fail_mode TEXT NOT NULL, kind TEXT NOT NULL, long_window TEXT, owner_module TEXT,
+  fail_mode_locked INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL, updated_at TEXT NOT NULL);
 CREATE UNIQUE INDEX moderation_rate_policy_class ON moderation_rate_policy(tenant_id, capability_class);
 CREATE TABLE moderation_rate_bucket (
   key_hash TEXT NOT NULL, tenant_id TEXT NOT NULL, capability_class TEXT NOT NULL, salt_epoch INTEGER NOT NULL, tat INTEGER, tokens REAL,
@@ -91,6 +97,8 @@ CREATE INDEX moderation_rate_bucket_expiry ON moderation_rate_bucket(tenant_id, 
 | TEST-PS-099-09.T11 | integration | PS-099-07.R02, PS-099-01.R01 | injected clock: a 24 h class bucket 25 h after its last update; a 30-day class bucket 31 days after its last update | both purged; export contains none |
 | TEST-PS-099-09.T16 | property | PS-099-03.R04, PS-099-01.R03 | 20-per-30-days window_counter with arrivals spread over 60 days and a salt rotation on day 15 | at most 20 allowed in any 30-day window across the rotation; previous salt destroyed once its last counter leaves the window |
 | TEST-PS-099-09.T18 | unit | PS-099-01.R02, PS-099-01.R04 | ratepolicy.set for 5 per 24 h, 20 per hour, 50 per 24 h and 20 per 30 days | all accepted and stored with limit and periodMs; GCRA emission interval reported as periodMs / limit |
+| TEST-PS-099-09.T19 | contract | PS-099-04.R07, PS-099-01.R05, PS-099-02.R04 | F06.S02.M03 contract fixture registers the four proximity classes with its v1 numbers (20 per minute and 200 per hour, 60 per minute and 600 per hour, a center_seen probe of 1 per 24 h, 2 new centers per hour and 5 per 24 h with failModeLocked); a second module registers read.proximity.center_new again; an operator sets failMode open on it | tenant rows seeded with ownerModule F06.S02.M03 and longWindow; VALIDATION_FAILED for the duplicate owner; MODERATION_RATE_POLICY_FAIL_MODE_LOCKED |
+| TEST-PS-099-09.T22 | integration | PS-099-04.R08, PS-099-01.R05, PS-099-02.R04 | request.default at 120 per minute; one request consuming three classes; anonymous caller; set request.default to 5 and to 1500; tenant migration with requestRatePerMinutePerKey 300 | the request charges request.default once; the 121st request in a minute is RATE_LIMITED whatever its class; anonymous charged by prefix; VALIDATION_FAILED twice; expand step writes limit 300 periodMs 60000 |
 
 ## Dependencies
 

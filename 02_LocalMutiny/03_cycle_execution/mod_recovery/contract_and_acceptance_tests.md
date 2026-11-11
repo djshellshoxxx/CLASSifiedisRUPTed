@@ -46,10 +46,12 @@ See the module test table below (all processes).
 | TEST-PS-024-09.T24 | contract | PS-024-04.R04, PS-024-04.R05, PS-024-01.R05 | completion and recovery events against the registry | completed carries contextId, completionCid recomputed independently from the receipt cids, parties and legs; opened, partially_executed and resolved carry participantIds; registry signer roles match |
 | TEST-PS-024-09.T25 | integration | PS-024-03.R03, PS-024-04.R05 | escalated case: dispute withdrawn, then re-escalated and lapsed; separate open case without activity for 30 days | escalated -> open on commerce.dispute.withdrawn; closed_unresolved on lapsed; both resolved events carry reviewUnlock with disputeFlag true |
 | TEST-PS-024-09.T26 | integration | PS-024-02.R02, PS-024-03.R03 | compensation option payer Dan payee Alice 80.00 EUR accepted by Dan then Alice | option accepted only after both; mutiny.compensation.activate called once in the transaction of Alice's accept |
+| TEST-PS-024-09.T27 | contract | PS-024-04.R06, PS-024-03.R03 | F09.S02.M02 DisputeContextPort conformance for type cycle on C4 (committed), an unknown cycle id and a proposed cycle without RecoveryCase; then escalate C4's case twice | resolve returns the four participants with role participant and contextCid equal to the committed revisionHash; unknown for the other two; commerce.dispute.open is called with contextRef {type: cycle, id: C4}, reason not_received, evidence cids and idempotencyRef recoveryCaseId, and the repeat returns the same case; commerce.dispute.resolved for that contextRef resolves the case |
+| TEST-PS-024-09.T28 | integration | PS-024-07.R05 | F10 deletion plan with an open RecoveryCase on C4, an escalated one on C6 and a resolved one on C3 | plan() lists blockers {kind: cycle, ref: C4} and {kind: cycle, ref: C6} with the other participants as counterparties; the resolved case is not a blocker |
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T28 pass in CI.
 - No cycle is completed without a valid receiver attestation for every leg and settled compensation, and no state ever claims that goods were delivered, only that signers asserted it.
 - Dropout after handover always yields partially_executed with a RecoveryCase and never a silent reroute.
 

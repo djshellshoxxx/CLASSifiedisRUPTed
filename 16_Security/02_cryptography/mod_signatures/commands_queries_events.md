@@ -43,7 +43,7 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Library module with no bus commands, queries or events. API is sign(context, payload, keyHandle, { inline }), verify(envelope, { expectedContext, expectedBinding? }, keyStatus, payload?) -> { accepted, reason?, signatureValid, contextOk, bindingOk, payloadHashOk, keyStatus, freshnessClass, flags[] }, payloadHashOf(payload), inventory() and findPrefixConflicts(entries), usable in vault and relay, with no network access. There is no signJcs, verifyJcs or request-signing entry point; those belong to F11.S01.M03.
+**Note:** Library module with no bus commands, queries or events. API is sign(context, payload, keyHandle, { inline }), verify(envelope, { expectedContext, expectedBinding? }, keyStatus, payload?) -> { accepted, reason?, signatureValid, contextOk, bindingOk, payloadHashOk, keyStatus, freshnessClass, flags[] (clockClaim, finalStatement) }, payloadHashOf(payload), inventory() and findPrefixConflicts(entries), usable in vault and relay, with no network access. There is no signJcs, verifyJcs or request-signing entry point; those belong to F11.S01.M03.
 
 ### Example
 

@@ -31,7 +31,7 @@ Schema `classrup.services.offering/v1` · storage **device** · privacy **P3** �
 | providerTimeZone? | string — IANA zone, copied from the F03.S01.M02 calendar at publish and on every published revision |
 | credentials | Credential[] — 0..10 items {label ≤ 80, issuer ≤ 80, year? 1950..2100, evidenceAttachmentId? (P2, never in the projection), attestation fixed 'self'} |
 | status | enum — draft \| published \| withdrawn |
-| projectionCid? | string — sha256- cid of the latest signed public projection (CTR-ID-001 ID-3) |
+| projectionCid? | string — sha256- cid of the latest signed public projection (CTR-ID-001 ID-3), exactly the cid returned by StatementPublisherPort.publish |
 | projectionSeq | int — seq of the latest signed projection, 0 before first publish; the next projection uses seq+1 and prev = projectionCid |
 | syncState | map — per destination relay {state: prepared \| transport_acknowledged \| peer_accepted \| refused, at, relayStatement?: the relay's stated reasons when it refused or removed the projection}; claims by the relay are evidence of its clock only |
 | withdrawReason? | enum — provider \| listing_unavailable \| draft_expired |

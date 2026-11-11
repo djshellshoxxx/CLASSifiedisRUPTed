@@ -29,8 +29,9 @@ Schema `classrup.rentals.deposit_terms/v1` · storage **device** · privacy **P2
 | dueBy | timestamp — default reservation startsAt; at most startsAt and at most proposal time + 75 days so the funding Deal expiry (≤ 90 days) covers it |
 | termsCid | string — sha256- cid of the signed deposit_terms statement |
 | agreementCid? | string — cid of the renter's comms.consent statement {subjectType rentals_deposit, subjectRef depositId, subjectRevisionHash of termsCid, statementKey consent.rentals.deposit.agree.v1} |
+| agreementRevocationId? | string — revocationId of the comms.consent.revoked whose revokedIds[] named agreementCid |
 | withdrawalCid? | string — cid of a deposit_withdrawal (owner withdrawal or renter decline) |
-| fundingDealId? | uuidv7 — F09 Deal for contextRef {rental_deposit, depositId} |
+| fundingDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_deposit, depositId} |
 | fundingClaimId? | uuidv7 — ref F09 PaymentClaim for the deposit payment |
 | fundedAt? | timestamp — local time when proof became acknowledged or final |
 | returnAttestedAtClaim? | timestamp — signed attestation time from rentals.return.attested |
@@ -38,7 +39,7 @@ Schema `classrup.rentals.deposit_terms/v1` · storage **device** · privacy **P2
 | damageClaims | object[] — 0..3 {claimId, kind} recorded from rentals.damage.claimed, with resolvedAt, outcome and agreedAmount? from rentals.damage.resolved |
 | forfeit? | object — {amount: Money, reason: damage \| missing_parts \| late_return \| not_returned \| other, damageClaimId? (required for damage and missing_parts, and for not_returned when a not_returned damage claim is recorded), evidenceRefs[] (1..10 attachment or blob ids), claimCid, respondBy (signed: createdAt + 14 d + 72 h), responseCid?, response?: accepted \| partial \| disputed, acceptedAmount?} |
 | releaseAttestationCid? | string — cid of the owner's deposit_release_attestation |
-| releaseDealId? | uuidv7 — F09 Deal for contextRef {rental_deposit_release, depositId} |
+| releaseDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_deposit_release, depositId} |
 | releaseClaimId? | uuidv7 — ref F09 PaymentClaim from owner to renter for the amount to be returned |
 | releaseAmount? | Money — amount to be returned, fixed by the path that entered release_pending |
 | retainedAmount? | Money — amount the owner keeps after an accepted forfeit or a both-accepted dispute outcome |

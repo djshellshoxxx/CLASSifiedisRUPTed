@@ -15,6 +15,7 @@ responsibilities:
   - Manage recovery options (return item, compensation, waive, dispute) as signed proposals and responses with requiredSignerIds derived per kind, escalate to F09.S02.M02, and record per-leg disposition of reserved items on resolution only when backed by that leg's giver and receiver.
   - Emit review-unlock data with the outcome on mutiny.recovery.resolved, including closed_unresolved cases, so reputation can unlock reviews with a dispute flag (FLOW-08).
   - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained evidence.
+  - "Register the F09.S02.M02 DisputeContextPort resolver for context type cycle by inverted registration: resolve({type: cycle, id: cycleId}) -> {parties [{did, role}], contextCid}."
 non_responsibilities:
   - Consent and commit verdict (F02.S03.M01), reservations and inventory conversion (F02.S03.M02) and dropout classification (F02.S03.M03).
   - Payment claims and receipts (F09.S01.M01) and dispute adjudication (F09.S02.M02); this module only links to them.
@@ -161,7 +162,7 @@ processes:
         terminal: [resolved, closed_unresolved]
         transitions:
           - "open -> open | option proposed, accepted, rejected or completed by signed statements | lastActivityAt updated; no state change"
-          - "open -> escalated | mutiny.recovery.escalate by a participant | dispute opened in F09.S02.M02 with the evidence bundle; disputeCaseId stored"
+          - "open -> escalated | mutiny.recovery.escalate by a participant | dispute opened with commerce.dispute.open contextRef {type: cycle, id: cycleId} and the evidence bundle; disputeCaseId stored"
           - "open -> resolved | all accepted options completed or waived and every leg has a disposition backed per V12 | emits mutiny.recovery.resolved with outcome agreed and reviewUnlock"
           - "escalated -> resolved | commerce.dispute.resolved consumed for disputeCaseId with a resolution other than lapsed | dispositions recorded only when both parties of each leg acknowledged the outcome; emits mutiny.recovery.resolved with outcome dispute_outcome and reviewUnlock"
           - "escalated -> open | commerce.dispute.withdrawn consumed for disputeCaseId | disputeCaseId cleared; options and dispositions remain; lastActivityAt updated"
@@ -177,6 +178,7 @@ processes:
       - Completion and partial execution are local verdicts emitted as events, not commands and not signed facts.
       - "Statement schemas and signer roles registered with the F11.S01.M01 registry (N2): classrup.mutiny.handover_attestation/v1 signed by the leg's giver (handed_over, returned), receiver (received, issue_reported) or original giver (return_confirmed); classrup.mutiny.recovery_action/v1 signed by a participant, accept counted only from requiredSignerIds; this module is the single ingest owner of both and drops statements from DIDs the principal blocked silently (N7)."
       - "Completion and recovery events carry contextId, completionCid, parties [{did, role}] and legs [{legId, giverId, receiverId}] (N3), and every event carries the participant DIDs that notification routing needs (N4)."
+      - "The module registers the F09.S02.M02 DisputeContextPort resolver for context type cycle (inverted registration; F09.S02.M02 never depends on F02): resolve({type: cycle, id: cycleId}) returns parties = the cycle's participantIds as [{did, role: participant}] and contextCid = the head revisionHash the cycle was committed on, read from F02.S03.M01, and returns unknown when the cycle is not stored in this vault or was never committed here and has no RecoveryCase; escalate always names contextRef {type: cycle, id: cycleId}, and dispute events are matched by that contextRef."
     commands:
       - name: mutiny.attestation.attest
         capability: mutiny.attestation.attest
@@ -208,9 +210,9 @@ processes:
         idempotent: true
       - name: mutiny.recovery.escalate
         capability: mutiny.recovery.escalate
-        input: "{ recoveryCaseId, summary ≤ 1000 code points, expectedRevision } — vault command; produces the dispute-opening statement defined by F09.S02.M02 with an evidence bundle of signed attestations"
+        input: "{ recoveryCaseId, summary ≤ 1000 code points, expectedRevision } — vault command; calls commerce.dispute.open {contextRef {type: cycle, id: cycleId}, reason (issueCode not_received, not_as_described or damaged as damage; other for dropouts and timeouts), description: summary, respondentIds (default the other parties from the cycle resolver), evidence: the signed attestation and recovery action cids, idempotencyRef: recoveryCaseId}, which produces classrup.commerce.dispute/v1 signed by the principal"
         output: "{ recoveryCaseId, disputeCaseId, caseStatus: escalated, syncState }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, COMMERCE_DISPUTE_CONTEXT_INVALID, COMMERCE_DISPUTE_DUPLICATE]
         emits: []
         idempotent: true
       - name: mutiny.recovery.ingest
@@ -239,7 +241,7 @@ processes:
     events_produced:
       - {type: mutiny.leg.handed_over, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, participantIds, attestationId, attestationCid, direction }"}
       - {type: mutiny.leg.received, privacy: P2, payload: "{ cycleId, legId, giverId, receiverId, participantIds, attestationId, attestationCid, inventoryItemIds, direction }"}
-      - {type: mutiny.cycle.completed, privacy: P2, payload: "{ cycleId, contextId (equals cycleId), contextType cycle, completionCid, receiptCids[], revisionHash, parties [{did, role: participant}], participantIds, legs [{legId, giverId, receiverId}], completedAtLocal, compensationSettled }"}
+      - {type: mutiny.cycle.completed, privacy: P2, payload: "{ cycleId, contextId (equals cycleId), contextType cycle, completionCid, receiptCids[], revisionHash, parties [{did, role: participant}], participantIds, legs [{legId, giverId, receiverId}] (giverId and receiverId are DIDs, ring order), completedAtLocal, compensationSettled }"}
       - {type: mutiny.cycle.partially_executed, privacy: P2, payload: "{ cycleId, participantIds, trigger, handedOverLegIds, receivedLegIds, pendingLegIds, recoveryCaseId }"}
       - {type: mutiny.recovery.opened, privacy: P2, payload: "{ recoveryCaseId, cycleId, participantIds, trigger, deadlineAt }"}
       - {type: mutiny.recovery.resolved, privacy: P2, payload: "{ recoveryCaseId, cycleId, contextId (equals cycleId), participantIds, parties [{did, role}], legs [{legId, giverId, receiverId}], outcome agreed|dispute_outcome|unresolved, dispositions, reviewUnlock { unlocked: true, disputeFlag: boolean (true for dispute_outcome and unresolved), evidenceCids[] } }"}
@@ -249,9 +251,9 @@ processes:
       - {type: mutiny.cycle.cancelled, effect: "stop accepting handed_over and received; later attestations open a late_attestation recovery case"}
       - {type: mutiny.compensation.settled, effect: "mark the compensation leg settled and re-evaluate completion"}
       - {type: commerce.payment.disputed, effect: "if the payment belongs to a compensation leg of an executing cycle, open or update a recovery case with a compensation dispute"}
-      - {type: commerce.dispute.opened, effect: "link disputeCaseId to the escalated recovery case when the context ref matches"}
-      - {type: commerce.dispute.resolved, effect: "for contextRef of this cycle: resolve an escalated case with outcome dispute_outcome and record dispositions that both parties of each leg acknowledged; resolution lapsed closes the case as unresolved"}
-      - {type: commerce.dispute.withdrawn, effect: "return the escalated recovery case whose disputeCaseId matches to open"}
+      - {type: commerce.dispute.opened, effect: "link disputeCaseId to the escalated recovery case when contextRef is {type: cycle, id: cycleId} of the case"}
+      - {type: commerce.dispute.resolved, effect: "for contextRef {type: cycle, id: cycleId} of this cycle: resolve an escalated case with outcome dispute_outcome and record dispositions that both parties of each leg acknowledged; resolution lapsed closes the case as unresolved"}
+      - {type: commerce.dispute.withdrawn, effect: "return the escalated recovery case whose disputeCaseId and contextRef {type: cycle, id: cycleId} match to open"}
       - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained attestations and cases with the deletion pseudonym and drop notes and evidence references of the erased author; signed statements stay verifiable"}
     errors:
       - "MUTINY_ATTESTATION_NOT_ALLOWED | 409 | no | the cycle state or recovery state does not allow this attestation kind"
@@ -305,7 +307,7 @@ processes:
       - Evidence is retained for RET-EVIDENCE and pseudonymized, not deleted, if a participant erases their identity locally.
       - False attestations and issue reports are limited by signature accountability, the 48 h and giver-attestation rules for issues, and by disputes that compare signed statements.
       - The UI states that signatures evidence what each person asserts and that ClassRup does not verify delivery.
-      - The module registers ExportSectionPort (section mutiny.execution), DeletionPort and RetentionPurgePort with F10 (N6), annotates every HandoverAttestation and RecoveryCase field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained evidence.
+      - "The module registers ExportSectionPort (section mutiny.execution), DeletionPort and RetentionPurgePort with F10 (N6), annotates every HandoverAttestation and RecoveryCase field with its F10.S02.M02 class, reports every open or escalated RecoveryCase as a DeletionPort.plan() blocker {kind: cycle, ref: cycleId, counterparties: the other participantIds}, and on privacy.deletion.completed pseudonymizes the erased participant in retained evidence."
     data:
       - "HandoverAttestation: P2; note and evidenceRefs may contain personal content and are never indexed."
       - "RecoveryCase: P2; option amounts are claims between participants; field classes annotated per F10.S02.M02."
@@ -370,8 +372,10 @@ processes:
       - "T24 | contract | 04.R04,04.R05,01.R05 | completion and recovery events against the registry | completed carries contextId, completionCid recomputed independently from the receipt cids, parties and legs; opened, partially_executed and resolved carry participantIds; registry signer roles match"
       - "T25 | integration | 03.R03,04.R05 | escalated case: dispute withdrawn, then re-escalated and lapsed; separate open case without activity for 30 days | escalated -> open on commerce.dispute.withdrawn; closed_unresolved on lapsed; both resolved events carry reviewUnlock with disputeFlag true"
       - "T26 | integration | 02.R02,03.R03 | compensation option payer Dan payee Alice 80.00 EUR accepted by Dan then Alice | option accepted only after both; mutiny.compensation.activate called once in the transaction of Alice's accept"
+      - "T27 | contract | 04.R06,03.R03 | F09.S02.M02 DisputeContextPort conformance for type cycle on C4 (committed), an unknown cycle id and a proposed cycle without RecoveryCase; then escalate C4's case twice | resolve returns the four participants with role participant and contextCid equal to the committed revisionHash; unknown for the other two; commerce.dispute.open is called with contextRef {type: cycle, id: C4}, reason not_received, evidence cids and idempotencyRef recoveryCaseId, and the repeat returns the same case; commerce.dispute.resolved for that contextRef resolves the case"
+      - "T28 | integration | 07.R05 | F10 deletion plan with an open RecoveryCase on C4, an escalated one on C6 and a resolved one on C3 | plan() lists blockers {kind: cycle, ref: C4} and {kind: cycle, ref: C6} with the other participants as counterparties; the resolved case is not a blocker"
     acceptance:
-      - All tests T01–T26 pass in CI.
+      - All tests T01–T28 pass in CI.
       - No cycle is completed without a valid receiver attestation for every leg and settled compensation, and no state ever claims that goods were delivered, only that signers asserted it.
       - Dropout after handover always yields partially_executed with a RecoveryCase and never a silent reroute.
   import_export_backup_rollback:

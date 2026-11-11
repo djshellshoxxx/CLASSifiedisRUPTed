@@ -10,6 +10,7 @@
 - **PS-025-04.R02** Quotes are requested through F09.S03.M02 and pinned by id; the module never invents rates.
 - **PS-025-04.R03** Events are written in the same IndexedDB transaction as the records.
 - **PS-025-04.R04** Every quote request names purpose barter_normalization and a lifetime of at most 24 h, and the module closes records of subjects that ended, forked or froze.
+- **PS-025-04.R05** verify calls F09.S03.M02 commerce.fx_quote.verify_embedded once per quote of a received revision and stores sourceSigned, issuerSigned, verificationLabel, label, expired and the ECB re-derivation deviation in quoteChecks; manual quotes are issuerSigned true but sourceSigned false, direct-provider quotes read 'source asserted by <issuer pseudonym>, not verifiable', and the UI shows only these results.
 
 ## Specification
 
@@ -18,7 +19,7 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `mutiny.normalization.compute` | mutiny.normalization.compute | { subjectType, subjectId, items: { inventoryItemId, valuationId }[2..16], settlementCurrency?, consentDeadline } — vault command; requests F09.S03.M02 quotes {base, quote, purpose: barter_normalization, validForMs ≤ 86400000}; produces no statement | { normalizationId?, normalizationHash?, settlementCurrency, earliestQuoteExpiry?, effectiveConsentDeadline (≤ now + 24 h when more than one currency), toleranceRef?, rateLabel: 'pinned rate agreed by all parties', totals: { actorId, givesMinor, receivesMinor }[] } | VALIDATION_FAILED, COMMERCE_CURRENCY_UNKNOWN, MUTINY_NORMALIZATION_LIMIT, MUTINY_QUOTE_UNAVAILABLE, MUTINY_QUOTE_TOO_SHORT, MUTINY_QUOTE_SOURCE_UNLABELLED, DEPENDENCY_UNAVAILABLE | mutiny.values.normalized | yes (Idempotency-Key) |
-| `mutiny.normalization.verify` | mutiny.normalization.verify | { revisionId } — vault command that recomputes a peer revision's normalization snapshot; produces no statement | { normalizationId, matches: boolean, differences: { inventoryItemId, expectedMinor, presentedMinor }[] } | NOT_FOUND, MUTINY_NORMALIZATION_MISMATCH, VALIDATION_FAILED | mutiny.values.normalized | yes (Idempotency-Key) |
+| `mutiny.normalization.verify` | mutiny.normalization.verify | { revisionId } — vault command that recomputes a peer revision's normalization snapshot and calls commerce.fx_quote.verify_embedded {quote, embeddingSignerId, embeddingReceivedAt, embeddingSignedAt, reDerive: true} for each embedded quote; produces no statement | { normalizationId, matches: boolean, differences: { inventoryItemId, expectedMinor, presentedMinor }[], quoteChecks: { quoteId, sourceSigned, issuerSigned, verificationLabel, label, expired, reDerivedDeviationBps? }[] } | NOT_FOUND, MUTINY_NORMALIZATION_MISMATCH, MUTINY_QUOTE_SOURCE_UNLABELLED, COMMERCE_RATE_SIGNATURE_INVALID, VALIDATION_FAILED, DEPENDENCY_UNAVAILABLE | mutiny.values.normalized | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -86,6 +87,7 @@ The same call with 2, 4 or N items (N ≤ 16 item lines across at most 8 legs) u
 | TEST-PS-025-09.T12 | integration | PS-025-04.R03, PS-025-06.R02 | valuation.declared after compute | record superseded and recomputed before the next revision |
 | TEST-PS-025-09.T16 | contract | PS-025-04.R04, PS-025-02.R03 | compute for the 3-currency example with consent deadlines of 23 h 30 min and 72 h | quote requests carry purpose barter_normalization and validForMs ≤ 86400000; 23 h 30 min accepted with every rate labelled 'pinned rate agreed by all parties'; 72 h refused with MUTINY_QUOTE_TOO_SHORT |
 | TEST-PS-025-09.T17 | integration | PS-025-03.R01, PS-025-04.R04 | mutiny.proposal.withdrawn, mutiny.revision.forked and mutiny.lock.conflict_detected for subjects with current records | each record closed; later compute for a new subject creates a new record |
+| TEST-PS-025-09.T20 | contract | PS-025-04.R05, PS-025-02.R02, PS-025-05.R02 | received revision embedding a relay-signed quote, a manual quote presented as sourceSigned true, a direct-provider ecb-daily quote with an invented rate and a quote with a broken relay signature | verify_embedded called once per quote with the revision author and local receive time; quoteChecks give sourceSigned true, then issuerSigned true with sourceSigned false and MUTINY_QUOTE_SOURCE_UNLABELLED for the false claim, then 'source asserted by <issuer pseudonym>, not verifiable' with the ECB deviation, then COMMERCE_RATE_SIGNATURE_INVALID; normalizationHash still recomputes; consent is blocked for the false sourceSigned claim and the broken signature, while the direct-provider quote stays consentable with its label and deviation shown |
 
 ## Dependencies
 

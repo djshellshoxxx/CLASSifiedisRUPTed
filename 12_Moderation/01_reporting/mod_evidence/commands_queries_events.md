@@ -18,10 +18,10 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `moderation.evidence.capture` | moderation.evidence.capture | { targetType, targetId, targetRevision?, captureReason, caseId?, reporterClaim?: boolean } | { snapshotId, contentHash, authorSignatureStatus, disclosure, capturedAt, revision: 1 } | VALIDATION_FAILED, MODERATION_EVIDENCE_SOURCE_MISSING, MODERATION_EVIDENCE_SIGNATURE_INVALID, PAYLOAD_TOO_LARGE, FORBIDDEN | moderation.evidence.captured | yes (Idempotency-Key) |
-| `moderation.evidence.ingest_bundle` | moderation.evidence.ingest_bundle | { sourceRef: reportId \| appealId, snapshot: { canonicalObject, authorEnvelope, disclosure, mediaRefs[] } } | { snapshotId, contentHash, integrity, missingMedia[] } | VALIDATION_FAILED, MODERATION_EVIDENCE_SIGNATURE_INVALID, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE | moderation.evidence.captured | yes (Idempotency-Key) |
+| `moderation.evidence.ingest_bundle` | moderation.evidence.ingest_bundle | { sourceRef: reportId \| appealId, snapshot: { canonicalObject, authorEnvelope, disclosure, mediaRefs[], messageKey? } } | { snapshotId, contentHash, integrity, commitmentStatus?, missingMedia[] } | VALIDATION_FAILED, MODERATION_EVIDENCE_SIGNATURE_INVALID, MODERATION_EVIDENCE_COMMITMENT_MISMATCH, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE | moderation.evidence.captured | yes (Idempotency-Key) |
 | `moderation.evidence.verify` | moderation.evidence.verify | { snapshotId } | { snapshotId, integrity, recomputedHash, authorSignatureStatus } | NOT_FOUND, EXPIRED |  | yes (Idempotency-Key) |
 | `moderation.evidence.prepare_disclosure` | moderation.evidence.disclose | { snapshotId, manualRedactions?: string[] } | { snapshotId, previewDigest, redactedObject, redactions: { rule, count }[], rulesVersion: redact/1 } | NOT_FOUND, CONFLICT_STATE, VALIDATION_FAILED |  | yes (Idempotency-Key) |
-| `moderation.evidence.approve_disclosure` | moderation.evidence.disclose | { snapshotId, previewDigest } | { snapshotId, disclosure: participant_disclosure, contentHash } | NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED |  | yes (Idempotency-Key) |
+| `moderation.evidence.approve_disclosure` | moderation.evidence.disclose | { snapshotId, previewDigest, messageKey? (K read from F08.S01.M01 by the F12.S01.M01 report sheet, only when the preview removed nothing) } | { snapshotId, disclosure: participant_disclosure, contentHash, messageKeyEligible: boolean, commitmentStatus? } | NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED, MODERATION_EVIDENCE_COMMITMENT_MISMATCH |  | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -51,6 +51,7 @@
 |---|---|---|---|
 | MODERATION_EVIDENCE_SOURCE_MISSING | 409 | no | the store does not hold the target envelope or the requested revision |
 | MODERATION_EVIDENCE_SIGNATURE_INVALID | 422 | no | author signature over the captured envelope does not verify |
+| MODERATION_EVIDENCE_COMMITMENT_MISMATCH | 422 | no | the message key does not match the signed key commitment or does not decrypt the signed ciphertext to the disclosed plaintext, or came with a redacted disclosure |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

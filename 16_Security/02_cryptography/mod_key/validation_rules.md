@@ -9,6 +9,7 @@
 - **PS-128-02.R01** Passphrases are validated for minimum length and a bundled common-passphrase list before any key is created or wrapped.
 - **PS-128-02.R02** KDF parameters read from a stored blob are validated against allowed minimums before use, so a tampered blob cannot lower the cost.
 - **PS-128-02.R03** Every violation maps to one stable error code.
+- **PS-128-02.R04** Passphrase inputs on create, unlock, change-passphrase and backup export and import accept paste, drop and password-manager autofill - no handler cancels paste, drop or input events - keep autocomplete current-password or new-password and a show/hide toggle, and validation runs only on the entered value (CTR-UX-001 UX-5, checked by F14.S01.M03 V07).
 
 ## Specification
 
@@ -31,6 +32,7 @@
 | TEST-PS-128-09.T05 | unit | PS-128-02.R01, PS-128-07.R03 | passphrases of 11 code points, a common entry, and a 12-code-point unique phrase; the create-vault screen text | first two rejected with SECURITY_PASSPHRASE_WEAK; third accepted; the screen states that a weak passphrase can still be guessed offline |
 | TEST-PS-128-09.T08 | unit | PS-128-02.R03, PS-128-03.R02 | rotation with a missing possession signature; device link not signed by the root handle; overlap of 10 days; old key marked compromised | SECURITY_ROTATION_INVALID three times; immediate revocation with overlap 0 and reason compromised |
 | TEST-PS-128-09.T16 | abuse | PS-128-01.R04, PS-128-02.R02 | relay-served mailbox hint with a substituted X25519 key for contact C; caller passes a raw agreement key to agree | the hint is ignored and the wrap targets the key derived from C's listed Ed25519 device key; SECURITY_AGREEMENT_KEY_UNBOUND |
+| TEST-PS-128-09.T19 | a11y | PS-128-02.R04 | create, unlock, change-passphrase, backup export and backup import screens: paste, drop, input and a password-manager autofill into each passphrase field, then the F14.S01.M03 V07 check | each value is accepted and no event is cancelled; autocomplete is current-password or new-password as fitting; the show/hide toggle has an accessible name; V07 passes |
 
 ## Dependencies
 

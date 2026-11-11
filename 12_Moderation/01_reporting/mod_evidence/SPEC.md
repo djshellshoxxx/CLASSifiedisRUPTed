@@ -37,6 +37,7 @@ Captures an immutable, hashed snapshot of content as a vault or relay held it at
 
 - Content is edited right after being reported; the snapshot keeps the earlier signed revision and a later capture of the new revision is a separate record linked by targetId.
 - The target is an end-to-end encrypted message; by default the snapshot holds only metadata (content id, sender key, sender signature); a disclosure of the plaintext needs an approved redacted preview, and an unsigned message can only be a labelled 'reporter claim' that carries less weight.
+- A reported message disclosure removed nothing in its redact/1 preview; the snapshot keeps the message key K with the disclosed text, and verification recomputes the signed key commitment and decrypts the signed ciphertext to the same text; a K that fails either check is refused with MODERATION_EVIDENCE_COMMITMENT_MISMATCH.
 - A listing has 10 photos of 5 MiB each; its public photos are referenced by blob:sha256 without copying, so the listing stays reportable.
 - Snapshot body exceeds 256 KiB or has more than 10 media items; capture truncates nothing and returns PAYLOAD_TOO_LARGE so a report is never filed on partial evidence.
 - Stored body no longer matches its hash (corruption or tampering); verification fails, the integrity flag becomes failed, a local or operator alert fires, decisions citing it are flagged, and the snapshot is still shredded at retention end.
@@ -76,8 +77,8 @@ F15.S02.M03, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-093-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-093-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-093-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-093-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-093-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-093-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-093-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -91,6 +92,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - Every read, verify, export and purge of a snapshot produces exactly one access row (property and abuse tests).
 - A modified snapshot body, media or author signature is always detected by verification, and no P2 plaintext reaches a relay without an approved disclosure.

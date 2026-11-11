@@ -252,7 +252,7 @@ processes:
       - Legs, claims and references are P2, end-to-end encrypted in transit to the participants and never published; claimRef is free text and never indexed.
       - The platform never holds funds or keys and the UI states 'Payments happen between you and the other person. ClassRup holds no money.'
       - False claims and false acknowledgements are limited by signature accountability, payee-only acknowledgement and disputes.
-      - The module registers ExportSectionPort (section mutiny.compensation), DeletionPort and RetentionPurgePort with F10 (N6), annotates every CompensationLeg field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased party in retained legs.
+      - "The module registers ExportSectionPort (section mutiny.compensation), DeletionPort and RetentionPurgePort with F10 (N6), annotates every CompensationLeg field with its F10.S02.M02 class, reports every leg with status due, claimed or disputed in which the principal is payer or payee as a DeletionPort.plan() blocker {kind: deal, ref: the leg's dealId, counterparties: [the other party of the leg]}, and on privacy.deletion.completed pseudonymizes the erased party in retained legs."
     data:
       - "CompensationLeg: P2; claimRef may contain a transaction reference and is P2; field classes annotated per F10.S02.M02."
     retention:
@@ -307,8 +307,9 @@ processes:
       - "T21 | unit | 01.R02,02.R01 | change amount or payer of a leg sealed by the head revision after commit | refused with CONFLICT_STATE (V10); leg unchanged; consented digest still matches"
       - "T22 | integration | 03.R02,04.R04 | cycle cancelled before handover with due legs; commerce.deal.cancelled received for another Deal | commerce.deal.cancel called once; legs withdrawn in both cases"
       - "T23 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.compensation exported; erased DID pseudonymized and claimRef purged in retained legs"
+      - "T24 | integration | 07.R04,03.R04 | F10 deletion plan with a due leg Dan to Alice, a claimed leg Alice to Bob, a settled leg and a proposed leg | plan() of Alice's vault lists exactly two blockers {kind: deal, ref: dealId} with counterparties [Dan] and [Bob]; settled and proposed legs are not blockers; after acknowledgement the claimed leg is no longer a blocker"
     acceptance:
-      - All tests T01–T23 pass in CI.
+      - All tests T01–T24 pass in CI.
       - No leg is ever settled without payee acknowledgement, chain finality, or a received extra item, and ClassRup never holds funds.
       - The planner is deterministic, conserves sums and leaves every participant within tolerance or with an explicit signed acceptance.
   import_export_backup_rollback:

@@ -12,7 +12,7 @@ Web Push delivery through a relay the user selected. The vault holds the authori
 
 - Own the vault push target record (classrup.notify.push_target/v1) per device and the relay PushSubscription service copy (classrup.notify.push_subscription/v1) with their lifecycles; the vault record is authoritative and the relay copy is rebuilt from it.
 - Run the vault commands enable and disable that drive the browser PushManager, check privacy.consent.check for notify_push and the registered channel consent, seal the subscription to the relay key and call the relay.
-- Accept sealed subscribe, unsubscribe and list requests signed by a device key that F16.S02.M02 reports active, and serve the public VAPID key.
+- Accept sealed subscribe, unsubscribe and list requests signed with the F11.S01.M03 RFC 9421 profile (tag classrup/relay-request/v1) by a device key that F16.S02.M02 reports active, and serve the public VAPID key.
 - Own VAPID private-key storage and rotation through RelayKeyStorePort and register each VAPID public key with purpose vapid in F16.S02.M02.
 - Send payloads with web-push 3.6.7 using a VAPID JWT (ES256, 12 h expiry), aes128gcm encryption, TTL, Urgency and an opaque Topic header, to allowlisted push-service origins only, with the endpoint address re-resolved and re-checked on every send.
 - Handle push service responses (201, 404, 410, 413, 429, 5xx, 400, 401, 403) per subscription, and pause an origin only on a multi-user VAPID rejection pattern.
@@ -74,7 +74,7 @@ Web Push delivery through a relay the user selected. The vault holds the authori
 
 ## Dependencies
 
-F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
+F13.S02.M03, F16.S02.M02, F16.S02.M01, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -85,7 +85,7 @@ F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F1
 | PS-104-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-104-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-104-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
-| PS-104-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
+| PS-104-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-104-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-104-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-104-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 4 |
@@ -95,7 +95,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T21 pass in CI.
+- All tests T01 to T22 pass in CI.
 - Decrypted push payloads in tests contain only the keys of the sealed, hook or digest form and never text, names or amounts, and sealed boxes open only on the target device.
 - Endpoints, keys and topic keys never appear in logs, events, exports or query results, and the vault record never holds them.
 - VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests, and the VAPID private key exists only in RelayKeyStorePort.

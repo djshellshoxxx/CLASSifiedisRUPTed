@@ -29,6 +29,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | TEST-PS-021-09.T09 | integration | PS-021-03.R03, PS-021-06.R03 | conflicting reservation for one item in two cycles seen by one vault | mutiny.lock.conflict_detected, both cycles frozen, renegotiation requires new cycle |
 | TEST-PS-021-09.T12 | integration | PS-021-06.R01, PS-021-06.R02, PS-021-06.R04 | replay commands; crash mid-transaction; out-of-order and duplicate delivery | one consent per participant; no partial record; verdict converges |
 | TEST-PS-021-09.T13 | chaos | PS-021-06.R04, PS-021-06.R03 | relay down 30 min during consent window | statements delivered afterwards, UI never shows peer_accepted before acknowledgement |
+| TEST-PS-021-09.T30 | integration | PS-021-07.R05, PS-021-06.R02 | F10 deletion plan while C3 is executing, C4 proposed and C2 completed | plan() lists exactly one blocker {kind: cycle, ref: C3, counterparties: the two other participants}; C4 and C2 are not blockers; after C3 completes the plan has no blocker |
 
 ## Dependencies
 

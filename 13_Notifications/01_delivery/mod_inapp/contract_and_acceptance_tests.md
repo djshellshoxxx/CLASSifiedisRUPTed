@@ -15,7 +15,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Vault U as seller of listing L and buyer elsewhere, devices A and B of U, routing table of 53 routed events, blocked user X, muted thread M, 600 fresh DIDs, F07.S02.M02 block double, NotificationDispatchPort spy, fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Vault U as seller of listing L and buyer elsewhere, devices A and B of U, routing table of 63 routed events, blocked user X, muted thread M, 600 fresh DIDs, F07.S02.M02 block double, NotificationDispatchPort spy, fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -25,7 +25,7 @@ See the module test table below (all processes).
 | TEST-PS-103-09.T02 | unit | PS-103-02.R01, PS-103-02.R03 | each rule V01 to V09 with malformed input in turn | VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED or ID_TIMESTAMP_SKEW as documented and nothing stored |
 | TEST-PS-103-09.T03 | property | PS-103-03.R01, PS-103-03.R02, PS-103-03.R03 | random sequences of events within and beyond 10-minute windows, reads and sweeps | count equals collapsed events; read never reopens; new window creates new row |
 | TEST-PS-103-09.T04 | contract | PS-103-04.R01, PS-103-04.R02, PS-103-09.R03 | create, mark_read, mark_all_read, list, unread_count execute | outputs and event payloads validate against registry schemas; created carries collapseKey; the dispatch port receives one decision per non-skipped event, also for in-app off |
-| TEST-PS-103-09.T05 | contract | PS-103-04.R03, PS-103-04.R04, PS-103-09.R02 | iterate the routing table against modules.yaml and the schema registry | every routed type is in the catalog emits; every recipient, ref, collapse and filter field exists in the producer payload; completion, offer withdrawal and email_stopped rows present; filters present for identity.session.revoked reasons, federation.account.moved kind and subject, auctions.auction.closed outcome and bazaar.offer.withdrawn reason; urgent only on 3 security templates |
+| TEST-PS-103-09.T05 | contract | PS-103-04.R03, PS-103-04.R04, PS-103-09.R02 | iterate the routing table against modules.yaml and the schema registry | every routed type is in the catalog emits; every recipient, ref, collapse and filter field exists in the producer payload; completion, offer withdrawal and email_stopped rows present; filters present for identity.session.revoked reasons, federation.account.moved kind and subject, auctions.auction.closed outcome, bazaar.offer.withdrawn reason and services.quote.declined reason; urgent only on 3 security templates |
 | TEST-PS-103-09.T06 | integration | PS-103-02.R02, PS-103-06.R01, PS-103-06.R04 | deliver each event type twice, shuffled; deliver an own-action event, an expired event and a filtered event | exactly one row per rule; duplicates and other skips return created false with the reason, are acknowledged once and never retried or dead-lettered |
 | TEST-PS-103-09.T07 | abuse | PS-103-05.R01, PS-103-05.R02, PS-103-05.R03 | event from blocked X; event with unverified statement; foreign actor tries to create or read rows | no row and no dispatch decision for X; no external access |
 | TEST-PS-103-09.T08 | integration | PS-103-06.R02, PS-103-06.R03 | 100 concurrent offer events for one listing; template render failure | one collapsed row count 100; fallback text on render failure |
@@ -38,15 +38,16 @@ See the module test table below (all processes).
 | TEST-PS-103-09.T15 | integration | PS-103-02.R04 | device B signs a device_link that A receives as a verified statement; the same change raised on A itself; session revoked with reasons idle, rotated and device_revoked; account moved for another principal and for the local principal | urgent security row on A for B's change and none for A's own command; only device_revoked routed; only the local principal's account move routed |
 | TEST-PS-103-09.T16 | abuse | PS-103-07.R03, PS-103-07.R04, PS-103-01.R04 | 600 fresh DIDs each send one offer while U has 30 unread rows from known counterparties and the inbox is near the cap | after 20 rows the rest collapse into one new_members row; every pre-existing unread row from known counterparties survives; unknown-actor rows evicted first |
 | TEST-PS-103-09.T17 | integration | PS-103-04.R05 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; block added for an actor with unread rows | purge removes rows and the known-actor index; section notify.notifications exported; rows purged after 30 days; blocked actor's unread rows hidden |
-| TEST-PS-103-09.T18 | unit | PS-103-04.R04, PS-103-02.R01 | auctions.auction.unsold followed by auctions.auction.closed with outcome unsold; commerce.deal.completed; notify.email.bounced (origin vault) | exactly one auction row; deal completion row for the other party; email_stopped security row |
+| TEST-PS-103-09.T18 | unit | PS-103-04.R04, PS-103-04.R07, PS-103-02.R01 | auctions.auction.unsold followed by auctions.auction.closed with outcome unsold; auctions.auction.won and auctions.auction.closed with outcome won in the seller, winner and a non-party vault; commerce.deal.completed; notify.email.bounced (origin vault) | exactly one unsold row for the seller; one sold row for the seller and one won row for the winner, none in the non-party vault and no closed row; deal completion row for the other party; email_stopped security row |
+| TEST-PS-103-09.T19 | contract | PS-103-04.R06, PS-103-02.R01 | route every cycle, recovery, proposal, quote, booking, milestone, dispute, rental, auction and meetup event in the vaults of each party and of a non-party, with an own-action copy for each actor field; deliver a host-local auctions.result.voided to the relay instance | each party gets exactly one row resolved from the documented DID fields (participantIds, remainingParticipantIds, proposerId, counterpartyId, clientId, providerId, ownerId, renterId, cancelledBy, sellerId, winnerId, candidateId, parties[], partyDids[]); the actor and the non-party get none; quote.declined with reason superseded or blocked creates none; the host-local void creates no inbox row and its parties are reached only through the dispatch hook |
 
 ## Acceptance criteria
 
-- All tests T01 to T18 pass in CI.
+- All tests T01 to T19 pass in CI.
 - Every routed event exists in the catalog, every routing field exists in its producer payload, and the inbox never stores text content.
 - Security notifications are created regardless of the in-app preference and for changes made on the user's other devices.
 - Duplicate event delivery never creates a second row and never retries.
 
 ## Dependencies
 
-Module depends on: F13.S02.M04, F07.S02.M02, F08.S01.M01, F08.S01.M02, F08.S03.M03, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M04, F07.S02.M02, F08.S01.M02, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -39,10 +39,12 @@ See the module test table below (all processes).
 | TEST-PS-101-09.T17 | abuse | PS-101-07.R01, PS-101-02.R04 | F12 privacy suite: scan federation payloads, public projections, notifications, relay and vault logs after ingesting every mapped event | no Signal field, subject key, source key or weight appears in any of them |
 | TEST-PS-101-09.T18 | integration | PS-101-07.R04 | ExportSectionPort run, DeletionPort plan and RetentionPurgePort run in a vault and on a relay | section moderation.signals exported in the vault only; deletion and purge counts reported; relay export absent |
 | TEST-PS-101-09.T19 | integration | PS-101-02.R04 | commerce.dispute.resolved refund_claimed, then no_fault_close for another case, then withdrawn for a third | refund_agreed against the respondent of the matching dispute_opened signal; compensations for the other two; no dispute_lost kind exists |
+| TEST-PS-101-09.T20 | contract | PS-101-04.R06, PS-101-02.R04 | F06.S02.M03 contract fixture calls SignalPort.record with proximity_pattern for a token caller twice with one sourceRef, for an anonymous caller without did:key, with an unregistered kind, with a cell in evidenceRef, and over HTTP | one signal weight 10 half-life 7 days and duplicate true on the repeat, moderation.signal.recorded once; VALIDATION_FAILED three times; no route |
+| TEST-PS-101-09.T21 | integration | PS-101-04.R07, PS-101-04.R03 | rentals.damage.claimed; rentals.damage.resolved with each outcome; comms.meetup.no_show contradicted false then comms.meetup.no_show_contradicted for it; comms.meetup.no_show with contradicted true; moderation.action.applied with caseSource auction_review and auctions.result.voided with subjectKeys [seller] for the same auction | nothing for claimed; damage_agreed only for accepted, counter_accepted, refund_claimed and return_agreed; no_show then its compensation; nothing for the contradicted arrival; only auction_voided against the seller and no report_actioned |
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T21 pass in CI.
 - No signal row is ever modified before expiry, and no counterparty action removes signals from another person's vault.
 - Decayed totals match the closed-form formula within 1e-9 in property tests.
 

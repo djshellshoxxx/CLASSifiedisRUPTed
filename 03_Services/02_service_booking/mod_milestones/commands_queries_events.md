@@ -36,7 +36,7 @@
 |---|---|---|
 | `services.milestone.submitted` | P2 | { milestoneId, bookingId, clientId, providerId, submissionCid, deliverableCount } |
 | `services.milestone.approved` | P2 | { milestoneId, bookingId, clientId, providerId, approvalCid, amount, dealId } |
-| `services.booking.completed` | P2 | { contextId: bookingId, contextType: booking, bookingId, completionCid, parties: [{did, role: client}, {did, role: provider}], settledAmount, milestoneCount, completedAt } |
+| `services.booking.completed` | P2 | { contextId: bookingId, contextType: booking, bookingId, completionCid (cid of the classrup.services.booking_completion/v1 summary signed separately by both parties), parties: [{did: clientId, role: client}, {did: providerId, role: provider}], settledAmount, milestoneCount, completedAt } |
 | `services.milestone.changes_requested` | P2 | { milestoneId, bookingId, clientId, providerId, round } |
 | `services.milestone.settled` | P2 | { milestoneId, bookingId, clientId, providerId, dealId, proof } |
 
@@ -57,7 +57,7 @@
 | `commerce.payment.expired` | for the milestone whose dealId matches, set proof expired; the milestone stays approved |
 | `commerce.deal.cancelled` | for the milestone whose dealId matches, reason mutual cancels the approved milestone; reason expired keeps it approved with proof expired |
 | `services.dispute.opened` | for milestones in scope, submitted and approved move to disputed with preDisputeStatus and disputeCaseId stored; other states only get openDisputeLinkId and disputeCaseId |
-| `commerce.dispute.resolved` | for milestones whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping; refund_claimed never changes the existing Deal |
+| `commerce.dispute.resolved` | for milestones whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping, which reads the advisory disposition {kind, favouredDid?, agreedAmount?} when present and otherwise the outcome type; neither a settled or waived disposition nor refund_claimed ever changes the existing Deal |
 | `commerce.dispute.withdrawn` | for milestones whose disputeCaseId matches, restore preDisputeStatus and clear the overlay |
 | `privacy.deletion.completed` | replace the erased counterparty DID with the deletion pseudonym in retained milestones and completion records; signatures are kept and marked unverifiable-after-pseudonymization |
 

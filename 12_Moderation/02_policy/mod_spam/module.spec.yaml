@@ -12,7 +12,7 @@ summary: >-
   user, and the author's pre-sign check only asks the author to confirm.
 responsibilities:
   - Evaluate submitted text and metadata with fixed, versioned heuristics and return a score, matched heuristic names, measured values, thresholds and a degraded flag.
-  - Expose moderation.spam.evaluate in-process for author_presign (F01.S01.M03, N19), relay_intake (relay index-intake hook) and vault_filter.
+  - Expose moderation.spam.evaluate in-process for author_presign (F01.S01.M03, N19), relay_intake (relay index-intake hook) and vault_filter; it is a registered vault and relay query on the command bus (capability moderation.spam.evaluate), and the SpamEvaluator port is only its implementation.
   - Emit moderation.spam.detected with the subject did:key, score, heuristics and an optional recommended throttle, from relay intake and from the vault filter, never from an author's pre-sign check.
   - Maintain derived, rebuildable fingerprint and key-observation indexes (normalized SHA-256, 64-bit simhash, store receipt time, first-seen time) keyed by a store-salted key hash, with a 30-day window.
   - "Keep the heuristic set deterministic: same input and same state give the same output, with the rule version and thresholds recorded in every result."
@@ -87,7 +87,7 @@ processes:
     queries:
       - name: moderation.spam.evaluate
         capability: moderation.spam.evaluate
-        input: "{ mode: author_presign|relay_intake|vault_filter, subjectKey: did:key, targetType, targetId?, targetCid?, text, links?: string[], receivedAt (store clock), claimedCreatedAt? }"
+        input: "{ mode: author_presign|relay_intake|vault_filter, subjectKey: did:key, targetType (listing_publication for the F01.S01.M03 author_presign call, the projection type otherwise), targetId?, targetCid?, text, links?: string[], receivedAt (store clock), claimedCreatedAt? }"
         output: "{ score: 0..100, heuristics: { name, value, threshold, points }[], throttle?: { capabilityClass, ttlMs ≤ 3600000 }, rulesVersion, degraded: boolean }"
         errors: [VALIDATION_FAILED, PAYLOAD_TOO_LARGE, FORBIDDEN]
     events_produced:

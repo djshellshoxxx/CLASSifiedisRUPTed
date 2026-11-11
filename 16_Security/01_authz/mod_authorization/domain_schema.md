@@ -37,7 +37,7 @@ Schema `classrup.security.roleassignment/v1` · storage **relay** · privacy **P
 | expiresAt? | timestamp — RFC 3339 UTC; required for moderator, operator and relay_operator, at most 365 days; never set for admin |
 | revokedAt? | timestamp — RFC 3339 UTC |
 | revokedBy? | did:key — admin principal, absent for automatic revocation |
-| revokeReason? | enum — revoked \| expired \| subject_contested \| cancelled \| approval_expired |
+| revokeReason? | enum — revoked \| expired \| subject_contested \| cancelled \| approval_expired \| tenant_archived (RoleBootstrapPort.archiveTenant only) |
 | breakGlassReason? | string — 20..500 code points, required when via is break_glass |
 | bootstrapOsUser? | string — OS user name that ran the local CLI for bootstrap or break-glass |
 | importedFrom? | string — relayId of the exporting relay for imported records |
@@ -50,6 +50,7 @@ Schema `classrup.security.roleassignment/v1` · storage **relay** · privacy **P
 - An assignment grants its role only in status active with expiresAt absent or in the future; admin assignments never carry expiresAt.
 - At most one assignment with status active, pending_approval or imported_inactive exists per (relayId, subjectKey, role, scope).
 - The scope matches the role per the valid pairs, and a tenant scope names a tenant that exists on this relay.
+- security.roleassignment.revoke never removes the last active operator assignment of a tenant scope; only expiry, a subject_contested revocation (both with lastOperator true) and RoleBootstrapPort.archiveTenant (reason tenant_archived) leave a tenant scope without an active operator.
 
 ### AuditEntry
 

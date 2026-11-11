@@ -11,6 +11,7 @@
 - **PS-040-04.R03** Payment status is derived only from F09 events whose contextRef is {rental_deposit, depositId} or {rental_deposit_release, depositId} of this module; the module never creates or alters a PaymentClaim itself.
 - **PS-040-04.R04** Every money obligation is a separate commerce.deal.open call with its own contextRef and contextCid (funding at agreement, release at the release attestation); no other payment context API is used.
 - **PS-040-04.R05** Statements the counterparty must act on (withdrawal, decline, dispute notice, renegotiation) are named schemas with signer roles registered in F11.S01.M01 and handled by receive, and an agreement received after a withdrawal fails with CONFLICT_STATE in both vaults.
+- **PS-040-04.R06** comms.consent.revoked is matched through its revokedIds[] against the agreementCid, its revocationId is recorded and afterCommit is cross-checked with comms.consent.verify, whose result decides; an agreed deposit never freezes on the event alone and a funded or later deposit keeps its state because the payment already happened under the agreement.
 
 ## Specification
 
@@ -56,7 +57,7 @@
 | `commerce.dispute.opened` | for contextRef exactly {rental_deposit, depositId}, link the case and move escalated_pending to disputed |
 | `commerce.dispute.resolved` | for contextRef exactly {rental_deposit, depositId}, apply the outcome mapping in the note |
 | `commerce.dispute.withdrawn` | for contextRef exactly {rental_deposit, depositId}, return the deposit to disputedFrom |
-| `comms.consent.revoked` | freeze an agreed deposit whose agreement consent was revoked, after comms.consent.verify confirms the status |
+| `comms.consent.revoked` | for subjectType rentals_deposit, when revokedIds[] contains the agreementCid of the deposit subjectRef names, store revocationId as agreementRevocationId and call comms.consent.verify (afterCommit true expects conflicted, false expects revoked; the verify result decides); on conflicted or revoked freeze an agreed deposit with frozenFrom agreed, while a funded or later deposit records the revocation as evidence without a state change; ids that match no agreement and a replayed revocationId change nothing |
 | `rentals.reservation.cancelled` | expire unfunded terms (emitting not_funded for agreed terms), or move funded terms to release_pending for a full release |
 | `rentals.return.attested` | store the signed attestation time and start the 7 day soft decision clock |
 | `rentals.rental.overdue` | record overdueSince; 14 days later a forfeit with reason not_returned becomes allowed without a return attestation |
@@ -96,10 +97,11 @@ after return: owner rentals.deposit.attest_release { "releaseAmount": { "amount"
 |---|---|---|---|---|
 | TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only at acknowledged or final; proof labels follow COM-4 |
 | TEST-PS-040-09.T07 | integration | PS-040-04.R01, PS-040-04.R02, PS-040-06.R01, PS-040-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on released with identical cids; duplicates skipped |
-| TEST-PS-040-09.T08 | contract | PS-040-04.R01, PS-040-04.R02, PS-040-04.R04 | each command, statement, consent, Deal call and event | payloads and signatures validate against registry schemas and signer roles; funding and release Deals are opened by the owner vault and carry contextRef {rental_deposit, depositId} with contextCid agreementCid and {rental_deposit_release, depositId} with the attestation cid; the renter vault derives the same fundingDealId before the Deal arrives and its ContextTermsPort.verify accepts both Deals |
+| TEST-PS-040-09.T08 | contract | PS-040-04.R01, PS-040-04.R02, PS-040-04.R04 | each command, statement, consent, Deal call and event | payloads and signatures validate against registry schemas and signer roles; funding and release Deals are opened by the owner vault and carry contextRef {rental_deposit, depositId} with contextCid agreementCid and {rental_deposit_release, depositId} with the attestation cid; fundingDealId and releaseDealId are stored as the UUIDv8 values F09.S01.M01 derives; the renter vault derives the same fundingDealId before the Deal arrives and its ContextTermsPort.verify accepts both Deals |
 | TEST-PS-040-09.T12 | integration | PS-040-03.R05, PS-040-04.R03 | reservation cancelled after funding, owner attests on day 40 | deposit moves to release_pending with the full amount and no release Deal; attest_release allowed without return attestation and after day 30; released after the renter acknowledges |
 | TEST-PS-040-09.T16 | e2e | PS-040-01.R01, PS-040-04.R01 | mobile owner proposes, renter agrees and pays, owner acknowledges, release after return | funded then released in both vaults; non-custody wording shown and signed; axe zero serious issues |
 | TEST-PS-040-09.T22 | integration | PS-040-04.R05 | owner withdraws the terms while the renter agrees concurrently | both vaults end withdrawn; the agreement fails with CONFLICT_STATE in both; rentals.deposit.released with not_funded emitted once per vault |
+| TEST-PS-040-09.T25 | integration | PS-040-04.R06, PS-040-03.R01 | comms.consent.revoked whose revokedIds[] holds the agreementCid of an agreed deposit with afterCommit false; the same for a funded deposit with afterCommit true; one naming an unrelated consent; the first revocationId replayed | the agreed deposit frozen with frozenFrom agreed and agreementRevocationId set after comms.consent.verify returns revoked; the funded deposit keeps its state with the revocation recorded; the unrelated and replayed cases change nothing |
 
 ## Dependencies
 

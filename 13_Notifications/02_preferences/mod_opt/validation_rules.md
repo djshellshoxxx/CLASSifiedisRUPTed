@@ -19,7 +19,7 @@
 | V01 | channel is push or email and the relay advertises that channel in its capability list | NOTIFY_CHANNEL_UNSUPPORTED |
 | V02 | the statement signature verifies against a device key of userDid that F16.S02.M02 reports active at receipt time, payload relayId equals the receiving relay's canonical relayId, the audience relay key is the relay's current key or its previous key within the 7-day rotation overlap, and seq and prev extend the author's chain at this relay | VALIDATION_FAILED |
 | V03 | notify.push.subscribe and notify.email.add are accepted only for a consent that this relay registered and accepted; the vault calls enable only after the acceptance | PRECONDITION_FAILED |
-| V04 | privacyConsentId and privacyPurpose are present, the purpose matches the channel, and in the vault privacy.consent.check {purpose, relayId} returns granted at opt_in | PRECONDITION_FAILED |
+| V04 | privacyConsentId and privacyPurpose are present in the record and in the statement (a statement without either is refused at the relay), the purpose matches the channel, and in the vault privacy.consent.check {purpose, relayId} returns granted at opt_in | PRECONDITION_FAILED |
 | V05 | the unsubscribe token equals the HMAC recomputed for a consent registered at this relay under the current or a retained previous unsubscribe key, compared in constant time | NOTIFY_UNSUBSCRIBE_TOKEN_INVALID |
 | V06 | RateLimitPort.consume (F12.S03.M03) allows at most 20 grants per day per user and relay; withdrawals are never limited | RATE_LIMITED |
 | V07 | a relay accepts at most 10 unsubscribe calls per minute per IP prefix through RateLimitPort | RATE_LIMITED |

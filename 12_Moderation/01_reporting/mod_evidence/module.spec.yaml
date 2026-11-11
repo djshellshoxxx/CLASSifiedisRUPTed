@@ -33,6 +33,7 @@ user_stories:
 edge_cases:
   - Content is edited right after being reported; the snapshot keeps the earlier signed revision and a later capture of the new revision is a separate record linked by targetId.
   - The target is an end-to-end encrypted message; by default the snapshot holds only metadata (content id, sender key, sender signature); a disclosure of the plaintext needs an approved redacted preview, and an unsigned message can only be a labelled 'reporter claim' that carries less weight.
+  - A reported message disclosure removed nothing in its redact/1 preview; the snapshot keeps the message key K with the disclosed text, and verification recomputes the signed key commitment and decrypts the signed ciphertext to the same text; a K that fails either check is refused with MODERATION_EVIDENCE_COMMITMENT_MISMATCH.
   - A listing has 10 photos of 5 MiB each; its public photos are referenced by blob:sha256 without copying, so the listing stays reportable.
   - Snapshot body exceeds 256 KiB or has more than 10 media items; capture truncates nothing and returns PAYLOAD_TOO_LARGE so a report is never filed on partial evidence.
   - Stored body no longer matches its hash (corruption or tampering); verification fails, the integrity flag becomes failed, a local or operator alert fires, decisions citing it are flagged, and the snapshot is still shredded at retention end.
@@ -57,6 +58,7 @@ processes:
       - Snapshot bodies are P2 between the store owner and the moderators of the relay that received them and retained under RET-EVIDENCE; each body and copied media item lives in an encrypted evidence blob with its own key, destroyed by deleting that key once no active snapshot references the blob.
       - Snapshots are immutable; only the integrity flag, lifecycle and legal-hold fields change and every change is recorded in the access log.
       - Evidence blobs are declared in this module's store (EvidenceBlob rows with blob id, SHA-256, size, key id and reference count) and P0 media is referenced by blob:sha256 from F15.S02.M03 MediaBlob (N9) instead of being copied.
+      - "A message snapshot records the F08.S01.M01 messageCid as targetCid and the sender-signed envelope without wrapped keys (nonce, ciphertext, key commitment, signature) as its metadata, and keeps the message key K inside its encrypted body only for an approved participant disclosure whose redact/1 preview removed nothing, with commitmentStatus verified once K has been checked."
     entities:
       - name: EvidenceSnapshot
         schema: classrup.moderation.evidencesnapshot/v1
@@ -68,7 +70,7 @@ processes:
           - "tenantId: uuidv7 — store scope (vault scope or relay hosting scope)"
           - "targetType: enum — listing | auction | message | profile | review | bid | offer | attachment | cycle_proposal"
           - "targetId: uuidv7 — captured content identity"
-          - "targetCid: string — content id (sha256-…) of the author's signed envelope"
+          - "targetCid: string — content id (sha256-…) of the author's signed envelope; for targetType message the F08.S01.M01 messageCid"
           - "targetRevision: int — revision of the target when captured"
           - "authorKey: did:key — signer of the captured envelope"
           - "authorSignatureStatus: enum — valid | invalid | absent_reporter_claim"
@@ -77,6 +79,8 @@ processes:
           - "disclosureState?: enum — previewed | export_prepared (P2 targets only)"
           - "redactionRulesVersion?: string — redact/1 when a disclosure preview ran"
           - "redactions?: object[] — { rule, count } applied by the preview"
+          - "messageKey?: bytes — 32-byte per-message key K of F08.S01.M01, only for targetType message with disclosure participant_disclosure and every redaction count 0; stored inside the encrypted body blob, never in an event, log, index or access row"
+          - "commitmentStatus?: enum — verified | not_checkable (message snapshots: verified when K recomputes the signed key commitment and decrypts the signed ciphertext to exactly the disclosed plaintext; not_checkable for metadata_only, reporter_claim and redacted disclosures)"
           - "contentHash: string — hex SHA-256 over JCS bytes of the stored canonical object (full body, metadata object or redacted disclosure), 64 chars"
           - "bodyBlobId: uuidv7 — EvidenceBlob holding the encrypted canonical object, ≤ 256 KiB"
           - "mediaRefs: object[] — up to 10 { ref: blob:sha256-… of a P0 MediaBlob (F15.S02.M03) or evidenceBlobId of a copied P2 item, sha256, bytes ≤ 5 MiB, alt? }"
@@ -90,6 +94,7 @@ processes:
           - Body and media of a snapshot never change after capture; a new capture creates a new record.
           - lifecycle purged implies the snapshot holds no blob references and legalHold is false; an EvidenceBlob key is destroyed only when the blob's reference count is 0, so a snapshot under hold keeps its blob readable.
           - disclosure participant_disclosure implies disclosureState export_prepared; a P2 target is never stored with disclosure public_target.
+          - messageKey is present only when targetType is message, disclosure is participant_disclosure, every redaction count is 0 and commitmentStatus is verified.
       - name: EvidenceAccess
         schema: classrup.moderation.evidenceaccess/v1
         storage: relay+device
@@ -132,6 +137,7 @@ processes:
       - Size limits are enforced before any storage so evidence is never truncated, and they are at least the listing limits (10 media items of 5 MiB each).
       - Verification and read requests are validated against the accessor's purpose and case context.
       - A P2 target is captured metadata_only unless the reporter runs the disclosure preview, whose rules redact/1 remove L3/L4 location shares, geohash cells longer than 5 characters, email addresses, phone numbers and attachments before approval.
+      - A message key K is accepted only for an unredacted message disclosure and only when HMAC-SHA256(K, 'classrup.comms.msg.commit.v1' || messageId) equals the signed key commitment and the XChaCha20-Poly1305 decryption of the signed ciphertext (additional data thread ID, message ID, sender device ID), unpadded, equals the disclosed plaintext; a redacted disclosure never carries K because K and the ciphertext would reveal what was redacted.
     rules:
       - "V01 | targetType is in the allowed list and targetId is a uuidv7 | VALIDATION_FAILED"
       - "V02 | the store holds the target envelope for targetCid and targetRevision | MODERATION_EVIDENCE_SOURCE_MISSING"
@@ -141,6 +147,7 @@ processes:
       - "V06 | snapshot lifecycle is not purged | EXPIRED"
       - "V07 | approve_disclosure carries the digest of the latest preview of this snapshot and redact/1 completed on it | PRECONDITION_FAILED"
       - "V08 | a P2 target (message, offer, cycle_proposal) is stored with disclosure metadata_only or reporter_claim unless a disclosure reached export_prepared | VALIDATION_FAILED"
+      - "V09 | a messageKey (approve_disclosure in the vault, ingest_bundle on the relay) comes with an unredacted message disclosure, recomputes the signed key commitment and decrypts the signed ciphertext to exactly the disclosed plaintext | MODERATION_EVIDENCE_COMMITMENT_MISMATCH"
     notes: "Rules redact/1 (deterministic, versioned): location share objects of level L3 or L4 are removed; geohash strings longer than 5 characters are truncated to 5; email addresses (local@domain.tld) become '[email]'; phone numbers (7 or more digits with optional +, spaces, dots or dashes) become '[phone]'; attachments are dropped and replaced by '[attachment n of m]'. Each rule reports its count in redactions."
   workflow_state_machine:
     requirements:
@@ -190,9 +197,9 @@ processes:
       - name: moderation.evidence.ingest_bundle
         mode: "relay-local, in-process from moderation.report.receive (F12.S01.M01) and moderation.appeal.receive (F12.S01.M03); produces no statement"
         capability: moderation.evidence.ingest_bundle
-        input: "{ sourceRef: reportId | appealId, snapshot: { canonicalObject, authorEnvelope, disclosure, mediaRefs[] } }"
-        output: "{ snapshotId, contentHash, integrity, missingMedia[] }"
-        errors: [VALIDATION_FAILED, MODERATION_EVIDENCE_SIGNATURE_INVALID, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE]
+        input: "{ sourceRef: reportId | appealId, snapshot: { canonicalObject, authorEnvelope, disclosure, mediaRefs[], messageKey? } }"
+        output: "{ snapshotId, contentHash, integrity, commitmentStatus?, missingMedia[] }"
+        errors: [VALIDATION_FAILED, MODERATION_EVIDENCE_SIGNATURE_INVALID, MODERATION_EVIDENCE_COMMITMENT_MISMATCH, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE]
         emits: [moderation.evidence.captured]
         idempotent: true
       - name: moderation.evidence.verify
@@ -214,9 +221,9 @@ processes:
       - name: moderation.evidence.approve_disclosure
         mode: "vault-local; reaches export prepared for the approved preview"
         capability: moderation.evidence.disclose
-        input: "{ snapshotId, previewDigest }"
-        output: "{ snapshotId, disclosure: participant_disclosure, contentHash }"
-        errors: [NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED]
+        input: "{ snapshotId, previewDigest, messageKey? (K read from F08.S01.M01 by the F12.S01.M01 report sheet, only when the preview removed nothing) }"
+        output: "{ snapshotId, disclosure: participant_disclosure, contentHash, messageKeyEligible: boolean, commitmentStatus? }"
+        errors: [NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED, MODERATION_EVIDENCE_COMMITMENT_MISMATCH]
         emits: []
         idempotent: true
     queries:
@@ -244,6 +251,7 @@ processes:
     errors:
       - "MODERATION_EVIDENCE_SOURCE_MISSING | 409 | no | the store does not hold the target envelope or the requested revision"
       - "MODERATION_EVIDENCE_SIGNATURE_INVALID | 422 | no | author signature over the captured envelope does not verify"
+      - "MODERATION_EVIDENCE_COMMITMENT_MISMATCH | 422 | no | the message key does not match the signed key commitment or does not decrypt the signed ciphertext to the disclosed plaintext, or came with a redacted disclosure"
     note: >-
       No signed statements are produced here (N2); snapshots travel inside classrup.moderation.report/v1 (F12.S01.M01) and
       classrup.moderation.appeal/v1 (F12.S01.M03) bodies sealed to the relay moderation key. Media follow N9: P0 media are
@@ -292,6 +300,7 @@ processes:
       - "EvidenceSnapshot: P2 (vault owner; moderators of the relay that received it for the case; author for appeal view)."
       - "EvidenceAccess: P2 (store owner and relay operators; author sees the redacted view only)."
       - "Per-blob keys: P4, wrapped by the vault key (vault) or the relay data key from F16.S01.M02 (relay)."
+      - "Message key K of an unredacted message disclosure: P2 inside the encrypted body blob, readable only by the moderators of the receiving relay for the case."
     retention:
       - "Snapshots: RET-EVIDENCE (2 years after last related activity) through the RetentionPurgePort unless a relay legal hold applies; failed-integrity snapshots are purged on the same schedule."
       - "Access rows: RET-EVIDENCE; after purge they are reduced to stubs without content references for 180 days."
@@ -352,8 +361,9 @@ processes:
       - "T20 | integration | 07.R06 | ExportSectionPort run, then privacy.deletion.completed in the vault with keepEvidence true and false | export section moderation.evidence produced; evidence purged or pseudonymized as documented"
       - "T21 | integration | 04.R03 | privacy.legal_hold.placed then released on a relay | snapshots of the held author flagged after privacy.legal_hold.check; flag cleared on release; purge only afterwards"
       - "T22 | abuse | 07.R01,07.R04 | F12 privacy suite after captures, ingests, disclosures and purges in a vault and on a relay: scan federation payloads, public projections, relay and vault logs, events and notification payloads | no snapshot body, media reference of a P2 item, accessorId or redacted value appears in any of them; events carry only ids, hashes and enums"
+      - "T23 | unit | 01.R05,02.R05 | approve an unredacted disclosure of message M with its K, with a wrong K, and a redacted disclosure with K; relay ingests the first bundle and a bundle whose disclosed text was altered | first stored with messageKey and commitmentStatus verified; MODERATION_EVIDENCE_COMMITMENT_MISMATCH for the wrong K, the redacted disclosure and the altered text; metadata of every message snapshot holds messageCid and the signed envelope without wrapped keys"
     acceptance:
-      - All tests T01–T22 pass in CI.
+      - All tests T01–T23 pass in CI.
       - Every read, verify, export and purge of a snapshot produces exactly one access row (property and abuse tests).
       - A modified snapshot body, media or author signature is always detected by verification, and no P2 plaintext reaches a relay without an approved disclosure.
   import_export_backup_rollback:

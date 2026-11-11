@@ -24,7 +24,7 @@
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `services.dispute.get` | services.dispute.read_own | [vault-local] { linkId } | { link: ServiceDisputeLink, allowedNextSteps: [mutual_cancellation \| new_refund_deal \| none] } | NOT_FOUND |
+| `services.dispute.get` | services.dispute.read_own | [vault-local] { linkId } | { link: ServiceDisputeLink, allowedNextSteps: [mutual_cancellation \| mutual_deal_cancellation \| new_refund_deal \| new_settlement_deal \| none] } | NOT_FOUND |
 | `services.dispute.preview_evidence` | services.dispute.read_own | [vault-local] { bookingId, milestoneId?, scope } | { eligible: boolean, reasonCode?, evidencePack: EvidenceRef[], windowEndsAt } | NOT_FOUND, SERVICES_DISPUTE_WINDOW_CLOSED, SERVICES_DISPUTE_NOT_ELIGIBLE |
 
 ### Events produced
@@ -32,14 +32,14 @@
 | Type | Privacy | Payload |
 |---|---|---|
 | `services.dispute.opened` | P2 | { linkId, bookingId, milestoneId?, scope, openerId, counterpartyId, clientId, providerId, disputeCaseId, preDisputeState, origin: local\|federated } |
-| `services.dispute.closed` | P2 | { linkId, bookingId, milestoneId?, disputeCaseId?, clientId, providerId, reason: withdrawn\|link_failed\|case_withdrawn\|resolved\|merged, resolution?, outcomeType?, effect: restore\|restore_then_renegotiate\|none } |
+| `services.dispute.closed` | P2 | { linkId, bookingId, milestoneId?, disputeCaseId?, clientId, providerId, reason: withdrawn\|link_failed\|case_withdrawn\|resolved\|merged, resolution?, outcomeType?, disposition?: {kind, favouredDid?, agreedAmount?}, effect: restore\|restore_then_renegotiate\|none } |
 
 ### Events consumed
 
 | Type | Effect |
 |---|---|
 | `commerce.dispute.opened` | for contextRef {type: booking, id} matching a link on (contextRef.id = bookingId, openerId) or the stored caseId, store the case id and move pending_link to linked; it never creates a link by itself |
-| `commerce.dispute.resolved` | for disputeCaseId move linked to resolved, store resolution and outcomeType, and apply the resolution mapping |
+| `commerce.dispute.resolved` | for disputeCaseId move linked to resolved, store resolution, outcomeType and the advisory disposition when present, and apply the resolution mapping - the disposition kind when present and valid for the booking parties, otherwise the outcome-type mapping |
 | `commerce.dispute.withdrawn` | for disputeCaseId move linked to withdrawn with closeReason case_withdrawn |
 | `privacy.deletion.completed` | replace the erased counterparty DID with the deletion pseudonym in retained links; notice signatures are kept and marked unverifiable-after-pseudonymization |
 
@@ -75,6 +75,7 @@ later: commerce.dispute.resolved resolution no_fault_close -> state resolved, se
 | TEST-PS-030-09.T04 | integration | PS-030-03.R02, PS-030-04.R03 | each F09 outcome - no_fault_close accepted by both and mediator-only, refund_claimed, return_agreed, enforcement_referral, lapsed - and commerce.dispute.withdrawn, each delivered twice | link resolved or withdrawn once; resolution stored; services.dispute.closed carries the mapped effect; booking and milestone back in their pre-dispute status; no obligation changed |
 | TEST-PS-030-09.T05 | integration | PS-030-03.R03, PS-030-04.R02 | services.dispute.opened, then the matching commerce.dispute.resolved, consumed by the quotes and milestones modules while services.dispute.closed is emitted here | booking disputed and milestones frozen exactly once, then unfrozen exactly once; exactly one opened and one closed event per link |
 | TEST-PS-030-09.T08 | contract | PS-030-04.R01, PS-030-09.R02 | each command, statement, event and F09 port call | payloads and signatures validate against registry and F09 schemas |
+| TEST-PS-030-09.T23 | integration | PS-030-03.R04, PS-030-04.R03 | commerce.dispute.resolved carrying dispositions continue, settled with agreedAmount EUR 45.00 favouring the client, settled favouring the provider, cancelled, waived on a cancellation_fee dispute, refund_claimed with disposition continue, a disposition whose favouredDid is not a booking party, and refund_claimed without disposition | disposition stored and the effect follows its kind (restore; new_refund_deal; new_settlement_deal; mutual_cancellation; lateFeeClaim labelled waived with the amount unchanged), refund_claimed with continue restores without a refund prompt, the foreign favouredDid falls back to the outcome-type mapping with a warning, the last uses the outcome-type mapping; services.dispute.closed carries the disposition; no obligation or Deal changed |
 
 ## Dependencies
 

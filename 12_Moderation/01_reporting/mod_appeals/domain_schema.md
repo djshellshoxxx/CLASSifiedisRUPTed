@@ -48,7 +48,7 @@ Schema `classrup.moderation.appeal/v1` · storage **relay+device** · privacy **
 
 **Invariants**
 - At most one appeal exists per (tenantId, actionId).
-- The reviewer's principal (all keys linked through F07.S02.M01 and the relay moderator registry) differs from the decider's principal, the subject's principal and the principal of every reporter of a report linked to the action's case.
+- The reviewer's principal (all keys linked through F07.S02.M01 and the relay moderator registry) differs from the decider's principal, the proposer's principal of a host-policy action (F12.S02.M01 proposerKey), the subject's principal and the principal of every reporter of a report linked to the action's case.
 - status decided implies outcome is upheld, overturned or reduced and decisionReasons, decisionRuleIds and decisionStatementCid are set and the relay signature verified; status moot implies outcome moot, mootReason and mootNoticeCid are set and no decisionRuleIds exist.
 - outcome reduced implies reducedTo is set, its kind is no more severe, its expiresAt no later and its restrictedCapabilities a subset of the contested action's.
 - reviewerKey never appears in the vault copy, in a statement to the appellant or in an event payload.

@@ -10,6 +10,7 @@
 - **PS-107-01.R02** The consent is P2 evidence held in the vault and registered at the sending relay as a relay registration record, retained under RET-EVIDENCE, and a new grant after withdrawal or expiry creates a new record instead of reviving the old one.
 - **PS-107-01.R03** One-click unsubscribe tokens are derived as base64url(HMAC-SHA256(relayUnsubscribeKey, consentId || channel)), recomputed for each email and verified in constant time without being stored, and a redeemed marker is kept for 365 days after withdrawal.
 - **PS-107-01.R04** The statements have their own schemas distinct from the record schemas - classrup.notify.channel_consent_statement/v1 and classrup.notify.channel_withdrawal/v1 signed by a device key of the principal and addressed to one relay, and classrup.notify.channel_withdrawal_receipt/v1 signed by the relay key for withdrawals made at the relay (CTR-SCH-001 SCH-1).
+- **PS-107-01.R05** The vault record classrup.notify.channel_consent/v1, its statement classrup.notify.channel_consent_statement/v1 and the relay registration all carry the mandatory privacyConsentId and privacyPurpose (the F10 purpose, notify_email or notify_push), so the channel consent statement is the single relay-facing artifact for notification consent and F10.S01.M01 sends no statement of its own for these purposes.
 
 ## Specification
 
@@ -27,8 +28,8 @@ Schema `classrup.notify.channel_consent/v1` · storage **device** · privacy **P
 | relayKeyId | string — relay key ('<relayId>#k<seq>') pinned when the consent was granted |
 | channel | enum — push \| email |
 | status | enum — granted \| withdrawn \| expired |
-| privacyConsentId | uuidv7 — F10.S01.M01 PrivacyConsent of the matching purpose for relayId; re-linked on supersession |
-| privacyPurpose | enum — notify_push \| notify_email; push requires notify_push and email requires notify_email |
+| privacyConsentId | uuidv7 — mandatory; F10.S01.M01 PrivacyConsent of the matching purpose for relayId; re-linked on supersession |
+| privacyPurpose | enum — mandatory F10 purpose notify_push \| notify_email; push requires notify_push and email requires notify_email |
 | grantedAtClaim | timestamp — user clock, a claim |
 | withdrawnAtClaim? | timestamp — claim set on withdrawal |
 | via? | enum — settings \| unsubscribe_link \| privacy_withdrawal \| account_deletion \| relay_policy \| expired |
@@ -58,7 +59,8 @@ Schema `classrup.notify.channel_consent_registration/v1` · storage **relay** ·
 | signerKeyId | string — device key that signed the statement |
 | channel | enum — push \| email |
 | status | enum — granted \| withdrawn \| expired |
-| privacyPurpose | enum — notify_push \| notify_email, as stated |
+| privacyConsentId | uuidv7 — mandatory F10 consent ID as stated; opaque to the relay, which never interprets it |
+| privacyPurpose | enum — mandatory F10 purpose notify_push \| notify_email, as stated |
 | statementCid | string — verified consent statement cid |
 | expiresAt | timestamp — from the statement, at most 365 days after grant |
 | relayRegisteredAt | timestamp — relay clock, evidence of that relay clock only |
@@ -81,6 +83,7 @@ Schema `classrup.notify.channel_consent_registration/v1` · storage **relay** ·
 | TEST-PS-107-09.T01 | unit | PS-107-01.R01, PS-107-01.R02, PS-107-02.R01 | opt in to push on R, withdraw, then re-grant | first record withdrawn terminal; re-grant creates a new record; statement signed and carries privacyConsentId, privacyPurpose and relayKeyId |
 | TEST-PS-107-09.T02 | unit | PS-107-02.R03, PS-107-02.R02, PS-107-01.R03 | each rule V01 to V09 violated in turn including email on R2, a token that does not verify, and a reused valid token | documented error code returned; the reused token returns 200 withdrawn unchanged; state unchanged otherwise |
 | TEST-PS-107-09.T04 | contract | PS-107-04.R01, PS-107-04.R02, PS-107-09.R02, PS-107-01.R04 | each command and query executes in its environment | outputs, statements, receipts and event payloads validate against registry schemas; statement schemas differ from the record schemas; relay events in the SQLite transaction of the change |
+| TEST-PS-107-09.T19 | contract | PS-107-01.R05, PS-107-04.R04 | opt in to email at R; register a statement lacking privacyConsentId, one lacking privacyPurpose and a valid one; capture all relay-bound traffic | record, statement and registration carry privacyConsentId and privacyPurpose notify_email; incomplete statements refused at the relay; the only relay-facing consent artifact is classrup.notify.channel_consent_statement/v1 and no F10 statement is sent |
 
 ## Dependencies
 

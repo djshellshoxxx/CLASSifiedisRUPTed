@@ -12,7 +12,8 @@ The authorize() decision function of CTR-CAP-001 with its two layers. Vault poli
 
 - Implement authorize(actor, capability, resource?, context) returning Allow or Deny(code) as a pure function with default deny for unknown capabilities, roles, scopes or predicates, resolving the actor principal's signing device key through the injected KeyStatusPort.
 - Implement authorizeStatement(statement, context) returning Accept or Quarantine(statusReason) as a pure predicate for F11.S01.M02, with the required signer role taken only from RoleResolverPort.roleFor(type, context) (F11.S01.M01) and key status only from KeyStatusPort (F07.S02.M01); it has no expected-role parameter and stores nothing.
-- Own relay RoleAssignment records (moderator, operator, relay_operator, admin with scope relay or tenant:<id>) with the propose and approve two-person path for admins, expiry for non-admin roles, revocation, last-admin protection, import activation, and the local-CLI bootstrap and break-glass path (also offered in process as RoleBootstrapPort), and publish relay-signed role statements.
+- Own relay RoleAssignment records (moderator, operator, relay_operator, admin with scope relay or tenant:<id>) with the propose and approve two-person path for admins, expiry for non-admin roles, revocation, last-admin protection per relay and last-operator protection per tenant scope, import activation, and the local-CLI bootstrap and break-glass path (also offered in process as RoleBootstrapPort, whose bootstrapTenant and archiveTenant run inside the F15.S04.M03 tenant-creation and tenant-archive transactions), and publish relay-signed role statements.
+- Keep relay-wide operational capabilities (relay identity rotate and revoke, relay status, backups, recovery plan, dead-letter replay) for the distinct relay_operator role at scope relay, so a tenant operator never holds them.
 - Own the AuditEntry log (relay and vault) with a per-store hash chain, HMAC-pseudonymized actors on relays, anchors published every 1 000 entries or 5 minutes, buffered coalescing of repeated read-only denials, and no payload content.
 - Provide the capability registry loader that validates every command and query declares exactly one capability.
 
@@ -23,7 +24,7 @@ The authorize() decision function of CTR-CAP-001 with its two layers. Vault poli
 - Reading user account state such as blocks or suspension; those facts are supplied in the context by the caller.
 - Moderation decisions that create suspensions (F12.S02.M01) and limit values (F12.S03.M04).
 - Legal-hold two-person approval workflow (F10.S01.M02).
-- Tenant records and the derived operator list (F15.S04.M03), which creates the first tenant operator and admin through RoleBootstrapPort.
+- Tenant records and the derived operator list (F15.S04.M03), which creates the first tenant operator and admin through RoleBootstrapPort.bootstrapTenant inside its tenant-creation transaction and removes a tenant's roles through RoleBootstrapPort.archiveTenant when it archives the tenant.
 - Future: delegated capabilities with signed, expiring capability tokens; hardware-key bound roles.
 
 ## User stories
@@ -49,6 +50,11 @@ The authorize() decision function of CTR-CAP-001 with its two layers. Vault poli
 - An assign request names an admin as approvedBy but that admin never signed an approval; it is refused with SECURITY_APPROVAL_REQUIRED.
 - An admin proposal is not approved within 24 hours; it expires and grants nothing.
 - Roles imported from another relay stay imported_inactive and grant nothing until an admin of this relay activates them.
+- An admin revokes O1, the only active operator assignment of scope tenant:T1, while O2 operates tenant:T2 and R1 is a relay_operator; the revoke is refused with SECURITY_LAST_OPERATOR because operators of other tenants and relay-scope roles do not count for T1.
+- The last operator of a tenant reaches expiresAt or its subject DID becomes contested; the automatic revocation is not blocked, security.role.revoked carries lastOperator true, and F15.S04.M03 handles the tenant without an operator.
+- F15.S04.M03 archives tenant T1; RoleBootstrapPort.archiveTenant(tx, T1) revokes every live assignment of scope tenant:T1 with reason tenant_archived inside the archive transaction, the only path that removes the last operator on purpose.
+- A tenant operator calls platform.relay_identity.rotate, platform.backup.run or platform.deadletter.replay; authorize denies with FORBIDDEN and reason role_missing because those relay-wide capabilities need relay_operator or admin at scope relay.
+- F15.S04.M03 calls bootstrapTenant with an admin key while an active admin exists and no break-glass reason; SECURITY_BOOTSTRAP_REFUSED is returned and the caller's transaction rolls back, so neither the tenant nor any assignment exists.
 
 ## UX and accessibility
 
@@ -81,10 +87,10 @@ F16.S01.M02, F10.S02.M02, CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR
 | ID | Process | Requirements |
 |---|---|---|
 | PS-126-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-126-02 | [Validation rules](validation_rules.md) | 3 |
-| PS-126-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
+| PS-126-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-126-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
 | PS-126-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
-| PS-126-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
+| PS-126-05 | [Authorization and capabilities](authorization_capabilities.md) | 5 |
 | PS-126-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-126-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-126-08 | [Observability and performance](observability_performance.md) | 3 |
@@ -95,6 +101,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T21 pass in CI.
+- All tests T01–T24 pass in CI.
 - authorize is pure and every unlisted capability, role and scope combination denies (property tests).
 - The audit chain detects any edit, deletion or truncation of entries covered by the last externally published anchor in tamper tests, and the residual window after it is reported.

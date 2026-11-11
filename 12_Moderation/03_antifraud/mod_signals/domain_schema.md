@@ -22,13 +22,13 @@ Schema `classrup.moderation.signal/v1` · storage **relay+device** · privacy **
 | id | uuidv7 — primary key |
 | tenantId | uuidv7 — store scope (vault scope or relay hosting scope) |
 | subjectKey | did:key — counterparty key the signal concerns; never the vault's own local principal |
-| kind | enum — shill_suspected \| spam_detected \| dispute_opened \| refund_agreed \| no_show \| payment_claim_expired \| payment_claim_disputed \| cycle_dropout \| auction_voided \| damage_claimed \| report_actioned \| report_dismissed \| report_dismissed_bad_faith \| deal_completed \| manual_concern \| manual_positive \| compensation |
+| kind | enum — shill_suspected \| spam_detected \| dispute_opened \| refund_agreed \| no_show \| payment_claim_expired \| payment_claim_disputed \| cycle_dropout \| auction_voided \| damage_agreed \| report_actioned \| report_dismissed \| report_dismissed_bad_faith \| deal_completed \| proximity_pattern \| manual_concern \| manual_positive \| compensation |
 | weight | int — -100..100, positive increases risk, negative reduces it, defaults from the kind table |
 | halfLifeDays | int — 7..180, default from the kind table |
-| sourceModule | string — module ID that produced the source event, or manual or import |
+| sourceModule | string — module ID that produced the source event or called SignalPort.record, or manual or import |
 | sourceEventId | string — unique per (tenantId, kind) except manual |
 | sourceKey? | did:key — reporter, opener or counterparty whose action produced the source event; absent for system observations |
-| evidenceRef? | string — id of snapshot, deal, dispute case, action or report, never content |
+| evidenceRef? | string — id of snapshot, deal, dispute case, damage claim, action, report, no-show report statement cid or module pattern id, never content or location cells |
 | supersedesSignalId? | uuidv7 — set only on kind compensation |
 | observedAt | timestamp — RFC 3339 UTC, store clock at ingestion |
 | claimedAt? | timestamp — RFC 3339 UTC, time claimed by the source event, advisory only |

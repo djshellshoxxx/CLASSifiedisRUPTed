@@ -70,7 +70,7 @@ stateDiagram-v2
 | TEST-PS-031-09.T04 | integration | PS-031-03.R02 | approval naming an older submission cid, then the latest | first SERVICES_SUBMISSION_STALE; second approved |
 | TEST-PS-031-09.T05 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only at acknowledged or final; booking completes only after both completion statements |
 | TEST-PS-031-09.T09 | integration | PS-031-06.R03, PS-031-03.R04 | commerce.deal.open fails during approval | approval not signed; milestone stays submitted; no dealId |
-| TEST-PS-031-09.T17 | integration | PS-031-03.R05 | dispute opened for a submitted and an approved milestone, then each F09 resolution and a withdrawal; then commerce.deal.cancelled mutual | each milestone returns to its pre-dispute status; refund_claimed leaves the Deal unchanged; approved becomes cancelled only on the mutual Deal cancellation |
+| TEST-PS-031-09.T17 | integration | PS-031-03.R05 | dispute opened for a submitted and an approved milestone, then each F09 resolution, a resolution carrying a settled disposition with agreedAmount, and a withdrawal; then commerce.deal.cancelled mutual | each milestone returns to its pre-dispute status; refund_claimed and the settled disposition leave the Deal unchanged; approved becomes cancelled only on the mutual Deal cancellation |
 
 ## Dependencies
 

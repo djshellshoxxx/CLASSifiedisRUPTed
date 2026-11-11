@@ -40,10 +40,11 @@ See the module test table below (all processes).
 | TEST-PS-029-09.T18 | unit | PS-029-01.R02 | inspect the withdrawReason enum and every code path that sets it | only provider, listing_unavailable and draft_expired exist; no suspension or policy value |
 | TEST-PS-029-09.T19 | integration | PS-029-04.R02, PS-029-07.R04 | withdraw a never-published draft and a published offering | draft produces no outbound statement, no tombstone and no event; published produces one services.offering.withdrawn with tombstoneReason and projectionCid and this module signs no tombstone |
 | TEST-PS-029-09.T20 | abuse | PS-029-07.R04 | publish to a relay without federation_publish consent; privacy.deletion.completed; export | SERVICES_PUBLISH_CONSENT_MISSING and nothing signed; foreign provenance pseudonymized; export section services.offerings present |
+| TEST-PS-029-09.T21 | contract | PS-029-04.R04, PS-029-04.R02 | publish, revise a published offering and re-sign after key revocation against a StatementPublisherPort spy, then withdraw | every projection is created by StatementPublisherPort.publish with type classrup.services.offering/v1 and audience public; stored projectionCid and the services.offering.published projectionCid equal the returned cid; no signing primitive or issueTombstone is called and no envelope seq is kept by the module; withdraw calls the port not at all |
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T21 pass in CI.
 - No credential is ever displayed without the self-attested label and no verified flag exists in any payload.
 - No public payload carries a service area other than a geohash 5 cell, and every published revision is re-signed with a higher seq.
 

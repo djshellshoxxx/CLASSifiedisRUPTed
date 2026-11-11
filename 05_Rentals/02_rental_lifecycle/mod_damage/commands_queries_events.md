@@ -10,6 +10,7 @@
 - **PS-041-04.R02** One ingestion command applies inbound statements, deduplicates by cid, recomputes the comparison, derives local events with actor.kind federated and quarantines failures.
 - **PS-041-04.R03** Payment status of an agreed amount is derived from F09 events whose contextRef is {rental_damage, claimId} of this module; the module never creates a PaymentClaim itself.
 - **PS-041-04.R04** The excess over the deposit is a separate commerce.deal.open with contextRef {rental_damage, claimId} and contextCid the acceptance, counter acceptance or dispute outcome cid, the dispute contextRef is {rental_damage, claimId}, and every statement schema is registered with its signer role in F11.S01.M01.
+- **PS-041-04.R05** A referenced evidence photo is detected as missing only when comms.attachment.download returns NOT_FOUND during ingestion or a re-fetch; it keeps claim, respond and accept_counter refused with RENTALS_EVIDENCE_MISSING and is re-requested from the author through the thread, and comms.attachment.deleted, which F08.S01.M03 emits only in the uploader vault, is not consumed.
 
 ## Specification
 
@@ -19,7 +20,7 @@
 |---|---|---|---|---|---|---|
 | `rentals.damage.claim` | rentals.damage.claim | [statement classrup.rentals.damage_claim/v1 signed by owner, E2E encrypted to renter, carrying the basis with provenance, ownerDeclaredValue copied from the deposit terms or signed request and the absolute respondBy] { reservationId, kind, items[] } | { claimId, claimCid, basis, ownerDeclaredValue, respondBy, syncState } | NOT_FOUND, VALIDATION_FAILED, RENTALS_DAMAGE_WINDOW, RENTALS_DAMAGE_NO_BASIS, RENTALS_DAMAGE_EXCEEDS_VALUE, RENTALS_DAMAGE_DUPLICATE, RENTALS_EVIDENCE_MISSING, COMMS_ATTACHMENT_TOO_LARGE | rentals.damage.claimed | yes (Idempotency-Key) |
 | `rentals.damage.respond` | rentals.damage.respond | [statement classrup.rentals.damage_response/v1 signed by renter over the claim cid; a counter carries the absolute counterAnswerBy] { claimId, expectedRevision, claimCid, kind: accepted\|counter\|contest, counterAmount?, note? } | { claimId, revision, state, responseCid, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, VALIDATION_FAILED, RENTALS_DAMAGE_COUNTER_LIMIT, RENTALS_EVIDENCE_MISSING | rentals.damage.resolved | yes (Idempotency-Key) |
-| `rentals.damage.accept_counter` | rentals.damage.decide | [statement classrup.rentals.damage_counter_acceptance/v1 signed by owner over the response cid] { claimId, expectedRevision, responseCid } | { claimId, revision, agreedAmount: Money, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED | rentals.damage.resolved | yes (Idempotency-Key) |
+| `rentals.damage.accept_counter` | rentals.damage.decide | [statement classrup.rentals.damage_counter_acceptance/v1 signed by owner over the response cid] { claimId, expectedRevision, responseCid } | { claimId, revision, agreedAmount: Money, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, RENTALS_EVIDENCE_MISSING | rentals.damage.resolved | yes (Idempotency-Key) |
 | `rentals.damage.withdraw` | rentals.damage.decide | [statement classrup.rentals.damage_withdrawal/v1 signed by owner] { claimId, expectedRevision } | { claimId, revision } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE | rentals.damage.resolved | yes (Idempotency-Key) |
 | `rentals.damage.escalate` | rentals.damage.escalate | [vault command on explicit user action by the designated opener; calls F09.S02.M02 commerce.dispute.open {contextRef {type rental_damage, id claimId}, reason, evidence the user selects} from the prefilled draft; sends classrup.rentals.damage_escalation/v1 signed by the opener to the other party] { claimId, expectedRevision, statement } | { claimId, revision, disputeCaseId?, noticeCid } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, VALIDATION_FAILED, FORBIDDEN |  | yes (Idempotency-Key) |
 | `rentals.damage.renegotiate` | rentals.damage.renegotiate | [statement classrup.rentals.damage_renegotiation/v1 signed by the proposing party naming the statements that stand, co-signed by the other over the same cid] { claimId, expectedRevision, standingCids[], renegotiationCid? } | { claimId, revision, renegotiationCid, signatures: 1 \| 2, state, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED |  | yes (Idempotency-Key) |
@@ -53,7 +54,6 @@
 | `commerce.dispute.withdrawn` | for contextRef exactly {rental_damage, claimId}, return the claim to escalatedFrom |
 | `commerce.payment.acknowledged` | for contextRef {rental_damage, claimId} record payment proof acknowledged |
 | `commerce.payment.finalized` | for contextRef {rental_damage, claimId} record payment proof final (F09.S01.M03) |
-| `comms.attachment.deleted` | no effect on evidence photo copies already stored; a photo not yet fetched is marked missing and re-requested |
 | `identity.block.added` | suppress notifications for the counterparty through filterBlocked; damage statements for reservations confirmed before the block are still verified and stored |
 | `privacy.deletion.completed` | replace the deleted party's DID in retained claims and statement metadata with the deletion pseudonym; signed statements and evidence copies are kept so signatures and hashes still verify |
 
@@ -90,6 +90,7 @@ agreed amount is prefilled into rentals.deposit.claim_forfeit; any excess become
 | TEST-PS-041-09.T07 | integration | PS-041-04.R02, PS-041-06.R01, PS-041-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on accepted with identical cids; duplicates skipped |
 | TEST-PS-041-09.T08 | contract | PS-041-04.R01, PS-041-04.R03, PS-041-04.R04 | each command, statement, Deal call and event | payloads and signatures validate against registry schemas and signer roles; dispute and Deal calls carry contextRef {rental_damage, claimId} |
 | TEST-PS-041-09.T16 | e2e | PS-041-01.R01, PS-041-04.R01 | mobile owner files claim, renter counters, owner accepts in two browsers | both show accepted with the same agreed amount; axe zero serious issues |
+| TEST-PS-041-09.T24 | integration | PS-041-07.R04, PS-041-04.R05 | relay blob of an evidence photo expired before the renter fetched it; owner deletes the thread message after the renter stored the photos; no comms.attachment.deleted reaches the renter vault | the download returns NOT_FOUND and the photo is re-requested; respond refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify after deletion |
 
 ## Dependencies
 

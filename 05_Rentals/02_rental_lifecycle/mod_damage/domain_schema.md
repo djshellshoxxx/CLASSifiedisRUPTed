@@ -35,7 +35,7 @@ Schema `classrup.rentals.damage_claim/v1` · storage **device** · privacy **P2*
 | counterAnswerBy? | timestamp — signed in the counter; counter createdAt + 7 d + 72 h |
 | agreedAmount? | Money — amount fixed by acceptance, accepted counter or a both-accepted dispute outcome |
 | retainedFromDeposit? | Money — amount retained for this claim, from rentals.deposit.released with this damageClaimId |
-| excessDealId? | uuidv7 — F09 Deal for contextRef {rental_damage, claimId} over agreedAmount minus retainedFromDeposit |
+| excessDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_damage, claimId} over agreedAmount minus retainedFromDeposit |
 | disputeCaseId? | uuidv7 — ref F09.S02.M02 DisputeCase for contextRef {rental_damage, claimId} |
 | disputeOpenerRole? | enum — owner \| renter |
 | escalatedFrom? | enum — claimed \| countered \| escalation_due |

@@ -10,6 +10,7 @@
 - **PS-102-01.R02** An EmailDelivery stores the delivery kind, the template key from the fixed email registry, status, attempts, the transport Message-ID, the VERP tag and times, never the address in clear, never a notification category and never any user content.
 - **PS-102-01.R03** Emails carry a generic subject and body from the fixed email template registry (notify.tpl.email.verify, notify.tpl.email.notice, notify.tpl.email.security_notice, notify.tpl.email.activity and notify.tpl.email.digest, at most 12 templates), a link to the app origin without identifiers, and RFC 8058 one-click unsubscribe headers whose URL comes from UnsubscribeTokenPort of F13.S02.M03.
 - **PS-102-01.R04** The vault email target is the authoritative user-owned record - the cleartext normalized address (P3), locale, relayId, the relay emailAddressId and a status mirror - while the relay copy is a disclosed service copy, sealed to the relay key in transit, never authoritative, and rebuilt from the vault record after a relay loss or a vault import.
+- **PS-102-01.R05** The locale in notify.email.add is a copy of F15.S04.M03 LocalSettings.defaultLocale taken by notify.email.enable and sent only inside the sealed add body after privacy.consent.check {purpose notify_email, relayId} returned granted (N6), and every email template declares only the parameters app origin link, verification link and unsubscribe URL, never a parameter carrying user content or Money.
 
 ## Specification
 
@@ -25,7 +26,7 @@ Schema `classrup.notify.email_address/v1` · storage **relay** · privacy **P2**
 | createdByKeyId | string — device key ID that signed the add request |
 | addressCipher? | bytes — AES-256-GCM encrypted normalized address, ≤ 254 characters plaintext; absent after erasure |
 | addressHash | bytes — HMAC-SHA256 with a relay secret, for per-(user, address) limits and uniqueness |
-| locale | string — BCP 47 locale from the add request, used to render the generic templates |
+| locale | string — BCP 47 locale from the sealed add request (the vault's copy of LocalSettings.defaultLocale), used only to render the generic templates |
 | status | enum — unverified \| verified \| bouncing \| removed |
 | consentId | uuidv7 — email ChannelConsent registered at this relay (F13.S02.M03); must be granted |
 | consentStatementCid | string — cid of the registered channel consent statement |
@@ -56,7 +57,7 @@ Schema `classrup.notify.email_target/v1` · storage **device** · privacy **P3**
 | relayId | string — canonical self-certifying relayId (F15.S02.M01) of the email relay |
 | relayHost | string — display hint only |
 | address | string — normalized address, ≤ 254 characters, P3, vault only |
-| locale | string — BCP 47 locale chosen by the user (F14.S02.M01) |
+| locale | string — BCP 47 copy of F15.S04.M03 LocalSettings.defaultLocale taken at enable; sent to the relay only in the sealed add after notify_email consent |
 | emailAddressId? | uuidv7 — relay copy once accepted |
 | status | enum — pending \| unverified \| verified \| bouncing \| removed (mirror of the relay copy) |
 | consentId | uuidv7 — local email ChannelConsent for relayId |
@@ -105,7 +106,8 @@ Schema `classrup.notify.email_delivery/v1` · storage **relay** · privacy **P2*
 | TEST-PS-102-09.T03 | contract | PS-102-01.R03, PS-102-04.R04, PS-102-09.R02 | send every template kind through the fake SMTP server | subject and body generic with the app origin link only; List-Unsubscribe URL from UnsubscribeTokenPort works on POST; List-Unsubscribe-Post and VERP Return-Path present; DKIM-signed; no user content |
 | TEST-PS-102-09.T13 | integration | PS-102-10.R01, PS-102-10.R02, PS-102-10.R03, PS-102-01.R04 | export from the vault; restore the relay from a backup that lacks the address; import the export into a fresh vault | export holds the email target with the cleartext address and no relay copy; restore fails stale queued deliveries; the vault offers re-add from its target and re-verification after confirmation |
 | TEST-PS-102-09.T18 | integration | PS-102-04.R05, PS-102-01.R04 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; enable with privacy.consent.check not granted | purge deletes the vault targets; section notify.email exported; delivery rows purged after 30 days; enable refused PRECONDITION_FAILED before anything is sealed |
+| TEST-PS-102-09.T20 | contract | PS-102-01.R05, PS-102-02.R03 | LocalSettings.defaultLocale de-AT; enable with and without notify_email consent and capture every outgoing request; lint every email template declaration; verify add, remove and get_mine signatures against the F11.S01.M03 RFC 9421 vectors with a key that KeyStatusPort reports revoked | with consent only the sealed add carries locale de-AT; without consent nothing is sent; no template declares a parameter other than app origin link, verification link and unsubscribe URL and none carries user content or Money; valid signatures verify with tag classrup/relay-request/v1 and the revoked key is refused UNAUTHENTICATED |
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

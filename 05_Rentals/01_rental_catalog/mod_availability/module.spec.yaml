@@ -15,6 +15,7 @@ responsibilities:
   - On confirmation, store the signed confirmation and copy the terms the renter signed in the request (rent, late fee, cancellation policy, declared value) and the checklist template of that offering revision; at handoff the owner vault opens the rent Deal through commerce.deal.open with contextRef {type rental_reservation, id reservationId} and contextCid requestCid.
   - Track reservation status from handoff, return and closure events, shorten the occupied interval on early return, extend it while overdue and end it at closure for an item that is never returned.
   - Expire requests on the signed absolute expiresAt in both vaults, never cancel a confirmed reservation automatically while a signed handoff report may exist, and freeze forked or equivocal owner promises for explicit renegotiation.
+  - Emit rentals.offering.withdrawn locally when a published offering is paused, archived or loses its listing, so the local discovery index (F06.S01.M01) removes the rental listing; copies of the signed projection already held by relays and other vaults end through the listing unpublish, an author tombstone or the projection expiry.
 non_responsibilities:
   - Deposit terms and release or forfeit (F05.S01.M02).
   - Condition reports and attestations at pickup and return (F05.S02.M01, F05.S02.M02), damage claims (F05.S02.M03) and disputes (F09.S02.M02).
@@ -43,9 +44,10 @@ edge_cases:
   - Owner blocks the renter after confirmation; lifecycle statements for the reservation are still verified and stored, notifications are suppressed, and no statement ever carries the reason blocked.
   - Renter's clock is wrong; interval times are UTC instants chosen in the UI by date pickers, and the owner vault validates them against its own clock for lead time.
   - Quantity is 3 and three overlapping rentals exist; a fourth overlapping request is refused, a request overlapping only two is allowed.
+  - Owner pauses a published offering while one request is open; rentals.offering.withdrawn with reason paused is emitted once, the open request is answered with a signed decline (offering_unavailable), confirmed reservations are unaffected, and pausing a never-published draft emits nothing.
 ux:
   screens:
-    - "Offering editor: item details from the listing, hourly rate, daily rate, quantity, minimum and maximum duration, buffer before and after, lead time, blackout dates, cancellation policy (free until N hours before start, fee), declared item value, condition checklist template (up to 30 labels), auto-confirm switch (works only while the owner's app is open), late-fee terms."
+    - "Offering editor: item details from the listing, hourly rate, daily rate, quantity, minimum and maximum duration, buffer before and after, lead time, blackout dates, cancellation policy (free until N hours before start, fee), declared item value, condition checklist template (up to 30 labels), auto-confirm switch (works only while the owner's app is open), late-fee terms, Pause and Archive actions with a notice that copies other people already fetched cannot be recalled."
     - "Date picker for renters: shows busy blocks from the owner's latest signed busy summary, with a note that only the owner's confirmation reserves the dates, and a terms summary (rent, late fee, cancellation fee, declared value) that the request signs."
     - "Owner calendar: month and agenda views of reservations with status chips and conflict warnings; Confirm and Decline buttons with the exact interval; frozen reservations show Renegotiate and Cancel."
   states: [loading, empty, requested, lapsed, declined, confirmed, handoff-pending, in-use, overdue, returned, closed, cancelled, frozen, cancellation-pending-counterparty, pending-offline]
@@ -88,6 +90,7 @@ processes:
           - "autoConfirm: boolean — confirm automatically when the owner's app is open and the interval is free"
           - "pickupAreaCell: string — geohash of length 4 or 5 checked by F06.S02.M01 assertPublicCell; never finer"
           - "status: enum — draft | active | paused | archived"
+          - "withdrawReason?: enum — paused | archived | listing_unavailable; set when a published offering leaves active and carried in rentals.offering.withdrawn"
           - "projectionCid?: string — cid of the signed public projection"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
@@ -127,8 +130,9 @@ processes:
           - "requestConsentCid: string — cid of the renter's comms.consent statement (consent.rentals.reservation.request.v1)"
           - "confirmationCid?: string — cid of the owner's rental_confirmation"
           - "confirmConsentCid?: string — cid of the owner's comms.consent statement (consent.rentals.reservation.confirm.v1)"
-          - "dealId?: uuidv7 — rent Deal in F09.S01.M01 for contextRef {rental_reservation, reservationId}, opened at handoff"
-          - "feeDealId?: uuidv7 — cancellation-fee Deal for contextRef {rental_cancellation_fee, reservationId}"
+          - "consentRevocationId?: string — revocationId of the comms.consent.revoked whose revokedIds[] named requestConsentCid or confirmConsentCid and froze the reservation"
+          - "dealId?: uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); rent Deal for contextRef {rental_reservation, reservationId}, opened at handoff"
+          - "feeDealId?: uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); cancellation-fee Deal for contextRef {rental_cancellation_fee, reservationId}"
           - "dealCancelPending?: boolean — a commerce.deal.cancel statement awaits the counterparty's signature"
           - "syncState: map — per peer {state: prepared | transport_acknowledged | peer_accepted, at}"
           - "revision: int — CTR-ID-001 ID-4"
@@ -213,6 +217,8 @@ processes:
       - Events are local (EVT-8) and leave the device only as the statements named below; the module consumes lifecycle events from handoff, return, listing, consent, block, Deal and deletion modules.
       - Rent and cancellation fees are noncustodial Deals opened through commerce.deal.open with contextRef types rental_reservation and rental_cancellation_fee, and a cancelled reservation that holds a Deal produces a commerce.deal.cancel statement for both parties to sign; the module never creates or alters a PaymentClaim.
       - Every statement schema this module sends is registered in the F11.S01.M01 statement registry with its signer role, consents use comms.consent.sign and comms.consent.verify with this module's SubjectCanonicalizerPort, and the receiving vault acts only on statements it accepted.
+      - Pausing or archiving a published offering, or the unpublish of its listing, emits rentals.offering.withdrawn locally with offeringId, ownerId, listingId, the last projectionCid and the reason, signs no new statement and answers open requests with a signed decline; an offering that was never published emits nothing.
+      - comms.consent.revoked is matched through its revokedIds[] against the reservation's requestConsentCid and confirmConsentCid, its revocationId is recorded and afterCommit is cross-checked with comms.consent.verify, whose result decides; a reservation never freezes on the event alone.
     commands:
       - name: rentals.offering.create
         capability: rentals.offering.manage
@@ -234,6 +240,13 @@ processes:
         output: "{ offeringId, revision, projectionCid, syncState }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, RENTALS_PUBLISH_CONSENT_REQUIRED, DISCOVERY_PRECISION_FORBIDDEN]
         emits: [rentals.offering.published]
+        idempotent: true
+      - name: rentals.offering.withdraw
+        capability: rentals.offering.manage
+        input: "[vault-local; signs no offering statement] { offeringId, expectedRevision, to: paused | archived } - open requests are answered with a signed decline (reason offering_unavailable), confirmed and later reservations are unaffected, a paused offering becomes active again only through rentals.offering.publish and archived is final"
+        output: "{ offeringId, revision, status, declinedReservationIds[] }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [rentals.offering.withdrawn, rentals.reservation.cancelled]
         idempotent: true
       - name: rentals.availability.publish_busy
         capability: rentals.offering.publish
@@ -304,14 +317,15 @@ processes:
       - {type: rentals.reservation.confirmed, privacy: P2, payload: "{ reservationId, offeringId, renterId, ownerId, parties: [{did: ownerId, role: owner}, {did: renterId, role: renter}], startsAt, endsAt, occupiedFrom, occupiedUntil, rent, lateFeeTerms, cancellationPolicy, declaredValue, checklistTemplate, requestCid, confirmationCid }"}
       - {type: rentals.reservation.cancelled, privacy: P2, payload: "{ reservationId, ownerId, renterId, cancelledBy (did), reason, freedFrom, freedUntil, feeDealId? }"}
       - {type: rentals.offering.published, privacy: P0, payload: "{ offeringId, ownerId, listingId, projectionCid }"}
+      - {type: rentals.offering.withdrawn, privacy: P0, payload: "{ offeringId, ownerId, listingId, projectionCid, reason: paused|archived|listing_unavailable } - emitted once per withdrawal, only for an offering that has a projectionCid"}
     events_consumed:
       - {type: rentals.handoff.attested, effect: "move a confirmed or handoff_pending reservation to in_use; in the owner vault open the rent Deal with commerce.deal.open as described in the note"}
       - {type: rentals.rental.overdue, effect: "move an in_use reservation to overdue and extend its occupied interval to the present"}
       - {type: rentals.return.attested, effect: "move to returned and set occupiedUntil to the effective return time plus bufferAfter"}
       - {type: rentals.rental.closed, effect: "move a returned reservation to closed; move an in_use or overdue reservation closed without return (not_returned, owner_silent, unresolved) to closed and end its occupied interval at closedAt"}
-      - {type: bazaar.listing.unpublished, effect: "pause the linked offering and answer requested reservations with a signed decline, reason offering_unavailable"}
+      - {type: bazaar.listing.unpublished, effect: "pause the linked offering, emit rentals.offering.withdrawn with reason listing_unavailable when it has a projectionCid, and answer requested reservations with a signed decline, reason offering_unavailable"}
       - {type: identity.block.added, effect: "requested reservations between the two parties: the owner vault cancels them locally with reason blocked and sends nothing (the renter vault lapses them by its own expiry rule), the renter vault cancels its own request with a signed cancellation reason renter; confirmed and later reservations are unaffected and their notifications are suppressed through filterBlocked"}
-      - {type: comms.consent.revoked, effect: "freeze a requested, confirmed or handoff_pending reservation whose request or confirm consent was revoked, after comms.consent.verify confirms the status"}
+      - {type: comms.consent.revoked, effect: "for subjectType rentals_reservation, match each id in revokedIds[] against requestConsentCid and confirmConsentCid of the reservation subjectRef names, store revocationId as consentRevocationId and call comms.consent.verify (afterCommit true expects conflicted, false expects revoked; the verify result decides); on conflicted or revoked freeze a requested, confirmed or handoff_pending reservation with frozenReason consent_conflict; ids that match no held consent and a replayed revocationId change nothing"}
       - {type: commerce.deal.cancelled, effect: "for contextRef rental_reservation or rental_cancellation_fee of a reservation, clear dealCancelPending"}
       - {type: privacy.deletion.completed, effect: "replace the deleted party's DID in retained reservations and statement metadata with the deletion pseudonym; signed statement bytes are kept so signatures still verify"}
     errors:
@@ -426,9 +440,11 @@ processes:
       - "T23 | abuse | 05.R02,02.R03 | renter-signed cancellation with reason declined; inbound cancellation with reason no_handoff while the receiving vault's handoff holds a signed report | first quarantined with RENTALS_STATEMENT_INVALID; second stored as a notice and not applied; reservation stays handoff_pending"
       - "T24 | integration | 07.R04 | privacy.deletion.completed for the renter; export; retention purge after RET-EVIDENCE; publication without federation_publish consent | DIDs replaced by the pseudonym and signatures still verify; section rentals.reservations exported; purge removes terminal records; publication refused"
       - "T25 | abuse | 07.R05 | owner blocks the renter after confirmation, then the renter's cancellation arrives; a new request from the blocked DID arrives | cancellation verified and stored and the notification suppressed; new request dropped silently with no reply; no outbound statement carries reason blocked"
-      - "T26 | integration | 04.R04 | handoff attested; a forked device opened a rent Deal before a frozen reservation is cancelled; renter cancels inside the fee period | owner vault opens one rent Deal {rental_reservation, reservationId} with contextCid requestCid, purpose rent and expiry covering endsAt, and the renter vault's ContextTermsPort.verify accepts it; commerce.deal.cancel produced and 'cancellation pending counterparty' shown until both sign; the owner vault opens one fee Deal {rental_cancellation_fee, reservationId} of the policy fee with contextCid the renter's cancellation cid"
+      - "T26 | integration | 04.R04 | handoff attested; a forked device opened a rent Deal before a frozen reservation is cancelled; renter cancels inside the fee period | owner vault opens one rent Deal {rental_reservation, reservationId} with contextCid requestCid, purpose rent and expiry covering endsAt, and the renter vault's ContextTermsPort.verify accepts it; dealId and feeDealId are stored as the UUIDv8 values F09.S01.M01 derives; commerce.deal.cancel produced and 'cancellation pending counterparty' shown until both sign; the owner vault opens one fee Deal {rental_cancellation_fee, reservationId} of the policy fee with contextCid the renter's cancellation cid"
+      - "T27 | integration | 04.R06 | owner pauses a published offering with one open request, archives a second, withdraws a never-published draft, and bazaar.listing.unpublished arrives for a third; then the paused offering is republished and the archived one is published again | rentals.offering.withdrawn emitted once each with offeringId, ownerId, listingId, projectionCid and reason paused, archived and listing_unavailable; the open request declined with offering_unavailable; nothing emitted for the draft and no offering statement signed; the paused offering returns to active and the archived publish returns CONFLICT_STATE"
+      - "T28 | integration | 04.R07,03.R01 | comms.consent.revoked whose revokedIds[] holds an alias cid and the requestConsentCid of a requested reservation with afterCommit false; one naming the confirmConsentCid of a confirmed reservation with afterCommit true; one naming an unrelated consent; the first revocationId replayed; one whose afterCommit is true while verify returns valid | first two frozen with frozenReason consent_conflict and consentRevocationId set after comms.consent.verify returns revoked and conflicted; the unrelated, replayed and still-valid cases change nothing"
     acceptance:
-      - All tests T01–T26 pass in CI.
+      - All tests T01–T28 pass in CI.
       - No renter is ever shown a confirmed reservation without the owner's verified signed confirmation and consent held in the vault.
       - In the owner vault no instant ever exceeds the offering quantity outside detected fork excess, verified against the brute-force model, and a confirmed reservation is never cancelled automatically while a signed handoff report may exist.
   import_export_backup_rollback:

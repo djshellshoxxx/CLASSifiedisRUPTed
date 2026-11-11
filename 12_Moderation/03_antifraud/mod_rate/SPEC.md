@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Rate limiting through the RateLimitPort used by the kernel command bus. On a relay it enforces the relay's hosting policy per actor key and capability, per IP prefix (/24 for IPv4, /48 for IPv6) for windows up to 24 h, and per tenant, using GCRA for command capabilities, token buckets for burst-tolerant reads such as proximity search, and window counters for long windows such as 20 appeals per 30 days. Every policy is { limit, periodMs, burst } from 1 second to 30 days. In a user's vault it provides local UX guards (for example a confirmation after 10 offers in an hour or above 10 open offers) that protect the user from their own mistakes and are not security controls. Limits are configured per relay tenant, return RATE_LIMITED with retryAfterMs, survive salt rotation, and degrade predictably when the counter store is unavailable.
+Rate limiting through the RateLimitPort used by the kernel command bus. On a relay it enforces the relay's hosting policy per actor key and capability, per IP prefix (/24 for IPv4, /48 for IPv6) for windows up to 24 h, and per tenant, using GCRA for command capabilities, token buckets for burst-tolerant reads such as keyword search, and window counters for long windows such as 20 appeals per 30 days. Every policy is { limit, periodMs, burst } from 1 second to 30 days, optionally with a second, longer window (for example 20 per minute and 200 per hour). It owns the per-tenant default request rate (class request.default, formerly the tenant record's requestRatePerMinutePerKey) and the classes other modules register with their own defaults, such as the shared proximity budget of F06.S02.M03. In a user's vault it provides local UX guards (for example a confirmation after 10 offers in an hour or above 10 open offers) that protect the user from their own mistakes and are not security controls. Limits are configured per relay tenant, return RATE_LIMITED with retryAfterMs, survive salt rotation, and degrade predictably when the counter store is unavailable.
 
 ## Responsibilities
 
@@ -16,6 +16,8 @@ Rate limiting through the RateLimitPort used by the kernel command bus. On a rel
 - Own the RateBucket state and a per-tenant RatePolicy configuration with built-in classes, and emit moderation.rate.exceeded at most once per key per minute.
 - Select class report.receive.reduced for reporter keys with a report_dismissed_bad_faith signal recorded by F12.S03.M02 in the last 30 days, and apply spam velocity penalties to the posting key's write buckets.
 - Provide vault-local UX guards from the same code (flow guards and stock guards such as open offers and open cycle proposals), configured by the user and never sent to anyone.
+- Own the per-tenant default request rate policy (built-in class request.default, which replaces the requestRatePerMinutePerKey limit F15.S04.M03 dropped from the tenant record) and charge it once per relay request on top of the request's own class.
+- Accept capability classes registered by their owner modules with defaults through RatePolicyRegistry.register (for example the shared proximity budget classes read.proximity.query.anonymous, read.proximity.query.token, read.proximity.center_seen and read.proximity.center_new, defined once in F06.S02.M03), seed tenant RatePolicy rows from those defaults and honour the fail mode each registration locks.
 
 ## Not responsible for
 
@@ -23,6 +25,7 @@ Rate limiting through the RateLimitPort used by the kernel command bus. On a rel
 - Account-level quotas by tier and risk (F12.S03.M04), which call this module for flow limits.
 - Command bus registration and HTTP mapping (F15.S02.M02 calls the port).
 - Network-level DDoS protection, which belongs to the relay's hosting environment.
+- The numbers and caller-class rules of module-registered classes (the owner module defines them once, for example F06.S02.M03 for the proximity budget); tenant limits other than request rates (F15.S04.M03 TenantPort.limits).
 - Future: distributed counters across relay replicas; adaptive limits driven by load.
 
 ## User stories
@@ -41,6 +44,9 @@ Rate limiting through the RateLimitPort used by the kernel command bus. On a rel
 - A 20-per-30-days appeal window crosses a salt rotation; consume reads counters under the current and the previous epoch salt, so the 21st appeal in any 30 days is still refused.
 - A spam velocity throttle arrives for a key; this module derives the key's bucket hash from the event's subjectKey and applies penalty factor 0.25 to its write buckets for at most 1 hour.
 - A reporter key received a report_dismissed_bad_faith signal 10 days ago; its report.receive requests use class report.receive.reduced until 30 days pass, except minor_safety reports marked exempt.
+- The counter store is down while a proximity search arrives; read.proximity.query.* fall back to the in-memory half rate like other read classes, but read.proximity.center_new is registered fail closed and returns RATE_LIMITED for 30 seconds, so a store outage never opens trilateration.
+- A caller reaches 5 new search centers at 23:50 and the daily salt rotates at 00:00; the next new center at 00:10 is still refused because the 24 h window reads counters under the current and the previous salt, and the previous salt is kept 24 h after rotation.
+- A relay migrates from a tenant record that held requestRatePerMinutePerKey 300; the expand step writes a request.default policy row with limit 300 and periodMs 60000, and later changes go through moderation.ratepolicy.set.
 
 ## UX and accessibility
 
@@ -72,10 +78,10 @@ F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-099-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-099-02 | [Validation rules](validation_rules.md) | 3 |
-| PS-099-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-099-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-099-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-099-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-099-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
+| PS-099-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-099-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-099-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-099-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -87,6 +93,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI.
+- All tests T01–T22 pass in CI.
 - Concurrent requests never exceed burst plus rate × elapsed time, and window counters never exceed their limit across salt rotations (property tests).
 - No raw IP address or actor key is ever persisted or logged by this module.

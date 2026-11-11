@@ -10,6 +10,7 @@
 - **PS-032-04.R02** A single ingestion command applies inbound statements; it drops statements from blocked DIDs silently, verifies, deduplicates by cid, derives local events with actor.kind federated and quarantines failures.
 - **PS-032-04.R03** Events are local (EVT-8); they leave the device only as the statements named below.
 - **PS-032-04.R04** Event payloads carry the client and provider DIDs that F13.S01.M03 needs to route notifications (N4), and services.booking.cancelled carries quoteId and slotHoldId so F03.S01.M02 can release the hold without reading the Booking.
+- **PS-032-04.R05** services.booking.confirmed carries contextId (bookingId), contextType booking, contextCid (the confirmationCid of the provider-signed booking_confirmation, which binds quoteCid and acceptanceCid) and parties [{did, role client or provider}], identical in both vaults, so F07.S03.M01 can open the pending review window from the bilateral opening statement.
 
 ## Specification
 
@@ -42,7 +43,7 @@
 | `services.quote.requested` | P2 | { requestId, offeringId, clientId, providerId, cid, firstContact } |
 | `services.quote.issued` | P2 | { quoteId, requestId, clientId, providerId, total, validUntil, cid, supersedes? } |
 | `services.quote.accepted` | P2 | { quoteId, requestId, bookingId, clientId, providerId, acceptanceCid } |
-| `services.booking.confirmed` | P2 | { bookingId, quoteId, quoteCid, confirmationCid, clientId, providerId, startUtc?, endUtc?, total, milestonePlan[{milestoneId, seq, title, amount, dueAt?, parallel}] } |
+| `services.booking.confirmed` | P2 | { bookingId, contextId: bookingId, contextType: booking, quoteId, quoteCid, confirmationCid, contextCid: confirmationCid, clientId, providerId, parties: [{did: clientId, role: client}, {did: providerId, role: provider}], startUtc?, endUtc?, total, milestonePlan[{milestoneId, seq, title, amount, dueAt?, parallel}] } |
 | `services.booking.cancelled` | P2 | { bookingId, quoteId, slotHoldId?, clientId, providerId, cancelledBy, reason, lateFeeClaim?, effectiveAt, cancellationCid? } |
 | `services.quote.declined` | P2 | { quoteId?, requestId, clientId, providerId, declinedBy, reason: client_declined\|provider_request\|superseded\|request_cancelled\|offering_withdrawn\|blocked } |
 | `services.quote.expired` | P2 | { quoteId, requestId, clientId, providerId } |
@@ -55,7 +56,7 @@
 | `services.milestone.approved` | append the milestone dealId to the derived Booking.dealIds list for display; no Deal is opened or changed here |
 | `services.booking.completed` | move an in_progress or disputed booking to completed; the event carries the bilateral completionCid |
 | `services.dispute.opened` | for a confirmed or in_progress booking move to disputed and store preDisputeStatus and disputeCaseId; for any other status only set openDisputeLinkId and disputeCaseId; fee claims are frozen either way |
-| `commerce.dispute.resolved` | for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping; refund_claimed and return_agreed only prompt both parties to sign a mutual cancellation or a new Deal; no obligation or fee changes automatically |
+| `commerce.dispute.resolved` | for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping, which reads the advisory disposition {kind, favouredDid?, agreedAmount?} when present and otherwise the outcome type; dispositions settled, cancelled and waived, and outcome types refund_claimed and return_agreed, only prompt the parties to sign a mutual cancellation or a new Deal; no obligation or fee changes automatically |
 | `commerce.dispute.withdrawn` | for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay |
 | `identity.block.added` | cancel open requests and unconfirmed bookings between the two parties locally with reason blocked (no statement is sent); later statements from the blocked DID are dropped silently |
 | `services.offering.withdrawn` | provider vault: cancel open and quoted requests for offeringId with reason offering_withdrawn, withdraw issued quotes with provider-signed quote_decline statements and release their holds; confirmed bookings are unaffected |
@@ -97,6 +98,7 @@ provider receives the acceptance -> hold extended to receipt + 24 h; services.bo
 | TEST-PS-032-09.T18 | integration | PS-032-04.R01 | crash injected between statement signing and the sync outbox write for every command | neither the state change nor the outbox entry persists |
 | TEST-PS-032-09.T25 | contract | PS-032-04.R04 | every produced event against the F13.S01.M03 routing table and the F03.S01.M02 consumer | clientId and providerId present where routed; services.booking.cancelled carries quoteId and slotHoldId |
 | TEST-PS-032-09.T26 | integration | PS-032-04.R03 | services.offering.withdrawn with an open request and an issued quote; services.availability.changed for the hold of an issued quote | request cancelled offering_withdrawn, quote withdrawn by a signed quote_decline, hold released, confirmed bookings unchanged; affected quote flagged needsReconfirmation |
+| TEST-PS-032-09.T30 | contract | PS-032-04.R05 | provider confirms a booking and the client vault ingests the confirmation; both services.booking.confirmed events checked against the F07.S03.M01 consumer schema | each carries contextId = bookingId, contextType booking, contextCid = confirmationCid and parties with exactly one client and one provider DID; both vaults emit identical values |
 
 ## Dependencies
 

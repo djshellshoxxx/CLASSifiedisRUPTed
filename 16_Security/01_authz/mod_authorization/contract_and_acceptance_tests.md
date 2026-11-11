@@ -14,14 +14,14 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Relay X with admins A1 and A2, relay_operator R1, tenant operators O1 (tenant:T1) and O2 (tenant:T2), moderator M (scope relay) with device keys Md1 and Md2, member U; KeyStatusPort and RoleResolverPort stubs; registry of 60 capabilities from fixture modules; audit pepper fixture; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Relay X with admins A1 and A2, relay_operator R1, tenant operators O1 (tenant:T1) and O2 (tenant:T2), moderator M (scope relay) with device keys Md1 and Md2, member U; tenant T3 whose only operator is O4; unused tenant IDs T4 and T5 with keys O5, O6, O7 and A9 for bootstrapTenant; KeyStatusPort and RoleResolverPort stubs; registry of 60 capabilities from fixture modules; audit pepper fixture; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-126-09.T01 | unit | PS-126-01.R01, PS-126-01.R03, PS-126-02.R01 | assign moderator at scope relay for 90 days and operator O3 at scope tenant:T1 | assignments stored active with scope, role statements signed by the relay key, expiry set |
-| TEST-PS-126-09.T02 | unit | PS-126-02.R01, PS-126-02.R03 | each rule V01–V10 violated, including admin with expiresAt, operator at scope relay, relay_operator at tenant scope, unknown tenant and a malformed did:key | documented error code and nothing stored |
+| TEST-PS-126-09.T02 | unit | PS-126-02.R01, PS-126-02.R03 | each rule V01–V12 violated, including admin with expiresAt, operator at scope relay, relay_operator at tenant scope, unknown tenant and a malformed did:key | documented error code and nothing stored |
 | TEST-PS-126-09.T03 | property | PS-126-02.R02, PS-126-06.R01, PS-126-09.R02 | generated actors, capabilities, resources, scopes and malformed inputs | authorize never throws, is deterministic, every unlisted combination denies, and a tenant-scope role never matches another tenant's resource |
 | TEST-PS-126-09.T04 | integration | PS-126-03.R02 | expiry sweep missed; role revoked mid-request; Md1 revoked in M's stored portable document | request-time check denies; handler re-check denies; Md1 denied with signer_key_revoked within 60 s while Md2 keeps the role |
 | TEST-PS-126-09.T05 | contract | PS-126-04.R02, PS-126-04.R05 | commands, queries, events and statements | validate against registry schemas; role_statement and audit_anchor verify as CTR-FED-001 envelopes by the relay key; role_approval verifies with the approver's device key; all three are registered in F11.S01.M01 |
@@ -41,10 +41,13 @@ See the module test table below (all processes).
 | TEST-PS-126-09.T19 | integration | PS-126-03.R04, PS-126-03.R01 | expiry sweep runs when A1 is the only admin; admin proposal carrying expiresInMs; revoke of an already expired assignment; approve of an active one | A1 never expires; VALIDATION_FAILED; CONFLICT_STATE; CONFLICT_STATE |
 | TEST-PS-126-09.T20 | integration | PS-126-07.R01, PS-126-07.R02 | inspect relay audit rows; recompute actorKeyHash without and with the pepper; vault deletion through the DeletionPort stub; relay rows under legal hold at the 1-year sweep | no DID in any row; only the peppered HMAC matches; local audit log erased; held rows kept until release |
 | TEST-PS-126-09.T21 | abuse | PS-126-05.R01 | vault locked; a command authored by a different principal in the same browser profile | FORBIDDEN with reasons vault_locked and not_owner; nothing written |
+| TEST-PS-126-09.T22 | integration | PS-126-02.R04, PS-126-03.R06 | A1 revokes O1, the only operator of tenant:T1, while O2 operates tenant:T2 and R1 is relay_operator; a second operator O3 is added to T1 and O1 is revoked again; O2 reaches expiresAt as T2's only operator; O4, the only operator of tenant:T3, becomes contested; archiveTenant(tx, T1) with O3 and a moderator at tenant:T1 | SECURITY_LAST_OPERATOR and nothing changed; O1 revoked; O2 expired with lastOperator true; O4 revoked subject_contested with lastOperator true; both T1 assignments revoked with reason tenant_archived inside tx, one security.role.revoked each |
+| TEST-PS-126-09.T23 | integration | PS-126-04.R04 | bootstrapTenant(tx, T4, [O5, O6], A9, { osUser }) on a fresh relay; bootstrapTenant(tx, T5, [O7]) inside A1's platform.tenant.create; bootstrapTenant with adminKey while A1 is active and no breakGlassReason; caller rolls tx back after a successful call; bootstrap({ adminKey, operatorKeys, tenantId, osUser }); operatorKeys of 11 keys | O5 and O6 at tenant:T4 with 365-day expiry and A9 admin via bootstrap in tx with the OS user audited; O7 via assign granted by A1; SECURITY_BOOTSTRAP_REFUSED and nothing created; no assignment remains; same result as bootstrapTenant; VALIDATION_FAILED |
+| TEST-PS-126-09.T24 | abuse | PS-126-05.R05 | O1 (tenant:T1 operator) and R1 (relay_operator) call platform.relay_identity.rotate, platform.relay.read_status, platform.backup.run, platform.recovery.read_plan and platform.deadletter.replay from the fixture registry; R1 calls platform.tenant.configure for T1 | O1 FORBIDDEN with reason role_missing each time; R1 allowed each time; R1 FORBIDDEN for the tenant capability |
 
 ## Acceptance criteria
 
-- All tests T01–T21 pass in CI.
+- All tests T01–T24 pass in CI.
 - authorize is pure and every unlisted capability, role and scope combination denies (property tests).
 - The audit chain detects any edit, deletion or truncation of entries covered by the last externally published anchor in tamper tests, and the residual window after it is reported.
 

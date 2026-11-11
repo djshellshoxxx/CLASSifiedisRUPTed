@@ -9,7 +9,7 @@
 - **PS-029-07.R01** Offerings never contain exact addresses; the service area is exactly L2, and publishing warns that copies already fetched by other vaults cannot be recalled (PRV-6).
 - **PS-029-07.R02** Credential evidence attachments are P2, travel only inside end-to-end encrypted envelopes to a client with an open QuoteRequest, and relays see ciphertext only.
 - **PS-029-07.R03** Fake credentials and keyword stuffing are limited by self-attestation labels, local caps, receiver-side filtering and each relay's hosting policy; there is no central suspension or takedown.
-- **PS-029-07.R04** The module registers ExportSectionPort (section services.offerings), DeletionPort and RetentionPurgePort with F10 (N6), classifies fields with F10.S02.M02, calls privacy.consent.check(federation_publish, relayId) for every relay before signing, and calls F06.S02.M01 assertPublicCell on serviceAreaCell (N8).
+- **PS-029-07.R04** The module registers ExportSectionPort (section services.offerings), DeletionPort and RetentionPurgePort with F10 (N6), classifies fields with F10.S02.M02, calls privacy.consent.check(federation_publish, relayId) for every relay before calling StatementPublisherPort.publish, and calls F06.S02.M01 assertPublicCell on serviceAreaCell (N8).
 
 ## Specification
 

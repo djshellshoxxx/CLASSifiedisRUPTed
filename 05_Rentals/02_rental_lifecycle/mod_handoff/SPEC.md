@@ -42,7 +42,7 @@ At pickup the parties record the item's condition as a handoff report - a checkl
 - Owner and renter author different reports at the same time; the owner's report is canonical and the renter's report is converted to a changes request. Forked devices of one party sign two different reports for the same revision; the handoff is frozen.
 - A signature arrives from a key that is neither owner nor renter; quarantined with RENTALS_STATEMENT_INVALID, never counted.
 - Report exceeds 30 checklist items or 20 photos; refused with VALIDATION_FAILED; a photo above 5 MiB after processing is refused with COMMS_ATTACHMENT_TOO_LARGE.
-- The relay blob of a photo expired before the counterparty fetched it; attest is refused with RENTALS_EVIDENCE_MISSING until the author re-sends it, and photos already stored stay as evidence even if the author later deletes the message.
+- The relay blob of a photo is gone before the counterparty fetched it (expired, or the author deleted the message); comms.attachment.download returns NOT_FOUND, the photo is listed in missingPhotos[], attest is refused with RENTALS_EVIDENCE_MISSING until the author re-sends it, and photos already stored stay as evidence even if the author later deletes the message.
 
 ## UX and accessibility
 
@@ -63,7 +63,7 @@ At pickup the parties record the item's condition as a handoff report - a checkl
 - Commands: `rentals.handoff.draft`, `rentals.handoff.submit`, `rentals.handoff.request_changes`, `rentals.handoff.attest`, `rentals.handoff.receive`
 - Queries: `rentals.handoff.get`, `rentals.handoff.get_for_reservation`
 - Emits: `rentals.handoff.attested`
-- Consumes: `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.deposit.funded`, `rentals.deposit.agreed`, `comms.attachment.deleted`, `identity.block.added`, `privacy.deletion.completed`
+- Consumes: `rentals.reservation.confirmed`, `rentals.reservation.cancelled`, `rentals.deposit.funded`, `rentals.deposit.agreed`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -76,7 +76,7 @@ F05.S01.M01, F05.S01.M02, F08.S01.M01, F08.S01.M03, F15.S02.M03, F10.S02.M03, F0
 | PS-042-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-042-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-042-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-042-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-042-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-042-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-042-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-042-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |

@@ -6,25 +6,32 @@ summary: >-
   inside the user's vault (IndexedDB, actor = unlocked local principal) and, wrapped by a node:http adapter,
   inside an optional self-hosted relay for relay commands only. It owns the definition API (defineCommand,
   defineQuery, defineSubscriber, defineEvent, defineMachine, defineErrors), the dispatch pipeline (feature flag,
-  authentication, rate limit, strict validation, authorization, idempotency, handler in one transaction,
-  transactional outbox, idempotent response, audit), UUIDv7 identifiers, the clock port, typed errors with
-  problem+json rendering, and relay access tokens issued by challenge-response. It holds no domain data of its
-  own except IdempotencyRecord and relay access tokens.
+  relay read-only containment, authentication, tenant status, rate limit, strict validation, authorization,
+  idempotency, handler in one transaction, transactional outbox, idempotent response, audit), UUIDv7 identifiers,
+  the clock port, typed errors with problem+json rendering, and relay access tokens issued by challenge-response.
+  Ports owned downstream reach the bus by inverted registration at composition: TenantPort (F15.S04.M03, which
+  also supplies LocalSettings.vaultId as the vault's dispatch-context tenantId) and ContainmentPort (the relay
+  read-only switch of F16.S03.M03). It holds no domain data of its own except IdempotencyRecord and relay access
+  tokens.
 responsibilities:
   - Provide the definition API and a registry that rejects duplicate or malformed command, query and consumer names at startup.
-  - Run every command through one pipeline in the order flag, authn, rate limit, validation, authorize, idempotency, handler in transaction, outbox, idempotent response, audit.
+  - Run every command through one pipeline in the order flag, read-only (relay), authn, tenant (TenantPort), rate limit, validation, authorize, idempotency, handler in transaction, outbox, idempotent response, audit.
   - Store IdempotencyRecord rows for 24 h and replay the original status and body for the same key and request hash (CTR-IDM-001 IDM-1).
   - Generate and validate UUIDv7 identifiers with a monotonic counter and reject IDs more than 24 h in the future (CTR-ID-001).
   - Map every failure to a CTR-ERR-001 AppError and render RFC 9457 problem+json on the relay HTTP surface.
   - Expose only relay-surface definitions over HTTP; vault definitions are reachable only in-process.
   - Issue, resolve and revoke relay access tokens by challenge-response (CTR-CAP-001 sessions, CAP-10).
+  - Refuse mutating relay commands that are not on the F16.S03.M03 exemption list with SECURITY_READ_ONLY_MODE (503, Retry-After 300) while the relay read-only sentinel is on, and never block queries.
+  - Run the TenantPort stage after authentication so writes to a suspended or archived relay tenant get PLATFORM_TENANT_SUSPENDED, and dispatch every vault command with LocalSettings.vaultId as the context tenantId.
 non_responsibilities:
   - Authorization policy content, role assignments and the audit log store (F16.S01.M01 implements AuthzPort and AuditPort).
   - Flag values and the dependency rule (F15.S04.M02 implements FlagPort and returns disabled modules).
   - Rate limit policy per relay (F12.S03.M04 and relay hosting policy implement RateLimitPort).
-  - Storage adapters, outbox delivery, the sync outbox and media blobs (F15.S02.M03).
-  - Logs, metrics and readiness (F15.S03.M01); the relay process, configuration and shutdown (F15.S02.M01).
+  - Storage adapters, outbox delivery and media blobs (F15.S02.M03); the vault sync outbox of OutboxEntry records and its sender (F15.S01.M01, N24).
+  - Logs, metrics and readiness (F15.S03.M01); the relay process, configuration and shutdown, and the public media route GET /media/v1/* served before the bus with its own cache headers (F15.S02.M01).
   - Device key cryptography; signature verification is injected through SignatureVerifier (F16.S02.M03).
+  - Tenant status, tenant limits and LocalSettings including vaultId (F15.S04.M03 registers TenantPort with the bus and owns PLATFORM_TENANT_SUSPENDED; no depends_on edge, because F15.S04.M03 depends on this module through F15.S02.M01).
+  - The containment switch contract, the read-only sentinel <RELAY_DATA_DIR>/containment/read_only and its exemption list by exact command ID (F16.S03.M03 owns them and SECURITY_READ_ONLY_MODE; the relay composition registers ContainmentPort; no depends_on edge, because F16.S03.M03 reaches this module through F11.S03.M01 and F10.S01.M04).
 depends_on: [F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001]
 user_stories:
   - As a feature developer, I declare a command with a strict zod input, a capability and a handler, and the bus enforces flags, authentication, validation, authorization, idempotency and audit for me.
@@ -40,6 +47,8 @@ edge_cases:
   - An idempotency record survives a restore from an older backup; it is ignored once its expiresAt has passed.
   - A login nonce is replayed or used after 120 s; UNAUTHENTICATED is returned and the nonce stays consumed.
   - The HTTP body is 300 KiB or not JSON; PAYLOAD_TOO_LARGE or PLATFORM_BUS_UNSUPPORTED_MEDIA_TYPE is returned before parsing.
+  - The relay is in read-only mode; bazaar.listing.publish returns SECURITY_READ_ONLY_MODE with 503 and Retry-After 300 without reaching its handler, while identity.session.revoke (exempt) and every query still run.
+  - A member writes to a relay tenant that its operator suspended; the TenantPort stage returns PLATFORM_TENANT_SUSPENDED after authentication, while reads of that tenant and writes to other tenants succeed.
 ux:
   notes: >-
     Headless kernel module. User-visible effects are the error message keys (error.<code>) rendered by CTR-UX-001
@@ -57,7 +66,7 @@ processes:
         privacy: P2
         retention: RET-SHORT
         fields:
-          - "tenantId: uuidv7 — vault ID in the vault, relay tenant on a relay"
+          - "tenantId: uuidv7 — LocalSettings.vaultId (F15.S04.M03) in the vault, relay tenant on a relay"
           - "actor: string — local principal did:key, relay actor ID, or anonymous"
           - "command: string — command name <slug>.<entity>.<verb>"
           - "key: uuidv7 — client Idempotency-Key"
@@ -110,10 +119,12 @@ processes:
   commands_queries_events:
     requirements:
       - Commands and queries are declared with defineCommand and defineQuery (name, module, capability, strict zod input, idempotent flag, surface vault, relay or both, deliveryEligible, handler) and registered once; duplicates are rejected at startup.
-      - The dispatch pipeline runs flag, authn, rate limit, validation, authorize, idempotency, handler in one transaction, outbox, idempotent response and audit in that order, and each stage short-circuits with its CTR-ERR-001 code.
+      - The dispatch pipeline runs flag, read-only (relay), authn, tenant (TenantPort), rate limit, validation, authorize, idempotency, handler in one transaction, outbox, idempotent response and audit in that order, and each stage short-circuits with its AppError - a CTR-ERR-001 common code, or the unchanged code of the port owner that registered it with defineErrors (PLATFORM_TENANT_SUSPENDED of F15.S04.M03, SECURITY_READ_ONLY_MODE of F16.S03.M03).
       - Events are CTR-EVT-001 envelopes built from defineEvent(type, version, privacy, payload schema); payloads are validated strictly, written to the local outbox in the handler transaction and published to the EventSink only after commit.
       - The bus runs in-process in the vault without any network, and the Node HTTP adapter exposes only relay-surface definitions at POST /api/v1/cmd/<name> and POST /api/v1/query/<name> with problem+json errors.
       - The module provides three relay commands for access tokens; none of them is a vault command and none produces a signed statement.
+      - The read-only stage runs on the relay only - while the ContainmentPort that the relay composition registers reports the sentinel <RELAY_DATA_DIR>/containment/read_only as present (read at most once per second without the database), every command whose exact name is not on the F16.S03.M03 exemption list returns SECURITY_READ_ONLY_MODE (503, retryable, retryAfterMs 300000 rendered as Retry-After 300) before authentication and its handler, queries are never blocked, and a relay composition without a ContainmentPort fails at startup.
+      - The tenant stage runs after authentication and calls the TenantPort that F15.S04.M03 registers by inverted registration, which returns PLATFORM_TENANT_SUSPENDED for writes to a suspended or archived relay tenant; in the vault the composition builds every dispatch context with tenantId = LocalSettings.vaultId read through that port, and a vault dispatch context with another tenantId is refused as a programmer error (INTERNAL).
     commands:
       - name: platform.access_token.challenge
         capability: platform.access_token.challenge
@@ -145,9 +156,12 @@ processes:
     note: >-
       Library module: feature modules declare their own vault commands, signed-statement commands and relay
       commands with defineCommand; the bus only adds the access-token relay commands above. Statements are queued
-      into the F15.S02.M03 sync outbox only by definitions flagged deliveryEligible.
+      into the F15.S01.M01 sync outbox (OutboxEntry records written inside the command's F15.S02.M03 transaction)
+      only by definitions flagged deliveryEligible. PLATFORM_TENANT_SUSPENDED (F15.S04.M03) and
+      SECURITY_READ_ONLY_MODE (F16.S03.M03) are defined by their owners and returned unchanged through TenantPort and
+      ContainmentPort; the bus lists no depends_on edge to either owner because both depend on this module.
     example: |
-      In the vault (no network):
+      In the vault (no network; vaultId = LocalSettings.vaultId through TenantPort):
         bus.dispatch({ actor: localPrincipal, tenantId: vaultId }, 'bazaar.offer.make', input, { idempotencyKey })
         → ok { status: 201, replayed: false, value: { offerId, revision: 1 }, events: [bazaar.offer.made] }
       On a relay:
@@ -156,6 +170,10 @@ processes:
         POST /api/v1/cmd/discovery.projection.publish  Authorization: Bearer <token>  Idempotency-Key: <uuidv7>
         → 201 { … }; the same request again → 201 with Idempotent-Replay: true
         → 422 application/problem+json { type: urn:classrup:error:IDEMPOTENCY_KEY_REUSED, correlationId } on a changed body
+      Relay in read-only mode (sentinel present):
+        POST /api/v1/cmd/bazaar.listing.publish → 503 Retry-After: 300 { code: SECURITY_READ_ONLY_MODE, retryable: true, retryAfterMs: 300000 }
+        POST /api/v1/cmd/identity.session.revoke → 200 (exempt); POST /api/v1/query/discovery.search.query → 200
+      Suspended tenant: member POST /api/v1/cmd/discovery.projection.publish → 403 { code: PLATFORM_TENANT_SUSPENDED }
   authorization_capabilities:
     requirements:
       - The bus calls AuthzPort.authorize(actor, capability, resource, context) before the handler and denies by default; the vault composition passes the local principal with vault policy, the relay composition passes the relay actor with relay policy.
@@ -173,19 +191,19 @@ processes:
   failure_recovery_idempotency:
     requirements:
       - The same key with the same request hash within 24 h replays the stored status and body (Idempotent-Replay true over HTTP); the same key with a different hash returns IDEMPOTENCY_KEY_REUSED; failed commands store nothing.
-      - A handler error result or exception rolls back records, outbox events, sync-outbox entries and the idempotency record together; exceptions map to INTERNAL and are logged with the correlation ID.
+      - A handler error result or exception rolls back records, outbox events, F15.S01.M01 OutboxEntry records and the idempotency record together; exceptions map to INTERNAL and are logged with the correlation ID.
       - Concurrent dispatches with the same key are serialized by the storage transaction so the handler runs at most once.
-      - Only RATE_LIMITED, DEPENDENCY_UNAVAILABLE and INTERNAL are retryable; RATE_LIMITED carries retryAfterMs and the HTTP Retry-After header.
+      - Of the common codes only RATE_LIMITED, DEPENDENCY_UNAVAILABLE and INTERNAL are retryable, port codes keep the retryability their owner defines (SECURITY_READ_ONLY_MODE is retryable with retryAfterMs 300000), and every retryAfterMs is rendered as the HTTP Retry-After header in whole seconds.
     idempotency: "Idempotency-Key (UUIDv7) required on idempotent commands; record keyed (tenantId, actor, command, key) with the request hash; 24 h validity; replay returns the stored status and normalized JSON body."
     concurrency: "All transactions of one vault or relay are serialized (single writer); the lookup, handler and record write happen in one transaction so a racing duplicate sees the stored record."
     retries: "Clients retry only retryable codes and network failures with full-jitter backoff (base 500 ms, cap 30 s, 6 attempts, IDM-4), honouring retryAfterMs; replays are safe because of the idempotency record."
-    offline: "In the vault the bus needs no network: commands commit locally and statements wait in the F15.S02.M03 sync outbox; the PWA outbox replays relay commands with their original keys after reconnect."
+    offline: "In the vault the bus needs no network: commands commit locally and statements wait as F15.S01.M01 OutboxEntry records; the PWA outbox replays relay commands with their original keys after reconnect, and a read-only relay keeps them pending until its Retry-After passes."
     partial_failure: "No step outside the transaction can leave partial state: events are written to the outbox in the same transaction and published to the EventSink only after commit; a failed audit write is logged and does not change the command result."
   privacy_retention_abuse:
     requirements:
       - Problem responses expose only type, title, status, code, retryable, messageKey, params, fields, correlationId and retryAfterMs; never stack traces, SQL, internal messages or another user's data.
       - IdempotencyRecord rows are scoped to (tenantId, actor, command, key), may hold P2 response bodies, never leave the vault or relay that stored them and are purged after 24 h.
-      - The HTTP adapter enforces 256 KiB JSON bodies, sends Cache-Control no-store, X-Content-Type-Options nosniff and a deny-all CSP, and never logs the Authorization header, tokens or request bodies.
+      - The HTTP adapter enforces 256 KiB JSON bodies, sends Cache-Control no-store, X-Content-Type-Options nosniff and a deny-all CSP on every bus response (the public media route GET /media/v1/*, served by F15.S02.M01 before the bus with Cache-Control public, max-age=31536000, immutable, is exempt from no-store), and never logs the Authorization header, tokens or request bodies.
     data:
       - "IdempotencyRecord: P2 at most (copies a handler response that may contain participant data); local to one vault or relay."
       - "Relay access token: stored only as SHA-256 of the token with principal, relay roles and timestamps (P1 on that relay)."
@@ -235,26 +253,29 @@ processes:
       - "T06 | unit | 04.R03,10.R02 | defineEvent with bad names and an envelope with an extra payload key | definitions rejected; envelope has exactly the CTR-EVT-001 keys; bad payload throws"
       - "T07 | unit | 03.R01,03.R02,03.R03 | invalid machine definitions and declared or undeclared transitions | definition errors; next returns target or CONFLICT_STATE with state and event; edges exported"
       - "T08 | property | 03.R02,09.R03 | random event sequences on the offer machine, 200 runs | only declared transitions succeed; terminal states absorb nothing"
-      - "T09 | integration | 04.R01,04.R02 | every stage failing at once, then fixed one by one | FEATURE_DISABLED, UNAUTHENTICATED, RATE_LIMITED, VALIDATION_FAILED, FORBIDDEN in order; handler runs only at the end; duplicate registration throws"
+      - "T09 | integration | 04.R01,04.R02 | every stage failing at once (flag off, read-only sentinel on, no token, suspended tenant, limit exceeded, bad input, denied), then fixed one by one | FEATURE_DISABLED, SECURITY_READ_ONLY_MODE, UNAUTHENTICATED, PLATFORM_TENANT_SUSPENDED, RATE_LIMITED, VALIDATION_FAILED, FORBIDDEN in order with port codes unchanged; handler runs only at the end; duplicate registration throws"
       - "T10 | integration | 01.R01,06.R01 | same key and body twice, then changed body, then other actor | replay with original 201 and body; IDEMPOTENCY_KEY_REUSED; other actor executes"
-      - "T11 | integration | 06.R02 | handler returns err, then throws after writes | no records, outbox rows or idempotency record; INTERNAL with no message; error log with correlationId"
+      - "T11 | integration | 06.R02 | handler returns err, then throws after writing records, an event and an OutboxEntry record through a stub F15.S01.M01 OutboxPort | no records, outbox rows, OutboxEntry records or idempotency record; INTERNAL with no message; error log with correlationId"
       - "T12 | integration | 06.R03 | five concurrent dispatches with one key | handler runs once; one fresh result and four replays"
       - "T13 | integration | 01.R03,07.R02,10.R01 | replay at 24 h - 1 ms and at 24 h, then purge | replay before expiry, execution after; purge removes one row"
       - "T14 | abuse | 05.R01,05.R02,05.R04 | denied member, hidden resource, anonymous caller, remote call of a vault command, public relay command | FORBIDDEN, NOT_FOUND, UNAUTHENTICATED, NOT_FOUND, ok"
       - "T15 | abuse | 05.R03 | deny then allow with a secret value in the input | two audit entries with decision, capability and resource; no input value in audit"
       - "T16 | unit | 02.R03 | idempotent command without key, with v4 key and with a key 25 h ahead | REQUIRED, INVALID_UUIDV7, ID_TIMESTAMP_SKEW"
-      - "T17 | unit | 06.R04 | fixed-window limit exceeded; busy dependency | RATE_LIMITED with retryAfterMs 45 000; only three common codes retryable; DEPENDENCY_UNAVAILABLE retryable"
+      - "T17 | unit | 06.R04 | fixed-window limit exceeded; busy dependency; read-only port refusal rendered over HTTP | RATE_LIMITED with retryAfterMs 45 000 and Retry-After 45; only three common codes retryable; DEPENDENCY_UNAVAILABLE retryable; SECURITY_READ_ONLY_MODE retryable with Retry-After 300"
       - "T18 | unit | 07.R01,10.R02 | render problem JSON and snapshot the common code table | exact RFC 9457 fields; no stack; table equals CTR-ERR-001 plus ID_TIMESTAMP_SKEW; defineErrors rules"
       - "T19 | integration | 04.R04,07.R03,10.R03 | sample relay over node:http with replay, reuse, 300 KiB body, form body, GET, bad JSON, bad token, vault command, /api/v2 | 201, Idempotent-Replay, problem+json 422, 413, 415, 405, 422, 401, 404, 404; security headers; logs carry truncated IP only"
       - "T20 | unit | 08.R01 | ok, replayed and rejected commands | counters per outcome and a duration histogram series rendered"
       - "T21 | unit | 08.R03 | one command with a private title | one log line with ts, level, msg, correlationId, module, code, durationMs first; title absent from logs"
       - "T22 | load | 08.R02 | 500 sequential idempotent commands on a SQLite WAL file | p95 ≤ 50 ms"
-      - "T23 | unit | 09.R01 | traceability scan of kernel test titles | every PS-117 test ID T01–T26 appears in a test title"
+      - "T23 | unit | 09.R01 | traceability scan of kernel test titles | every PS-117 test ID T01–T29 appears in a test title"
       - "T24 | unit | 09.R02 | static scan of kernel sources | no node: import outside node.ts, the SQLite adapter and the HTTP adapter"
-      - "T25 | integration | 04.R03 | command emits an event, then a deliveryEligible and a non-eligible sync enqueue | event in outbox and sink after commit only; eligible enqueue prepared; non-eligible INTERNAL"
+      - "T25 | integration | 04.R03 | command emits an event, then a deliveryEligible and a non-eligible definition enqueue through a stub F15.S01.M01 OutboxPort | event in outbox and sink after commit only; eligible OutboxEntry record committed with the command; non-eligible INTERNAL"
       - "T26 | integration | 04.R05,05.R04 | challenge, forged signature, login, nonce replay, expired nonce, idle expiry, revoke, and the same through the relay commands | tokens issued and stored hashed; all bad proofs UNAUTHENTICATED; revoked token rejected"
+      - "T27 | integration | 04.R06 | ContainmentPort stub reports read-only; over node:http dispatch bazaar.listing.publish, platform.access_token.login, identity.session.revoke, security.containment.set and a query; then the sentinel goes off; then start a relay composition without ContainmentPort and a vault dispatch | non-exempt commands 503 SECURITY_READ_ONLY_MODE with Retry-After 300 and their handlers never run; exempt command IDs and the query run; writes accepted within 1 s after off; startup fails without the port; vault unaffected"
+      - "T28 | integration | 04.R07 | TenantPort stub with T1 suspended and T2 active: member command on T1, query on T1, operator configure on T1, command on T2; vault composition with LocalSettings.vaultId V1 dispatches a command, then a context with another tenantId | PLATFORM_TENANT_SUSPENDED 403 after authentication and before rate limiting; query and configure decided by the port; T2 ok; vault records and idempotency rows carry tenantId V1; foreign tenantId INTERNAL"
+      - "T29 | integration | 07.R03 | GET /media/v1/sha256-X through the relay server with the F15.S02.M01 media route registered, then a bus command and a bus problem response | media response Cache-Control public, max-age=31536000, immutable and no no-store; every bus response Cache-Control no-store with nosniff and deny-all CSP"
     acceptance:
-      - All tests T01–T26 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
+      - All tests T01–T29 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
       - No failure path leaves records, outbox events or idempotency records behind (T11, T25).
       - A duplicate submission never executes twice within 24 h (T10, T12).
   import_export_backup_rollback:

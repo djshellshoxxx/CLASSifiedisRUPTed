@@ -24,12 +24,12 @@ Schema `classrup.mutiny.trade_proposal/v1` · storage **device** · privacy **P2
 | counterpartyId | did — the other member; differs from proposerId |
 | headRevisionId | uuidv7 — current ProposalRevision id (F02.S01.M04) |
 | headRevisionNo | int — 1..20 |
-| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); consents sign its 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash) |
+| headRevisionHash | cid — contentHash of the head revision (F02.S01.M04); F08 consents carry this same cid as subjectRevisionHash (CTR-ID-001 ID-3 form sha256-<base64url>, N13), never a hex form |
 | headAuthorId | did — author of the head revision |
 | status | enum — draft \| open \| accepted \| rejected \| withdrawn \| expired \| frozen |
 | closeReason? | enum — rejected_by_peer \| withdrawn_by_author \| timeout \| item_unavailable \| blocked_locally \| fork_detected \| conflicting_promise \| consent_conflicted \| clock_disagreement |
 | expiresAt | timestamp — consentDeadline claimed in the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 14 d, at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16) |
-| consents | array — 0..4 items {actorId, consentId (F08 ConsentStatement), kind consent\|decline, revisionNo, revisionHash, direction own\|peer, signedAtClaim, receivedAtLocal, relayReceiptAt?, status valid\|void, voidReason? revision_changed\|consent_revoked\|key_revoked\|deadline_missed\|conflicted} |
+| consents | array — 0..4 items {actorId, consentId (F08 ConsentStatement), kind consent\|decline, revisionNo (F08 subjectRevision), revisionHash (F08 subjectRevisionHash), statementKey, statementLocale, aliasIds[] (cids of F08 duplicates whose aliasOf names consentId), direction own\|peer, signedAtClaim, receivedAtLocal, relayReceiptAt?, status valid\|void, voidReason? revision_changed\|consent_revoked\|key_revoked\|deadline_missed\|conflicted} |
 | reservations | array — 0..2 items {actorId, lockId, reservationCid (classrup.bazaar.reservation/v1), expiresAt, direction own\|peer, valid boolean} |
 | hasCompensation | boolean — true when the head revision contains a compensation leg |
 | syncStates | object — per outgoing statement {statementCid: local_committed\|prepared\|transport_acknowledged\|peer_accepted} |

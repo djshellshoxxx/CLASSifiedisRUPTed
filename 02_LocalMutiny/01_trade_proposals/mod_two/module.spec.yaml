@@ -15,6 +15,7 @@ responsibilities:
   - Ingest only the proposal withdrawal statement (classrup.mutiny.proposal_response/v1); react to the events of the single ingest owner of every other statement type (revisions F02.S01.M04, consents, declines and revocations F08.S02.M02, reservations F02.S03.M02) and re-evaluate the local acceptance verdict.
   - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased parties in retained evidence.
   - Expire proposals by the local clock (default 72 h, range 1 h to 14 d) and treat any clock disagreement as expired.
+  - "Register the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_proposal by inverted registration: canonicalBytes(ref, rev) from F02.S01.M04, currentRevision(ref), partyRole(ref, did) and isCommitted(ref)."
 non_responsibilities:
   - Signature format, ingest and revocation of consent (F08.S02.M02), revision snapshots (F02.S01.M04), legs (F02.S01.M03), roster (F02.S01.M02), reservations (F02.S03.M02 on the F01.S03.M01 reservation statement).
   - Executing the exchange, handover attestations and recovery (F02.S03.M04) and dropouts after acceptance (F02.S03.M03).
@@ -64,12 +65,12 @@ processes:
           - "counterpartyId: did — the other member; differs from proposerId"
           - "headRevisionId: uuidv7 — current ProposalRevision id (F02.S01.M04)"
           - "headRevisionNo: int — 1..20"
-          - "headRevisionHash: cid — contentHash of the head revision (F02.S01.M04); consents sign its 32 digest bytes as lowercase hex (F08 subjectRevisionHash = hex of the base64url-decoded contentHash)"
+          - "headRevisionHash: cid — contentHash of the head revision (F02.S01.M04); F08 consents carry this same cid as subjectRevisionHash (CTR-ID-001 ID-3 form sha256-<base64url>, N13), never a hex form"
           - "headAuthorId: did — author of the head revision"
           - "status: enum — draft | open | accepted | rejected | withdrawn | expired | frozen"
           - "closeReason?: enum — rejected_by_peer | withdrawn_by_author | timeout | item_unavailable | blocked_locally | fork_detected | conflicting_promise | consent_conflicted | clock_disagreement"
           - "expiresAt: timestamp — consentDeadline claimed in the head snapshot, evaluated on the local clock; default 72 h, range 1 h to 14 d, at most 24 h and not after the earliest pinned quote expiry when more than one currency is involved (N16)"
-          - "consents: array — 0..4 items {actorId, consentId (F08 ConsentStatement), kind consent|decline, revisionNo, revisionHash, direction own|peer, signedAtClaim, receivedAtLocal, relayReceiptAt?, status valid|void, voidReason? revision_changed|consent_revoked|key_revoked|deadline_missed|conflicted}"
+          - "consents: array — 0..4 items {actorId, consentId (F08 ConsentStatement), kind consent|decline, revisionNo (F08 subjectRevision), revisionHash (F08 subjectRevisionHash), statementKey, statementLocale, aliasIds[] (cids of F08 duplicates whose aliasOf names consentId), direction own|peer, signedAtClaim, receivedAtLocal, relayReceiptAt?, status valid|void, voidReason? revision_changed|consent_revoked|key_revoked|deadline_missed|conflicted}"
           - "reservations: array — 0..2 items {actorId, lockId, reservationCid (classrup.bazaar.reservation/v1), expiresAt, direction own|peer, valid boolean}"
           - "hasCompensation: boolean — true when the head revision contains a compensation leg"
           - "syncStates: object — per outgoing statement {statementCid: local_committed|prepared|transport_acknowledged|peer_accepted}"
@@ -97,7 +98,7 @@ processes:
       - "V03 | expiresInMs is between 3600000 and 1209600000 (default 259200000); with more than one currency it is ≤ 86400000 and the deadline is not after the earliest pinned quote expiry (N16), otherwise re-quote and fresh consent; expiresInMs + executionWindowMs ≤ 2592000000 (F02.S01.M04 V09) | MUTINY_PROPOSAL_DEADLINE_INVALID"
       - "V04 | proposer has ≤ 5 non-terminal proposals and cycles combined and is within the F12.S03.M04 local limit | MUTINY_PROPOSAL_LIMIT"
       - "V05 | no non-terminal proposal exists for the same pair and item-set hash | MUTINY_PROPOSAL_DUPLICATE"
-      - "V06 | accept presents revisionHash equal to headRevisionHash and revisionNo equal to headRevisionNo; a counted consent has subjectType mutiny_proposal, statementKey consent.mutiny.proposal.accept.v1, subjectRevision equal to headRevisionNo and subjectRevisionHash equal to the hex of headRevisionHash | MUTINY_PROPOSAL_CONSENT_STALE"
+      - "V06 | accept presents revisionHash equal to headRevisionHash and revisionNo equal to headRevisionNo; a counted consent has subjectType mutiny_proposal, statementKey consent.mutiny.proposal.accept.v1, subjectRevision equal to headRevisionNo and subjectRevisionHash equal to headRevisionHash (the same ID-3 cid, never hex) | MUTINY_PROPOSAL_CONSENT_STALE"
       - "V07 | latest feasibility report for the head hash is fresh (≤ 10 min) and overall is not infeasible | MUTINY_PROPOSAL_INFEASIBLE"
       - "V08 | own items reserved all-or-nothing through F02.S03.M02 with holder {type: cycle, id: proposalId} and the classrup.bazaar.reservation/v1 statement issued before the consent is signed | MUTINY_PROPOSAL_RESERVATION_FAILED"
       - "V09 | an incoming classrup.mutiny.proposal_response/v1 withdraw verifies Ed25519 against a non-revoked key of the head author, the role registered in F11.S01.M01; revisions, consents and reservations are verified by their ingest owners and only their accepted records count | MUTINY_PROPOSAL_STATEMENT_INVALID"
@@ -143,10 +144,11 @@ processes:
       - Every command writes its record, events and outbox entries in one IndexedDB transaction (EVT-8) and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
       - The module consumes revision, consent, reservation, roster, block and inventory events only to re-evaluate the local verdict and never acts for another party.
       - "Statement schemas and signer roles registered with the F11.S01.M01 registry (N2): classrup.mutiny.proposal_response/v1 signed by the head author (withdraw only, ingested here); consents and declines use classrup.comms.consent/v1 signed by a proposal party (ingest owner F08.S02.M02); reservations use classrup.bazaar.reservation/v1 signed by the item owner (ingest owner F02.S03.M02); revisions use classrup.mutiny.proposal_revision/v1 signed by its author (ingest owner F02.S01.M04). The module acts only on records the receiving vault's owner module accepted."
+      - "The module registers the F08.S02.M02 SubjectCanonicalizerPort for subjectType mutiny_proposal (inverted registration; F08.S02.M02 never depends on F02): canonicalBytes(proposalId, rev) returns F02.S01.M04 canonicalBytes(trade_proposal, proposalId, rev); currentRevision(proposalId) returns {revisionNo: headRevisionNo, revisionHash: headRevisionHash}; partyRole(proposalId, did) returns party for proposerId and counterpartyId and none otherwise; isCommitted(proposalId) is true once the proposal is accepted. It reads comms.consent.signed and comms.consent.received with the N13 field names subjectType, subjectRef, subjectRevision, subjectRevisionHash (ID-3 cid), statementKey, statementLocale, kind and aliasOf, and a received record with aliasOf is a duplicate of the named kept consent and is never counted twice."
     commands:
       - name: mutiny.proposal.create
         capability: mutiny.proposal.create
-        input: "{ counterpartyId, giveItems[1..5], wantItems[1..5], compensation? { payerId, amount: Money }, acceptedImbalances?[{ actorId, maxAmount }], expiresInMs?, executionWindowMs?, note? ≤ 500 } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1, F02.S01.M04), classrup.bazaar.reservation/v1 (proposer reservation, holder {type: cycle, id: proposalId}, via F02.S03.M02) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_proposal, statementKey consent.mutiny.proposal.accept.v1, subjectRevision 1, subjectRevisionHash hex of the digest)"
+        input: "{ counterpartyId, giveItems[1..5], wantItems[1..5], compensation? { payerId, amount: Money }, acceptedImbalances?[{ actorId, maxAmount }], expiresInMs?, executionWindowMs?, note? ≤ 500 } — vault command; produces statements classrup.mutiny.proposal_revision/v1 (revision 1, F02.S01.M04), classrup.bazaar.reservation/v1 (proposer reservation, holder {type: cycle, id: proposalId}, via F02.S03.M02) and classrup.comms.consent/v1 (comms.consent.sign kind consent, subjectType mutiny_proposal, statementKey consent.mutiny.proposal.accept.v1, subjectRevision 1, subjectRevisionHash = the revision contentHash cid, statementLocale of the shown wording)"
         output: "{ proposalId, revisionNo: 1, revisionHash, status: open, syncState: local_committed | prepared }"
         errors: [VALIDATION_FAILED, MUTINY_PROPOSAL_LEGS_INVALID, MUTINY_PROPOSAL_DEADLINE_INVALID, MUTINY_PROPOSAL_LIMIT, MUTINY_PROPOSAL_DUPLICATE, MUTINY_PROPOSAL_INFEASIBLE, MUTINY_PROPOSAL_RESERVATION_FAILED, BLOCKED_PARTY, RATE_LIMITED]
         emits: [mutiny.proposal.created]
@@ -207,7 +209,7 @@ processes:
       - {type: mutiny.proposal.revised, effect: "set head pointer and hash, void all consents, release and re-make own reservation if leg items changed, move open to draft"}
       - {type: mutiny.revision.forked, effect: "freeze the proposal and release the principal's own reservation"}
       - {type: comms.consent.signed, effect: "own statements only: record the principal's consent or decline (subjectType mutiny_proposal) on the head digest; a decline moves the proposal to rejected"}
-      - {type: comms.consent.received, effect: "peer consent or decline accepted by F08 for subjectType mutiny_proposal and this proposalId: record it, check subjectRevision equals headRevisionNo and the hash, and re-evaluate the verdict; a decline from the non-author party moves the proposal to rejected"}
+      - {type: comms.consent.received, effect: "peer consent or decline accepted by F08 for subjectType mutiny_proposal and subjectRef this proposalId: record consentId, signerDid, kind, statementKey and statementLocale, check that subjectRevision equals headRevisionNo and subjectRevisionHash equals headRevisionHash (ID-3 cid), attach a record with aliasOf to the kept consent it names without counting it again, and re-evaluate the verdict; a decline from the non-author party moves the proposal to rejected"}
       - {type: comms.consent.revoked, effect: "mark the consent void with voidReason consent_revoked and re-evaluate the verdict; after acceptance the revocation is handled by F02.S03.M03 as a dropout of the cycle"}
       - {type: mutiny.cycle.locked, effect: "record a verified reservation with holder {type: cycle, id: proposalId} (own or peer, by lockId and reservationCid) and re-evaluate the local verdict"}
       - {type: mutiny.cycle.unlocked, effect: "mark that reservation invalid; withdraw an open proposal with reason item_unavailable only when the principal's own lock was unlocked with reason expired, item_lost or conflict; ignore reason superseded when a newer active own lock exists for the same subject, and ignore converted and released after a terminal state"}
@@ -235,7 +237,7 @@ processes:
       -> 201 { "proposalId":"0192f413-…", "revisionNo":1, "revisionHash":"sha256-Zk8…", "status":"open", "syncState":"prepared" }
       Bob's vault receives 3 envelopes, each ingested by its owner (revision by F02.S01.M04, Alice consent by F08.S02.M02, Alice reservation by F02.S03.M02), runs feasibility, then Bob signs:
       mutiny.proposal.accept { "proposalId":"0192f413-…", "revisionHash":"sha256-Zk8…", "revisionNo": 1, "expectedRevision": 2 }
-      consent via comms.consent.sign { "subjectType":"mutiny_proposal", "subjectRef":"0192f413-…", "subjectRevision":1, "subjectRevisionHash":"<hex of the 32 bytes of sha256-Zk8…>", "statementKey":"consent.mutiny.proposal.accept.v1", "kind":"consent" }
+      consent via comms.consent.sign { "subjectType":"mutiny_proposal", "subjectRef":"0192f413-…", "subjectRevision":1, "subjectRevisionHash":"sha256-Zk8…", "statementKey":"consent.mutiny.proposal.accept.v1", "statementLocale":"en", "kind":"consent" }
       -> 200 { "status":"accepted", "localVerdict":"accepted", "syncState":"prepared" }
       Alice's vault becomes accepted only after it receives Bob's consent and reservation, and shows 'waiting for Bob's signature' until then.
   authorization_capabilities:
@@ -304,7 +306,7 @@ processes:
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
-      - Contract tests verify the withdrawal statement schema, the F08 consent fields this module relies on (subjectType, statement key, hex digest), the reservation holder and the sync-state progression against fake relays.
+      - Contract tests verify the withdrawal statement schema, the F08 consent fields this module relies on (subjectType, statement key, statement locale, subjectRevisionHash as the contentHash cid, aliasOf), the reservation holder and the sync-state progression against fake relays.
       - The two-vault flow is tested end to end with two in-memory vaults, a fake relay and an injected clock, including forks and clock disagreement.
     fixtures: "Two in-memory vaults Alice and Bob with keys, items (Alice guitar I1, Bob bicycle I2), a fake relay that can drop, delay and duplicate, fixed clock 2026-11-04T10:00:00Z."
     tests:
@@ -331,10 +333,11 @@ processes:
       - "T21 | integration | 06.R03,04.R03 | Bob counters (own lock superseded); a peer double promise names the proposal | counter does not withdraw the proposal; conflict_detected freezes it and own reservation is released with fork_frozen"
       - "T22 | unit | 02.R02,02.R03 | V01 with the principal's own block, and a proposal sent to a recipient who blocked the proposer | BLOCKED_PARTY for the own block; recipient vault drops the proposal silently and emits nothing"
       - "T23 | integration | 07.R04,07.R02 | F10 export, deletion and retention sweep with a pseudonymized erased counterparty | section mutiny.proposals exported; erased DID replaced by the deletion pseudonym; signatures still verify; quarantined statements purged after 30 days"
-      - "T24 | contract | 04.R04 | F11.S01.M01 registry lookup for each statement schema named here | registered signer role matches; consent uses subjectType mutiny_proposal and key consent.mutiny.proposal.accept.v1 with hex digest equal to the base64url-decoded contentHash"
+      - "T24 | contract | 04.R04 | F11.S01.M01 registry lookup for each statement schema named here | registered signer role matches; consent uses subjectType mutiny_proposal and key consent.mutiny.proposal.accept.v1 with subjectRevisionHash equal to the contentHash cid; a hex-encoded digest is not counted"
       - "T25 | integration | 03.R02,02.R02 | Bob tries to accept an imbalance not in the head snapshot, then counters with acceptedImbalances naming himself | first refused; Alice's vault verifies Bob's consent on the new digest as his signed acceptance and feasibility C05 passes"
+      - "T26 | contract | 04.R05,09.R02 | F08 shared SubjectCanonicalizerPort conformance suite against the mutiny_proposal registration; comms.consent.received for Bob's consent followed by a duplicate whose aliasOf names it | canonicalBytes equals F02.S01.M04 canonicalBytes and its ID-3 cid equals headRevisionHash; currentRevision returns the head; partyRole returns party for Alice and Bob and none for Carol; isCommitted false while open and true after acceptance; statementLocale recorded; the alias is attached and Bob's consent counts once"
     acceptance:
-      - All tests T01–T25 pass in CI.
+      - All tests T01–T26 pass in CI.
       - A party is never shown as bound to a revision unless a valid signature on that exact hash was verified in the viewing vault.
       - Forks and clock disagreement always end in frozen or expired, never in acceptance.
   import_export_backup_rollback:

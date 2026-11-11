@@ -40,14 +40,16 @@ See the module test table below (all processes).
 | TEST-PS-102-09.T17 | abuse | PS-102-07.R05, PS-102-05.R04 | forged DSN at the plain bounce address quoting a real Message-ID; DSN with a wrong VERP tag; ARF report from an unknown source; unsigned webhook | each refused NOTIFY_EMAIL_REPORT_UNVERIFIED; address stays verified; consent unchanged |
 | TEST-PS-102-09.T19 | e2e | PS-102-07.R03, PS-102-05.R03, PS-102-07.R02 | open the email settings, the opt-in sheet and the example email preview | text says the relay operator can read the address it sends to, that email links the address to the pseudonym at that operator, and the preview shows only the generic subject and app link |
 | TEST-PS-102-09.T18 | integration | PS-102-04.R05, PS-102-01.R04 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; enable with privacy.consent.check not granted | purge deletes the vault targets; section notify.email exported; delivery rows purged after 30 days; enable refused PRECONDITION_FAILED before anything is sealed |
+| TEST-PS-102-09.T20 | contract | PS-102-01.R05, PS-102-02.R03 | LocalSettings.defaultLocale de-AT; enable with and without notify_email consent and capture every outgoing request; lint every email template declaration; verify add, remove and get_mine signatures against the F11.S01.M03 RFC 9421 vectors with a key that KeyStatusPort reports revoked | with consent only the sealed add carries locale de-AT; without consent nothing is sent; no template declares a parameter other than app origin link, verification link and unsubscribe URL and none carries user content or Money; valid signatures verify with tag classrup/relay-request/v1 and the revoked key is refused UNAUTHENTICATED |
+| TEST-PS-102-09.T21 | chaos | PS-102-06.R04, PS-102-04.R03 | restore the relay from a backup taken before an email withdrawal, with archived notify.channel.opted_out events in the replay range; then dispatch to the user | the restore report lists this module's consumers as excluded; nothing is re-delivered to them and no email is sent twice; the withdrawn address is removed, its ciphertext erased and its queued deliveries cancelled before the first send |
 
 ## Acceptance criteria
 
-- All tests T01 to T19 pass in CI.
+- All tests T01 to T21 pass in CI.
 - No email is sent without a verified address and a granted registered consent, and each email carries one-click unsubscribe headers and a VERP return path.
 - Emails contain no listing, message, name or amount content in any test.
 - Addresses never appear in logs, events, relay exports or query results, and no unauthenticated report changes an address or a consent.
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F11.S01.M03, F07.S02.M01, F15.S01.M01, F15.S02.M01, F15.S04.M03, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

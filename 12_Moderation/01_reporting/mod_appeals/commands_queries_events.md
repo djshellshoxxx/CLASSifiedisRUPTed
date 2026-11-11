@@ -43,7 +43,7 @@
 
 | Type | Effect |
 |---|---|
-| `moderation.action.applied` | relay origin: store actionId, subjectKey, deciderKey and deadlineAt = reasonsIssuedAt + 30 days for window and independence checks; vault origin: store the deadline for the appellant's UI |
+| `moderation.action.applied` | relay origin: store actionId, subjectKey, deciderKey, proposerKey (host-policy records such as auction voids from F04.S02.M03) and deadlineAt = reasonsIssuedAt + 30 days for window and independence checks; vault origin: store the deadline for the appellant's UI |
 | `moderation.action.reverted` | relay: reason moderator_decision or error_correction closes an open appeal on the action as moot with mootReason action_reverted, reason expired as moot with mootReason action_expired, and queues a relay-signed appealmoot/v1; reasons appeal_overturned and appeal_reduced come from this module's decision and change nothing; never emits moderation.appeal.decided |
 | `security.role.revoked` | relay: when role moderator is revoked for a key that reviews in_review appeals, move them to awaiting_reviewer through moderation.appeal.reassign with reason reviewer_role_lost |
 | `privacy.deletion.completed` | vault: appeals are deleted, or kept as evidence with appellantKey replaced by the payload pseudonym when the request kept evidence (DeletionPort); relay copies are pseudonymized by the DeletionPort when the relay applies the signed deletion request and stay for RET-EVIDENCE |

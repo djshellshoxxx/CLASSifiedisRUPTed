@@ -8,7 +8,7 @@
 
 - **PS-113-04.R01** The module exposes library functions and no vault or relay commands, queries or events.
 - **PS-113-04.R02** Functions return strings or Result values and never throw for bad input.
-- **PS-113-04.R03** Push alert text is rendered on the device by the service worker from the tpl key with t(); relays never render push text. Only the generic email templates of F13.S01.M02 (no user content, no amounts) may be rendered by the user-selected email relay.
+- **PS-113-04.R03** Push alert text is rendered on the device by the service worker from the template key of one of the three F13.S01.M01 push payload forms - the tpl inside the opened sealed box {v, tpl, ref, ck} of a sealed payload {v, urg, s}, the tpl of a relay-hook payload {v, urg, tpl, ref?, ck?}, or tp(notify.tpl.system.digest, n) for a digest payload {v, urg, tpl: notify.tpl.system.digest, n}; relays never render push text. Only the generic email templates of F13.S01.M02 (no user content, no amounts) may be rendered by the user-selected email relay.
 
 ## Specification
 
@@ -63,7 +63,7 @@ dirOf("ar-XB") // "rtl"
 |---|---|---|---|---|
 | TEST-PS-113-09.T03 | property | PS-113-09.R02, PS-113-04.R02 | for each shipped locale and counts 0..1000000, compare tp() category to Intl.PluralRules | category matches; every category has a string; no exception |
 | TEST-PS-113-09.T06 | unit | PS-113-04.R01, PS-113-04.R02, PS-113-05.R01, PS-113-05.R02, PS-113-03.R03 | inspect exports, network calls, storage and authorization calls | pure functions or Result values; no vault or relay command; no network call during t(); no persisted state of its own |
-| TEST-PS-113-09.T15 | contract | PS-113-04.R03 | service worker receives the push payload {v, ref, tpl: notify.tpl.offers.made, ck, urg} with the vault in de; render every F13.S01.M02 email template with the relay build of the catalogs | alert text rendered on the device by t(tpl) in German; payload carries no text; no relay code path renders push text; email templates declare no parameter carrying user content or Money |
+| TEST-PS-113-09.T15 | contract | PS-113-04.R03 | with the vault in de the service worker receives each of the three F13.S01.M01 push payload forms - a sealed payload {v, urg, s} that opens on the device to {v, tpl: notify.tpl.offers.made, ref, ck}, a relay-hook payload {v, urg, tpl: notify.tpl.activity.wake} from the mailbox hook and a digest payload {v, urg, tpl: notify.tpl.system.digest, n: 7}; render every F13.S01.M02 email template with the relay build of the catalogs | sealed alert text rendered on the device by t(tpl) from the opened box in German; hook alert text rendered by t(tpl) in German; digest rendered by tp(notify.tpl.system.digest, 7) with the de plural form; no form carries text; no relay code path renders push text; email templates declare no parameter carrying user content or Money |
 
 ## Dependencies
 

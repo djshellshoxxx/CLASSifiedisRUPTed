@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Local-first reporting. A member reports content from their own vault: the vault captures evidence of what it holds (via F12.S01.M02), stores the Report locally, and sends a report statement to one user-selected relay. The statement has a signed header the relay can read (report id, relay, reporter key, subject key, target and reason) and a body sealed to that relay's moderation key (details and evidence). The relay verifies the statement, returns a signed receipt and emits the relay-local moderation.report.received event that opens or extends a case; when the report is attached to a case and when the case closes, the relay sends signed link and outcome statements back. The reporter can also hide or block locally and subscribe to signed advisory feeds that label or hide content, with no relay involved. A relay's moderators decide only what that relay indexes; there is no global takedown. Reporter pseudonymity is not anonymity: the relay operator sees the reporting key, and the relay's hosting policy (not cryptography) promises not to reveal it to the reported party.
+Local-first reporting. A member reports content from their own vault: the vault captures evidence of what it holds (via F12.S01.M02), stores the Report locally, and sends a report statement to one user-selected relay. The statement has a signed header the relay can read (report id, relay, reporter key, subject key, target and reason) and a body sealed to that relay's moderation key (details and evidence). The relay verifies the statement, returns a signed receipt and emits the relay-local moderation.report.received event that opens or extends a case; when the report is attached to a case and when the case closes, the relay sends signed link and outcome statements back. The reporter can also hide or block locally and subscribe to signed advisory feeds that label or hide content, with no relay involved. A relay's moderators decide only what that relay indexes; there is no global takedown. Reporter pseudonymity is not anonymity: the relay operator sees the reporting key, and the relay's hosting policy (not cryptography) promises not to reveal it to the reported party. Local hides are vault records that local views (F06 search and proximity results) apply at query time through the in-process LocalHidePort (isHidden, filterHidden), and the user removes them with an explicit unhide.
 
 ## Responsibilities
 
@@ -14,7 +14,7 @@ Local-first reporting. A member reports content from their own vault: the vault 
 - Offer the 12-code reason taxonomy and produce the report statement addressed to one user-selected relay, bound to that relay's DID and current moderation key.
 - Deduplicate reports (one open report per reporter key, target and reason) in the vault and again at the relay, and cap reports per relay policy through F12.S03.M03.
 - On the relay, verify received reports, store the readable header and sealed body, return a signed receipt, emit moderation.report.received (and moderation.report.dismissed for reports on cases closed without action), and send signed reportlinked and reportoutcome statements to reporters.
-- Provide local hide (never leaves the device) and advisory-feed subscriptions that label or hide matching content in local views, removing labels on verified retraction or expiry.
+- Provide local hide records (never leave the device) with explicit hide and unhide commands, the in-process LocalHidePort (isHidden by targetRef or authorDid, filterHidden over result items) used by F06.S01.M02 and F06.S02.M03 at query time, and advisory-feed subscriptions that label or hide matching content in local views, removing labels on verified retraction or expiry.
 - Show the reporter honest delivery state and a coarse outcome (actioned on that relay, no action, duplicate, removed by owner) from verified relay statements.
 - Keep the relay-side report ledger (reporter keys per case) used in-process for conflict-of-interest checks (F12.S02.M01, F12.S01.M03) and report-abuse controls.
 
@@ -34,6 +34,7 @@ Local-first reporting. A member reports content from their own vault: the vault 
 - As a member, I can hide content or an author on my device immediately, even when no relay is reachable.
 - As a member, I can subscribe to a relay's or community's signed advisory feed and choose whether matching content is labelled or hidden, and labels disappear when the publisher retracts them or they expire.
 - As a member reporting a private message, I am told that by default only its metadata is sent, and I choose whether to disclose a redacted copy.
+- As a member, I can see what I hid on this device and unhide an item or an author, and my searches show it again at once.
 
 ## Edge cases
 
@@ -47,6 +48,9 @@ Local-first reporting. A member reports content from their own vault: the vault 
 - The first receipt is lost and the vault retries on day 3; the relay returns the stored signed receipt for the same reportId and digest instead of a duplicate error.
 - A relay forwards a report statement it received to another relay; the second relay refuses it because the signed relayId and sealing key are not its own.
 - The reported private message came from the only counterparty; the sheet warns that the reported party can infer who reported it.
+- A member hides author A and later one listing of author B; filterHidden drops every result item of A and only that listing of B, and unhiding A restores A's items in the next query without touching the search index.
+- A message disclosure preview removed a phone number; the report carries the redacted copy without the message key K, because K and the ciphertext would reveal the removed number, and the relay shows 'redacted copy, commitment not checkable'.
+- A message disclosure preview removed nothing; the sealed body carries K so the relay recomputes the key commitment and checks that the ciphertext decrypts to the disclosed text.
 
 ## UX and accessibility
 
@@ -55,8 +59,9 @@ Local-first reporting. A member reports content from their own vault: the vault 
 - Delivery status line under each report: Saved on this device, Sent to relay, Relay acknowledged, Linked to a case, Resolved; each with timestamp labelled as 'this device' or 'relay clock'.
 - Settings > Safety > Advisory feeds: add publisher, per-feed mode (label, hide, ignore), last update, revoke state, number of active, retracted and expired advisories.
 - Honest notice on the sheet: your reporting key is visible to the relay's moderators; the person reported is not told by the relay's policy; copies already fetched by others cannot be recalled.
+- Settings > Safety > Hidden on this device: hidden items and authors with the time hidden and an Unhide button each; the note says hides stay on this device and are never sent.
 
-**States:** loading; empty; saved-locally; sent; acknowledged; linked; resolved; duplicate; relay-unreachable; quarantined-outcome; disclosure-preview
+**States:** loading; empty; saved-locally; sent; acknowledged; linked; resolved; duplicate; relay-unreachable; quarantined-outcome; disclosure-preview; hidden-locally; unhidden
 
 **Accessibility:** Reason list is a radiogroup with arrow-key navigation and per-option descriptions.; Delivery state changes are announced in an aria-live polite region and are never conveyed by color alone.; All controls are at least 44 by 44 px and the sheet traps focus and restores it on close.
 
@@ -67,8 +72,8 @@ Local-first reporting. A member reports content from their own vault: the vault 
 
 ## Interfaces
 
-- Commands: `moderation.report.file`, `moderation.report.withdraw`, `moderation.report.receive`, `moderation.report.link_case`, `moderation.report.receive_relay_statement`, `moderation.advisorysubscription.set`, `moderation.advisorysubscription.sync`
-- Queries: `moderation.report.list_mine`, `moderation.report.list_for_target`, `moderation.report.status_for_reporter`, `moderation.report.ledger_for_case`, `moderation.advisorysubscription.list`
+- Commands: `moderation.report.file`, `moderation.report.withdraw`, `moderation.report.receive`, `moderation.report.link_case`, `moderation.report.receive_relay_statement`, `moderation.localhide.add`, `moderation.localhide.remove`, `moderation.advisorysubscription.set`, `moderation.advisorysubscription.sync`
+- Queries: `moderation.report.list_mine`, `moderation.report.list_for_target`, `moderation.report.status_for_reporter`, `moderation.report.ledger_for_case`, `moderation.localhide.list`, `moderation.localhide.check`, `moderation.localhide.filter`, `moderation.advisorysubscription.list`
 - Emits: `moderation.report.filed`, `moderation.report.received`, `moderation.report.dismissed`
 - Consumes: `moderation.case.opened`, `moderation.case.closed`, `privacy.deletion.completed`
 
@@ -80,13 +85,13 @@ F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-094-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-094-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-094-02 | [Validation rules](validation_rules.md) | 4 |
-| PS-094-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-094-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-094-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
+| PS-094-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-094-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-094-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-094-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
+| PS-094-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
 | PS-094-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-094-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-094-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -95,6 +100,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T29 pass in CI.
 - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
 - The UI never shows sent, acknowledged, linked or resolved before the matching verified state is reached.

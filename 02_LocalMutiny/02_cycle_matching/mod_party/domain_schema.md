@@ -31,7 +31,7 @@ Schema `classrup.mutiny.matching_profile/v1` · storage **device** · privacy **
 | pausedUntil? | timestamp — at most now + 90 d |
 | excludedActorIds | array — local only, ≤ 200 DIDs, never in the projection |
 | includeUnknownIdentities | boolean — local only, default false; when false the engine excludes counterparties with no history known to this vault (F02.S02.M03) |
-| regionL1 | string — geohash4 of home region from F06.S02.M02, validated with F06.S02.M01 assertPublicCell; used only to partition matching, never for pair distances; required when optedIn |
+| regionL1 | string — geohash4 home region: the first 4 characters of publicCell of the last consumed discovery.location.updated event (no build dependency on its producer) or a manual entry, validated with F06.S02.M01 assertPublicCell; used only to partition matching, never for pair distances; required when optedIn |
 | seq | int — projection sequence per CTR-FED-001 FED-3, starts at 1 |
 | prev? | cid — hash of previous projection envelope |
 | projectionCid? | cid — sha256 of the signed projection envelope |
@@ -66,4 +66,4 @@ CREATE UNIQUE INDEX mutiny_matching_profile_actor ON mutiny_matching_profile(ten
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

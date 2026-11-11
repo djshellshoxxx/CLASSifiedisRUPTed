@@ -6,13 +6,13 @@
 
 ## Purpose
 
-Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers. Receivers independently recompute the arithmetic. Quotes are requested with purpose barter_normalization and a lifetime of at most 24 h (N16) and are shown as 'pinned rate agreed by all parties' with their source (relay-signed, manual operator rate, local). A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues a quote_refresh revision, which voids earlier consents. When a pinned quote expires before commit, the record expires with the same consequence.
+Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers. Receivers independently recompute the arithmetic. Quotes are requested with purpose barter_normalization and a lifetime of at most 24 h (N16) and are shown as 'pinned rate agreed by all parties' with their source label from F09.S03.M02 ('signed by relay <name>', 'manual rate by <pseudonym>' or 'source asserted by <pseudonym>, not verifiable'); a receiving vault takes that label and sourceSigned from commerce.fx_quote.verify_embedded, never from the sender. A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues a quote_refresh revision, which voids earlier consents. When a pinned quote expires before commit, the record expires with the same consequence.
 
 ## Responsibilities
 
 - Compute normalization records for a subject from valuations and quotes, with settlement currency default from the vault's configuration (default EUR for a EUR tenant), at most 5 distinct currencies and 8 quotes per record.
 - Request quotes from F09.S03.M02 with purpose barter_normalization and validForMs = min(consentDeadline − now + 30 min, 24 h) (N16), label each pinned rate 'pinned rate agreed by all parties' with its source, and require consentDeadline ≤ now + 24 h and ≤ earliestQuoteExpiry; otherwise re-quote and require fresh consent through a quote_refresh revision.
-- Verify and store peers' normalization data from signed revisions by recomputing every conversion, and flag mismatches.
+- Verify and store peers' normalization data from signed revisions by recomputing every conversion and checking every embedded quote with F09.S03.M02 commerce.fx_quote.verify_embedded, taking sourceSigned, issuerSigned and the origin label from its result, and flag mismatches.
 - Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, freeze records after commit and close them when the subject ends, forks or freezes.
 - When the settlement currency is not EUR, provide the tolerance reference quote EUR to settlement currency (purpose barter_normalization) that the revision pins as toleranceRef, used only to convert the profile's absolute minimum reference (F02.S02.M05 C05); its rate is part of the signed terms and its later expiry has no effect.
 - Register the module's export section, deletion and retention purge handlers with F10 (N6).
@@ -72,7 +72,7 @@ F02.S04.M03, F09.S03.M01, F09.S03.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F1
 | PS-025-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-025-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-025-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-025-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-025-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-025-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-025-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-025-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -84,6 +84,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T20 pass in CI.
 - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
 - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.

@@ -9,11 +9,12 @@ summary: >-
   This module is the single caller of the InventoryPort for cycle holds and the single ingest owner of cycle reservations and release notices. A reservation
   prevents conflicts only inside the reserving vault; across vaults it is a signed promise whose breach can be detected but not prevented. A subject can be
   committed by a vault only when every giver's reservation is present, valid and unexpired on that vault's clock. Conflicting promises freeze the affected subjects.
-  The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement.
+  The local record schema classrup.mutiny.cycle_lock/v1 is never sent as a statement. F01.S03.M01 sends no release for holderType cycle, so this module signs the cycle release
+  notice classrup.mutiny.reservation_release/v1, registered as an alias of classrup.bazaar.reservation_release/v1 and carrying exactly its payload {releasesCid, holder, reason}.
 responsibilities:
-  - "Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {listingId, variantId?, quantity} mapped from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d)."
+  - "Reserve the principal's own items for a subject all-or-nothing through bazaar.inventory.hold (lines {inventoryItemId, quantity} taken from the leg items, holder {type: cycle, id: subjectId}) and issue classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation {holdIds, audience [{did, mailboxId}], expiresAt, ext} with expiresAt = min(consentDeadline + executionWindowMs, issue time + 30 d)."
   - Renew the local hold internally with bazaar.inventory.renew before it lapses, up to the statement's absolute expiresAt and never beyond the hold's maxExpiresAt, without re-signing.
-  - Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1.
+  - Release, convert (on the giver's own handed_over attestation or the receiver's verified receipt) or expire reservations, keep holds of undelivered legs under recovery ownership after partial execution, and publish the signed release notice classrup.mutiny.reservation_release/v1 (alias of classrup.bazaar.reservation_release/v1) whenever an own reservation ends before its expiresAt without conversion.
   - Verify peers' reservation statements and release notices (storing the generic statement through bazaar.inventory.record_peer_reservation), detect conflicting promises for the same item, and emit locked and unlocked events for local consumers.
   - Provide the LockPort releaseForSubject used inside the transactions of F02.S01.M01, F02.S03.M01 and F02.S03.M03.
   - Enforce a cap of 5 active own reservation sets per vault and evaluate expiry lazily on vault open and every 60 s while open.
@@ -68,13 +69,13 @@ processes:
           - "kind: enum — reserve | release"
           - "direction: enum — own | peer"
           - "revisionHash: cid — head revision digest the reservation was made against, carried in the statement extension ext.revisionHash"
-          - "items: array — 1..5 items {inventoryItemId uuidv7, listingId uuidv7, listingCid cid, variantId? uuidv7, quantity int 1..99, holdId? uuidv7}; listingId, variantId and quantity form the InventoryPort line; holdId only on own"
+          - "items: array — 1..5 items {inventoryItemId uuidv7, listingId uuidv7, listingCid cid, variantId? uuidv7, quantity int 1..99, holdId? uuidv7}; inventoryItemId and quantity form the InventoryPort line {inventoryItemId, quantity}; listingId, listingCid and variantId are the statement item references; holdId only on own"
           - "expiresAt: timestamp — absolute; min(consentDeadline + executionWindowMs, issue time + 30 d), never extended; evaluated on the local clock"
           - "holdRenewedUntil?: timestamp — own only; current expiry of the local hold, renewed internally up to expiresAt and never past the hold's maxExpiresAt"
           - "issuedAtClaim: timestamp — signer's clock, a claim"
           - "status: enum — active | recovery_held | released | converted | expired | superseded | conflicted"
           - "releaseReason?: enum — declined | withdrawn | cancelled | completed | recovered | item_lost | fork_frozen | superseded | subject_ended"
-          - "reservationCid: cid — cid of the classrup.bazaar.reservation/v1 statement (kind reserve) or of the classrup.mutiny.reservation_release/v1 notice (kind release)"
+          - "reservationCid: cid — cid of the classrup.bazaar.reservation/v1 statement (kind reserve) or of the release notice (kind release): classrup.mutiny.reservation_release/v1, the alias of classrup.bazaar.reservation_release/v1"
           - "supersedesCid?: cid — earlier reservation of the same signer and subject that this one replaces (statement extension)"
           - "releasesCid?: cid — required when kind is release; the reservation the notice releases"
           - "sig: string — Ed25519 signature (base64url) per CTR-FED-001 FED-2"
@@ -99,14 +100,14 @@ processes:
       - Incoming reservation statements are verified for signature, signer role, digest binding and expiry before they count toward any commit verdict.
       - Conflict detection compares only data this vault legitimately holds and never claims knowledge of other vaults.
     rules:
-      - "V01 | items has 1..5 lines with quantity 1..99, each maps to an InventoryPort line {listingId of the item's local listing, variantId?, quantity} owned by the principal, and bazaar.inventory.hold succeeds for all lines at once | MUTINY_LOCK_UNAVAILABLE"
+      - "V01 | items has 1..5 lines with quantity 1..99, each is an InventoryPort line {inventoryItemId, quantity} of an item owned by the principal, and bazaar.inventory.hold succeeds for all lines at once | MUTINY_LOCK_UNAVAILABLE"
       - "V02 | expiresAt = min(consentDeadline + executionWindowMs, now + 30 d) and the head revision satisfies the F02.S01.M04 V09 cap ((consentDeadline − revision time) + executionWindowMs ≤ 30 d), so expiresAt normally equals consentDeadline + executionWindowMs; the hold is taken with ttlMs = min(expiresAt − now, 14 d) | MUTINY_LOCK_EXPIRY_INVALID"
       - "V03 | the principal has fewer than 5 active own reservation sets | MUTINY_LOCK_LIMIT"
       - "V04 | revisionHash equals the subject's head revision hash | MUTINY_LOCK_REVISION_STALE"
       - "V05 | peer classrup.bazaar.reservation/v1 has holder {type: cycle, id: subjectId}, signature verifies Ed25519 and the signer is the listing owner (F01.S03.M01 V11) and a giver in the head revision's legs, ext.revisionHash equals the head digest, and supersedesCid, when present, names an earlier active reservation of the same signer and subject | MUTINY_LOCK_STATEMENT_INVALID"
       - "V06 | peer reservation expiresAt ≥ head consentDeadline + executionWindowMs and is still in the future on the local clock | MUTINY_LOCK_STATEMENT_INVALID"
       - "V07 | conflict counts only peer and own reservations that are active, unexpired on the local clock and whose subject is non-terminal in this vault; another such reservation of the same item for a different subject that exceeds the quantity is a conflict | MUTINY_LOCK_CONFLICT"
-      - "V08 | a release notice classrup.mutiny.reservation_release/v1 carries releasesCid naming an active reservation of the same signer and subject; it is accepted only from that signer and only while that reservation is active, and a notice naming any other cid is ignored | CONFLICT_STATE"
+      - "V08 | a release notice (classrup.mutiny.reservation_release/v1, alias of classrup.bazaar.reservation_release/v1, or classrup.bazaar.reservation_release/v1 itself with holder.type cycle) has exactly the payload {releasesCid, holder {type: cycle, id: subjectId}, reason} and releasesCid names an active reservation of the same signer and subject; it is accepted only from that signer and only while that reservation is active, and a notice naming any other cid is ignored | CONFLICT_STATE"
       - "V09 | issuedAtClaim is not more than 5 minutes after the local clock | MUTINY_LOCK_STATEMENT_INVALID"
       - "V10 | a local hold renewal never sets holdRenewedUntil past the statement's expiresAt or the hold's maxExpiresAt and never re-signs the statement | MUTINY_LOCK_EXPIRY_INVALID"
   workflow_state_machine:
@@ -133,29 +134,30 @@ processes:
       - "Local hold renewal with bazaar.inventory.renew when less than 24 h of hold ttl remain, in steps of at most 14 d, until expiresAt (statement) or maxExpiresAt (recovery_held); at most 20 renewals per F01."
   commands_queries_events:
     requirements:
-      - reserve produces classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation and release produces the notice classrup.mutiny.reservation_release/v1; ingest verifies a peer's reservation or release notice and produces none; classrup.mutiny.cycle_lock/v1 is the local record only.
+      - reserve produces classrup.bazaar.reservation/v1 through bazaar.inventory.issue_reservation and release produces the notice classrup.mutiny.reservation_release/v1 (alias of classrup.bazaar.reservation_release/v1); ingest verifies a peer's reservation or release notice and produces none; classrup.mutiny.cycle_lock/v1 is the local record only.
       - The reserve command takes all holds and writes the statement and event in one IndexedDB transaction, and it is idempotent.
       - Events locked and unlocked are emitted for own reservations and for verified peer reservations, with direction in the payload.
-      - "Statements registered with the F11.S01.M01 registry (N2): classrup.bazaar.reservation/v1 with holder.type cycle, signer role 'owner of the listed items and giver in the head revision' (ingest owner here, storage through F01.S03.M01 record_peer_reservation), and classrup.mutiny.reservation_release/v1, signer role 'signer of the released reservation'; statements from DIDs the principal blocked are dropped silently (N7)."
-      - "This module is the single caller of the F01.S03.M01 InventoryPort for holderType cycle (hold, renew, release, convert); F01.S03.M01 does not act on mutiny events, and the unlocked event names holdIds for own locks."
+      - "Statements registered with the F11.S01.M01 registry (N2): classrup.bazaar.reservation/v1 with holder.type cycle, signer role 'owner of the listed items and giver in the head revision' (ingest owner here, storage through F01.S03.M01 record_peer_reservation), and classrup.mutiny.reservation_release/v1 with aliasOf classrup.bazaar.reservation_release/v1 (payload schema, audience and signer role 'signer of the released reservation' of that entry); statements from DIDs the principal blocked are dropped silently (N7)."
+      - "This module is the single caller of the F01.S03.M01 InventoryPort for holderType cycle (hold, renew, release, convert); F01.S03.M01 does not act on mutiny events and sends no classrup.bazaar.reservation_release/v1 for holderType cycle, and the unlocked event names holdIds for own locks."
+      - "Release notices carry exactly the classrup.bazaar.reservation_release/v1 payload {releasesCid, holder {type: cycle, id: subjectId}, reason} under the alias type; the local releaseReason maps to reason frozen for fork_frozen, for item_lost to the reason of the F01 hold release when it is owner_override, listing_gone or deal_cancelled (released when the F01 reason is expired), and to released for every other reason; no notice is sent for converted locks or for locks that reach their signed expiresAt, because conversion is evidenced by attestations and expiry by the signed expiresAt."
     commands:
       - name: mutiny.lock.reserve
         capability: mutiny.lock.reserve
-        input: "{ subjectType, subjectId, revisionHash, items: { inventoryItemId, quantity }[1..5], consentDeadline, executionWindowMs, audience: did[] } — vault command; calls bazaar.inventory.hold {holder {type: cycle, id: subjectId}, ttlMs, lines} and bazaar.inventory.issue_reservation {holdIds, audience, expiresAt, ext {subjectType, revisionHash, supersedesCid?}}; produces statement classrup.bazaar.reservation/v1 signed by the principal"
+        input: "{ subjectType, subjectId, revisionHash, items: { inventoryItemId, quantity }[1..5], consentDeadline, executionWindowMs, audience: { did, mailboxId }[1..10] } — vault command; calls bazaar.inventory.hold {holder {type: cycle, id: subjectId}, ttlMs, lines: { inventoryItemId, quantity }[]} and bazaar.inventory.issue_reservation {holdIds, audience, expiresAt, ext {subjectType, revisionHash, supersedesCid?}} (F01 also accepts holdId or holder; this module always names the holdIds of the set); produces statement classrup.bazaar.reservation/v1 signed by the principal"
         output: "{ lockId, reservationCid, expiresAt, holdIds, syncState: local_committed | prepared }"
         errors: [VALIDATION_FAILED, MUTINY_LOCK_UNAVAILABLE, MUTINY_LOCK_CONFLICT, MUTINY_LOCK_LIMIT, MUTINY_LOCK_EXPIRY_INVALID, MUTINY_LOCK_REVISION_STALE]
         emits: [mutiny.cycle.locked]
         idempotent: true
       - name: mutiny.lock.release
         capability: mutiny.lock.release
-        input: "{ lockId, expectedRevision, reason } — vault command; releases the holds with bazaar.inventory.release and produces the notice classrup.mutiny.reservation_release/v1 {releasesCid, holder, revisionHash, reason} signed by the principal"
+        input: "{ lockId, expectedRevision, reason } — vault command; releases the holds with bazaar.inventory.release and produces the notice classrup.mutiny.reservation_release/v1 (alias of classrup.bazaar.reservation_release/v1) {releasesCid, holder {type: cycle, id: subjectId}, reason: released|frozen|owner_override|listing_gone|deal_cancelled} signed by the principal to the reservation audience"
         output: "{ lockId, revision, status: released, syncState }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: [mutiny.cycle.unlocked]
         idempotent: true
       - name: mutiny.lock.ingest
         capability: mutiny.lock.ingest
-        input: "{ envelope: classrup.bazaar.reservation/v1 with holder.type cycle | classrup.mutiny.reservation_release/v1, signed by the giver, provenance } — vault command; stores the reservation as evidence through bazaar.inventory.record_peer_reservation; produces no statement"
+        input: "{ envelope: classrup.bazaar.reservation/v1 with holder.type cycle | classrup.mutiny.reservation_release/v1 (alias of classrup.bazaar.reservation_release/v1) | classrup.bazaar.reservation_release/v1 with holder.type cycle, signed by the giver, provenance } — vault command; stores the reservation or release as evidence through bazaar.inventory.record_peer_reservation (an alias notice is passed as the classrup.bazaar.reservation_release/v1 entry it aliases); produces no statement"
         output: "{ lockId?, accepted: boolean, status, quarantineReason? }"
         errors: [MUTINY_LOCK_STATEMENT_INVALID, MUTINY_LOCK_REVISION_STALE, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED, CONFLICT_STATE]
         emits: [mutiny.cycle.locked, mutiny.cycle.unlocked, mutiny.lock.conflict_detected]
@@ -194,7 +196,7 @@ processes:
       - {type: mutiny.proposal.withdrawn, effect: "release own reservations of the proposal and mark peer locks subject_ended"}
       - {type: mutiny.proposal.expired, effect: "release own reservations of the proposal and mark peer locks subject_ended"}
       - {type: mutiny.revision.forked, effect: "release own reservations of the frozen subject with reason fork_frozen"}
-      - {type: bazaar.inventory.released, effect: "if the released hold belongs to an active own reservation and was not released by this module, mark it expired with reason item_lost and emit unlocked"}
+      - {type: bazaar.inventory.released, effect: "if the released hold belongs to an active own reservation and was not released by this module (reason expired, owner_override, listing_gone or deal_cancelled), mark it expired with releaseReason item_lost, send the release notice with the F01 reason (released for expired) and emit unlocked"}
       - {type: bazaar.inventory.conflict_detected, effect: "an own hold froze because two devices of the principal reserved the same unit; mark the affected own locks conflicted, release own locks of every named subject with fork_frozen and emit mutiny.lock.conflict_detected"}
       - {type: privacy.deletion.completed, effect: "release remaining own holds of the erased principal and pseudonymize the erased DID in retained lock records; signed statements stay verifiable"}
     errors:
@@ -281,7 +283,7 @@ processes:
       - "T05 | integration | 02.R01,06.R03 | reserve [I1, I2, I3] where I3 is unavailable | MUTINY_LOCK_UNAVAILABLE and I1, I2 holds absent"
       - "T06 | integration | 03.R03,06.R03 | vault closed beyond expiry then opened | lock expired before any command runs, holds released, unlocked emitted"
       - "T07 | integration | 03.R02,04.R03 | leg.received for all items, then for part of the items | lock converted only when all items received; holds converted in inventory"
-      - "T08 | contract | 04.R01,04.R02,09.R02,04.R04 | commands and events | statements validate against classrup.bazaar.reservation/v1 (F01 schema, holder cycle) and classrup.mutiny.reservation_release/v1; no classrup.mutiny.cycle_lock/v1 envelope is ever sent; locked carries lockId, reservationCid and revisionHash; unlocked carries lockId, revisionHash and own holdIds"
+      - "T08 | contract | 04.R01,04.R02,09.R02,04.R04 | commands and events | statements validate against classrup.bazaar.reservation/v1 (F01 schema, holder cycle) and, for classrup.mutiny.reservation_release/v1, against the classrup.bazaar.reservation_release/v1 schema it aliases; no classrup.mutiny.cycle_lock/v1 envelope is ever sent; locked carries lockId, reservationCid and revisionHash; unlocked carries lockId, revisionHash and own holdIds"
       - "T09 | integration | 02.R02,07.R01 | peer statements: valid, bad signature, wrong signer, expiry too short, duplicated | only valid one stored; others quarantined; duplicate skipped"
       - "T10 | integration | 07.R03,02.R03 | peer double promise for one quantity-1 item in two subjects | both conflicted, conflict_detected emitted, both subjects frozen"
       - "T11 | abuse | 05.R01,05.R02,05.R03,07.R03 | other principal reserves; reservation for another person's item; relay inspects mailbox | FORBIDDEN or quarantine; relay sees ciphertext only"
@@ -296,8 +298,9 @@ processes:
       - "T20 | integration | 02.R03,03.R01 | peer lock of a cycle that ended locally plus a new cycle over the same item; conflict_detected between two live subjects | ended subject's peer lock marked subject_ended and not counted, new cycle not frozen; for live subjects own locks of both are released with fork_frozen"
       - "T21 | integration | 06.R02,04.R05 | LockPort.releaseForSubject inside a cancelling transaction that then aborts | holds and locks unchanged after abort; on commit holds released before the transaction ends"
       - "T22 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.locks exported without holdIds; erased principal's own holds released and records pseudonymized; signatures still verify"
+      - "T23 | contract | 04.R06,04.R05,01.R01 | reserve with lines {inventoryItemId, quantity} and audience [{did, mailboxId}]; release after decline, after fork_frozen and after an F01 release with reason deal_cancelled; ingest of an alias notice and of a bazaar release with holder cycle | hold and issue_reservation called with those shapes; notices typed classrup.mutiny.reservation_release/v1 with payload {releasesCid, holder {type: cycle, id}, reason} and reasons released, frozen and deal_cancelled; the registry resolves the alias to classrup.bazaar.reservation_release/v1; both notices release the peer lock and reach record_peer_reservation; no notice for converted locks or at the signed expiresAt"
     acceptance:
-      - All tests T01–T22 pass in CI.
+      - All tests T01–T23 pass in CI.
       - A reservation never leaves a partial item set, and no module claims that a peer's reservation prevents that peer from double-promising.
       - Expiry is always evaluated on the local clock and terminal lock states never reopen.
   import_export_backup_rollback:

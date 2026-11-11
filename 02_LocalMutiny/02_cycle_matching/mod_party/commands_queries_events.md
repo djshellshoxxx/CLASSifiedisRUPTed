@@ -40,7 +40,7 @@
 |---|---|
 | `identity.block.added` | no profile change; eligibility function reads the block list at evaluation time |
 | `identity.block.removed` | no profile change; eligibility re-evaluated on next read |
-| `discovery.location.updated` | if the principal is opted in and regionL1 changed, update regionL1 (assertPublicCell) and publish projection seq+1 |
+| `discovery.location.updated` | keep the first 4 characters of publicCell as the region candidate (none at publicLevel L0); if the principal is opted in and regionL1 changed, update regionL1 (assertPublicCell) and publish projection seq+1; at L0 an opted-in principal keeps the last regionL1 until changing it manually |
 | `privacy.consent.withdrawn` | for purpose federation_publish and a relay: queue a signed tombstone to that relay and publish nothing further there |
 | `privacy.deletion.completed` | purge the local profile including exclusions after the tombstone was queued; peer mirrors of the erased DID are deleted |
 
@@ -79,4 +79,4 @@ statement sent to selected relays (excludedActorIds omitted):
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

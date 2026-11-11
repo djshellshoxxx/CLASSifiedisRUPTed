@@ -28,7 +28,7 @@
 |---|---|---|
 | T01 | Credential-stuffing or challenge flooding on relay access | relay.access class: 10 per minute per IP prefix, 5 per minute per key, failMode closed |
 | T02 | Evasion by creating many new keys | per-IP-prefix scope with multiplier 5, tenant global cap per class, and tier limits from F12.S03.M04 |
-| T03 | Proximity query trilateration | read.search class token bucket 60 per minute per key and 120 per minute per /24, minimum search radius enforced elsewhere (CTR-PRV-001 PRV-2) |
+| T03 | Proximity query trilateration | proximity budget classes registered by F06.S02.M03 (query volume per minute and per hour, distinct new centers per hour and per 24 h), read.proximity.center_new fail closed, dual-salt counting across rotation, minimum search radius enforced elsewhere (CTR-PRV-001 PRV-2) |
 | T04 | Privacy leak through rate-limit logs | only hashed keys and truncated prefixes; salts destroyed with their epoch; no raw IPs in storage |
 | T05 | Operator disables limits | bounded ranges (V01), locked fail modes (V03), all policy changes audit-logged and visible in the public relay policy |
 | T06 | Long-window limits reset at salt rotation | dual-epoch lookup until the previous epoch leaves the window |

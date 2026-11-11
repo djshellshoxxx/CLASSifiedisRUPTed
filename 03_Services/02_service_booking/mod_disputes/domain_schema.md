@@ -33,6 +33,7 @@ Schema `classrup.services.dispute_link/v1` · storage **device** · privacy **P2
 | state | enum — pending_link \| linked \| resolved \| withdrawn \| link_failed |
 | resolution? | enum — no_fault_close \| refund_claimed \| return_agreed \| enforcement_referral \| lapsed (the F09 resolution enum) |
 | outcomeType? | enum — no_fault_close \| refund_claimed \| return_agreed \| enforcement_referral; F09 outcome type when present |
+| disposition? | object — {kind: continue \| settled \| cancelled \| waived, favouredDid?, agreedAmount?: Money}; the advisory, non-executable F09 disposition copied from commerce.dispute.resolved when present; ignored with a warning when favouredDid is not the client or provider of the booking |
 | closeReason? | enum — resolved \| withdrawn \| case_withdrawn \| link_failed \| merged |
 | noticeCid? | string — cid of the signed dispute notice |
 | withdrawalCid? | string — cid of the signed dispute withdrawal |
@@ -47,6 +48,7 @@ Schema `classrup.services.dispute_link/v1` · storage **device** · privacy **P2
 - At most one link per scopeKey among links that are not withdrawn or link_failed, and at most one open link per booking in a vault.
 - evidencePack always contains the cids of the booking confirmation statement and of the quote that the booking derives from.
 - No field maps a resolution to an executable money or obligation change.
+- When disposition is stored, the effect recorded for the link is the one its kind maps to, never the outcome-type effect.
 
 ### Storage DDL
 

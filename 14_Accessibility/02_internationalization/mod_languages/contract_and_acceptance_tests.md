@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Catalogs en, de, fr, es plus generated en-XA and ar-XB; a broken fixture catalog set (missing key, parameter mismatch, missing plural, 501-character message, nested braces, ICU select syntax); lint fixtures with left and right CSS and a call site missing a declared parameter; LocalSettings fixtures with defaultLocale de, de-AT and pt-BR; a received listing title containing U+202E; a push payload with tpl notify.tpl.offers.made.
+**Fixtures:** Catalogs en, de, fr, es plus generated en-XA and ar-XB; a broken fixture catalog set (missing key, parameter mismatch, missing plural, 501-character message, nested braces, ICU select syntax); lint fixtures with left and right CSS and a call site missing a declared parameter; LocalSettings fixtures with defaultLocale de, de-AT and pt-BR; a received listing title containing U+202E; three F13.S01.M01 push payloads - a sealed payload {v, urg, s} whose box opens on the device to {v, tpl: notify.tpl.offers.made, ref, ck}, a relay-hook payload {v, urg, tpl: notify.tpl.activity.wake} from the mailbox hook and a digest payload {v, urg, tpl: notify.tpl.system.digest, n: 7}.
 
 ## Verification
 
@@ -34,7 +34,7 @@ See the module test table below (all processes).
 | TEST-PS-113-09.T12 | load | PS-113-08.R01, PS-113-08.R02, PS-113-08.R03 | 100 000 t() calls; catalog load on 4G profile; bundle size check | p95 ≤ 0.05 ms, switch ≤ 300 ms, load ≤ 1 s, catalogs ≤ 30 KiB gzip |
 | TEST-PS-113-09.T13 | unit | PS-113-09.R01 | traceability tool run | every PS-113 requirement maps to a passing test |
 | TEST-PS-113-09.T14 | integration | PS-113-10.R01, PS-113-10.R02, PS-113-10.R03 | add a key and a locale; export and import F15.S04.M03 LocalSettings with defaultLocale de and with pt-BR; roll back a release | new keys fall back to en until translated; de restored after import; pt-BR kept while the browser language or en is used; this module adds no export section; rollback keeps users on a shipped locale |
-| TEST-PS-113-09.T15 | contract | PS-113-04.R03 | service worker receives the push payload {v, ref, tpl: notify.tpl.offers.made, ck, urg} with the vault in de; render every F13.S01.M02 email template with the relay build of the catalogs | alert text rendered on the device by t(tpl) in German; payload carries no text; no relay code path renders push text; email templates declare no parameter carrying user content or Money |
+| TEST-PS-113-09.T15 | contract | PS-113-04.R03 | with the vault in de the service worker receives each of the three F13.S01.M01 push payload forms - a sealed payload {v, urg, s} that opens on the device to {v, tpl: notify.tpl.offers.made, ref, ck}, a relay-hook payload {v, urg, tpl: notify.tpl.activity.wake} from the mailbox hook and a digest payload {v, urg, tpl: notify.tpl.system.digest, n: 7}; render every F13.S01.M02 email template with the relay build of the catalogs | sealed alert text rendered on the device by t(tpl) from the opened box in German; hook alert text rendered by t(tpl) in German; digest rendered by tp(notify.tpl.system.digest, 7) with the de plural form; no form carries text; no relay code path renders push text; email templates declare no parameter carrying user content or Money |
 
 ## Acceptance criteria
 

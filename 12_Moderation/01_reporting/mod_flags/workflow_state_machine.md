@@ -10,6 +10,7 @@
 - **PS-094-03.R02** Sync state advances only through local committed, prepared, transport_acknowledged (relay transport 2xx or mailbox acknowledgement) and peer_accepted (verified relay receipt bound to reportId and statement digest), and the UI never shows more than the reached state.
 - **PS-094-03.R03** A reporter can withdraw a report while it is filed or linked; withdrawal sends a signed withdrawal statement but cannot recall evidence the relay already holds.
 - **PS-094-03.R04** The relay sends a signed reportlinked statement when it attaches a received report to a case and a signed reportoutcome statement when that case closes, so the reporter's vault can reach linked and resolved and see the outcome actioned or no_action.
+- **PS-094-03.R05** A local hide is active from hide until the user's explicit unhide, which deletes the row so the item or author shows again at the next query; hiding again creates a new row, and withdrawing a report does not unhide its target.
 
 ## Specification
 
@@ -56,6 +57,21 @@ stateDiagram-v2
   peer_accepted --> [*]
 ```
 
+### LocalHide lifecycle
+
+Initial **active**; terminal **removed**.
+
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| active -> removed | moderation.localhide.remove by the local principal (explicit unhide) | row deleted; isHidden and filterHidden stop matching it at the next call |
+
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> removed: moderation.localhide.remove by the local principal (explicit unhide)
+  removed --> [*]
+```
+
 **Note:** A 2xx response that already carries the signed receipt records transport_acknowledged and then peer_accepted as two ordered writes in one vault transaction, so each state has its own trigger and no step is skipped.
 
 ### Timeouts and scheduled transitions
@@ -75,6 +91,7 @@ stateDiagram-v2
 | TEST-PS-094-09.T16 | e2e | PS-094-03.R02, PS-094-08.R02 | mobile reporter files a report offline then reconnects | single report, delivery status progresses Saved, Sent, Relay acknowledged honestly, axe zero serious issues |
 | TEST-PS-094-09.T19 | integration | PS-094-03.R04 | report filed, case opened, moderation.action.apply with closeCase true | vault receives reportlinked then reportoutcome actioned and shows Resolved; status_for_reporter returns the same statements |
 | TEST-PS-094-09.T26 | integration | PS-094-04.R06, PS-094-03.R04 | a second reporter's report arrives after case C is open and is merged by F12.S02.M01; moderation.case.opened redelivered | link_case called in the intake transaction; the second reporter's vault receives one reportlinked for C and reaches linked; the fallback consumer sends nothing twice |
+| TEST-PS-094-09.T27 | contract | PS-094-04.R07, PS-094-01.R06, PS-094-03.R05, PS-094-02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault |
 
 ## Dependencies
 

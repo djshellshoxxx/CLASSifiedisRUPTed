@@ -251,6 +251,7 @@ processes:
       - A single ingestion command applies inbound statements; it drops statements from blocked DIDs silently, verifies, deduplicates by cid, derives local events with actor.kind federated and quarantines failures.
       - Events are local (EVT-8); they leave the device only as the statements named below.
       - Event payloads carry the client and provider DIDs that F13.S01.M03 needs to route notifications (N4), and services.booking.cancelled carries quoteId and slotHoldId so F03.S01.M02 can release the hold without reading the Booking.
+      - "services.booking.confirmed carries contextId (bookingId), contextType booking, contextCid (the confirmationCid of the provider-signed booking_confirmation, which binds quoteCid and acceptanceCid) and parties [{did, role client or provider}], identical in both vaults, so F07.S03.M01 can open the pending review window from the bilateral opening statement."
     commands:
       - name: services.quote.request
         capability: services.quote.request
@@ -336,7 +337,7 @@ processes:
       - {type: services.quote.requested, privacy: P2, payload: "{ requestId, offeringId, clientId, providerId, cid, firstContact }"}
       - {type: services.quote.issued, privacy: P2, payload: "{ quoteId, requestId, clientId, providerId, total, validUntil, cid, supersedes? }"}
       - {type: services.quote.accepted, privacy: P2, payload: "{ quoteId, requestId, bookingId, clientId, providerId, acceptanceCid }"}
-      - {type: services.booking.confirmed, privacy: P2, payload: "{ bookingId, quoteId, quoteCid, confirmationCid, clientId, providerId, startUtc?, endUtc?, total, milestonePlan[{milestoneId, seq, title, amount, dueAt?, parallel}] }"}
+      - {type: services.booking.confirmed, privacy: P2, payload: "{ bookingId, contextId: bookingId, contextType: booking, quoteId, quoteCid, confirmationCid, contextCid: confirmationCid, clientId, providerId, parties: [{did: clientId, role: client}, {did: providerId, role: provider}], startUtc?, endUtc?, total, milestonePlan[{milestoneId, seq, title, amount, dueAt?, parallel}] }"}
       - {type: services.booking.cancelled, privacy: P2, payload: "{ bookingId, quoteId, slotHoldId?, clientId, providerId, cancelledBy, reason, lateFeeClaim?, effectiveAt, cancellationCid? }"}
       - {type: services.quote.declined, privacy: P2, payload: "{ quoteId?, requestId, clientId, providerId, declinedBy, reason: client_declined|provider_request|superseded|request_cancelled|offering_withdrawn|blocked }"}
       - {type: services.quote.expired, privacy: P2, payload: "{ quoteId, requestId, clientId, providerId }"}
@@ -345,7 +346,7 @@ processes:
       - {type: services.milestone.approved, effect: "append the milestone dealId to the derived Booking.dealIds list for display; no Deal is opened or changed here"}
       - {type: services.booking.completed, effect: "move an in_progress or disputed booking to completed; the event carries the bilateral completionCid"}
       - {type: services.dispute.opened, effect: "for a confirmed or in_progress booking move to disputed and store preDisputeStatus and disputeCaseId; for any other status only set openDisputeLinkId and disputeCaseId; fee claims are frozen either way"}
-      - {type: commerce.dispute.resolved, effect: "for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping; refund_claimed and return_agreed only prompt both parties to sign a mutual cancellation or a new Deal; no obligation or fee changes automatically"}
+      - {type: commerce.dispute.resolved, effect: "for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay per the F03.S02.M03 mapping, which reads the advisory disposition {kind, favouredDid?, agreedAmount?} when present and otherwise the outcome type; dispositions settled, cancelled and waived, and outcome types refund_claimed and return_agreed, only prompt the parties to sign a mutual cancellation or a new Deal; no obligation or fee changes automatically"}
       - {type: commerce.dispute.withdrawn, effect: "for the booking whose disputeCaseId matches, restore preDisputeStatus and clear the overlay"}
       - {type: identity.block.added, effect: "cancel open requests and unconfirmed bookings between the two parties locally with reason blocked (no statement is sent); later statements from the blocked DID are dropped silently"}
       - {type: services.offering.withdrawn, effect: "provider vault: cancel open and quoted requests for offeringId with reason offering_withdrawn, withdraw issued quotes with provider-signed quote_decline statements and release their holds; confirmed bookings are unaffected"}
@@ -459,7 +460,7 @@ processes:
       - "T17 | property | 01.R02 | random hourly rates and estimatedMinutes | total equals rate times estimatedMinutes divided by 60 rounded HALF_EVEN through F09.S03.M03 and is computed once"
       - "T18 | integration | 04.R01 | crash injected between statement signing and the sync outbox write for every command | neither the state change nor the outbox entry persists"
       - "T19 | integration | 03.R04 | two vaults; provider confirmation delayed by 8 h past the client timeout, and a second run with skewed clocks | client signs a confirmation_timeout cancellation at 24 h; provider refuses confirm after receipt plus 24 h minus 5 min; a crossing confirmation moves the provider booking to conflicted with the slot committed and the client booking shows both statements; nothing quarantined"
-      - "T20 | integration | 03.R05 | dispute opened on confirmed and on in_progress bookings, then each F09 resolution (no_fault_close, refund_claimed, return_agreed, enforcement_referral, lapsed) and a withdrawal | booking returns to its pre-dispute status; no obligation or fee changes; completed and cancelled bookings get only the overlay"
+      - "T20 | integration | 03.R05 | dispute opened on confirmed and on in_progress bookings, then each F09 resolution (no_fault_close, refund_claimed, return_agreed, enforcement_referral, lapsed), a resolution carrying a cancelled disposition, and a withdrawal | booking returns to its pre-dispute status; the cancelled disposition only prompts a mutual cancellation; no obligation or fee changes; completed and cancelled bookings get only the overlay"
       - "T21 | integration | 03.R06 | propose mutual cancellation of an in_progress booking, counter-sign it, and a run where verify reports conflicted | cancelled only when verify is valid for both; conflicted consent moves the booking to conflicted"
       - "T22 | integration | 03.R03 | quote valid 72 h accepted at hour 71 and confirmed at hour 80 | hold extended on acceptance receipt; booking confirmed with the slot committed"
       - "T23 | abuse | 05.R02 | provider-signed booking_cancellation with reason client_request; client-signed quote_decline with reason provider_request | both quarantined with SERVICES_STATEMENT_INVALID; no fee assigned"
@@ -469,8 +470,9 @@ processes:
       - "T27 | integration | 07.R05 | block added then statements from the blocked DID; privacy.deletion.completed for the counterparty; export | statements dropped with no reply; counterparty pseudonymized; export section services.bookings present"
       - "T28 | abuse | 07.R06 | request description containing a street address; L4 share sent after booking | warning shown before sending; share TTL ≤ 24 h, purged at TTL and absent from the evidence pack"
       - "T29 | abuse | 01.R03 | booking_confirmation whose plan changes one milestone amount | quarantined with SERVICES_STATEMENT_INVALID; booking stays awaiting_confirmation"
+      - "T30 | contract | 04.R05 | provider confirms a booking and the client vault ingests the confirmation; both services.booking.confirmed events checked against the F07.S03.M01 consumer schema | each carries contextId = bookingId, contextType booking, contextCid = confirmationCid and parties with exactly one client and one provider DID; both vaults emit identical values"
     acceptance:
-      - All tests T01–T29 pass in CI.
+      - All tests T01–T30 pass in CI.
       - No booking is ever shown as confirmed without the provider's verified signed confirmation held in the vault.
       - Duplicated, reordered or replayed statements never change state twice, and a booking never stays disputed after its case is resolved or withdrawn.
   import_export_backup_rollback:

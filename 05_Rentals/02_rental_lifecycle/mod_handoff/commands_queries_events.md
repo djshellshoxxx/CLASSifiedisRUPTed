@@ -10,6 +10,7 @@
 - **PS-042-04.R02** One ingestion command applies inbound statements, deduplicates by cid, fetches and verifies referenced photos, derives local events with actor.kind federated and quarantines failures.
 - **PS-042-04.R03** Events are local (EVT-8); rentals.handoff.attested is derived in each vault only when both signatures on the same cid are held.
 - **PS-042-04.R04** Every statement schema this module sends is registered in the F11.S01.M01 statement registry with its signer role, and the receiving vault acts only on statements it accepted.
+- **PS-042-04.R05** A referenced photo is detected as missing only when comms.attachment.download returns NOT_FOUND during ingestion or a re-fetch; it is listed in missingPhotos[], keeps attest and request_changes refused with RENTALS_EVIDENCE_MISSING and is re-requested from the author through the thread, and comms.attachment.deleted, which F08.S01.M03 emits only in the uploader vault, is not consumed.
 
 ## Specification
 
@@ -44,7 +45,6 @@
 | `rentals.reservation.cancelled` | cancel an unattested handoff and keep its drafts as history |
 | `rentals.deposit.funded` | show deposit funded on the handoff screen |
 | `rentals.deposit.agreed` | show deposit agreed but not yet funded warning until funded is received |
-| `comms.attachment.deleted` | no effect on photo copies already stored as evidence; a photo not yet fetched is marked missing and re-requested from the author |
 | `identity.block.added` | suppress notifications for the counterparty through filterBlocked; handoff statements for reservations confirmed before the block are still verified and stored |
 | `privacy.deletion.completed` | replace the deleted party's DID in retained handoffs and statement metadata with the deletion pseudonym; signed statements and photo copies are kept so signatures and hashes still verify |
 
@@ -60,7 +60,7 @@
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
-**Note:** Statements and signer roles registered in F11.S01.M01 (N2): classrup.rentals.handoff_report/v1 (owner or renter of the reservation; when both submit the same revision concurrently the owner's report is canonical), classrup.rentals.handoff_changes_request/v1 (the party that did not author the named report), classrup.rentals.handoff_attestation/v1 (the party that did not author the named report). Photos (N9): F08.S01.M03 attachments of at most 5 MiB, metadata stripped through F10.S02.M03 before encryption, referenced by MediaBlob id computed over the stripped plaintext, which travels only inside the encrypted statement while the relay holds only the F08.S01.M03 ciphertext and never a P2 MediaBlob; the receiving vault fetches, decrypts, SHA-256 verifies and stores each photo locally under RET-EVIDENCE, and a later message or attachment deletion does not touch copies already stored. Blocks (N7): handoff statements for a reservation confirmed before a block are still verified and stored; only notifications are suppressed, through F07.S02.M02 filterBlocked, and isBlockedEither is never used to drop them.
+**Note:** Statements and signer roles registered in F11.S01.M01 (N2): classrup.rentals.handoff_report/v1 (owner or renter of the reservation; when both submit the same revision concurrently the owner's report is canonical), classrup.rentals.handoff_changes_request/v1 (the party that did not author the named report), classrup.rentals.handoff_attestation/v1 (the party that did not author the named report). Photos (N9): F08.S01.M03 attachments of at most 5 MiB, metadata stripped through F10.S02.M03 before encryption, referenced by MediaBlob id computed over the stripped plaintext, which travels only inside the encrypted statement while the relay holds only the F08.S01.M03 ciphertext and never a P2 MediaBlob; the receiving vault fetches, decrypts, SHA-256 verifies and stores each photo locally under RET-EVIDENCE, and a later message or attachment deletion does not touch copies already stored; because comms.attachment.deleted is emitted only in the uploader vault, a photo not yet held is detected as missing only when comms.attachment.download returns NOT_FOUND, then listed in missingPhotos[] and re-requested from the author. Blocks (N7): handoff statements for a reservation confirmed before a block are still verified and stored; only notifications are suppressed, through F07.S02.M02 filterBlocked, and isBlockedEither is never used to drop them.
 
 ### Example
 
@@ -80,6 +80,7 @@ renter vault: receives the report, fetches and verifies the photo, rentals.hando
 | TEST-PS-042-09.T06 | integration | PS-042-04.R01, PS-042-04.R02, PS-042-06.R01, PS-042-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on attested with identical cids; duplicates skipped |
 | TEST-PS-042-09.T07 | contract | PS-042-04.R01, PS-042-04.R03, PS-042-04.R04 | each command, statement and event | payloads and signatures validate against registry schemas and the registered signer roles |
 | TEST-PS-042-09.T15 | e2e | PS-042-01.R01, PS-042-04.R01 | mobile owner and renter complete a handoff in two browsers | both show attested with the same fingerprint; axe zero serious issues |
+| TEST-PS-042-09.T18 | integration | PS-042-07.R04, PS-042-01.R02, PS-042-04.R05 | relay blob of one photo expired before the renter fetched it; author deletes the thread message after the renter stored the other photos; no comms.attachment.deleted reaches the renter vault | the download returns NOT_FOUND, the photo is listed in missingPhotos[] and re-requested, and attest is refused with RENTALS_EVIDENCE_MISSING until re-sent; stored copies stay and verify against their MediaBlob ids after the deletion |
 
 ## Dependencies
 

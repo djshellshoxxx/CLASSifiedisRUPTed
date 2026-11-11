@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-029-03.R01** Offerings follow draft, published, withdrawn; withdrawn is terminal and a new offering is created to return to market.
-- **PS-029-03.R02** Publish re-runs all validation, requires a published service listing, a calendar from F03.S01.M02 and federation_publish consent for each selected relay, signs the projection and writes the local event in the same IndexedDB transaction; a revision of a published offering re-signs the projection with seq+1 and prev in the same way.
+- **PS-029-03.R02** Publish re-runs all validation, requires a published service listing, a calendar from F03.S01.M02 and federation_publish consent for each selected relay, has the projection signed and stored through StatementPublisherPort.publish and writes the local event in the same IndexedDB transaction; a revision of a published offering republishes the projection with seq+1 and prev in the same way.
 - **PS-029-03.R03** Withdrawal is automatic when the linked listing is unpublished or expired; relay-side refusal or removal never changes the local status and is recorded only in that relay's sync state.
 
 ## Specification
@@ -19,10 +19,10 @@ Initial **draft**; terminal **withdrawn**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | draft -> draft | services.offering.revise by provider | vault-local edit, revision+1; emits services.offering.revised |
-| draft -> published | services.offering.publish by provider | full validation, published listing, calendar present, consent per relay; signs projection seq 1; emits services.offering.published |
+| draft -> published | services.offering.publish by provider | full validation, published listing, calendar present, consent per relay; projection seq 1 signed through StatementPublisherPort.publish, projectionCid = returned cid; emits services.offering.published |
 | draft -> withdrawn | services.offering.withdraw by provider or the 90-day draft sweep | vault-local only, reason provider or draft_expired; no statement, no tombstone and no event |
-| published -> published | services.offering.revise by provider | re-validate, sign a new classrup.services.offering/v1 projection with seq+1 and prev = projectionCid, queue it to the sync outbox of every consented relay; emits services.offering.revised and services.offering.published with the new projectionCid |
-| published -> published | identity.device_key.revoked consumed for the key that signed the projection | same content re-signed with a current key, seq+1 and prev; emits services.offering.published |
+| published -> published | services.offering.revise by provider | re-validate, publish a new classrup.services.offering/v1 projection with seq+1 and prev = projectionCid through StatementPublisherPort.publish, queue it to the sync outbox of every consented relay; emits services.offering.revised and services.offering.published with the new projectionCid |
+| published -> published | identity.device_key.revoked consumed for the key that signed the projection | same content republished through StatementPublisherPort.publish, which signs with a current key, seq+1 and prev; emits services.offering.published |
 | published -> withdrawn | services.offering.withdraw by provider, or bazaar.listing.unpublished or bazaar.listing.expired consumed | records withdrawReason provider or listing_unavailable; emits services.offering.withdrawn, from which F11.S01.M02 issues the tombstone |
 
 ```mermaid

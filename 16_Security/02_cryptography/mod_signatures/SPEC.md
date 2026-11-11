@@ -37,6 +37,7 @@ Domain-separated signature envelope (classrup.security.envelope/v1) for consents
 - Signature with non-canonical S value or small-order public key; strict verification in F11.S01.M03 rejects it and verify returns SECURITY_SIGNATURE_INVALID.
 - signedAt claim is 3 days in the future or 40 days in the past; it is covered by the signature so it cannot be changed in transit, but it is still only a claim, so verify flags clockClaim and the caller's policy decides.
 - Key status supplied by the caller says the signer key was revoked before this vault first saw the statement; verify returns accepted false with SECURITY_KEY_REVOKED.
+- A final deletion statement is signed by a device key that was then revoked with reason account_deleted; the caller-supplied status is revoked with finalListed true, so verify returns accepted true with flag finalStatement, while any other statement by that key returns SECURITY_KEY_REVOKED.
 - Key status is active but its freshness is unknown because the vault was offline for 9 days; verify returns accepted true with freshnessClass unknown, never upgraded, and a high-stakes policy refuses until the user refreshes or acknowledges.
 - Payload larger than 64 KiB; refused with PAYLOAD_TOO_LARGE before any hashing.
 - A hash-only envelope is verified with a payload whose JCS hash differs from payloadHash, or with no payload at all; accepted false with SECURITY_PAYLOAD_HASH_MISMATCH.
@@ -74,7 +75,7 @@ F11.S01.M03, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001
 | ID | Process | Requirements |
 |---|---|---|
 | PS-130-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-130-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-130-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-130-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-130-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-130-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -88,6 +89,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI with RFC 8032 and RFC 8785 vectors.
+- All tests T01–T20 pass in CI with RFC 8032 and RFC 8785 vectors.
 - No signature validates under a context other than the one it was made for (property tests), and the inventory has no prefix-ambiguous entries.
 - Every verify result carries one accepted flag, key status and freshness, and the UI states what a signature does not prove.

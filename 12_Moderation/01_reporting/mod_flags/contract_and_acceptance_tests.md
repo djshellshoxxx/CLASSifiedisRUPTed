@@ -46,10 +46,13 @@ See the module test table below (all processes).
 | TEST-PS-094-09.T24 | chaos | PS-094-06.R02, PS-094-04.R02 | evidence blob write fails during file | no Report row, no outbox entry, no moderation.report.filed, MODERATION_EVIDENCE_FAILED returned |
 | TEST-PS-094-09.T25 | integration | PS-094-04.R05 | case with three received reports (one minor_safety) closed no_action; same case.closed delivered twice | three moderation.report.dismissed events, the minor_safety one with exempt true, each carrying reporterKey only in the in-process payload; no duplicates on redelivery; no reporterKey in logs |
 | TEST-PS-094-09.T26 | integration | PS-094-04.R06, PS-094-03.R04 | a second reporter's report arrives after case C is open and is merged by F12.S02.M01; moderation.case.opened redelivered | link_case called in the intake transaction; the second reporter's vault receives one reportlinked for C and reaches linked; the fallback consumer sends nothing twice |
+| TEST-PS-094-09.T27 | contract | PS-094-04.R07, PS-094-01.R06, PS-094-03.R05, PS-094-02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault |
+| TEST-PS-094-09.T28 | integration | PS-094-04.R08, PS-094-02.R02 | report message M metadata-only, with a redacted disclosure (phone removed) and with an unredacted disclosure; then force K onto the redacted disclosure | header targetCid equals messageCid and the metadata carries the signed envelope without wrapped keys; no K in the first two; the third seals K and the relay records commitment verified; the forced case returns PRECONDITION_FAILED |
+| TEST-PS-094-09.T29 | abuse | PS-094-07.R06 | F12 privacy suite after hides and unhides: scan sync outbox, relay requests, federation payloads, logs and notifications; export and delete the vault | no LocalHide field appears anywhere outside the vault; section moderation.hides exported; rows deleted with the vault |
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T29 pass in CI.
 - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
 - The UI never shows sent, acknowledged, linked or resolved before the matching verified state is reached.
 

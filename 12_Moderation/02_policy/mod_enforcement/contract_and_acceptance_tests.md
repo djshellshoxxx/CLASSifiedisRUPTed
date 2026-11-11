@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-096-09.T01 | unit | PS-096-01.R01, PS-096-01.R02, PS-096-02.R01 | apply remove_from_index with a valid in-force rule and facts | action stored with ruleRefs, target fields, statement CID and reasonsIssuedAt; case stays assigned |
-| TEST-PS-096-09.T02 | unit | PS-096-02.R02, PS-096-02.R03, PS-096-02.R04 | each rule V02–V11 violated, and a citation of POL-FRAUD-001@2 before its effective date | documented error code, nothing stored, no effect on index; MODERATION_RULE_REQUIRED for the scheduled version |
+| TEST-PS-096-09.T02 | unit | PS-096-02.R02, PS-096-02.R03, PS-096-02.R04 | each rule V02–V13 violated, and a citation of POL-FRAUD-001@2 before its effective date | documented error code, nothing stored, no effect on index; MODERATION_RULE_REQUIRED for the scheduled version |
 | TEST-PS-096-09.T03 | property | PS-096-03.R01 | random sequences of open, assign, close, apply, revert, expiry and appeal outcomes | only declared transitions succeed; terminal states never change |
 | TEST-PS-096-09.T04 | integration | PS-096-03.R02 | mailbox acknowledges the statement after 2 h; mailbox down for 24 h; imminent-harm rule | active at acknowledgement; active at 24 h with the statement retrievable; imminent-harm effect first and notice follows |
 | TEST-PS-096-09.T05 | integration | PS-096-03.R03, PS-096-04.R03 | operator revert and expiry of actions that published advisories | effect removed, reversal and advisory retraction signed, original statement unchanged, events in the same transaction as the state change |
@@ -46,10 +46,15 @@ See the module test table below (all processes).
 | TEST-PS-096-09.T24 | integration | PS-096-07.R05 | ExportSectionPort run and privacy.deletion.completed in the subject vault with keepEvidence true and false | section moderation.actions exported; statements deleted or pseudonymized |
 | TEST-PS-096-09.T25 | contract | PS-096-04.R05 | action.applied restrict_feature and action.reverted consumed by F12.S03.M04, F12.S03.M02 and F12.S01.M03 contract fixtures | each consumer resolves subject key, capabilities, expiry and reasonsIssuedAt from the payload without extra lookups |
 | TEST-PS-096-09.T26 | integration | PS-096-07.R02, PS-096-07.R01 | injected clock: case closed 181 days ago without appeal or hold; case and actions past RET-EVIDENCE with and without a legal hold | internal notes deleted at 180 days; RetentionPurgePort purges the unheld case and actions and keeps the held ones; nothing was ever sent off the relay except the documented statements |
+| TEST-PS-096-09.T27 | integration | PS-096-01.R06, PS-096-04.R08, PS-096-02.R05, PS-096-05.R06 | F04.S02.M03 contract fixture confirms a void (seller_fraud) for auction A with no open case and for auction B with a report case open; a record whose proposer equals the decider; an HTTP request to record_host_policy | A: case opened with source auction_review and assigned to the confirming moderator, remove_from_index with targetRef { auction, A }, subject the seller, reasons statement queued, actionId returned, case resolved actioned; B: action attached to the open case; VALIDATION_FAILED; no route |
+| TEST-PS-096-09.T28 | chaos | PS-096-06.R04, PS-096-02.R05 | record_host_policy retried with the same hostRef after a crash before commit and after a successful commit; the auction document already left the index at close | one action only, the retry returns the stored actionId with created false; the record is accepted without NOT_FOUND and the index effect is a no-op |
+| TEST-PS-096-09.T29 | contract | PS-096-01.R05, PS-096-04.R06 | apply remove_from_index on listing L with targetCid, apply on an account case, then revert both; inspect events and statements with the F06.S01.M01 and F01.S01.M03 contract fixtures | applied and reverted carry targetRef { listing, L, cid } or { account, subjectKey } and caseSource; reasons/v1 and reversal/v1 carry relayId, actionId and targetRef with the listingId and projection statementCid; the index fixture removes only L's document; the publication fixture binds each notice to one delivery |
+| TEST-PS-096-09.T30 | contract | PS-096-04.R07 | action.applied and action.reverted delivered to the F07.S02.M02 and F06.S01.M01 relay runtime fixtures and derived in a subject vault | relay copies stop and resume serving only the targetRef item; no vault record changes on either origin |
+| TEST-PS-096-09.T31 | integration | PS-096-01.R06, PS-096-04.R08 | the host-policy action is appealed through F12.S01.M03 and overturned | moderation.appeal.decided carries the actionId the hosting module stored; the action is reverted with appeal_overturned and a reversal statement; the reviewer's principal differs from proposer and decider |
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T31 pass in CI.
 - No action exists without in-force rule IDs, facts summary and a retrievable signed statement of reasons.
 - No moderation path produces any effect outside the issuing relay, and no federation tombstone is ever produced; statements say so.
 

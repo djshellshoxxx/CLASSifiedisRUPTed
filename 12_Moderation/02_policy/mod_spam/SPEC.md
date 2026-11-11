@@ -11,7 +11,7 @@ Deterministic spam heuristics exposed as the in-process query moderation.spam.ev
 ## Responsibilities
 
 - Evaluate submitted text and metadata with fixed, versioned heuristics and return a score, matched heuristic names, measured values, thresholds and a degraded flag.
-- Expose moderation.spam.evaluate in-process for author_presign (F01.S01.M03, N19), relay_intake (relay index-intake hook) and vault_filter.
+- Expose moderation.spam.evaluate in-process for author_presign (F01.S01.M03, N19), relay_intake (relay index-intake hook) and vault_filter; it is a registered vault and relay query on the command bus (capability moderation.spam.evaluate), and the SpamEvaluator port is only its implementation.
 - Emit moderation.spam.detected with the subject did:key, score, heuristics and an optional recommended throttle, from relay intake and from the vault filter, never from an author's pre-sign check.
 - Maintain derived, rebuildable fingerprint and key-observation indexes (normalized SHA-256, 64-bit simhash, store receipt time, first-seen time) keyed by a store-salted key hash, with a 30-day window.
 - Keep the heuristic set deterministic: same input and same state give the same output, with the rule version and thresholds recorded in every result.

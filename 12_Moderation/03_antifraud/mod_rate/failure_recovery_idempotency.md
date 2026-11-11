@@ -25,6 +25,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-099-09.T09 | chaos | PS-099-06.R01, PS-099-06.R02, PS-099-06.R03 | concurrent consumes on one key; counter store down for reads and for relay.access; restart mid-run | never above burst; reads fail open at half rate; relay.access closed 30 s; loosening ≤ one burst |
+| TEST-PS-099-09.T21 | chaos | PS-099-06.R03 | counter store down during proximity searches | read.proximity.query.* allowed at half rate in memory; read.proximity.center_new returns RATE_LIMITED for 30 seconds |
 
 ## Dependencies
 

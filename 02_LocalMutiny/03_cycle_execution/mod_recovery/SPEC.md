@@ -16,6 +16,7 @@ After a vault considers a cycle committed, every hand-over is evidenced by Ed255
 - Manage recovery options (return item, compensation, waive, dispute) as signed proposals and responses with requiredSignerIds derived per kind, escalate to F09.S02.M02, and record per-leg disposition of reserved items on resolution only when backed by that leg's giver and receiver.
 - Emit review-unlock data with the outcome on mutiny.recovery.resolved, including closed_unresolved cases, so reputation can unlock reviews with a dispute flag (FLOW-08).
 - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained evidence.
+- Register the F09.S02.M02 DisputeContextPort resolver for context type cycle by inverted registration: resolve({type: cycle, id: cycleId}) -> {parties [{did, role}], contextCid}.
 
 ## Not responsible for
 
@@ -76,7 +77,7 @@ F02.S03.M01, F02.S04.M01, F02.S01.M03, F09.S02.M02, F08.S01.M03, F16.S02.M03, F0
 | PS-024-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-024-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-024-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-024-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-024-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-024-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-024-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-024-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -88,6 +89,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T28 pass in CI.
 - No cycle is completed without a valid receiver attestation for every leg and settled compensation, and no state ever claims that goods were delivered, only that signers asserted it.
 - Dropout after handover always yields partially_executed with a RecoveryCase and never a silent reroute.

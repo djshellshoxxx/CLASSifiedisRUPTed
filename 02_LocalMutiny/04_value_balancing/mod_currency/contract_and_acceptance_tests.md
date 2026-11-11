@@ -39,10 +39,11 @@ See the module test table below (all processes).
 | TEST-PS-025-09.T17 | integration | PS-025-03.R01, PS-025-04.R04 | mutiny.proposal.withdrawn, mutiny.revision.forked and mutiny.lock.conflict_detected for subjects with current records | each record closed; later compute for a new subject creates a new record |
 | TEST-PS-025-09.T18 | unit | PS-025-01.R01, PS-025-02.R01 | single-currency JPY subject | no NormalizationRecord referenced, no 24 h cap, toleranceRef EUR->JPY 163/1 returned |
 | TEST-PS-025-09.T19 | integration | PS-025-07.R04 | F10 export, deletion and retention sweep | section mutiny.normalizations exported; erased DID pseudonymized in local metadata; normalizationHash unchanged |
+| TEST-PS-025-09.T20 | contract | PS-025-04.R05, PS-025-02.R02, PS-025-05.R02 | received revision embedding a relay-signed quote, a manual quote presented as sourceSigned true, a direct-provider ecb-daily quote with an invented rate and a quote with a broken relay signature | verify_embedded called once per quote with the revision author and local receive time; quoteChecks give sourceSigned true, then issuerSigned true with sourceSigned false and MUTINY_QUOTE_SOURCE_UNLABELLED for the false claim, then 'source asserted by <issuer pseudonym>, not verifiable' with the ECB deviation, then COMMERCE_RATE_SIGNATURE_INVALID; normalizationHash still recomputes; consent is blocked for the false sourceSigned claim and the broken signature, while the direct-provider quote stays consentable with its label and deviation shown |
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T20 pass in CI.
 - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
 - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.
 

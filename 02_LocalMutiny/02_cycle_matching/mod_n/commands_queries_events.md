@@ -21,7 +21,7 @@
 | `mutiny.suggestion.generate` | mutiny.suggestion.generate | { lmax? (2..8, default 5), mode? local_rooted (default), timeBudgetMs? ≤ 250, expansionBudget? ≤ 100000, dryRun? } | { runId, suggestions: CycleSuggestion[], stats: { nodes, edges, expansions, durationMs, cyclesFound, truncated, projectionAsOf } } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_MATCHING_NOT_ENABLED, MUTINY_RUN_IN_PROGRESS, RATE_LIMITED | mutiny.cycle.suggested, mutiny.matching.run_completed | yes (Idempotency-Key) |
 | `mutiny.suggestion.import` | mutiny.suggestion.import | { envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox } | { suggestionId, verifiedLocally, status } | MUTINY_SUGGESTION_UNVERIFIED, VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION | mutiny.cycle.suggested | yes (Idempotency-Key) |
 | `mutiny.suggestion.dismiss` | mutiny.suggestion.dismiss | { suggestionId, expectedRevision } | { suggestionId, revision, suppressedUntil } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE |  | yes (Idempotency-Key) |
-| `mutiny.suggestion.compute_public` | mutiny.suggestion.compute_public | { partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } — relay command; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them | { runId, stats, deliveredEnvelopes: int } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED | mutiny.matching.run_completed | yes (Idempotency-Key) |
+| `mutiny.suggestion.compute_public` | mutiny.suggestion.compute_public | { partition?: l1 geohash4, lmax? (2..TenantPort.limits(tenantId).maxCycleLength, default that limit), scheduledAt } — relay command; reads the tenant limit from F15.S04.M03 TenantPort before the search; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them | { runId, stats, deliveredEnvelopes: int } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED, DEPENDENCY_UNAVAILABLE | mutiny.matching.run_completed | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -60,7 +60,7 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..tenant maximum |
+| MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..8 in the vault or above the relay tenant's maxCycleLength |
 | MUTINY_GRAPH_TOO_LARGE | 422 | no | graph exceeds 2000 nodes or 20000 edges even after L1 partitioning |
 | MUTINY_MATCHING_NOT_ENABLED | 409 | no | the principal has not opted in to matching |
 | MUTINY_RUN_IN_PROGRESS | 409 | yes | another matching run holds the mutex |
@@ -110,4 +110,4 @@ Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000a1
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F15.S04.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

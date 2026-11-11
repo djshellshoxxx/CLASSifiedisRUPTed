@@ -19,6 +19,7 @@
 - EvidenceSnapshot: P2 (vault owner; moderators of the relay that received it for the case; author for appeal view).
 - EvidenceAccess: P2 (store owner and relay operators; author sees the redacted view only).
 - Per-blob keys: P4, wrapped by the vault key (vault) or the relay data key from F16.S01.M02 (relay).
+- Message key K of an unredacted message disclosure: P2 inside the encrypted body blob, readable only by the moderators of the receiving relay for the case.
 
 **Retention**
 - Snapshots: RET-EVIDENCE (2 years after last related activity) through the RetentionPurgePort unless a relay legal hold applies; failed-integrity snapshots are purged on the same schedule.

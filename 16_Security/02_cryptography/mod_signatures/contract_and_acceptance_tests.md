@@ -38,10 +38,12 @@ See the module test table below (all processes).
 | TEST-PS-130-09.T16 | contract | PS-130-04.R03 | device-to-relay request signed with F11.S01.M03 signRequest and tag classrup/relay-request/v1; a request whose expires is 301 s after created; the same request body presented to verify as an envelope | the first verifies in F11.S01.M03; the second is refused there; verify returns SECURITY_SIGNATURE_INVALID |
 | TEST-PS-130-09.T17 | contract | PS-130-09.R02, PS-130-04.R01 | F08.S02.M02 consent known-answer vectors in the header form | vectors pass in this suite and in the F08.S02.M02 suite |
 | TEST-PS-130-09.T18 | unit | PS-130-04.R04 | import graph scan | the module imports no key registry or identity code |
+| TEST-PS-130-09.T19 | unit | PS-130-02.R04, PS-130-03.R01 | statement c1 by key K1 verified with status revoked and finalListed true; statement c3 by K1 with status revoked and finalListed false; status active with finalListed true | accepted true with flag finalStatement; accepted false with SECURITY_KEY_REVOKED; accepted true without the flag |
+| TEST-PS-130-09.T20 | contract | PS-130-01.R03 | inventory entry for classrup/receipt/v1 checked against F09.S02.M01 receipt fixtures, one with a 7.5 KiB keyLink chain | payload schema classrup.commerce.receipt/v1 statement, kid equal to signingKeyId, binding fields claimCid, dealId and contextCid, maximum 65536 bytes; the receipt with its keyLink verifies |
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI with RFC 8032 and RFC 8785 vectors.
+- All tests T01–T20 pass in CI with RFC 8032 and RFC 8785 vectors.
 - No signature validates under a context other than the one it was made for (property tests), and the inventory has no prefix-ambiguous entries.
 - Every verify result carries one accepted flag, key status and freshness, and the UI states what a signature does not prove.
 

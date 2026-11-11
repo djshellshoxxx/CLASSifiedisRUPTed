@@ -5,12 +5,12 @@ summary: >-
   Converts the declared values of all items in a proposal or cycle into one settlement currency with pinned FX quotes (F09.S03.M02), using bigint arithmetic and a single HALF_EVEN rounding
   per conversion (MNY-3, MNY-4). The resulting NormalizationRecord lists every quote id, rate, source and expiry and is embedded in the signed revision snapshot, so every participant signs the same numbers.
   Receivers independently recompute the arithmetic. Quotes are requested with purpose barter_normalization and a lifetime of at most 24 h (N16) and are shown as 'pinned rate agreed by all parties' with their source
-  (relay-signed, manual operator rate, local). A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues
+  label from F09.S03.M02 ('signed by relay <name>', 'manual rate by <pseudonym>' or 'source asserted by <pseudonym>, not verifiable'); a receiving vault takes that label and sourceSigned from commerce.fx_quote.verify_embedded, never from the sender. A cross-currency subject therefore has a consent deadline of at most 24 h and never after the earliest quote expiry; otherwise the coordinator re-quotes and issues
   a quote_refresh revision, which voids earlier consents. When a pinned quote expires before commit, the record expires with the same consequence.
 responsibilities:
   - Compute normalization records for a subject from valuations and quotes, with settlement currency default from the vault's configuration (default EUR for a EUR tenant), at most 5 distinct currencies and 8 quotes per record.
   - Request quotes from F09.S03.M02 with purpose barter_normalization and validForMs = min(consentDeadline − now + 30 min, 24 h) (N16), label each pinned rate 'pinned rate agreed by all parties' with its source, and require consentDeadline ≤ now + 24 h and ≤ earliestQuoteExpiry; otherwise re-quote and require fresh consent through a quote_refresh revision.
-  - Verify and store peers' normalization data from signed revisions by recomputing every conversion, and flag mismatches.
+  - Verify and store peers' normalization data from signed revisions by recomputing every conversion and checking every embedded quote with F09.S03.M02 commerce.fx_quote.verify_embedded, taking sourceSigned, issuerSigned and the origin label from its result, and flag mismatches.
   - Expire records at the earliest quote expiry before commit, emit the expiry for re-consent, freeze records after commit and close them when the subject ends, forks or freezes.
   - When the settlement currency is not EUR, provide the tolerance reference quote EUR to settlement currency (purpose barter_normalization) that the revision pins as toleranceRef, used only to convert the profile's absolute minimum reference (F02.S02.M05 C05); its rate is part of the signed terms and its later expiry has no effect.
   - Register the module's export section, deletion and retention purge handlers with F10 (N6).
@@ -65,6 +65,7 @@ processes:
           - "quotes: array — 0..8 items {quoteId, base, quote, rate {num, den} positive integer strings, asOf, expiresAt ≤ issuedAt + 24 h, purpose barter_normalization, source label, sourceSigned boolean}"
           - "earliestQuoteExpiry?: timestamp — min of quotes[].expiresAt; absent when no quotes; the revision consentDeadline is ≤ this and ≤ creation + 24 h"
           - "toleranceRef?: object — {quoteId, rate {num, den}, source} EUR to settlement currency, present when the settlement currency is not EUR; converts the absolute minimum reference only"
+          - "quoteChecks: array — 0..8 local results {quoteId, sourceSigned, issuerSigned, verificationLabel, label, expired, reDerivedDeviationBps?}; for peer_verified records the output of commerce.fx_quote.verify_embedded, for local records the issued FxQuote's flags; not covered by normalizationHash and the only source of the labels shown"
           - "normalizationHash: cid — sha256 of JCS(settlementCurrency, items, quotes)"
           - "status: enum — current | superseded | expired | frozen | closed"
           - "mismatch: boolean — true when a peer's recomputation differs"
@@ -88,9 +89,10 @@ processes:
       - "V04 | when more than one currency is involved the revision consentDeadline is ≤ now + 24 h and ≤ earliestQuoteExpiry (N16), otherwise re-quote and fresh consent through a quote_refresh revision | MUTINY_QUOTE_TOO_SHORT"
       - "V05 | rate num and den are positive integers and the conversion formula is applied with a single HALF_EVEN rounding | VALIDATION_FAILED"
       - "V06 | peer record recomputes to identical converted amounts and normalizationHash | MUTINY_NORMALIZATION_MISMATCH"
-      - "V07 | quote source label is present, and manual or proposer-stated rates are labelled sourceSigned false | MUTINY_QUOTE_SOURCE_UNLABELLED"
+      - "V07 | quote source label is present, and the quoteChecks entry of each quote agrees with the presented quote: a relay-signed quote is sourceSigned true only when commerce.fx_quote.verify_embedded says so, a manual quote is issuerSigned true and sourceSigned false, and a direct-provider quote is sourceSigned false with the label 'source asserted by <issuer pseudonym>, not verifiable'; a presented sourceSigned true that the check does not confirm is refused | MUTINY_QUOTE_SOURCE_UNLABELLED"
       - "V08 | no declared value is non-positive or above 1 000 000 000 000 minor units | VALIDATION_FAILED"
       - "V09 | every pinned quote is displayed with the label 'pinned rate agreed by all parties' and its source before any consent can be signed | MUTINY_QUOTE_SOURCE_UNLABELLED"
+      - "V10 | every quote in a received revision passes commerce.fx_quote.verify_embedded {quote, embeddingSignerId: the revision author, embeddingReceivedAt: the local receive time, embeddingSignedAt: the revision's claimed time, reDerive: true}; a failed relay or issuer signature, or a quote expired on the local clock before commit, blocks consent | COMMERCE_RATE_SIGNATURE_INVALID"
   workflow_state_machine:
     requirements:
       - A record is current until a newer record supersedes it, its earliest quote expires, or its subject commits or closes.
@@ -113,6 +115,7 @@ processes:
       - Quotes are requested through F09.S03.M02 and pinned by id; the module never invents rates.
       - Events are written in the same IndexedDB transaction as the records.
       - Every quote request names purpose barter_normalization and a lifetime of at most 24 h, and the module closes records of subjects that ended, forked or froze.
+      - "verify calls F09.S03.M02 commerce.fx_quote.verify_embedded once per quote of a received revision and stores sourceSigned, issuerSigned, verificationLabel, label, expired and the ECB re-derivation deviation in quoteChecks; manual quotes are issuerSigned true but sourceSigned false, direct-provider quotes read 'source asserted by <issuer pseudonym>, not verifiable', and the UI shows only these results."
     commands:
       - name: mutiny.normalization.compute
         capability: mutiny.normalization.compute
@@ -123,9 +126,9 @@ processes:
         idempotent: true
       - name: mutiny.normalization.verify
         capability: mutiny.normalization.verify
-        input: "{ revisionId } — vault command that recomputes a peer revision's normalization snapshot; produces no statement"
-        output: "{ normalizationId, matches: boolean, differences: { inventoryItemId, expectedMinor, presentedMinor }[] }"
-        errors: [NOT_FOUND, MUTINY_NORMALIZATION_MISMATCH, VALIDATION_FAILED]
+        input: "{ revisionId } — vault command that recomputes a peer revision's normalization snapshot and calls commerce.fx_quote.verify_embedded {quote, embeddingSignerId, embeddingReceivedAt, embeddingSignedAt, reDerive: true} for each embedded quote; produces no statement"
+        output: "{ normalizationId, matches: boolean, differences: { inventoryItemId, expectedMinor, presentedMinor }[], quoteChecks: { quoteId, sourceSigned, issuerSigned, verificationLabel, label, expired, reDerivedDeviationBps? }[] }"
+        errors: [NOT_FOUND, MUTINY_NORMALIZATION_MISMATCH, MUTINY_QUOTE_SOURCE_UNLABELLED, COMMERCE_RATE_SIGNATURE_INVALID, VALIDATION_FAILED, DEPENDENCY_UNAVAILABLE]
         emits: [mutiny.values.normalized]
         idempotent: true
     queries:
@@ -248,8 +251,9 @@ processes:
       - "T17 | integration | 03.R01,04.R04 | mutiny.proposal.withdrawn, mutiny.revision.forked and mutiny.lock.conflict_detected for subjects with current records | each record closed; later compute for a new subject creates a new record"
       - "T18 | unit | 01.R01,02.R01 | single-currency JPY subject | no NormalizationRecord referenced, no 24 h cap, toleranceRef EUR->JPY 163/1 returned"
       - "T19 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.normalizations exported; erased DID pseudonymized in local metadata; normalizationHash unchanged"
+      - "T20 | contract | 04.R05,02.R02,05.R02 | received revision embedding a relay-signed quote, a manual quote presented as sourceSigned true, a direct-provider ecb-daily quote with an invented rate and a quote with a broken relay signature | verify_embedded called once per quote with the revision author and local receive time; quoteChecks give sourceSigned true, then issuerSigned true with sourceSigned false and MUTINY_QUOTE_SOURCE_UNLABELLED for the false claim, then 'source asserted by <issuer pseudonym>, not verifiable' with the ECB deviation, then COMMERCE_RATE_SIGNATURE_INVALID; normalizationHash still recomputes; consent is blocked for the false sourceSigned claim and the broken signature, while the direct-provider quote stays consentable with its label and deviation shown"
     acceptance:
-      - All tests T01–T19 pass in CI.
+      - All tests T01–T20 pass in CI.
       - Every converted amount matches the MNY-4 formula with one HALF_EVEN rounding, and every record names its quote sources.
       - No cycle can be consented with an expired quote and expiry before commit always requires a new revision and fresh consent from everyone.
   import_export_backup_rollback:

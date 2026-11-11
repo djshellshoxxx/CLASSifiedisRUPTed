@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-026-09.T21 | unit | PS-026-01.R02, PS-026-02.R01 | change amount or payer of a leg sealed by the head revision after commit | refused with CONFLICT_STATE (V10); leg unchanged; consented digest still matches |
 | TEST-PS-026-09.T22 | integration | PS-026-03.R02, PS-026-04.R04 | cycle cancelled before handover with due legs; commerce.deal.cancelled received for another Deal | commerce.deal.cancel called once; legs withdrawn in both cases |
 | TEST-PS-026-09.T23 | integration | PS-026-07.R04 | F10 export, deletion and retention sweep | section mutiny.compensation exported; erased DID pseudonymized and claimRef purged in retained legs |
+| TEST-PS-026-09.T24 | integration | PS-026-07.R04, PS-026-03.R04 | F10 deletion plan with a due leg Dan to Alice, a claimed leg Alice to Bob, a settled leg and a proposed leg | plan() of Alice's vault lists exactly two blockers {kind: deal, ref: dealId} with counterparties [Dan] and [Bob]; settled and proposed legs are not blockers; after acknowledgement the claimed leg is no longer a blocker |
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No leg is ever settled without payee acknowledgement, chain finality, or a received extra item, and ClassRup never holds funds.
 - The planner is deterministic, conserves sums and leaves every participant within tolerance or with an explicit signed acceptance.
 

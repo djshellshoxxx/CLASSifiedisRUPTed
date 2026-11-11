@@ -88,6 +88,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No leg is ever settled without payee acknowledgement, chain finality, or a received extra item, and ClassRup never holds funds.
 - The planner is deterministic, conserves sums and leaves every participant within tolerance or with an explicit signed acceptance.

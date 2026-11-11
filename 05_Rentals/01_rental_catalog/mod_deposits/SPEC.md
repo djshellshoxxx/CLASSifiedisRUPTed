@@ -79,7 +79,7 @@ F05.S01.M01, F09.S01.M01, F09.S01.M03, F09.S02.M02, F09.S03.M01, F09.S03.M03, F0
 | PS-040-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-040-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-040-03 | [Workflow state machine](workflow_state_machine.md) | 7 |
-| PS-040-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-040-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-040-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-040-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-040-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -91,6 +91,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T24 pass in CI.
+- All tests T01–T25 pass in CI.
 - No state shows a deposit as funded, released or forfeited on a payment claim alone, silence never settles money and no case is ever opened without a party's explicit action.
 - No code path in the platform or a relay moves or holds deposit funds.

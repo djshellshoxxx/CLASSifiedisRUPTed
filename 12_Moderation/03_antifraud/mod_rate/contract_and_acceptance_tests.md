@@ -38,10 +38,14 @@ See the module test table below (all processes).
 | TEST-PS-099-09.T16 | property | PS-099-03.R04, PS-099-01.R03 | 20-per-30-days window_counter with arrivals spread over 60 days and a salt rotation on day 15 | at most 20 allowed in any 30-day window across the rotation; previous salt destroyed once its last counter leaves the window |
 | TEST-PS-099-09.T17 | integration | PS-099-04.R05 | moderation.signal.recorded report_dismissed_bad_faith observed 10 days ago (delivered twice) for reporter key R; R files 4 reports in 24 h; one more marked exempt (minor_safety); clock advanced 21 more days | one marker row; 4th RATE_LIMITED under report.receive.reduced; exempt one allowed under report.receive; after the marker expires report.receive applies again |
 | TEST-PS-099-09.T18 | unit | PS-099-01.R02, PS-099-01.R04 | ratepolicy.set for 5 per 24 h, 20 per hour, 50 per 24 h and 20 per 30 days | all accepted and stored with limit and periodMs; GCRA emission interval reported as periodMs / limit |
+| TEST-PS-099-09.T19 | contract | PS-099-04.R07, PS-099-01.R05, PS-099-02.R04 | F06.S02.M03 contract fixture registers the four proximity classes with its v1 numbers (20 per minute and 200 per hour, 60 per minute and 600 per hour, a center_seen probe of 1 per 24 h, 2 new centers per hour and 5 per 24 h with failModeLocked); a second module registers read.proximity.center_new again; an operator sets failMode open on it | tenant rows seeded with ownerModule F06.S02.M03 and longWindow; VALIDATION_FAILED for the duplicate owner; MODERATION_RATE_POLICY_FAIL_MODE_LOCKED |
+| TEST-PS-099-09.T20 | property | PS-099-03.R05, PS-099-03.R04 | random arrivals against a class with 20 per minute and longWindow 200 per hour, and against center_new over 3 days with a salt rotation at each midnight; center_seen probes for repeated and new cells | never more than 20 in any minute or 200 in any hour; never more than 5 new centers in any 24 h across rotations; previous salt kept 24 h then destroyed; a repeated cell is refused by the probe and costs nothing in center_new |
+| TEST-PS-099-09.T21 | chaos | PS-099-06.R03 | counter store down during proximity searches | read.proximity.query.* allowed at half rate in memory; read.proximity.center_new returns RATE_LIMITED for 30 seconds |
+| TEST-PS-099-09.T22 | integration | PS-099-04.R08, PS-099-01.R05, PS-099-02.R04 | request.default at 120 per minute; one request consuming three classes; anonymous caller; set request.default to 5 and to 1500; tenant migration with requestRatePerMinutePerKey 300 | the request charges request.default once; the 121st request in a minute is RATE_LIMITED whatever its class; anonymous charged by prefix; VALIDATION_FAILED twice; expand step writes limit 300 periodMs 60000 |
 
 ## Acceptance criteria
 
-- All tests T01–T18 pass in CI.
+- All tests T01–T22 pass in CI.
 - Concurrent requests never exceed burst plus rate × elapsed time, and window counters never exceed their limit across salt rotations (property tests).
 - No raw IP address or actor key is ever persisted or logged by this module.
 

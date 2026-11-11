@@ -16,13 +16,14 @@ responsibilities:
   - Open scheduled auctions at the host-clock start time, keep currentEndsAt and price projections used by bids, and publish a public P0 projection that never contains the reserve, bidder identities or max bids.
   - Allow cancellation by the seller only while the auction has zero bids, and by the host operator under hosting policy with a stated reason, always confirmed by a host-signed host_cancel statement.
   - Answer the listing edit-lock query that F01.S01.M02 uses to refuse material listing edits while the auction has bids (N11).
+  - Freeze hosted auctions whose bids or close a host restore may have lost (auctions.auction.freeze, called by the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03), mirror the freeze in vaults from the host relay's verified restore announcement, and end it only by a cancel with reason host_restore or by a re-adopted host-signed result.
 non_responsibilities:
   - Placing and ordering bids and proxy logic (F04.S01.M02) and closing and result (F04.S01.M03).
   - Soft-close extensions (F04.S02.M02), shill controls (F04.S02.M01) and fraud review (F04.S02.M03).
   - Listing content and media (F01.S01.M01) and the refusal of material listing edits (F01.S01.M02); the auction references one auction-kind listing whose subtypeRef is the auction.
   - Payment and receipts (F09); winners and sellers settle through a local Deal in each vault.
   - "Future: Dutch and sealed-bid auctions, federated hosts that share one auction, and buy-it-now."
-depends_on: [F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001]
+depends_on: [F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001]
 user_stories:
   - As a seller, I choose a host relay, see its name, operator policy and what it can and cannot do, set start price, hidden reserve and duration, and schedule the auction once the host countersigns.
   - As a bidder, I see the host named on the auction, whether the reserve has been met (not its value), the next minimum bid and the end time with soft-close rules.
@@ -41,12 +42,14 @@ edge_cases:
   - The host disappears after scheduling; with no auction_opened, result or host_cancel by scheduledEndsAt plus 60 minutes plus 72 h the vault moves the auction to host_silent, releases the listing lock and shows host did not report a result; a later valid host statement still applies.
   - Draft-first creation; the seller creates the draft Auction without a listing, creates the auction listing with subtypeRef {slug auctions, entity Auction, id}, publishes it and then schedules; schedule refuses an unpublished listing with AUCTIONS_LISTING_NOT_ELIGIBLE, create does not.
   - Terms name an unknown softCloseRulesVersion; refused with VALIDATION_FAILED by the vault and by the host.
+  - The host relay restores an older backup and its signed restore announcement names a lost window that overlaps an open auction; bids or a close signed in that window may be missing on the host, so the host freezes the auction before its port opens and refuses bids and close, vaults freeze it from the verified announcement, and the auction ends by the seller's cancel with reason host_restore, by a participant returning the host's own signed result, or by the host's cancel 72 h after the freeze.
+  - A vault already holds a verified result for an auction that the restored host froze; the vault stays closed, F04.S01.M03 returns the result to the host for re-adoption, and a later host_cancel with reason host_restore is kept as conflicting host evidence without changing the closed auction.
 ux:
   screens:
     - "Auction setup: listing picker or create auction listing, host relay picker with trust panel (operator name, region, policy link, retention, what the host can see including the reserve and every bid in plaintext), start price, hidden reserve (optional, with the note that a proxy maximum lifting the price exactly to the reserve reveals it), duration chips (1 h, 24 h, 3 d, 7 d, 14 d), start now or schedule, increment table preview."
     - "Auction page: current price, next minimum bid, time left from host-signed time, reserve status (no reserve, reserve not met, reserve met), host panel, bid count, soft-close note naming rules version softclose-v1, listing-edited notice when applicable."
-    - "Seller dashboard: auctions by state with host sync line (prepared, delivered to host, accepted by host), cancel requested, host did not answer (with Release anyway after a warning) and host did not report a result."
-  states: [loading, empty, draft, proposed, cancel-pending, scheduled, open, closed, cancelled, host-silent, needs-host-check, host-required, host-unreachable, pending-offline]
+    - "Seller dashboard: auctions by state with host sync line (prepared, delivered to host, accepted by host), cancel requested, host did not answer (with Release anyway after a warning), host did not report a result, and frozen after host restore (bids in the lost window may be missing; Cancel and relist, or wait up to 72 h for the host to recover its signed result)."
+  states: [loading, empty, draft, proposed, cancel-pending, scheduled, open, frozen, closed, cancelled, host-silent, needs-host-check, host-required, host-unreachable, pending-offline]
   a11y:
     - Money fields have visible labels including currency and use inputmode=decimal.
     - Time left is text in an aria-live polite region updated at most once per 10 s, and the final minute announces once per 15 s.
@@ -93,17 +96,19 @@ processes:
           - "openedCid?: string — cid of the host-signed auction_opened statement"
           - "hostCancelCid?: string — cid of the host-signed host_cancel statement"
           - "pushOptIn: boolean — seller allows content-free host pushes; true only when privacy.consent.check(notify_push) for the host is granted"
-          - "status: enum — draft | proposed | cancel_pending | scheduled | open | closed | cancelled | host_silent | needs_host_check"
-          - "cancelReason?: enum — seller | host_unreachable | host_refused | host_policy | listing_unavailable | accept_window_passed"
+          - "status: enum — draft | proposed | cancel_pending | scheduled | open | frozen | closed | cancelled | host_silent | needs_host_check"
+          - "cancelReason?: enum — seller | host_unreachable | host_refused | host_policy | listing_unavailable | accept_window_passed | host_restore"
           - "syncState: map — {host: prepared | transport_acknowledged | peer_accepted}"
+          - "freeze?: object — {lostWindow: {from, to}, causes: (bids_possibly_lost | close_possibly_lost)[], frozenAt, announcementCid?}; set by auctions.auction.freeze on the host and from the verified classrup.platform.relay_restore/v1 of hostRelayId in vaults"
           - "revision: int — CTR-ID-001 ID-4"
           - "createdAt: timestamp — RFC 3339 UTC"
         invariants:
           - status scheduled, open or closed implies listingId, listingCid, hostRelayId, hostKeyId, termsCid and hostAcceptanceCid are set and verified, and the acceptance host time is at or before acceptBy.
           - reservePrice and reserveSalt never appear in any event payload, public projection, log or export other than the seller's own; on the host they exist only decrypted inside the host process for this auction.
           - currentEndsAt is at least scheduledEndsAt and at most scheduledEndsAt plus 60 minutes.
-          - A cancelled auction has bidCount 0 unless cancelReason is host_policy.
-          - At most one Auction per listing is in proposed, cancel_pending, scheduled, open or needs_host_check; host_silent, closed and cancelled release the listing.
+          - A cancelled auction has bidCount 0 unless cancelReason is host_policy or host_restore.
+          - At most one Auction per listing is in proposed, cancel_pending, scheduled, open, frozen or needs_host_check; host_silent, closed and cancelled release the listing.
+          - A frozen auction accepts no bid, extension or close; it leaves frozen only to closed through a re-adopted host-signed result, to cancelled through a host_cancel with reason host_restore or host_policy, or in vaults to host_silent.
     sql: |
       CREATE TABLE auctions_auction (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT, seller_id TEXT NOT NULL, host_relay_id TEXT NOT NULL,
@@ -111,7 +116,7 @@ processes:
         current_ends_at TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE INDEX auctions_auction_due ON auctions_auction(status, starts_at, current_ends_at);
       CREATE UNIQUE INDEX auctions_auction_listing ON auctions_auction(tenant_id, listing_id)
-        WHERE listing_id IS NOT NULL AND status IN ('proposed','cancel_pending','scheduled','open','needs_host_check');
+        WHERE listing_id IS NOT NULL AND status IN ('proposed','cancel_pending','scheduled','open','frozen','needs_host_check');
   validation_rules:
     requirements:
       - Terms are validated strictly in the seller vault before signing and again by the host relay before countersigning.
@@ -126,17 +131,19 @@ processes:
       - "V05 | incrementTable satisfies the tier rules in the Auction field definition | AUCTIONS_INCREMENT_INVALID"
       - "V06 | at schedule and accept_hosting only - listing is published, of kind auction with subtypeRef equal to this auction id, owned by the seller, its published projection cid equals listingCid, and no other live auction references it; at create a supplied listingId only has to be owned by the seller | AUCTIONS_LISTING_NOT_ELIGIBLE"
       - "V07 | seller has fewer than 20 live auctions on this host, the host hosting policy accepts the seller and the F12.S03.M04 limits check passes | AUCTIONS_SELLER_LIMIT"
-      - "V08 | a seller cancel is applied by the host only while bidCount is 0 | AUCTIONS_HAS_BIDS"
+      - "V08 | a seller cancel is applied by the host only while bidCount is 0, or while the auction is frozen after a host restore (reason host_restore) | AUCTIONS_HAS_BIDS"
       - "V09 | softCloseRulesVersion is a version known to vault and host (softclose-v1 in v1) and host_acceptance echoes the same version | VALIDATION_FAILED"
       - "V10 | accept_hosting runs at host time at or before acceptBy, and acceptBy equals min(terms signing time + 24 h, startsAt + 5 min) | EXPIRED"
       - "V11 | privacy.consent.check(federation_publish) for the chosen host relay is granted before schedule sends terms whose public projection the host will publish | PRECONDITION_FAILED"
       - "V12 | inbound host statements (host_acceptance, auction_opened, host_cancel) verify against hostKeyId in the seller's own terms and bind termsCid | AUCTIONS_HOST_STATEMENT_INVALID"
+      - "V13 | a classrup.platform.relay_restore/v1 announcement is applied to an auction only when it is signed under context classrup-relay-restore:v1 by a non-revoked key of hostRelayId in the host relay's published key history (F15.S02.M01) | AUCTIONS_HOST_STATEMENT_INVALID"
   workflow_state_machine:
     requirements:
       - Auctions follow draft, proposed, scheduled, open, closed, with cancelled as an exit before close and cancel_pending, host_silent and needs_host_check as vault states for an unanswered cancel, a silent host and an unconfirmed import; closed and cancelled are terminal.
       - Scheduled requires the host's verified countersignature; no host acceptance means no auction.
       - Opening, end adjustment, host cancellation and closing are host-clock decisions; the seller vault shows them only after receiving the host-signed statements (auction_opened, extension, host_cancel, result).
       - A vault never cancels a proposed auction silently - at acceptBy it sends a signed auction_cancel and waits in cancel_pending - and an auction whose host stops answering moves to host_silent, which releases the listing lock but still yields to a later valid host statement.
+      - A host restore freezes every auction whose bids or close may have been lost - on the host through auctions.auction.freeze before the restored relay accepts a request, in vaults from the verified restore announcement - and a frozen auction takes no bid, extension or close until it is renegotiated - re-adoption of the host's own signed result closes it, and the seller's cancel or the host's cancel 72 h after the freeze, both with reason host_restore, cancel it; no new result is ever determined for it.
     machines:
       - entity: Auction
         initial: draft
@@ -163,18 +170,27 @@ processes:
           - "needs_host_check -> closed | a verified result arrives | final projection stored"
           - "needs_host_check -> cancelled | a verified host_cancel arrives | emits auctions.auction.cancelled"
           - "needs_host_check -> host_silent | no host answer by scheduledEndsAt plus 60 minutes plus 72 h | listing lock released"
+          - "scheduled -> frozen | auctions.auction.freeze from an AuctionHostPort implementation after a host restore (host), or a verified classrup.platform.relay_restore/v1 of hostRelayId whose lostWindow overlaps startsAt to currentEndsAt (vault, V13) | bids, extensions and close refused; emits auctions.auction.frozen"
+          - "open -> frozen | the same triggers as scheduled -> frozen | bids, extensions and close refused; live bids keep their state until the freeze ends; emits auctions.auction.frozen"
+          - "needs_host_check -> frozen | a verified restore announcement of hostRelayId whose lostWindow overlaps the auction (vault) | emits auctions.auction.frozen"
+          - "frozen -> closed | auctions.auction.mark_closed called by F04.S01.M03 auctions.result.readopt (host), or a verified result (vault) | the host's own signed result is re-adopted; no new result is determined"
+          - "frozen -> cancelled | host_cancel with reason host_restore for the seller's auction_cancel or 72 h after the freeze without a re-adopted result, or host policy (host); the verified host_cancel (vault) | live bids void; emits auctions.auction.cancelled"
+          - "frozen -> host_silent | vault sweep finds no verified result or host_cancel by the later of scheduledEndsAt plus 60 minutes plus 72 h and frozenAt plus 96 h | listing lock released; shows host did not report a result"
     timeouts:
       - "Host timer checks scheduled auctions every 5 s, opens those with startsAt <= host now and signs auction_opened."
       - "Seller vault sweep at app start and every 60 s while open - proposed auctions past acceptBy move to cancel_pending and send auction_cancel; scheduled, open, cancel_pending and needs_host_check auctions past scheduledEndsAt plus 60 minutes plus 72 h without a verified result or host_cancel move to host_silent. The sweep never cancels an auction."
+      - "Host restore - the host sweep every 60 s signs a host_cancel with reason host_restore for each frozen auction without a re-adopted result 72 h after frozenAt; the vault sweep moves frozen auctions to host_silent at the later of scheduledEndsAt plus 60 minutes plus 72 h and frozenAt plus 96 h."
   commands_queries_events:
     requirements:
       - Vault commands create, schedule and cancel the seller's auction; schedule and cancel produce signed statements to the host; the host relay offers accept_hosting, open, apply_cancel, adjust_end and mark_closed as relay commands and answers with host-signed statements that the vault ingests with auctions.auction.receive.
       - Auction events exist on the host as relay-local events and are derived again in each participant vault when the host-signed statement arrives (actor.kind federated); they never leave a device otherwise.
       - The module consumes listing events to cancel auctions whose listing becomes unavailable.
       - Every statement this module sends or accepts is registered with the F11.S01.M01 statement registry with its signer role - classrup.auctions.auction/v1 and classrup.auctions.auction_cancel/v1 by the seller key (sellerId), classrup.auctions.host_acceptance/v1, classrup.auctions.auction_opened/v1 and classrup.auctions.host_cancel/v1 by the host key named in the terms - and vaults act only on records they accepted (N2).
-      - The vault query auctions.auction.edit_lock answers F01.S01.M02 before a material listing edit from the cached host projection, so material edits are refused while the auction has bids (N11).
+      - The vault query auctions.auction.edit_lock answers F01.S01.M02 before a material listing edit from the bidCount the seller vault folds in from auctions.bid.placed (derived from the host-signed seller copies of bid receipts, F04.S01.M02) and from the cached host projection, so material edits are refused while the auction has bids or may have them (N11).
       - Host-produced auction events call the relay hook notify.notification.dispatch for a content-free push - opening to the seller, a host cancellation to the seller and bidders - for recipients who set pushOptIn (N17); the hook is provided by the relay runtime.
-    note: "Statements: classrup.auctions.auction/v1 (terms, signer seller key; payload {auctionId, listingId, listingCid, sellerId, hostRelayId, hostKeyId, currency, startPrice, reserveCommitment?, incrementTable, softCloseRulesVersion, startsAt, scheduledEndsAt, acceptBy, pushOptIn}); a separate reserve envelope {auctionId, reservePrice, reserveSalt} E2E-encrypted to hostKeyId; classrup.auctions.auction_cancel/v1 (seller key) {auctionId, termsCid, reason}; classrup.auctions.host_acceptance/v1 (host key) {termsCid, softCloseRulesVersion, hostTime}; classrup.auctions.auction_opened/v1 (host key) {auctionId, termsCid, openedAt, currentEndsAt}; classrup.auctions.host_cancel/v1 (host key) {auctionId, termsCid, reason: host_refused | host_policy | seller | listing_unavailable | accept_window_passed, bidCount, hostTime}. Execution sites: create, schedule, cancel, receive and the queries run in the seller vault; accept_hosting, open, apply_cancel, adjust_end and mark_closed run on the host relay."
+      - Auction events derived in the seller vault carry listingId and come only from verified host-signed statements - auctions.auction.scheduled from host_acceptance, auctions.auction.opened from auction_opened and auctions.auction.cancelled from host_cancel, the only local exceptions being a discarded draft and Release anyway - so F01.S01.M02 and the other listing modules follow the auction of a listing without a direct call (N11, N17).
+      - auctions.auction.freeze is the host-internal command that the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03 call while F15.S03.M03 restores the relay; it emits the host-local auctions.auction.frozen and calls notify.notification.dispatch for a content-free push to opted-in participants, and auctions.auction.receive derives auctions.auction.frozen in each vault from the host relay's verified classrup.platform.relay_restore/v1 for every local auction of that host whose open interval overlaps the lost window, whatever its local status.
+    note: "Statements: classrup.auctions.auction/v1 (terms, signer seller key; payload {auctionId, listingId, listingCid, sellerId, hostRelayId, hostKeyId, currency, startPrice, reserveCommitment?, incrementTable, softCloseRulesVersion, startsAt, scheduledEndsAt, acceptBy, pushOptIn}); a separate reserve envelope {auctionId, reservePrice, reserveSalt} E2E-encrypted to hostKeyId; classrup.auctions.auction_cancel/v1 (seller key) {auctionId, termsCid, reason}; classrup.auctions.host_acceptance/v1 (host key) {termsCid, softCloseRulesVersion, hostTime}; classrup.auctions.auction_opened/v1 (host key) {auctionId, termsCid, openedAt, currentEndsAt}; classrup.auctions.host_cancel/v1 (host key) {auctionId, termsCid, reason: host_refused | host_policy | seller | listing_unavailable | accept_window_passed | host_restore, bidCount, hostTime}. Inbound classrup.platform.relay_restore/v1 announcements (signer role relay_identity, written by F15.S03.M03) of hostRelayId are read from the restoreAnnouncements of the host relay descriptor (F15.S02.M01) at each host sync. Execution sites: create, schedule, cancel, receive and the queries run in the seller vault; accept_hosting, open, apply_cancel, adjust_end, mark_closed and freeze run on the host relay."
     commands:
       - name: auctions.auction.create
         capability: auctions.auction.create
@@ -220,10 +236,10 @@ processes:
         idempotent: true
       - name: auctions.auction.receive
         capability: auctions.auction.receive
-        input: "[vault-local ingestion of host_acceptance, auction_opened and host_cancel envelopes per CTR-FED-001, or of the reply to an acceptance fetch by termsCid] { envelope, via? }"
+        input: "[vault-local ingestion of host_acceptance, auction_opened and host_cancel envelopes per CTR-FED-001, of the reply to an acceptance fetch by termsCid, and of classrup.platform.relay_restore/v1 announcements of hostRelayId from the host descriptor (V13)] { envelope, via? }"
         output: "{ auctionId, accepted: boolean, quarantined?: boolean, code?, status }"
         errors: [AUCTIONS_HOST_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, NOT_FOUND]
-        emits: [auctions.auction.scheduled, auctions.auction.opened, auctions.auction.cancelled]
+        emits: [auctions.auction.scheduled, auctions.auction.opened, auctions.auction.cancelled, auctions.auction.frozen]
         idempotent: true
       - name: auctions.auction.adjust_end
         capability: auctions.auction.run
@@ -234,10 +250,17 @@ processes:
         idempotent: true
       - name: auctions.auction.mark_closed
         capability: auctions.auction.run
-        input: "[relay internal, called by F04.S01.M03 holding the close lease] { auctionId, fenceToken }"
+        input: "[relay internal, called by F04.S01.M03 holding the close lease - for an open auction from determine, for a frozen auction from readopt] { auctionId, fenceToken, readoptedResultCid? }"
         output: "{ auctionId, revision }"
         errors: [NOT_FOUND, CONFLICT_STATE, PRECONDITION_FAILED]
         emits: []
+        idempotent: true
+      - name: auctions.auction.freeze
+        capability: auctions.auction.run
+        input: "[relay internal, called under the auction lease by the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03 while F15.S03.M03 restores the relay, before the port opens] { auctionId, lostWindow: { from, to }, cause: bids_possibly_lost | close_possibly_lost }"
+        output: "{ auctionId, status: frozen, frozenAt, causes }"
+        errors: [NOT_FOUND, CONFLICT_STATE]
+        emits: [auctions.auction.frozen]
         idempotent: true
     queries:
       - name: auctions.auction.get_public
@@ -253,16 +276,18 @@ processes:
       - name: auctions.auction.edit_lock
         capability: auctions.auction.read_own
         input: "[vault query in the seller vault; also registered as the listing edit-lock port that F01.S01.M02 calls before a material edit] { listingId }"
-        output: "{ locked: boolean, bidCount, lastKnownAt, auctionId? } — locked when an auction on the listing is open, cancel_pending or needs_host_check with last known bidCount > 0, or open with a host projection older than 5 minutes"
+        output: "{ locked: boolean, bidCount, lastKnownAt, auctionId? } — locked when an auction on the listing is frozen, or open, cancel_pending or needs_host_check with last known bidCount > 0 (from auctions.bid.placed or the host projection), or open with its newest host evidence (seller copy of a bid receipt or host projection) older than 5 minutes"
         errors: []
     events_produced:
       - {type: auctions.auction.scheduled, privacy: P0, payload: "{ auctionId, listingId, listingCid, sellerId, hostRelayId, startsAt, scheduledEndsAt, currency, startPrice, reserveCommitment?, softCloseRulesVersion, termsCid }"}
       - {type: auctions.auction.opened, privacy: P0, payload: "{ auctionId, sellerId, hostRelayId, openedAt, currentEndsAt, openedCid }"}
-      - {type: auctions.auction.cancelled, privacy: P0, payload: "{ auctionId, sellerId, reason, bidCount, hostCancelCid? }"}
+      - {type: auctions.auction.cancelled, privacy: P0, payload: "{ auctionId, listingId?, sellerId, reason, bidCount, hostCancelCid? } — listingId absent only for a discarded draft without a listing; in the seller vault derived from the verified host_cancel"}
+      - {type: auctions.auction.frozen, privacy: P0, payload: "{ auctionId, listingId, sellerId, hostRelayId, lostWindow: { from, to }, causes?, frozenAt, announcementCid?, localStatus? } — host-local from auctions.auction.freeze (causes set); derived in vaults from the verified restore announcement for each local auction of that host whose open interval overlaps lostWindow (announcementCid and localStatus set)"}
     events_consumed:
       - {type: bazaar.listing.unpublished, effect: "seller vault - send auction_cancel with reason listing_unavailable for a scheduled auction, or an open auction with zero bids; an auction with bids stays open"}
       - {type: bazaar.listing.expired, effect: "same as unpublished"}
-      - {type: auctions.auction.closed, effect: "move an open, host_silent or needs_host_check auction to closed and store the final projection"}
+      - {type: auctions.auction.closed, effect: "move an open, frozen, host_silent or needs_host_check auction to closed and store the final projection"}
+      - {type: auctions.bid.placed, effect: "seller vault only - for the copy derived from a host-signed seller copy of a bid receipt (F04.S01.M02) with a seq above the last folded one, raise bidCount and set currentPrice, reserveMet and lastKnownAt of the local Auction; auctions.auction.edit_lock answers from them"}
       - {type: privacy.deletion.completed, effect: "replace the erased principal's did in retained Auction evidence with the per-deletion pseudonym, delete drafts and the reserve with its salt, and keep signed envelopes marked unverifiable-after-pseudonymization"}
     errors:
       - "AUCTIONS_HOST_REQUIRED | 409 | no | no host relay selected, or the host is not accepted; auctions are disabled without a host"
@@ -285,16 +310,16 @@ processes:
   authorization_capabilities:
     requirements:
       - Vault policy - only the unlocked local principal who is the seller creates, schedules or cancels the auction; the seller also reads the reserve.
-      - Relay policy - the host accepts terms only when signed by the seller key named in the terms, at or before acceptBy and within its hosting policy; open, adjust_end and mark_closed are host-internal and callable only by the host's own scheduler and sibling modules holding a current fence token.
+      - Relay policy - the host accepts terms only when signed by the seller key named in the terms, at or before acceptBy and within its hosting policy; open, adjust_end, mark_closed and freeze are host-internal and callable only by the host's own scheduler, its restore hook and sibling modules holding a current fence token.
       - Host moderators may cancel an auction on that host with a stated reason; this affects only that host. Bidders and viewers read the public projection with no capability beyond a signed or anonymous request.
-      - Vaults accept host_acceptance, auction_opened and host_cancel only when signed by the host key named in the seller's own terms and bound to termsCid; anything else is quarantined.
+      - Vaults accept host_acceptance, auction_opened and host_cancel only when signed by the host key named in the seller's own terms and bound to termsCid, and a restore announcement only when signed by a non-revoked key of the host relay (V13); anything else is quarantined.
     capabilities:
       - "auctions.auction.create | principal | local principal; a supplied listing is owned by the principal; host selected in local relay list"
       - "auctions.auction.schedule | principal | auction.sellerId = local principal; state draft"
-      - "auctions.auction.cancel | principal | auction.sellerId = local principal; state draft, proposed, scheduled or open"
-      - "auctions.auction.host_cancel | moderator, system | system for a seller-signed auction_cancel with bidCount 0 or a host refusal; host moderator under hosting policy with a stated reason; affects only this host"
+      - "auctions.auction.cancel | principal | auction.sellerId = local principal; state draft, proposed, scheduled, open or frozen (reason host_restore)"
+      - "auctions.auction.host_cancel | moderator, system | system for a seller-signed auction_cancel with bidCount 0 or on a frozen auction, a host refusal, or the 72 h restore deadline of a frozen auction; host moderator under hosting policy with a stated reason; affects only this host"
       - "auctions.auction.host_accept | host-operator, system | terms signed by seller key; host time at or before acceptBy; host hosting policy and quotas satisfied"
-      - "auctions.auction.run | system | host scheduler or sibling module inside a host transaction holding the auction lease with a current fence token"
+      - "auctions.auction.run | system | host scheduler, the restore hook (auctions.auction.freeze through AuctionHostPort) or a sibling module inside a host transaction holding the auction lease with a current fence token"
       - "auctions.auction.receive | principal | any envelope; acceptance depends on the host key in the local terms"
       - "auctions.auction.read_public | anonymous, principal | published projection only"
       - "auctions.auction.read_own | principal, system | auction.sellerId = local principal; edit_lock also callable in-process by F01.S01.M02 in the same vault"
@@ -304,11 +329,12 @@ processes:
       - Host open, adjust_end and mark_closed run inside the per-auction lease (IDM-8) and are safe to repeat; a stale lease token is refused.
       - A seller vault crash after signing terms but before recording them is repaired by re-sending the same terms cid, which the host deduplicates.
       - A lost acceptance is never resolved by a silent local cancel - the vault sends auction_cancel at acceptBy and keeps the listing locked until the host answers, the seller explicitly releases it, or the host_silent deadline passes.
-    idempotency: "Local command id stored 24 h; host accept_hosting dedupes on termsCid and returns the same host_acceptance; apply_cancel returns the same host_cancel per auction; receive dedupes on statement cid; open, adjust_end and mark_closed ignore repeats once their effect is stored."
+      - A host restore never contradicts what the host signed before it - auctions whose bids or close may lie in the announced lost window are frozen before the restored relay accepts a request, a frozen auction is never reopened or closed with a new result, and freeze, re-adoption and the restore cancel are idempotent per auction.
+    idempotency: "Local command id stored 24 h; host accept_hosting dedupes on termsCid and returns the same host_acceptance; apply_cancel returns the same host_cancel per auction; receive dedupes on statement cid; open, adjust_end and mark_closed ignore repeats once their effect is stored; freeze ignores repeats and merges causes; the restore cancel is signed once per frozen auction."
     concurrency: "Per-auction lease row on the host with a fencing token, TTL 5 s for bid-path commands and 30 s for the close path, always taken with BEGIN IMMEDIATE; adjust_end and mark_closed carry the fence token and a stale token is refused with PRECONDITION_FAILED. The lease is local to the host relay (IDM-8); the seller vault uses a Web Locks lock auctions-auction-<id>; no lock spans vaults."
     retries: "Terms upload retries 1 s, 2 s, 4 s, 8 s up to 8 attempts, then shows needs attention; the vault fetches the acceptance by termsCid at each retry; auction_cancel is re-sent with the same cid every 60 s while in cancel_pending; the host timer retries open every 5 s until success or cancellation."
     offline: "Create and cancel of a draft work offline; schedule needs the host and shows prepared until transport acknowledged; the UI never says scheduled until the host countersignature is verified; a cancel of a proposed or live auction waits in the sync outbox and the UI shows cancel requested, not cancelled, until host_cancel is verified."
-    partial_failure: "If the host acknowledges transport but the acceptance is lost, the seller sees proposed and fetches the acceptance by termsCid; at acceptBy it sends auction_cancel and waits in cancel_pending; if the host opened the auction and has bids, the cancel is refused and the vault shows it open. If the host is down at start time the auction opens late by the host clock and the delay is recorded, never backdated."
+    partial_failure: "If the host acknowledges transport but the acceptance is lost, the seller sees proposed and fetches the acceptance by termsCid; at acceptBy it sends auction_cancel and waits in cancel_pending; if the host opened the auction and has bids, the cancel is refused and the vault shows it open. If the host is down at start time the auction opens late by the host clock and the delay is recorded, never backdated. If the host restores an older backup, auctions whose open interval overlaps the announced lost window are frozen (03.R05) instead of continuing on incomplete data."
   privacy_retention_abuse:
     requirements:
       - The reserve is committed by salted hash publicly and known only to the seller and the host; bidders learn whether it has been met, and when a proxy maximum lifts the visible price exactly to the reserve (F04.S01.M02 reserve rule PX4) the price reveals the reserve value, which the setup screen states; the seller can verify the host's commitment at close.
@@ -358,7 +384,7 @@ processes:
     fixtures: "Seller vault S, host relay H with injectable clock, bidder vault B, auction listing L (EUR), default increment table default-v1; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R01 | create auctions in EUR, JPY (exponent 0) and BHD (exponent 3) | increments are ceiling-converted to at least 1 minor unit; tiers strictly increasing"
-      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01–V12 violated in turn on vault and on host | documented code returned and nothing stored; reserve never echoed"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01–V13 violated in turn on vault and on host | documented code returned and nothing stored; reserve never echoed"
       - "T03 | property | 03.R01 | random command, statement and timer sequences | only declared transitions succeed; closed and cancelled never change"
       - "T04 | integration | 03.R02,02.R02,03.R04 | schedule with no host, with host refusing, and with host silent past acceptBy | AUCTIONS_HOST_REQUIRED; cancelled host_refused after a verified host_cancel; cancel_pending with auction_cancel sent; never scheduled"
       - "T05 | integration | 03.R03,06.R02 | advance host clock past startsAt; run open twice; call adjust_end and mark_closed with a stale fence token | opened once with one signed auction_opened; both stale calls refused with PRECONDITION_FAILED"
@@ -381,11 +407,14 @@ processes:
       - "T22 | integration | 07.R04 | export, account deletion, consents withdrawn | section auctions.auctions present; evidence pseudonymized; schedule refused with PRECONDITION_FAILED without federation_publish consent; pushOptIn false without notify_push consent"
       - "T23 | integration | 04.R06 | host opens and later cancels an auction by host policy | notify.notification.dispatch called once per opted-in recipient with a template key and reference only"
       - "T24 | unit | 01.R04,02.R04 | create a draft without listing, create the listing with its subtypeRef, publish, schedule; schedule with an unpublished listing | draft id accepted as subtypeRef; schedule pins listingCid; unpublished listing refused AUCTIONS_LISTING_NOT_ELIGIBLE at schedule but not at create"
+      - "T25 | integration | 03.R05,06.R05,04.R08 | restore host H from a backup whose lost window covers bids on open auction A and the end of auction C; the AuctionHostPort implementations run before the port opens; seller vault S receives the restore announcement; S cancels A; nobody returns the result of C for 72 h | A and C frozen once on the host and in vaults with auctions.auction.frozen; bids and close refused; the cancel of A gives host_cancel host_restore although A has bids; C cancelled host_restore at 72 h; no new result determined for either; push dispatched once per opted-in recipient"
+      - "T26 | integration | 04.R07,04.R05,05.R04 | seller vault receives host_acceptance, a seller copy of a bid receipt, a host_cancel, and a restore announcement signed by a key outside the host key history | auctions.auction.scheduled and auctions.auction.cancelled carry listingId with actor.kind federated; bidCount folded from auctions.bid.placed and edit_lock locked; the forged announcement quarantined with AUCTIONS_HOST_STATEMENT_INVALID and nothing frozen"
     acceptance:
-      - All tests T01–T24 pass in CI.
+      - All tests T01–T26 pass in CI.
       - An auction cannot be scheduled or opened without a verified host countersignature and the UI always names the host.
       - The reserve value never appears in any payload visible to bidders, in logs, or in errors.
       - No vault cancels a proposed auction without telling the host, and every live auction ends in closed, cancelled or host_silent.
+      - No auction that a host restore may have affected takes another bid or is closed with a newly determined result.
   import_export_backup_rollback:
     requirements:
       - The seller's vault export contains their auctions, signed terms, host statements and the reserve with its salt; the reserve appears in no other user's export.
@@ -393,5 +422,5 @@ processes:
       - Schema changes follow expand and contract and keep v1 readable for 180 days.
     export: "Section auctions.auctions in classrup-export/v1 with Auction lines and the original terms, host_acceptance, auction_opened, auction_cancel and host_cancel envelopes; reservePrice and reserveSalt included only in the seller's own export."
     import: "Closed and cancelled auctions import as history; proposed auctions import as proposed before acceptBy and as cancel_pending after it (auction_cancel re-sent); scheduled and open auctions import as needs_host_check until the host confirms its state; unknown host keys are kept as read-only history."
-    backup: "The vault export is the primary backup (IOX-6); the host relay uses relay SQLite backup (IOX-3, IOX-7) and holds only auction operational data."
+    backup: "The vault export is the primary backup (IOX-6); the host relay uses relay SQLite backup (IOX-3, IOX-7) and holds only auction operational data; after a restore F15.S03.M03 calls the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03 and every auction with possible activity in the lost window is frozen (03.R05)."
     migration_rollback: "Additive optional fields only in v1; rollback is safe because signed statements are immutable and older readers ignore unknown fields."

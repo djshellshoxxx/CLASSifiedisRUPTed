@@ -14,7 +14,7 @@
 
 - **export:** Section auctions.auctions in classrup-export/v1 with Auction lines and the original terms, host_acceptance, auction_opened, auction_cancel and host_cancel envelopes; reservePrice and reserveSalt included only in the seller's own export.
 - **import:** Closed and cancelled auctions import as history; proposed auctions import as proposed before acceptBy and as cancel_pending after it (auction_cancel re-sent); scheduled and open auctions import as needs_host_check until the host confirms its state; unknown host keys are kept as read-only history.
-- **backup:** The vault export is the primary backup (IOX-6); the host relay uses relay SQLite backup (IOX-3, IOX-7) and holds only auction operational data.
+- **backup:** The vault export is the primary backup (IOX-6); the host relay uses relay SQLite backup (IOX-3, IOX-7) and holds only auction operational data; after a restore F15.S03.M03 calls the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03 and every auction with possible activity in the lost window is frozen (03.R05).
 - **migration rollback:** Additive optional fields only in v1; rollback is safe because signed statements are immutable and older readers ignore unknown fields.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

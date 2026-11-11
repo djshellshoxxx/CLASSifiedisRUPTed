@@ -25,12 +25,13 @@
 | V08 | seller vault offer - the candidate is the first entry of the host-signed list that F07.S02.M02 isBlockedEither does not block, no earlier offer exists, and no claim on the original Deal is claimed, acknowledged or final | AUCTIONS_SECOND_CHANCE_NOT_ALLOWED |
 | V09 | seller and winner vaults on result receipt - when seller and winner are blocked either way no Deal is opened and the result becomes failed with reason blocked; a candidate vault drops an offer from a seller it blocks | BLOCKED_PARTY |
 | V10 | record_non_payment on the host - the report is signed by the auction's sellerId key, names this result cid, and host time is between day 3 and day 30 after closedAtHost | AUCTIONS_NONPAYMENT_NOT_ALLOWED |
+| V11 | readopt - the auction is frozen on this host, the returned result verifies against this host's key in the auction terms, binds termsCid and auctionId and has closedAtHost inside the frozen lostWindow, and a returned disclosure matches winnerCommitment | AUCTIONS_RESULT_INVALID |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-034-09.T02 | unit | PS-034-02.R01, PS-034-02.R02, PS-034-02.R03 | each rule V01–V10 violated | documented code returned and nothing stored |
+| TEST-PS-034-09.T02 | unit | PS-034-02.R01, PS-034-02.R02, PS-034-02.R03 | each rule V01–V11 violated | documented code returned and nothing stored |
 | TEST-PS-034-09.T19 | integration | PS-034-02.R04, PS-034-07.R04 | seller blocked the first candidate; winner blocked by the seller at result time | candidate list filtered locally and the offer goes to the second; with the winner blocked the result shows, no Deal is opened, state failed with reason blocked, report refused |
 
 ## Dependencies

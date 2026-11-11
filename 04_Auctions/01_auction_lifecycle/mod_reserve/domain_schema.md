@@ -47,9 +47,10 @@ Schema `classrup.auctions.auction/v1` · storage **relay+device** · privacy **P
 | openedCid? | string — cid of the host-signed auction_opened statement |
 | hostCancelCid? | string — cid of the host-signed host_cancel statement |
 | pushOptIn | boolean — seller allows content-free host pushes; true only when privacy.consent.check(notify_push) for the host is granted |
-| status | enum — draft \| proposed \| cancel_pending \| scheduled \| open \| closed \| cancelled \| host_silent \| needs_host_check |
-| cancelReason? | enum — seller \| host_unreachable \| host_refused \| host_policy \| listing_unavailable \| accept_window_passed |
+| status | enum — draft \| proposed \| cancel_pending \| scheduled \| open \| frozen \| closed \| cancelled \| host_silent \| needs_host_check |
+| cancelReason? | enum — seller \| host_unreachable \| host_refused \| host_policy \| listing_unavailable \| accept_window_passed \| host_restore |
 | syncState | map — {host: prepared \| transport_acknowledged \| peer_accepted} |
+| freeze? | object — {lostWindow: {from, to}, causes: (bids_possibly_lost \| close_possibly_lost)[], frozenAt, announcementCid?}; set by auctions.auction.freeze on the host and from the verified classrup.platform.relay_restore/v1 of hostRelayId in vaults |
 | revision | int — CTR-ID-001 ID-4 |
 | createdAt | timestamp — RFC 3339 UTC |
 
@@ -57,8 +58,9 @@ Schema `classrup.auctions.auction/v1` · storage **relay+device** · privacy **P
 - status scheduled, open or closed implies listingId, listingCid, hostRelayId, hostKeyId, termsCid and hostAcceptanceCid are set and verified, and the acceptance host time is at or before acceptBy.
 - reservePrice and reserveSalt never appear in any event payload, public projection, log or export other than the seller's own; on the host they exist only decrypted inside the host process for this auction.
 - currentEndsAt is at least scheduledEndsAt and at most scheduledEndsAt plus 60 minutes.
-- A cancelled auction has bidCount 0 unless cancelReason is host_policy.
-- At most one Auction per listing is in proposed, cancel_pending, scheduled, open or needs_host_check; host_silent, closed and cancelled release the listing.
+- A cancelled auction has bidCount 0 unless cancelReason is host_policy or host_restore.
+- At most one Auction per listing is in proposed, cancel_pending, scheduled, open, frozen or needs_host_check; host_silent, closed and cancelled release the listing.
+- A frozen auction accepts no bid, extension or close; it leaves frozen only to closed through a re-adopted host-signed result, to cancelled through a host_cancel with reason host_restore or host_policy, or in vaults to host_silent.
 
 ### Storage DDL
 
@@ -69,7 +71,7 @@ CREATE TABLE auctions_auction (
   current_ends_at TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE INDEX auctions_auction_due ON auctions_auction(status, starts_at, current_ends_at);
 CREATE UNIQUE INDEX auctions_auction_listing ON auctions_auction(tenant_id, listing_id)
-  WHERE listing_id IS NOT NULL AND status IN ('proposed','cancel_pending','scheduled','open','needs_host_check');
+  WHERE listing_id IS NOT NULL AND status IN ('proposed','cancel_pending','scheduled','open','frozen','needs_host_check');
 ```
 
 ## Verification
@@ -84,4 +86,4 @@ CREATE UNIQUE INDEX auctions_auction_listing ON auctions_auction(tenant_id, list
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [module SPEC](SPEC.md).

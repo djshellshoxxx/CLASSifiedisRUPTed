@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-034-09.T01 | unit | PS-034-01.R01, PS-034-01.R04 | close A3 whose ledger head is an auto entry at the reserve | finalPrice equals the ledger head price 50.00; reserveCheck met; close computes no price of its own |
-| TEST-PS-034-09.T02 | unit | PS-034-02.R01, PS-034-02.R02, PS-034-02.R03 | each rule V01–V10 violated | documented code returned and nothing stored |
+| TEST-PS-034-09.T02 | unit | PS-034-02.R01, PS-034-02.R02, PS-034-02.R03 | each rule V01–V11 violated | documented code returned and nothing stored |
 | TEST-PS-034-09.T03 | property | PS-034-03.R01 | random timer, command and statement sequences per role | only declared transitions succeed; terminal states never change |
 | TEST-PS-034-09.T04 | integration | PS-034-03.R02 | Deal opened, payment claimed only, then acknowledged | state stays awaiting_payment on claim; completed only on commerce.deal.completed |
 | TEST-PS-034-09.T05 | chaos | PS-034-06.R01, PS-034-06.R02, PS-034-09.R03 | two workers close the same auction; extension lands before lease; lease expires mid-close | exactly one result; no close on extension; stale fence refused |
@@ -44,10 +44,12 @@ See the module test table below (all processes).
 | TEST-PS-034-09.T22 | integration | PS-034-07.R05 | seller receives the candidate list | at most 3 candidates with lastVisibleBid; no other bidder key reaches the seller |
 | TEST-PS-034-09.T23 | integration | PS-034-07.R04 | export; account deletion of the winner | section auctions.results present; winnerId pseudonymized in the seller's retained result |
 | TEST-PS-034-09.T24 | unit | PS-034-03.R01 | host row and non-party mirrors after a sale; second-chance offer to a candidate vault | host and non-party copies go determined to recorded; the candidate vault goes recorded to second_chance_offered and back to recorded on decline |
+| TEST-PS-034-09.T25 | integration | PS-034-06.R05, PS-034-04.R06 | restore host H from a backup taken before auction A closed with a sale; the seller vault holds result and disclosure; a bidder returns the public result first; a forged result signed by another key | freeze_closes freezes A before the close tick runs; readopt of the bidder copy stores the result and the seller's disclosure completes the host row; host-local closed and won re-emitted; the forged result AUCTIONS_RESULT_INVALID; determine never runs for A |
+| TEST-PS-034-09.T26 | integration | PS-034-04.R03 | seller vault receives a verified unsold result for auction listing L | auctions.auction.unsold derived once with listingId L from the verified terms, sellerId and actor.kind federated with verified provenance.sig |
 
 ## Acceptance criteria
 
-- All tests T01–T24 pass in CI.
+- All tests T01–T26 pass in CI.
 - Exactly one result exists per auction under any worker race and no late bid can win.
 - A winner is never shown as having won, and a sale never as completed, before the host-signed result and the acknowledged or final payment are held.
 - No vault applies a void over an acknowledged or final payment, and no void cancels a Deal.

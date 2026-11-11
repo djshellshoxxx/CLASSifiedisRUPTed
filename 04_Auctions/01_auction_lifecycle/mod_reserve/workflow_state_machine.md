@@ -10,6 +10,7 @@
 - **PS-035-03.R02** Scheduled requires the host's verified countersignature; no host acceptance means no auction.
 - **PS-035-03.R03** Opening, end adjustment, host cancellation and closing are host-clock decisions; the seller vault shows them only after receiving the host-signed statements (auction_opened, extension, host_cancel, result).
 - **PS-035-03.R04** A vault never cancels a proposed auction silently - at acceptBy it sends a signed auction_cancel and waits in cancel_pending - and an auction whose host stops answering moves to host_silent, which releases the listing lock but still yields to a later valid host statement.
+- **PS-035-03.R05** A host restore freezes every auction whose bids or close may have been lost - on the host through auctions.auction.freeze before the restored relay accepts a request, in vaults from the verified restore announcement - and a frozen auction takes no bid, extension or close until it is renegotiated - re-adoption of the host's own signed result closes it, and the seller's cancel or the host's cancel 72 h after the freeze, both with reason host_restore, cancel it; no new result is ever determined for it.
 
 ## Specification
 
@@ -40,6 +41,12 @@ Initial **draft**; terminal **closed**, **cancelled**.
 | needs_host_check -> closed | a verified result arrives | final projection stored |
 | needs_host_check -> cancelled | a verified host_cancel arrives | emits auctions.auction.cancelled |
 | needs_host_check -> host_silent | no host answer by scheduledEndsAt plus 60 minutes plus 72 h | listing lock released |
+| scheduled -> frozen | auctions.auction.freeze from an AuctionHostPort implementation after a host restore (host), or a verified classrup.platform.relay_restore/v1 of hostRelayId whose lostWindow overlaps startsAt to currentEndsAt (vault, V13) | bids, extensions and close refused; emits auctions.auction.frozen |
+| open -> frozen | the same triggers as scheduled -> frozen | bids, extensions and close refused; live bids keep their state until the freeze ends; emits auctions.auction.frozen |
+| needs_host_check -> frozen | a verified restore announcement of hostRelayId whose lostWindow overlaps the auction (vault) | emits auctions.auction.frozen |
+| frozen -> closed | auctions.auction.mark_closed called by F04.S01.M03 auctions.result.readopt (host), or a verified result (vault) | the host's own signed result is re-adopted; no new result is determined |
+| frozen -> cancelled | host_cancel with reason host_restore for the seller's auction_cancel or 72 h after the freeze without a re-adopted result, or host policy (host); the verified host_cancel (vault) | live bids void; emits auctions.auction.cancelled |
+| frozen -> host_silent | vault sweep finds no verified result or host_cancel by the later of scheduledEndsAt plus 60 minutes plus 72 h and frozenAt plus 96 h | listing lock released; shows host did not report a result |
 
 ```mermaid
 stateDiagram-v2
@@ -65,6 +72,12 @@ stateDiagram-v2
   needs_host_check --> closed: a verified result arrives
   needs_host_check --> cancelled: a verified host_cancel arrives
   needs_host_check --> host_silent: no host answer by scheduledEndsAt plus 60 minutes plus 72 h
+  scheduled --> frozen: auctions.auction.freeze from an AuctionHostPort implementation after a host restore (host), or a verified classrup.platform.relay_restore/v1 of hostRelayId whose lostWindow overlaps startsAt to currentEndsAt (vault, V13)
+  open --> frozen: the same triggers as scheduled -> frozen
+  needs_host_check --> frozen: a verified restore announcement of hostRelayId whose lostWindow overlaps the auction (vault)
+  frozen --> closed: auctions.auction.mark_closed called by F04.S01.M03 auctions.result.readopt (host), or a verified result (vault)
+  frozen --> cancelled: host_cancel with reason host_restore for the seller's auction_cancel or 72 h after the freeze without a re-adopted result, or host policy (host)  the verified host_cancel (vault)
+  frozen --> host_silent: vault sweep finds no verified result or host_cancel by the later of scheduledEndsAt plus 60 minutes plus 72 h and frozenAt plus 96 h
   closed --> [*]
   cancelled --> [*]
 ```
@@ -73,6 +86,7 @@ stateDiagram-v2
 
 - Host timer checks scheduled auctions every 5 s, opens those with startsAt <= host now and signs auction_opened.
 - Seller vault sweep at app start and every 60 s while open - proposed auctions past acceptBy move to cancel_pending and send auction_cancel; scheduled, open, cancel_pending and needs_host_check auctions past scheduledEndsAt plus 60 minutes plus 72 h without a verified result or host_cancel move to host_silent. The sweep never cancels an auction.
+- Host restore - the host sweep every 60 s signs a host_cancel with reason host_restore for each frozen auction without a re-adopted result 72 h after frozenAt; the vault sweep moves frozen auctions to host_silent at the later of scheduledEndsAt plus 60 minutes plus 72 h and frozenAt plus 96 h.
 
 ## Verification
 
@@ -84,7 +98,8 @@ stateDiagram-v2
 | TEST-PS-035-09.T15 | e2e | PS-035-01.R02, PS-035-03.R02, PS-035-09.R03 | mobile seller schedules with a host, bidder views host panel and auction page | host named, reserve status shown, no host means feature disabled; axe zero serious issues |
 | TEST-PS-035-09.T18 | integration | PS-035-06.R04, PS-035-03.R04, PS-035-02.R04 | host accepts but the acceptance is lost; 24 h pass; host opened and a bidder bid; second run without bids; host tries to accept after acceptBy | vault sends auction_cancel at acceptBy and waits in cancel_pending; with a bid the host refuses AUCTIONS_HAS_BIDS and the vault shows open; without bids host_cancel and cancelled; late acceptance refused with EXPIRED |
 | TEST-PS-035-09.T19 | integration | PS-035-03.R04 | host stops answering after scheduling | after scheduledEndsAt plus 60 minutes plus 72 h the auction is host_silent and the listing lock is released; a later valid result moves it to closed |
+| TEST-PS-035-09.T25 | integration | PS-035-03.R05, PS-035-06.R05, PS-035-04.R08 | restore host H from a backup whose lost window covers bids on open auction A and the end of auction C; the AuctionHostPort implementations run before the port opens; seller vault S receives the restore announcement; S cancels A; nobody returns the result of C for 72 h | A and C frozen once on the host and in vaults with auctions.auction.frozen; bids and close refused; the cancel of A gives host_cancel host_restore although A has bids; C cancelled host_restore at 72 h; no new result determined for either; push dispatched once per opted-in recipient |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -11,10 +11,11 @@ Bidders place bids on an open auction through the auction's host relay. A bid is
 ## Responsibilities
 
 - Own the Bid record - on the host as the authoritative ledger entry, in the bidder vault as the bidder's copy of the signed bid and receipts.
-- Validate each bid after the idempotency lookup in a fixed order - schema, signature, host acceptance, validity window, auction state and host time, minimum or max-only rule, eligibility and revoked keys from F04.S02.M01, rate limits through RateLimitPort - and apply proxy rules proxy-v1 deterministically.
+- Validate each bid after the idempotency lookup in a fixed order - schema, signature, host acceptance, validity window, auction state and host time, minimum or max-only rule, eligibility and revoked keys from F04.S02.M01, rate limits through RateLimitPort and the F12.S03.M04 bids_per_day account limit - and apply proxy rules proxy-v1 deterministically.
 - Maintain a hash-chained bid ledger per auction (hash of seq, auction id, bid cid, alias, kind, amount, host time and previous hash) and return host-signed receipts so bidders can detect omission or reordering of their own bids.
 - Apply retraction rules - more than 12 h before the current end, at most 1 retraction per bidder per auction, only of the bidder's current leading bid - executed on the host by auctions.bid.apply_retraction with a host-signed retraction receipt, and recompute the leader and price.
 - Deliver host-signed bid_outbid statements to outbid bidders and call the relay notification hook for content-free pushes.
+- Return a relay receipt from F15.S02.M01 ReceiptPort.issue for every bid and retraction body the host accepts, deliver host-signed seller copies of bid receipts so the seller vault can derive auctions.bid.placed, and register the AuctionHostPort implementation that freezes auctions whose bids a host restore may have lost.
 
 ## Not responsible for
 
@@ -48,6 +49,9 @@ Bidders place bids on an open auction through the auction's host relay. A bid is
 - The leader of an auction whose reserve was not met is shown lost at close, never won; won comes only from auctions.auction.won naming this bidder.
 - The host stops answering; with no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h the bidder's live bids show host did not report a result, and a later valid result still applies.
 - The bidder has blocked the seller (or holds the seller's block); the bidder vault refuses to sign the bid with BLOCKED_PARTY and sends nothing.
+- A new key places its 21st bid of the day on a host; the in-process F12.S03.M04 moderation.accountlimit.check for limitKey bids_per_day refuses it with MODERATION_ACCOUNT_LIMIT_REACHED and params.resetsAt, and nothing is stored.
+- The first bid lands on an auction; the host sends a host-signed seller copy of its bid receipt to the seller's mailbox at once and later copies at most once per 60 s, so the seller vault derives auctions.bid.placed with listingId and bidCount but never learns a bidder key.
+- The host restores an older backup whose lost window overlaps an open auction; the bidder's relay receipt shows its bid was received inside the lost window, the auction is frozen through AuctionHostPort, new bids are refused with AUCTIONS_NOT_OPEN, and the bid view shows frozen after host restore.
 
 ## UX and accessibility
 
@@ -55,7 +59,7 @@ Bidders place bids on an open auction through the auction's host relay. A bid is
 - Bid history: alias, amount, host time, kind (bid, proxy raise, retraction), and the user's own receipts with a Check against my receipts action whose result reads consistent with your receipts, never verified.
 - My bids: status per auction (leading, outbid, retracted, won, lost, not placed, host did not report) and receipt fingerprints.
 
-**States:** loading; host-unreachable; not-open; eligible; submitting; leading; outbid; rejected; not-placed; retracted; won; lost; void; host-silent
+**States:** loading; host-unreachable; not-open; frozen; eligible; submitting; leading; outbid; rejected; not-placed; retracted; won; lost; void; host-silent
 
 **Accessibility:** Bid amount and maximum fields have visible labels with currency and inputmode=decimal; the next minimum is in the label text.; Bid outcome (leading, outbid, rejected with reason) is announced through an aria-live assertive region once per submission.; Place bid and Retract buttons are at least 44x44 px with accessible names including the amount and the auction title.
 
@@ -65,14 +69,14 @@ Bidders place bids on an open auction through the auction's host relay. A bid is
 
 ## Interfaces
 
-- Commands: `auctions.bid.submit`, `auctions.bid.place`, `auctions.bid.retract`, `auctions.bid.apply_retraction`, `auctions.bid.receive`
+- Commands: `auctions.bid.submit`, `auctions.bid.place`, `auctions.bid.retract`, `auctions.bid.apply_retraction`, `auctions.bid.receive`, `auctions.bid.freeze_activity`
 - Queries: `auctions.bid.list_for_auction`, `auctions.bid.list_mine`, `auctions.bid.verify_ledger`
 - Emits: `auctions.bid.placed`, `auctions.bid.outbid`, `auctions.bid.retracted`
-- Consumes: `auctions.auction.opened`, `auctions.auction.closed`, `auctions.auction.won`, `auctions.auction.cancelled`, `auctions.auction.extended`, `auctions.result.voided`, `privacy.deletion.completed`
+- Consumes: `auctions.auction.opened`, `auctions.auction.closed`, `auctions.auction.won`, `auctions.auction.cancelled`, `auctions.auction.extended`, `auctions.auction.frozen`, `auctions.result.voided`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001
+F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001
 
 ## Process specifications and aggregation
 
@@ -81,9 +85,9 @@ F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F1
 | PS-033-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-033-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-033-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-033-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-033-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-033-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
-| PS-033-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
+| PS-033-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-033-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-033-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-033-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
@@ -93,7 +97,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T29 pass in CI.
 - The proxy algorithm matches the proxy-v1 reference model on 100 000 random sequences and ledger replay reproduces every price.
 - No proxy maximum or bidder key is visible to any party other than the bidder and the host, and both reach the host only encrypted to its key.
 - No bid is shown as won unless auctions.auction.won names its bidder, and no bid stays submitted past notAfter plus 45 s.

@@ -23,6 +23,8 @@
 | auctions.result.respond_second_chance | principal | local principal key equals the nominated candidate; seller not blocked either way |
 | auctions.result.read_public | anonymous, principal | public projection |
 | auctions.result.read_own | principal | local principal is seller, winner, candidate or a bidder of the auction |
+| auctions.result.freeze | system | relay restore hook only (AuctionHostPort registered with the relay process, called by F15.S03.M03); not routable over HTTP |
+| auctions.result.readopt | principal, system | any participant vault returning a result; accepted only when the host's own key in the terms signed it and the auction is frozen on this host (V11) |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

@@ -16,7 +16,7 @@
 |---|---|---|
 | V01 | actor holds the moderator role on this host, is not the seller or a bidder of the auction, and F04.S02.M01 linkage finds no link between the actor's key and the seller or any bidder | FORBIDDEN |
 | V02 | review exists in the status required by the command | CONFLICT_STATE |
-| V03 | void reason is one of the five enum values and findings has 20..2000 code points | VALIDATION_FAILED |
+| V03 | void reason is one of the five enum values, findings has 20..2000 code points, and ruleRefs (1..5 rule versions in force) and factsSummary (50..2000 code points, no reporter identity or internal note) satisfy the F12.S02.M01 record_host_policy input | VALIDATION_FAILED |
 | V04 | confirming moderator differs from the proposing moderator | FORBIDDEN |
 | V05 | the result exists with outcome won, is not already voided, and closedAtHost is at most 60 days before host now | AUCTIONS_RESULT_NOT_VOIDABLE |
 | V06 | cancel_auction applies only when the auction status is scheduled or open | CONFLICT_STATE |

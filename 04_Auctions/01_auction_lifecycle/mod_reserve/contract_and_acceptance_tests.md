@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-035-09.T01 | unit | PS-035-01.R01, PS-035-01.R03, PS-035-02.R01 | create auctions in EUR, JPY (exponent 0) and BHD (exponent 3) | increments are ceiling-converted to at least 1 minor unit; tiers strictly increasing |
-| TEST-PS-035-09.T02 | unit | PS-035-02.R01, PS-035-02.R02, PS-035-02.R03 | each rule V01–V12 violated in turn on vault and on host | documented code returned and nothing stored; reserve never echoed |
+| TEST-PS-035-09.T02 | unit | PS-035-02.R01, PS-035-02.R02, PS-035-02.R03 | each rule V01–V13 violated in turn on vault and on host | documented code returned and nothing stored; reserve never echoed |
 | TEST-PS-035-09.T03 | property | PS-035-03.R01 | random command, statement and timer sequences | only declared transitions succeed; closed and cancelled never change |
 | TEST-PS-035-09.T04 | integration | PS-035-03.R02, PS-035-02.R02, PS-035-03.R04 | schedule with no host, with host refusing, and with host silent past acceptBy | AUCTIONS_HOST_REQUIRED; cancelled host_refused after a verified host_cancel; cancel_pending with auction_cancel sent; never scheduled |
 | TEST-PS-035-09.T05 | integration | PS-035-03.R03, PS-035-06.R02 | advance host clock past startsAt; run open twice; call adjust_end and mark_closed with a stale fence token | opened once with one signed auction_opened; both stale calls refused with PRECONDITION_FAILED |
@@ -44,14 +44,17 @@ See the module test table below (all processes).
 | TEST-PS-035-09.T22 | integration | PS-035-07.R04 | export, account deletion, consents withdrawn | section auctions.auctions present; evidence pseudonymized; schedule refused with PRECONDITION_FAILED without federation_publish consent; pushOptIn false without notify_push consent |
 | TEST-PS-035-09.T23 | integration | PS-035-04.R06 | host opens and later cancels an auction by host policy | notify.notification.dispatch called once per opted-in recipient with a template key and reference only |
 | TEST-PS-035-09.T24 | unit | PS-035-01.R04, PS-035-02.R04 | create a draft without listing, create the listing with its subtypeRef, publish, schedule; schedule with an unpublished listing | draft id accepted as subtypeRef; schedule pins listingCid; unpublished listing refused AUCTIONS_LISTING_NOT_ELIGIBLE at schedule but not at create |
+| TEST-PS-035-09.T25 | integration | PS-035-03.R05, PS-035-06.R05, PS-035-04.R08 | restore host H from a backup whose lost window covers bids on open auction A and the end of auction C; the AuctionHostPort implementations run before the port opens; seller vault S receives the restore announcement; S cancels A; nobody returns the result of C for 72 h | A and C frozen once on the host and in vaults with auctions.auction.frozen; bids and close refused; the cancel of A gives host_cancel host_restore although A has bids; C cancelled host_restore at 72 h; no new result determined for either; push dispatched once per opted-in recipient |
+| TEST-PS-035-09.T26 | integration | PS-035-04.R07, PS-035-04.R05, PS-035-05.R04 | seller vault receives host_acceptance, a seller copy of a bid receipt, a host_cancel, and a restore announcement signed by a key outside the host key history | auctions.auction.scheduled and auctions.auction.cancelled carry listingId with actor.kind federated; bidCount folded from auctions.bid.placed and edit_lock locked; the forged announcement quarantined with AUCTIONS_HOST_STATEMENT_INVALID and nothing frozen |
 
 ## Acceptance criteria
 
-- All tests T01–T24 pass in CI.
+- All tests T01–T26 pass in CI.
 - An auction cannot be scheduled or opened without a verified host countersignature and the UI always names the host.
 - The reserve value never appears in any payload visible to bidders, in logs, or in errors.
 - No vault cancels a proposed auction without telling the host, and every live auction ends in closed, cancelled or host_silent.
+- No auction that a host restore may have affected takes another bid or is closed with a newly determined result.
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

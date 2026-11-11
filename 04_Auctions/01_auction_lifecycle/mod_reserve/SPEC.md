@@ -15,6 +15,7 @@ English ascending auctions on a listing, run only on a host relay that the selle
 - Open scheduled auctions at the host-clock start time, keep currentEndsAt and price projections used by bids, and publish a public P0 projection that never contains the reserve, bidder identities or max bids.
 - Allow cancellation by the seller only while the auction has zero bids, and by the host operator under hosting policy with a stated reason, always confirmed by a host-signed host_cancel statement.
 - Answer the listing edit-lock query that F01.S01.M02 uses to refuse material listing edits while the auction has bids (N11).
+- Freeze hosted auctions whose bids or close a host restore may have lost (auctions.auction.freeze, called by the AuctionHostPort implementations of F04.S01.M02 and F04.S01.M03), mirror the freeze in vaults from the host relay's verified restore announcement, and end it only by a cancel with reason host_restore or by a re-adopted host-signed result.
 
 ## Not responsible for
 
@@ -45,14 +46,16 @@ English ascending auctions on a listing, run only on a host relay that the selle
 - The host disappears after scheduling; with no auction_opened, result or host_cancel by scheduledEndsAt plus 60 minutes plus 72 h the vault moves the auction to host_silent, releases the listing lock and shows host did not report a result; a later valid host statement still applies.
 - Draft-first creation; the seller creates the draft Auction without a listing, creates the auction listing with subtypeRef {slug auctions, entity Auction, id}, publishes it and then schedules; schedule refuses an unpublished listing with AUCTIONS_LISTING_NOT_ELIGIBLE, create does not.
 - Terms name an unknown softCloseRulesVersion; refused with VALIDATION_FAILED by the vault and by the host.
+- The host relay restores an older backup and its signed restore announcement names a lost window that overlaps an open auction; bids or a close signed in that window may be missing on the host, so the host freezes the auction before its port opens and refuses bids and close, vaults freeze it from the verified announcement, and the auction ends by the seller's cancel with reason host_restore, by a participant returning the host's own signed result, or by the host's cancel 72 h after the freeze.
+- A vault already holds a verified result for an auction that the restored host froze; the vault stays closed, F04.S01.M03 returns the result to the host for re-adoption, and a later host_cancel with reason host_restore is kept as conflicting host evidence without changing the closed auction.
 
 ## UX and accessibility
 
 - Auction setup: listing picker or create auction listing, host relay picker with trust panel (operator name, region, policy link, retention, what the host can see including the reserve and every bid in plaintext), start price, hidden reserve (optional, with the note that a proxy maximum lifting the price exactly to the reserve reveals it), duration chips (1 h, 24 h, 3 d, 7 d, 14 d), start now or schedule, increment table preview.
 - Auction page: current price, next minimum bid, time left from host-signed time, reserve status (no reserve, reserve not met, reserve met), host panel, bid count, soft-close note naming rules version softclose-v1, listing-edited notice when applicable.
-- Seller dashboard: auctions by state with host sync line (prepared, delivered to host, accepted by host), cancel requested, host did not answer (with Release anyway after a warning) and host did not report a result.
+- Seller dashboard: auctions by state with host sync line (prepared, delivered to host, accepted by host), cancel requested, host did not answer (with Release anyway after a warning), host did not report a result, and frozen after host restore (bids in the lost window may be missing; Cancel and relist, or wait up to 72 h for the host to recover its signed result).
 
-**States:** loading; empty; draft; proposed; cancel-pending; scheduled; open; closed; cancelled; host-silent; needs-host-check; host-required; host-unreachable; pending-offline
+**States:** loading; empty; draft; proposed; cancel-pending; scheduled; open; frozen; closed; cancelled; host-silent; needs-host-check; host-required; host-unreachable; pending-offline
 
 **Accessibility:** Money fields have visible labels including currency and use inputmode=decimal.; Time left is text in an aria-live polite region updated at most once per 10 s, and the final minute announces once per 15 s.; Host trust panel is reachable by keyboard before the first bid and its text states host power in plain words.
 
@@ -62,14 +65,14 @@ English ascending auctions on a listing, run only on a host relay that the selle
 
 ## Interfaces
 
-- Commands: `auctions.auction.create`, `auctions.auction.schedule`, `auctions.auction.accept_hosting`, `auctions.auction.open`, `auctions.auction.cancel`, `auctions.auction.apply_cancel`, `auctions.auction.receive`, `auctions.auction.adjust_end`, `auctions.auction.mark_closed`
+- Commands: `auctions.auction.create`, `auctions.auction.schedule`, `auctions.auction.accept_hosting`, `auctions.auction.open`, `auctions.auction.cancel`, `auctions.auction.apply_cancel`, `auctions.auction.receive`, `auctions.auction.adjust_end`, `auctions.auction.mark_closed`, `auctions.auction.freeze`
 - Queries: `auctions.auction.get_public`, `auctions.auction.list_mine`, `auctions.auction.edit_lock`
-- Emits: `auctions.auction.scheduled`, `auctions.auction.opened`, `auctions.auction.cancelled`
-- Consumes: `bazaar.listing.unpublished`, `bazaar.listing.expired`, `auctions.auction.closed`, `privacy.deletion.completed`
+- Emits: `auctions.auction.scheduled`, `auctions.auction.opened`, `auctions.auction.cancelled`, `auctions.auction.frozen`
+- Consumes: `bazaar.listing.unpublished`, `bazaar.listing.expired`, `auctions.auction.closed`, `auctions.bid.placed`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001
+F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001
 
 ## Process specifications and aggregation
 
@@ -77,10 +80,10 @@ F01.S01.M01, F01.S01.M03, F09.S03.M01, F11.S01.M01, F11.S01.M03, F07.S01.M01, F1
 |---|---|---|
 | PS-035-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-035-02 | [Validation rules](validation_rules.md) | 4 |
-| PS-035-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-035-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-035-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
+| PS-035-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-035-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
-| PS-035-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
+| PS-035-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-035-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-035-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-035-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
@@ -90,7 +93,8 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T24 pass in CI.
+- All tests T01–T26 pass in CI.
 - An auction cannot be scheduled or opened without a verified host countersignature and the UI always names the host.
 - The reserve value never appears in any payload visible to bidders, in logs, or in errors.
 - No vault cancels a proposed auction without telling the host, and every live auction ends in closed, cancelled or host_silent.
+- No auction that a host restore may have affected takes another bid or is closed with a newly determined result.

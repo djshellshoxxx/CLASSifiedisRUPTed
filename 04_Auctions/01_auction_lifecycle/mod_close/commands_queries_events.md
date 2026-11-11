@@ -8,9 +8,10 @@
 
 - **PS-034-04.R01** The host relay command auctions.result.determine runs from the close tick and produces the host-signed public result and disclosure; participant vaults ingest them with auctions.result.receive and the other parties' signed statements with auctions.result.receive_statement.
 - **PS-034-04.R02** Seller and candidate actions are vault commands that produce named signed statements and go through the sync outbox and the host.
-- **PS-034-04.R03** Auction closed, won and unsold events are host-local and are derived in each participant vault on receipt of the result (actor.kind federated).
+- **PS-034-04.R03** Auction closed, won and unsold events are host-local and are derived in each participant vault, the seller vault included, on receipt of the verified host-signed result (actor.kind federated, N17); auctions.auction.unsold carries listingId from the verified terms so the listing modules can follow it (N11).
 - **PS-034-04.R04** Statements are registered with F11.S01.M01 with their signer roles - result, result_disclosure and second_chance_candidates by the host key in the terms, non_payment_report and second_chance_offer by the seller key (sellerId), second_chance_response by the nominated candidate key - and vaults act only on statements they accepted (N2).
 - **PS-034-04.R05** Host-produced events call the relay hook notify.notification.dispatch for a content-free push - closed and unsold to the seller, won to the seller and winner, second_chance_offered to the candidate - for recipients who set pushOptIn (N17).
+- **PS-034-04.R06** This module registers an AuctionHostPort.freezeActivityIn(lostWindow) implementation with the relay process (inverted registration, no depends_on edge; F15.S03.M03 calls it and the F04.S01.M02 implementation after a restore before the port opens) that freezes, through F04.S01.M01 auctions.auction.freeze with cause close_possibly_lost, every hosted open auction whose currentEndsAt is at or before lostWindow.to and that has no result row; on auctions.auction.frozen a vault holding the verified result returns it, with the disclosure in the seller and winner vaults, once to auctions.result.readopt, which re-adopts the host's own signed statements and re-emits the host-local closed and won or unsold events.
 
 ## Specification
 
@@ -26,6 +27,8 @@
 | `auctions.result.nominate_second_chance` | auctions.result.nominate | [relay command at the host, after record_non_payment stored the seller-signed report for this result] { resultId, reportCid } | { candidates: statement classrup.auctions.second_chance_candidates/v1 signed by host key, E2E to the seller } | NOT_FOUND, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED, FORBIDDEN |  | yes (Idempotency-Key) |
 | `auctions.result.offer_second_chance` | auctions.result.offer_second_chance | [statement classrup.auctions.second_chance_offer/v1 signed by seller, E2E encrypted to the candidate, sent through the host; price equals the candidate's host-signed lastVisibleBid] { resultId, expectedRevision, candidatesCid, candidateId } | { resultId, revision, offerCid, expiresAt, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED, BLOCKED_PARTY | auctions.result.second_chance_offered | yes (Idempotency-Key) |
 | `auctions.result.respond_second_chance` | auctions.result.respond_second_chance | [statement classrup.auctions.second_chance_response/v1 signed by the candidate] { resultId, offerCid, accept: boolean } | { resultId, accepted, responseCid, dealId?, syncState } | NOT_FOUND, CONFLICT_STATE, EXPIRED, BLOCKED_PARTY, AUCTIONS_RESULT_INVALID |  | yes (Idempotency-Key) |
+| `auctions.result.freeze_closes` | auctions.result.freeze | [relay internal; this module's AuctionHostPort.freezeActivityIn(lostWindow) implementation, called by F15.S03.M03 after a restore before the port and the close tick start] { lostWindow: { from, to } } | { frozenAuctionIds: uuidv7[] } — open auctions with currentEndsAt at or before lostWindow.to and no result row, frozen through F04.S01.M01 auctions.auction.freeze with cause close_possibly_lost | DEPENDENCY_UNAVAILABLE |  | yes (Idempotency-Key) |
+| `auctions.result.readopt` | auctions.result.readopt | [relay command, authorized by the host's own signature over the returned result; frozen auctions only; calls F04.S01.M01 mark_closed with readoptedResultCid under the close lease] { resultEnvelope, disclosureEnvelope? } | { resultId, readopted: boolean, auctionStatus: closed } | NOT_FOUND, CONFLICT_STATE, AUCTIONS_RESULT_INVALID, PRECONDITION_FAILED | auctions.auction.closed, auctions.auction.won, auctions.auction.unsold | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -40,7 +43,7 @@
 |---|---|---|
 | `auctions.auction.closed` | P0 | { auctionId, resultId, sellerId, outcome, closedAtHost, ledgerHeadSeq, ledgerHeadHash } |
 | `auctions.auction.won` | P2 | { auctionId, resultId, sellerId, winnerId?, winnerAlias, finalPrice, winningBidId? } — winnerId and winningBidId only in host-local events and in the seller and winner vaults; a non-party vault derives it with winnerAlias only |
-| `auctions.auction.unsold` | P0 | { auctionId, resultId, sellerId, reason } |
+| `auctions.auction.unsold` | P0 | { auctionId, listingId, resultId, sellerId, reason } — listingId from the verified terms; derived in the seller vault from the verified public result (N17) |
 | `auctions.result.non_payment` | P2 | { resultId, auctionId, sellerId, winnerId, reportCid } — host-local from record_non_payment; vault-local in the seller vault; derived in the winner vault |
 | `auctions.result.second_chance_offered` | P2 | { resultId, auctionId, sellerId, candidateId, price, offerCid, expiresAt } |
 
@@ -52,6 +55,7 @@
 | `commerce.deal.completed` | for such a contextRef move awaiting_payment or non_payment to completed; on a voided result only record that the Deal completed |
 | `commerce.deal.cancelled` | for such a contextRef record the cancellation; a voided result shows that both parties cancelled the Deal |
 | `commerce.payment.expired` | for such a Deal show payment expired; the non-payment report window (day 3 to day 30) is unchanged |
+| `auctions.auction.frozen` | host - the close tick skips the frozen auction; vault - when a verified result of the auction is held whose closedAtHost lies inside lostWindow, send it, with the disclosure in the seller and winner vaults, once to auctions.result.readopt on the host |
 | `auctions.result.voided` | apply the host's void in this vault - when no Deal of this result has an acknowledged or final PaymentClaim (commerce.payment.list_for_deal), move to voided, keep the Deal and offer Cancel Deal; otherwise keep the state, set hostVoid.appliedAs void_after_payment, show voided by host after payment and link F09.S02.M02 disputes |
 | `privacy.deletion.completed` | replace the erased principal's did (sellerId, winnerId, candidateId, buyerId in deals) in retained results with the per-deletion pseudonym; envelopes are kept and marked unverifiable-after-pseudonymization |
 
@@ -89,6 +93,8 @@ day 11: seller auctions.result.report_non_payment -> host record_non_payment -> 
 | TEST-PS-034-09.T17 | integration | PS-034-04.R03 | non-winning bidder vault receives the public result; seller vault receives result and disclosure | derived auctions.auction.closed and auctions.auction.won have actor.kind federated with verified provenance.sig; the non-party copy has no winnerId |
 | TEST-PS-034-09.T20 | contract | PS-034-04.R04 | statement registry entries; a non-payment report signed by the winner key | roleFor matches the declared roles; the report is quarantined with AUCTIONS_RESULT_INVALID |
 | TEST-PS-034-09.T21 | integration | PS-034-04.R05 | host close with a sale; second chance offered | dispatch called once per opted-in recipient (seller, winner, candidate) with a template key and reference only |
+| TEST-PS-034-09.T25 | integration | PS-034-06.R05, PS-034-04.R06 | restore host H from a backup taken before auction A closed with a sale; the seller vault holds result and disclosure; a bidder returns the public result first; a forged result signed by another key | freeze_closes freezes A before the close tick runs; readopt of the bidder copy stores the result and the seller's disclosure completes the host row; host-local closed and won re-emitted; the forged result AUCTIONS_RESULT_INVALID; determine never runs for A |
+| TEST-PS-034-09.T26 | integration | PS-034-04.R03 | seller vault receives a verified unsold result for auction listing L | auctions.auction.unsold derived once with listingId L from the verified terms, sellerId and actor.kind federated with verified provenance.sig |
 
 ## Dependencies
 

@@ -22,14 +22,16 @@ Schema `classrup.auctions.review/v1` · storage **relay** · privacy **P3** · r
 | tenantId | uuidv7 — host relay tenant scope |
 | auctionId | uuidv7 — ref F04.S01.M01 Auction |
 | resultId? | uuidv7 — ref F04.S01.M03 AuctionResult once closed |
-| triggers | Trigger[] — 1..10 items {kind: shill_suspected \| report \| winner_defaults \| listing_changed \| manual, ref, at}; ref is the checkId for shill_suspected and the reportId for report |
+| triggers | Trigger[] — 1..10 items {kind: shill_suspected \| report \| winner_defaults \| listing_changed \| manual, ref, at}; ref is the checkId for shill_suspected and the receiptId of moderation.report.received for report |
 | confirmedCheckIds | uuidv7[] — ShillChecks the findings confirm; a subset of the shill_suspected trigger refs |
 | priority | enum — normal \| high; high for shill score ≥ 85, a sold result, or a material listing change |
 | status | enum — opened \| in_review \| void_proposed \| voided \| dismissed |
 | assigneeId? | actorId — host moderator; must not be a party or bidder of the auction nor linked to one |
-| evidenceSnapshotIds | uuidv7[] — F12.S01.M02 snapshots of the listing (targetType listing) and of bids (targetType bid) |
+| evidenceSnapshotIds | uuidv7[] — F12.S01.M02 snapshots of the listing (targetType listing) and of bids (targetType bid), and the snapshotIds of received reports |
 | frozenRefs? | object — {termsCid, ledgerHeadSeq, ledgerHeadHash, extensionCids[], resultCid?} |
 | findings? | string — ≤ 2000 code points, plain text |
+| ruleRefs? | string[] — 1..5 policy rule versions in force (F12.S02.M03), passed to moderation.action.record_host_policy |
+| factsSummary? | string — 50..2000 code points for the statement of reasons shown to the subject, passed to moderation.action.record_host_policy; never the findings text, reporter identity or other parties' keys |
 | decision? | enum — dismiss \| cancel_auction \| void_result |
 | voidReason? | enum — shill_bidding \| seller_fraud \| bidder_collusion \| listing_prohibited \| technical_error |
 | subjectKeys? | actorId[] — host-only; parties the finding concerns (seller for seller_fraud and listing_prohibited, confirmed bidders for shill_bidding and bidder_collusion, none for technical_error) |
@@ -38,8 +40,9 @@ Schema `classrup.auctions.review/v1` · storage **relay** · privacy **P3** · r
 | voidCid? | string — cid of the host-signed void statement |
 | enforcementActionId? | uuidv7 — ref F12.S02.M01 EnforcementAction recorded for the void under host policy |
 | appealOutcome? | enum — upheld \| overturned \| reduced |
+| appealReducedTo? | object — {kind, expiresAt?, restrictedCapabilities?} copied from moderation.appeal.decided with outcome reduced; the void stays issued |
 | rescissionCid? | string — cid of the host-signed void_rescission statement after an overturned appeal |
-| moderationCaseId? | uuidv7 — ref F12.S02.M01 ModerationCase |
+| moderationCaseId? | uuidv7 — ref F12.S02.M01 ModerationCase returned by moderation.action.record_host_policy |
 | openedAt | timestamp — host clock, RFC 3339 UTC |
 | decidedAt? | timestamp — host clock, RFC 3339 UTC |
 | revision | int — CTR-ID-001 ID-4 |
@@ -51,6 +54,7 @@ Schema `classrup.auctions.review/v1` · storage **relay** · privacy **P3** · r
 - A void is recorded only for a won, not yet voided result closed at most 60 days before; whether it applies over a payment is decided in each vault, and no vault applies a void over an acknowledged or final payment (F04.S01.M03).
 - confirmedCheckIds is a subset of the refs of the review's shill_suspected triggers.
 - rescissionCid is set only when appealOutcome is overturned, and never changes the review status.
+- appealReducedTo is set only when appealOutcome is reduced, and never changes the review status or the issued void.
 
 ### Storage DDL
 

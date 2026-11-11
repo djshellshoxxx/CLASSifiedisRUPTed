@@ -15,6 +15,7 @@ At the auction's current end the host relay takes the per-auction close lease, d
 - Decide won or unsold from the ledger head - finalPrice is the price of the ledger head entry, already raised to the reserve by the F04.S01.M02 reserve rule; no bids or reserve not met is unsold - and publish the ledger head hash so bidders can compare it with their receipts.
 - In the seller and winner vaults open a local Deal through F09.S01.M01 unless the parties are blocked either way, track it until commerce.deal.completed, and handle winner non-payment and one second-chance offer to a candidate filtered by the seller vault's blocks.
 - Apply a host's void finding in each vault by the vault's own Deal state - voided when no claim is acknowledged or final, otherwise recorded as void after payment - and offer the principal a mutual Deal cancel instead of cancelling it.
+- Register the AuctionHostPort implementation that freezes hosted auctions whose close a host restore may have lost, and re-adopt the host's own signed result and disclosure when a participant vault returns them (auctions.result.readopt), never determining a second result.
 
 ## Not responsible for
 
@@ -46,6 +47,8 @@ At the auction's current end the host relay takes the per-auction close lease, d
 - The winner pays late, after the seller reported non-payment; commerce.deal.completed moves non_payment to completed; once any claim on the original Deal is claimed, acknowledged or final, the seller cannot offer a second chance.
 - The seller reports non-payment on day 11 with no acknowledged claim; allowed in the day 3 to day 30 window; day 10 only shows a prompt and changes nothing.
 - A non-winning bidder's vault receives the public result; it verifies the host signature over the public statement it holds, which has no winnerId, records the result and never learns the winner key.
+- The relay restores a backup older than a close it signed; the restored database shows the auction open past its end, so this module's AuctionHostPort implementation freezes it before the close tick runs; the seller vault returns the held result and disclosure, the host verifies its own signature and re-adopts them, and no different result is ever signed.
+- The seller vault derives auctions.auction.unsold from the verified public result with listingId from its own terms, so the F01 listing modules release the listing without asking the host.
 
 ## UX and accessibility
 
@@ -64,10 +67,10 @@ At the auction's current end the host relay takes the per-auction close lease, d
 
 ## Interfaces
 
-- Commands: `auctions.result.determine`, `auctions.result.receive`, `auctions.result.receive_statement`, `auctions.result.report_non_payment`, `auctions.result.record_non_payment`, `auctions.result.nominate_second_chance`, `auctions.result.offer_second_chance`, `auctions.result.respond_second_chance`
+- Commands: `auctions.result.determine`, `auctions.result.receive`, `auctions.result.receive_statement`, `auctions.result.report_non_payment`, `auctions.result.record_non_payment`, `auctions.result.nominate_second_chance`, `auctions.result.offer_second_chance`, `auctions.result.respond_second_chance`, `auctions.result.freeze_closes`, `auctions.result.readopt`
 - Queries: `auctions.result.get`, `auctions.result.verify`
 - Emits: `auctions.auction.closed`, `auctions.auction.won`, `auctions.auction.unsold`, `auctions.result.non_payment`, `auctions.result.second_chance_offered`
-- Consumes: `commerce.deal.opened`, `commerce.deal.completed`, `commerce.deal.cancelled`, `commerce.payment.expired`, `auctions.result.voided`, `privacy.deletion.completed`
+- Consumes: `commerce.deal.opened`, `commerce.deal.completed`, `commerce.deal.cancelled`, `commerce.payment.expired`, `auctions.auction.frozen`, `auctions.result.voided`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -80,9 +83,9 @@ F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M01, F1
 | PS-034-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-034-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-034-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-034-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-034-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-034-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
-| PS-034-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
+| PS-034-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-034-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-034-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-034-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
@@ -92,7 +95,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T24 pass in CI.
+- All tests T01–T26 pass in CI.
 - Exactly one result exists per auction under any worker race and no late bid can win.
 - A winner is never shown as having won, and a sale never as completed, before the host-signed result and the acknowledged or final payment are held.
 - No vault applies a void over an acknowledged or final payment, and no void cancels a Deal.

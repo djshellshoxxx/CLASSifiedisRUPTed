@@ -6,12 +6,12 @@
 
 ## Purpose
 
-The host relay of an auction keeps the seller and the seller's linked keys from bidding on that seller's auctions, and scores bidding patterns for shill suspicion. Linkage means evidence the host can actually hold - the same key, a key listed in the seller's published portable identity document (including key rotation chains and keys revoked from it, which stay linked), a same-owner attestation dual-signed by both keys (F07.S03.M02 kind same_owner), or keys this host saw together in one signed device-link or registration request or in one relay access-token session. IP addresses, network ranges, timing and device fingerprints are never linkage. A deterministic link or a revoked key denies the bid with a generic error. Statistical patterns, scored by the fixed table shill-v1 from host-local auction events, never deny a bid; they flag the bidder for human review in F04.S02.M03. A seller who uses a fresh unlinked key cannot be detected by linkage, and the UI and policy say so; pseudonymity is not anonymity, and the host is trusted to run this check honestly.
+The host relay of an auction keeps the seller and the seller's linked keys from bidding on that seller's auctions, and scores bidding patterns for shill suspicion. Linkage means evidence the host can actually hold - the same key, a device key that the in-process F07 reads identity.portable_doc.key_set and find_by_key list under both the seller DID and the bidder DID (active, revoked or removed keys, which stay linked; MVP has no account key rotation chain), a same_owner attestation signed by both DIDs (identity.attestation.list_linkage), or keys this host saw together in one signed device-link or registration request or in one relay access-token session (identity.session.linked_keys). IP addresses, network ranges, timing and device fingerprints are never linkage. A deterministic link or a revoked key denies the bid with a generic error. Statistical patterns, scored by the fixed table shill-v1 from host-local auction events, never deny a bid; they flag the bidder for human review in F04.S02.M03. A seller who uses a fresh unlinked key cannot be detected by linkage, and the UI and policy say so; pseudonymity is not anonymity, and the host is trusted to run this check honestly.
 
 ## Responsibilities
 
 - Own ShillCheck records on the host - one per denied or flagged evaluation - with the verdict, reason codes, evidence type, score and scoring version.
-- Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations from host-held F07 data.
+- Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations in-process from host-held F07 data through identity.portable_doc.key_set, find_by_key and key_status, identity.attestation.list_linkage and identity.session.linked_keys.
 - Compute an asynchronous shill score with scoring table shill-v1 from consumed host-local auctions.bid.* and auction result events after each placed bid, and emit auctions.shill.suspected at score 60 or more.
 - Keep the linkage evidence private - the bidder gets a generic denial, the seller sees nothing, the reviewers see evidence types and ids.
 - Confirm or dismiss each check only from the per-check outcomes in auctions.review.closed.
@@ -21,7 +21,7 @@ The host relay of an auction keeps the seller and the seller's linked keys from 
 - Bid placement and ledger (F04.S01.M02) and result voiding (F04.S02.M03 issues the host finding, F04.S01.M03 applies it in each vault).
 - Creating or revoking keys and attestations (F07.S01.M01, F07.S03.M02) and identity documents (F07.S02.M01); this module only reads them.
 - Account-level enforcement; a host may apply its own hosting policy through F12.S02.M01 on the host, and no global ban exists (ADR-0016 section 8).
-- Future: cross-host linkage sharing between hosts under explicit peer agreements, and machine-learned scoring.
+- Future: cross-host linkage sharing between hosts under explicit peer agreements, machine-learned scoring, and rotation-chain linkage once account key rotation leaves Future in F07.S02.M01.
 
 ## User stories
 
@@ -32,14 +32,14 @@ The host relay of an auction keeps the seller and the seller's linked keys from 
 ## Edge cases
 
 - A family member uses a distinct key that was registered on this host in the same signed device-link request as the seller's key (linked_host_registration); the bid is denied generically, the bidder appeals to the host operator, who can allow-list the pair for one auction with a recorded reason; the allow-list never applies to the seller's own key.
-- The seller rotates a device key; the old and new key are both in the identity document chain, so both are linked.
+- The seller replaces a device key (the old key revoked with reason superseded); identity.portable_doc.key_set lists the new key as active and the old one as revoked, so both stay linked; no rotation chain is read because account key rotation is Future in F07.
 - A same-owner attestation is revoked after a denial; the revoked attestation still links the two keys for this seller for 30 days and permanently for auctions scheduled before the revocation; past denials are kept as history.
 - F07 linkage data on the host is older than 24 h or missing; the check uses cached data while it is at most 24 h old, and beyond that allows the bid with a linkage_stale flag for review, a counter and an operator alert; the seller-key equality and revoked-key checks still run on host-local data.
 - Two honest friends alternate bids; the alternation feature gives 25 points and alone stays below the flag threshold of 60.
 - A bidder bids on only one seller's auctions because it is the only local seller; concentration and price_pump points are halved when the host had fewer than 5 sellers in the last 30 days.
 - A flagged bidder wins an auction before review; the result is not changed by the flag; F04.S02.M03 may void it later.
 - Scoring job lags; flags may appear up to 5 minutes after the bid, and the bid decision never waits for the score.
-- The seller revokes a device key and then bids with it; the host holds the revocation statement, the key is refused as revoked, and it stays linked to the seller anyway.
+- The seller revokes a device key and then bids with it; the host holds the classrup.security.keyrevocation/v1 statement, identity.portable_doc.key_status answers revoked, the key is refused as revoked, and it stays linked to the seller anyway.
 - Two honest bidders bid from the same IP address within the same second; IP addresses, network ranges and timing are never linkage evidence, so both are allowed.
 - An operator tries allow_pair for the seller's own key, or to override a seller_self or linked_identity_doc denial; refused with VALIDATION_FAILED because the allow-list never overrides V01 or V02.
 
@@ -75,7 +75,7 @@ F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F1
 | PS-036-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-036-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-036-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-036-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-036-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-036-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-036-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-036-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -87,7 +87,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T21 pass in CI.
 - Deterministic linkage and revoked keys always deny and heuristics never deny.
 - Denials are generic and indistinguishable in body and timing from other ineligibility.
 - No IP address, network range, timing or device fingerprint is ever used as linkage evidence.

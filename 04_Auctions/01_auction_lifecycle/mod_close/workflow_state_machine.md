@@ -19,8 +19,8 @@ Initial **determined**; terminal **unsold**, **completed**, **failed**, **voided
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| determined -> recorded | host close commits (host row), or a verified public result with outcome won in a non-party vault | emits auctions.auction.closed and auctions.auction.won (host-local, or vault-derived without winnerId) |
-| determined -> unsold | host close or a verified result with outcome unsold, in any role | emits auctions.auction.closed and auctions.auction.unsold |
+| determined -> recorded | host close commits or auctions.result.readopt stores the host's own returned result with outcome won (host row), or a verified public result with outcome won in a non-party vault | emits auctions.auction.closed and auctions.auction.won (host-local, or vault-derived without winnerId) |
+| determined -> unsold | host close, auctions.result.readopt of a returned unsold result (host row), or a verified result with outcome unsold, in any role including the seller vault | emits auctions.auction.closed and auctions.auction.unsold with listingId |
 | determined -> pending_deal | verified result and disclosure in the seller or winner vault, parties not blocked either way | emits auctions.auction.closed and auctions.auction.won; calls commerce.deal.open with contextRef (auction_result, resultId) |
 | determined -> failed | verified result and disclosure in the seller or winner vault while seller and winner are blocked either way | failReason blocked; result shown; no Deal; no non-payment report |
 | pending_deal -> awaiting_payment | commerce.deal.opened consumed for a contextRef of this result | dealId stored for that buyer |
@@ -42,8 +42,8 @@ Initial **determined**; terminal **unsold**, **completed**, **failed**, **voided
 ```mermaid
 stateDiagram-v2
   [*] --> determined
-  determined --> recorded: host close commits (host row), or a verified public result with outcome won in a non-party vault
-  determined --> unsold: host close or a verified result with outcome unsold, in any role
+  determined --> recorded: host close commits or auctions.result.readopt stores the host's own returned result with outcome won (host row), or a verified public result with outcome won in a non-party vault
+  determined --> unsold: host close, auctions.result.readopt of a returned unsold result (host row), or a verified result with outcome unsold, in any role including the seller vault
   determined --> pending_deal: verified result and disclosure in the seller or winner vault, parties not blocked either way
   determined --> failed: verified result and disclosure in the seller or winner vault while seller and winner are blocked either way
   pending_deal --> awaiting_payment: commerce.deal.opened consumed for a contextRef of this result

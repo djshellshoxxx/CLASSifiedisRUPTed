@@ -40,6 +40,7 @@ Schema `classrup.auctions.bid/v1` · storage **relay+device** · privacy **P2** 
 | prevHash? | string — hash of the previous ledger entry |
 | hash? | string — sha256- over JCS of {seq, auctionId, bidCid, alias, kind, amount, hostTime, prevHash} |
 | receiptCid? | string — cid of the host-signed bid receipt |
+| relayReceipt? | object — classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue {relayId, keyId, destination '<relayId>/auction/<auctionId>', digest, receivedAt, epoch, seq, sig} without cid; transport acknowledged only - the host-signed receipt decides placement |
 | extensionCid? | string — cid of the host-signed extension this bid triggered (F04.S02.M02) |
 | status | enum — submitted \| winning \| outbid \| retracted \| rejected \| won \| lost \| void \| not_placed \| host_silent |
 | rejectCode? | string — error code when rejected |
@@ -73,4 +74,4 @@ CREATE TABLE auctions_lease (auction_id TEXT PRIMARY KEY, holder TEXT NOT NULL, 
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [module SPEC](SPEC.md).

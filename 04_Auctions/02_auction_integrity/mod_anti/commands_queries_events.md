@@ -10,6 +10,7 @@
 - **PS-036-04.R02** Moderators read the review queue through a relay query; the public policy query describes the controls and their limits in words.
 - **PS-036-04.R03** The module consumes host-local bid and result events, identity events and review events on the host; nothing here runs in participant vaults.
 - **PS-036-04.R04** auctions.shill.check also answers whether the bidder key is revoked as known to the host, so the bid path rejects revoked keys with the same generic error (F04.S01.M02 V07).
+- **PS-036-04.R05** Linkage is read only through the in-process F07 reads on the host - identity.portable_doc.key_set, identity.portable_doc.find_by_key and identity.portable_doc.key_status (F07.S02.M01), identity.attestation.list_linkage for kind same_owner signed by both DIDs (F07.S03.M02) and identity.session.linked_keys (F07.S01.M02) - cached at most 24 h; no rotation chain is read until account key rotation leaves Future in F07 (N11 as narrowed by F07).
 
 ## Specification
 
@@ -46,9 +47,9 @@
 | `auctions.auction.scheduled` | record the scheduling time used by the revocation rule (01.R04) |
 | `auctions.review.opened` | move each flagged check listed in triggers to under_review, on open and on merge |
 | `auctions.review.closed` | move checks listed in confirmedCheckIds to confirmed and the other checks of the review to dismissed |
-| `identity.attestation.added` | refresh the linkage cache for the attested keys when the attestation is of kind same_owner and signed by both keys |
+| `identity.attestation.added` | when the attestation is of kind same_owner, re-read identity.attestation.list_linkage for both DIDs and cache only links signed by both DIDs |
 | `identity.attestation.revoked` | mark the attestation revoked with its time and keep the link per 01.R04 |
-| `identity.portable_doc.published` | refresh the owner's key set and rotation chain, keep keys that left the document as revoked links per 01.R04, and ingest the classrup.identity.device_revocation/v1 statements the document references |
+| `identity.portable_doc.published` | re-read identity.portable_doc.key_set for the DID (activeKeys, revokedKeys, removedKeys and revocationCids of the classrup.security.keyrevocation/v1 statements) and keep keys that left the document as revoked links per 01.R04; no rotation chain is read |
 | `privacy.deletion.completed` | host relay, when the relay applies the deletion - replace the erased principal's did in retained ShillChecks with the per-deletion pseudonym |
 
 ### Module errors
@@ -73,7 +74,8 @@ event auctions.shill.suspected { "checkId": "0192f420-0001-…", "auctionId": "0
 |---|---|---|---|---|
 | TEST-PS-036-09.T05 | unit | PS-036-04.R01, PS-036-02.R02 | shill-v1 totals - alternation only; concentration 0.6 plus alternation plus new_key; damped concentration 0.9 plus damped price_pump plus probing 5; concentration 0.9 plus probing 5 plus price_pump; every feature at its maximum | 25 no flag; 60 flag; 17 + 12 + 30 = 59 no flag; 35 + 30 + 25 = 90 flag at high priority; 135 capped at 99 |
 | TEST-PS-036-09.T06 | contract | PS-036-04.R02, PS-036-04.R03, PS-036-09.R02 | check, score, allow_pair, queries and the event | payloads validate against registry schemas; no check data in bid errors; no event for linkage_stale flags |
-| TEST-PS-036-09.T20 | integration | PS-036-04.R04 | bid with a key revoked by a device revocation statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE |
+| TEST-PS-036-09.T20 | integration | PS-036-04.R04 | bid with a key revoked by a classrup.security.keyrevocation/v1 statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE |
+| TEST-PS-036-09.T21 | contract | PS-036-04.R05, PS-036-02.R04 | linkage reads against F07 conformance stubs for key_set, find_by_key, key_status, list_linkage and linked_keys; a same_owner attestation with only one signature; a stub that also offers a rotation chain | the check calls exactly the named in-process reads; only links signed by both DIDs count; no rotation-chain read is made |
 
 ## Dependencies
 

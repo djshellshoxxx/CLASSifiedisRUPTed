@@ -18,9 +18,10 @@
 | auctions.bid.place | host-operator, system | bid signature verifies; host acceptance matches; notAfter not passed; relay quotas satisfied |
 | auctions.bid.retract | principal | bid.bidderId = local principal; retraction rules satisfied |
 | auctions.bid.apply_retraction | host-operator, system | bidder-signed retraction verifies against the bid's bidderId; runs under the auction lease |
-| auctions.bid.receive | principal | any envelope; acceptance depends on the host key in the terms and the bid it binds |
+| auctions.bid.receive | principal | any envelope; acceptance depends on the host key in the terms and the bid it binds, or for a seller copy on the seller's own terms |
 | auctions.bid.read_public | anonymous, principal | ledger projection with aliases only |
 | auctions.bid.read_own | principal | bid.bidderId = local principal |
+| auctions.bid.freeze | system | relay restore hook only (AuctionHostPort registered with the relay process, called by F15.S03.M03); not routable over HTTP |
 
 Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -33,4 +34,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Host H; seller S with identity document listing keys K1, K2 and rotation K0 to K1; bidders B1 (unlinked), B2 (holds K2), B3 (same_owner attestation dual-signed with S), B4 (registered with S in one signed device-link request), B5 (unlinked, flagged); synthetic dataset of 500 auctions with 25 labelled shill patterns; fixed clock 2026-11-05T12:00:00Z.
+**Fixtures:** Host H; seller S whose key set (identity.portable_doc.key_set) lists K1 and K2 active and K0 revoked with reason superseded; bidders B1 (unlinked), B2 (holds K2), B3 (same_owner attestation dual-signed with S), B4 (registered with S in one signed device-link request), B5 (unlinked, flagged); synthetic dataset of 500 auctions with 25 labelled shill patterns; fixed clock 2026-11-05T12:00:00Z.
 
 ## Verification
 
@@ -39,11 +39,12 @@ See the module test table below (all processes).
 | TEST-PS-036-09.T17 | abuse | PS-036-02.R01 | allow_pair(seller, seller) and allow_pair covering a seller_self or linked_identity_doc denial | refused with VALIDATION_FAILED; the denial stays |
 | TEST-PS-036-09.T18 | integration | PS-036-03.R03 | review with flagged bidders B2 and B5 closes with only B2's check in confirmedCheckIds | B2's check confirmed with RET-EVIDENCE; B5's check dismissed with RET-SHORT |
 | TEST-PS-036-09.T19 | integration | PS-036-07.R04 | operator export, export of the subject's user vault, deletion applied on the host, retention sweep | checks only in the operator export; subject pseudonymized; dismissed checks purged after 30 days, confirmed after RET-EVIDENCE |
-| TEST-PS-036-09.T20 | integration | PS-036-04.R04 | bid with a key revoked by a device revocation statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE |
+| TEST-PS-036-09.T20 | integration | PS-036-04.R04 | bid with a key revoked by a classrup.security.keyrevocation/v1 statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE |
+| TEST-PS-036-09.T21 | contract | PS-036-04.R05, PS-036-02.R04 | linkage reads against F07 conformance stubs for key_set, find_by_key, key_status, list_linkage and linked_keys; a same_owner attestation with only one signature; a stub that also offers a rotation chain | the check calls exactly the named in-process reads; only links signed by both DIDs count; no rotation-chain read is made |
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T21 pass in CI.
 - Deterministic linkage and revoked keys always deny and heuristics never deny.
 - Denials are generic and indistinguishable in body and timing from other ineligibility.
 - No IP address, network range, timing or device fingerprint is ever used as linkage evidence.

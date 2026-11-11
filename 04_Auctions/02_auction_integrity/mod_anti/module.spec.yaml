@@ -2,17 +2,18 @@ id: F04.S02.M01
 scope: MVP
 summary: >-
   The host relay of an auction keeps the seller and the seller's linked keys from bidding on that seller's auctions, and
-  scores bidding patterns for shill suspicion. Linkage means evidence the host can actually hold - the same key, a key listed in the
-  seller's published portable identity document (including key rotation chains and keys revoked from it, which stay linked), a
-  same-owner attestation dual-signed by both keys (F07.S03.M02 kind same_owner), or keys this host saw together in one signed
-  device-link or registration request or in one relay access-token session. IP addresses, network ranges, timing and device
+  scores bidding patterns for shill suspicion. Linkage means evidence the host can actually hold - the same key, a device key that
+  the in-process F07 reads identity.portable_doc.key_set and find_by_key list under both the seller DID and the bidder DID (active,
+  revoked or removed keys, which stay linked; MVP has no account key rotation chain), a same_owner attestation signed by both DIDs
+  (identity.attestation.list_linkage), or keys this host saw together in one signed device-link or registration request or in one
+  relay access-token session (identity.session.linked_keys). IP addresses, network ranges, timing and device
   fingerprints are never linkage. A deterministic link or a revoked key denies the bid with a generic error. Statistical patterns,
   scored by the fixed table shill-v1 from host-local auction events, never deny a bid; they flag the bidder for human review in
   F04.S02.M03. A seller who uses a fresh unlinked key cannot be detected by linkage, and the UI and policy say so; pseudonymity is
   not anonymity, and the host is trusted to run this check honestly.
 responsibilities:
   - Own ShillCheck records on the host - one per denied or flagged evaluation - with the verdict, reason codes, evidence type, score and scoring version.
-  - Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations from host-held F07 data.
+  - Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations in-process from host-held F07 data through identity.portable_doc.key_set, find_by_key and key_status, identity.attestation.list_linkage and identity.session.linked_keys.
   - Compute an asynchronous shill score with scoring table shill-v1 from consumed host-local auctions.bid.* and auction result events after each placed bid, and emit auctions.shill.suspected at score 60 or more.
   - Keep the linkage evidence private - the bidder gets a generic denial, the seller sees nothing, the reviewers see evidence types and ids.
   - Confirm or dismiss each check only from the per-check outcomes in auctions.review.closed.
@@ -20,7 +21,7 @@ non_responsibilities:
   - Bid placement and ledger (F04.S01.M02) and result voiding (F04.S02.M03 issues the host finding, F04.S01.M03 applies it in each vault).
   - Creating or revoking keys and attestations (F07.S01.M01, F07.S03.M02) and identity documents (F07.S02.M01); this module only reads them.
   - Account-level enforcement; a host may apply its own hosting policy through F12.S02.M01 on the host, and no global ban exists (ADR-0016 section 8).
-  - "Future: cross-host linkage sharing between hosts under explicit peer agreements, and machine-learned scoring."
+  - "Future: cross-host linkage sharing between hosts under explicit peer agreements, machine-learned scoring, and rotation-chain linkage once account key rotation leaves Future in F07.S02.M01."
 depends_on: [F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
 user_stories:
   - As a bidder, I am told only that I cannot bid on an auction when I am ineligible, and I know where to appeal to the host operator.
@@ -28,14 +29,14 @@ user_stories:
   - As a host moderator, I see flagged bidders with reasons and evidence types ranked by score and decide in the review.
 edge_cases:
   - A family member uses a distinct key that was registered on this host in the same signed device-link request as the seller's key (linked_host_registration); the bid is denied generically, the bidder appeals to the host operator, who can allow-list the pair for one auction with a recorded reason; the allow-list never applies to the seller's own key.
-  - The seller rotates a device key; the old and new key are both in the identity document chain, so both are linked.
+  - The seller replaces a device key (the old key revoked with reason superseded); identity.portable_doc.key_set lists the new key as active and the old one as revoked, so both stay linked; no rotation chain is read because account key rotation is Future in F07.
   - A same-owner attestation is revoked after a denial; the revoked attestation still links the two keys for this seller for 30 days and permanently for auctions scheduled before the revocation; past denials are kept as history.
   - F07 linkage data on the host is older than 24 h or missing; the check uses cached data while it is at most 24 h old, and beyond that allows the bid with a linkage_stale flag for review, a counter and an operator alert; the seller-key equality and revoked-key checks still run on host-local data.
   - Two honest friends alternate bids; the alternation feature gives 25 points and alone stays below the flag threshold of 60.
   - A bidder bids on only one seller's auctions because it is the only local seller; concentration and price_pump points are halved when the host had fewer than 5 sellers in the last 30 days.
   - A flagged bidder wins an auction before review; the result is not changed by the flag; F04.S02.M03 may void it later.
   - Scoring job lags; flags may appear up to 5 minutes after the bid, and the bid decision never waits for the score.
-  - The seller revokes a device key and then bids with it; the host holds the revocation statement, the key is refused as revoked, and it stays linked to the seller anyway.
+  - The seller revokes a device key and then bids with it; the host holds the classrup.security.keyrevocation/v1 statement, identity.portable_doc.key_status answers revoked, the key is refused as revoked, and it stays linked to the seller anyway.
   - Two honest bidders bid from the same IP address within the same second; IP addresses, network ranges and timing are never linkage evidence, so both are allowed.
   - An operator tries allow_pair for the seller's own key, or to override a seller_self or linked_identity_doc denial; refused with VALIDATION_FAILED because the allow-list never overrides V01 or V02.
 ux:
@@ -93,15 +94,15 @@ processes:
       - The eligibility check evaluates deterministic linkage first and heuristic scoring only afterwards and asynchronously.
       - Scoring inputs are bounded - the last 20 bids of the subject and the last 30 days of host data, taken from consumed host-local auctions.bid.* and auction result events - and the features, points, caps and thresholds are the fixed constants of scoring table shill-v1 in this specification.
       - Every violation maps to one stable error code; the bidder-facing code never discloses the reason.
-      - Linkage evidence is limited to signed or host-recorded co-occurrence - identity documents, rotation chains, dual-signed attestations, one signed device-link or registration request, one relay access-token session - and never IP addresses, network ranges, time proximity or device fingerprints.
+      - Linkage evidence is limited to signed or host-recorded co-occurrence - key sets of identity documents (identity.portable_doc.key_set and find_by_key), same_owner attestations signed by both DIDs (identity.attestation.list_linkage), one signed device-link or registration request, one relay access-token session (identity.session.linked_keys) - and never IP addresses, network ranges, time proximity or device fingerprints; no rotation chain is read while account key rotation is Future in F07.
     rules:
       - "V01 | subject key is not equal to the auction seller key; no allow-list entry overrides this rule | AUCTIONS_BIDDER_NOT_ELIGIBLE"
-      - "V02 | subject key is not in the seller's identity document key set, rotation chain or revoked keys kept per 01.R04 (cache age at most 24 h) | AUCTIONS_BIDDER_NOT_ELIGIBLE"
-      - "V03 | no same_owner attestation dual-signed by both keys (F07.S03.M02, N11) connects subject and seller keys within 3 hops; attestations revoked less than 30 days ago, or after this auction was scheduled, still count | AUCTIONS_BIDDER_NOT_ELIGIBLE"
-      - "V04 | linked_host_registration - subject and seller keys do not appear together in one signed classrup.identity.device_link/v1 or handle registration request received by this host, nor in one relay access-token session of this host (F07.S01.M02); IP addresses, network ranges and time proximity are excluded | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V02 | no device key is listed under both the subject DID and the seller DID - identity.portable_doc.key_set of the seller (activeKeys, revokedKeys and removedKeys, kept per 01.R04) and identity.portable_doc.find_by_key for the subject's keys, cache age at most 24 h; no rotation chain is read | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V03 | no same_owner link returned by identity.attestation.list_linkage (F07.S03.M02, kind same_owner signed by both DIDs, N11) connects subject and seller DIDs within 3 hops; links revoked less than 30 days ago, or after this auction was scheduled, still count | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V04 | linked_host_registration - subject and seller keys do not appear together in one signed classrup.identity.device_link/v1 or classrup.identity.handle_registration/v1 request received by this host, nor in one relay access-token session of this host (identity.session.linked_keys, F07.S01.M02); IP addresses, network ranges and time proximity are excluded | AUCTIONS_BIDDER_NOT_ELIGIBLE"
       - "V05 | score input window is at most 20 bids and 30 days and thresholds are 60 for flag and 85 for high priority per shill-v1 | VALIDATION_FAILED"
       - "V06 | host operator allow-list entries name one auction, one bidder key different from the seller key, a reason of 10..500 code points, and cover only linked_host_registration or linked_attestation reasons; the allow-list never overrides V01, V02 or V07 | VALIDATION_FAILED"
-      - "V07 | subject key is not revoked as known to this host (classrup.identity.device_revocation/v1 statements or identity documents it holds) | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V07 | identity.portable_doc.key_status for the subject DID and its signing key at host receipt time is not revoked (classrup.security.keyrevocation/v1 statements and identity documents this host holds) | AUCTIONS_BIDDER_NOT_ELIGIBLE"
     notes: "Scoring table shill-v1 (fixed constants). Window W is the subject's last 20 bids on this host within the last 30 days, built only from consumed host-local auctions.bid.placed, auctions.bid.outbid, auctions.bid.retracted, auctions.auction.closed and auctions.auction.won events; S is the subject, X the seller of the scored auction A; retractions count as bids of S. concentration - share of S's bids in W placed on X's auctions with at least 5 bids in W; at least 0.6 gives 25 points, at least 0.9 gives 35; cap 35. alternation - in A, S and one other bidder alternate as consecutive leader-changing entries at least 6 times in a row; 25 points; cap 25. probing - in A within 10 minutes, S placed bids at exactly the minimum next bid that were each followed by an auto entry for the leader; 3 such bids give 20 points, 5 give 30; cap 30. price_pump - on at least 3 of X's auctions closed in the last 30 days, S was the last bidder outbid before close and did not win; 25 points; cap 25. new_key - S's first bid on this host is less than 7 days old and S bid on no seller other than X; 10 points; cap 10. never_wins - S bid on at least 5 auctions on this host closed in the last 30 days and won none; 10 points; cap 10. Damping - when the host had fewer than 5 distinct sellers with auctions in the last 30 days, concentration and price_pump points are halved and rounded down. Total - the sum of feature points capped at 99; flag at 60 or more; high priority at 85 or more."
   workflow_state_machine:
     requirements:
@@ -128,6 +129,7 @@ processes:
       - Moderators read the review queue through a relay query; the public policy query describes the controls and their limits in words.
       - The module consumes host-local bid and result events, identity events and review events on the host; nothing here runs in participant vaults.
       - auctions.shill.check also answers whether the bidder key is revoked as known to the host, so the bid path rejects revoked keys with the same generic error (F04.S01.M02 V07).
+      - Linkage is read only through the in-process F07 reads on the host - identity.portable_doc.key_set, identity.portable_doc.find_by_key and identity.portable_doc.key_status (F07.S02.M01), identity.attestation.list_linkage for kind same_owner signed by both DIDs (F07.S03.M02) and identity.session.linked_keys (F07.S01.M02) - cached at most 24 h; no rotation chain is read until account key rotation leaves Future in F07 (N11 as narrowed by F07).
     commands:
       - name: auctions.shill.check
         capability: auctions.shill.check
@@ -172,9 +174,9 @@ processes:
       - {type: auctions.auction.scheduled, effect: "record the scheduling time used by the revocation rule (01.R04)"}
       - {type: auctions.review.opened, effect: "move each flagged check listed in triggers to under_review, on open and on merge"}
       - {type: auctions.review.closed, effect: "move checks listed in confirmedCheckIds to confirmed and the other checks of the review to dismissed"}
-      - {type: identity.attestation.added, effect: "refresh the linkage cache for the attested keys when the attestation is of kind same_owner and signed by both keys"}
+      - {type: identity.attestation.added, effect: "when the attestation is of kind same_owner, re-read identity.attestation.list_linkage for both DIDs and cache only links signed by both DIDs"}
       - {type: identity.attestation.revoked, effect: "mark the attestation revoked with its time and keep the link per 01.R04"}
-      - {type: identity.portable_doc.published, effect: "refresh the owner's key set and rotation chain, keep keys that left the document as revoked links per 01.R04, and ingest the classrup.identity.device_revocation/v1 statements the document references"}
+      - {type: identity.portable_doc.published, effect: "re-read identity.portable_doc.key_set for the DID (activeKeys, revokedKeys, removedKeys and revocationCids of the classrup.security.keyrevocation/v1 statements) and keep keys that left the document as revoked links per 01.R04; no rotation chain is read"}
       - {type: privacy.deletion.completed, effect: "host relay, when the relay applies the deletion - replace the erased principal's did in retained ShillChecks with the per-deletion pseudonym"}
     errors:
       - "AUCTIONS_BIDDER_NOT_ELIGIBLE | 403 | no | bidder cannot bid on this auction; no reason is disclosed"
@@ -218,7 +220,7 @@ processes:
     threats:
       - "T01 | Probing the bid endpoint to map seller-linked keys | denial is generic and constant-time within 5 ms of an allow path, per-key rate limits apply"
       - "T02 | Seller shills with a fresh unlinked key | linkage cannot see it; heuristics flag patterns for review; documented limitation shown on the auction page"
-      - "T03 | False accusations through crafted attestations | only same_owner attestations signed by both keys count (F07.S03.M02); a revocation stops linkage only after 30 days and never for auctions scheduled before it; host moderator can inspect the evidence"
+      - "T03 | False accusations through crafted attestations | only same_owner attestations signed by both DIDs count (identity.attestation.list_linkage, F07.S03.M02); a revocation stops linkage only after 30 days and never for auctions scheduled before it; host moderator can inspect the evidence"
       - "T04 | Host operator misuses the review queue to harass a bidder | actions are logged in the host audit (CTR-CAP-001 CAP-7), decisions are statements with reasons, and bidders can choose another host"
       - "T05 | Score gaming by an adversary mimicking benign patterns | scores only flag, never deny; human review decides; the scoring table is versioned (shill-v1)"
       - "T06 | Seller revokes a linked key or attestation and then bids with it | revoked keys are rejected (V07) and kept linked (01.R04); host registration evidence is never dropped"
@@ -246,7 +248,7 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Linkage and scoring are covered by fixture-based unit tests and a labelled synthetic dataset with measured precision and recall.
       - Contract tests validate the event payload and that no check data leaks into bidder-facing payloads.
-    fixtures: "Host H; seller S with identity document listing keys K1, K2 and rotation K0 to K1; bidders B1 (unlinked), B2 (holds K2), B3 (same_owner attestation dual-signed with S), B4 (registered with S in one signed device-link request), B5 (unlinked, flagged); synthetic dataset of 500 auctions with 25 labelled shill patterns; fixed clock 2026-11-05T12:00:00Z."
+    fixtures: "Host H; seller S whose key set (identity.portable_doc.key_set) lists K1 and K2 active and K0 revoked with reason superseded; bidders B1 (unlinked), B2 (holds K2), B3 (same_owner attestation dual-signed with S), B4 (registered with S in one signed device-link request), B5 (unlinked, flagged); synthetic dataset of 500 auctions with 25 labelled shill patterns; fixed clock 2026-11-05T12:00:00Z."
     tests:
       - "T01 | unit | 01.R01,01.R03,02.R01 | evaluate seller key, K2, K0, attested B3 and B4 | all denied with the right internal reasons (seller_self, linked_identity_doc, linked_attestation, linked_host_registration); B1 allowed; allow leaves no record"
       - "T02 | unit | 02.R02,02.R03 | each rule V01–V07 violated or satisfied | documented outcome and generic error code"
@@ -267,9 +269,10 @@ processes:
       - "T17 | abuse | 02.R01 | allow_pair(seller, seller) and allow_pair covering a seller_self or linked_identity_doc denial | refused with VALIDATION_FAILED; the denial stays"
       - "T18 | integration | 03.R03 | review with flagged bidders B2 and B5 closes with only B2's check in confirmedCheckIds | B2's check confirmed with RET-EVIDENCE; B5's check dismissed with RET-SHORT"
       - "T19 | integration | 07.R04 | operator export, export of the subject's user vault, deletion applied on the host, retention sweep | checks only in the operator export; subject pseudonymized; dismissed checks purged after 30 days, confirmed after RET-EVIDENCE"
-      - "T20 | integration | 04.R04 | bid with a key revoked by a device revocation statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE"
+      - "T20 | integration | 04.R04 | bid with a key revoked by a classrup.security.keyrevocation/v1 statement the host holds | check returns deny with internal reason revoked_key; the bidder sees AUCTIONS_BIDDER_NOT_ELIGIBLE; never DEPENDENCY_UNAVAILABLE"
+      - "T21 | contract | 04.R05,02.R04 | linkage reads against F07 conformance stubs for key_set, find_by_key, key_status, list_linkage and linked_keys; a same_owner attestation with only one signature; a stub that also offers a rotation chain | the check calls exactly the named in-process reads; only links signed by both DIDs count; no rotation-chain read is made"
     acceptance:
-      - All tests T01–T20 pass in CI.
+      - All tests T01–T21 pass in CI.
       - Deterministic linkage and revoked keys always deny and heuristics never deny.
       - Denials are generic and indistinguishable in body and timing from other ineligibility.
       - No IP address, network range, timing or device fingerprint is ever used as linkage evidence.

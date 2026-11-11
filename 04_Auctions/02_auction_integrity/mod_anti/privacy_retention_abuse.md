@@ -27,7 +27,7 @@
 |---|---|---|
 | T01 | Probing the bid endpoint to map seller-linked keys | denial is generic and constant-time within 5 ms of an allow path, per-key rate limits apply |
 | T02 | Seller shills with a fresh unlinked key | linkage cannot see it; heuristics flag patterns for review; documented limitation shown on the auction page |
-| T03 | False accusations through crafted attestations | only same_owner attestations signed by both keys count (F07.S03.M02); a revocation stops linkage only after 30 days and never for auctions scheduled before it; host moderator can inspect the evidence |
+| T03 | False accusations through crafted attestations | only same_owner attestations signed by both DIDs count (identity.attestation.list_linkage, F07.S03.M02); a revocation stops linkage only after 30 days and never for auctions scheduled before it; host moderator can inspect the evidence |
 | T04 | Host operator misuses the review queue to harass a bidder | actions are logged in the host audit (CTR-CAP-001 CAP-7), decisions are statements with reasons, and bidders can choose another host |
 | T05 | Score gaming by an adversary mimicking benign patterns | scores only flag, never deny; human review decides; the scoring table is versioned (shill-v1) |
 | T06 | Seller revokes a linked key or attestation and then bids with it | revoked keys are rejected (V07) and kept linked (01.R04); host registration evidence is never dropped |

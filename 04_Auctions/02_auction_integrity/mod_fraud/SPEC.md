@@ -6,14 +6,14 @@
 
 ## Purpose
 
-Moderators of the host relay review auctions flagged for fraud - shill suspicion from F04.S02.M01, user reports on the auction's listing or bids, repeated winner non-payment, listing edits after bids, or a manual decision. A review gathers a frozen evidence snapshot (listing and bids through F12.S01.M02, and the ledger head, extensions and result by their host-signed cids), lets a moderator dismiss it, cancel a still-open auction, or void a result. Voiding needs two different moderators (propose and confirm) and produces a host-signed void statement - the host's finding under its own hosting policy, not a global ruling - sent to the seller and all bidders. The host checks only facts it holds (a won result, not already voided, closed at most 60 days ago); each vault applies the void by its own payment state (F04.S01.M03), so no vault voids over an acknowledged or final payment, and a void never cancels a Deal. Each void is recorded as a host-policy EnforcementAction in F12.S02.M01 so it can be appealed; a successful appeal yields a host-signed rescission that vaults show as advisory, without reopening the sale.
+Moderators of the host relay review auctions flagged for fraud - shill suspicion from F04.S02.M01, user reports this relay received (moderation.report.received) on the auction, its listing or its bids, repeated winner non-payment, listing edits after bids, or a manual decision. A review gathers a frozen evidence snapshot (listing and bids through F12.S01.M02, and the ledger head, extensions and result by their host-signed cids), lets a moderator dismiss it, cancel a still-open auction, or void a result. Voiding needs two different moderators (propose and confirm) and produces a host-signed void statement - the host's finding under its own hosting policy, not a global ruling - sent to the seller and all bidders. The host checks only facts it holds (a won result, not already voided, closed at most 60 days ago); each vault applies the void by its own payment state (F04.S01.M03), so no vault voids over an acknowledged or final payment, and a void never cancels a Deal. Each void is recorded as a host-policy EnforcementAction in F12.S02.M01 so it can be appealed; a successful appeal yields a host-signed rescission that vaults show as advisory, without reopening the sale.
 
 ## Responsibilities
 
 - Own AuctionReview on the host - its queue, priority, triggers with per-check outcomes, evidence snapshot references, findings and decision.
-- Open reviews from consumed triggers (shill score 85 or more, reports on the auction's listing or bids, 2 or more winner non-payments in 30 days, listing edits after bids) or by a moderator, with at most one open review per auction into which later triggers are merged.
+- Open reviews from consumed triggers (shill score 85 or more, received reports about the auction, its listing or its bids, 2 or more winner non-payments in 30 days, listing edits after bids) or by a moderator, with at most one open review per auction into which later triggers are merged.
 - Execute decisions - dismiss, cancel an open auction through F04.S01.M01 apply_cancel with reason host_policy, or void a result with a reason from shill_bidding, seller_fraud, bidder_collusion, listing_prohibited, technical_error.
-- Distribute the host-signed void statement to participant vaults, record the void as a host-policy EnforcementAction in F12.S02.M01, and issue an advisory rescission statement after a successful appeal.
+- Distribute the host-signed void statement to participant vaults, record the void as a host-policy EnforcementAction through F12.S02.M01 moderation.action.record_host_policy, and issue an advisory rescission statement after an overturned appeal.
 
 ## Not responsible for
 
@@ -42,7 +42,8 @@ Moderators of the host relay review auctions flagged for fraud - shill suspicion
 - A host moderator is a bidder in the auction, or holds a key F04.S02.M01 links to a bidder or the seller; assignment is refused (FORBIDDEN) and the review goes to another moderator.
 - A void is attempted on an unsold result, an already voided result, or a result closed more than 60 days ago; refused with AUCTIONS_RESULT_NOT_VOIDABLE.
 - Two flagged bidders in one auction, only one confirmed by the findings; confirmedCheckIds lists only that bidder's check, and F04.S02.M01 dismisses the other.
-- A report targets the auction's listing (targetType listing) or one of its bids (targetType bid); the host maps it to the auction through Auction.listingId or Bid.auctionId and merges it into the auction's review.
+- A received report (moderation.report.received) targets the auction (targetType auction), its listing (targetType listing) or one of its bids (targetType bid); the host maps it to the auction through the auction id, Auction.listingId or Bid.auctionId, merges it into the auction's review with ref receiptId and adds its snapshotId to the evidence; moderation.report.filed stays in the reporter's vault (EVT-8) and never reaches the host.
+- An appeal against the void's EnforcementAction is decided reduced; F12.S02.M01 replaces the host-policy action as reducedTo describes, the review records the outcome and reducedTo, the void stays issued and no rescission is signed; a copy of moderation.appeal.decided derived in the appellant's vault (origin vault) is ignored.
 
 ## UX and accessibility
 
@@ -63,7 +64,7 @@ Moderators of the host relay review auctions flagged for fraud - shill suspicion
 - Commands: `auctions.review.open`, `auctions.review.assign`, `auctions.review.dismiss`, `auctions.review.cancel_auction`, `auctions.review.propose_void`, `auctions.review.confirm_void`, `auctions.review.rescind_void`, `auctions.review.receive_void`
 - Queries: `auctions.review.list`, `auctions.review.get`
 - Emits: `auctions.review.opened`, `auctions.result.voided`, `auctions.review.closed`
-- Consumes: `auctions.shill.suspected`, `moderation.report.filed`, `auctions.result.non_payment`, `auctions.auction.closed`, `bazaar.listing.edited`, `moderation.appeal.decided`, `privacy.deletion.completed`
+- Consumes: `auctions.shill.suspected`, `moderation.report.received`, `auctions.result.non_payment`, `auctions.auction.closed`, `bazaar.listing.edited`, `moderation.appeal.decided`, `privacy.deletion.completed`
 
 ## Dependencies
 

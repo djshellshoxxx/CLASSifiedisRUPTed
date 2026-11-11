@@ -14,7 +14,7 @@
 
 - **export:** Section auctions.bids in classrup-export/v1; one line per own Bid with bid, receipt, retraction and bid_outbid envelopes; the host's ledger export for sellers contains aliases and amounts only.
 - **import:** Closed-auction bids import as history; bids on auctions still open import read-only until the host confirms its state; submitted bids without a receipt import as not_placed; no bid is ever re-sent on import.
-- **backup:** The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and restoring it must keep the hash chain intact, verified by a post-restore chain check.
+- **backup:** The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and restoring it must keep the hash chain intact, verified by a post-restore chain check; auctions whose bids may lie in the lost window are frozen through AuctionHostPort before the restored relay accepts a bid (06.R05).
 - **migration rollback:** Additive optional fields only in v1; the ledger hash input (including bidCid) is frozen for v1 so rollback never breaks chain verification.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -52,7 +52,7 @@ stateDiagram-v2
 | TEST-PS-037-09.T03 | unit | PS-037-03.R01, PS-037-03.R02, PS-037-02.R02 | propose by M1, confirm by M1, confirm by M2 after 73 hours, confirm by M2 within 72 hours | second and third refused or lapsed; fourth voids and signs |
 | TEST-PS-037-09.T05 | property | PS-037-03.R01 | random command sequences on one review | only declared transitions succeed; voided and dismissed never change |
 | TEST-PS-037-09.T15 | e2e | PS-037-03.R03 | two moderators in two browsers void a sale; bidder and seller vaults open the notice | statuses correct on all four; auctions.review.closed and auctions.result.voided in one host transaction; notice has no names and says the Deal stays until both cancel; axe zero serious issues |
-| TEST-PS-037-09.T19 | integration | PS-037-04.R05, PS-037-03.R04 | void confirmed; seller appeals; appeal overturned | EnforcementAction recorded and actionId stored; moderation.appeal.decided matched on actionId; rescission statement issued; vaults show it as advisory and the review stays voided |
+| TEST-PS-037-09.T19 | integration | PS-037-04.R05, PS-037-03.R04 | void confirmed; seller appeals; appeal overturned; on a second auction an appeal decided reduced; a vault-origin copy of moderation.appeal.decided | record_host_policy called with source auction_review, hostRef reviewId and both moderators, actionId and caseId stored; overturned matched on actionId with origin relay, rescission statement issued, shown as advisory, review stays voided; reduced stores appealReducedTo and signs no rescission; the vault-origin copy is ignored |
 
 ## Dependencies
 

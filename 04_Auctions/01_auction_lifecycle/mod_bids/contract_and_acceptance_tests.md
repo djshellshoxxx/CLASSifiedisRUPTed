@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-033-09.T01 | unit | PS-033-01.R01, PS-033-01.R03, PS-033-01.R04, PS-033-02.R01, PS-033-02.R03 | place valid bid and read ledger entry | seq 1, hash chain starts with genesis and covers bidCid, amount immutable, receipt signature verifies |
-| TEST-PS-033-09.T02 | unit | PS-033-02.R02, PS-033-02.R03 | each rule V01–V13 violated in turn | documented code returned, no ledger entry, no maximum echoed |
+| TEST-PS-033-09.T02 | unit | PS-033-02.R02, PS-033-02.R03 | each rule V01–V14 violated in turn | documented code returned, no ledger entry, no maximum echoed |
 | TEST-PS-033-09.T03 | property | PS-033-03.R02, PS-033-02.R04 | random bid, max-only and retraction sequences, with and without a reserve, compared with the proxy-v1 reference model (PX1–PX5) | price, leader and aliases equal the model; replaying the ledger reproduces the same result |
 | TEST-PS-033-09.T04 | unit | PS-033-03.R03, PS-033-02.R04 | B3 bids 1000 max 4000, B2 bids 1050 max 6000, B1 bids 5100 max 10000, then B1 retracts | B2 leads at 5000 after its bid (PX3 gives 4050, the reserve rule PX4 lifts it to 5000); B1 leads at 6100; after the retraction B2 is winning at 5000 again; retraction and auto entries appended; hashes stay chained |
 | TEST-PS-033-09.T05 | property | PS-033-03.R01, PS-033-03.R04 | random command sequences on one bid, including close with outcome unsold, close without a receipt, a won event naming another alias, and a void after won | only declared transitions succeed; the leader of an unsold auction becomes lost; submitted without receipt becomes lost; won becomes void on auctions.result.voided; terminal states never change |
@@ -45,14 +45,18 @@ See the module test table below (all processes).
 | TEST-PS-033-09.T23 | integration | PS-033-07.R04 | export, account deletion and push consent withdrawn | section auctions.bids present; bidderId pseudonymized; pushOptIn false and no host push |
 | TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a device revocation statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
 | TEST-PS-033-09.T25 | integration | PS-033-03.R04 | host silent after the auction end | winning and outbid bids show host_silent after the deadline; a later result moves them to won or lost |
+| TEST-PS-033-09.T26 | abuse | PS-033-02.R01, PS-033-07.R03 | a key of tier new places its 21st bid of the day across auctions on host H; the limits check stub fails | MODERATION_ACCOUNT_LIMIT_REACHED with params.resetsAt from the in-process F12.S03.M04 check after RateLimitPort.consume; the failing stub gives DEPENDENCY_UNAVAILABLE; nothing stored |
+| TEST-PS-033-09.T27 | integration | PS-033-04.R06, PS-033-04.R02 | first bid and 30 more bids within 60 s on auction A; one seller copy replayed and one delivered out of order | the seller vault gets one copy at once and coalesced copies at most once per 60 s; it derives auctions.bid.placed with listingId, sellerId, seq and bidCount, without bidderId or bidId, actor.kind federated; the out-of-order copy is stored as history without an event; edit_lock answers locked |
+| TEST-PS-033-09.T28 | contract | PS-033-04.R07 | place and apply_retraction responses; a replayed bid; a tampered relay receipt | each carries classrup.platform.relay_receipt/v1 with destination '<relayId>/auction/<auctionId>', digest over the request bytes and no cid; the replay returns the same relay receipt; the tampered one is rejected by the vault and the bid stays submitted until the host-signed receipt arrives |
+| TEST-PS-033-09.T29 | integration | PS-033-06.R05 | restore host H from a backup whose lost window covers bids on open auction A and starts after auction B closed; bidder B1 holds a receipt for seq 9 that the restored ledger lacks | freeze_activity freezes A only, before the port opens; a new bid on A gets AUCTIONS_NOT_OPEN and no seq is assigned again; the vault of B1 shows A frozen and its bid possibly lost |
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T29 pass in CI.
 - The proxy algorithm matches the proxy-v1 reference model on 100 000 random sequences and ledger replay reproduces every price.
 - No proxy maximum or bidder key is visible to any party other than the bidder and the host, and both reach the host only encrypted to its key.
 - No bid is shown as won unless auctions.auction.won names its bidder, and no bid stays submitted past notAfter plus 45 s.
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

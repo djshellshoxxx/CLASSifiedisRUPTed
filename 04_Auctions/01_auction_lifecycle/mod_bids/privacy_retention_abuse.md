@@ -17,6 +17,8 @@
 - Bid (bidder vault): maxAmount, bidderId and clientNonce P3; receipts P2.
 - Bid (host copy): maxAmount, bidderId and clientNonce P2 with the host as the only listed participant, received only inside the bid envelope E2E-encrypted to hostKeyId (PRV-5) and kept under the host's published retention; public projection P0 (alias, amount, kind, host time, hash).
 - Bid receipt, retraction receipt and bid_outbid: P2 host-signed statements delivered end-to-end encrypted to the bidder.
+- Seller copy of a bid_receipt: P2 host-signed statement end-to-end encrypted to the seller; alias, amount, price, seq and bidCount only, no bidder key, nonce or maximum.
+- Relay receipt: classrup.platform.relay_receipt/v1 binding the destination and the digest of the request bytes; no cid, amount or bidder key.
 
 **Retention**
 - Bids and receipts: RET-EVIDENCE (2 years) in the bidder vault; the host keeps the ledger for its published retention, default 90 days after close; idempotency records RET-SHORT (24 h).
@@ -36,6 +38,7 @@
 
 **Abuse controls**
 - 10 bids per minute per bidder per auction and 200 per auction through RateLimitPort.consume (F12.S03.M03, N18); host-wide relay quota per key.
+- bids_per_day account limit through the in-process F12.S03.M04 moderation.accountlimit.check (N18) - 20, 100 or 500 bids per day by tier on the host.
 - Probe and retract patterns reach F04.S02.M01 scoring through the host-local auctions.bid.placed and auctions.bid.retracted events.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
@@ -49,7 +52,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-033-09.T19 | integration | PS-033-07.R02 | one bidder bids on auctions A and A2 on the same host | the two aliases differ and cannot be matched without the per-auction host secrets |
 | TEST-PS-033-09.T23 | integration | PS-033-07.R04 | export, account deletion and push consent withdrawn | section auctions.bids present; bidderId pseudonymized; pushOptIn false and no host push |
 | TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a device revocation statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
+| TEST-PS-033-09.T26 | abuse | PS-033-02.R01, PS-033-07.R03 | a key of tier new places its 21st bid of the day across auctions on host H; the limits check stub fails | MODERATION_ACCOUNT_LIMIT_REACHED with params.resetsAt from the in-process F12.S03.M04 check after RateLimitPort.consume; the failing stub gives DEPENDENCY_UNAVAILABLE; nothing stored |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S02.M01, F04.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F12.S03.M04, F13.S02.M01, F15.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

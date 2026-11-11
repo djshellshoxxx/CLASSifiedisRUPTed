@@ -45,6 +45,7 @@ Schema `classrup.auctions.result/v1` · storage **relay+device** · privacy **P2
 | secondChance? | object — {candidatesCid, candidates: [{candidateId, lastVisibleBid}] (seller vault, at most 3), candidateId, price: Money, offerCid, responseCid?, expiresAt, status: offered \| accepted \| declined \| expired \| withdrawn} |
 | nonPaymentReportCid? | string — cid of the seller-signed non-payment report |
 | hostVoid? | object — {voidCid, reason, appliedAs: voided \| void_after_payment, rescissionCid?} |
+| readoptedAt? | timestamp — host row only; host clock time at which auctions.result.readopt stored a returned host-signed result after a restore |
 | revision | int — CTR-ID-001 ID-4 |
 
 **Invariants**

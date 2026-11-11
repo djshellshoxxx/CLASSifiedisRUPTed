@@ -14,7 +14,7 @@
 
 - **export:** Section auctions.results in classrup-export/v1; one line per AuctionResult with the signed result, disclosure, report, candidate list, offer and response envelopes.
 - **import:** Terminal results import as history; awaiting_payment and non_payment results import as is and resume timers from the stored closedAtHost; second_chance_offered offers whose expiry has passed import as failed in the seller vault and recorded in the candidate vault.
-- **backup:** The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and after restore re-checks the one-result-per-auction constraint.
+- **backup:** The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and after restore re-checks the one-result-per-auction constraint and freezes auctions whose close may lie in the lost window through AuctionHostPort (06.R05).
 - **migration rollback:** Additive optional fields only in v1; the signed result and disclosure payloads are frozen per version so rollback never invalidates signatures.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).

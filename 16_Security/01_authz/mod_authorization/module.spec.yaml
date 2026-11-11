@@ -2,53 +2,69 @@ id: F16.S01.M01
 scope: MVP
 summary: >-
   The authorize() decision function of CTR-CAP-001 with its two layers. Vault policy runs in the user's
-  browser: the unlocked local principal may change its own records, and an incoming signed statement is
-  accepted only if signed by a key authorized for that role in that statement (for example only the listing
-  author accepts an offer on it), otherwise it is quarantined with a reason. Relay policy runs on a relay and
-  decides access to that relay's own resources using relay roles (moderator, operator, admin) that exist only on
-  that relay. authorize() is pure, default-deny and side-effect free; this module also owns relay role
-  assignments and the append-only, hash-chained audit log of decisions. There are no global roles.
+  browser: the unlocked local principal may change its own records, and authorizeStatement is the pure predicate
+  that F11.S01.M02 calls before acting on an incoming signed statement; it takes the required signer role only from
+  the F11.S01.M01 statement-type registry and key status only from F07.S02.M01, and returns Accept or Quarantine
+  with an F11.S01.M02 reason code (F11.S01.M02 stores and shows quarantined statements). Relay policy runs on a relay
+  and decides access to that relay's own resources using relay roles (moderator, operator, relay_operator, admin)
+  that exist only on that relay, each scoped to the whole relay or to one tenant on it. A role is held by a principal
+  DID and exercised only with a device key active in that principal's identity document. authorize() is pure,
+  default-deny and side-effect free. This module also owns relay role assignments, including the command-line
+  bootstrap and break-glass path that creates the first admin, and the append-only, hash-chained audit log whose
+  anchors are published for others to keep. There are no global roles.
 responsibilities:
-  - Implement authorize(actor, capability, resource?, context) returning Allow or Deny(code) as a pure function with default deny for unknown capabilities, roles or predicates.
-  - Implement authorizeStatement(statement, expectedRole, context) returning Accept or Quarantine(reason) for incoming signed statements, using signer keys and role claims inside the statement chain.
-  - Own relay RoleAssignment records (moderator, operator, admin per relay) with expiry, revocation and last-admin protection, and publish signed role statements.
-  - Own the AuditEntry log (relay and vault) with a per-store hash chain, coalescing of repeated denials, and no payload content.
+  - Implement authorize(actor, capability, resource?, context) returning Allow or Deny(code) as a pure function with default deny for unknown capabilities, roles, scopes or predicates, resolving the actor principal's signing device key through the injected KeyStatusPort.
+  - Implement authorizeStatement(statement, context) returning Accept or Quarantine(statusReason) as a pure predicate for F11.S01.M02, with the required signer role taken only from RoleResolverPort.roleFor(type, context) (F11.S01.M01) and key status only from KeyStatusPort (F07.S02.M01); it has no expected-role parameter and stores nothing.
+  - Own relay RoleAssignment records (moderator, operator, relay_operator, admin with scope relay or tenant:<id>) with the propose and approve two-person path for admins, expiry for non-admin roles, revocation, last-admin protection, import activation, and the local-CLI bootstrap and break-glass path (also offered in process as RoleBootstrapPort), and publish relay-signed role statements.
+  - Own the AuditEntry log (relay and vault) with a per-store hash chain, HMAC-pseudonymized actors on relays, anchors published every 1 000 entries or 5 minutes, buffered coalescing of repeated read-only denials, and no payload content.
   - Provide the capability registry loader that validates every command and query declares exactly one capability.
 non_responsibilities:
-  - Authenticating relay access tokens and challenge-response (F07.S01.M02 sessions) and verifying signatures (F16.S02.M03).
+  - Authenticating relay access tokens and challenge-response (F07.S01.M02 sessions) and the signature primitives and envelopes (F11.S01.M03, F16.S02.M03).
+  - Quarantine storage, the quarantine view and export of quarantined statements (F11.S01.M02), the statement-type registry and its signer roles (F11.S01.M01), and user key validity (F07.S02.M01).
   - Reading user account state such as blocks or suspension; those facts are supplied in the context by the caller.
   - Moderation decisions that create suspensions (F12.S02.M01) and limit values (F12.S03.M04).
   - Legal-hold two-person approval workflow (F10.S01.M02).
+  - Tenant records and the derived operator list (F15.S04.M03), which creates the first tenant operator and admin through RoleBootstrapPort.
   - "Future: delegated capabilities with signed, expiring capability tokens; hardware-key bound roles."
-depends_on: [CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+depends_on: [F16.S01.M02, CTR-CAP-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
 user_stories:
-  - As a user, I know that only my unlocked vault can change my records, and that a statement claiming to come from someone else is quarantined unless their authorized key signed it.
-  - As a relay admin, I assign a moderator role to a key for 90 days and can see in the audit log every decision made with that role.
-  - As an auditor of a relay, I can verify that the audit log has not been altered or truncated.
+  - As a user, I know that only my unlocked vault can change my records, and that a statement claiming to come from someone else is held back unless the key the registry requires for that role signed it.
+  - As a relay admin, I assign a moderator role to a member's identity for 90 days and can see in the audit log every decision made with that role.
+  - As an auditor of a relay, I can verify that the audit log has not been altered or truncated up to the last anchor that I or a peer fetched.
+  - As the person starting a relay, I create the first admin from the relay command line with access to the relay's data directory, and I can use the same command with a recorded reason if the only admin is compromised.
 edge_cases:
   - Capability is not in the registry; authorize returns Deny(FORBIDDEN) with reason unknown_capability and never falls through to allow.
-  - A statement is signed by a key that was a valid author key when signed but the vault now holds a revocation for it; the statement is quarantined with reason signer_revoked and the revocation freshness is shown.
+  - A statement is signed by a device key that F07.S02.M01 reports revoked with revokesEffectiveAt at or before this vault's first sight of the statement; authorizeStatement returns Quarantine(signer_key_revoked) and F11.S01.M02 stores and shows it.
   - Two admins revoke each other simultaneously; the second revoke is refused with SECURITY_LAST_ADMIN because at least one admin must remain.
   - Role expires between the HTTP request check and the handler's re-check inside the transaction; the re-check denies and the command returns FORBIDDEN.
-  - Audit denial flood from one key; repeated identical denials within 60 seconds are coalesced into one entry with a count to bound storage.
-  - Audit log truncated by an attacker with disk access; chain verification reports the first missing sequence and the head hash recorded in the last signed digest.
-  - A federated statement claims a role the sender cannot prove; it is quarantined as unauthorized_role and shown in the quarantine view with the failing check.
+  - Audit denial flood from one key on a read-only capability; identical denials within 60 seconds are buffered in memory and appended once when the window closes, with a count; denials on state-changing commands are never buffered.
+  - Audit log truncated by an attacker with disk access; chain verification reports the first missing sequence and compares the head with the last externally published anchor; entries appended after that anchor are the stated residual window.
+  - A federated statement's signer does not hold the role the F11.S01.M01 registry requires for its type; authorizeStatement returns Quarantine(signer_role_invalid) whatever role the calling context suggests.
+  - A fresh relay has no admin; every role command is refused, and relay roles bootstrap --admin <did:key> run on the host with filesystem access to RELAY_DATA_DIR creates the first admin.
+  - The only admin's identity is compromised; relay roles bootstrap --admin <did:key> --break-glass --reason <text> grants a new admin although one exists, records the reason and OS user, and opens a SEV1 incident through security.role.assigned with breakGlass true.
+  - A moderator's device key is stolen and revoked in their identity document; once the relay stores that document, requests signed by the stolen key are denied with reason signer_key_revoked while the moderator's other device keys keep the role.
+  - The subject DID of the last admin becomes contested in F07.S02.M01; the assignment is revoked with reason subject_contested, security.role.revoked carries lastAdmin true, a SEV1 incident opens and only bootstrap is usable until a new admin exists.
+  - An assign request names an admin as approvedBy but that admin never signed an approval; it is refused with SECURITY_APPROVAL_REQUIRED.
+  - An admin proposal is not approved within 24 hours; it expires and grants nothing.
+  - Roles imported from another relay stay imported_inactive and grant nothing until an admin of this relay activates them.
 ux:
   screens:
-    - "Relay admin roles screen: list of role assignments (key label, role, granted by, expiry), assign and revoke forms with confirmation naming the key fingerprint."
-    - "Audit log viewer (operator and admin): filter by capability, decision, time; entry details without payload; chain verification button with result."
-    - "Vault quarantine view: statements held back with reason (unauthorized_role, signer_revoked, signature_invalid, unknown_signer), signer fingerprint, and actions to inspect or discard."
-  states: [loading, empty, populated, verifying-chain, chain-ok, chain-broken, quarantined-item]
+    - "Relay admin roles screen: list of role assignments (subject fingerprint from F07.S01.M01 fingerprintOf, role, scope relay or community name, granted by, approval, expiry, status), pending admin proposals with approve and cancel, assign and revoke forms with confirmation naming the subject fingerprint, and a bootstrap-required banner when no admin exists."
+    - "Audit log viewer (relay_operator and admin): filter by capability, decision, time; entry details without payload; chain verification button with result, the last externally published anchor and the residual window since it."
+    - "Relay CLI output of relay roles bootstrap: created assignment, role statement cid, OS user recorded, and for break-glass the reason and the note that a SEV1 incident was opened."
+  states: [loading, empty, populated, pending-approval, bootstrap-required, verifying-chain, chain-ok, chain-broken]
   a11y:
-    - Role and decision values are text labels, not color alone.
+    - Role, scope and decision values are text labels, not color alone.
     - Tables have headers and are keyboard navigable; destructive revoke uses a confirmation dialog with focus trap.
     - Chain verification result is announced in an aria-live polite region.
 processes:
   domain_schema:
     requirements:
-      - A RoleAssignment stores relay, subject key, role, grantor, optional second approver, grant time, expiry and revocation, with tenant and revision per CTR-ID-001.
-      - An AuditEntry stores sequence, actor key hash, capability, resource ID, decision, deny code or reason, correlation ID, coalesced count and chain hashes, and never payload content, retained under RET-AUDIT.
-      - Roles exist per relay only; assignments are published as relay-signed role statements and are P1 within the relay's members.
+      - A RoleAssignment stores relay, subject principal DID, role, scope (relay or tenant:<uuidv7>), status, grant path, grantor, optional approver with the cid of the approver's signed approval, grant time, expiry and revocation, with tenant and revision per CTR-ID-001.
+      - An AuditEntry stores sequence, HMAC-pseudonymized actor, capability, resource ID, decision, deny code or reason, correlation ID, idempotency key hash, coalesced count and chain hashes, and never payload content, retained under RET-AUDIT.
+      - Roles exist per relay only; assignments are published as relay-signed role statements (classrup.security.role_statement/v1) and are P1 within the relay's members.
+      - Valid role and scope pairs are fixed - admin and relay_operator only at scope relay, operator only at scope tenant:<id> of a tenant on this relay, moderator at scope relay or tenant:<id> - and authorize matches a relay-scope role for every resource on that relay and a tenant-scope role only for resources whose tenantId equals the scope's id.
+      - The subject of an assignment is a principal DID (the account root did:key), never a device key, and a request exercises the role only when signed by a device key that the principal's portable identity document lists as active at the relay's receipt time (F07.S02.M01 KeyStatusPort).
     entities:
       - name: RoleAssignment
         schema: classrup.security.roleassignment/v1
@@ -57,21 +73,34 @@ processes:
         retention: RET-AUDIT
         fields:
           - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — relay hosting scope"
-          - "subjectKey: did:key — key holding the role"
-          - "role: enum — moderator | operator | admin"
-          - "grantedBy: did:key — admin who granted"
-          - "approvedBy?: did:key — second admin, required to grant admin when two or more admins exist"
-          - "grantedAt: timestamp — RFC 3339 UTC, relay clock"
-          - "expiresAt?: timestamp — RFC 3339 UTC; required for moderator and operator, at most 365 days"
+          - "tenantId: uuidv7 — store scope per CTR-ID-001 ID-6 (the relay's bootstrap tenant)"
+          - "relayId: string — canonical relayId of this relay (F15.S02.M01)"
+          - "subjectKey: did:key — principal DID holding the role; never a device key"
+          - "role: enum — moderator | operator | relay_operator | admin"
+          - "scope: string — relay | tenant:<uuidv7>; admin and relay_operator only relay, operator only tenant:<id>, moderator either"
+          - "status: enum — pending_approval | imported_inactive | active | revoked | expired"
+          - "via: enum — assign | propose | approve | bootstrap | break_glass | import"
+          - "grantedBy?: did:key — admin principal who assigned or proposed; absent for bootstrap"
+          - "approvedBy?: did:key — second admin principal for admin grants approved through security.roleassignment.approve"
+          - "approvalStatementCid?: string — cid of the approver's signed classrup.security.role_approval/v1 statement"
+          - "proposedAt?: timestamp — RFC 3339 UTC, relay clock"
+          - "approvalDeadline?: timestamp — proposedAt + 24 h"
+          - "grantedAt?: timestamp — RFC 3339 UTC, relay clock, set on entering active"
+          - "expiresAt?: timestamp — RFC 3339 UTC; required for moderator, operator and relay_operator, at most 365 days; never set for admin"
           - "revokedAt?: timestamp — RFC 3339 UTC"
-          - "revokedBy?: did:key"
-          - "statementCid: string — content id of the relay-signed role statement"
+          - "revokedBy?: did:key — admin principal, absent for automatic revocation"
+          - "revokeReason?: enum — revoked | expired | subject_contested | cancelled | approval_expired"
+          - "breakGlassReason?: string — 20..500 code points, required when via is break_glass"
+          - "bootstrapOsUser?: string — OS user name that ran the local CLI for bootstrap or break-glass"
+          - "importedFrom?: string — relayId of the exporting relay for imported records"
+          - "statementCid?: string — content id of the latest relay-signed role statement"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - At least one active admin assignment exists per relay at all times.
-          - subjectKey differs from grantedBy and from approvedBy.
-          - An assignment is active when revokedAt is absent and expiresAt is absent or in the future.
+          - Once bootstrapped, at least one active admin assignment exists per relay, except after an automatic revocation with reason subject_contested of the last admin, which emits lastAdmin true, opens a SEV1 incident and leaves only security.roleassignment.bootstrap usable until an admin exists.
+          - subjectKey differs from grantedBy and from approvedBy, and approvedBy differs from grantedBy.
+          - An assignment grants its role only in status active with expiresAt absent or in the future; admin assignments never carry expiresAt.
+          - At most one assignment with status active, pending_approval or imported_inactive exists per (relayId, subjectKey, role, scope).
+          - The scope matches the role per the valid pairs, and a tenant scope names a tenant that exists on this relay.
       - name: AuditEntry
         schema: classrup.security.auditentry/v1
         storage: relay+device
@@ -81,85 +110,149 @@ processes:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — store scope (vault or relay)"
           - "seq: int — gapless per store, starting at 1"
-          - "actorKeyHash: string — SHA-256 of the actor key (relay) or local-principal marker (vault)"
+          - "actorKeyHash: string — relay: hex HMAC-SHA256 of the actor principal DID with the relay audit pepper loaded through F16.S01.M02 (AUDIT_PEPPER); vault: the marker local"
+          - "actorOsUser?: string — OS user for local CLI actions (bootstrap, break-glass, containment)"
           - "capability: string — capability ID"
           - "resourceId?: string — resource identifier, never content"
           - "decision: enum — allow | deny | quarantine"
-          - "reason: string — stable reason code such as unknown_capability, not_owner, role_missing, signer_revoked"
+          - "reason: string — stable reason code such as unknown_capability, not_owner, role_missing, scope_mismatch, signer_key_revoked, signer_role_invalid"
           - "denyCode?: string — error code returned"
           - "correlationId: uuidv7 — request correlation"
-          - "count: int — 1, or the number of coalesced identical denials within 60 s"
-          - "occurredAt: timestamp — RFC 3339 UTC, store clock"
+          - "idempotencyKeyHash?: string — hex SHA-256 of (actorKeyHash, command, Idempotency-Key); unique per store, so a replay never adds an entry"
+          - "count: int — 1, or the number of identical read-only denials buffered in one 60 s window"
+          - "windowStart?: timestamp — first denial of a coalesced window"
+          - "occurredAt: timestamp — RFC 3339 UTC, store clock (window close for coalesced entries)"
           - "prevHash: string — hex SHA-256 of the previous entry hash, 64 chars"
-          - "entryHash: string — hex SHA-256 over JCS bytes of this entry without entryHash"
+          - "entryHash: string — hex SHA-256 over JCS bytes of the v1 field set of this entry without entryHash, computed when the entry is appended"
         invariants:
-          - seq increases by exactly 1 and entryHash covers prevHash, so any removal or edit is detectable.
+          - seq increases by exactly 1 and entryHash covers prevHash, so any removal or edit before the last externally published anchor is detectable.
           - No payload field, token, key material or P2+ value is ever stored in an entry.
           - Audit rows are append-only and are never updated or deleted before RET-AUDIT expiry.
+          - Entries for state-changing commands are appended in the command's own transaction and are never buffered or coalesced (CAP-7).
     sql: |
       CREATE TABLE security_role_assignment (
-        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, role TEXT NOT NULL, granted_by TEXT NOT NULL,
-        expires_at TEXT, revoked_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE INDEX security_role_subject ON security_role_assignment(tenant_id, subject_key, role);
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, relay_id TEXT NOT NULL, subject_key TEXT NOT NULL, role TEXT NOT NULL,
+        scope TEXT NOT NULL, status TEXT NOT NULL, granted_by TEXT, expires_at TEXT, revoked_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX security_role_live ON security_role_assignment(tenant_id, subject_key, role, scope)
+        WHERE status IN ('active', 'pending_approval', 'imported_inactive');
+      CREATE INDEX security_role_scope ON security_role_assignment(tenant_id, scope, role, status);
       CREATE TABLE security_audit_entry (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, seq INTEGER NOT NULL, actor_key_hash TEXT NOT NULL, capability TEXT NOT NULL,
-        decision TEXT NOT NULL, occurred_at TEXT NOT NULL, prev_hash TEXT NOT NULL, entry_hash TEXT NOT NULL, data TEXT NOT NULL);
+        decision TEXT NOT NULL, idempotency_key_hash TEXT, occurred_at TEXT NOT NULL, prev_hash TEXT NOT NULL, entry_hash TEXT NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX security_audit_seq ON security_audit_entry(tenant_id, seq);
+      CREATE UNIQUE INDEX security_audit_replay ON security_audit_entry(tenant_id, idempotency_key_hash) WHERE idempotency_key_hash IS NOT NULL;
       CREATE TRIGGER security_audit_no_update BEFORE UPDATE ON security_audit_entry BEGIN SELECT RAISE(ABORT, 'append-only'); END;
+      CREATE TRIGGER security_audit_no_early_delete BEFORE DELETE ON security_audit_entry
+        WHEN old.occurred_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-365 days') BEGIN SELECT RAISE(ABORT, 'append-only'); END;
+      CREATE TABLE security_audit_anchor (
+        tenant_id TEXT NOT NULL, seq INTEGER NOT NULL, entry_hash TEXT NOT NULL, statement_cid TEXT NOT NULL, anchored_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, seq));
   validation_rules:
     requirements:
-      - Role commands are validated strictly, including role vocabulary, expiry bounds and the two-person rule for admin.
+      - Role commands are validated strictly, including role and scope vocabulary, expiry bounds, the signed two-person rule for admin and the bootstrap preconditions.
       - authorize() inputs are validated structurally and any malformed input returns Deny without throwing.
       - Every violation maps to one stable error code.
     rules:
-      - "V01 | role is moderator, operator or admin and subjectKey is a well-formed did:key | VALIDATION_FAILED"
-      - "V02 | moderator and operator assignments carry expiresAt within 365 days | VALIDATION_FAILED"
-      - "V03 | granting admin when two or more admins exist carries approvedBy, a different active admin | SECURITY_APPROVAL_REQUIRED"
-      - "V04 | grantor is an active admin and is not the subject | FORBIDDEN"
+      - "V01 | role is moderator, operator, relay_operator or admin; scope is relay or tenant:<uuidv7> of a tenant on this relay and the pair is valid (admin and relay_operator at relay, operator at tenant, moderator at either); subjectKey is a well-formed Ed25519 did:key that KeyStatusPort does not report as a device key of another DID | VALIDATION_FAILED"
+      - "V02 | moderator, operator and relay_operator assignments carry expiresAt within 365 days; admin assignments carry no expiresAt | VALIDATION_FAILED"
+      - "V03 | an admin grant while two or more active admins exist goes through propose and approve, and approve carries a classrup.security.role_approval/v1 statement signed by a device key active for a different active admin principal (neither proposer nor subject) before approvalDeadline; assign with role admin, or any request naming approvedBy without that signed statement, is refused | SECURITY_APPROVAL_REQUIRED"
+      - "V04 | grantor is an active relay-scope admin of this relay signing with a device key active in its portable identity document, and is not the subject | FORBIDDEN"
       - "V05 | revoking must leave at least one active admin | SECURITY_LAST_ADMIN"
       - "V06 | expectedRevision matches the assignment revision | CONFLICT_REVISION"
       - "V07 | audit query range spans at most 90 days per request | VALIDATION_FAILED"
+      - "V08 | bootstrap runs only from the local relay CLI with filesystem access to RELAY_DATA_DIR, and only when no active admin exists or with a break-glass reason of 20..500 code points | SECURITY_BOOTSTRAP_REFUSED"
+      - "V09 | activating an imported assignment is requested by an active relay-scope admin of this relay, and the imported subject, role, scope and expiry pass V01 and V02 | FORBIDDEN"
+      - "V10 | a role is exercised only when the request's signing device key is active for the subject principal at the relay's receipt time per KeyStatusPort and the subject DID is not contested | FORBIDDEN"
   workflow_state_machine:
     requirements:
-      - Role assignments follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
-      - Expiry and revocation take effect on the next request and no role grant is cached for more than 60 seconds (CAP-6).
-      - Audit entries have no lifecycle; they are appended inside the same transaction as the decision's command when it changes state.
+      - Role assignments follow the declared lifecycle and any other transition is refused with CONFLICT_STATE; requested is the initial pseudostate of a validated command and is never stored.
+      - Expiry, revocation and device-key revocation take effect on the next request, and no role grant or key status is cached for more than 60 seconds (CAP-6).
+      - Audit entries have no lifecycle; entries for state-changing commands are appended inside the same transaction as the command, and buffered read-only denials are appended once when their 60 second window closes.
+      - Admin assignments never expire, so expiry can never remove the last admin, and an admin proposal not approved within 24 hours expires without granting anything.
+      - Bootstrap and break-glass are the only paths that create an admin without an existing admin's signature, and break-glass use emits security.role.assigned with breakGlass true so that F16.S03.M02 opens a SEV1 incident.
     machines:
       - entity: RoleAssignment
-        initial: active
+        initial: requested
         terminal: [revoked, expired]
         transitions:
-          - "active -> revoked | security.roleassignment.revoke by admin | revokedAt set; emits security.role.revoked; statement of revocation signed"
-          - "active -> expired | expiry sweep at expiresAt | emits security.role.revoked with reason expired"
+          - "requested -> active | security.roleassignment.assign (moderator, operator, relay_operator) by an admin; security.roleassignment.propose of admin while exactly one active admin exists; or security.roleassignment.bootstrap from the relay CLI | grantedAt set; role statement signed; emits security.role.assigned with via assign, propose, bootstrap or break_glass"
+          - "requested -> pending_approval | security.roleassignment.propose of admin while two or more active admins exist | approvalDeadline = proposedAt + 24 h; grants nothing; no event"
+          - "requested -> imported_inactive | import of a role assignment from another relay's export | grants nothing; no event"
+          - "pending_approval -> active | security.roleassignment.approve with a role_approval statement signed by another active admin before approvalDeadline | approvalStatementCid stored; role statement signed; emits security.role.assigned with via approve"
+          - "pending_approval -> expired | approvalDeadline passed at the sweep or at approve time | revokeReason approval_expired; no event"
+          - "pending_approval -> revoked | security.roleassignment.revoke by an admin (cancel) | revokeReason cancelled; no event"
+          - "imported_inactive -> active | security.roleassignment.activate_import by an active admin of this relay | new role statement signed by this relay; emits security.role.assigned with via import"
+          - "imported_inactive -> revoked | security.roleassignment.revoke by an admin | no event"
+          - "imported_inactive -> expired | expiresAt passed | no event"
+          - "active -> revoked | security.roleassignment.revoke by an admin, or the subject DID becomes contested in F07.S02.M01 | revokedAt set; revocation role statement signed; emits security.role.revoked with reason and lastAdmin"
+          - "active -> expired | expiry sweep or request-time check at expiresAt (never for admin) | emits security.role.revoked with reason expired"
     timeouts:
       - "Expiry sweep every 60 s; per-request check also compares expiresAt so a missed sweep never extends a role."
-      - "Daily at 00:05 UTC the relay signs an audit digest {seq, entryHash} with its relay key and stores it as a chain anchor."
+      - "Admin proposals expire 24 h (86 400 000 ms) after proposedAt."
+      - "Audit anchor classrup.security.audit_anchor/v1 signed by the relay key every 1 000 entries or every 5 minutes with new entries, whichever comes first, and served for vaults and peers to fetch."
+      - "Read-only denial coalescing window 60 s; the buffer is flushed when the window closes, on graceful shutdown and when it holds 1 000 distinct keys."
+      - "Role grant and key status caches expire after at most 60 s."
   commands_queries_events:
     requirements:
-      - authorize and authorizeStatement are in-process pure functions evaluated by the command bus before every handler in both vault and relay.
-      - Role assign and revoke are relay commands that produce signed role statements and emit security.role.assigned and security.role.revoked.
-      - The module consumes session, suspension and legal-hold events only to invalidate caches or protect audit rows.
+      - authorize and authorizeStatement are in-process pure functions, evaluated by the command bus before every handler (authorize) and by F11.S01.M02 intake before a statement is acted on (authorizeStatement), with the required signer role resolved only through RoleResolverPort and key status only through KeyStatusPort.
+      - Role assign, propose, approve, activate_import, bootstrap and revoke are relay commands that produce relay-signed role statements and emit security.role.assigned and security.role.revoked.
+      - The module consumes session, identity document, suspension and legal-hold events only to invalidate caches, revoke the roles of contested identities or protect audit rows.
+      - RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys?, tenantId?, breakGlassReason?, osUser }) is the in-process form of security.roleassignment.bootstrap used by F15.S04.M03 tenant bootstrap in the same transaction, so a tenant's first operator and the relay's first admin are created together.
+      - Statements and signer roles (N2) are registered with F11.S01.M01 - classrup.security.role_statement/v1 and classrup.security.audit_anchor/v1 are CTR-FED-001 envelopes with author = relay did:key signed by the relay key, and classrup.security.role_approval/v1 is a CTR-FED-001 envelope with author = the approving admin principal and ext.signerKey = one of its active device keys.
+    note: "Statements (N2, registered in F11.S01.M01): classrup.security.role_statement/v1 { relayId, roleAssignmentId, subjectKey, role, scope, status: active|revoked|expired, via, grantedBy?, approvalStatementCid?, grantedAt?, expiresAt?, revokedAt?, revokeReason? } audience public, signer role relay (the relay's current key); classrup.security.role_approval/v1 { relayId, roleAssignmentId, subjectKey, role: admin, proposedBy, approvalDeadline } audience relay-local, signer role principal holding an active relay-scope admin RoleAssignment on relayId (checked here); classrup.security.audit_anchor/v1 { relayId, seq, entryHash, prevAnchorCid?, anchoredAt, entriesSinceLast } audience public, signer role relay. Injected ports (dependency inversion, wired by the vault and relay composition roots because the implementers depend on this module): RoleResolverPort.roleFor(type, context) implemented by F11.S01.M01; KeyStatusPort.keyStatus(did, publicKey, at) implemented by F07.S02.M01. authorizeStatement(statement, context) -> Accept | Quarantine(statusReason) uses the F11.S01.M02 statusReason vocabulary (signer_role_invalid, signer_key_revoked), has no expected-role parameter and ignores any role hint in the context. Provided port: RoleBootstrapPort.bootstrap for F15.S04.M03."
     commands:
       - name: security.roleassignment.assign
-        mode: "relay command; produces statement classrup.security.roleassignment/v1 signed by the relay key"
+        mode: "relay command; produces statement classrup.security.role_statement/v1 signed by the relay key"
         capability: security.roleassignment.assign
-        input: "{ subjectKey, role, expiresInMs?, approvedBy? }"
-        output: "{ roleAssignmentId, statementCid, revision: 1 }"
-        errors: [VALIDATION_FAILED, SECURITY_APPROVAL_REQUIRED, FORBIDDEN]
+        input: "{ subjectKey, role: moderator|operator|relay_operator, scope, expiresInMs }"
+        output: "{ roleAssignmentId, status: active, statementCid, revision: 1 }"
+        errors: [VALIDATION_FAILED, SECURITY_APPROVAL_REQUIRED, FORBIDDEN, CONFLICT_STATE]
+        emits: [security.role.assigned]
+        idempotent: true
+      - name: security.roleassignment.propose
+        mode: "relay command; admin grant, first half of the two-person path"
+        capability: security.roleassignment.propose
+        input: "{ subjectKey, role: admin, scope: relay }"
+        output: "{ roleAssignmentId, status: pending_approval|active, approvalDeadline?, statementCid?, revision: 1 }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, CONFLICT_STATE]
+        emits: [security.role.assigned]
+        idempotent: true
+      - name: security.roleassignment.approve
+        mode: "relay command carrying the approver's signed statement classrup.security.role_approval/v1; produces classrup.security.role_statement/v1"
+        capability: security.roleassignment.approve
+        input: "{ roleAssignmentId, expectedRevision, approval: classrup.security.role_approval/v1 envelope }"
+        output: "{ roleAssignmentId, status: active, approvalStatementCid, statementCid, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, SECURITY_APPROVAL_REQUIRED, FORBIDDEN, EXPIRED]
+        emits: [security.role.assigned]
+        idempotent: true
+      - name: security.roleassignment.activate_import
+        mode: "relay command; re-signs an imported assignment with this relay's key"
+        capability: security.roleassignment.activate_import
+        input: "{ roleAssignmentId, expectedRevision }"
+        output: "{ roleAssignmentId, status: active, statementCid, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, FORBIDDEN]
+        emits: [security.role.assigned]
+        idempotent: true
+      - name: security.roleassignment.bootstrap
+        mode: "local relay CLI only (relay roles bootstrap), authorized by filesystem access to RELAY_DATA_DIR, mirroring platform.tenant.create bootstrap; never routed over HTTP; also RoleBootstrapPort in process"
+        capability: security.roleassignment.bootstrap
+        input: "{ adminKey: did:key, breakGlassReason? (20..500 code points), osUser }"
+        output: "{ roleAssignmentId, status: active, via: bootstrap|break_glass, statementCid, auditSeq }"
+        errors: [VALIDATION_FAILED, SECURITY_BOOTSTRAP_REFUSED]
         emits: [security.role.assigned]
         idempotent: true
       - name: security.roleassignment.revoke
-        mode: "relay command; produces revocation statement signed by the relay key"
+        mode: "relay command; produces a revocation role statement signed by the relay key when the assignment was active"
         capability: security.roleassignment.revoke
         input: "{ roleAssignmentId, expectedRevision, reason }"
-        output: "{ roleAssignmentId, revision }"
+        output: "{ roleAssignmentId, status: revoked, revision }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, SECURITY_LAST_ADMIN, FORBIDDEN]
         emits: [security.role.revoked]
         idempotent: true
     queries:
       - name: security.roleassignment.list
         capability: security.roleassignment.read
-        input: "{ role?, activeOnly?: boolean, cursor?, limit ≤ 100 }"
+        input: "{ role?, scope?, status?, cursor?, limit ≤ 100 }"
         output: "{ items: RoleAssignment[], nextCursor? }"
         errors: []
       - name: security.auditentry.list
@@ -170,115 +263,145 @@ processes:
       - name: security.auditentry.verify_chain
         capability: security.auditentry.verify
         input: "{ fromSeq?, toSeq? }"
-        output: "{ ok, checked, firstBrokenSeq?, headHash, lastAnchor }"
+        output: "{ ok, checked, firstBrokenSeq?, headHash, lastPublishedAnchor: { seq, entryHash, statementCid }, entriesAfterAnchor }"
+        errors: []
+      - name: security.auditentry.list_anchors
+        capability: security.auditentry.read_public
+        input: "{ sinceSeq?, limit ≤ 100 }"
+        output: "{ items: classrup.security.audit_anchor/v1 statements }"
         errors: []
     events_produced:
-      - {type: security.role.assigned, privacy: P1, payload: "{ roleAssignmentId, subjectKey, role, grantedBy, expiresAt, statementCid }"}
-      - {type: security.role.revoked, privacy: P1, payload: "{ roleAssignmentId, subjectKey, role, revokedBy, reason }"}
+      - {type: security.role.assigned, privacy: P1, payload: "{ roleAssignmentId, relayId, subjectKey, role, scope, via, breakGlass: boolean, grantedBy?, approvedBy?, expiresAt?, statementCid }"}
+      - {type: security.role.revoked, privacy: P1, payload: "{ roleAssignmentId, relayId, subjectKey, role, scope, revokedBy?, reason: revoked|expired|subject_contested, lastAdmin: boolean, statementCid }"}
     events_consumed:
       - {type: identity.session.revoked, effect: "drop cached grants for the revoked session before the 60 second bound"}
-      - {type: moderation.action.applied, effect: "invalidate cached suspension and restriction facts for the subject key on this relay"}
-      - {type: moderation.action.reverted, effect: "invalidate cached suspension and restriction facts for the subject key on this relay"}
+      - {type: identity.portable_doc.published, effect: "drop cached key status for the document's DID; when its status is contested, revoke that DID's active assignments on this relay with reason subject_contested, setting lastAdmin when it held the last admin"}
+      - {type: moderation.action.applied, effect: "invalidate cached suspension and restriction facts for the subject on this relay"}
+      - {type: moderation.action.reverted, effect: "invalidate cached suspension and restriction facts for the subject on this relay"}
       - {type: privacy.legal_hold.placed, effect: "exempt audit rows referencing the held subject from the retention sweep"}
+      - {type: privacy.legal_hold.released, effect: "return the released audit rows to the RET-AUDIT retention sweep"}
     errors:
-      - "SECURITY_APPROVAL_REQUIRED | 422 | no | granting admin needs a second active admin as approver"
+      - "SECURITY_APPROVAL_REQUIRED | 422 | no | an admin grant needs a signed approval by a second active admin"
       - "SECURITY_LAST_ADMIN | 409 | no | at least one active admin must remain on the relay"
+      - "SECURITY_BOOTSTRAP_REFUSED | 409 | no | bootstrap needs the local CLI and either no active admin or a recorded break-glass reason"
     example: |
-      authorize({ kind: "relay_key", key: "did:key:z6MkMod", roles: ["moderator"] }, "moderation.action.apply", { caseAssignee: "did:key:z6MkMod" }, { now })
+      authorize({ kind: "relay_key", principal: "did:key:z6MkMod", signerKey: "did:key:z6MkModDev1", roles: [{ role: "moderator", scope: "tenant:0192f3a4-…" }] }, "moderation.action.apply", { tenantId: "0192f3a4-…", caseAssignee: "did:key:z6MkMod" }, { now, keyStatus })
       -> Allow
-      authorize({ kind: "relay_key", key: "did:key:z6MkMember", roles: [] }, "moderation.action.apply", {}, { now })
-      -> Deny(FORBIDDEN, reason: "role_missing")  (audit entry seq 4812 written)
-      authorizeStatement({ schema: "classrup.bazaar.offeracceptance/v1", signerKey: "did:key:z6MkBuyer", offerAuthor: "did:key:z6MkSeller" }, "listing_author", ctx)
-      -> Quarantine("unauthorized_role")
+      authorize({ kind: "relay_key", principal: "did:key:z6MkMod", signerKey: "did:key:z6MkModDev1", roles: [{ role: "moderator", scope: "tenant:0192f3a4-…" }] }, "moderation.action.apply", { tenantId: "0192f3b9-…" }, { now, keyStatus })
+      -> Deny(FORBIDDEN, reason: "scope_mismatch")  (audit entry seq 4812 written)
+      authorizeStatement({ type: "classrup.bazaar.offer_decision/v1", payload: { decision: "accepted" }, author: "did:key:z6MkBuyer", ext: { signerKey: "did:key:z6MkBuyerDev" } }, { listingAuthor: "did:key:z6MkSeller", roleHint: "anyone" })
+      -> Quarantine("signer_role_invalid")   // role from RoleResolverPort.roleFor; the hint is ignored
+      $ relay roles bootstrap --admin did:key:z6MkAdmin
+      -> admin assignment 0192f3c0-… active (via bootstrap), role statement sha256-Rk…, audit seq 1 (os user classrup)
   authorization_capabilities:
     requirements:
-      - "Vault policy: the vault accepts local commands only from the unlocked local principal, and records quarantined statements without applying them."
-      - "Relay policy: relay roles apply only to the relay that assigned them; admins assign roles, operators configure the relay, moderators act on moderation capabilities, and members use own-resource capabilities."
-      - Reading the audit log requires operator or admin on that relay, and the vault owner may read the local audit log.
+      - "Vault policy: the vault accepts local commands only from the unlocked local principal, and authorizeStatement accepts an incoming statement only when its signer holds the role the F11.S01.M01 registry requires and its key is active per F07.S02.M01; F11.S01.M02 stores and shows the quarantined ones."
+      - "Relay policy: relay roles apply only to the relay that assigned them and only within their scope; admins assign roles, relay_operators run relay-wide operations, tenant operators configure their tenant, moderators act on moderation capabilities, and members use own-resource capabilities."
+      - Reading the audit log requires relay_operator or admin on that relay, and the vault owner may read the local audit log.
+      - Bootstrap and break-glass are authorized only by filesystem access to the relay data directory through the local CLI, never over HTTP, and the OS user and reason are recorded in the audit entry.
     capabilities:
-      - "security.roleassignment.assign | admin | relay role admin; subject is not actor; approver required for admin grants when two or more admins exist"
-      - "security.roleassignment.revoke | admin | relay role admin; at least one active admin remains"
-      - "security.roleassignment.read | operator, admin | relay role"
-      - "security.auditentry.read | operator, admin, local principal | relay role, or vault unlocked for the local audit log"
-      - "security.auditentry.verify | operator, admin, local principal | relay role, or vault unlocked"
+      - "security.roleassignment.assign | admin | relay-scope admin signing with an active device key; subject is not actor; role is not admin; scope valid for the role"
+      - "security.roleassignment.propose | admin | relay-scope admin signing with an active device key; role admin at scope relay; subject is not actor"
+      - "security.roleassignment.approve | admin | a different active relay-scope admin, neither proposer nor subject, whose signed role_approval statement arrives before approvalDeadline"
+      - "security.roleassignment.activate_import | admin | relay-scope admin of this relay; imported record passes V01 and V02"
+      - "security.roleassignment.bootstrap | local relay CLI | filesystem access to RELAY_DATA_DIR; no active admin, or a break-glass reason; never over HTTP; OS user recorded"
+      - "security.roleassignment.revoke | admin | relay-scope admin; at least one active admin remains"
+      - "security.roleassignment.read | relay_operator, admin | relay-scope role"
+      - "security.auditentry.read | relay_operator, admin, local principal | relay-scope role, or vault unlocked for the local audit log"
+      - "security.auditentry.verify | relay_operator, admin, local principal | relay-scope role, or vault unlocked"
+      - "security.auditentry.read_public | anonymous | published audit anchors only, never entries"
   failure_recovery_idempotency:
     requirements:
       - authorize is pure and deterministic, so retries and replays give the same decision for the same inputs and clock.
       - Role commands are idempotent per CTR-IDM-001 and mutating commands carry expectedRevision.
       - The audit append and the command's state change commit in one transaction, and a failed append aborts the command for state-changing capabilities.
-    idempotency: "Idempotency-Key required on assign and revoke; replay returns the stored response for 24 h; audit entries for a replay are not duplicated because the correlation ID is unique per entry."
-    concurrency: "Audit seq is assigned inside BEGIN IMMEDIATE (relay) or a single IndexedDB readwrite transaction (vault); role changes use expectedRevision; the last-admin check runs inside the revoke transaction."
+    idempotency: "Idempotency-Key required on every role command; replay returns the stored response for 24 h; audit entries for a replay are de-duplicated by the unique idempotencyKeyHash over (actor, command, Idempotency-Key); bootstrap rerun with the same admin key returns the existing assignment."
+    concurrency: "Audit seq is assigned inside BEGIN IMMEDIATE (relay) or a single IndexedDB readwrite transaction (vault); role changes use expectedRevision; the last-admin check and the zero-admin check of bootstrap run inside the same transaction as the change; the partial unique index prevents two live assignments for one subject, role and scope."
     retries: "Callers retry DEPENDENCY_UNAVAILABLE only; Deny decisions are never retried."
-    offline: "Vault authorization and quarantine work fully offline; relay role statements are cached by vaults with their fetch time and signature."
-    partial_failure: "If audit append fails for a state-changing command the command fails closed with DEPENDENCY_UNAVAILABLE; for read-only allows the entry is queued and appended within 5 seconds, and if the queue is lost the gap is detectable by chain verification."
+    offline: "Vault authorization and authorizeStatement work fully offline with the key status F07.S02.M01 holds; relay role statements and audit anchors are cached by vaults with their fetch time and signature."
+    partial_failure: "If audit append fails for a state-changing command the command fails closed with DEPENDENCY_UNAVAILABLE. Read-only allows and denials are buffered in memory and appended when their 60 s window closes, with entryHash computed at flush; a crash loses at most the open window of read-only decisions (60 s), which the chain cannot show because they were never appended, and this residual is stated in the audit viewer."
   privacy_retention_abuse:
     requirements:
-      - Audit entries contain IDs, hashes and reason codes only and never payloads, tokens or P2+ values; actor keys are stored as hashes on relays.
+      - Audit entries contain IDs, hashes and reason codes only and never payloads, tokens or P2+ values; on relays actors are stored as HMAC-SHA256 with a relay pepper loaded through F16.S01.M02, so a copied audit table cannot be joined to public DIDs without the pepper.
       - Audit entries and role assignments are retained under RET-AUDIT (1 year), except entries under legal hold which are kept until release.
-      - Privilege escalation and log tampering are limited by default deny, two-person admin grants, expiry on roles, hash chaining and signed daily anchors.
+      - Privilege escalation and log tampering are limited by default deny, signed two-person admin approvals, expiry on non-admin roles, hash chaining and anchors published off-host every 1 000 entries or 5 minutes.
+      - Tampering is detectable only for entries covered by the last externally published anchor; entries appended since then (at most 1 000 entries or 5 minutes plus the fetch interval of the vaults or peers holding anchors) are the stated residual window.
     data:
-      - "RoleAssignment: P1 within the relay; published as signed statements."
-      - "AuditEntry: P3 (relay operators and admins; vault owner for the local log)."
+      - "RoleAssignment: P1 within the relay; published as signed role statements."
+      - "AuditEntry: P3 (relay_operators and admins; vault owner for the local log)."
+      - "Audit pepper: P4 relay secret loaded through F16.S01.M02, never logged, exported or backed up with the database."
     retention:
-      - "Audit entries: RET-AUDIT (1 year), then purged with their chain summarized in a signed digest."
+      - "Audit entries: RET-AUDIT (1 year), then purged; the purge boundary is recorded in the next anchor so verification starts from it."
       - "Role assignments: RET-AUDIT after revocation or expiry."
+      - "Audit anchors: kept by the relay for 2 years and by fetching vaults and peers under their own retention."
+      - "Vault audit log: deleted with the vault through the F10.S01.M04 DeletionPort registry injected by the vault composition root."
     threats:
-      - "T01 | Privilege escalation by self-granting a role | grants require an active admin who is not the subject, two-person approval for admin, and every grant is audited and signed"
+      - "T01 | Privilege escalation by self-granting a role | grants require an active admin who is not the subject, admin grants need a second admin's signed approval statement, and every grant is audited and signed"
       - "T02 | Default-allow bug in a new capability | registry loader fails the build when a command lacks exactly one capability; unknown capabilities deny"
-      - "T03 | Forged statement exercising another user's authority | authorizeStatement requires a signer key listed for the role in the author's signed chain, otherwise quarantine"
-      - "T04 | Audit log tampering or truncation | per-entry hash chain, gapless sequence, daily signed anchors, append-only trigger"
-      - "T05 | Audit log used to leak private data | entries carry only IDs, hashes and codes; operators cannot read payloads through the log"
-      - "T06 | Stale grants after revocation | grants cached at most 60 seconds, handlers re-check inside the transaction, session revocation events flush caches"
+      - "T03 | Forged statement exercising another user's authority, or a caller passing a weaker role | authorizeStatement takes the role only from the F11.S01.M01 registry and key status only from F07.S02.M01, ignoring caller hints; otherwise quarantine"
+      - "T04 | Audit log tampering or truncation | per-entry hash chain, gapless sequence, append-only triggers, anchors every 1 000 entries or 5 minutes fetched and kept by vaults and peers off-host; residual window stated"
+      - "T05 | Audit log used to leak private data | entries carry only IDs, HMAC actor hashes and codes; operators cannot read payloads through the log"
+      - "T06 | Stale grants after revocation or device-key theft | grants and key status cached at most 60 seconds, handlers re-check inside the transaction, session revocation and identity document events flush caches, roles bound to the principal and exercised only with active device keys"
+      - "T07 | Bootstrap misuse by someone with host access | host access already controls the relay key file; bootstrap refuses while an admin exists unless a break-glass reason is recorded; break-glass opens a SEV1 incident and is shown on the roles screen"
+      - "T08 | Joining a copied audit table with public DIDs | HMAC-SHA256 with a pepper held outside the database and backups"
     abuse_controls:
-      - "Role commands limited to 20 per day per admin via F12.S03.M03."
-      - "Denial coalescing: identical deny entries within 60 seconds fold into one with a count, bounding log growth to at most 1 440 entries per key per capability per day."
+      - "Role commands limited to 20 per day per admin via the bus rate limit (F12.S03.M03)."
+      - "Denial coalescing for read-only capabilities: identical denials are buffered for 60 seconds and appended once with a count, bounding log growth to at most 1 440 entries per key per capability per day; decisions on state-changing commands are never buffered (CAP-7)."
   observability_performance:
     requirements:
       - Authorization outcomes and latency are measured per CTR-OBS-001 with labels limited to module, code and outcome and no keys.
       - authorize adds at most 0.2 ms p95 in a vault and 0.5 ms p95 on a relay, excluding fact lookups.
-      - Audit append lag and chain verification time are observable.
+      - Audit append lag, anchor publication lag and chain verification time are observable.
     metrics:
       - "classrup_security_authorize_total{outcome=allow|deny|quarantine,code}"
       - "classrup_security_authorize_us (histogram)"
       - "classrup_security_audit_append_lag_ms"
-      - "classrup_security_role_assignments{role} (gauge)"
+      - "classrup_security_audit_entries_since_anchor (gauge)"
+      - "classrup_security_role_assignments{role,status} (gauge)"
     logs:
       - "relay info authz.deny {capability, reason, correlationId} — no key, no payload."
+      - "relay warn roles.bootstrap {via, osUser, correlationId} — reason text stays in the audit entry."
     budgets:
-      - "authorize p95 ≤ 0.5 ms (relay) and ≤ 0.2 ms (vault); role assign p95 ≤ 300 ms."
-      - "Chain verification of 100 000 entries completes in ≤ 10 s."
+      - "authorize p95 ≤ 0.5 ms (relay) and ≤ 0.2 ms (vault); role commands p95 ≤ 300 ms."
+      - "Chain verification of 100 000 entries completes in ≤ 10 s; anchor signing ≤ 20 ms."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
-      - Default deny and purity are covered by property tests over generated capability and role matrices.
+      - Default deny and purity are covered by property tests over generated capability, role and scope matrices.
       - Audit integrity is covered by tamper tests.
-    fixtures: "Relay X with admins A1 and A2, moderator M, member U; registry of 60 capabilities from fixture modules; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Relay X with admins A1 and A2, relay_operator R1, tenant operators O1 (tenant:T1) and O2 (tenant:T2), moderator M (scope relay) with device keys Md1 and Md2, member U; KeyStatusPort and RoleResolverPort stubs; registry of 60 capabilities from fixture modules; audit pepper fixture; fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | assign moderator for 90 days | assignment stored, statement signed, expiry set"
-      - "T02 | unit | 02.R02,02.R03 | each rule V02–V07 violated | documented error code and nothing stored"
-      - "T03 | property | 02.R02,06.R01 | generated actors, capabilities, resources and malformed inputs | authorize never throws, is deterministic, and every unlisted combination denies"
-      - "T04 | integration | 03.R01,03.R02,03.R03 | expiry sweep missed; role revoked mid-request | request-time check denies; handler re-check denies; audit entries written"
-      - "T05 | contract | 04.R01,04.R02,09.R02 | commands, queries and events | validate against registry schemas; role statements verify with the relay key"
-      - "T06 | integration | 04.R03 | session.revoked and action.applied events | caches flushed; next request uses fresh facts"
-      - "T07 | abuse | 05.R01,05.R02,05.R03,07.R03 | member assigns role; moderator reads audit; self-grant; sole admin revokes self | FORBIDDEN, FORBIDDEN, FORBIDDEN, SECURITY_LAST_ADMIN"
-      - "T08 | abuse | 05.R01,07.R03 | statement signed by non-author accepting an offer; revoked signer; unknown signer | quarantined with reasons unauthorized_role, signer_revoked, unknown_signer"
-      - "T09 | abuse | 07.R01,07.R02,07.R03 | UPDATE and DELETE audit rows; remove middle entry; truncate tail | trigger aborts; verify_chain reports first broken seq; anchor mismatch detected"
+      - "T01 | unit | 01.R01,01.R03,02.R01 | assign moderator at scope relay for 90 days and operator O3 at scope tenant:T1 | assignments stored active with scope, role statements signed by the relay key, expiry set"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V10 violated, including admin with expiresAt, operator at scope relay, relay_operator at tenant scope, unknown tenant and a malformed did:key | documented error code and nothing stored"
+      - "T03 | property | 02.R02,06.R01 | generated actors, capabilities, resources, scopes and malformed inputs | authorize never throws, is deterministic, every unlisted combination denies, and a tenant-scope role never matches another tenant's resource"
+      - "T04 | integration | 03.R01,03.R02 | expiry sweep missed; role revoked mid-request; Md1 revoked in M's stored portable document | request-time check denies; handler re-check denies; Md1 denied with signer_key_revoked within 60 s while Md2 keeps the role"
+      - "T05 | contract | 04.R02,04.R05,09.R02 | commands, queries, events and statements | validate against registry schemas; role_statement and audit_anchor verify as CTR-FED-001 envelopes by the relay key; role_approval verifies with the approver's device key; all three are registered in F11.S01.M01"
+      - "T06 | integration | 04.R03 | identity.session.revoked, moderation.action.applied, identity.portable_doc.published with status contested for A2, privacy.legal_hold.placed then released | caches flushed; A2's admin revoked with subject_contested and lastAdmin false; held rows exempted then returned to the sweep"
+      - "T07 | abuse | 05.R01,05.R02,05.R03,07.R03 | member assigns a role; moderator reads audit; self-grant; sole admin revokes self; O1 configures T2 and assigns roles; R1 assigns roles | FORBIDDEN, FORBIDDEN, FORBIDDEN, SECURITY_LAST_ADMIN, FORBIDDEN, FORBIDDEN"
+      - "T08 | abuse | 04.R01,05.R01 | statement accepting an offer signed by a non-author; signer device key revoked before first sight; caller context claims a weaker role than the registry requires | Quarantine(signer_role_invalid), Quarantine(signer_key_revoked), Quarantine(signer_role_invalid) with the hint ignored; nothing stored by this module"
+      - "T09 | abuse | 01.R02,07.R04 | UPDATE and DELETE audit rows; remove a middle entry; truncate the tail before and after the last published anchor | triggers abort; verify_chain reports the first broken seq; truncation before the anchor detected; entries after it reported as the residual window"
       - "T10 | integration | 06.R02,06.R03 | audit store failure during a state-changing command | command fails closed with DEPENDENCY_UNAVAILABLE and no state change"
-      - "T11 | integration | 06.R01 | same Idempotency-Key replayed on assign | original response; one audit entry"
-      - "T12 | abuse | 07.R03 | 1 000 identical denials from one key in 60 seconds | one coalesced entry with count 1 000"
-      - "T13 | load | 08.R01,08.R02,08.R03 | 5 000 authorize calls per second for 5 minutes; verify 100 000 entries | p95 targets met; verification ≤ 10 s"
+      - "T11 | integration | 06.R01 | same Idempotency-Key replayed on assign by the same admin | original response; one audit entry de-duplicated by (actor, command, Idempotency-Key)"
+      - "T12 | abuse | 03.R03,07.R03 | 1 000 identical read-only denials in 60 seconds; 1 000 denials of a state-changing command; crash in the middle of a window | one entry with count 1 000 appended at window close with entryHash computed then; 1 000 separate entries; the crash loses at most the open window"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 5 000 authorize calls per second for 5 minutes; verify 100 000 entries; 1 000 entries to trigger an anchor | p95 targets met; verification ≤ 10 s; anchor published and the entries-since-anchor gauge resets"
       - "T14 | unit | 09.R01,09.R03 | traceability tool run | every PS-126 requirement maps to a passing test"
-      - "T15 | integration | 10.R01,10.R02,10.R03 | export audit and roles, import into fresh relay, restore backup | chain verifies after round trip; imported roles inactive until re-signed by the new relay"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export audit and roles, import into a fresh relay, restore backup | chain verifies after round trip; imported roles stay imported_inactive until activate_import by an admin of the new relay"
+      - "T16 | integration | 03.R05,04.R04,05.R04 | fresh relay rejects assign; CLI bootstrap creates A1; second bootstrap without break-glass; break-glass with a 30-character reason; bootstrap attempted over HTTP; RoleBootstrapPort from a tenant bootstrap stub | A1 active via bootstrap with OS user audited; SECURITY_BOOTSTRAP_REFUSED; new admin via break_glass and security.role.assigned with breakGlass true; no HTTP route; operator and admin created in one transaction"
+      - "T17 | integration | 02.R01,03.R04 | A1 proposes admin S with A2 approving within 24 h; a proposal left 25 h; assign naming A2 as approvedBy without a signed approval; approval signed by the proposer | S active with approvalStatementCid; expired with approval_expired; SECURITY_APPROVAL_REQUIRED; SECURITY_APPROVAL_REQUIRED"
+      - "T18 | unit | 01.R04,01.R05 | M (scope relay) acts on T1 and T2; moderator at tenant:T1 acts on T2; request signed by an active device key of M; subjectKey given as a device key of another DID | allowed twice; FORBIDDEN scope_mismatch; device key resolved to the principal; VALIDATION_FAILED"
+      - "T19 | integration | 03.R04,03.R01 | expiry sweep runs when A1 is the only admin; admin proposal carrying expiresInMs | A1 never expires; VALIDATION_FAILED"
+      - "T20 | integration | 07.R01,07.R02 | inspect relay audit rows; recompute actorKeyHash without and with the pepper; vault deletion through the DeletionPort stub; relay rows under legal hold at the 1-year sweep | no DID in any row; only the peppered HMAC matches; local audit log erased; held rows kept until release"
+      - "T21 | abuse | 05.R01 | vault locked; a command authored by a different principal in the same browser profile | FORBIDDEN with reasons vault_locked and not_owner; nothing written"
     acceptance:
-      - All tests T01–T15 pass in CI.
-      - authorize is pure and every unlisted capability and role combination denies (property tests).
-      - The audit chain detects any edit, deletion or truncation in tamper tests.
+      - All tests T01–T21 pass in CI.
+      - authorize is pure and every unlisted capability, role and scope combination denies (property tests).
+      - The audit chain detects any edit, deletion or truncation of entries covered by the last externally published anchor in tamper tests, and the residual window after it is reported.
   import_export_backup_rollback:
     requirements:
       - Relay operators can export role assignments and the audit log with its anchors as JSON lines, and the vault owner can export the local audit log.
-      - Import of roles from another relay is never active; it creates inactive records until the new relay's admin re-signs them.
+      - Import of roles from another relay is never active; it creates imported_inactive records until an admin of the new relay activates them, which re-signs them with the new relay's key.
       - Audit schema changes follow expand/contract, keep v1 readable for 180 days and never break chain verification.
-    export: "Sections security.roles and security.audit in the relay export; vault export contains the local audit log and the quarantine list without statement payload bodies."
-    import: "Audit imports are accepted only as a separate verified segment with its anchors and never merged into the live chain; role imports create inactive records."
-    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restore re-verifies the chain against the latest signed anchor; vault audit is included in the vault export (IOX-6)."
-    migration_rollback: "Additive fields only in v1; entryHash covers JCS bytes of the v1 field set so added optional fields are excluded from the hash and rollback keeps the chain valid."
+    export: "Sections security.roles and security.audit in the relay export (with anchors); vault export contains the local audit log only (quarantined statements are exported by F11.S01.M02)."
+    import: "Audit imports are accepted only as a separate verified segment with its anchors and never merged into the live chain; role imports create imported_inactive records."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restore re-verifies the chain against the latest anchor held by vaults or peers; the audit pepper is restored by the operator from the secret store (F16.S01.M02); vault audit is included in the vault export (IOX-6)."
+    migration_rollback: "Additive fields only in v1; entryHash covers JCS bytes of the v1 field set so added optional fields are excluded from the hash and rollback keeps the chain valid; new role and status values are read as no grant by older releases (fail closed)."

@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section notify.quiet_hours in classrup-export/v1; one line per QuietHoursSchedule (schema classrup.notify.quiet_hours/v1).
-- **import:** Time zone and windows re-validated; unknown zones are rejected and the schedule imports disabled; the mirror is re-sent only after user confirmation.
-- **backup:** The vault export is the backup (IOX-6); relay mirrors are operational data covered by relay SQLite backup (IOX-3, IOX-7).
-- **migration rollback:** Additive fields only in v1; a tzdata release changes results only for future instants and is recorded; rollback to an older build keeps the stored tzdataVersion and re-evaluates with the older data.
+- **export:** Section notify.quiet_hours in classrup-export/v1 through ExportSectionPort; one line per QuietHoursSchedule (schema classrup.notify.quiet_hours/v1); relay copies are not exported.
+- **import:** Time zone and windows re-validated; unknown zones are rejected and the schedule imports disabled; the imported vault starts a new mirror chain for its own device key and mirrors only after user confirmation.
+- **backup:** The vault export is the backup (IOX-6); relay copies are operational data covered by relay SQLite backup (IOX-3, IOX-7) and are deleted on restore when no consent of the user remains registered.
+- **migration rollback:** Additive fields only in v1; a tzdata release changes results only for future instants and is recorded; rollback to an older build keeps the stored tzdataVersion and re-evaluates with the older data and its canonical-zone table.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

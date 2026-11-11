@@ -14,11 +14,11 @@
 
 **Metrics**
 - classrup_notify_channel_consents_total{channel,status} (relay)
-- classrup_notify_unsubscribe_total{outcome=ok|invalid|rate_limited} (relay)
+- classrup_notify_unsubscribe_total{outcome=ok|invalid|rate_limited|reused} (relay)
 - classrup_notify_consent_sweep_lag_ms (gauge, relay)
 
 **Logs**
-- relay info channel.registered {consentIdHash, channel, correlationId} — no token and no DID.
+- relay info channel.registered {consentIdHash, channel, outcome, correlationId} — no token and no DID.
 
 **Budgets**
 - register and unsubscribe p95 ≤ 300 ms at 50 req/s; vault opt_in/opt_out p95 ≤ 50 ms.
@@ -34,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F10.S01.M01, F07.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F10.S01.M01, F07.S01.M01, F07.S02.M01, F11.S01.M01, F11.S03.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -370,9 +370,10 @@ processes:
       - "T17 | abuse | 05.R04,03.R03 | device key K is revoked in F16.S02.M02; K then signs subscribe, list and unsubscribe; a request signed before revocationEffectiveFrom arrives late | the subscription created by K is revoked; every later request refused UNAUTHENTICATED; the late pre-revocation request is refused because the key is no longer active"
       - "T18 | unit | 01.R04,03.R04,04.R04 | enable, disable and expiry discovered by list_mine in the vault; inspect the push target record and the outgoing request | target moves pending, active, then disabled or expired; record holds no endpoint or keys; subscribe body is sealed and the request carries no device label"
       - "T19 | integration | 01.R05,04.R05,05.R03 | operator rotates the VAPID key; DeletionPort plan and purge, export section and retention purge with F10 registry doubles | new key registered with purpose vapid in F16.S02.M02; private key never leaves RelayKeyStorePort; purge removes targets and calls PushManager.unsubscribe; section notify.push exported; targets purged 30 days after endedAt"
+      - "T21 | e2e | 07.R02,07.R03 | open the permission explainer and the push settings before and after enabling | text names the relay that receives the endpoint, says the push service sees only an opaque topic and can link the endpoint to the browser vendor, and that the relay links the pseudonym to the endpoint"
       - "T20 | contract | 04.R05,02.R01 | enable with privacy.consent.check returning not granted, and with the channel consent not yet registered; 11th subscribe call in a day | PRECONDITION_FAILED before any browser prompt; RATE_LIMITED from RateLimitPort"
     acceptance:
-      - All tests T01 to T20 pass in CI.
+      - All tests T01 to T21 pass in CI.
       - Decrypted push payloads in tests contain only the keys of the sealed, hook or digest form and never text, names or amounts, and sealed boxes open only on the target device.
       - Endpoints, keys and topic keys never appear in logs, events, exports or query results, and the vault record never holds them.
       - VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests, and the VAPID private key exists only in RelayKeyStorePort.

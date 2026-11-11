@@ -1,56 +1,67 @@
 id: F16.S02.M01
 scope: MVP
 summary: >-
-  Client library for the user's own keys in the browser vault. It generates Ed25519 signing keys and x25519
-  agreement keys with @noble/curves 2.4.0, wraps private keys for storage in IndexedDB with a passphrase-derived
-  key (scrypt N=2^17, r=8, p=1) and XChaCha20-Poly1305 from @noble/ciphers 2.4.0, unlocks them on demand, locks
-  them after idle time, rotates them with signed rotation statements, and exports an encrypted backup. There is
-  no server-held user secret and no central account; the private key never leaves the vault except in the user's
-  own encrypted export. argon2 is not used because the available JavaScript implementations are unaudited, and
-  noble-ciphers 2.x has no stated third-party audit, which is recorded as an accepted risk with mitigations.
+  Client library for the user's own keys in the browser vault. It generates the account root key and the device
+  keys (Ed25519, @noble/curves 2.4.0) and exposes them as separate handles, so that the root key signs only the
+  statements F07 reserves for it and device keys sign everything else. Each device's X25519 agreement key is derived
+  deterministically from that device's Ed25519 key, so the root-signed portable identity document that lists the
+  device key also binds its agreement key and no relay can substitute one. Private keys are wrapped for storage in
+  IndexedDB with a passphrase-derived key (scrypt N=2^17, r=8, p=1) and XChaCha20-Poly1305 from @noble/ciphers
+  2.4.0, unlocked on demand and locked after idle time. Device keys are rotated through the F07 identity flow (new
+  device key, root-signed device link, overlap, revocation of the old key, new portable identity document); the
+  root key is not rotated in MVP and is recovered through F07.S01.M03. There is no server-held user secret and no
+  central account; private keys never leave the vault except in the user's own encrypted export. argon2 is not
+  used because the available JavaScript implementations are unaudited, and noble-ciphers 2.x has no stated
+  third-party audit, which is recorded as an accepted risk with mitigations.
 responsibilities:
-  - Generate Ed25519 and x25519 keys from the browser CSPRNG (crypto.getRandomValues) and derive the did:key principal and key fingerprint.
-  - Wrap private keys with scrypt (N=131072, r=8, p=1, 16-byte random salt, 32-byte output) and XChaCha20-Poly1305 (24-byte random nonce) and store only the wrapped blob.
+  - Generate the Ed25519 root key and device keys from the browser CSPRNG (crypto.getRandomValues), derive the did:key principal from the root key, derive each device's X25519 agreement key from its Ed25519 key, and show fingerprints only through F07.S01.M01 fingerprintOf.
+  - Wrap private keys with scrypt (N=131072, r=8, p=1, 16-byte random salt, 32-byte output) and XChaCha20-Poly1305 (24-byte random nonce) and store only the wrapped blobs.
   - Unlock into memory on passphrase entry, lock on idle (default 15 minutes, range 1 to 60), on tab hide for 5 minutes, and on explicit lock.
-  - Rotate device keys with a rotation statement signed by the old key and the new key, then revoke the old key after the overlap through the key registry (F16.S02.M02).
+  - Enforce key roles in sign(keyRole, context, payload) - the root handle signs only the F07 root-only statement list and a device handle never signs root-only types.
+  - Rotate device keys through F07.S01.M01 (identity.device_key.add with a root-signed device link and the new key's possession signature, an overlap of 0 to 7 days, then identity.device_key.revoke of the old key with reason superseded) and queue the resulting statements and portable identity document through the F15.S01.M01 sync outbox.
   - Produce a passphrase-protected key export (backup file) and import it, with the recovery kit remaining under the user's control.
 non_responsibilities:
-  - Signature formats and context strings (F16.S02.M03).
-  - Key status and revocation lists (F16.S02.M02).
-  - Recovery kit creation and account recovery flow (F07.S01.M03) and device linking (F07.S01.M01).
+  - Signature envelope and context registry (F16.S02.M03) and the JCS, Ed25519 and did:key primitives (F11.S01.M03).
+  - User key validity and revocation status (F07.S02.M01 KeyStatusPort) and the key cache with freshness (F16.S02.M02).
+  - Device linking rules, the device_link and keyrevocation identity rules and the portable identity document (F07.S01.M01, F07.S02.M01), recovery kit creation and account recovery (F07.S01.M03).
   - Server-side key handling; relays never receive private keys.
-  - "Future: platform-protected non-extractable keys through WebCrypto or WebAuthn where Ed25519 is supported; passkey as second factor; Shamir split of recovery material."
-depends_on: [CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001]
+  - "Future: rotation of the account root key with a signed move statement; platform-protected non-extractable keys through WebCrypto or WebAuthn where Ed25519 is supported; passkey as second factor; Shamir split of recovery material."
+depends_on: [F16.S02.M02, F16.S02.M03, F15.S01.M01, F07.S01.M01, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001]
 user_stories:
   - As a new user, I create a vault by choosing a passphrase and get a key without any account on a server.
   - As a user, I unlock my vault with my passphrase and it locks itself when I am away.
-  - As a user, I rotate my device key if I suspect it is exposed, and my contacts see a signed statement of the change.
+  - As a user, I rotate a device key if I suspect it is exposed, and my contacts see the change in my signed identity document.
 edge_cases:
   - Wrong passphrase; AEAD tag verification fails, the error does not reveal whether the blob or passphrase was wrong, and a local delay of 1 s doubling to 60 s applies after 3 failures without ever wiping the key.
   - Unlock takes too long on a low-end phone; the unlock runs in a Web Worker with progress and cancel, and the scrypt cost parameters stay fixed for the blob's recorded version so cost is never silently lowered.
   - Browser storage is cleared; the wrapped key is gone and recovery needs the user's backup file or recovery kit; the vault says so honestly at creation.
   - Two tabs unlock the same vault; a Web Lock named classrup-vault-unlock serializes unlock, and a lock in one tab locks the others through BroadcastChannel.
   - Passphrase change while another device is linked; the wrap is rewritten with a new salt and nonce; other devices are unaffected because each device has its own key.
-  - Key rotation interrupted after the new key is generated but before the statement is delivered; the vault retains both keys, shows 'rotation pending', and resumes the delivery from the sync outbox.
+  - Device rotation interrupted after the new key is generated but before the root-signed device link is recorded; the old key stays active, the new key is unused, the vault shows 'rotation pending' and resumes from the persisted progress.
   - Passphrase appears on a list of commonly used passphrases; creation is refused with SECURITY_PASSPHRASE_WEAK and explains how to choose a longer phrase.
+  - Rotation is started on a linked device that does not hold the root key; the new key and its possession signature are prepared there and the vault shows 'waiting for approval on your root device', because only the root key signs the device link.
+  - A relay-served mailbox hint carries an X25519 key for a contact that differs from the one derived from the contact's listed device key; the hint is ignored and messages are wrapped only to the derived key.
+  - Application code asks the root handle to sign a listing, or a device handle to sign a portable identity document; both are refused with SECURITY_KEY_ROLE_FORBIDDEN.
+  - The user picks an overlap of 10 days; refused with SECURITY_ROTATION_INVALID because the bound is 0 to 7 days.
 ux:
   screens:
     - "Create vault: passphrase and confirmation with strength meter (minimum 12 code points and not on the 10 000-entry common list), explicit text about what happens if the passphrase is lost, backup file download prompt."
     - "Unlock screen: passphrase field, progress while deriving the key (scrypt takes 1 to 8 seconds on typical devices), cancel button, lockout countdown after failures."
-    - "Security settings: auto-lock timeout, change passphrase, rotate key, export encrypted backup, key fingerprint display as 4-word list and QR code."
-  states: [no-vault, locked, unlocking, unlocked, lockout, rotating, rotation-pending, backup-needed]
+    - "Security settings: auto-lock timeout, change passphrase, rotate this device's key (overlap 0 to 7 days, root-device approval step on linked devices), export encrypted backup, fingerprint from F07.S01.M01 fingerprintOf as 16 characters, 8-word spoken form and QR code."
+  states: [no-vault, locked, unlocking, unlocked, lockout, rotating, rotation-pending, awaiting-root-approval, backup-needed]
   a11y:
     - Passphrase fields use autocomplete=current-password or new-password and have visible labels and show/hide toggles with accessible names.
     - Progress during key derivation is announced politely and cancel is keyboard reachable.
     - Fingerprint is available as text and as a word list, not only a QR code.
 processes:
   domain_schema:
-    note: "No catalog entities. The wrapped key blob and rotation records are local vault storage of the client library, versioned as classrup.security.wrappedkey/v1 and are not synced or shared."
+    note: "No catalog entities. The wrapped key blobs (classrup.security.wrappedkey/v1, one for the root key on the root device and one per local device key) and the local device-rotation progress records (classrup.security.devicerotation/v1 { oldKeyId, newKeyId, possessionSigDone, deviceLinkCid?, overlapEndsAt, revocationCid?, portableDocSeq? }) are vault storage of this client library and are not synced or shared."
     entities: []
     requirements:
-      - The stored wrapped key blob contains version, KDF name and parameters (N, r, p), salt, nonce, ciphertext, key ID and algorithm, all authenticated as associated data.
-      - Private keys exist unwrapped only in memory while unlocked, and the library exposes sign and agree operations without exposing key bytes to application code.
-      - Key IDs are the SHA-256 thumbprint of the raw public key in base64url, and the principal is the did:key encoding of the Ed25519 public key.
+      - The stored wrapped key blob contains version, key role (root or device), KDF name and parameters (N, r, p), salt, nonce, ciphertext, key ID and algorithm, all authenticated as associated data.
+      - Private keys exist unwrapped only in memory while unlocked, and the library exposes separate root and device key handles with sign and agree operations, never key bytes, to application code.
+      - Key IDs are the SHA-256 thumbprint of the raw public key in base64url (used inside envelopes), the principal is the did:key encoding of the root Ed25519 public key, and every displayed fingerprint is F07.S01.M01 fingerprintOf (16 base58btc characters with the 8-word spoken form).
+      - Each device's X25519 agreement key is derived deterministically from that device's Ed25519 key (RFC 7748 birational map of the public key, clamped SHA-512 scalar of the seed), so the root-signed portable identity document that lists the Ed25519 device key binds the agreement key, and no separate agreement key is generated, stored or published.
   validation_rules:
     requirements:
       - Passphrases are validated for minimum length and a bundled common-passphrase list before any key is created or wrapped.
@@ -59,28 +70,32 @@ processes:
     rules:
       - "V01 | passphrase is at least 12 Unicode code points after NFKC normalization and not in the common list | SECURITY_PASSPHRASE_WEAK"
       - "V02 | blob KDF is scrypt with N ≥ 131072, r ≥ 8, p ≥ 1 and salt of 16 bytes | SECURITY_WRAPPED_KEY_INVALID"
-      - "V03 | AEAD authentication succeeds with associated data (version, kdf params, key ID) | SECURITY_UNLOCK_FAILED"
-      - "V04 | rotation statement is signed by both the old and the new key over the same payload | SECURITY_ROTATION_INVALID"
+      - "V03 | AEAD authentication succeeds with associated data (version, key role, kdf params, key ID) | SECURITY_UNLOCK_FAILED"
+      - "V04 | device rotation - the new key's possession signature over classrup-device-link:v1:<did>:<newPublicKey>:<linkNonce> verifies, the device link is signed by the root handle through F07.S01.M01, and the overlap is 0 to 7 days | SECURITY_ROTATION_INVALID"
       - "V05 | the browser provides crypto.getRandomValues and IndexedDB; otherwise vault creation is refused | SECURITY_ENVIRONMENT_UNSUPPORTED"
       - "V06 | imported backup file has matching version and decrypts with the supplied passphrase | SECURITY_UNLOCK_FAILED"
+      - "V07 | the root handle signs only classrup.identity.portable_doc/v1, classrup.identity.device_link/v1, classrup.security.keyrevocation/v1 and classrup.identity.recovery_notice/v1, and a device handle never signs portable_doc, device_link or recovery_notice | SECURITY_KEY_ROLE_FORBIDDEN"
+      - "V08 | agree uses only an agreement key derived here from an Ed25519 device key that the peer's root-signed portable identity document lists as active; a raw agreement key from a relay, hint or statement is refused | SECURITY_AGREEMENT_KEY_UNBOUND"
   workflow_state_machine:
-    note: "Library state is a runtime lock state of the in-memory key (locked, unlocked), not a persisted catalog entity. Persisted rotation progress is described in requirements."
+    note: "Library state is a runtime lock state of the in-memory keys (locked, unlocked), not a persisted catalog entity. Persisted device-rotation progress is described in requirements."
     machines: []
     requirements:
       - The in-memory lock state moves locked to unlocked only after successful AEAD verification, and unlocked to locked on idle timeout, explicit lock, tab hide for 5 minutes or browser discard.
-      - Rotation proceeds generate, sign, deliver and finalize, with the old key kept valid for an overlap of at most 7 days unless the user marks it compromised, in which case revocation is immediate.
+      - Device rotation proceeds generate, possession-sign, root-signed device link through F07.S01.M01 identity.device_key.add, overlap, then identity.device_key.revoke of the old key with reason superseded and a new portable identity document, with one overlap bound of 0 to 7 days (default 7) unless the user marks the old key compromised, in which case the revocation is immediate.
       - After 3 consecutive failed unlocks the library enforces a local delay of 1 s, doubling per failure, capped at 60 s, and resets after one success.
+      - The account root key is never rotated in MVP; a lost or compromised root key is handled by recovery (F07.S01.M03), and rotation applies only to device keys.
     timeouts:
       - "Idle auto-lock default 15 minutes (range 1 to 60); hidden-tab lock after 5 minutes."
-      - "Rotation overlap default 7 days, range 0 to 30."
+      - "Device rotation overlap default 7 days, range 0 to 7 days (0 when the old key is marked compromised)."
   commands_queries_events:
-    note: "Library module with no bus commands or queries and no events. API is createVault, unlock, lock, sign, agree, rotateKey, changePassphrase, exportBackup and importBackup, all vault-local and run in a Web Worker for key derivation."
+    note: "Library module with no bus commands or queries and no events. API is createVault, unlock, lock, rootKey() and deviceKey() handles, sign(keyRole, context, payload), agree(peerDevicePublicKey), agreementPublicKeyOf(ed25519PublicKey), rotateDeviceKey({ overlapDays, compromised }), changePassphrase, exportBackup and importBackup, all vault-local with key derivation in a Web Worker. Signing goes through F16.S02.M03 and F11.S01.M03 with the handle. Statements produced during rotation are F07.S01.M01's classrup.identity.device_link/v1 (root key plus possession signature) and F16.S02.M02's classrup.security.keyrevocation/v1 (old key or root key, reason superseded), followed by a root-signed classrup.identity.portable_doc/v1 from F07.S02.M01; there is no classrup.security.keyrotation/v1."
     commands: []
     queries: []
     requirements:
-      - createVault(passphrase) generates keys, wraps them and returns the principal and fingerprint without returning key bytes.
-      - sign(context, payload) and agree(peerKey) operate on the unlocked key and fail with SECURITY_VAULT_LOCKED when locked.
-      - rotateKey produces a rotation statement (classrup.security.keyrotation/v1) signed by old and new keys and hands it to the sync outbox and to F16.S02.M02 for registration.
+      - createVault(passphrase) generates the root key and the first device key, wraps them, and returns the principal and fingerprint without returning key bytes.
+      - sign(keyRole, context, payload) and agree(peerDevicePublicKey) operate on the unlocked handle and fail with SECURITY_VAULT_LOCKED when locked, and agree derives the peer's agreement key from its Ed25519 device key itself.
+      - rotateDeviceKey generates a new device key and its possession signature, obtains the root-signed device link through F07.S01.M01 identity.device_key.add, waits the overlap, revokes the old key with reason superseded through identity.device_key.revoke, and queues the statements and the new portable identity document through the F15.S01.M01 sync outbox.
+      - Fingerprints returned or shown by this library come from F07.S01.M01 fingerprintOf and never from a separate encoding.
     events_produced: []
     events_consumed: []
     errors:
@@ -88,41 +103,45 @@ processes:
       - "SECURITY_UNLOCK_FAILED | 401 | no | passphrase or blob authentication failed; generic on purpose"
       - "SECURITY_WRAPPED_KEY_INVALID | 422 | no | stored blob has unsafe or unknown parameters"
       - "SECURITY_VAULT_LOCKED | 403 | no | operation needs the unlocked vault"
-      - "SECURITY_ROTATION_INVALID | 422 | no | rotation statement is not signed by both keys"
+      - "SECURITY_ROTATION_INVALID | 422 | no | device rotation step invalid - possession proof, root-signed device link or overlap bound"
       - "SECURITY_ENVIRONMENT_UNSUPPORTED | 422 | no | required browser capability is missing"
+      - "SECURITY_KEY_ROLE_FORBIDDEN | 403 | no | this key handle may not sign this statement type"
+      - "SECURITY_AGREEMENT_KEY_UNBOUND | 422 | no | agreement key is not derived from a device key listed in the peer's identity document"
     example: |
       const v = await createVault({ passphrase: "correct horse battery staple 41" });   // runs scrypt N=131072 in a Worker
-      -> { principal: "did:key:z6MkExample…", fingerprint: "orbit-maple-quiet-river", blob: "wrapped (not returned)" }
-      await lock(); await sign("classrup/consent/v1", bytes)  -> throws SECURITY_VAULT_LOCKED
-      await rotateKey({ reason: "routine" }) -> { rotationStatementCid: "sha256-ee78…", oldKeyValidUntil: "2026-11-11T10:00:00Z" }
+      -> { principal: "did:key:z6MkExample…", fingerprint: "7Hq3mK9sLp2xV4nR" (fingerprintOf), spoken: "orbit maple quiet river amber delta north lamp" }
+      await lock(); await sign("device", "classrup/consent/v1", bytes)  -> throws SECURITY_VAULT_LOCKED
+      await sign("root", "classrup.bazaar.listing/v1", draft)            -> throws SECURITY_KEY_ROLE_FORBIDDEN
+      await rotateDeviceKey({ overlapDays: 7 }) -> { newKeyId: "Zr4c…", deviceLinkCid: "sha256-ee78…", oldKeyRevokesAt: "2026-11-11T10:00:00Z", status: "overlap" }
   authorization_capabilities:
-    note: "No capabilities: the library runs inside the user's vault; its only authority is possession of the passphrase."
+    note: "No capabilities: the library runs inside the user's vault; its only authority is possession of the passphrase, and the root handle exists only on the root device."
     capabilities: []
     requirements:
       - Only code running in the vault's origin can call the library, and sign requests from any other context are impossible.
-      - The library never exposes raw private key bytes to callers, including the application code, and exposes only sign and agree.
+      - The library never exposes raw private key bytes to callers, including the application code, and exposes only sign and agree on separate root and device handles.
       - Auto-lock and unlock lockouts are enforced by the library regardless of caller.
   failure_recovery_idempotency:
     requirements:
-      - createVault is atomic, so the wrapped blob and public metadata are written in one IndexedDB transaction or nothing is written.
+      - createVault is atomic, so the wrapped blobs and public metadata are written in one IndexedDB transaction or nothing is written.
       - Unlock is repeatable and has no side effects besides in-memory state; failed attempts only advance the local backoff counter.
       - Rotation is resumable from persisted progress and never leaves the vault without a usable key.
-    idempotency: "createVault refuses when a vault exists (SECURITY_VAULT_EXISTS is reported as CONFLICT_STATE); rotation steps record the new key ID so repeating a step is a no-op."
+    idempotency: "createVault refuses when a vault exists (reported as CONFLICT_STATE); rotation steps record the new key ID, the device link cid and the revocation cid so repeating a step is a no-op."
     concurrency: "Web Lock classrup-vault-unlock serializes unlock and rotation across tabs; BroadcastChannel propagates lock events; IndexedDB readwrite transactions guard blob updates."
-    retries: "Rotation statement delivery goes through the sync outbox with CTR-IDM-001 backoff; unlock is retried only by the user."
-    offline: "All operations work offline; only delivery of rotation statements and registry updates need a network."
-    partial_failure: "If rotation fails after generation, both keys stay wrapped and valid, the UI shows rotation pending, and nothing is revoked until the statement is delivered or the user chooses immediate revocation."
+    retries: "Device link, revocation and portable document delivery goes through the F15.S01.M01 sync outbox with CTR-IDM-001 backoff; unlock is retried only by the user."
+    offline: "All operations work offline; only delivery of rotation statements and the new identity document needs a network, and linked devices need the root device to sign the link."
+    partial_failure: "If rotation stops after generation, the new key stays wrapped but unused until the root-signed device link is recorded, the old key stays active, the UI shows rotation pending, and nothing is revoked until the overlap ends or the user marks the old key compromised."
   privacy_retention_abuse:
     requirements:
       - Private keys and passphrases are P4 and never leave the device except inside the user's own passphrase-encrypted export, and they are never logged or sent in telemetry (OBS-7).
       - The wrapped blob is retained until the user deletes the vault, and deletion overwrites the IndexedDB records and removes the blob.
       - Offline brute force against a stolen wrapped blob is slowed by scrypt N=2^17 (about 128 MiB per attempt) and the passphrase minimum, and the user is told the limits.
+      - Device-rotation progress, device link and revocation records for own keys are retained under RET-EVIDENCE and extended while any retained record references a signature by that key, so evidence signed by a rotated key still verifies through its link chain.
     data:
-      - "Wrapped key blob: P4 ciphertext, local only."
-      - "Public key, fingerprint and did:key: P0 once the user publishes them."
+      - "Wrapped key blobs: P4 ciphertext, local only."
+      - "Public keys, derived agreement keys, fingerprint and did:key: P0 once the user publishes the identity document."
     retention:
       - "Wrapped blob: until the user deletes the vault."
-      - "Rotation records: kept in the vault for 1 year (RET-AUDIT equivalent) for dispute evidence."
+      - "Device rotation progress, device link and revocation records: RET-EVIDENCE (2 years after last related activity), extended while any retained statement references a signature by that key."
     threats:
       - "T01 | Stolen device or copied IndexedDB offers offline passphrase guessing | scrypt N=131072 r=8 p=1 about 128 MiB per guess, XChaCha20-Poly1305 authenticated blob, passphrase minimum 12 code points and common-list check; users are told a weak passphrase can still be guessed"
       - "T02 | Malicious or altered web code reads unwrapped keys | strict CSP, subresource integrity and reproducible builds (see F16.S03.M01); keys unwrapped only in a worker module; the API never returns key bytes; the residual risk of malicious code is stated"
@@ -130,6 +149,8 @@ processes:
       - "T04 | Nonce reuse in XChaCha20-Poly1305 | 24-byte random nonces from the CSPRNG, fresh per wrap; unit tests assert uniqueness over 1 000 000 wraps"
       - "T05 | Supply-chain compromise or lack of audit in crypto dependencies | exact version pins @noble/curves 2.4.0 and @noble/ciphers 2.4.0 with lockfile integrity hashes; known-answer tests from RFC 8032, RFC 7748, RFC 7914 and the XChaCha20-Poly1305 specification; noble-ciphers 2.x has no stated third-party audit and argon2 is avoided as unaudited"
       - "T06 | Unlock abuse via shoulder surfing or unattended device | auto-lock 15 minutes, hidden-tab lock, explicit lock button; no biometric shortcut in MVP"
+      - "T07 | A relay that serves identity documents or mailbox hints substitutes its own agreement key to read end-to-end P2 traffic (PRV-5) | agreement keys are derived from Ed25519 device keys listed in the root-signed identity document and raw agreement keys are refused; using one secret for Ed25519 signing and X25519 agreement is an established construction (as in libsodium's Ed25519-to-Curve25519 conversion) recorded as an accepted design choice"
+      - "T08 | Root key exposure through routine signing | the root handle refuses every type outside the four root-only statements, so it is unwrapped only for identity changes"
     abuse_controls:
       - "Local unlock backoff 1 s doubling to 60 s after 3 failures; never wipes keys, so an attacker cannot destroy a victim's key by failed guesses."
       - "Key export requires re-entering the passphrase and is rate limited locally to 5 per hour."
@@ -139,44 +160,47 @@ processes:
       - Unlock completes within 3 s p95 on a desktop-class device and within 8 s p95 on a Moto G-class device, running in a worker so the main thread stays responsive (INP ≤ 200 ms).
       - Sign and agree complete within 5 ms p95 desktop and 25 ms p95 Moto G.
     metrics:
-      - "Local diagnostic counters: unlock_ms, unlock_failures, auto_locks, rotations (vault-local, exportable)."
+      - "Local diagnostic counters: unlock_ms, unlock_failures, auto_locks, device_rotations (vault-local, exportable)."
     logs:
       - "local vault log key.unlocked {durationMs} and key.locked {reason}; never passphrases, keys or blobs."
     budgets:
-      - "unlock p95 ≤ 3 s (desktop) and ≤ 8 s (Moto G profile); sign p95 ≤ 5 ms and ≤ 25 ms; library bundle ≤ 40 KiB gzip."
+      - "unlock p95 ≤ 3 s (desktop) and ≤ 8 s (Moto G profile); sign and agree p95 ≤ 5 ms and ≤ 25 ms; library bundle ≤ 40 KiB gzip."
       - "Main-thread blocking during unlock ≤ 50 ms per task."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Cryptographic primitives are covered by known-answer tests from the standards and by round-trip property tests.
       - Tamper and downgrade attempts are covered by abuse tests.
-    fixtures: "RFC 8032 Ed25519 vectors, RFC 7748 x25519 vectors, RFC 7914 scrypt vectors (reduced N for speed plus one full N=131072 run), XChaCha20-Poly1305 specification vectors, fixed random source for deterministic tests, Moto G CPU throttling profile."
+    fixtures: "RFC 8032 Ed25519 vectors, RFC 7748 X25519 vectors and Ed25519-to-X25519 conversion vectors, RFC 7914 scrypt vectors (reduced N for speed plus one full N=131072 run), XChaCha20-Poly1305 specification vectors, F07.S01.M01 fingerprintOf vectors, stub of identity.device_key.add and revoke, fixed random source for deterministic tests, Moto G CPU throttling profile."
     tests:
-      - "T01 | unit | 01.R01,01.R03,02.R01,04.R01 | create vault and derive principal and thumbprint for a known seed | did:key and key ID match independent vectors"
-      - "T02 | unit | 01.R01,01.R02,09.R02 | known-answer tests for Ed25519, x25519, scrypt and XChaCha20-Poly1305 | all standard vectors pass"
+      - "T01 | unit | 01.R01,01.R03,04.R01,04.R04 | create a vault for a known seed and read the fingerprint | did:key from the root key and key IDs match independent vectors; fingerprint equals F07.S01.M01 fingerprintOf; no key bytes returned"
+      - "T02 | unit | 09.R02 | known-answer tests for Ed25519, X25519, the Ed25519-to-X25519 conversion, scrypt and XChaCha20-Poly1305 | all standard vectors pass"
       - "T03 | property | 01.R02,06.R01 | random keys and passphrases wrapped and unwrapped; random bit flips in blob | round trip exact; any flip fails with SECURITY_UNLOCK_FAILED"
       - "T04 | unit | 02.R02,02.R03 | blob with N=1024; wrong version; missing salt | SECURITY_WRAPPED_KEY_INVALID before any derivation"
       - "T05 | unit | 02.R01 | passphrases of 11 code points, a common entry, and a 12-code-point unique phrase | first two rejected with SECURITY_PASSPHRASE_WEAK; third accepted"
       - "T06 | integration | 03.R01,03.R03 | idle timer, tab hidden, 3 wrong unlocks | auto-lock at 15 min, hidden lock at 5 min, delays 1 s then 2 s then 4 s capped at 60 s, no wipe"
-      - "T07 | integration | 03.R02,04.R03,06.R03 | rotate key, interrupt after generation, resume | both keys valid, rotation pending shown, statement delivered later, old key revoked after overlap"
-      - "T08 | unit | 04.R03 | rotation statement signed only by the new key | SECURITY_ROTATION_INVALID"
+      - "T07 | integration | 03.R02,04.R03,06.R03 | rotate a device key with overlap 7 days, interrupt after generation, resume | new key used only after the root-signed device link is recorded; old key revoked with reason superseded after 7 days; new portable identity document queued; all statements delivered through the outbox"
+      - "T08 | unit | 02.R03,03.R02 | rotation with a missing possession signature; device link not signed by the root handle; overlap of 10 days; old key marked compromised | SECURITY_ROTATION_INVALID three times; immediate revocation with overlap 0 and reason compromised"
       - "T09 | abuse | 04.R02,05.R01,05.R02,07.R01 | application code requests key bytes; sign while locked; call from other origin | no API returns key bytes; SECURITY_VAULT_LOCKED; unreachable cross-origin"
       - "T10 | integration | 05.R03,06.R02 | two tabs unlock concurrently; lock in one tab | one unlock proceeds at a time; other tab locks via BroadcastChannel"
       - "T11 | chaos | 06.R01,06.R03 | IndexedDB write fails during createVault; storage cleared after creation | nothing half-written; clear message about backup and recovery kit"
-      - "T12 | abuse | 07.R02,07.R03 | nonce uniqueness over 1 000 000 wraps; export without passphrase re-entry; 6 exports in an hour | no duplicate nonce; export refused; 6th rate limited locally"
-      - "T13 | load | 08.R02,08.R03 | unlock under Moto G throttling; 1 000 signs | unlock p95 ≤ 8 s with main-thread tasks ≤ 50 ms; sign p95 ≤ 25 ms"
+      - "T12 | abuse | 07.R02,07.R03 | nonce uniqueness over 1 000 000 wraps; export without passphrase re-entry; 6 exports in an hour; vault deletion | no duplicate nonce; export refused; 6th rate limited locally; blob records overwritten and removed"
+      - "T13 | load | 08.R02,08.R03 | unlock under Moto G throttling; 1 000 signs and 1 000 agrees | unlock p95 ≤ 8 s with main-thread tasks ≤ 50 ms; sign and agree p95 ≤ 25 ms"
       - "T14 | unit | 08.R01,09.R01,09.R03 | traceability tool run; telemetry scan of network calls | every PS-128 requirement maps to a passing test; zero network calls from the library"
       - "T15 | integration | 10.R01,10.R02,10.R03 | export backup, import on a fresh browser profile, downgrade attempt | same principal and fingerprint; wrong passphrase fails generically; older client rejects unknown version"
+      - "T16 | abuse | 01.R04,02.R02 | relay-served mailbox hint with a substituted X25519 key for contact C; caller passes a raw agreement key to agree | the hint is ignored and the wrap targets the key derived from C's listed Ed25519 device key; SECURITY_AGREEMENT_KEY_UNBOUND"
+      - "T17 | unit | 01.R02,04.R02 | root handle signs a listing draft; device handle signs a portable identity document and a device link; root handle signs a keyrevocation | SECURITY_KEY_ROLE_FORBIDDEN three times; the keyrevocation is signed"
+      - "T18 | integration | 03.R04,07.R04 | 23 months after a rotation, verify an exported consent signed by the old device key; look for a root rotation entry point | old key, its device link and superseded revocation are retained and the consent verifies through the chain; no root rotation API exists"
     acceptance:
-      - All tests T01–T15 pass in CI with the pinned noble versions and standard known-answer vectors.
-      - Private key bytes are never returned by any API, logged or sent over the network (abuse and network tests).
+      - All tests T01–T18 pass in CI with the pinned noble versions and standard known-answer vectors.
+      - Private key bytes are never returned by any API, logged or sent over the network (abuse and network tests), and agreement keys are only ever derived from listed device keys.
       - Unlock meets 8 s p95 on the Moto G profile without blocking the main thread beyond 50 ms per task.
   import_export_backup_rollback:
     requirements:
-      - The encrypted backup file contains the wrapped blob and public metadata only, uses the same KDF and cipher, and is the user's primary key backup alongside the recovery kit under the user's control.
+      - The encrypted backup file contains the wrapped blobs and public metadata only, uses the same KDF and cipher, and is the user's primary key backup alongside the recovery kit under the user's control.
       - Import decrypts with the passphrase, validates parameters and refuses unknown or downgraded versions.
       - Blob format changes follow versioned parsers, keep v1 readable for 180 days and re-wrap to the newest version only after a successful unlock.
-    export: "Download classrup-key-backup.json containing the v1 wrapped blob (scrypt parameters, salt, nonce, ciphertext, key ID) and the public principal; the passphrase is never included; recovery kit handling stays in F07.S01.M03."
-    import: "Importing a backup on a new device creates a vault with the same key after passphrase verification; if a vault already exists the user must choose to replace it, and the old blob is kept until the new one unlocks successfully."
-    backup: "Vault export (IOX-6) includes the wrapped blob; keys are never uploaded by default; users are warned after 30 days without an export."
+    export: "Download classrup-key-backup.json containing the v1 wrapped blobs (key role, scrypt parameters, salt, nonce, ciphertext, key ID), the public principal and the device rotation records; the passphrase is never included; recovery kit handling stays in F07.S01.M03."
+    import: "Importing a backup on a new device creates a vault with the same keys after passphrase verification; if a vault already exists the user must choose to replace it, and the old blob is kept until the new one unlocks successfully."
+    backup: "Vault export (IOX-6) includes the wrapped blobs; keys are never uploaded by default; users are warned after 30 days without an export."
     migration_rollback: "Raising scrypt cost or switching ciphers adds a new blob version; unlock re-wraps after success and keeps the old blob for 7 days to allow rollback; older clients refuse unknown versions rather than guess."

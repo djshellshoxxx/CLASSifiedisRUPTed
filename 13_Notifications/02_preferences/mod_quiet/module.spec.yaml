@@ -25,7 +25,7 @@ non_responsibilities:
   - Block filtering, which F13.S01.M03 applies through F07.S02.M02 before any decision reaches this gate; relay hooks carry no counterparty data and the service worker routes wake-ups through F13.S01.M03.
   - Do-not-disturb of the operating system; the gate cannot override device-level focus modes.
   - "Future: per-category quiet windows, adaptive digest timing, delivery-time optimization."
-depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F08.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
 user_stories:
   - As a member, I do not get a push at 03:00 about a new offer and I see a single summary when my quiet hours end.
   - As a member, I still get a push on my other devices when a new device key is added to my account at 03:00.
@@ -329,7 +329,7 @@ processes:
       - "T05 | contract | 04.R01,04.R02,09.R02 | dispatch in all three modes, release, cancel and list_deferred execute | outputs and event payloads validate against registry schemas; events carry no template key, reference or collapse key"
       - "T06 | integration | 04.R03,03.R03 | vault-local quiet_hours.changed, channel.opted_out, preference.changed and notification.read; relay-local quiet_hours.changed, opted_out and preference.changed from the mirror and registration commands | items recomputed, released with reason schedule_changed, dropped or cancelled with documented reasons in each environment"
       - "T07 | integration | 01.R03,02.R02,06.R03 | urgent security alert at 03:00 with push consent; urgent offers alert; urgent security with no consent; relay with no preference mirror for a hook | first sent immediately; second downgraded to normal, counted and deferred; third not pushed; hook decided by the default matrix"
-      - "T08 | abuse | 05.R01,05.R02,05.R03 | dispatch and cancel signed by a valid device key of user W for user U; unsigned dispatch; replay of a hook call; operator reads relay deferred records | FORBIDDEN exactly for W's key; UNAUTHENTICATED for the unsigned request; one send for the replay; records hold no readable content"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | dispatch and cancel signed by a valid device key of user W for user U; replay of a hook call; operator reads relay deferred records | both W requests return exactly FORBIDDEN and nothing about U is revealed; one send for the replay; records hold no readable content"
       - "T09 | integration | 06.R01,06.R02 | same sealed dispatch retried 5 times with one dispatchId; crash after send before status update | one send, or one repeated send collapsed by Topic and Message-ID"
       - "T10 | chaos | 06.R03 | preference store unavailable during a vault decision | re-deferred 5 minutes, dropped after 3 attempts; inbox entry unaffected"
       - "T11 | abuse | 07.R01,07.R02,07.R03 | 121st dispatch in an hour; inspect deferred records and logs | RATE_LIMITED; no content or schedule in records"

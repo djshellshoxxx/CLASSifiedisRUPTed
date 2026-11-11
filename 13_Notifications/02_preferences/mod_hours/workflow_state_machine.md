@@ -8,11 +8,11 @@
 
 - **PS-105-03.R01** The schedule is a settings record without lifecycle states; it is replaced as a whole on each save with an incremented revision.
 - **PS-105-03.R02** Enabled and disabled are a flag, not a state machine, and disabling never deletes the windows.
-- **PS-105-03.R03** Mirror progress to each relay moves forward through local committed, prepared, transport acknowledged and peer accepted and the UI shows only the reached stage.
+- **PS-105-03.R03** Mirror progress to each relay moves through local committed, prepared, transport acknowledged (HTTP 2xx) and peer accepted (relay acceptance signature over this statement's cid as the applied head), and a stale, forked or superseded statement never shows peer accepted.
 
 ## Specification
 
-**Note:** Settings record with no lifecycle states; enabled is a boolean flag and mirror progress is tracked by the sync outbox (CTR-IDM-001 IDM-7).
+**Note:** Settings record with no lifecycle states; enabled is a boolean flag and mirror progress per relay is tracked by the F15.S01.M01 sync outbox (CTR-IDM-001 IDM-7) and mirrorStates, where stale and conflict are outcomes below transport_acknowledged.
 
 ### Timeouts and scheduled transitions
 
@@ -22,10 +22,10 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-105-09.T06 | property | PS-105-02.R02, PS-105-03.R01 | random instants 2020 to 2100 for 12 zones and random valid schedules | isQuiet equals reference; quietEndsAt is the first instant where isQuiet is false; never throws |
-| TEST-PS-105-09.T08 | integration | PS-105-04.R03, PS-105-03.R02 | channel opted in and opted out events delivered | schedule mirrored to the consenting relay and deletion requested when consent ends |
-| TEST-PS-105-09.T10 | integration | PS-105-06.R01, PS-105-06.R02, PS-105-06.R03, PS-105-03.R03 | replay seq 3 after seq 5; relay down during save | stale ignored; local evaluation unaffected; sync states advance prepared to transport acknowledged to peer accepted |
+| TEST-PS-105-09.T06 | property | PS-105-02.R02, PS-105-03.R01, PS-105-09.R03 | random instants 2020 to 2100 for 12 zones and random valid schedules | isQuiet equals reference; quietEndsAt equals nextQuietEnd and is the first instant where isQuiet is false; never throws |
+| TEST-PS-105-09.T08 | integration | PS-105-04.R03, PS-105-03.R02 | vault-local opted_in and opted_out; relay-local opted_out for the last consent at R; security.key.revoked for the effective device key | mirror queued after the registration; relay rows deleted at once and relay-local changed emitted; revoked chain no longer effective |
+| TEST-PS-105-09.T10 | integration | PS-105-06.R01, PS-105-06.R02, PS-105-06.R03, PS-105-03.R03 | replay seq 3 after seq 5 on one chain; devices A and B each sign seq 1; a restored vault signs seq 5 again with another cid; relay down during save | stale outcome without peer_accepted; latest accepted of A and B is effective and the other device shows which device's schedule applies; fork refused CONFLICT_STATE with currentCid; local evaluation unaffected; sync states advance prepared to transport_acknowledged to peer_accepted only for applied |
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

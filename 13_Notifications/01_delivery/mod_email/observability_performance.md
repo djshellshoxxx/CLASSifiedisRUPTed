@@ -13,13 +13,14 @@
 ## Specification
 
 **Metrics**
-- classrup_notify_email_deliveries_total{status=sent|settled|bounced|failed}
+- classrup_notify_email_deliveries_total{status=sent|settled|bounced|failed|cancelled}
 - classrup_notify_email_bounce_ratio (gauge, alert > 0.05 over 1 h)
 - classrup_notify_email_queue_depth (gauge)
 - classrup_notify_email_verify_total{outcome=ok|expired|invalid}
+- classrup_notify_email_reports_rejected_total{source} (alert on spikes)
 
 **Logs**
-- info email.sent {deliveryIdHash, templateKey, correlationId} — no address, no subject beyond key.
+- info email.sent {deliveryIdHash, kind, correlationId} — no address, no subject beyond the template key.
 
 **Budgets**
 - submission p95 ≤ 500 ms; add/verify/remove p95 ≤ 300 ms at 20 req/s.
@@ -35,4 +36,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -9,40 +9,47 @@
 - **PS-104-09.R01** Every requirement of this module is covered by at least one automated test.
 - **PS-104-09.R02** Protocol tests use a fake push service that decrypts RFC 8291 messages and validates RFC 8030 and RFC 8292 headers.
 - **PS-104-09.R03** Contract tests check commands, events and payload shape against the schema registry.
+- **PS-104-09.R04** The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues and a keyboard and screen-reader walk-through.
 
 ## Specification
 
 See the module test table below (all processes).
 
-**Fixtures:** Relay R with VAPID key vapid-2026-11, fake push service P accepting aes128gcm, user U with granted push consent, browser key pairs generated from fixed seeds, fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Relay R with VAPID key vapid-2026-11 in a test RelayKeyStorePort, fake push service P on an allowlisted test origin accepting aes128gcm, fake DNS resolver, F16.S02.M02 registry double with active and revoked device keys, users U1 and U2 with registered push consent, browser key pairs from fixed seeds, fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-104-09.T01 | unit | PS-104-01.R01, PS-104-01.R02, PS-104-01.R03, PS-104-02.R01, PS-104-02.R02 | subscribe with valid and malformed endpoint and keys | valid stored encrypted; invalid refused VALIDATION_FAILED; secrets absent from queries |
-| TEST-PS-104-09.T02 | unit | PS-104-02.R03, PS-104-02.R01 | each rule V01 to V08 violated in turn including private-IP endpoint and 11th subscription | documented error code returned and nothing stored |
-| TEST-PS-104-09.T03 | contract | PS-104-01.R03, PS-104-04.R01, PS-104-09.R02 | send a normal offers alert | fake push service decrypts payload with only keys v, ref, tpl, ck, urg; headers TTL 86400, Urgency normal, Topic, Content-Encoding aes128gcm; VAPID JWT valid ES256 with exp ≤ 12 h |
-| TEST-PS-104-09.T04 | property | PS-104-03.R01, PS-104-03.R02, PS-104-03.R03 | random sequences of subscribe, send outcomes (201, 404, 410, 429, 500), unsubscribe, consent withdrawal | expired and revoked never change; 410 expires at once; 5 failures over 24 h expire |
-| TEST-PS-104-09.T05 | integration | PS-104-04.R02, PS-104-06.R02 | push service returns 429 with Retry-After 120 then 201 | one retry after 120 s, one notify.push.sent event, attempts recorded |
-| TEST-PS-104-09.T06 | integration | PS-104-04.R03, PS-104-03.R03 | channel opted out and VAPID key revoked events delivered | subscriptions revoked or expired and secrets erased |
-| TEST-PS-104-09.T07 | abuse | PS-104-05.R01, PS-104-05.R02, PS-104-05.R03 | send called by external client; subscribe signed by unknown key; list by another user; inspect key store | refused; no private key or endpoint exposed |
-| TEST-PS-104-09.T08 | integration | PS-104-06.R01, PS-104-06.R03 | subscribe twice with same endpoint, send to user with 3 subscriptions where one returns 410 | one subscription; others delivered; failure isolated |
+| TEST-PS-104-09.T01 | unit | PS-104-01.R01, PS-104-01.R02, PS-104-02.R01 | subscribe with valid and malformed sealed bodies | valid stored with secret encrypted and pushOrigin set; malformed refused VALIDATION_FAILED; secrets absent from every query |
+| TEST-PS-104-09.T02 | unit | PS-104-02.R03, PS-104-02.R01 | each rule V01 to V10 violated in turn including an off-allowlist origin, private-IP endpoint and 11th subscription | documented error code returned and nothing stored or sent |
+| TEST-PS-104-09.T03 | contract | PS-104-01.R03, PS-104-02.R02, PS-104-04.R01, PS-104-09.R02, PS-104-09.R03 | send a sealed, a hook and a digest payload; run every command, query and event of this module | fake push service decrypts exactly the keys of each form; headers TTL, Urgency, Topic and Content-Encoding aes128gcm; VAPID JWT valid ES256 with exp ≤ 12 h; inputs, outputs and event payloads validate against the schema registry entries |
+| TEST-PS-104-09.T04 | property | PS-104-03.R01, PS-104-03.R02 | random sequences of subscribe, send outcomes (201, 401, 403, 404, 410, 429, 500) and unsubscribe | expired and revoked never change; 410 expires at once; 5 failures over 24 h expire; 401 and 403 affect only that subscription |
+| TEST-PS-104-09.T05 | integration | PS-104-04.R02, PS-104-06.R02 | push service returns 429 with Retry-After 120 then 201 | one retry after 120 s, one notify.push.sent with form and no tpl for sealed, attempts recorded |
+| TEST-PS-104-09.T06 | integration | PS-104-04.R03, PS-104-03.R03, PS-104-01.R02 | relay-local notify.channel.opted_out for push and security.key.revoked for the VAPID key delivered to the relay instance; vault-local opted_out to the vault instance | relay subscriptions revoked or expired with secrets erased in the same transaction; vault target disabled and PushManager.unsubscribe called |
+| TEST-PS-104-09.T07 | abuse | PS-104-05.R01, PS-104-05.R02, PS-104-05.R03 | send called by an external client; subscribe signed by an unknown key; list by another user; inspect the relay database and key store | refused or NOT_FOUND; no private key or endpoint exposed; VAPID private key only in RelayKeyStorePort |
+| TEST-PS-104-09.T08 | integration | PS-104-06.R01, PS-104-06.R03 | subscribe twice with the same endpoint; send to a user with 3 subscriptions where one returns 410 | one subscription; others delivered; failure isolated |
 | TEST-PS-104-09.T09 | chaos | PS-104-06.R03 | relay restart mid-send | unfinished attempts retried once; no duplicate beyond Topic collapse |
-| TEST-PS-104-09.T10 | abuse | PS-104-07.R01, PS-104-07.R02, PS-104-07.R03 | inspect database, logs, events and metrics; SSRF endpoint attempts to 169.254.169.254 and redirects | no endpoint or payload outside encrypted storage; SSRF blocked |
-| TEST-PS-104-09.T11 | abuse | PS-104-07.R03, PS-104-06.R02 | VAPID rejected 401 | operator alert raised, no subscription expired, sends paused 15 minutes |
-| TEST-PS-104-09.T12 | load | PS-104-08.R01, PS-104-08.R02, PS-104-08.R03 | 200 pushes per second for 5 minutes to fake service | p95 ≤ 500 ms, metrics exported, alert rule fires on injected VAPID rejection |
-| TEST-PS-104-09.T13 | unit | PS-104-09.R01, PS-104-09.R03 | traceability tool run | every PS-104 requirement maps to a passing test |
-| TEST-PS-104-09.T14 | integration | PS-104-10.R01, PS-104-10.R02, PS-104-10.R03 | export from vault, restore relay from backup, rotate VAPID key | export has no endpoints; restored subscriptions are re-verified or expired; rotation expires old-key subscriptions |
-| TEST-PS-104-09.T15 | a11y | PS-104-04.R01 | push settings and permission explainer with screen reader and keyboard | controls labelled, states announced, zero serious axe issues |
+| TEST-PS-104-09.T10 | abuse | PS-104-07.R01, PS-104-07.R02, PS-104-07.R03, PS-104-07.R04 | inspect database, logs, events and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection |
+| TEST-PS-104-09.T11 | abuse | PS-104-06.R04, PS-104-07.R04 | an attacker endpoint returns 401 to every send; then subscriptions of 5 distinct users on one allowlisted origin return 403 within 5 minutes | first case only the attacker's subscription accrues failures and others keep sending; second case operator alert and a 15-minute pause for that origin only |
+| TEST-PS-104-09.T12 | load | PS-104-08.R01, PS-104-08.R02, PS-104-08.R03 | 200 pushes per second for 5 minutes to the fake service with an injected multi-user rejection | p95 ≤ 500 ms, metrics exported, origin pause alert fires |
+| TEST-PS-104-09.T13 | unit | PS-104-09.R01 | traceability tool run | every PS-104 requirement maps to a passing test |
+| TEST-PS-104-09.T14 | integration | PS-104-10.R01, PS-104-10.R02, PS-104-10.R03 | export from the vault, restore the relay from backup, vault import into a fresh device, scheduled VAPID rotation | export has push targets without endpoints; restored subscriptions are probed or expired; import rebuilds the relay copy only after confirmation; old-key subscriptions keep working 30 days then expire |
+| TEST-PS-104-09.T15 | a11y | PS-104-09.R04 | push settings, permission explainer and re-enable banner with screen reader and keyboard | controls labelled with the device name, explainer read before the prompt, result announced, zero serious axe issues |
+| TEST-PS-104-09.T16 | contract | PS-104-02.R04, PS-104-07.R01 | property over 10 000 collapse tags of 1..64 valid characters and two users with the same tag | every Topic matches ^[A-Za-z0-9_-]{1,32}$; the two users' Topics differ; no Topic equals or contains the tag |
+| TEST-PS-104-09.T17 | abuse | PS-104-05.R04, PS-104-03.R03 | device key K is revoked in F16.S02.M02; K then signs subscribe, list and unsubscribe; a request signed before revocationEffectiveFrom arrives late | the subscription created by K is revoked; every later request refused UNAUTHENTICATED; the late pre-revocation request is refused because the key is no longer active |
+| TEST-PS-104-09.T18 | unit | PS-104-01.R04, PS-104-03.R04, PS-104-04.R04 | enable, disable and expiry discovered by list_mine in the vault; inspect the push target record and the outgoing request | target moves pending, active, then disabled or expired; record holds no endpoint or keys; subscribe body is sealed and the request carries no device label |
+| TEST-PS-104-09.T19 | integration | PS-104-01.R05, PS-104-04.R05, PS-104-05.R03 | operator rotates the VAPID key; DeletionPort plan and purge, export section and retention purge with F10 registry doubles | new key registered with purpose vapid in F16.S02.M02; private key never leaves RelayKeyStorePort; purge removes targets and calls PushManager.unsubscribe; section notify.push exported; targets purged 30 days after endedAt |
+| TEST-PS-104-09.T21 | e2e | PS-104-07.R02, PS-104-07.R03 | open the permission explainer and the push settings before and after enabling | text names the relay that receives the endpoint, says the push service sees only an opaque topic and can link the endpoint to the browser vendor, and that the relay links the pseudonym to the endpoint |
+| TEST-PS-104-09.T20 | contract | PS-104-04.R05, PS-104-02.R01 | enable with privacy.consent.check returning not granted, and with the channel consent not yet registered; 11th subscribe call in a day | PRECONDITION_FAILED before any browser prompt; RATE_LIMITED from RateLimitPort |
 
 ## Acceptance criteria
 
-- All tests T01 to T15 pass in CI.
-- Decrypted push payloads in tests contain only the keys v, ref, tpl, ck and urg and never text, names or amounts.
-- Endpoints and keys never appear in logs, events, exports or query results.
-- VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests.
+- All tests T01 to T21 pass in CI.
+- Decrypted push payloads in tests contain only the keys of the sealed, hook or digest form and never text, names or amounts, and sealed boxes open only on the target device.
+- Endpoints, keys and topic keys never appear in logs, events, exports or query results, and the vault record never holds them.
+- VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests, and the VAPID private key exists only in RelayKeyStorePort.
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, F16.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

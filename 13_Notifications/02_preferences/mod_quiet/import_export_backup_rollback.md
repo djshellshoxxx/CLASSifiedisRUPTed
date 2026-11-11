@@ -7,14 +7,14 @@
 ## Requirements
 
 - **PS-108-10.R01** Deferred records are operational and short-lived, so a user's vault export contains no deferred items, only the counts since the last export in diagnostics.
-- **PS-108-10.R02** Relay restore from backup drops deferred records older than 24 hours and rechecks consent before any release.
+- **PS-108-10.R02** Relay restore from backup drops deferred records older than 24 hours and rechecks the registered consent before any release.
 - **PS-108-10.R03** Schema changes follow expand and contract; new channels or categories are additive and ignored by older relays.
 
 ## Specification
 
-- **export:** No section for deferred items; the vault diagnostics export includes counts per category and channel (schema classrup.notify.deferred/v1 counts only).
+- **export:** Section notify.deferred in classrup-export/v1 through ExportSectionPort with counts per category and channel only (schema classrup.notify.deferred/v1 counts projection).
 - **import:** Nothing is imported; deferred state is rebuilt from new events.
-- **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) may contain deferred rows; on restore all rows older than 24 h are dropped and consent is rechecked before release.
+- **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) may contain deferred relay rows; on restore all rows older than 24 h are dropped and consent is rechecked before release.
 - **migration rollback:** Additive fields only in v1; rollback is safe because deferred rows live at most 24 hours and unknown fields are ignored.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F08.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -281,9 +281,10 @@ processes:
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup, and import with newer tzdata | schedule round trips; unknown time zone rejected with the user prompted"
       - "T15 | a11y | 09.R04 | settings screen with screen reader and keyboard | inputs labelled, currently quiet announced, relay note read, zero serious axe issues"
       - "T16 | property | 01.R04 | every zone of the pinned tzdata mapped to its canonical zone; random schedules and instants 2020 to 2100 | isQuiet identical for the zone and its canonical zone; Europe/Busingen maps to Europe/Zurich and America/Indiana/Tell_City to America/Chicago; every canonical class covers at least an L1 cell"
+      - "T18 | e2e | 01.R02,07.R01,07.R02 | open the quiet hours screen with Europe/Busingen selected and a relay with push consent | the relay note names Europe/Zurich as the region the relay learns and states that the windows are sent; no location permission is requested"
       - "T17 | integration | 04.R04,04.R05 | registry lookup of classrup.notify.quiet_hours_mirror/v1; DeletionPort plan and purge, export section and retention purge with F10 doubles | signer role principal and audience relayId present; purge removes the schedule; section notify.quiet_hours exported"
     acceptance:
-      - All tests T01 to T17 pass in CI.
+      - All tests T01 to T18 pass in CI.
       - Golden DST fixtures for the six listed transitions produce the documented durations in the vault and on the relay with identical results.
       - No notification payload or event contains the schedule, and no mirror carries a non-canonical zone.
   import_export_backup_rollback:

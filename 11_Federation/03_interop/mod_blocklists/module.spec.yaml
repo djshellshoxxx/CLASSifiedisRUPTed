@@ -202,7 +202,7 @@ processes:
     events_consumed:
       - {type: identity.block.added, effect: "when the blocked party has a did:key, create or keep a personal_block author rule with action hide (created -> active) so federated content from that author is hidden reversibly"}
       - {type: identity.block.removed, effect: "remove the matching personal_block hide rule; F11.S01.M02 then returns the hidden records to accepted"}
-      - {type: privacy.deletion.completed, effect: "vault: delete the deleted principal's remaining local and personal_block rules after its DeletionPort plan ran (N6)"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): the deleted principal's local and personal_block rules were already deleted in this module's DeletionPort purge step, so nothing is deleted, pseudonymized, signed or sent to a relay here"}
     errors:
       - "FEDERATION_BLOCK_DUPLICATE | 409 | no | an active or pending rule with this type and value exists"
       - "FEDERATION_BLOCK_SELF | 422 | no | a peer rule cannot target this relay"
@@ -243,7 +243,7 @@ processes:
       - A person's block list is P3 and never leaves the vault except when the person publishes a selected list deliberately.
       - Rejections caused by block rules return one generic code so senders cannot probe which rules exist.
       - Imported lists are advisory and bounded; they can never silence a person on a relay without that relay's operator review.
-      - The module registers the N6 ports (ExportSectionPort for the owner's rules, DeletionPort, RetentionPurgePort for removed rules after 30 days) and classifies fields with F10.S02.M02.
+      - The module registers the N6 ports (ExportSectionPort for the owner's rules, DeletionPort whose purge step deletes the principal's local and personal_block rules and which retains nothing to pseudonymize, RetentionPurgePort for removed rules after 30 days) and classifies fields with F10.S02.M02; privacy.deletion.completed is a notification only (N6a).
     data:
       - "BlockRule: P3 (value, reason, note)."
       - "Published blocklist statement: P0 once the owner publishes it."
@@ -301,7 +301,7 @@ processes:
       - "T16 | integration | 10.R01,10.R02,10.R03 | export rules, import into fresh vault | rules round trip as written; imported-source rules return to pending_review"
       - "T17 | unit | 01.R04,02.R01 | content_hash rules in sha256- and blob:sha256- form; envelope whose payload hash is H1 and that references blob B1; malformed blob value | both forms validate and match the contentHashes computed by F11.S01.M02; the malformed value VALIDATION_FAILED"
       - "T18 | integration | 02.R04 | reject author and cid rules on Bad plus a reject peer rule on P; tombstone, move and move_cancel from Bad via peer B and via peer P | via B evaluate returns allow with bypassed true; via P refused by the peer rule"
-      - "T19 | unit | 07.R01,07.R04,01.R02 | export, deletion and retention ports called by F10; log capture; privacy.deletion.completed | rules only in the owner's personal section; deletion plan and purge counts returned; author values absent from logs; rules deleted after completion"
+      - "T19 | unit | 07.R01,07.R04,01.R02 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize); log capture; privacy.deletion.completed delivered alone | rules only in the owner's personal section; deletion plan and purge counts returned; the purge step deletes the principal's local and personal_block rules and pseudonymize returns count 0; author values absent from logs; privacy.deletion.completed changes no rule"
     acceptance:
       - All tests T01–T19 pass in CI.
       - Block rules are evaluated before any record is stored (integration test with storage spy), and hide rules never purge.

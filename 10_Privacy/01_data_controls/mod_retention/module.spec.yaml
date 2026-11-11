@@ -19,10 +19,12 @@ responsibilities:
   - Enforce RET-SIGNAL (CTR-PRV-001 PRV-8) - purge each signal record at its expiresAt and never later than 365 days after creation, after its module folded it into a counts-only rollup, and purge the rollup 365 days later.
   - Discover RetentionPurgePort registrations through the kernel port registry at vault and relay composition (inverted registration), so modules that cannot list this module in depends_on without closing a cycle, such as F15.S01.M01 and F15.S04.M03, register their kinds without a depends_on edge.
   - Carry the held subject (subjectKind and subjectRef) in privacy.legal_hold.placed and privacy.legal_hold.released so relay-side holders of that subject react without scanning every record.
+  - Refresh jurisdiction rows by ProfileRef {publisherId, code} from governance.jurisdiction_profile.activated in the vault (scope vault) and on the relay (scope relay), falling back to the bundled generic profile for a missing or unknown ref, and apply a Looser value only to records created at or after its looserFrom.
+  - Accept RetentionPurgePort kinds with a fixed anchor offset and a class cap, and kinds registered only at relay composition, such as governance.transparency_counter of F18.S02.M02 (RET-AUDIT, publishedAt + 90 days).
 non_responsibilities:
   - Account and data deletion flows, grace period and crypto-shred (F10.S01.M04); its relay command asks this module whether a relay-held subject is under hold and calls the relay purge path.
   - Export (F10.S01.M03) and consent (F10.S01.M01).
-  - Jurisdiction profiles content (F18.S01.M01), which this module reads for overrides.
+  - Jurisdiction profile content, selection, upgrade confirmation and the Stricter or Looser merge table (F18.S01.M01), which this module reads by ProfileRef through governance.jurisdiction_profile.resolve and get.
   - Key-linkage data (F07 identity, N11), read through a KeyLinkagePort supplied by the relay composition.
   - "Future: automated legal-request intake, notice templates for affected users, and hold reporting to regulators; MVP leaves these to relay operators."
 depends_on: [F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001]
@@ -46,9 +48,14 @@ edge_cases:
   - The device clock jumps forward by 3 days, by the user or by malware, or runs more than 24 h ahead of the latest relay-signed receipt time; the sweep runs as a dry run and purges RET-SHORT, RET-STANDARD and RET-EVIDENCE records only after the user confirms the preview.
   - A RET-SIGNAL record carries an expiresAt 400 days after its createdAt; the sweep treats createdAt plus 365 days as its end, folds it into the counts-only rollup and purges it at that cap, and the CI conformance check fails the schema that allowed the longer expiry.
   - A legal hold on an author is placed on a relay; privacy.legal_hold.placed names subjectKind author and the author's did as subjectRef, and the relay's evidence holder flags exactly that author's snapshots instead of re-checking every record.
+  - A selected profile's new version shortens evidenceDays from 1825 to 730; governance.jurisdiction_profile.activated with change upgrade_pending leaves every row unchanged, and only after the owner confirms (change upgraded) does the EVIDENCE row become 730 days with priorDurationDays 1825, so records created before looserFrom are still kept 1825 days.
+  - A publisher backdates effectiveFrom by a year to reach existing records; looserFrom is the later of effectiveFrom and the local time the version came into use in this scope, so no record created before the owner's confirmation or the relay upload loses retention.
+  - A retention row or a relay tenant names a ProfileRef that this scope does not know, or none at all; the refresh resolves the bundled generic profile and writes the CTR-PRV-001 defaults with fallback recorded, while a malformed code such as "EU DE" is refused with VALIDATION_FAILED.
+  - A resolved profile sets evidenceDays 180 or auditDays 90, which are inside the F18.S01.M01 ranges but below this module's class bounds; the refresh clamps them to 365 and 180 days and logs the clamp.
+  - TransparencyCounter rows of a period whose report is not yet published have no publishedAt; they are never purged by the 90-day offset and are purged only when their createdField passes the effective RET-AUDIT duration of the relay scope.
 ux:
   screens:
-    - "Vault data retention screen: table of classes with duration, source and next sweep time; edit control for classes the user may shorten; last run summary with counts; clock-jump dialog showing the dry-run preview with Confirm purge and Not now."
+    - "Vault data retention screen: table of classes with duration, source (for jurisdiction rows the profile name, ProfileRef and version, and a pending Looser upgrade when one waits for confirmation) and next sweep time; edit control for classes the user may shorten; last run summary with counts; clock-jump dialog showing the dry-run preview with Confirm purge and Not now."
     - "Relay operator console: policy editor with bounds, run history, and Legal holds list with Request, Approve, Reject and Release request actions (release decisions approve or decline), showing requester, approver, their roles and the review due date."
   states: [loading, default-policy, overridden, sweeping, clock-jump-confirm, hold-requested, hold-active, hold-release-requested, error]
   a11y:
@@ -63,6 +70,7 @@ processes:
       - Vault-scope policy rows are P3 (owner only) and relay-scope policy rows are P0 (the relay's published policy); holds are P3 operator records retained as RET-AUDIT for 1 year after release.
       - Run records hold counts per kind and class plus startedAt; the latest startedAt of a committed vault run is the high-water clock, and the latest relay-signed receipt time the vault has seen is kept beside it for clock-jump detection.
       - RET-SIGNAL (CTR-PRV-001 PRV-8) is expiry-bounded - a signal record is kept until its own expiresAt and never longer than 365 days after its createdAt, is then folded into a counts-only rollup that holds no identifiers, and the rollup is kept 365 days; its policy row sets only the rollup duration, fixed at 365 days, and the defaults row exists in every vault and relay scope for F12.S03.M02 Signal records.
+      - A jurisdiction-source row names its profile by the ProfileRef {publisherId, code} of F18.S01.M01 that supplied the class value, with the version resolved at the last refresh, never by a bare jurisdiction code; a missing or unknown ref resolves to the bundled generic profile, and a row whose value became Looser keeps priorDurationDays and looserFrom so that records created before looserFrom keep the stricter retention.
     entities:
       - name: RetentionPolicy
         schema: classrup.privacy.retention_policy/v1
@@ -76,11 +84,16 @@ processes:
           - "class: enum — RET-EPHEMERAL | RET-SHORT | RET-STANDARD | RET-EVIDENCE | RET-AUDIT | RET-SIGNAL"
           - "durationDays: int — within bounds: EPHEMERAL 1 fixed, SHORT 7..90, STANDARD purge delay 7..90, EVIDENCE 365..3650, AUDIT 180..2555, SIGNAL 365 fixed (rollup retention; the signal record itself ends at its expiresAt, capped at createdAt + 365 days)"
           - "source: enum — default | jurisdiction | user | relay_operator"
-          - "jurisdictionCode?: string — profile code from F18.S01.M01, e.g. DE or US-CA"
+          - "profileRef?: object — ProfileRef {publisherId: did:key, code: ^[a-z0-9_-]{2,40}$} of F18.S01.M01 that supplied the value of a jurisdiction row (from the sources of governance.jurisdiction_profile.resolve); absent or unknown resolves to the bundled generic profile"
+          - "profileVersion?: int — version of the supplying ProfileRef at the last refresh"
+          - "fallback?: boolean — true when resolve used the bundled generic profile"
+          - "priorDurationDays?: int — duration in force before the last Looser change; records created before looserFrom keep the stricter of priorDurationDays and durationDays"
+          - "looserFrom?: timestamp — max(effectiveFrom claimed by the profile version, local time the version came into use in this scope); a Looser value applies only to records created at or after it"
           - "effectiveFrom: timestamp — RFC 3339 UTC"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
           - Unique per (scopeKind, scopeId, class).
+          - A Looser change by the F18.S01.M01 merge table (EVIDENCE or AUDIT shorter, STANDARD purge delay longer) sets looserFrom and sets priorDurationDays to the replaced durationDays, or to the stricter of it and an earlier priorDurationDays; a Stricter change updates durationDays for every record at once and keeps any earlier priorDurationDays and looserFrom.
           - durationDays is inside the bounds of its class; RET-LEGAL-HOLD cannot be configured as a policy.
           - Defaults are EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365, SIGNAL 365 (rollup).
           - Neither a user, a relay operator nor a jurisdiction profile changes RET-SIGNAL; its record cap of 365 days after createdAt and its 365-day rollup are fixed by PRV-8.
@@ -129,10 +142,12 @@ processes:
       - Sweeps validate that every record kind has a registered purge port and that anchor times are not in the future.
       - A vault sweep that finds the clock more than 24 h ahead of its high-water clock, or more than 24 h ahead of the latest relay-signed receipt time, runs as a dry run and purges RET-SHORT, RET-STANDARD or RET-EVIDENCE records only after the user confirms.
       - A RET-SIGNAL kind is accepted only with an expiresAt anchor, a createdAt field and a registered counts-only rollup kind, and its records are purged at expiresAt or at createdAt plus 365 days, whichever comes first.
+      - A ProfileRef is validated for shape only; a well-formed ref that is missing or unknown resolves to the bundled generic profile, and resolved values are clamped into this module's class bounds before they become rows.
+      - A RetentionPurgePort kind may declare a fixed anchorOffsetDays together with a createdField, as F18.S02.M02 does for TransparencyCounter (RET-AUDIT, anchorField publishedAt, 90 days), only when the offset does not exceed the effective class duration and the kind holds no did, device key or free text, and the class duration counted from createdField stays a hard cap.
     rules:
       - "V01 | durationDays is inside the bounds of the class | VALIDATION_FAILED"
       - "V02 | user override in a vault only shortens SHORT, STANDARD or EVIDENCE within bounds and never changes AUDIT | FORBIDDEN"
-      - "V03 | jurisdictionCode refers to a profile known to F18.S01.M01 | VALIDATION_FAILED"
+      - "V03 | profileRef, when given, is {publisherId: did:key, code matching ^[a-z0-9_-]{2,40}$}; a well-formed ref that is missing or unknown in this scope is not an error and resolves to the bundled generic profile of F18.S01.M01 with fallback true | VALIDATION_FAILED"
       - "V04 | hold requester holds the operator or admin role on the relay | FORBIDDEN"
       - "V05 | hold approver (and releaser) differs from the requester (and release requester) | PRIVACY_HOLD_SELF_APPROVAL"
       - "V06 | hold approved before approvalDeadline | EXPIRED"
@@ -146,6 +161,8 @@ processes:
       - "V14 | every registered RetentionPurgePort kind declares a class and an anchorField that exists in its schema and is classified by F10.S02.M02 | VALIDATION_FAILED"
       - "V15 | a RET-SIGNAL record kind declares anchorField expiresAt, createdField createdAt and a rollupKind registered with rollup true; its schema caps expiresAt at createdAt + 365 days; a rollup kind holds only counts per period and kind, no did, key, cid or free text | VALIDATION_FAILED"
       - "V16 | privacy.retention_policy.set never changes RET-SIGNAL in any scope or source, including jurisdiction overrides | FORBIDDEN"
+      - "V17 | a jurisdiction refresh clamps resolved evidenceDays, standardPurgeDays and auditDays into the class bounds of V01 (EVIDENCE 365..3650, STANDARD 7..90, AUDIT 180..2555), and a Looser value is applied only to records whose createdField is at or after looserFrom; a kind without a createdField is swept as if every row were created before looserFrom | VALIDATION_FAILED"
+      - "V18 | a kind declaring anchorOffsetDays (1..365) also declares a createdField, its anchorOffsetDays is at most the effective duration of its class in every scope that registers it, and its schema has no did, device key or free-text field classified by F10.S02.M02 | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Legal holds follow the declared machine and every activation and release needs two different, unlinked operators of whom at least one is a relay admin.
@@ -174,10 +191,12 @@ processes:
       - On a relay, purges of an author's data start only from a verified deletion statement applied through privacy.deletion.relay_apply (F10.S01.M04), which calls privacy.legal_hold.check and purgeSubject, or from federation.tombstone.applied; vault-local events such as privacy.deletion.completed never reach a relay.
       - privacy.legal_hold.placed and privacy.legal_hold.released carry the hold subject as subjectKind and subjectRef, stay relay-local P3 events for relay-system handlers (for example F12.S01.M02 evidence and F12.S03.M02 signals), and never reach a vault or a federation sink.
       - RetentionPurgePort kinds are discovered through the kernel port registry at vault and relay composition; modules that list this module in depends_on (F07.S01.M01, the F11 federation modules for records, tombstones, conflicts, peers, block rules, migrations and routes, and F12.S03.M02 for signals and their rollup) and modules that cannot without closing a cycle (F15.S01.M01 platform.outbox_entry and F15.S04.M03 platform.local_settings, by inverted registration) register the same way, and one kind name registered by two modules fails composition.
+      - governance.jurisdiction_profile.activated is consumed in the vault for scope vault and on the relay for scope relay - changes released, retired, selected, deselected and upgraded refresh that scope's jurisdiction rows from governance.jurisdiction_profile.resolve by ProfileRef, upgrade_pending changes no row, and a Looser value applies only to records created at or after the later of the profile's effectiveFrom and the time the version came into use.
+      - F18.S02.M02 registers the relay-scope kind governance.transparency_counter (class RET-AUDIT, anchorField publishedAt, anchorOffsetDays 90, capped by the effective RET-AUDIT duration from its createdField) through its depends_on edge at relay composition only, and F18.S01.M01 and F18.S02.M01 register their kinds at vault composition by inverted registration because each sits on the path F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01.
     commands:
       - name: privacy.retention_policy.set
         capability: privacy.retention_policy.set
-        input: "[vault command or relay command by scope] { scopeKind, scopeId, class, durationDays, source, jurisdictionCode?, expectedRevision? }"
+        input: "[vault command or relay command by scope] { scopeKind, scopeId, class, durationDays, source, profileRef?: {publisherId, code}, expectedRevision? }"
         output: "{ policyId, revision, effectiveFrom }"
         errors: [VALIDATION_FAILED, FORBIDDEN, CONFLICT_REVISION]
         emits: []
@@ -245,11 +264,22 @@ processes:
       relay composition through the kernel port registry, by inverted registration for modules that cannot list this
       module in depends_on): kinds() -> [{kind (record kind, for example bazaar.listing), class: RET-EPHEMERAL | RET-SHORT |
       RET-STANDARD | RET-EVIDENCE | RET-AUDIT | RET-SIGNAL, anchorField (path of the RFC 3339 time the retention period
-      starts from, for example deletedAt, withdrawnAt, closedAt or lastActivityAt), createdField? and rollupKind? (both
-      required for a RET-SIGNAL record kind), rollup?: boolean (true for a RET-SIGNAL counts-only rollup kind)}];
-      purge(kind, olderThan, cursor?, limit ≤ 1000) -> {purged, rolledUp, skippedHeld, nextCursor?}, which deletes in one
-      transaction only rows whose anchorField is at or before olderThan, where olderThan = sweep clock minus the effective
-      durationDays of the class for the scope, and never rows whose anchor is later than the sweep clock. RET-SIGNAL
+      starts from, for example deletedAt, withdrawnAt, closedAt or lastActivityAt), createdField? (path of the record's
+      creation time; required for a RET-SIGNAL record kind and for a kind with anchorOffsetDays, and used to split sweeps
+      after a Looser change), rollupKind? (required for a RET-SIGNAL record kind), rollup?: boolean (true for a RET-SIGNAL
+      counts-only rollup kind), anchorOffsetDays?: int 1..365 (a fixed period counted from anchorField that replaces the
+      class duration for the anchor, set in code by the registering module and changeable by no user, operator or profile)}];
+      purge(kind, olderThan, cursor?, limit ≤ 1000, created?: {from?, before?}, capBefore?) -> {purged, rolledUp,
+      skippedHeld, nextCursor?}, which deletes in one transaction only rows whose anchorField is at or before olderThan, or,
+      when capBefore is given, whose createdField is at or before capBefore, limited by created to rows whose createdField
+      is at or after from and before before, where olderThan = sweep clock minus the effective durationDays of the class for
+      the scope, and never rows whose anchor is later than the sweep clock. Offset kinds - for a kind with anchorOffsetDays,
+      olderThan = sweep clock minus anchorOffsetDays and capBefore = sweep clock minus the effective class duration, so a row
+      whose anchorField is still empty (for TransparencyCounter, a period not yet published) is due only by the cap (V18).
+      Looser split - when a class row carries looserFrom, the sweep calls purge for each kind of that class twice, with
+      created.before = looserFrom and the stricter of priorDurationDays and durationDays, and with created.from = looserFrom
+      and durationDays (for an offset kind the split applies to capBefore); a kind without createdField gets only the first
+      call, as if every row were created before looserFrom (V17). RET-SIGNAL
       (PRV-8) - for a record kind olderThan is the sweep clock itself (anchorField expiresAt) and rows whose createdField is
       365 days or more before the sweep clock are also due; in the same transaction the module adds the due rows to its
       rollupKind as counts per UTC day and kind, without did, key, cid or free text, reports them as rolledUp and then
@@ -266,9 +296,21 @@ processes:
       records and released holds purge through its own kinds privacy.retention_run (RET-AUDIT, anchorField startedAt) and
       privacy.legal_hold (RET-AUDIT, anchorField releasedAt). KeyLinkagePort {linked(didA, didB) -> boolean} is supplied by
       the relay composition from the F07 key-linkage reads (N11). Registry - the kernel port registry holds every kind,
-      including those of F07.S01.M01, the F11 federation modules and F12.S03.M02 (signals and their rollup), and by inverted
-      registration those of F15.S01.M01 (platform.outbox_entry) and F15.S04.M03 (platform.local_settings), which cannot list
-      this module in depends_on without closing a cycle; a kind registered twice fails composition. Hold
+      including those of F07.S01.M01, the F11 federation modules, F12.S03.M02 (signals and their rollup) and F18.S02.M02
+      (governance.transparency_counter, class RET-AUDIT, anchorField publishedAt, anchorOffsetDays 90, registered at relay
+      composition only, so vault sweeps and the vault conformance check never expect it), and by inverted registration those
+      of F15.S01.M01 (platform.outbox_entry), F15.S04.M03 (platform.local_settings), F18.S01.M01 (its JurisdictionProfile
+      mirror and ProfileSelection) and F18.S02.M01 (its policy comments, trusted publishers and pending statements), which
+      cannot list this module in depends_on without closing a cycle; a kind registered twice fails composition.
+      Jurisdiction refresh - on governance.jurisdiction_profile.activated (scope vault in the vault, scope relay on the
+      relay) with change selected, deselected or upgraded, or released or retired for a ProfileRef in use in that scope, and
+      on platform.tenant.configured on a relay, the module calls governance.jurisdiction_profile.resolve (the vault
+      selection, or the relay's hosting profile), reads the supplying version's effectiveFrom through
+      governance.jurisdiction_profile.get, clamps evidenceDays, standardPurgeDays and auditDays into the class bounds (V17),
+      and writes the EVIDENCE, STANDARD and AUDIT rows with source jurisdiction (source default and fallback true when
+      resolve used the bundled generic profile), profileRef and profileVersion, plus priorDurationDays and looserFrom = max
+      (effectiveFrom, local time of the event) for a Looser change; rows with source user or relay_operator keep their
+      value; change upgrade_pending writes no row and only shows the pending Looser values on the retention screen. Hold
       events - privacy.legal_hold.placed and privacy.legal_hold.released name the subject as subjectKind (record, author
       or mailbox) and subjectRef (cid, did or mailbox ID), and relayId is the canonical relayId of F15.S02.M01; both are
       relay-local P3 events delivered only to relay-system handlers, so relay modules that hold that subject (F12.S01.M02,
@@ -279,7 +321,8 @@ processes:
       - {type: privacy.legal_hold.released, privacy: P3, payload: "{ holdId, relayId, subjectKind, subjectRef } — relay-local"}
     events_consumed:
       - {type: security.role.revoked, effect: "requested holds lapse and release_requested holds return to active when the revoked assignment's subjectKey (a did:key) equals requestedBy or releaseRequestedBy or is a key of that did per KeyLinkagePort; approvals already given stay valid"}
-      - {type: platform.tenant.configured, effect: "apply the relay's configured jurisdiction profile as retention policy rows with source jurisdiction"}
+      - {type: platform.tenant.configured, effect: "refresh the relay-scope jurisdiction rows from governance.jurisdiction_profile.resolve for the tenant's configured ProfileRef, falling back to the bundled generic profile when it is absent or unknown"}
+      - {type: governance.jurisdiction_profile.activated, effect: "for scope vault in the vault and scope relay on the relay - released, retired (when the ProfileRef is in use in that scope), selected, deselected and upgraded refresh the jurisdiction rows by ProfileRef with values clamped into the class bounds, and a Looser value applies only to records created at or after the later of the profile's effectiveFrom and the event's local time; upgrade_pending changes no row"}
       - {type: federation.tombstone.applied, effect: "relay calls purgeSubject for the tombstoned content within 24 h unless privacy.legal_hold.check says held, in which case it is sealed and withdrawn from public serving"}
     errors:
       - "PRIVACY_HOLD_SELF_APPROVAL | 403 | no | the approver must differ from the requester and must not be linked to the requester's DID"
@@ -323,6 +366,7 @@ processes:
       - Run records contain counts and kinds only, never record contents or identifiers of users.
       - Holds are the only way to keep relay-held data past policy, require two unlinked operators including an admin, are audited under RET-AUDIT and reviewed every 180 days.
       - Abuse of holds by a rogue operator is limited by separation of duties, mandatory reference, review reminders and visibility to all relay operators.
+      - A Looser jurisdiction value never changes the retention of records created before it came into use in the scope, whatever effectiveFrom the publisher claims, and a fixed anchor offset never shortens the retention of records that carry a did, device key or free text.
     data:
       - "RetentionPolicy: P3 for vault scope, P0 for relay scope (published policy). LegalHold: P3 operator record; the reference must not contain personal data."
       - "Run records: counts per kind and class and the run start time."
@@ -337,6 +381,8 @@ processes:
       - "T05 | Forward clock jump makes the vault sweep purge early | persisted high-water clock and latest relay-signed receipt time; a jump over 24 h forces a dry run and user confirmation before RET-SHORT, RET-STANDARD or RET-EVIDENCE purges; future anchors are never purged"
       - "T06 | Fraud signals kept past their purpose or re-identified from their rollup | RET-SIGNAL purges at expiresAt with a hard cap of 365 days after createdAt, the rollup holds counts per day and kind only and is purged after 365 days, and the class cannot be changed by any scope or jurisdiction (V15, V16)"
       - "T07 | Hold events disclose the held subject beyond the relay | placed and released are relay-local P3 events delivered only to relay-system handlers, never to vaults, federation or notifications"
+      - "T08 | A compromised or malicious profile publisher shortens evidence retention or backdates effectiveFrom to destroy existing records | upgrade_pending writes no row until the owner confirms (F18.S01.M01), looserFrom is the later of effectiveFrom and the local in-use time, records created earlier keep the stricter duration, and values are clamped into the class bounds (V17)"
+      - "T09 | A fixed anchor offset used to purge actor audit trails early | anchorOffsetDays is declared in code, at most the effective class duration, allowed only for kinds without did, device key or free-text fields, and the class duration from createdField stays a cap (V18)"
     abuse_controls:
       - "Hold requests limited to 10 per operator per day and sweep runs limited to 6 per day per scope, enforced by the command bus (F15.S02.M02) through RateLimitPort (N18)."
   observability_performance:
@@ -352,6 +398,7 @@ processes:
     logs:
       - "info retention.purged {runId, kind, class, count, correlationId} — counts only."
       - "audit legal_hold.transition {holdId, from, to, actorDid} — no subject contents."
+      - "info retention.policy_refreshed {scopeKind, class, profileRef, profileVersion, fallback, clamped, looser, correlationId} — local diagnostics in the vault, relay logs on the relay."
     budgets:
       - "Relay sweep purges 50 000 rows in ≤ 60 s; vault sweep of 20 000 rows ≤ 10 s in chunks that never block the main thread over 50 ms."
       - "Hold check p95 ≤ 5 ms."
@@ -360,7 +407,7 @@ processes:
       - Every requirement is covered by at least one automated test.
       - Sweeps are tested with a controllable clock and stub purge ports for every record kind.
       - Separation of duties and fail-closed hold checks are tested with adversarial scenarios.
-    fixtures: "Vault and relay with records in each class aged 0, 1, 31, 731 and 366 days and one with an anchor 2 days in the future; signal records with expiresAt in 10 days, 2 days ago and 400 days after createdAt plus a signal rollup kind; stub purge ports registered through a kernel port registry double (F07.S01.M01, F15.S01.M01, F15.S04.M03, F11 and F12.S03.M02 stubs); operators A and B, admin C, operator D linked to A by a same-owner attestation and operator E linked to A by a rotation chain (KeyLinkagePort double); fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Vault and relay with records in each class aged 0, 1, 31, 731 and 366 days and one with an anchor 2 days in the future; signal records with expiresAt in 10 days, 2 days ago and 400 days after createdAt plus a signal rollup kind; stub purge ports registered through a kernel port registry double (F07.S01.M01, F15.S01.M01, F15.S04.M03, F11 and F12.S03.M02 stubs); operators A and B, admin C, operator D linked to A by a same-owner attestation and operator E linked to A by a rotation chain (KeyLinkagePort double); an F18.S01.M01 resolve and get double with ProfileRef (KP, eu_de) at version 3 (evidenceDays 1825) and version 4 (evidenceDays 730, effectiveFrom backdated to 2025-11-04), a relay hosting profile with standardPurgeDays 60, a profile resolving evidenceDays 180 and auditDays 90, and the bundled generic profile; evidence records created before and after the upgrade confirmation; an F18.S02.M02 stub registering governance.transparency_counter with rows of periods published 89 and 91 days ago and of an unpublished period created 364 and 366 days ago; F18.S01.M01 and F18.S02.M01 stub registrants; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | set durations at, below and above class bounds | in-bound accepted; out-of-bound VALIDATION_FAILED; defaults EPHEMERAL 1, SHORT 30, STANDARD 30, EVIDENCE 730, AUDIT 365, SIGNAL 365"
       - "T02 | unit | 01.R02,02.R01 | hold requested with personal data in reference; user tries to change AUDIT | VALIDATION_FAILED and FORBIDDEN"
@@ -387,8 +434,11 @@ processes:
       - "T23 | integration | 01.R05,02.R05 | sweep over the signal fixtures in a vault and on a relay, one signal record under an active hold; rollup rows aged 364 and 366 days; set RET-SIGNAL to 180 days as user, operator and jurisdiction; register a signal kind without rollupKind and one whose rollup holds a did | the expired and the 400-day records are rolled up and purged (the latter at createdAt + 365 days), the 10-day record and the held record are kept; the 366-day rollup row is purged; every set returns FORBIDDEN; both registrations fail with VALIDATION_FAILED"
       - "T24 | contract | 04.R06 | approve and release a hold on an author and on a record, then deliver the events to an F12.S01.M02 double on the relay and try to route them to a vault and a federation sink | placed and released carry subjectKind and subjectRef (did or cid) with the canonical relayId; the double flags and clears exactly that subject; the vault and federation routes are refused"
       - "T25 | integration | 04.R07 | vault and relay composition through the kernel port registry with stub registrants F07.S01.M01, F15.S01.M01, F15.S04.M03, the seven F11 kinds and F12.S03.M02, then a second registrant for platform.outbox_entry | every kind is discovered without a depends_on edge and swept; the duplicate kind fails composition"
+      - "T26 | integration | 01.R06,02.R06,04.R08,07.R04 | vault with (KP, eu_de) selected; activated selected, then upgrade_pending and upgraded to version 4 with the backdated effectiveFrom, then deselected; relay activated with scope relay for the hosting profile; resolve returning evidenceDays 180 and auditDays 90; a row naming an unknown ProfileRef and a set with code EU DE | selected writes EVIDENCE 1825 with source jurisdiction, ProfileRef and version 3; upgrade_pending changes no row; upgraded sets 730 with priorDurationDays 1825 and looserFrom at the confirmation time, so a record created before it is kept until 1825 days and one created after is purged after 730; deselected writes the generic defaults with fallback true; the relay STANDARD 60 applies only to records created after its looserFrom; 180 and 90 are clamped to 365 and 180; the unknown ref resolves to generic; EU DE returns VALIDATION_FAILED"
+      - "T27 | integration | 02.R07,07.R04 | relay sweep over the TransparencyCounter rows of the F18.S02.M02 stub; vault composition with the same stub; registrations with anchorOffsetDays 400, without createdField and with a did field | rows published 91 days ago and the unpublished 366-day rows are purged, the 89-day and 364-day rows are kept; the vault sweep and the vault conformance check ignore the relay-only kind; the three bad registrations fail with VALIDATION_FAILED"
+      - "T28 | integration | 04.R09 | vault composition through the kernel port registry with stub registrants F18.S01.M01 (profile mirror and ProfileSelection) and F18.S02.M01 (comments, trusted publishers, pending statements), and relay composition with the F18.S02.M02 stub | every kind is discovered and swept in its scope without a depends_on edge from F18.S01.M01 or F18.S02.M01 to this module, and the depends_on graph stays acyclic"
     acceptance:
-      - All tests T01 to T25 pass in CI.
+      - All tests T01 to T28 pass in CI.
       - No hold can be activated or released by one person alone, by two linked DIDs, or by a pair without an admin.
       - Active holds are never violated by any sweep or tombstone handler, and holds never alter a vault.
       - Every record kind has a registered purge port or the build fails.
@@ -399,6 +449,6 @@ processes:
       - Relay backups include holds and policies (IOX-3); after restore, holds are re-evaluated before any sweep runs.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
     export: "Section privacy.retention in classrup-export/v1: the vault's RetentionPolicy rows (schema classrup.privacy.retention_policy/v1). Legal holds are operator records and are excluded from user exports."
-    import: "Policies import as user-source rows clamped to bounds; foreign hold records are never imported; the high-water clock is not imported, so the first sweep after an import takes the import time as its high-water clock."
+    import: "Policies import as user-source rows clamped to bounds, except jurisdiction and default rows, which are re-derived by a jurisdiction refresh from the selection that F18.S01.M01 restores, keeping the imported priorDurationDays and looserFrom when the same ProfileRef and version are restored; foreign hold records are never imported; the high-water clock is not imported, so the first sweep after an import takes the import time as its high-water clock."
     backup: "Relay SQLite backup (CTR-IOX-001 IOX-3) covers holds and policies; after a restore the relay refuses to sweep until hold records are loaded and verified, and purge jobs missed during downtime are not replayed for held subjects."
     migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields; class bounds are never widened by a migration."

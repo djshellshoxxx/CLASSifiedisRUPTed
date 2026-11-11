@@ -14,17 +14,18 @@
 - **PS-004-02.R06** Unpublishing a listing that has active local inventory holds requires explicit owner confirmation; the holds stay valid and are listed.
 - **PS-004-02.R07** Publication refuses a photo that has neither non-empty alt text nor decorative true with BAZAAR_LISTING_MEDIA_ALT_MISSING (params.mediaIndexes), before the risk assessment and before anything is published; F14.S01.M02 relies on this rule and its end-to-end suite.
 - **PS-004-02.R08** Publish, confirm and renew call privacy.deletion.assert_not_pending (F10.S01.M04) first and refuse with PRIVACY_DELETION_PENDING while a deletion request of the principal is pending, deferred, executing or failed.
+- **PS-004-02.R09** While a publication is in policy_attention, renewal (also when the F01.S01.M04 expiry deferral asks for it) and re-publication of the unchanged revision are refused with BAZAAR_PUBLISH_POLICY_ATTENTION; only a newer revision that passes every check may be published, and jurisdiction profiles are named only as ProfileRef {publisherId, code}.
 
 ## Specification
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | listing status is draft, unpublished or expired; relays whose delivery for this listing has hostingRemoved are dropped from relayIds and reported in skippedRelays, and only an empty remaining relay list is refused | BAZAAR_PUBLISH_NOT_ALLOWED |
+| V01 | listing status is draft, unpublished or expired, or published with its live publication active or in policy_attention and a listing revision newer than the signed listingRevision (re-publication in place after an F01.S01.M02 edit); relays whose delivery for this listing has hostingRemoved are dropped from relayIds and reported in skippedRelays, and only an empty remaining relay list is refused | BAZAAR_PUBLISH_NOT_ALLOWED |
 | V02 | title >= 3 and description >= 10 code points; kind sell has SellTerms, wanted has WantSpec, giveaway has GiveawayTerms | BAZAAR_PUBLISH_INCOMPLETE |
 | V03 | regionCell present with length 4 or 5 and no media ref has a GPS tag | BAZAAR_PUBLISH_INCOMPLETE |
-| V04 | category is active and, if restricted for the chosen jurisdiction profile, notices are acknowledged | BAZAAR_PUBLISH_BLOCKED |
-| V05 | prohibited-item verdict is not block | BAZAAR_PUBLISH_BLOCKED |
-| V06 | verdict review or risk level medium or high requires ownerConfirmedAt | BAZAAR_PUBLISH_CONFIRMATION_REQUIRED |
+| V04 | category is active and, if restricted under the selected ProfileRefs (governance.jurisdiction_profile.resolve of F18.S01.M01 with profileRefs [{publisherId, code}]), notices are acknowledged | BAZAAR_PUBLISH_BLOCKED |
+| V05 | verdict of governance.prohibited_rule.evaluate {kind, categoryId, title, description, tags, profileRefs} (F18.S01.M02) is not block; its packs, packsDigest and matches with publisherId are stored | BAZAAR_PUBLISH_BLOCKED |
+| V06 | verdict review or risk level medium or high requires ownerConfirmedAt; a re-publication in place records it from confirmedRules covering every matched review rule and confirmedRisk | BAZAAR_PUBLISH_CONFIRMATION_REQUIRED |
 | V07 | expiresInDays between 1 and 90 | VALIDATION_FAILED |
 | V08 | 1 to 10 destination relays, each a user-selected relay known to the vault with a pinned signing key and named by its canonical relayId (relay: plus 26 lowercase base32 characters, F15.S02.M01) | VALIDATION_FAILED |
 | V09 | vault has fewer than 100 active publications | BAZAAR_PUBLISH_LIMIT |
@@ -39,12 +40,15 @@
 | V18 | every media entry of the listing has alt text of 1..140 code points or decorative true | BAZAAR_LISTING_MEDIA_ALT_MISSING |
 | V19 | publish, confirm and renew: privacy.deletion.assert_not_pending (F10.S01.M04) returns ok | PRIVACY_DELETION_PENDING |
 | V20 | moderation.spam.evaluate is called with { mode: author_presign, subjectKey: the author did:key, targetType: listing_publication, targetId: listingId, text: title and description, links, receivedAt }; a degraded result is treated as risk level medium | BAZAAR_PUBLISH_CONFIRMATION_REQUIRED |
+| V21 | publication in policy_attention (checked before V01 and V11): renew (owner or expiry_deferral) is refused, and publish is accepted only for a listing revision newer than policyAttention.blockedRevision | BAZAAR_PUBLISH_POLICY_ATTENTION |
+| V22 | publish and preview_policy name jurisdiction profiles only as profileRefs, 1..3 distinct ProfileRef {publisherId (did:key), code ^[a-z0-9_-]{2,40}$}; confirmedRules entries are {publisherId, ruleKey}; packs holds 1..20 entries and packsDigest equals sha256-JCS(packs) | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-004-09.T03 | unit | PS-004-02.R01, PS-004-02.R02, PS-004-02.R03 | violate each rule V01-V20 | documented error code returned, no statement published |
+| TEST-PS-004-09.T03 | unit | PS-004-02.R01, PS-004-02.R02, PS-004-02.R03 | violate each rule V01-V22 | documented error code returned, no statement published |
+| TEST-PS-004-09.T13 | integration | PS-004-03.R01, PS-004-03.R05, PS-004-02.R09, PS-004-04.R08 | governance.prohibited_rule.changed adds a block rule matching active L; renew and publish of the unchanged revision; 6 days, then 7 days pass; the owner edits L so the verdict clears and publishes it; in a second run the owner confirms Unpublish; in a third run a later pack retires the rule | L moves to policy_attention with bazaar.publication.policy_attention raised for ownerId and no unpublish, end or federation.tombstone.issue call; renew and unchanged publish refused with BAZAAR_PUBLISH_POLICY_ATTENTION; no reminder at day 6, one at day 7; the edited revision is published and the attention resolved as edited; the confirmation unpublishes with reason policy_changed and only then issues the tombstone; the retirement returns L to active as verdict_cleared without a new statement |
 | TEST-PS-004-09.T19 | integration | PS-004-02.R04 | spam stub (moderation.spam.evaluate, mode author_presign) scores 72 and risk stub (moderation.risk.assess with subjectType listing_publication and publication {draftId, spamScore 72, publicationsLast24h}) returns medium, then high, then a degraded spam result; publish without federation_publish consent for R1 (federationOptIn false); regionCell of 6 characters injected past the record check | held_for_confirmation and nothing published in the first three cases with riskLevel medium or high recorded; BAZAAR_PUBLISH_FEDERATION_CONSENT_REQUIRED; DISCOVERY_PRECISION_FORBIDDEN; nothing queued in each case |
 | TEST-PS-004-09.T20 | abuse | PS-004-02.R05 | R3 returns receipts 3 days in the future while R1 and R2 agree with the device; then only R3 is configured | R3 flagged untrusted and publish succeeds; with R3 alone the command proceeds with clockWarning instead of PRECONDITION_FAILED |
 | TEST-PS-004-09.T21 | integration | PS-004-02.R06 | unpublish L with an active deal hold without and with confirmHolds | BAZAAR_PUBLISH_HOLDS_ACTIVE first; then unpublished with the hold still active and listed |

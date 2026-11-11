@@ -13,7 +13,7 @@
 ## Specification
 
 **Metrics**
-- classrup_bazaar_publications_total{outcome=active|blocked|held|unpublished|ended} (local)
+- classrup_bazaar_publications_total{outcome=active|blocked|held|policy_attention|unpublished|ended} (local)
 - classrup_bazaar_publication_delivery_total{state} (local)
 - classrup_bazaar_publication_policy_duration_ms (local histogram)
 - classrup_bazaar_relay_notice_quarantined_total{reason} (local)

@@ -17,7 +17,7 @@ responsibilities:
   - Enforce a 24 h veto window on each receiver's clock, a cool-down of one move per 30 days, a 24 h minimum key age and a 180-day redirect on the old relay.
   - Verify inbound move statements from other principals and relays, open a commitment conflict through F11.S02.M03 for conflicting moves, and emit federation.account.moved only for statements that verify and become effective on this receiver.
   - Provide the redirect lookup GET /fed/v1/moved?author=did on relays and document the ActivityPub and AT Protocol mappings as Future work.
-  - Register the N6 privacy ports for the migration history.
+  - Register the N6 privacy ports for the migration history, with a F10.S01.M04 DeletionPort whose sign step cancels the open own migration (signing move_cancel for an announced one) and whose pseudonymize step, the only call that receives the pseudonym, pseudonymizes retained MigrationRecords; privacy.deletion.completed is a notification only (N6a).
 non_responsibilities:
   - Key generation, device key registration, revocation and recovery (F07 identity).
   - Record verification and storage on the new relay (F11.S01.M02); acceptance there never depends on a move.
@@ -41,7 +41,7 @@ edge_cases:
   - New relay unreachable or refuses the account; migration stays prepared or announced, redirect is not activated, the old relay stays the selected delivery relay and the user can cancel.
   - Two move statements for the same did with different targets; F11.S02.M03 opens a commitment conflict for move:subject, both moves are held and no redirect is activated.
   - Relay move statement signed by a different key than the pinned relay key; dropped with FEDERATION_KEY_MISMATCH and counted only against the sender that signed the delivering request, never against the relay it names.
-  - The user deletes the account during a pending move; the move is cancelled and tombstones are sent to both relays.
+  - The user requests account deletion during a pending move; during the grace period copy and announce are refused with PRIVACY_DELETION_PENDING and the wizard shows the migration paused, a cancelled deletion lets it continue unchanged, and at execution this module's DeletionPort sign step cancels the move (signing move_cancel when it was announced) while the F11.S01.M02 sign step signs the tombstones that go to both relays.
   - Move whose announcedAt claims a time more than 10 minutes in the receiver's future; refused as VALIDATION_FAILED since timestamps are claims.
 ux:
   screens:
@@ -130,9 +130,9 @@ processes:
         transitions:
           - "prepared -> announced | federation.migration.announce signed with a device key active ≥ 24 h, copy step ≥ 99 percent | produces classrup.federation.move/v1 through F11.S01.M02 publish and queues it to old relay, new relay and peers"
           - "prepared -> announced | federation.migration.receive_move of a verified observed move | effectiveAt computed on this receiver's clock (V04, V08); conflicting moves call federation.conflict.detect and set conflictId"
-          - "prepared -> cancelled | federation.migration.cancel or account deletion requested | no statement"
+          - "prepared -> cancelled | federation.migration.cancel, or this module's DeletionPort sign step at deletion execution (never on privacy.deletion.requested) | no statement"
           - "announced -> effective | this receiver's effectiveAt reached with no valid veto, the signer key still active on re-check (V01) and no open conflict for the subject | emits federation.account.moved; old relay starts redirect for 180 days"
-          - "announced -> cancelled | valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, or federation.conflict.resolved drop_all for the subject | produces classrup.federation.move_cancel/v1 for own moves"
+          - "announced -> cancelled | valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, federation.conflict.resolved drop_all for the subject, or this module's DeletionPort sign step at deletion execution for an own move | produces classrup.federation.move_cancel/v1 for own moves, in the deletion case signed before any key is revoked"
           - "effective -> closed | redirectUntil reached | old relay removes redirect"
     timeouts:
       - "Veto window 24 h from this receiver's window start (own clock, first verified receipt or old relay receipt); sweep every 5 min promotes announced records whose effectiveAt ≤ now after re-checking the signer key."
@@ -156,14 +156,14 @@ processes:
         capability: federation.migration.copy
         input: "[vault-local command; routes copies through F11.S02.M01 into the F15.S01.M01 sync outbox] { migrationId, expectedRevision }"
         output: "{ migrationId, revision, copyProgress }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, PRIVACY_DELETION_PENDING]
         emits: []
         idempotent: true
       - name: federation.migration.announce
         capability: federation.migration.announce
         input: "[vault-local command; produces signed statement classrup.federation.move/v1 through F11.S01.M02 publish] { migrationId, expectedRevision }"
         output: "{ migrationId, revision, moveCid, effectiveAt }"
-        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_COOLDOWN]
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_COOLDOWN, PRIVACY_DELETION_PENDING]
         emits: []
         idempotent: true
       - name: federation.migration.cancel
@@ -199,8 +199,9 @@ processes:
       - {type: federation.delivery.failed, effect: "increase copyProgress.failed for the migration's copy entries"}
       - {type: federation.conflict.detected, effect: "subjectRef move:<subject>: set conflictId and hold every announced move of that subject; no redirect is activated"}
       - {type: federation.conflict.resolved, effect: "subjectRef move:<subject>: drop_all cancels the held moves; superseded keeps only the move named by supersededByCid, which then follows its own window"}
-      - {type: privacy.deletion.requested, effect: "cancel the open own migration and send tombstones to both relays"}
-      - {type: privacy.deletion.completed, effect: "pseudonymize the deleted principal's DID in retained own MigrationRecords (RET-EVIDENCE) (N6)"}
+      - {type: privacy.deletion.requested, effect: "reversible only (N6a): show the open own migration as paused; copy and announce call F10.S01.M04 privacy.deletion.assert_not_pending and are refused with PRIVACY_DELETION_PENDING; nothing is cancelled, signed, purged or sent to a relay"}
+      - {type: privacy.deletion.cancelled, effect: "clear the paused notice; the open own migration continues from its unchanged state"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): the open own migration was cancelled in this module's DeletionPort sign step and retained own MigrationRecords (RET-EVIDENCE) were pseudonymized in its pseudonymize step, so nothing is signed, pseudonymized or sent to a relay here"}
     errors:
       - "FEDERATION_MOVE_SIGNER_INVALID | 403 | no | signer is not a device key active in the subject's portable document at the receiver's time, or the key is younger than 24 h"
       - "FEDERATION_MOVE_COOLDOWN | 409 | no | the subject moved less than 30 days ago"
@@ -242,7 +243,8 @@ processes:
       - A move statement reveals the old and new relay of a pseudonymous did:key, which is public by design and stated in the wizard.
       - A stolen device key must not silently move an account, so a 24 h veto window on each receiver's clock, a 24 h minimum key age and a 30-day cool-down limit the damage, and the UI says when only one device key exists and no veto is possible.
       - The move never transfers private data between relays; the vault re-establishes mailboxes and encrypted material itself.
-      - The module registers the N6 ports (ExportSectionPort for the migration history, DeletionPort, RetentionPurgePort for RET-EVIDENCE records), classifies fields with F10.S02.M02 and pseudonymizes retained records on privacy.deletion.completed.
+      - During a deletion grace period the module takes only reversible actions, so copy and announce of the open own migration are refused with PRIVACY_DELETION_PENDING through privacy.deletion.assert_not_pending and continue unchanged after privacy.deletion.cancelled, while cancelling the migration and signing its move_cancel happen only in the DeletionPort sign step at execution.
+      - The module registers the N6 ports (ExportSectionPort for the migration history, DeletionPort, RetentionPurgePort for RET-EVIDENCE records) and classifies fields with F10.S02.M02; its DeletionPort sign step cancels the open own migration and signs move_cancel for an announced one, its pseudonymize step (pseudonymize(ctx{requestId, pseudonym}), the only call that receives the pseudonym) replaces the principal's DID in retained own MigrationRecords, and privacy.deletion.completed is a notification only (N6a).
     data:
       - "MigrationRecord and move statements: P0 (did, relay ids, times)."
       - "Copy progress counters: P0."
@@ -303,10 +305,11 @@ processes:
       - "T21 | integration | 02.R02 | observer V3 receives a move signed by a key not listed in P's portable document | ignored: no announced record, no account.moved, no redirect or fetch-hint change; FEDERATION_MOVE_SIGNER_INVALID recorded locally"
       - "T22 | abuse | 02.R04 | observer V3 receives a move whose announcedAt claims 25 h ago with no old relay receipt; R1 receives the same move straight from a hosted device | V3 holds it for a full 24 h from its first receipt and a K2 veto at 23 h cancels it; R1 refuses it with VALIDATION_FAILED"
       - "T23 | integration | 04.R04,03.R04 | two moves for P with different targets reach V3 | federation.conflict.detect called with statementClass commitment and subjectRef move:P; both held with no redirect; a drop_all resolution cancels both"
-      - "T24 | unit | 07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed | migration section exported; deletion plan returned; retained records pseudonymized"
+      - "T24 | unit | 07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone | migration section exported; deletion plan returned; the pseudonymize step replaces the DID in retained records with exactly that pseudonym and a second run changes nothing; privacy.deletion.completed changes no record"
       - "T25 | integration | 02.R01 | K1 revoked in a newer portable document after the move was announced but before V3's effectiveAt | the promotion re-check cancels the move; no account.moved emitted"
+      - "T26 | integration | 07.R05,03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step"
     acceptance:
-      - All tests T01–T25 pass in CI.
+      - All tests T01–T26 pass in CI.
       - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
       - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
       - Bridge documents exist and are marked Future.

@@ -21,6 +21,7 @@
 **Logs**
 - info retention.purged {runId, kind, class, count, correlationId} — counts only.
 - audit legal_hold.transition {holdId, from, to, actorDid} — no subject contents.
+- info retention.policy_refreshed {scopeKind, class, profileRef, profileVersion, fallback, clamped, looser, correlationId} — local diagnostics in the vault, relay logs on the relay.
 
 **Budgets**
 - Relay sweep purges 50 000 rows in ≤ 60 s; vault sweep of 20 000 rows ≤ 10 s in chunks that never block the main thread over 50 ms.

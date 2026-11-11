@@ -49,7 +49,7 @@
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | BAZAAR_EDIT_REVISION_LIMIT | 409 | no | listing already has 100 revisions |
-| BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.ruleKeys |
+| BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.rules [{publisherId, ruleKey}] from the F18.S01.M02 evaluate matches |
 | BAZAAR_EDIT_AUCTION_HAS_BIDS | 409 | no | the auction edit lock (auctions.auction.edit_lock) reports this listing locked because an auction on it has bids or its bid count is not confirmed; condition, category and price cannot change (N11); params bidCount, lastKnownAt, auctionId |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).

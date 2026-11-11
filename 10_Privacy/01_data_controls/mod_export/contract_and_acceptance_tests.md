@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-078-09.T21 | integration | PS-078-01.R04 | vault with 2.5 GiB of media; single request; then a two-part set by media date; restore double | single request PRIVACY_EXPORT_QUOTA with a suggested split; each part ≤ 2 GiB and verifies alone; parts share setId and part 2 carries the part-1 manifest hash; the restore double accepts the set only with both parts |
 | TEST-PS-078-09.T22 | integration | PS-078-03.R04 | job requested and never started for 24 h; job collecting with the PWA closed for 25 h; job with 31 min of active collection time | first two fail with errorCode EXPIRED; third fails with PRIVACY_EXPORT_TIMEOUT; each emits privacy.export.failed and leaves no files |
 | TEST-PS-078-09.T23 | integration | PS-078-04.R05 | vault composition with the kernel port registry and stub registrants for F07.S01.M01, F15.S01.M01, F15.S04.M03 and the seven F11 sections, then a second registrant for federation.records, then F15.S01.M01 missing | the manifest lists identity.account, identity.device_keys, platform.outbox, platform.local_settings and every federation section with counts and hashes, and none of these modules needs a depends_on edge; the duplicate fails composition naming both modules; the missing registrant fails the job with PRIVACY_EXPORT_SECTION_FAILED naming F15.S01.M01 |
+| TEST-PS-078-09.T24 | integration | PS-078-04.R06, PS-078-04.R05 | vault composition with stub registrants for F18.S02.M01 (policy proposals, policy comments, trusted publishers, pending statements) and F18.S01.M01 (jurisdiction profiles, a profile selection with declaredAgeAtLeast 18), then a second registrant for governance.policy_comments | the manifest lists all six governance sections with counts and hashes, the selection line keeps the age declaration in the owner's bundle after redactForExport, neither module has a depends_on edge to this module and the depends_on graph stays acyclic; the duplicate fails composition naming both modules |
 
 ## Acceptance criteria
 
-- All tests T01 to T23 pass in CI.
+- All tests T01 to T24 pass in CI.
 - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
 - No bundle contains P4 secrets, unclassified fields or other users' private content.
 - A ready bundle is unreachable after 7 days and its key is gone.

@@ -243,7 +243,7 @@ processes:
       - {type: federation.conflict.detected, effect: "only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks, commitment conflicts and key_compromise records are ignored"}
       - {type: federation.delivery.failed, effect: "transport reasons (timeout, unreachable, 5xx) lower the destination peer's health by 1 per entry (max 10 per hour); reason receipt_equivocation (two receipts signed by the peer key for one cid with different outcomes) lowers it by 20; per-envelope rejections by the peer's own policy are ignored"}
       - {type: platform.flag.changed, effect: "when F11 turns off, freeze health scores and mark peer_relay peers dormant; selected_relay peers are unaffected"}
-      - {type: privacy.deletion.completed, effect: "vault: delete the deleted principal's selected-relay list after the DeletionPort plan ran; relay peer records hold no user data and are unchanged"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): the deleted principal's selected-relay list was already deleted in this module's DeletionPort purge step and relay peer records hold no user data, so nothing is deleted, pseudonymized, signed or sent to a relay here"}
     errors:
       - "FEDERATION_PEER_URL_INVALID | 422 | no | base URL is not https on 443, resolves to a non-public address or redirects"
       - "FEDERATION_KEY_MISMATCH | 409 | no | peer key differs from the pinned key without a valid rotation statement, or the rotation overlap ended"
@@ -287,7 +287,7 @@ processes:
       - Peer records contain no user data; they hold relay identity, quotas and health only.
       - A user's selected relays are vault data; only relays the user marks 'List in my identity document' (at most 5) are published in the portable identity document (F07.S02.M01, P0, readable by anyone who holds the document), unlisted relays are never shared with other users or relays, and the user is told which metadata a relay can observe (mailbox ID, size, time, IP).
       - Pseudonymity is not anonymity, so the relay chooser states that a relay sees the IP address of connecting devices and the did:key of each author.
-      - The module registers the N6 ports (ExportSectionPort for the selected-relay list, DeletionPort, RetentionPurgePort for RET-AUDIT peers) and classifies fields with F10.S02.M02.
+      - The module registers the N6 ports (ExportSectionPort for the selected-relay list, DeletionPort whose purge step deletes the principal's selected-relay list and which retains nothing to pseudonymize, RetentionPurgePort for RET-AUDIT peers) and classifies fields with F10.S02.M02; privacy.deletion.completed is a notification only (N6a).
     data:
       - "Peer: P1; relay id, URL, key, quotas, health."
       - "listInIdentityDoc selection: P1 in the vault; listed relays become P0 once the portable document is published."
@@ -349,7 +349,7 @@ processes:
       - "T19 | abuse | 04.R04 | malicious author forks twice via honest relays A and B; throwaway did:keys trigger FEDERATION_SIGNER_ROLE_INVALID, FEDERATION_NOT_ACCEPTED and gap codes through peer A | no health change and no suspension for A or B"
       - "T20 | integration | 02.R02,03.R04 | vault selects relay R: fetch and verify its relay_identity statement, user confirms fingerprint; then a tampered identity statement | active without any per-user accept; the tampered one FEDERATION_KEY_MISMATCH"
       - "T21 | integration | 06.R02 | crash injected after an envelope acceptance but before commit, and after commit | neither counter nor acceptance persisted in the first case, both in the second; counted envelopes equal accepted envelopes"
-      - "T22 | unit | 07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed in a vault | selected-relay section exported without secrets; list deleted; relay peers untouched"
+      - "T22 | unit | 07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize); privacy.deletion.completed delivered alone in a vault | selected-relay section exported without secrets; the purge step deletes the list and pseudonymize returns count 0; privacy.deletion.completed changes nothing; relay peers untouched"
       - "T23 | integration | 04.R03 | flag F11 off then on | peer_relay health frozen and peers dormant; selected relays keep working; scores resume"
       - "T24 | contract | 04.R06 | activate a peer; apply a verified key_rotation; apply a rotation signed by a non-pinned key | federation.peer.added carries relayKey; federation.peer.key_rotated carries oldRelayKey, newRelayKey, effectiveAt and previousKeyUntil in the same transaction as the update; the invalid rotation FEDERATION_KEY_MISMATCH and no event"
     acceptance:

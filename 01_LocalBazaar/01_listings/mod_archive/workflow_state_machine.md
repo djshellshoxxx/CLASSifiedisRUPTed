@@ -9,7 +9,7 @@
 - **PS-001-03.R01** ArchiveRecord follows the declared machine; the pseudo-state live means the listing has no record yet.
 - **PS-001-03.R02** Every transition runs together with the matching Listing.apply_status call and, where a publication is active, with bazaar.publication.end, in one transaction.
 - **PS-001-03.R03** Restored listings return as unpublished and must go through publication checks again; restore never republishes automatically.
-- **PS-001-03.R04** The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows, and otherwise defers the local expiry and records the deferral until the holds end.
+- **PS-001-03.R04** The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows and the publication is not in policy_attention, and otherwise defers the local expiry and records the deferral until the holds end; a deferral never signs a statement.
 - **PS-001-03.R05** An expired listing can be closed directly by the owner, and an expired listing that is published again closes its record as superseded.
 
 ## Specification
@@ -21,7 +21,7 @@ Initial **live**; terminal **restored**, **superseded**, **purged**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | live -> live | expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap | bazaar.publication.renew requestedBy expiry_deferral; autoExtensions counted in the next record |
-| live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached | Listing stays published locally; others see the signed expiresAt; deferredSince recorded |
+| live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached, or the renewal refused with BAZAAR_PUBLISH_POLICY_ATTENTION because a changed rule pack holds the publication for its owner | Listing stays published locally; others see the signed expiresAt; deferredSince recorded |
 | live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid |
 | live -> closed | bazaar.listing.close by owner or sold-out sweep | holds handled per V04; end publication first; Listing unpublished -> closed; emits bazaar.listing.closed |
 | live -> archived | bazaar.listing.archive by owner | holds handled per V04; end publication if active; Listing -> archived; emits bazaar.listing.archived |
@@ -38,7 +38,7 @@ Initial **live**; terminal **restored**, **superseded**, **purged**.
 stateDiagram-v2
   [*] --> live
   live --> live: expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap
-  live --> deferred: expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached
+  live --> deferred: expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached, or the renewal refused with BAZAAR_PUBLISH_POLICY_ATTENTION because a changed rule pack holds the publication for its owner
   live --> expired: expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold
   live --> closed: bazaar.listing.close by owner or sold-out sweep
   live --> archived: bazaar.listing.archive by owner
@@ -68,7 +68,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | TEST-PS-001-09.T04 | property | PS-001-03.R01, PS-001-03.R02, PS-001-03.R05 | random command and clock sequences including close from expired and publishing again after expiry | only declared transitions; expired -> closed and expired -> superseded allowed; at most one open record per listing |
 | TEST-PS-001-09.T05 | integration | PS-001-03.R02, PS-001-03.R03, PS-001-06.R02 | close A with active publication | publication ended and tombstone queued in the same transaction; restore of C gives unpublished, never published |
-| TEST-PS-001-09.T17 | integration | PS-001-03.R04 | E reaches expiresAt on day 10 with the 14-day cycle hold; then the renewal cap is reached | publication renewed with requestedBy expiry_deferral and no bazaar.listing.expired; at the cap the record becomes deferred and expires only after the hold ends |
+| TEST-PS-001-09.T17 | integration | PS-001-03.R04 | E reaches expiresAt on day 10 with the 14-day cycle hold; then the renewal cap is reached | publication renewed with requestedBy expiry_deferral and no bazaar.listing.expired; at the cap the record becomes deferred and expires only after the hold ends; a second listing whose publication is in policy_attention is deferred without a renewal request succeeding and without any statement |
 
 ## Dependencies
 

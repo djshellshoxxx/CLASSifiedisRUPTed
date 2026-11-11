@@ -11,7 +11,7 @@ summary: >-
   shredded. The vault export is the primary backup (IOX-6), and nothing leaves the device unless the user saves the file somewhere.
 responsibilities:
   - Own ExportJob - request, collect, ready, expired, failed and cancelled with per-section progress.
-  - Define the ExportSectionPort contract and discover export sections through the kernel port registry at vault composition (inverted registration, so modules that cannot list this module in depends_on without a cycle, such as F07.S01.M01, F15.S01.M01 and F15.S04.M03, register without an edge), with at least one section per module that owns user data and every section name owned by exactly one module (IOX-5), failing the build in CI when a module that owns user data has none.
+  - Define the ExportSectionPort contract and discover export sections through the kernel port registry at vault composition (inverted registration, so modules that cannot list this module in depends_on without a cycle, such as F07.S01.M01, F15.S01.M01, F15.S04.M03, F18.S01.M01 and F18.S02.M01, register without an edge), with at least one section per module that owns user data and every section name owned by exactly one module (IOX-5), failing the build in CI when a module that owns user data has none.
   - Produce the bundle as JSON Lines - manifest first {format, exportedAt, accountId, did, modules[], counts, sha256 per section, sectionExportedAt per section, part?}, then {schema, record} lines, with media as chunked blob records.
   - Sign the manifest with the principal's device key and verify it before declaring the job ready.
   - Store the bundle encrypted with a per-job key, serve it for 7 days, and delete it and shred the key at expiry, on user cancel or in the deletion shred step.
@@ -41,6 +41,7 @@ edge_cases:
   - A second request with a new command ID while a job is collecting; refused with PRECONDITION_FAILED and params.activeJobId, while the same command ID replays the stored result.
   - Two modules register the same section name, for example two registrants of federation.records; vault composition fails and CI names both modules, so no bundle ever mixes their lines.
   - A module registered through the kernel port registry without a depends_on edge (F15.S01.M01 platform.outbox) is missing at composition; the build-time conformance check fails, and at runtime the job fails with PRIVACY_EXPORT_SECTION_FAILED naming the missing module instead of producing a bundle without its section.
+  - The governance modules F18.S01.M01 and F18.S02.M01 register their sections from the vault composition root because a depends_on edge to this module would close the cycle F10.S01.M03 -> F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01; the bundle still carries governance.profile_selection with the owner's age declaration and the governance comment, trusted-publisher and pending-statement sections.
 ux:
   screens:
     - "Export screen: explanation of what is included and what is not, include media toggle with estimated size, a multi-part choice with date ranges when media exceed 2 GiB, Request export button requiring a fresh unlock."
@@ -135,6 +136,7 @@ processes:
       - State changes emit events into the vault outbox in the same IndexedDB transaction as the job update.
       - ExportSectionPort is defined in the note with typed methods, error semantics and a CI conformance check, and DeletionPort and RetentionPurgePort are implemented for ExportJob and bundles.
       - Export sections are discovered through the kernel port registry at vault composition, by inverted registration for modules that cannot list this module in depends_on, a section name registered by two modules fails composition, and the registrants include identity.account and identity.device_keys (F07.S01.M01), platform.outbox (F15.S01.M01), platform.local_settings (F15.S04.M03) and the federation sections federation.records and federation.tombstones (F11.S01.M02), federation.routes (F11.S02.M01), federation.conflicts (F11.S02.M03), federation.peers (F11.S03.M01), federation.block_rules (F11.S03.M02) and federation.migrations (F11.S03.M03).
+      - The governance sections are registered from the vault composition root by inverted registration, because F18.S01.M01 and F18.S02.M01 sit on the path F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01 and cannot list this module in depends_on - governance.policy_comments, governance.trusted_publishers and governance.pending_statements, with governance.policy_proposals, from F18.S02.M01, and governance.profile_selection (including the age declaration, P3 for the owner only), with governance.jurisdiction_profiles, from F18.S01.M01.
     commands:
       - name: privacy.export.request
         capability: privacy.export.request
@@ -183,7 +185,10 @@ processes:
       registered by exactly one module, the schemas of a module's sections together cover the schemas of its owned
       entities, and a contract test streams the module's fixtures through lines() twice with identical bytes. Known
       registrants without a depends_on edge to this module - F07.S01.M01 (identity.account, identity.device_keys),
-      F15.S01.M01 (platform.outbox), F15.S04.M03 (platform.local_settings); the F11 modules register federation.records,
+      F15.S01.M01 (platform.outbox), F15.S04.M03 (platform.local_settings), F18.S01.M01 (governance.jurisdiction_profiles,
+      governance.profile_selection) and F18.S02.M01 (governance.policy_proposals, governance.policy_comments,
+      governance.trusted_publishers, governance.pending_statements), the two governance modules registering from the vault
+      composition root because F10.S01.M02 depends on F18.S01.M01, which depends on F18.S02.M01; the F11 modules register federation.records,
       federation.tombstones, federation.routes, federation.conflicts, federation.peers, federation.block_rules and
       federation.migrations through the same registry. This module's own section
       privacy.exports exports ExportJob metadata. DeletionPort (wired directly by F10.S01.M04, which depends on this module)
@@ -293,8 +298,9 @@ processes:
       - "T21 | integration | 01.R04 | vault with 2.5 GiB of media; single request; then a two-part set by media date; restore double | single request PRIVACY_EXPORT_QUOTA with a suggested split; each part ≤ 2 GiB and verifies alone; parts share setId and part 2 carries the part-1 manifest hash; the restore double accepts the set only with both parts"
       - "T22 | integration | 03.R04 | job requested and never started for 24 h; job collecting with the PWA closed for 25 h; job with 31 min of active collection time | first two fail with errorCode EXPIRED; third fails with PRIVACY_EXPORT_TIMEOUT; each emits privacy.export.failed and leaves no files"
       - "T23 | integration | 04.R05 | vault composition with the kernel port registry and stub registrants for F07.S01.M01, F15.S01.M01, F15.S04.M03 and the seven F11 sections, then a second registrant for federation.records, then F15.S01.M01 missing | the manifest lists identity.account, identity.device_keys, platform.outbox, platform.local_settings and every federation section with counts and hashes, and none of these modules needs a depends_on edge; the duplicate fails composition naming both modules; the missing registrant fails the job with PRIVACY_EXPORT_SECTION_FAILED naming F15.S01.M01"
+      - "T24 | integration | 04.R06,04.R05 | vault composition with stub registrants for F18.S02.M01 (policy proposals, policy comments, trusted publishers, pending statements) and F18.S01.M01 (jurisdiction profiles, a profile selection with declaredAgeAtLeast 18), then a second registrant for governance.policy_comments | the manifest lists all six governance sections with counts and hashes, the selection line keeps the age declaration in the owner's bundle after redactForExport, neither module has a depends_on edge to this module and the depends_on graph stays acyclic; the duplicate fails composition naming both modules"
     acceptance:
-      - All tests T01 to T23 pass in CI.
+      - All tests T01 to T24 pass in CI.
       - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
       - No bundle contains P4 secrets, unclassified fields or other users' private content.
       - A ready bundle is unreachable after 7 days and its key is gone.

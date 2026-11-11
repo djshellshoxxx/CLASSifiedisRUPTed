@@ -23,7 +23,7 @@
 | V06 | expectedRevision matches ArchiveRecord or Listing revision | CONFLICT_REVISION |
 | V07 | kind giveaway closes only with reason given or other; kind wanted only fulfilled or other | VALIDATION_FAILED |
 | V08 | expiry sweep: now >= expiresAt by the device clock and the device clock is not more than 24 h behind the median of the latest receipts of at least 2 distinct relays in the last 7 days (receipts more than 24 h ahead of the median are discarded) | PRECONDITION_FAILED |
-| V09 | expiry sweep: no active hold with linkedDealId or holderType cycle on the listing, otherwise renew within the F01.S01.M03 cap or defer | BAZAAR_ARCHIVE_HOLD_ACTIVE |
+| V09 | expiry sweep: no active hold with linkedDealId or holderType cycle on the listing, otherwise renew within the F01.S01.M03 cap or defer (also when F01.S01.M03 refuses the renewal because the publication is in policy_attention) | BAZAAR_ARCHIVE_HOLD_ACTIVE |
 
 ## Verification
 

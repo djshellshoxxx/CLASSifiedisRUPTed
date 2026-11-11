@@ -8,14 +8,14 @@
 
 - **PS-006-06.R01** The command is idempotent per CTR-IDM-001 and carries expectedRevision when replacing existing terms.
 - **PS-006-06.R02** Terms, listing revision record and outbox event commit in one transaction or not at all.
-- **PS-006-06.R03** Offline edits are committed locally and remain unsent until the next signed projection is accepted; no certainty beyond that state is claimed.
+- **PS-006-06.R03** Offline edits are committed locally and remain unsent until the next signed projection is prepared, and count as received by a relay only after its verified receipt; no certainty beyond that state is claimed.
 
 ## Specification
 
 - **idempotency:** Idempotency-Key required; key and request hash kept 24 h in the vault; replay returns the stored result.
 - **concurrency:** expectedRevision on every replace; the unique index on listing id prevents two terms records; stale revision returns CONFLICT_REVISION with currentRevision and both values are shown.
 - **retries:** Only IndexedDB aborts are retried (max 3); RATE_LIMITED is retried only after retryAfterMs.
-- **offline:** Fully offline capable; sync state of the affected projection is tracked by F01.S01.M03 (prepared, transport_acknowledged, peer_accepted).
+- **offline:** Fully offline capable; sync state of the affected projection is tracked by F01.S01.M03 (prepared, then transport_acknowledged on a verified relay receipt; a public projection is never peer_accepted).
 - **partial failure:** If recording the listing revision fails, the terms write is rolled back and DEPENDENCY_UNAVAILABLE is returned only for transient storage faults.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
@@ -27,7 +27,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | TEST-PS-006-09.T05 | integration | PS-006-04.R02, PS-006-06.R03 | define on published P with price change | event emitted once; revision recorded as material; draft L emits no event |
 | TEST-PS-006-09.T07 | integration | PS-006-06.R01, PS-006-06.R02 | replay define; stale expectedRevision | original result; CONFLICT_REVISION with currentRevision |
 | TEST-PS-006-09.T08 | chaos | PS-006-06.R03 | revision record fails inside define | terms write rolled back |
-| TEST-PS-006-09.T09 | integration | PS-006-06.R03 | edit offline then send projection | state unsent, then prepared, transport_acknowledged, peer_accepted only after signed ack |
+| TEST-PS-006-09.T09 | integration | PS-006-06.R03 | edit offline then send projection | state unsent, then prepared, then transport_acknowledged only after the verified relay receipt, never peer_accepted |
 
 ## Dependencies
 

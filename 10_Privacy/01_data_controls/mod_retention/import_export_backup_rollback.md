@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section privacy.retention in classrup-export/v1: the vault's RetentionPolicy rows (schema classrup.privacy.retention_policy/v1). Legal holds are operator records and are excluded from user exports.
-- **import:** Policies import as user-source rows clamped to bounds; foreign hold records are never imported; the high-water clock is not imported, so the first sweep after an import takes the import time as its high-water clock.
+- **import:** Policies import as user-source rows clamped to bounds, except jurisdiction and default rows, which are re-derived by a jurisdiction refresh from the selection that F18.S01.M01 restores, keeping the imported priorDurationDays and looserFrom when the same ProfileRef and version are restored; foreign hold records are never imported; the high-water clock is not imported, so the first sweep after an import takes the import time as its high-water clock.
 - **backup:** Relay SQLite backup (CTR-IOX-001 IOX-3) covers holds and policies; after a restore the relay refuses to sweep until hold records are loaded and verified, and purge jobs missed during downtime are not replayed for held subjects.
 - **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; class bounds are never widened by a migration.
 

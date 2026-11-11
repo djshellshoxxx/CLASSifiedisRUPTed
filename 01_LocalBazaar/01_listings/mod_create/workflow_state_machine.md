@@ -9,7 +9,7 @@
 - **PS-002-03.R01** Listing status follows the declared machine; any other transition is refused with CONFLICT_STATE and nothing changes.
 - **PS-002-03.R02** Only the sibling modules F01.S01.M03 and F01.S01.M04 may request status changes, and only through apply_status in their own transaction.
 - **PS-002-03.R03** Deleted is terminal; the tombstone keeps id, type and deletedAt for 180 days as required by CTR-PRV-001.
-- **PS-002-03.R04** Relay hosting notices never change Listing.status: unpublishing is triggered only by the owner or a local policy-pack change, and a relay's removal changes only that relay's delivery state in the PublicationRecord of F01.S01.M03 (ADR-0016 §3, §8).
+- **PS-002-03.R04** Relay hosting notices never change Listing.status: unpublishing is triggered only by the owner, including the owner's confirmed Unpublish of a publication that a changed policy pack holds in policy_attention (reason policy_changed), never by the pack change itself, and a relay's removal changes only that relay's delivery state in the PublicationRecord of F01.S01.M03 (ADR-0016 §3, §8).
 
 ## Specification
 
@@ -21,7 +21,7 @@ Initial **draft**; terminal **deleted**.
 |---|---|---|
 | draft -> published | apply_status by F01.S01.M03 after a signed projection is committed | sets currentPublicationId, publishedAt, expiresAt |
 | draft -> deleted | bazaar.listing.delete by owner, or 180-day draft purge | tombstone written; emits bazaar.listing.deleted |
-| published -> unpublished | apply_status by F01.S01.M03 (owner or local policy-pack change) | clears expiresAt; relay notices are not a trigger |
+| published -> unpublished | apply_status by F01.S01.M03 (owner, or reason policy_changed when the owner confirms Unpublish of a publication held in policy_attention) | clears expiresAt; relay notices and rule pack changes alone are not a trigger |
 | published -> published | apply_status by F01.S01.M03 renew, including a renew requested by the F01.S01.M04 expiry deferral | new expiresAt from the renewed signed projection |
 | published -> expired | apply_status by F01.S01.M04 expiry sweep | expiresAt <= now and no deferral applies |
 | unpublished -> published | apply_status by F01.S01.M03 republish | requires new PublicationRecord |
@@ -39,7 +39,7 @@ stateDiagram-v2
   [*] --> draft
   draft --> published: apply_status by F01.S01.M03 after a signed projection is committed
   draft --> deleted: bazaar.listing.delete by owner, or 180-day draft purge
-  published --> unpublished: apply_status by F01.S01.M03 (owner or local policy-pack change)
+  published --> unpublished: apply_status by F01.S01.M03 (owner, or reason policy_changed when the owner confirms Unpublish of a publication held in policy_attention)
   published --> published: apply_status by F01.S01.M03 renew, including a renew requested by the F01.S01.M04 expiry deferral
   published --> expired: apply_status by F01.S01.M04 expiry sweep
   unpublished --> published: apply_status by F01.S01.M03 republish

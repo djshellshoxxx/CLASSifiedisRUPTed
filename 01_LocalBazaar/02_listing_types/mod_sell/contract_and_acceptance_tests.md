@@ -28,7 +28,7 @@ See the module test table below (all processes).
 | TEST-PS-006-09.T06 | abuse | PS-006-05.R01, PS-006-05.R02, PS-006-05.R03 | other principal calls define; internal caller reads minOffer | FORBIDDEN or NOT_FOUND; offers module allowed on owner's behalf |
 | TEST-PS-006-09.T07 | integration | PS-006-06.R01, PS-006-06.R02 | replay define; stale expectedRevision | original result; CONFLICT_REVISION with currentRevision |
 | TEST-PS-006-09.T08 | chaos | PS-006-06.R03 | revision record fails inside define | terms write rolled back |
-| TEST-PS-006-09.T09 | integration | PS-006-06.R03 | edit offline then send projection | state unsent, then prepared, transport_acknowledged, peer_accepted only after signed ack |
+| TEST-PS-006-09.T09 | integration | PS-006-06.R03 | edit offline then send projection | state unsent, then prepared, then transport_acknowledged only after the verified relay receipt, never peer_accepted |
 | TEST-PS-006-09.T10 | abuse | PS-006-01.R02, PS-006-01.R03, PS-006-07.R01, PS-006-07.R02 | scan projection, events and logs; note with IBAN; schema search for payment instruction fields | no minOffer or drafts leave device; projected subset only after publish; note rejected; no payment instruction field exists |
 | TEST-PS-006-09.T11 | abuse | PS-006-02.R03 | 11 price changes within 24 h | 11th returns RATE_LIMITED with retryAfterMs |
 | TEST-PS-006-09.T12 | load | PS-006-08.R01, PS-006-08.R02, PS-006-08.R03 | 1 000 define calls on Moto G profile | p95 <= 60 ms, counters present, no network |

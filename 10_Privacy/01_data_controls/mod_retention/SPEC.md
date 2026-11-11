@@ -18,12 +18,14 @@ Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, st
 - Enforce RET-SIGNAL (CTR-PRV-001 PRV-8) - purge each signal record at its expiresAt and never later than 365 days after creation, after its module folded it into a counts-only rollup, and purge the rollup 365 days later.
 - Discover RetentionPurgePort registrations through the kernel port registry at vault and relay composition (inverted registration), so modules that cannot list this module in depends_on without closing a cycle, such as F15.S01.M01 and F15.S04.M03, register their kinds without a depends_on edge.
 - Carry the held subject (subjectKind and subjectRef) in privacy.legal_hold.placed and privacy.legal_hold.released so relay-side holders of that subject react without scanning every record.
+- Refresh jurisdiction rows by ProfileRef {publisherId, code} from governance.jurisdiction_profile.activated in the vault (scope vault) and on the relay (scope relay), falling back to the bundled generic profile for a missing or unknown ref, and apply a Looser value only to records created at or after its looserFrom.
+- Accept RetentionPurgePort kinds with a fixed anchor offset and a class cap, and kinds registered only at relay composition, such as governance.transparency_counter of F18.S02.M02 (RET-AUDIT, publishedAt + 90 days).
 
 ## Not responsible for
 
 - Account and data deletion flows, grace period and crypto-shred (F10.S01.M04); its relay command asks this module whether a relay-held subject is under hold and calls the relay purge path.
 - Export (F10.S01.M03) and consent (F10.S01.M01).
-- Jurisdiction profiles content (F18.S01.M01), which this module reads for overrides.
+- Jurisdiction profile content, selection, upgrade confirmation and the Stricter or Looser merge table (F18.S01.M01), which this module reads by ProfileRef through governance.jurisdiction_profile.resolve and get.
 - Key-linkage data (F07 identity, N11), read through a KeyLinkagePort supplied by the relay composition.
 - Future: automated legal-request intake, notice templates for affected users, and hold reporting to regulators; MVP leaves these to relay operators.
 
@@ -50,10 +52,15 @@ Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, st
 - The device clock jumps forward by 3 days, by the user or by malware, or runs more than 24 h ahead of the latest relay-signed receipt time; the sweep runs as a dry run and purges RET-SHORT, RET-STANDARD and RET-EVIDENCE records only after the user confirms the preview.
 - A RET-SIGNAL record carries an expiresAt 400 days after its createdAt; the sweep treats createdAt plus 365 days as its end, folds it into the counts-only rollup and purges it at that cap, and the CI conformance check fails the schema that allowed the longer expiry.
 - A legal hold on an author is placed on a relay; privacy.legal_hold.placed names subjectKind author and the author's did as subjectRef, and the relay's evidence holder flags exactly that author's snapshots instead of re-checking every record.
+- A selected profile's new version shortens evidenceDays from 1825 to 730; governance.jurisdiction_profile.activated with change upgrade_pending leaves every row unchanged, and only after the owner confirms (change upgraded) does the EVIDENCE row become 730 days with priorDurationDays 1825, so records created before looserFrom are still kept 1825 days.
+- A publisher backdates effectiveFrom by a year to reach existing records; looserFrom is the later of effectiveFrom and the local time the version came into use in this scope, so no record created before the owner's confirmation or the relay upload loses retention.
+- A retention row or a relay tenant names a ProfileRef that this scope does not know, or none at all; the refresh resolves the bundled generic profile and writes the CTR-PRV-001 defaults with fallback recorded, while a malformed code such as "EU DE" is refused with VALIDATION_FAILED.
+- A resolved profile sets evidenceDays 180 or auditDays 90, which are inside the F18.S01.M01 ranges but below this module's class bounds; the refresh clamps them to 365 and 180 days and logs the clamp.
+- TransparencyCounter rows of a period whose report is not yet published have no publishedAt; they are never purged by the 90-day offset and are purged only when their createdField passes the effective RET-AUDIT duration of the relay scope.
 
 ## UX and accessibility
 
-- Vault data retention screen: table of classes with duration, source and next sweep time; edit control for classes the user may shorten; last run summary with counts; clock-jump dialog showing the dry-run preview with Confirm purge and Not now.
+- Vault data retention screen: table of classes with duration, source (for jurisdiction rows the profile name, ProfileRef and version, and a pending Looser upgrade when one waits for confirmation) and next sweep time; edit control for classes the user may shorten; last run summary with counts; clock-jump dialog showing the dry-run preview with Confirm purge and Not now.
 - Relay operator console: policy editor with bounds, run history, and Legal holds list with Request, Approve, Reject and Release request actions (release decisions approve or decline), showing requester, approver, their roles and the review due date.
 
 **States:** loading; default-policy; overridden; sweeping; clock-jump-confirm; hold-requested; hold-active; hold-release-requested; error
@@ -70,7 +77,7 @@ Enforces the retention classes of CTR-PRV-001 (ephemeral 24 h, short 30 days, st
 - Commands: `privacy.retention_policy.set`, `privacy.retention.run`, `privacy.legal_hold.request`, `privacy.legal_hold.approve`, `privacy.legal_hold.reject`, `privacy.legal_hold.release_request`, `privacy.legal_hold.release_approve`
 - Queries: `privacy.retention_policy.list`, `privacy.legal_hold.check`, `privacy.legal_hold.list`
 - Emits: `privacy.retention.purged`, `privacy.legal_hold.placed`, `privacy.legal_hold.released`
-- Consumes: `security.role.revoked`, `platform.tenant.configured`, `federation.tombstone.applied`
+- Consumes: `security.role.revoked`, `platform.tenant.configured`, `governance.jurisdiction_profile.activated`, `federation.tombstone.applied`
 
 ## Dependencies
 
@@ -80,13 +87,13 @@ F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-079-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-079-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-079-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-079-02 | [Validation rules](validation_rules.md) | 7 |
 | PS-079-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-079-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
+| PS-079-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-079-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-079-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-079-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-079-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-079-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-079-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-079-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -95,7 +102,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T25 pass in CI.
+- All tests T01 to T28 pass in CI.
 - No hold can be activated or released by one person alone, by two linked DIDs, or by a pair without an admin.
 - Active holds are never violated by any sweep or tombstone handler, and holds never alter a vault.
 - Every record kind has a registered purge port or the build fails.

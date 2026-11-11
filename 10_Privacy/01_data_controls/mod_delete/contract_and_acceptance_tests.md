@@ -47,10 +47,11 @@ See the module test table below (all processes).
 | TEST-PS-077-09.T25 | integration | PS-077-01.R06, PS-077-02.R05, PS-077-04.R02 | deletion with 40 threads and 63 thread counterparties listed by an F08.S01.M02 plan double, one open cycle and a notice addressed to a did that no plan listed | one departure notice signed once and sealed to 63 mailboxes under one cid, payload {requestId, signedAt, kind, effectiveAt, recourse}; the cycle gets a commitment notice; the unlisted recipient is refused with VALIDATION_FAILED; the account_deleted revocation lists the departure cid |
 | TEST-PS-077-09.T26 | integration | PS-077-04.R06, PS-077-04.R07, PS-077-03.R03 | execution with stub registrants in the kernel port registry for F07.S01.M01, F08.S01.M01, F08.S01.M03, F15.S01.M01 and F15.S04.M03 and recording order | F07 handle releases, identity document tombstone and relay session revocations, F08 message and attachment deletes and mailbox closes all run in sign before revoke_keys and destroy_keys; F15.S01.M01 moves pending signed entries to the residue outbox; F15.S04.M03 local settings are purged; no registrant needs a depends_on edge to this module |
 | TEST-PS-077-09.T27 | e2e | PS-077-02.R05, PS-077-07.R02 | tap Erase vault in the PWA, then lock the vault and switch principal with queued entries | the export prompt is shown before anything is deleted and the deletion request starts grace only after confirmation; lock and switch keep every record and entry and never call DeletionPort |
+| TEST-PS-077-09.T28 | integration | PS-077-04.R08, PS-077-03.R03 | execution with recording stub registrants for F18.S02.M01 (3 own policy comments) and F18.S01.M01 (a profile selection with an age declaration) registered from the vault composition root | 3 comment tombstones are signed in sign before revoke_keys and listed by the account_deleted revocation; the selection and age declaration are gone after purge; neither module has a depends_on edge to this module and the depends_on graph stays acyclic |
 
 ## Acceptance criteria
 
-- All tests T01 to T27 pass in CI.
+- All tests T01 to T28 pass in CI.
 - After completion no module on this device retains content or recoverable keys for the principal, retained evidence carries only the pseudonym, and no record joins the did and the pseudonym.
 - The grace period of 14 days cannot be shortened by any API.
 - The completion summary always states what cannot be recalled and that the guarantee covers this device only.

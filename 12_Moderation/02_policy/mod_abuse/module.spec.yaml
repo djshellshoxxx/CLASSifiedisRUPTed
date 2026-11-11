@@ -7,21 +7,25 @@ summary: >-
   change type (initial adoption, restrictive or non-restrictive), restrictive changes need 14 days' notice, and each
   published version is signed by the relay as a public policy statement that vaults can fetch, pin and compare, so
   users can see what a relay enforces before they choose it. Rules describe what the relay hosts and indexes; they
-  are not law and not a global standard. Prohibited goods rules are owned by F18 and are referenced here by ID.
+  are not law and not a global standard. Prohibited goods rules are owned by F18.S01.M02 and are referenced here by
+  (publisherId, ruleKey), optionally pinned to one version by ruleId. Approved community decisions about platform
+  policy (F18.S02.M01, targetType platform_policy) arrive on the relay as drafts for operator review and are never
+  published by themselves.
 responsibilities:
   - "Own the PolicyRule record: stable rule ID, immutable versions, change type, locale texts, severity and allowed action ladder."
   - Provide a seed set of 12 rule families that a relay can adopt, edit or replace before publishing, adopted as initial versions with a stated effective date.
   - Publish each rule version as a relay-signed statement (classrup.moderation.policy/v1) and an index of current versions with their derived in-force state.
   - Answer in-process whether a cited rule version was in force at a decision time (moderation.policyrule.check_citable) for F12.S02.M01 and F12.S01.M03.
   - Keep retired and superseded versions readable forever so old statements of reasons remain understandable.
-  - Cross-reference prohibited-goods rules from F18.S01.M02 by rule ID without copying their content.
+  - Cross-reference prohibited-goods rules from F18.S01.M02 by (publisherId, ruleKey), with an optional ruleId naming one exact version, without copying their content.
+  - Turn relay-scope governance.policy_proposal.decided events of targetType platform_policy with outcome approved into draft PolicyRule versions for operator review, built from the carried proposedChange, and discard the unpublished drafts of a proposal whose outcome becomes conflicted.
 non_responsibilities:
   - Applying rules to content (F12.S02.M01) and detecting violations (F12.S02.M02).
   - Prohibited goods rule sets and jurisdiction logic (F18.S01.M02, F18.S01.M01).
   - Community decision-making on policy changes (F18.S02.M01); this module records the published result.
   - Relay signing key registry and rotation history (F16.S02.M02).
   - "Future: per-community rule overlays; machine-readable rule tests; translations beyond the operator's locales."
-depends_on: [F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001]
+depends_on: [F18.S01.M02, F18.S02.M01, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001]
 user_stories:
   - As a prospective member, I can read a relay's rules and their change history before I choose it.
   - As a relay operator, I publish a revised rule with a changelog and an effective date at least 14 days ahead for restrictive changes, and a new relay can adopt its first rule set with a stated effective date.
@@ -34,8 +38,12 @@ edge_cases:
   - An operator labels a version non_restrictive although it adds an allowed action; refused with VALIDATION_FAILED because non_restrictive requires a subset of the previous allowed actions and no higher severity.
   - A moderator cites version 2 of a rule that is published but scheduled for next week; check_citable reports scheduled and the citation is refused by F12.S02.M01.
   - A rule text exists only in English but the user's locale is German; the vault shows the English text labelled with its language.
-  - A rule references a prohibited-goods rule ID that F18 later retires; the reference shows 'retired' and moderators cannot cite the rule for new actions.
+  - A rule references a prohibited-goods rule (publisherId, ruleKey) that the relay's applied F18.S01.M02 pack later retires; the reference shows 'retired', the rule is flagged for operator review and check_citable refuses it for new actions.
   - Relay signing key rotates; older rule statements stay verifiable through the key registry history in F16.S02.M02.
+  - An approved platform_policy decision reaches the relay twice through relay_upload (scope relay) and once as a vault-scope copy; one draft per (decisionCid, ruleId) is created from the carried proposedChange, the vault copy is ignored, and nothing is published until an operator publishes the draft.
+  - A decision later becomes conflicted (equivocation detected by F18.S02.M01); the unpublished drafts built from it are discarded with reason governance_conflicted, and a version already published from it stays immutable and is flagged for operator review.
+  - A decided event whose changeDigest does not equal sha256-JCS(proposedChange), or that carries only proposedChangeCid while the proposal statement stored on this relay does not match it, creates no draft and is logged.
+  - A v1 rule row holds a plain F18 rule version id as prohibitedRuleRef; the expand step resolves it to (publisherId, ruleKey, ruleId) and flags the rule for review when the id cannot be resolved.
 ux:
   screens:
     - "Public policy page: rule list grouped by family, each with ID, current version, change type, effective date, in-force state, short and full text, changelog."
@@ -53,6 +61,7 @@ processes:
       - Published rule versions are P0, immutable and retained under RET-EVIDENCE because moderation decisions cite them.
       - Rule IDs follow POL-<FAMILY>-<NNN>, are never reused and version numbers increase by one.
       - Each version has a derived in-force state (scheduled, in_force, superseded) computed from effectiveAt, later versions and retirement, and at most one version of a rule ID is in force at any time.
+      - A prohibited-goods reference is the F18.S01.M02 identity (publisherId, ruleKey) with an optional ruleId for one exact version, a version drafted from a governance decision keeps its governanceRef, and review flags and reference status derived from governance events live in a store-local review table beside the immutable version rows.
     entities:
       - name: PolicyRule
         schema: classrup.moderation.policyrule/v1
@@ -69,7 +78,8 @@ processes:
           - "allowedActions: string[] — subset of warn, remove_from_index, restrict_feature, suspend_relay_access"
           - "changeType: enum — initial | restrictive | non_restrictive"
           - "texts: object — locale to { title ≤ 120 code points, summary ≤ 400, body ≤ 4000 }"
-          - "prohibitedRuleRef?: string — F18.S01.M02 rule ID when family is prohibited_goods"
+          - "prohibitedRuleRef?: object — { publisherId: did:key, ruleKey: [a-z0-9_]{3,40}, ruleId?: uuidv7 } F18.S01.M02 reference when family is prohibited_goods; cross-module identity is (publisherId, ruleKey) and ruleId pins one exact version"
+          - "governanceRef?: object — { proposalId, publisherId, proposalStatementCid, decisionCid, changeDigest } when the draft was built from an approved F18.S02.M01 decision; kept unchanged on publication"
           - "changelog: string — 10..1000 code points"
           - "publishedAt?: timestamp — RFC 3339 UTC, relay clock at publication"
           - "effectiveAt: timestamp — RFC 3339 UTC; at least 14 days after publication when changeType is restrictive"
@@ -83,6 +93,7 @@ processes:
           - At most one version of a ruleId is in force at any time; a version is in force from its effectiveAt until a later version of the same ruleId reaches its effectiveAt or the rule is retired.
           - imminent_harm rules are the only restrictive ones allowed an effective date earlier than 14 days after publication.
           - changeType initial exists only for versions published before the relay's first in-force policy version; non_restrictive requires a previous version whose allowedActions include the new ones, with no higher severity and the same family.
+          - prohibitedRuleRef.ruleId, when present, names a version of the same (publisherId, ruleKey); review flags and reference status are never written into a version row.
     sql: |
       CREATE TABLE moderation_policy_rule (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, rule_id TEXT NOT NULL, version INTEGER NOT NULL, family TEXT NOT NULL,
@@ -92,29 +103,40 @@ processes:
       CREATE INDEX moderation_policy_effective ON moderation_policy_rule(tenant_id, rule_id, effective_at);
       CREATE TRIGGER moderation_policy_published_immutable BEFORE UPDATE ON moderation_policy_rule
         WHEN OLD.status = 'published' AND NEW.status = 'published' BEGIN SELECT RAISE(ABORT, 'immutable'); END;
+      CREATE TABLE moderation_policy_review (
+        tenant_id TEXT NOT NULL, rule_id TEXT NOT NULL, version INTEGER NOT NULL, flag TEXT NOT NULL,
+        prohibited_ref_status TEXT, source_event_id TEXT NOT NULL, flagged_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, rule_id, version, flag));
+      CREATE TABLE moderation_policy_governance_draft (
+        tenant_id TEXT NOT NULL, decision_cid TEXT NOT NULL, rule_id TEXT NOT NULL, policy_rule_id TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, decision_cid, rule_id));
+    note: "Store-local tables (P1, relay-internal, operators only, retained with the rule versions they refer to): moderation_policy_review holds review flags (prohibited_rule_changed, governance_conflicted) and the derived prohibitedRefStatus (active | retired) per version; moderation_policy_governance_draft dedupes governance drafts per (decisionCid, ruleId)."
   validation_rules:
     requirements:
       - Rule input is validated strictly, including ID format, text sizes and allowed action vocabulary.
       - Publication checks the notice period for restrictive changes only, the changelog and that the rule is the next version, and initial adoption on a new relay takes effect at its stated effective date.
       - Every violation maps to one stable error code.
       - A change is classified initial, restrictive or non_restrictive by testable rules, and a declared class that the rules contradict is refused.
+      - A governance decision becomes a draft only when it is relay-scope, approved, about platform_policy, published by this relay's operator and its content digest matches, and every draft built from it passes the same rule checks as an operator draft.
     rules:
       - "V01 | ruleId matches POL-[A-Z]+-[0-9]{3}, family is in the enum and no unknown fields are present | VALIDATION_FAILED"
       - "V02 | title ≤ 120, summary ≤ 400, body ≤ 4000 code points in at least one locale | VALIDATION_FAILED"
       - "V03 | allowedActions is a non-empty subset of the four relay action kinds | VALIDATION_FAILED"
       - "V04 | changeType restrictive requires effectiveAt ≥ publication + 14 days unless severity is imminent_harm | MODERATION_POLICY_NOTICE_TOO_SHORT"
       - "V05 | version equals current published version + 1 and expectedRevision matches | CONFLICT_REVISION"
-      - "V06 | family prohibited_goods requires prohibitedRuleRef that exists and is active in F18.S01.M02 | VALIDATION_FAILED"
+      - "V06 | family prohibited_goods requires prohibitedRuleRef { publisherId, ruleKey, ruleId? } whose (publisherId, ruleKey) has an active version in the relay's applied F18.S01.M02 pack (governance.prohibited_rule.get), and ruleId, when present, names a version of that key | VALIDATION_FAILED"
       - "V07 | a retired ruleId cannot be republished with the same ID | MODERATION_POLICY_RETIRED"
       - "V08 | changeType non_restrictive requires a previous version with the same family whose allowedActions include the new ones and whose severity is not lower; version 1 of a rule on a relay that already has an in-force policy is restrictive | VALIDATION_FAILED"
       - "V09 | changeType initial only while the relay has no in-force policy version yet, with effectiveAt stated and not before publication | VALIDATION_FAILED"
       - "V10 | check_citable input names ruleId, version and a decision time not in the future | VALIDATION_FAILED"
+      - "V11 | a governance.policy_proposal.decided event is drafted only with scope relay, targetType platform_policy, outcome approved, publisherId an operator key of this relay, changeDigest equal to sha256-JCS(proposedChange) (or of the stored proposal statement's proposedChange when only proposedChangeCid is carried), every targetRef matching POL-[A-Z]+-[0-9]{3} and every proposedChange entry passing V01–V03, V06, V08 and V09 | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - Rule versions follow the declared lifecycle and any other transition is refused with CONFLICT_STATE.
       - Publishing a version supersedes the previous in-force version at effectiveAt, and the previous stays readable.
       - Retiring a rule prevents new citations and leaves all existing citations valid.
       - The in-force state of a published version moves from scheduled to in_force at effectiveAt and to superseded when a later version takes effect or the rule is retired, and only an in_force version is citable for a decision at that time.
+      - A governance-built draft starts in state draft with governanceRef and is published only by an operator through moderation.policyrule.publish; a conflicted outcome discards the proposal's unpublished drafts and flags a version already published from it without changing that version.
     machines:
       - entity: PolicyRule
         initial: draft
@@ -122,7 +144,7 @@ processes:
         transitions:
           - "draft -> published | moderation.policyrule.publish by operator | statement signed; inForce scheduled or in_force by effectiveAt; emits moderation.policy.published"
           - "published -> retired | moderation.policyrule.retire by operator | retiredAt set; inForce superseded; later versions of the ID are refused"
-          - "draft -> retired | moderation.policyrule.retire by operator | draft discarded without publication"
+          - "draft -> retired | moderation.policyrule.retire by operator, or a relay-scope governance.policy_proposal.decided with outcome conflicted for the proposal the draft was built from | draft discarded without publication (reason governance_conflicted for the latter)"
       - entity: PolicyRuleInForce
         initial: scheduled
         terminal: [superseded]
@@ -137,13 +159,15 @@ processes:
     requirements:
       - Every command is a relay command; publish also produces a signed policy statement that vaults can fetch.
       - Publish emits moderation.policy.published in the same transaction as the version row and the statement.
-      - The module consumes governance events to flag rules for review and does not change rules by itself.
+      - The module consumes relay-scope governance events to create drafts and flag rules for operator review, and never publishes, retires or changes a published version by itself.
       - moderation.policyrule.check_citable answers in-process whether ruleId@version was in force at a given decision time, and F12.S02.M01 and F12.S01.M03 cite only versions it confirms.
+      - "governance.policy_proposal.decided is consumed in relay runtime only with scope relay (a decision this relay stored through F18.S02.M01 relay_upload) and targetType platform_policy: outcome approved creates one draft version per targetRef from proposedChange[targetRef], the canonical platform_policy change record { family, severity, allowedActions, changeType, texts, prohibitedRuleRef?, changelog?, effectiveAt }, with governanceRef { proposalId, publisherId, proposalStatementCid, decisionCid, changeDigest } and without a second lookup (only a payload carrying proposedChangeCid instead reads the proposal statement proposalStatementCid stored on this relay); rejected creates nothing; conflicted discards the proposal's unpublished drafts and flags versions already published from it; vault-scope events are ignored."
+      - "governance.prohibited_rule.changed is consumed in relay runtime only with scope relay (the relay's applied pack, emitted by F18.S01.M02 relay_upload): versions whose prohibitedRuleRef has the event's (publisherId, ruleKey) get prohibitedRefStatus retired on change retired or emergency_expired and a review flag, a version pinned to a ruleId that is no longer the active version is flagged, check_citable reports citable false for a version whose reference is retired, and vault-scope events are ignored."
     commands:
       - name: moderation.policyrule.draft
         mode: "relay command"
         capability: moderation.policyrule.draft
-        input: "{ ruleId?, family, severity, allowedActions, changeType, texts, prohibitedRuleRef?, changelog, effectiveAt }"
+        input: "{ ruleId?, family, severity, allowedActions, changeType, texts, prohibitedRuleRef?: { publisherId, ruleKey, ruleId? }, changelog, effectiveAt }"
         output: "{ policyRuleId, ruleId, version, revision: 1 }"
         errors: [VALIDATION_FAILED, CONFLICT_REVISION, MODERATION_POLICY_RETIRED]
         emits: []
@@ -178,17 +202,17 @@ processes:
       - name: moderation.policyrule.check_citable
         capability: moderation.policyrule.check_citable
         input: "{ refs: ruleId@version[] (1..5), decisionAt }"
-        output: "{ items: { ref, citable: boolean, inForce: scheduled|in_force|superseded|retired|unknown, allowedActions }[] }"
+        output: "{ items: { ref, citable: boolean, inForce: scheduled|in_force|superseded|retired|unknown, allowedActions, prohibitedRefStatus?: active|retired }[] } — citable is false when prohibitedRefStatus is retired"
         errors: [VALIDATION_FAILED]
     events_produced:
       - {type: moderation.policy.published, privacy: P0, payload: "{ ruleId, version, family, severity, changeType, effectiveAt, statementCid, changelog }"}
     events_consumed:
-      - {type: governance.policy_proposal.decided, effect: "create a draft rule version from an accepted proposal for operator review; never publishes by itself"}
-      - {type: governance.prohibited_rule.changed, effect: "refresh prohibitedRuleRef status and flag dependent rules for review"}
+      - {type: governance.policy_proposal.decided, effect: "relay runtime, scope relay and targetType platform_policy only (vault-scope copies and other target types are ignored): reads outcome approved|rejected|conflicted, proposalId, publisherId, targetRefs, proposedChange (or proposedChangeCid), changeDigest, proposalStatementCid, decisionCid and changelogEntry; approved after V11 creates one draft per targetRef with governanceRef, deduped on (decisionCid, ruleId), changelog defaulting to changelogEntry; rejected creates nothing; conflicted discards that proposal's unpublished drafts (reason governance_conflicted) and flags versions already published from it; never publishes"}
+      - {type: governance.prohibited_rule.changed, effect: "relay runtime, scope relay only (vault-scope copies are ignored): match versions whose prohibitedRuleRef has the payload's (publisherId, ruleKey); change retired or emergency_expired sets prohibitedRefStatus retired and flag prohibited_rule_changed; change activated with a ruleId other than a pinned prohibitedRuleRef.ruleId flags the version; dedupe on (consumer, eventId); never changes a version row"}
     errors:
       - "MODERATION_POLICY_NOTICE_TOO_SHORT | 422 | no | restrictive rule changes need an effective date at least 14 days after publication"
       - "MODERATION_POLICY_RETIRED | 409 | no | a retired rule ID cannot be reused"
-    note: "Statement registry (N2, F11.S01.M01): classrup.moderation.policy/v1 (signer role: the relay key registered in F16.S02.M02). check_citable is an in-process relay call and is not routable over HTTP."
+    note: "Statement registry (N2, F11.S01.M01): classrup.moderation.policy/v1 (signer role: the relay key registered in F16.S02.M02). check_citable is an in-process relay call and is not routable over HTTP. For F18.S02.M01 targetType platform_policy, a targetRef is an F12 ruleId (POL-<FAMILY>-<NNN>) and proposedChange[ruleId] is the canonical change record { family, severity, allowedActions, changeType, texts, prohibitedRuleRef?, changelog?, effectiveAt }, the moderation.policyrule.draft input without ruleId; a new ruleId starts at version 1. Prohibited-goods references use the F18.S01.M02 identity (publisherId, ruleKey) with optional ruleId."
     example: |
       POST https://relay.example/api/v1/cmd/moderation.policyrule.publish   (relay command, operator token)
       Idempotency-Key: 0192f3d0-0000-7000-8000-000000000e01
@@ -211,7 +235,7 @@ processes:
       - Commands are idempotent per CTR-IDM-001 and mutations require expectedRevision.
       - Publication writes the version row, signature and event in one transaction.
       - Concurrent edits to the same rule serialize on version uniqueness.
-    idempotency: "Idempotency-Key required; replay returns the stored response for 24 h; publish replay returns the same statementCid."
+    idempotency: "Idempotency-Key required; replay returns the stored response for 24 h; publish replay returns the same statementCid; governance drafts dedupe on (decisionCid, ruleId) and governance events on (consumer, eventId)."
     concurrency: "Unique (tenant, ruleId, version) index and expectedRevision; two drafts of the same next version conflict at publish with CONFLICT_REVISION; the in-force refresh updates the outgoing and incoming version in one write."
     retries: "Callers retry DEPENDENCY_UNAVAILABLE only; signing failure aborts publication."
     offline: "Operators need the relay online; vaults read cached policy statements offline and show their fetch date."
@@ -234,6 +258,7 @@ processes:
       - "T04 | Rule text used to smuggle active content | texts are plain text with inert links, length capped"
       - "T05 | Moderator cites a scheduled rule to bypass the notice period | check_citable allows only versions in force at the decision time"
       - "T06 | Operator labels a restrictive change non_restrictive to skip notice | V08 derives the class from allowed actions, severity and family"
+      - "T07 | A forged, foreign or equivocated governance decision injects a rule | only relay-scope decisions that F18.S02.M01 relay_upload verified for this relay's operator are drafted (V11), digests are checked, conflicted outcomes discard drafts, and drafts never publish by themselves"
     abuse_controls:
       - "Operator publish rate limited to 20 rule versions per 24 h (F12.S03.M03 window_counter class policy.publish); all operator actions audit-logged (F16.S01.M01)."
   observability_performance:
@@ -245,6 +270,7 @@ processes:
       - "classrup_moderation_policy_versions_total{outcome=published|retired,changeType}"
       - "classrup_moderation_policy_in_force (gauge: number of rules in force)"
       - "classrup_moderation_policy_index_age_ms (gauge)"
+      - "classrup_moderation_policy_governance_events_total{outcome=drafted|ignored|discarded|flagged}"
     logs:
       - "relay info policy.published {ruleId, version, changeType, correlationId}."
     budgets:
@@ -273,8 +299,11 @@ processes:
       - "T14 | e2e | 01.R02,04.R01 | mobile visitor reads policy offline after first visit | cached policy shown with fetch date; axe zero serious issues"
       - "T15 | integration | 02.R04,02.R02 | fresh relay Z adopts the seed set as initial with effectiveAt = publication; relay X publishes a restrictive v2 with 3 days notice, a non_restrictive text fix with immediate effect, a new rule version 1 labelled non_restrictive, and an initial version | Z's rules in force at once; NOTICE_TOO_SHORT; text fix in force at once; VALIDATION_FAILED; VALIDATION_FAILED"
       - "T16 | integration | 03.R04,04.R04 | v2 scheduled for next week; check_citable for v2 now and after effectiveAt, and for v1 after v2 takes effect | scheduled and not citable; in_force and citable; v1 superseded and not citable for later decisions while still readable"
+      - "T17 | integration | 04.R05,02.R05,03.R05 | relay-scope decided events for platform_policy: approved with proposedChange for POL-FRAUD-001 and new POL-SCAM-001 delivered twice, a vault-scope copy, a prohibited_rule target, a digest mismatch, a publisher that is not an operator key of the relay, then conflicted for the approved proposal | one draft per (decisionCid, ruleId) with governanceRef built without a get call; the copy, the other target, the mismatch and the foreign publisher create nothing; conflicted discards the unpublished drafts with reason governance_conflicted; nothing is published"
+      - "T18 | integration | 04.R06,01.R05,02.R02 | draft with prohibitedRuleRef { publisherId P, ruleKey counterfeit_goods }, with an unknown ruleKey and with a ruleId of another key; relay-scope prohibited_rule.changed retired for (P, counterfeit_goods) and a vault-scope copy; check_citable for the dependent version | stored; VALIDATION_FAILED twice; prohibitedRefStatus retired and flag set in the review table while the version row is unchanged; copy ignored; citable false"
+      - "T19 | contract | 04.R05,04.R06,10.R04 | F18.S02.M01 decided-event fixture (outcomes approved, rejected and conflicted, scope relay and vault) and F18.S01.M02 changed-event fixture against this module's consumer schema; v1 rows with a string prohibitedRuleRef through the expand step | every documented payload field is read as specified; string refs resolve to { publisherId, ruleKey, ruleId } or are flagged for review"
     acceptance:
-      - All tests T01–T16 pass in CI.
+      - All tests T01–T19 pass in CI.
       - Published rule versions are immutable and every action's citation resolves to the exact text in force at decision time.
       - Seed set of 12 rule families is available for adoption in a fresh relay, and restrictive changes always give 14 days' notice.
   import_export_backup_rollback:
@@ -282,7 +311,8 @@ processes:
       - Policy export contains all versions with statements and is portable between relays as a starting template, not as authority.
       - Import verifies statement signatures when keeping them as history, and templates import as drafts under the new relay's keys.
       - Schema changes follow expand/contract and keep v1 readable for 180 days.
+      - The expand step turns a v1 prohibitedRuleRef string (an F18 rule version id) into { publisherId, ruleKey, ruleId } through governance.prohibited_rule.get { ruleId }, and a reference that cannot be resolved is flagged for operator review instead of guessed.
     export: "Section moderation.policy in the relay configuration export: all versions, change types, texts, statements and changelogs; users can download the current policy as JSON from the public page."
     import: "Importing another relay's policy creates drafts only, with changelog 'adopted from <relay>' and changeType initial when the importing relay has no in-force policy, otherwise restrictive; original signatures are kept as provenance but never as this relay's statements."
     backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring re-verifies all statement signatures and recomputes inForce."
-    migration_rollback: "Additive fields only in v1 (changeType defaults to restrictive for existing versions after the first, initial for version 1 rows published before the first in-force policy; publishedAt; inForce derived); rollback is safe because older readers ignore new optional fields and unknown families display as 'other'."
+    migration_rollback: "Additive fields only in v1 (changeType defaults to restrictive for existing versions after the first, initial for version 1 rows published before the first in-force policy; publishedAt; inForce derived; governanceRef); prohibitedRuleRef changes from the rule version id string to the object { publisherId, ruleKey, ruleId } by an expand step that resolves the stored id with governance.prohibited_rule.get and flags unresolved rows for review, and readers keep the string readable for 180 days; rollback is safe because older readers ignore new optional fields, read prohibitedRuleRef.ruleId, and unknown families display as 'other'."

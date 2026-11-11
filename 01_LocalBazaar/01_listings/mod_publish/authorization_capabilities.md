@@ -16,8 +16,8 @@
 |---|---|---|
 | bazaar.publication.publish | owner | listing.ownerId = local principal; vault unlocked; signing key unrevoked |
 | bazaar.publication.confirm | owner | publication.ownerId = local principal and status held_for_confirmation |
-| bazaar.publication.unpublish | owner | publication.ownerId = local principal and status active; confirmHolds when holds exist |
-| bazaar.publication.end | system | caller is F01.S01.M04 or the policy-change consumer in this module |
+| bazaar.publication.unpublish | owner | publication.ownerId = local principal and status active or policy_attention; confirmHolds when holds exist |
+| bazaar.publication.end | system | caller is F01.S01.M04 or the DeletionPort step of this module; the policy-change consumer never calls it |
 | bazaar.publication.renew | owner | publication.ownerId = local principal; renewal window met; or system caller F01.S01.M04 expiry deferral within the 120-day cap |
 | bazaar.publication.promote | owner | publication.ownerId = local principal; Deal payer is the local principal and payee the operator DID of that relay |
 | bazaar.publication.read | owner | publication.ownerId = local principal |

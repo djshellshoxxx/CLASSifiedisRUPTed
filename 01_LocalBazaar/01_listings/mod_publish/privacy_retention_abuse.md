@@ -34,6 +34,7 @@
 | T06 | Forged relay_removal advisory to make the owner believe a listing was removed, or an advisory of one relay applied to another | F11.S01.M02 verification plus V16 accept only the pinned key of the relay of that delivery and the publication's statementCid; quarantine otherwise; advisories never change the Listing (FED-9) |
 | T07 | A malicious or misconfigured relay blocks publishing with future receipt times | median of at least 2 relays; receipts more than 24 h ahead discarded and the relay flagged untrusted; one relay alone only warns |
 | T08 | Promotion overclaim (paid or promoted shown without the relay) | promotion acknowledged only by the operator-signed payment acknowledgement, never by the seller's own finalized observation; active only on the relay-signed statement; relay can revoke |
+| T09 | Publisher key compromise or malicious rule pack used as a takedown of the user's publications | a block verdict caused by a pack change only holds the publication in policy_attention for its owner with a reminder after at least 7 days; no automatic unpublish or tombstone (CTR-FED-001 FED-9, ADR-0016 §3 and §8) |
 
 **Abuse controls**
 - At most 20 publish commands per hour per vault.

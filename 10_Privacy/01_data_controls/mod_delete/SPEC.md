@@ -11,7 +11,7 @@ The user can delete their identity and data on this device; the PWA's Erase vaul
 ## Responsibilities
 
 - Own DeletionRequest with its states, grace and deferral deadlines, per-module step progress, per-relay and per-counterparty delivery state, and its residue form after completion.
-- Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules discovered through the kernel port registry at vault composition (by inverted registration for F07.S01.M01, F15.S01.M01 and F15.S04.M03, which cannot list this module in depends_on without closing a cycle), idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
+- Define the DeletionPort contract (plan, execute, pseudonymize) and orchestrate deletion across modules discovered through the kernel port registry at vault composition (by inverted registration for F07.S01.M01, F15.S01.M01, F15.S04.M03, F18.S01.M01 and F18.S02.M01, which cannot list this module in depends_on without closing a cycle), idempotently and resumably, in a fixed step order that ends with F07.S01.M01 destroying the keys.
 - Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments and for every thread counterparty listed by the F08 DeletionPort plans, each signed once at execution and valid for the whole 30-day delivery window.
 - Orchestrate, not produce, federation tombstones by running the F11.S01.M02 DeletionPort sign step at execution, never during grace.
 - Pseudonymize the principal in retained RET-EVIDENCE records with a per-deletion pseudonym, destroy the pseudonymization salt at completion, and never keep the did and the pseudonym in the same retained record.
@@ -51,6 +51,7 @@ The user can delete their identity and data on this device; the PWA's Erase vaul
 - The user has 40 threads with 63 distinct counterparties and no open commitment; the sign step signs one departure notice, the F08.S01.M02 plan lists the 63 counterparties with their mailboxes, the notice is sealed to each of them under the same cid, and the account_deleted revocation lists that single cid.
 - The user taps Erase vault in the PWA; the export prompt opens first, and nothing in IndexedDB is deleted until the user has seen it and confirmed the deletion request; locking the vault or switching principal instead keeps every record.
 - The F15.S01.M01 outbox purge step runs while deletion statements and notices signed in the sign step still await delivery; those entries move to the residue outbox instead of being deleted, and only the principal's other entries are purged.
+- The principal posted 3 policy comments on a publisher's relay and declared an age in a profile selection; the F18.S02.M01 sign step signs 3 classrup.federation.tombstone/v1 comment withdrawals before revoke_keys, the account_deleted revocation lists their cids, and the F18.S01.M01 purge step deletes the selection and the age declaration, although neither module can list this module in depends_on.
 
 ## UX and accessibility
 
@@ -84,7 +85,7 @@ F10.S01.M02, F10.S01.M03, F07.S01.M01, F16.S02.M02, F11.S01.M01, F15.S01.M01, F1
 | PS-077-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-077-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-077-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
+| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-077-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-077-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-077-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -96,7 +97,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T27 pass in CI.
+- All tests T01 to T28 pass in CI.
 - After completion no module on this device retains content or recoverable keys for the principal, retained evidence carries only the pseudonym, and no record joins the did and the pseudonym.
 - The grace period of 14 days cannot be shortened by any API.
 - The completion summary always states what cannot be recalled and that the guarantee covers this device only.

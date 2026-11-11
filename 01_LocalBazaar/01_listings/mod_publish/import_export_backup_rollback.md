@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section bazaar.publications in classrup-export/v1, one line per PublicationRecord, followed by the referenced statements (classrup.bazaar.listing/v1 projections, tombstones, relay_removal advisories, reversals and promotion statements) as separate lines.
-- **import:** Signature and cid verified; records with invalid signatures are quarantined; imported active records become status ended with endReason owner and the UI offers Publish again, so stale promises are never revived silently; imported promotions are shown as ended.
+- **import:** Signature and cid verified; records with invalid signatures are quarantined; imported active or policy_attention records become status ended with endReason owner and the UI offers Publish again, so stale promises are never revived silently; imported promotions are shown as ended.
 - **backup:** Vault export is the primary backup (IOX-6); relays hold only copies of public projections under their own policy (IOX-7).
 - **migration rollback:** Additive fields only in v1; rollback is by reinstalling the previous release; statements already sent remain valid because their schema is unchanged.
 

@@ -113,13 +113,13 @@ processes:
       - "V06 | expectedRevision matches ArchiveRecord or Listing revision | CONFLICT_REVISION"
       - "V07 | kind giveaway closes only with reason given or other; kind wanted only fulfilled or other | VALIDATION_FAILED"
       - "V08 | expiry sweep: now >= expiresAt by the device clock and the device clock is not more than 24 h behind the median of the latest receipts of at least 2 distinct relays in the last 7 days (receipts more than 24 h ahead of the median are discarded) | PRECONDITION_FAILED"
-      - "V09 | expiry sweep: no active hold with linkedDealId or holderType cycle on the listing, otherwise renew within the F01.S01.M03 cap or defer | BAZAAR_ARCHIVE_HOLD_ACTIVE"
+      - "V09 | expiry sweep: no active hold with linkedDealId or holderType cycle on the listing, otherwise renew within the F01.S01.M03 cap or defer (also when F01.S01.M03 refuses the renewal because the publication is in policy_attention) | BAZAAR_ARCHIVE_HOLD_ACTIVE"
   workflow_state_machine:
     requirements:
       - "ArchiveRecord follows the declared machine; the pseudo-state live means the listing has no record yet."
       - "Every transition runs together with the matching Listing.apply_status call and, where a publication is active, with bazaar.publication.end, in one transaction."
       - "Restored listings return as unpublished and must go through publication checks again; restore never republishes automatically."
-      - "The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows, and otherwise defers the local expiry and records the deferral until the holds end."
+      - "The expiry sweep never expires a listing with active Deal-linked or cycle holds: it requests bazaar.publication.renew (requestedBy expiry_deferral) while the 120-day cap of F01.S01.M03 allows and the publication is not in policy_attention, and otherwise defers the local expiry and records the deferral until the holds end; a deferral never signs a statement."
       - "An expired listing can be closed directly by the owner, and an expired listing that is published again closes its record as superseded."
     machines:
       - entity: ArchiveRecord
@@ -127,7 +127,7 @@ processes:
         terminal: [restored, superseded, purged]
         transitions:
           - "live -> live | expiry sweep at expiresAt with active Deal-linked or cycle holds and renewals left under the 120-day cap | bazaar.publication.renew requestedBy expiry_deferral; autoExtensions counted in the next record"
-          - "live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached | Listing stays published locally; others see the signed expiresAt; deferredSince recorded"
+          - "live -> deferred | expiry sweep at expiresAt with active Deal-linked or cycle holds and the renewal cap reached, or the renewal refused with BAZAAR_PUBLISH_POLICY_ATTENTION because a changed rule pack holds the publication for its owner | Listing stays published locally; others see the signed expiresAt; deferredSince recorded"
           - "live -> expired | expiry sweep when expiresAt <= now (V08) and no Deal-linked or cycle hold | bazaar.publication.end {reason expired} in the same transaction issues the tombstone; Listing published -> expired; emits bazaar.listing.expired with tombstoneCid"
           - "live -> closed | bazaar.listing.close by owner or sold-out sweep | holds handled per V04; end publication first; Listing unpublished -> closed; emits bazaar.listing.closed"
           - "live -> archived | bazaar.listing.archive by owner | holds handled per V04; end publication if active; Listing -> archived; emits bazaar.listing.archived"
@@ -290,7 +290,7 @@ processes:
       - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import record with restoreUntil in the past | records round-trip; stale archived record imported as purged candidate"
       - "T15 | integration | 04.R01 | stock zero for 7 days then restocked on day 6 in a second case | closed sold_out on day 7 in the first; timer cancelled in the second"
       - "T16 | integration | 02.R02 | close B with closedWithRef D1; close B with a ref to another Deal; then with cancelDeals true | first converts the D1 hold; second BAZAAR_ARCHIVE_HOLD_ACTIVE; third calls commerce.deal.cancel and queues a signed reservation release to the buyer"
-      - "T17 | integration | 03.R04 | E reaches expiresAt on day 10 with the 14-day cycle hold; then the renewal cap is reached | publication renewed with requestedBy expiry_deferral and no bazaar.listing.expired; at the cap the record becomes deferred and expires only after the hold ends"
+      - "T17 | integration | 03.R04 | E reaches expiresAt on day 10 with the 14-day cycle hold; then the renewal cap is reached | publication renewed with requestedBy expiry_deferral and no bazaar.listing.expired; at the cap the record becomes deferred and expires only after the hold ends; a second listing whose publication is in policy_attention is deferred without a renewal request succeeding and without any statement"
       - "T18 | abuse | 02.R04 | R3 returns receipts 3 days ahead while R1 and R2 agree; then only R3 remains | R3 ignored and the sweep expires on time; with R3 alone the device clock is used and a warning is recorded"
       - "T19 | integration | 01.R03,07.R02 | purge C with an accepted offer citing it and D without references, then privacy.deletion.requested and completed | C keeps evidence fields until evidenceUntil with ownerId pseudonymized and keepEvidence passed to F01.S01.M01; D purged at min(restoreUntil, request + 30 d) with a tombstone"
       - "T20 | integration | 07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.archive_records present with field classes; deletion plan archives and pseudonymizes; purge honours purgeAt and evidenceUntil"

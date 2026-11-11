@@ -11,7 +11,7 @@ Builds the user's complete data export from their vault. The orchestrator asks e
 ## Responsibilities
 
 - Own ExportJob - request, collect, ready, expired, failed and cancelled with per-section progress.
-- Define the ExportSectionPort contract and discover export sections through the kernel port registry at vault composition (inverted registration, so modules that cannot list this module in depends_on without a cycle, such as F07.S01.M01, F15.S01.M01 and F15.S04.M03, register without an edge), with at least one section per module that owns user data and every section name owned by exactly one module (IOX-5), failing the build in CI when a module that owns user data has none.
+- Define the ExportSectionPort contract and discover export sections through the kernel port registry at vault composition (inverted registration, so modules that cannot list this module in depends_on without a cycle, such as F07.S01.M01, F15.S01.M01, F15.S04.M03, F18.S01.M01 and F18.S02.M01, register without an edge), with at least one section per module that owns user data and every section name owned by exactly one module (IOX-5), failing the build in CI when a module that owns user data has none.
 - Produce the bundle as JSON Lines - manifest first {format, exportedAt, accountId, did, modules[], counts, sha256 per section, sectionExportedAt per section, part?}, then {schema, record} lines, with media as chunked blob records.
 - Sign the manifest with the principal's device key and verify it before declaring the job ready.
 - Store the bundle encrypted with a per-job key, serve it for 7 days, and delete it and shred the key at expiry, on user cancel or in the deletion shred step.
@@ -46,6 +46,7 @@ Builds the user's complete data export from their vault. The orchestrator asks e
 - A second request with a new command ID while a job is collecting; refused with PRECONDITION_FAILED and params.activeJobId, while the same command ID replays the stored result.
 - Two modules register the same section name, for example two registrants of federation.records; vault composition fails and CI names both modules, so no bundle ever mixes their lines.
 - A module registered through the kernel port registry without a depends_on edge (F15.S01.M01 platform.outbox) is missing at composition; the build-time conformance check fails, and at runtime the job fails with PRIVACY_EXPORT_SECTION_FAILED naming the missing module instead of producing a bundle without its section.
+- The governance modules F18.S01.M01 and F18.S02.M01 register their sections from the vault composition root because a depends_on edge to this module would close the cycle F10.S01.M03 -> F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01; the bundle still carries governance.profile_selection with the owner's age declaration and the governance comment, trusted-publisher and pending-statement sections.
 
 ## UX and accessibility
 
@@ -80,7 +81,7 @@ F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR
 | PS-078-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-078-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-078-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-078-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-078-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-078-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-078-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-078-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -92,7 +93,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T23 pass in CI.
+- All tests T01 to T24 pass in CI.
 - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
 - No bundle contains P4 secrets, unclassified fields or other users' private content.
 - A ready bundle is unreachable after 7 days and its key is gone.

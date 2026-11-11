@@ -21,7 +21,7 @@ responsibilities:
   - Apply the origin-wins policy to public projections after 7 days without review, keeping the candidate first received from a relay listed in the author's latest verified portable document, and record that this is a policy choice, not proof.
   - Record resolution (keep one cid or drop_all for public projections; drop_all or superseded by a statement signed by every required signer for commitments) and emit federation.conflict.resolved with candidateCids, statementClass and freezeScope.
   - Attribute forks to the author with an author-level limit of 20 open conflicts, after which the author's further envelopes are quarantined; forwarding relays are never blamed.
-  - Register the N6 privacy ports and pseudonymize retained conflict evidence after principal deletion.
+  - Register the N6 privacy ports and pseudonymize retained conflict evidence only in its F10.S01.M04 DeletionPort pseudonymize step, the only call that receives the pseudonym, never on privacy.deletion.completed (N6a).
 non_responsibilities:
   - Fork arithmetic on seq and prev (F11.S02.M02 decides; this module records and drives review).
   - Storing, holding or purging envelopes and the promise index itself (F11.S01.M02 consumes the conflict events and changes record status).
@@ -140,7 +140,7 @@ processes:
     requirements:
       - The module exposes detect, resolve and read operations plus the synchronous is_frozen check; detect is an internal vault or relay command and resolve is a review action.
       - Each command emits its events in the same local transaction as the state change.
-      - The module consumes account move, identity document and peer suspension events to recompute the author's listed relays and review windows, and deletion events to pseudonymize evidence.
+      - The module consumes account move, identity document and peer suspension events to recompute the author's listed relays and review windows; retained evidence is pseudonymized only in its DeletionPort pseudonymize step, and privacy.deletion.completed is a notification only that never triggers pseudonymization (N6a).
       - Domain modules that act on commitments (F01.S04.M01 offers, F02 proposals, F01.S03.M01 reservations, F08.S02.M02 consent, F09 deals, F11.S03.M03 moves) consume federation.conflict.detected and resolved and call is_frozen before acting; these are N-note obligations recorded for their owners.
     commands:
       - name: federation.conflict.detect
@@ -180,7 +180,7 @@ processes:
       - {type: federation.account.moved, effect: "recompute the author's listed relays from the verified move and portable document for open public_projection conflicts of that author before auto-resolution"}
       - {type: identity.portable_doc.published, effect: "origin received: refresh the listed relays of the author used by origin-wins for open public_projection conflicts"}
       - {type: federation.peer.suspended, effect: "extend the 7-day review window of public_projection conflicts whose candidates came from that peer by 7 days"}
-      - {type: privacy.deletion.completed, effect: "pseudonymize the deleted principal's DID in retained ConflictRecords kept as RET-EVIDENCE and delete open commitment records of that principal's own vault (N6)"}
+      - {type: privacy.deletion.completed, effect: "notification only (N6a): mark the deletion closed in local diagnostics; the deleted principal's DID in retained RET-EVIDENCE ConflictRecords was already replaced by the pseudonym in this module's DeletionPort pseudonymize step and the open commitment records of that principal's own vault were deleted in its purge step, so nothing is signed, pseudonymized, deleted or sent to a relay here"}
     errors:
       - "FEDERATION_CONFLICT_INVALID_RESOLUTION | 422 | no | decision does not match the candidates or lacks a verified superseding statement"
       - "FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE | 409 | no | commitments accept only drop_all or a renegotiated statement signed by every required signer"
@@ -217,14 +217,14 @@ processes:
       - Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference participant statements by cid, never store plaintext and never exist on a relay.
       - A relay operator sees only public projections and therefore resolves only public_projection conflicts on that relay.
       - Attackers must not be able to freeze someone else's trade with unsigned or role-less statements.
-      - The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort), classifies fields with F10.S02.M02 and pseudonymizes the author DID of retained conflict evidence on privacy.deletion.completed.
+      - The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort) and classifies fields with F10.S02.M02; its DeletionPort pseudonymize step (pseudonymize(ctx{requestId, pseudonym}), the only call that receives the pseudonym) replaces the deleted principal's DID in retained RET-EVIDENCE conflict records, its purge step deletes the open commitment records of that principal's own vault, and privacy.deletion.completed is a notification only (N6a).
       - Forks are attributed to the author; after 20 open conflicts the author's further envelopes are quarantined, and forwarding relays are never penalized for an author's equivocation.
     data:
       - "ConflictRecord commitment class: P2, vault only; logs carry IDs only."
       - "ConflictRecord public_projection class: P1 to the relay operator; candidate cids, claimed and receipt times, author did."
       - "Candidate payloads stay in F11.S01.M02 under their own class."
     retention:
-      - "RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized on account deletion."
+      - "RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized in the DeletionPort pseudonymize step on account deletion."
     threats:
       - "T01 | Griefing: attacker injects a second statement to freeze a victim's trade | detect requires a verified signature by the victim's authorized key or a listed participant; role-less statements are quarantined by F11.S01.M02 and never open a conflict"
       - "T02 | Equivocating author shows different histories to different peers | both versions retained as evidence; the author's chain marked forked; author-level limit of 20 open conflicts then author quarantine; forwarding relays are not blamed"
@@ -279,7 +279,7 @@ processes:
       - "T20 | integration | 03.R04 | a domain module calls is_frozen while the conflict store is unavailable | DEPENDENCY_UNAVAILABLE and the domain action is refused (fail closed)"
       - "T21 | integration | 08.R03 | relay with one public conflict open 8 days and 1 minute, then 51 open conflicts | both alerts fire"
       - "T22 | abuse | 07.R05 | malicious author forks 21 times, each fork delivered through two honest relays | the 21st returns FEDERATION_CONFLICT_AUTHOR_LIMIT and quarantines the author's later envelopes; detected events carry no peer blame and no peer health changes"
-      - "T23 | unit | 07.R04,07.R01 | export, deletion and retention ports called by F10; privacy.deletion.completed; log capture for a commitment conflict | sections and plans returned; author DID pseudonymized in retained records; logs hold IDs only"
+      - "T23 | unit | 07.R04,07.R01,04.R03 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone; log capture for a commitment conflict | sections and plans returned; the pseudonymize step replaces the author DID in retained records with exactly that pseudonym and a second run changes nothing; the purge step deletes the principal's open commitment records; privacy.deletion.completed changes no record; logs hold IDs only"
       - "T24 | integration | 01.R05,02.R02 | F11.S01.M02 re-marks a consent signed during a claimed compromise and calls detect kind key_compromise with that one envelope; detect key_compromise with 2 envelopes; resolve keep; resolve with a consent re-signed by every required signer with current keys | record open with 1 candidate and freezeScope naming the proposal, is_frozen true; 2 envelopes VALIDATION_FAILED; keep FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE; the re-signed consent supersedes it"
     acceptance:
       - All tests T01–T24 pass in CI.

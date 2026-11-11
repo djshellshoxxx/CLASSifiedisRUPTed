@@ -159,7 +159,7 @@ processes:
       - {type: privacy.deletion.completed, effect: "replace editorId with the payload pseudonym in revisions retained under evidenceUntil and purge the derived edit state"}
     errors:
       - "BAZAAR_EDIT_REVISION_LIMIT | 409 | no | listing already has 100 revisions"
-      - "BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.ruleKeys"
+      - "BAZAAR_EDIT_POLICY_BLOCKED | 422 | no | edited content or category is blocked or needs review under the active policy pack; params.verdict and params.rules [{publisherId, ruleKey}] from the F18.S01.M02 evaluate matches"
       - "BAZAAR_EDIT_AUCTION_HAS_BIDS | 409 | no | the auction edit lock (auctions.auction.edit_lock) reports this listing locked because an auction on it has bids or its bid count is not confirmed; condition, category and price cannot change (N11); params bidCount, lastKnownAt, auctionId"
     example: |
       vault.dispatch("bazaar.listing.edit", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 4,
@@ -184,7 +184,7 @@ processes:
     idempotency: "Idempotency-Key required on edit; the key and request hash are kept 24 h in the vault; replay returns the stored result. Event consumers record (consumer, eventId) before side effects and skip duplicates (EVT-3)."
     concurrency: "expectedRevision on every call; a stale value returns CONFLICT_REVISION with params.currentRevision and the app shows both versions for manual resolution; no last-writer-wins. The edit-lock port is asked inside the edit transaction; it answers from the cached host projection and locks an open auction whose host projection is older than 5 minutes, so a bid in transit cannot be overtaken by a material edit. Host-side baselines serialize per listing in the relay transaction that stores the derived event."
     retries: "Only IndexedDB transaction aborts are retried (max 3); policy and validation errors are not retried."
-    offline: "Edits work offline. Sync-outbox state for the projection belongs to F01.S01.M03: local committed, prepared, transport_acknowledged, peer_accepted."
+    offline: "Edits work offline. Sync-outbox state for the projection belongs to F01.S01.M03: local committed, prepared, transport_acknowledged once the relay receipt verifies; a public projection has acknowledger none and is never peer_accepted."
     partial_failure: "If the prohibited-rule pack cannot be read, or the edit-lock port fails during a material edit, the edit is refused with DEPENDENCY_UNAVAILABLE rather than stored unchecked. If the derived edit state is missing after a restore, it is rebuilt from the outbox history; a missing host baseline is rebuilt from the stored projections before the next comparison, and a projection without a baseline only seeds it."
   privacy_retention_abuse:
     requirements:

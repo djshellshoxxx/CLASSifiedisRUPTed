@@ -36,3 +36,7 @@ Not implemented: relay read/publish endpoints, export/import sections, deletion/
 ## Open questions
 - Should `evaluate` apply jurisdiction-scoped rules when the caller passes no profile ids?
 - Who feeds `readRuleSetView` and `readTaxonomyView` caches in the composition root (event-driven refresh)?
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 28 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

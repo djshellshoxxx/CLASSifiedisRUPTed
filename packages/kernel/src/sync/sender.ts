@@ -114,6 +114,16 @@ export function createSyncSender(o: SyncSenderOptions): SyncSender {
   }
 
   async function sendOne(entry: SyncEntry): Promise<Step> {
+    // The heads were selected before preceding asynchronous sends. Revalidate at
+    // the dispatch boundary so a slow earlier destination cannot send stale work.
+    const now = o.clock.now();
+    if (isExpired(entry, now)) {
+      const failed = await o.storage.transaction((tx) =>
+        tx.sync.transition(entry.id, 'fail', { lastError: 'EXPIRED', nextAttemptAt: null }, now));
+      if (!failed.ok) return 'retried';
+      reportFailed(entry, 'EXPIRED');
+      return 'failed';
+    }
     let r: Result<TransportReceipt, AppError>;
     try {
       r = await o.transport.send(entry.destination, entry.envelope);

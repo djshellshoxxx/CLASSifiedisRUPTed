@@ -11,7 +11,7 @@ Requires Node >=22.18.0 and the pinned pnpm 10.28.0. See the [CLI setup guide](d
 ```sh
 git clone https://github.com/djshellshoxxx/CLASSifiedisRUPTed.git
 cd CLASSifiedisRUPTed
-git switch codex/local-alpha-20261109
+git switch integration/classrup-completion   # until this branch is merged to main
 corepack pnpm install --frozen-lockfile
 corepack pnpm run setup --non-interactive
 corepack pnpm run doctor
@@ -43,11 +43,13 @@ corepack pnpm test --reporter=json --outputFile=test-results/domain.json
 corepack pnpm run test:cli
 corepack pnpm run test:tooling
 corepack pnpm trace --results test-results/domain.json
+corepack pnpm run status --results test-results/domain.json --write
 corepack pnpm run test:browser
 ```
 
 Trace coverage requires executed passing results; source comments never establish passing coverage. The non-strict report is not a release gate. Browser tests require Playwright's browser installations.
 
+- [Project status](docs/status/PROJECT_STATUS.md) · [Feature status (generated)](docs/status/FEATURE_STATUS.md) · [Branch ledger](docs/status/BRANCH_LEDGER.md) · [Changelog](CHANGELOG.md)
 - [Integration plan / evidence](planning/LOCAL_ALPHA_20261109.md)
 - [Barter signed-file walkthrough](docs/BARTER_ALPHA.md)
 - [Vault backup boundaries](packages/vault/README.md) · [Federation boundaries](packages/federation/README.md) · [Bazaar scope](packages/bazaar/ALPHA_SCOPE.md)

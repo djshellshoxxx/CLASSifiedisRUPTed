@@ -26,3 +26,7 @@ None. The caller supplies the clock value (`now`) and whether the index sells pr
 
 ## Limits
 Sybil gaming of new-author slots cannot be detected here; only the 2-per-page limit, the 50 percent ratio and the 30 day window bound it (as stated in the spec).
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 34 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

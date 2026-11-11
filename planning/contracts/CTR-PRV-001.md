@@ -42,3 +42,5 @@ Deletion = tombstone (ID, type, deletedAt) kept for federation propagation for 1
 
 ## ADR-0016 amendment 2 (review pass, 2026-11-11)
 - **PRV-7** Supersedes the server-side re-encode in PRV-4: vaults strip and re-encode images before upload; relays only run `verifyImageClean` and reject with `PRIVACY_METADATA_GPS_PRESENT`; relays never re-encode (N9).
+- **PRV-8** Retention class **RET-SIGNAL**: kept until the record's `expiresAt` (at most 365 days), then reduced to a counts-only rollup kept 365 days (fraud/abuse signals, F12.S03.M02).
+- **PRV-9** Single participant-disclosure exception: a reporter may disclose a `redact/1` copy of a P2 message, offer or cycle proposal to one relay's moderation key, only after an approved disclosure preview reached *export prepared* (F12.S01.M01, F12.S01.M02). No other P2 content leaves the participants' vaults in plaintext.

@@ -39,3 +39,6 @@ Deletion = tombstone (ID, type, deletedAt) kept for federation propagation for 1
 ## ADR-0016 amendment (local-first)
 - **PRV-5** P2 data travels only as end-to-end encrypted envelopes addressed to the listed participants; relays see ciphertext plus minimal routing metadata (recipient mailbox ID, size, time). P3/P4 never leave the vault except in the user's own export.
 - **PRV-6** Relays retain public projections per their published policy and must honour signed tombstones; copies already fetched by other vaults cannot be recalled, and the UI says so before publishing.
+
+## ADR-0016 amendment 2 (review pass, 2026-11-11)
+- **PRV-7** Supersedes the server-side re-encode in PRV-4: vaults strip and re-encode images before upload; relays only run `verifyImageClean` and reject with `PRIVACY_METADATA_GPS_PRESENT`; relays never re-encode (N9).

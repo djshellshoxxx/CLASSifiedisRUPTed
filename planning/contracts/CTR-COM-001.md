@@ -8,3 +8,7 @@
 - **COM-4** `verification`: `{ source: self|counterparty|chain|provider, chainId?, confirmations?, finalityPolicy?, checkedAt?, verifierVersion? }`. UI labels: *claimed (unverified)*, *acknowledged by payee*, *confirmed N/M on chain*, *final*. Only `final` (chain) or `acknowledged` (cash/external) may unlock downstream “completed” states, and the UI shows which.
 - **COM-5** Default finality: Bitcoin 6 confirmations; Ethereum-family: block at or below the `finalized` tag; other chains disabled until configured. Chain verifiers are adapters behind `ChainVerifierPort`; with none configured, crypto claims stay `claimed` (honest unverified) — never auto-confirmed.
 - **COM-6** Receipts (D06) are signed statements `{claimId, statement, signerId, signedAt, sig}` evidencing an assertion, not delivery.
+
+## ADR-0016 amendment 2 (review pass, 2026-11-11)
+- **COM-7** Crypto claims additionally transition `claimed|pending_confirmation|confirmed|disputed|reorged -> failed` with reason `underpaid | wrong_address | wrong_asset | before_request | reverted | absent`; `disputed -> pending_confirmation`; `confirmed -> confirmed` records confirmation progress.
+- **COM-8** Crypto completion requires the payee-signed `classrup.commerce.payment_ack/v1` carrying `verification.source = chain`. Labels are relative to the viewer's own verifier: "confirmed N of M per your verifier", "final per your verifier".

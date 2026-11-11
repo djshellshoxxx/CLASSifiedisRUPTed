@@ -29,5 +29,8 @@
     "@classrup/services": "workspace:*",
     "@classrup/auctions": "workspace:*",
     "@classrup/rentals": "workspace:*"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6"
   }
 }

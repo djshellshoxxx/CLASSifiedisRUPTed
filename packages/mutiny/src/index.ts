@@ -1,5 +1,5 @@
-// Public API of @classrup/mutiny. Each subfeature exposes its modules through its own index.ts.
-export * as cycle_execution from './cycle_execution/index.ts';
-export * as cycle_matching from './cycle_matching/index.ts';
-export * as trade_proposals from './trade_proposals/index.ts';
-export * as value_balancing from './value_balancing/index.ts';
+// Implemented pure domain primitives. Persistent command handlers are composed by the vault application.
+export * from './cycle_matching/index.ts';
+export * from './trade_proposals/index.ts';
+export * from './cycle_matching/admission.ts';
+export * from './trade_proposals/repository.ts';

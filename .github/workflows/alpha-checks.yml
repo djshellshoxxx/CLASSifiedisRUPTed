@@ -1,0 +1,30 @@
+name: Alpha verification
+on:
+  push:
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.x
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm typecheck
+      - run: corepack pnpm spec:check
+      - run: corepack pnpm deps:check
+      - run: corepack pnpm run test:tooling
+      - run: corepack pnpm test --reporter=json --outputFile=test-results/domain.json
+      - name: Report executed requirement coverage (not a release gate)
+        run: corepack pnpm trace --results test-results/domain.json
+      - run: corepack pnpm run setup --non-interactive
+      - run: corepack pnpm build
+      - run: corepack pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: corepack pnpm run test:browser

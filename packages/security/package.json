@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "engines": {
     "node": ">=22.18.0"
   },
@@ -16,5 +13,9 @@
     "@noble/hashes": "2.4.0",
     "@noble/ciphers": "2.4.0",
     "canonicalize": "5.1.0"
+  },
+  "description": "Isomorphic signing primitives and strict Ed25519 did:key/base64url encoding; other security modules remain unimplemented.",
+  "exports": {
+    ".": "./src/index.ts"
   }
 }

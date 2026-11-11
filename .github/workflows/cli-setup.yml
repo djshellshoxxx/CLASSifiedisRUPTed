@@ -1,0 +1,41 @@
+name: CLI setup
+on:
+  push:
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  clean-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22.18.0, 24.x]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install pinned toolchain dependencies
+        run: corepack pnpm install --frozen-lockfile
+      - name: CLI negative and repeat-setup tests
+        run: node --test tests/cli/*.test.mjs
+      - name: Non-interactive setup
+        run: corepack pnpm run setup --non-interactive
+      - name: Repeat setup
+        run: corepack pnpm run setup --non-interactive
+      - name: Diagnose local prerequisites
+        run: corepack pnpm run doctor
+      - name: Production build
+        run: corepack pnpm build
+      - name: Install browser
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Real development and production browser smoke
+        run: node tests/cli/browser-smoke.mjs
+      - name: Tracked files remain unchanged
+        run: git diff --exit-code

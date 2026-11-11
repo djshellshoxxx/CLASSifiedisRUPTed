@@ -29,3 +29,7 @@ Headless pure library: no commands, queries, events, capabilities or statement h
 ## Open questions
 - Should saved-search filters carry price as decimal strings (kernel money rule) rather than integers? The spec example and V02 use integers.
 - A category index on discovery_doc (category_id) is implied by the performance budget but absent from F06.S01.M02's DDL; that belongs to the index module.
+
+## Status at pause (2026-11-11)
+
+Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 24 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.

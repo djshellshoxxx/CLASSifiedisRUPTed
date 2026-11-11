@@ -23,7 +23,7 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Malicious pull request exfiltrates secrets | no secrets on pull requests, contents: read, no pull_request_target, first-party actions only pinned to a SHA or exact tag |
+| T01 | Malicious pull request exfiltrates secrets or writes to the repository | no secrets on pull requests, default contents: read, write permissions only on the allowlisted schedule and release jobs, no pull_request_target, first-party actions only pinned to a SHA or exact tag |
 | T02 | Supply-chain action compromise | only actions/* allowed; lint enforces; pnpm install uses --frozen-lockfile and lockfile hash cache key |
 | T03 | Cache poisoning across branches | cache keys contain the lockfile hash and runner OS; caches from forks are not restored into protected branches |
 
@@ -41,4 +41,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S03.M02, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M02, F17.S01.M03, F17.S01.M04, F17.S02.M01, F17.S02.M02, F17.S02.M03, F17.S03.M02, F17.S03.M03, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

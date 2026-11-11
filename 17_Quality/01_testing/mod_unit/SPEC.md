@@ -6,11 +6,11 @@
 
 ## Purpose
 
-Defines how unit tests are written and enforced in the pnpm workspace: one vitest 5.1.0 configuration shared by all packages, deterministic fixtures with an injected clock and ID generator, the TEST-PS-NNN-PP.Tnn title convention (CTR-TST-001) and coverage thresholds that fail the build when core packages drop below 85 % line coverage. It is the base layer; property, integration and e2e suites live in sibling modules.
+Defines how unit tests are written and enforced in the pnpm workspace: one vitest 5.1.0 configuration (vitest.config.ts with test.projects) shared by all packages, deterministic fixtures with an injected clock and ID generator, the TEST-PS-NNN-PP.Tnn title convention (CTR-TST-001) and coverage thresholds that fail the build when core packages drop below 85 % line coverage. It is the base layer; property, integration and e2e suites live in sibling modules.
 
 ## Responsibilities
 
-- Provide the shared vitest 5.1.0 configuration (node environment, no network, 5 s default test timeout, parallel workers = CPU count) used by every package.
+- Provide the shared vitest 5.1.0 configuration used by every package as vitest.config.ts with test.projects (vitest 5.1.0 has no workspace file and no defineWorkspace export): one project per environment, node and browser-like with fake-indexeddb, each with pool: forks, isolate: true, testTimeout: 5000, no network and parallel workers = CPU count.
 - Enforce coverage thresholds: core packages (kernel, money, matching, mutiny, commerce, security) at least 85 % lines, 85 % functions, 80 % branches; other packages at least 70 % lines.
 - Provide deterministic fixtures: FakeClock, SeqIdGenerator (UUIDv7-shaped, monotonic), seeded PRNG, factory builders for Listing, Offer, Proposal, Money and actors.
 - Ban nondeterminism in unit scope: Math.random, Date.now, new Date() without arguments and global fetch throw inside tests unless a fixture is injected.
@@ -22,6 +22,7 @@ Defines how unit tests are written and enforced in the pnpm workspace: one vites
 - Relay plus SQLite flows (F17.S01.M03 integration) and browser tests (F17.S01.M04 e2e).
 - Mapping requirements to tests and failing releases on gaps (F17.S03.M02 gates; the tools/trace tool reads the titles this module standardises).
 - Future: mutation testing with Stryker as a nightly report.
+- Flake detection over CI history and the quarantine waiver verdict at release (F17.S03.M01 nightly report job and F17.S03.M02 gates); this module owns the tests/quarantine.yaml format and the runner behavior.
 
 ## User stories
 
@@ -35,7 +36,9 @@ Defines how unit tests are written and enforced in the pnpm workspace: one vites
 - A test calls Date.now directly; the setup file throws QUALITY_UNIT_NONDETERMINISTIC naming the file and line.
 - Coverage of a new package is 0 % because it has no tests yet; the check treats missing packages as below threshold, not as skipped.
 - Two tests share a module-level mutable fixture; vitest isolate mode is on, so state never leaks and a lint rule forbids top-level let in test files.
-- A flaky test passes on retry; retries are set to 0 locally and 0 in CI so flakes surface as failures.
+- A flaky test passes on retry; retries are set to 0 locally and 0 in CI so flakes surface as failures, and a test that failed in 1 of the last 100 CI runs gets a tests/quarantine.yaml entry within 24 h.
+- A quarantine entry passes its expiresAt (at most 14 days); the test returns to the blocking project and the release gate treats the expired entry as an expired waiver.
+- A synthetic exact coordinate (L4) marked P3 is fed to a public projection builder; the output holds only snap(input) at precision 5 or coarser and the canary coordinates never appear.
 - Windows line endings or locale change numeric formatting; fixtures use fixed locale en-US and TZ=UTC set in the global setup.
 
 ## UX and accessibility
@@ -57,7 +60,7 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-CTR-TST-001, CTR-ID-001, CTR-MNY-001, CTR-OBS-001
+CTR-TST-001, CTR-ID-001, CTR-MNY-001, CTR-OBS-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, F15.S02.M03, F15.S02.M02, F16.S01.M01, F16.S02.M01, F11.S01.M03, F09.S03.M03, F06.S02.M01
 
 ## Process specifications and aggregation
 
@@ -82,3 +85,4 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 - Every core package reports at least 85 % line coverage and a lowered threshold cannot merge without a code-owner approval.
 - A deliberately introduced Date.now call in a test is rejected with QUALITY_UNIT_NONDETERMINISTIC.
 - Every test title in covered packages carries a valid TEST-PS-NNN-PP.Tnn ID.
+- A test is taken out of the blocking run only through an unexpired tests/quarantine.yaml entry, and an expired entry fails the release gate.

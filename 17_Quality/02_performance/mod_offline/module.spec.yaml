@@ -112,7 +112,7 @@ processes:
     requirements:
     - 'Offline tests use real authorization: a queued statement signed by a key revoked while offline is refused or quarantined by the receiving vault (F11.S01.M02), and the sender''s entry shows the reported rejection as Needs attention with its reason; quarantine is the receiver''s status, not an outbox state.'
     - 'On vault lock (F07.S01.M02) and principal switch, the suite asserts: in-memory keys are dropped; the vault in IndexedDB stays encrypted and unreadable until unlock; OutboxEntry rows are kept but not sent; relay access tokens are dropped; the principal''s image partition is unbound (CLEAR_USER_CACHES reason lock or principal switch, F15.S01.M02); a second principal on the device gets a separate vault; and only an explicit Erase vault (F10.S01.M04 deletion flow) after an export prompt may delete IndexedDB data.'
-    - No test uses an elevated relay role (operator, moderator) or any central account; test principals are locally created identities.
+    - No test uses an elevated relay role (operator, moderator); test principals are locally created identities.
     capabilities: []
     notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
   failure_recovery_idempotency:

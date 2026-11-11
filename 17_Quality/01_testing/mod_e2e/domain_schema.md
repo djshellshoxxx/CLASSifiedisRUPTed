@@ -1,13 +1,13 @@
 # PS-134-01 — Domain schema: E2E testing
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M04 E2E testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/e2e` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M04 E2E testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/e2e` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
 ## Requirements
 
 - **PS-134-01.R01** The module owns no persisted entities; each worker gets a fresh browser context whose vault (IndexedDB) starts empty, plus an optional throwaway test relay for the with-relay profile.
-- **PS-134-01.R02** Test accounts are generated pseudonyms with device keys created in the browser context; no real accounts exist.
+- **PS-134-01.R02** Test principals are generated pseudonyms whose did:key identities and device keys are created locally in the browser context, each with its own vault; there are no accounts or logins (ADR-0016, CTR-UX-001 UX-5).
 - **PS-134-01.R03** Artifacts (traces, screenshots on failure) are written under test-results/ and git-ignored.
 
 ## Specification
@@ -23,4 +23,4 @@
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-UX-001, CTR-OBS-001, CTR-IDM-001, F17.S01.M01, F15.S01.M01, F15.S01.M02, F14.S01.M03. Predecessor: [module SPEC](SPEC.md).
+Module depends on: CTR-TST-001, CTR-UX-001, CTR-OBS-001, CTR-IDM-001, CTR-CAP-001, CTR-PRV-001, F17.S01.M01, F15.S01.M01, F15.S01.M02, F14.S01.M03, F07.S01.M01, F07.S01.M02, F07.S01.M03, F11.S01.M02, F01.S04.M01. Predecessor: [module SPEC](SPEC.md).

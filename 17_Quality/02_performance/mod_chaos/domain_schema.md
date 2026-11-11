@@ -8,7 +8,7 @@
 
 - **PS-138-01.R01** The module owns no persisted entities; faults are described in a scenario file (YAML) and results in reports/chaos.json.
 - **PS-138-01.R02** A scenario lists fault type, injection point, duration, seed, and the invariants to assert; the schema is validated before the run.
-- **PS-138-01.R03** Fault injectors wrap ports and the clock in the test relay; production code contains no chaos hooks and a build check proves it.
+- **PS-138-01.R03** Fault injectors wrap ports and the clock in the test relay and in test vaults (the F15.S02.M03 storage/indexeddb adapter over fake-indexeddb aborts a transaction on the Nth write; each vault clock is skewable on its own); production code contains no chaos hooks and a build check of both the relay bundle and the vault (PWA) bundles proves it.
 
 ## Specification
 
@@ -19,8 +19,9 @@
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-138-09.T01 | unit | PS-138-01.R01, PS-138-01.R02, PS-138-02.R03 | validate a scenario file without seed or recovery | rejected with QUALITY_CHAOS_SCENARIO_INVALID |
-| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan production bundles and run with out-of-bound parameters | no chaos hooks; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
+| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan the production relay bundle and the vault (PWA) bundles, and run with out-of-bound parameters | no chaos hooks in either; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
+| TEST-PS-138-09.T22 | chaos | PS-138-01.R03, PS-138-06.R03 | idb_abort - the vault storage/indexeddb adapter aborts the 3rd write of an offer-accept transaction | the whole transaction rolls back (no hold without a Deal); the sweep of each vault reservation store, saga state and sync outbox and of the relay queues shows nothing stuck |
 
 ## Dependencies
 
-Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03. Predecessor: [module SPEC](SPEC.md).
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [module SPEC](SPEC.md).

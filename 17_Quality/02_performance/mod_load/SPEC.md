@@ -6,13 +6,13 @@
 
 ## Purpose
 
-A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQLite WAL) with read, write, search and cycle-matching traffic and compares measured latencies with the budgets of CTR-OBS-001 OBS-4. It writes a JSON and Markdown report and exits non-zero when any budget is exceeded. It runs a short smoke profile on release candidates and the full profile nightly. Per ADR-0016 and CTR-OBS-001 OBS-7 the budgets of OBS-4 apply to relays only (index, mailbox, matching over public projections, content-free push, auction host); vault performance is covered by unit and e2e budgets.
+A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQLite WAL) with read, write, search and cycle-matching traffic and compares measured latencies with the budgets of CTR-OBS-001 OBS-4. It writes a JSON and Markdown report and exits non-zero when any budget is exceeded. The release workflow runs the smoke and then the standard profile on the release commit because budgets are release-gated (F17.S03.M01), the nightly workflow runs standard and a weekly workflow runs soak. Per ADR-0016 and CTR-OBS-001 OBS-7 the budgets of OBS-4 apply to relays only (index, mailbox, matching over public projections, content-free push, auction host); vault performance is covered by unit and e2e budgets.
 
 ## Responsibilities
 
 - Implement the load driver (Node 22, undici keep-alive, open-loop arrival rate) with profiles smoke (30 s), standard (5 min) and soak (60 min).
-- Measure p50/p95/p99 latency and error rate per scenario: read 50 req/s p95 at most 150 ms, write 50 req/s p95 at most 300 ms, search over 100 000 listings p95 at most 200 ms, cycle search on a graph of 5 000 edges with max length 5 p95 at most 250 ms.
-- Seed datasets deterministically (100 000 listings, 5 000 want/offer edges, 10 000 actors) from a fixed seed using the production commands bulk path.
+- Measure p50/p95/p99 latency and error rate per scenario: read 50 req/s p95 at most 150 ms; writes (signed projection index writes with signature verification, mailbox put of opaque envelopes, auction bids at a host relay) 50 req/s p95 at most 300 ms; search over 100 000 listings p95 at most 200 ms; cycle search on a graph of 5 000 edges with max length 5 p95 at most 250 ms.
+- Seed datasets deterministically from a fixed seed the way real relays receive data: 10 000 generated did:key principals sign 100 000 classrup.bazaar.listing/v1 public projections and the public want and have projections that yield 5 000 matching edges, submitted through the relay index-write command federation.record.ingest (F11.S01.M02) with signature verification on every write; listings are vault-authored signed projections and no bulk path bypasses verification.
 - Emit reports/load.json and reports/load.md and fail the run on any budget violation or error rate above 0.1 %.
 
 ## Not responsible for
@@ -31,7 +31,7 @@ A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQ
 ## Edge cases
 
 - The generator itself saturates the machine; the report records generator CPU and marks the run invalid if generator CPU exceeds 70 %.
-- The relay returns RATE_LIMITED during the test; the load script uses a dedicated unthrottled test tenant and counts any 429 as an error.
+- The relay returns RATE_LIMITED during the test; rate limits stay on, the load tenant's limits were raised by the setup step through an F12.S03.M03 RatePolicy whose revision and values are in the report, and any 429 counts as an error.
 - The seeded dataset is stale after a schema change; the seed script version-checks and rebuilds, failing with QUALITY_LOAD_SEED_STALE.
 - Latency spikes from a one-off garbage collection; the report uses p95 over the whole window and also flags max over 2 s.
 - Coordinated omission would hide stalls; the driver is open loop and measures from intended send time.
@@ -56,7 +56,7 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, F17.S01.M01, F15.S02.M01, F15.S02.M03
+CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, F17.S01.M01, F15.S02.M01, F15.S02.M03, F12.S03.M03, F11.S01.M02, F08.S01.M01, F04.S01.M02, F07.S01.M02
 
 ## Process specifications and aggregation
 
@@ -77,7 +77,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- On the 2 vCPU reference runner all OBS-4 budgets pass at 50 req/s.
+- On the 2 vCPU reference runner all OBS-4 budgets pass at 50 req/s for read, write_index, write_mailbox, auction_bid, search and cycle scenarios.
 - A planted 400 ms slowdown is detected as a budget failure with exit 1.
 - The load script refuses to run against any non-allow-listed host.
 - Reports are machine-readable and consumed by the release gates.

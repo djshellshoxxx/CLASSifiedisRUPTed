@@ -6,13 +6,13 @@
 
 ## Purpose
 
-Browser end-to-end tests with @playwright/test 1.63.0 pinned to the preinstalled Chromium, run on Pixel 7 and iPhone 14 device profiles against the built PWA. The PWA is the product: its vault lives in IndexedDB, so the first profile runs with no relay configured and must work fully offline. A second profile adds a self-hosted relay on an in-memory SQLite database. Covers core journeys, offline and reconnect behaviour, and axe-core accessibility checks (@axe-core/playwright 4.14.0) with zero serious or critical violations.
+Browser end-to-end tests with @playwright/test 1.63.0 pinned to the preinstalled Chromium, run on Pixel 7 and iPhone 14 device profiles against the built PWA. The PWA is the product: its vault lives in IndexedDB, so the first profile runs with no relay configured and must work fully offline. A second profile adds a self-hosted relay on an in-memory SQLite database. There are no accounts or logins (ADR-0016, CTR-UX-001 UX-5): journeys create an identity locally, unlock the vault and optionally obtain a relay access token. A journey passes only when each participant's UI matches that participant's own vault and the vaults agree on the signed statements they exchanged; the relay is never the oracle. Covers core journeys, offline and reconnect behaviour along the F15.S01.M01 sync states, PWA budgets (LCP, INP, CLS, initial JS) and axe-core accessibility checks (@axe-core/playwright 4.14.0) with zero serious or critical violations.
 
 ## Responsibilities
 
 - Provide Playwright configuration with two projects (Pixel 7, iPhone 14 viewport and user agent, both on pinned Chromium), traces on first retry, video off, 30 s test timeout and 1 retry only in CI.
 - Serve the already-built PWA artifact (built once by CI) on a random free port. Run two profiles: no-relay (no relay configured, network blocked) and with-relay (a test relay started on a random port with in-memory SQLite, then selected by the user in settings); each worker has an isolated browser context and vault.
-- Provide journey specs: sign-up and login, publish listing, make and accept offer, propose barter, offline create and reconnect replay, install prompt and update flow, and language switch.
+- Provide journey specs: create identity (local device-key generation) and unlock vault, restore from a recovery kit, then optionally select a relay and obtain a relay access token by challenge-response (CTR-CAP-001 CAP-10); publish listing, make and accept offer, propose barter, offline create and reconnect along the sync states, install prompt and update flow, and language switch.
 - Run axe on every screen visited by a journey and fail on any serious or critical violation; record minor ones in the report.
 - Prove that the PWA works offline with no relay configured: create identity, draft and publish a listing locally, search local records, export and restore the vault, all with the network blocked.
 
@@ -31,19 +31,22 @@ Browser end-to-end tests with @playwright/test 1.63.0 pinned to the preinstalled
 
 ## Edge cases
 
-- The browser goes offline mid-submit; the command is queued in the outbox, shown as pending, and replayed with the same Idempotency-Key on reconnect.
+- The browser goes offline mid-submit; the offer is local committed and its OutboxEntry stays prepared (Saved on this device); on reconnect it is sent with the same cid and the seller vault applies it once (dedupe by cid).
 - Service worker update arrives during a test; the update-available prompt appears and the page does not reload without consent.
 - Two workers use the same port; ports are allocated from the OS and recorded in the worker fixture to avoid clashes.
 - A screen is correct visually but has an unlabeled input; axe reports a serious violation and the test fails with the node selector.
 - Slow 4G emulation with CPU throttle 4x; the app shell still loads offline after the first visit.
 - Chromium preinstalled path differs per runner; the config resolves it from PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH and fails clearly if absent.
 - No relay is configured and the network is blocked; every core journey still completes and shows delivery as unknown rather than failed or sent.
+- A correctly signed acceptance made by a key that is not the listing author is injected into the buyer vault; it appears in the quarantine list with its reason and the offer never shows as accepted.
+- A production relay build is started; the e2e clock and seeding hooks are absent and their routes answer 404.
+- A screen shows sign-up, sign-in, log-in or account wording, or blocks paste in the passphrase field; the run fails.
 
 ## UX and accessibility
 
 
 
-Headless runner. Output is the Playwright HTML report, traces for failed tests, JUnit XML and reports/e2e-axe.json listing violations per screen and impact.
+Headless runner. Output is the Playwright HTML report, traces for failed tests, JUnit XML, reports/e2e-axe.json listing violations per screen and impact, and reports/pwa-budgets.json. Covered contract notes: CTR-UX-001 UX-1 and UX-5 (accessible authentication without accounts or logins, N20 and N23), CTR-OBS-001 OBS-5, CTR-IDM-001 IDM-7, CTR-CAP-001 CAP-8 and CAP-10.
 
 ## Owned data
 
@@ -58,19 +61,19 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-CTR-TST-001, CTR-UX-001, CTR-OBS-001, CTR-IDM-001, F17.S01.M01, F15.S01.M01, F15.S01.M02, F14.S01.M03
+CTR-TST-001, CTR-UX-001, CTR-OBS-001, CTR-IDM-001, CTR-CAP-001, CTR-PRV-001, F17.S01.M01, F15.S01.M01, F15.S01.M02, F14.S01.M03, F07.S01.M01, F07.S01.M02, F07.S01.M03, F11.S01.M02, F01.S04.M01
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-134-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-134-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-134-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-134-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-134-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-134-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-134-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-134-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-134-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-134-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-134-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-134-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -80,6 +83,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 ## Acceptance criteria
 
 - The buyer and seller offer journey passes on Pixel 7 and iPhone 14 profiles.
-- An action queued offline is delivered exactly once after reconnect.
+- An offer queued offline is applied exactly once by the recipient vault after reconnect, and the UI never shows more than the reached sync state.
+- No journey depends on an account, sign-up or login, and the relay is never the oracle for domain state.
 - Every visited screen has zero serious or critical axe violations.
-- Smoke subset finishes within 90 s and OBS-5 PWA budgets hold.
+- Smoke subset finishes within 90 s and OBS-5 PWA budgets (LCP, INP, CLS, initial JS) hold and are written to reports/pwa-budgets.json.

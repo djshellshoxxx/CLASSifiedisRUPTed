@@ -1,13 +1,13 @@
 # PS-139-06 — Failure recovery and idempotency: Load testing
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
 ## Requirements
 
 - **PS-139-06.R01** Runs are repeatable: a fresh relay and database are created per run and the seed is deterministic.
-- **PS-139-06.R02** Write scenarios use unique Idempotency-Keys per request and also replay 1 % of requests with the same key to verify idempotency under load.
+- **PS-139-06.R02** Write scenarios use unique Idempotency-Keys per request (signed index writes dedupe by cid) and also replay 1 % of requests with the same key or cid to verify idempotency under load.
 - **PS-139-06.R03** If the relay crashes mid-run, the run is invalid, exit 2, and the relay log tail is saved.
 
 ## Specification
@@ -30,4 +30,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, F17.S01.M01, F15.S02.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, F17.S01.M01, F15.S02.M01, F15.S02.M03, F12.S03.M03, F11.S01.M02, F08.S01.M01, F04.S01.M02, F07.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

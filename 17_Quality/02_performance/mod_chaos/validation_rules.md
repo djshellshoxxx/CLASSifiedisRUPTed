@@ -16,19 +16,20 @@
 |---|---|---|
 | V01 | Scenario has seed, fault type, bounded parameters and a recovery step | QUALITY_CHAOS_SCENARIO_INVALID |
 | V02 | After recovery every committed command appears exactly once and revisions are strictly increasing | QUALITY_CHAOS_INVARIANT_VIOLATED |
-| V03 | Outbox is drained and no orphan hold or stuck saga exists within 60 s of fault removal | QUALITY_CHAOS_RECOVERY_TIMEOUT |
-| V04 | Production build contains no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD |
+| V03 | Within the scenario recovery bound (06.R04) no participant vault holds a classrup.bazaar.reservation/v1 hold past expiresAt, no vault saga is stuck, every OutboxEntry is in a documented F15.S01.M01 state, and relay-hosted leases and mailbox and federation queues are drained | QUALITY_CHAOS_RECOVERY_TIMEOUT |
+| V04 | Production relay and vault (PWA) builds contain no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD |
 | V05 | Fault parameters do not exceed bounds: BUSY 30 s, skew 24 h, outage 10 min, 5 crashes | QUALITY_CHAOS_SCENARIO_INVALID |
-| V06 | Trust-fault scenarios fork_conflict, relay_tamper, revocation_lag and relay_down exist and pass | QUALITY_CHAOS_TRUST_SCENARIO_MISSING |
+| V06 | Every F17.S01.M03 trust-fault suite (relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay, relay_withhold_equivocate) is rerun with seeded random fault timing and passes that module's oracle | QUALITY_CHAOS_TRUST_SCENARIO_MISSING |
+| V07 | Under clock skew ordering never depends on wall time, an expired entity never comes back, each expiry event fires exactly once, and relay-hosted leases use only the relay clock | QUALITY_CHAOS_INVARIANT_VIOLATED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-138-09.T01 | unit | PS-138-01.R01, PS-138-01.R02, PS-138-02.R03 | validate a scenario file without seed or recovery | rejected with QUALITY_CHAOS_SCENARIO_INVALID |
-| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan production bundles and run with out-of-bound parameters | no chaos hooks; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
+| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan the production relay bundle and the vault (PWA) bundles, and run with out-of-bound parameters | no chaos hooks in either; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
 | TEST-PS-138-09.T03 | chaos | PS-138-02.R01, PS-138-06.R01 | db_busy: SQLITE_BUSY for 12 s during accept commands | commands retried or DEPENDENCY_UNAVAILABLE; no half-commit; exactly-once after replay |
 
 ## Dependencies
 
-Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

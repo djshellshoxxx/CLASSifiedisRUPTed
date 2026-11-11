@@ -10,9 +10,9 @@ Property-based test suites using fast-check 4.10.2 for the invariants that examp
 
 ## Responsibilities
 
-- Provide the property suites for money (CTR-MNY-001), matching (F02.S02), state machines (every machines[] block), geohash (F04), idempotency (CTR-IDM-001) and signed statements (RFC 8785 JCS canonicalization, Ed25519 verification, fork detection) under tests/property.
+- Provide the property suites for money (CTR-MNY-001, F09.S03.M03), matching (F02.S02.M03), state machines (every machines[] block), geohash and geoprivacy (F06.S02.M01), idempotency (CTR-IDM-001) and signed statements (RFC 8785 JCS canonicalization, Ed25519 verification, fork detection, N2 signer roles from the F11.S01.M01 statement registry, re-delivery by cid) under tests/property.
 - Define two run profiles: pr (numRuns 200, fixed base seed derived from the commit SHA, 60 s budget) and nightly (numRuns 10 000, fresh random seed, 20 min budget).
-- Record the seed and the shrunk counterexample path on failure and persist it as a regression case that is replayed on every later run.
+- Record the seed and the shrunk counterexample on failure as a classrup-regression/v1 case. An open case (bug not yet fixed) lives only as a CI artifact and an issue; the case is merged into tests/property/regressions/ on main only in the pull request that fixes the bug, with status fixed, and is then replayed on every later run as an expected-pass example (the property must hold for the shrunk value).
 - Provide shared arbitraries (Money, ActorId, Listing, Edge graph, Command sequence) so suites stay consistent with production schemas.
 
 ## Not responsible for
@@ -30,7 +30,11 @@ Property-based test suites using fast-check 4.10.2 for the invariants that examp
 
 ## Edge cases
 
-- A property finds a counterexample that is later fixed; the stored regression case keeps running as an example forever.
+- A property finds a counterexample that is later fixed; the case is merged with the fix as status fixed and keeps running as an expected-pass example forever.
+- Nightly finds a counterexample for a bug nobody has fixed yet; it is uploaded as an open regression artifact and filed as one issue, never committed to main, so unrelated pull requests stay green.
+- A fix pull request adds a regression file; CI runs the case on the parent commit, where it must fail, and on the pull request head, where it must pass.
+- A generated exact coordinate (L4) or a precision-7 cell reaches a public projection builder; the geoprivacy property fails unless the output is snap(input) at precision 5 or coarser.
+- A correctly signed acceptance arrives from a key that is not the listing author; the trust property expects quarantine with reason signer_role_invalid and no state change.
 - Arbitrary generation produces a degenerate value (empty graph, zero amount); generators include them deliberately and properties handle them or assert the documented error.
 - A property exceeds the per-property 10 s timeout on a pathological graph; the run fails with QUALITY_PROP_TIMEOUT and the seed instead of hanging CI.
 - The same seed on a different Node patch version yields different values; the seed is paired with the fast-check version in the report and the lockfile pins 4.10.2.
@@ -56,14 +60,14 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-CTR-TST-001, CTR-MNY-001, CTR-IDM-001, CTR-ID-001, CTR-OBS-001, F17.S01.M01
+CTR-TST-001, CTR-MNY-001, CTR-IDM-001, CTR-ID-001, CTR-OBS-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, F17.S01.M01, F09.S03.M03, F02.S02.M03, F06.S02.M01, F15.S02.M02, F11.S01.M01, F11.S01.M03, F11.S02.M03, F16.S01.M01
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-136-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-136-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-136-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-136-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-136-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-136-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-136-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -80,4 +84,5 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 - Every property runs at least 200 times on pull requests and exactly 10 000 times nightly, with the seed printed on failure.
 - A planted off-by-one money split is detected within 200 runs and reported with a minimal counterexample.
 - Replaying a recorded seed and path reproduces the failure deterministically.
-- Property suites exist for money, matching, state machines, geohash and idempotency.
+- Property suites exist for money, matching, state machines, geohash and geoprivacy, idempotency, and signed statements with signer roles.
+- No nightly counterexample is committed to main before its fix, and a fixed regression replays as an expected-pass example.

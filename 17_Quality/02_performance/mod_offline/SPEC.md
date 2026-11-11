@@ -6,42 +6,49 @@
 
 ## Purpose
 
-Test suite for client offline behavior under ADR-0016: the PWA is local-first, so offline is the normal state and a relay is optional. It verifies that the core works with no relay configured, that the sync outbox moves statements through local committed, prepared, transport_acknowledged and peer_accepted without the UI claiming more, that conflicts and forks surface as prompts rather than silent overwrites, and that service worker caching never stores authenticated relay responses. It runs partly as vitest tests with a fake network and IndexedDB shim and partly through Playwright network emulation.
+Test suite for client offline behavior under ADR-0016: the PWA is local-first, so offline is the normal state and a relay is optional. It verifies, against the owner F15.S01.M01 (N24), that the core works with no relay configured, that each locally committed record's OutboxEntry moves through prepared, sending, transport_acknowledged and peer_accepted (plus conflict, failed, expired and discarded) with labels never stronger than the reached state, that retries follow CTR-IDM-001 IDM-4, that conflicts surface as the resolve-or-discard dialog and forks freeze the coordination, that vault lock keeps data encrypted and queued work intact, and that service worker caching never stores relay-authenticated responses. It runs partly as vitest tests with a fake network and IndexedDB shim and partly through Playwright network emulation.
 
 ## Responsibilities
 
 - Provide a controllable fake network (online, offline, latency 2 s, 30 percent packet loss, connection reset mid-request) for unit and integration tests of the outbox.
-- Verify outbox behavior from CTR-IDM-001: queue order per entity, same Idempotency-Key on replay, backoff 1 s doubling to 60 s with jitter, and maximum 7 days before a queued command is marked stale.
-- Verify conflict handling (IDM-5): CONFLICT_REVISION after reconnect surfaces a prompt offering keep mine, take theirs or merge, with no silent overwrite.
-- Verify cache behavior: app shell available offline after first visit, authenticated APIs never served from cache, versioned cache cleanup on update.
+- Verify the F15.S01.M01 outbox behavior (CTR-IDM-001 IDM-4, IDM-5, IDM-7): delivery in seq order per destination and aggregateKey, the original cid (statements) or Idempotency-Key (relay commands) on every resend, IDM-4 retry (full jitter, base 500 ms, cap 30 s, retryAfterMs honoured, 6 attempts then failed with failureReason retry_exhausted, Retry now resets attempts), the day-6 expiry prompt and expiry at 7 days, and the 200-entry and 5 MiB per-principal caps (PLATFORM_OUTBOX_FULL).
+- Verify conflict handling (IDM-5, F15.S01.M01): CONFLICT_REVISION or a peer rejection after reconnect surfaces the conflict dialog with exactly the actions Prepare a new version on theirs and Discard mine (plus Change relay in the outbox sheet); no option overwrites the peer's signed revision and nothing is auto-merged; two conflicting signed promises (a fork) freeze the coordination with no resolve option (ADR-0016 section 5).
+- Verify cache behavior: app shell available offline after first visit, relay-authenticated responses never served from or stored in Cache Storage, versioned cache cleanup on update.
+- Verify vault lock and principal switch (F07.S01.M02, F15.S01.M02): in-memory keys are dropped, the IndexedDB vault stays encrypted and unreadable until unlock, OutboxEntry rows are kept but not sent, relay access tokens are dropped and the image partition is unbound; unlocking restores everything with zero entries lost; only Erase vault (F10.S01.M04) after an export prompt deletes vault data.
 
 ## Not responsible for
 
 - The outbox and service worker implementations (F15.S01.M01 and F15.S01.M02).
 - General e2e journeys (F17.S01.M04).
 - Server-side fault injection (F17.S02.M02).
+- Receiver-side verification and quarantine of statements (F11.S01.M02); this suite only checks that the sender's entry shows the reported rejection.
+- Deleting vault data (F10.S01.M04 deletion flow behind Erase vault); this suite only proves lock and switch never delete.
 - Future: background sync on iOS when the platform supports it.
 
 ## User stories
 
-- As a user on a train, I create an offer offline, see it pending, and it is delivered once when I reconnect.
+- As a user on a train, I create an offer offline, see it as Saved on this device, and after I reconnect it reaches the relay and the seller's vault applies it once.
+- As a user who locks my vault on a shared phone, my records stay encrypted and my queued statements wait, unsent, until I unlock again.
 - As a user whose listing was edited on another device, I get a clear choice when my queued edit conflicts.
 - As a developer, I run one command that proves cache and outbox behavior under flaky networks.
 
 ## Edge cases
 
-- Connection drops after the server committed but before the response arrived; the replay returns the stored response and no duplicate is created.
+- Connection drops after the relay committed but before the response arrived; a relay command resend returns the stored response under its Idempotency-Key and a statement resend is ignored as a duplicate cid, so no duplicate is created.
 - Two queued commands target the same entity; order is preserved and the second uses the revision from the first response.
-- A queued command is older than 7 days; it is marked stale and the user is asked to review instead of replaying.
-- The service worker caches an authenticated API response by mistake; the test asserts network-only for such routes.
+- An unsent entry reaches day 6; the expiry prompt lists it with Send now, Keep until expiry and Discard; at 7 days it moves to expired with its payload erased, is never sent, and a send attempt is refused with EXPIRED.
+- The service worker caches a relay-authenticated response by mistake; the test asserts network-only for such routes.
 - Storage quota is exceeded when queuing; the user is told and the command is not silently dropped.
+- The 201st entry, or one that would push queued payload past 5 MiB for the principal, is refused with PLATFORM_OUTBOX_FULL and shown to the user.
+- The vault locks with three entries queued; keys leave memory, records stay encrypted, entries are kept but not sent, relay access tokens are dropped and the image partition is unbound; unlocking restores everything and sending resumes with zero entries lost.
+- Two conflicting signed promises (a fork) arrive for one coordination; it is frozen and the dialog offers no option that picks a winner.
 - Browser reloads during replay; the outbox resumes from persisted state without double send.
 
 ## UX and accessibility
 
 
 
-Headless tests that assert user-visible states: pending badge, retry banner, conflict dialog with three actions, stale-command review list, offline shell. They check accessible names and aria-live announcements.
+Headless tests that assert user-visible states: the sync status chip with the F15.S01.M01 labels (Saved on this device, Delivered to relay, peer has not confirmed, Confirmed by peer, Needs attention), the failure banner with Retry now, the conflict dialog with exactly Prepare a new version on theirs and Discard mine, the day-6 expiry prompt, the lock screen and the offline shell. They check accessible names and aria-live announcements.
 
 ## Owned data
 
@@ -56,14 +63,14 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02
+CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02, F15.S02.M03, F07.S01.M02, F10.S01.M04, F11.S01.M02, CTR-PRV-001, CTR-CAP-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-140-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-140-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-140-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-140-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-140-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-140-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -77,7 +84,8 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- A command created offline is applied exactly once after reconnect, even across repeated connection resets.
-- A stale revision conflict always shows the keep mine, take theirs and merge prompt and never overwrites silently.
-- Authenticated API responses are never present in Cache Storage and caches are empty after logout.
+- An offer created offline is applied exactly once by the receiving vault after reconnect, even across repeated connection resets.
+- A revision conflict shows exactly Prepare a new version on theirs and Discard mine, never overwrites the peer's signed revision, and a fork freezes the coordination.
+- Relay-authenticated responses are never present in Cache Storage, vault lock keeps data encrypted and queued entries intact, and only Erase vault after an export prompt deletes vault data.
+- Retry timing follows IDM-4 exactly and unsent entries expire at 7 days after the day-6 prompt.
 - The app shell loads offline after first visit within the OBS-5 budget.

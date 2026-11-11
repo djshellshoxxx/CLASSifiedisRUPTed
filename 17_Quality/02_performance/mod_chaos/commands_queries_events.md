@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-138-04.R01** The module exposes pnpm test:chaos (smoke profile), pnpm test:chaos:nightly and pnpm test:chaos --scenario <name> --seed <n>.
-- **PS-138-04.R02** Scenarios are db_busy, consumer_crash, duplicate_delivery, clock_skew, peer_outage, combined_busy_crash, fork_conflict, relay_tamper, revocation_lag and relay_down.
+- **PS-138-04.R02** Scenarios are db_busy, idb_abort, consumer_crash, duplicate_delivery, clock_skew, peer_outage, vault_outbox_outage, combined_busy_crash and the reruns of the F17.S01.M03 trust-fault suites relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate.
 - **PS-138-04.R03** Exit codes: 0 pass, 1 invariant violated, 2 recovery timeout, 3 scenario invalid.
 
 ## Specification
@@ -34,9 +34,9 @@ _None._
 |---|---|---|---|
 | QUALITY_CHAOS_SCENARIO_INVALID | 422 | no | scenario lacks seed or recovery, or exceeds fault bounds (exit 3) |
 | QUALITY_CHAOS_INVARIANT_VIOLATED | 422 | no | an invariant failed after recovery (exit 1) |
-| QUALITY_CHAOS_RECOVERY_TIMEOUT | 422 | no | system did not recover within 60 s (exit 2) |
-| QUALITY_CHAOS_HOOK_IN_PROD | 422 | no | chaos hook detected in a production bundle (exit 1) |
-| QUALITY_CHAOS_TRUST_SCENARIO_MISSING | 422 | no | a mandatory trust-fault scenario is missing or failing (exit 1) |
+| QUALITY_CHAOS_RECOVERY_TIMEOUT | 422 | no | system did not recover within the scenario recovery bound (exit 2) |
+| QUALITY_CHAOS_HOOK_IN_PROD | 422 | no | chaos hook detected in a production relay or vault bundle (exit 1) |
+| QUALITY_CHAOS_TRUST_SCENARIO_MISSING | 422 | no | a mandatory trust-fault rerun is missing or fails the F17.S01.M03 oracle (exit 1) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -50,16 +50,20 @@ $ pnpm test:chaos --scenario duplicate_delivery --seed 31
   recover: 4.1 s
   invariants: exactly-once OK, revisions monotonic OK, outbox drained OK
   exit 0
+$ pnpm test:chaos --scenario clock_skew --seed 32
+  inject: vault Bob clock -24 h after reservation r1 expired; vault Carol clock +24 h with live reservation r2
+  invariants: ordering wall-time independent OK, r1 not resurrected (expired event x1) OK, Carol expired r2 and sent signed withdrawal OK
+  exit 0
 ```
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan production bundles and run with out-of-bound parameters | no chaos hooks; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
+| TEST-PS-138-09.T02 | integration | PS-138-01.R03, PS-138-02.R02, PS-138-04.R03 | scan the production relay bundle and the vault (PWA) bundles, and run with out-of-bound parameters | no chaos hooks in either; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew |
 | TEST-PS-138-09.T05 | chaos | PS-138-03.R03, PS-138-04.R02 | run each scenario twice in sequence | each starts from a fresh relay and database |
-| TEST-PS-138-09.T06 | chaos | PS-138-04.R01, PS-138-04.R03, PS-138-09.R02 | duplicate_delivery with planted double-apply bug | invariant violated and exit 1 |
+| TEST-PS-138-09.T06 | chaos | PS-138-04.R01, PS-138-04.R03, PS-138-06.R02, PS-138-09.R02 | duplicate_delivery - events and statements delivered twice and reordered, correct code then a planted double-apply bug | correct code dedupes by event ID and cid with one effect; the planted bug violates the invariant and exits 1 |
 
 ## Dependencies
 
-Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

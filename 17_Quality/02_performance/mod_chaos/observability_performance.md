@@ -22,7 +22,7 @@
 
 **Budgets**
 - Smoke profile at most 2 min; nightly at most 30 min.
-- Recovery within 60 s of fault removal; outbox lag back under 60 s (OBS-6 readiness).
+- Recovery within the per-scenario bound (60 s for local faults; peer_outage next scheduled round plus one IDM-4 cycle of fake time); relay outbox lag back under 60 s (OBS-6 readiness).
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -35,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

@@ -22,9 +22,9 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-138-09.T08 | chaos | PS-138-05.R03 | peer_outage 10 min then recovery | local commands keep succeeding; federation deliveries resume without duplicate import; audit entries intact |
 | TEST-PS-138-09.T09 | chaos | PS-138-05.R01, PS-138-05.R02 | scan relay for HTTP exposure of injection endpoints | none reachable; fake ports only |
+| TEST-PS-138-09.T19 | abuse | PS-138-05.R03 | issue a command the actor is not authorized for before and after db_busy and peer_outage faults | both attempts denied with the same code; both decisions have audit entries after recovery and none is lost |
 
 ## Dependencies
 
-Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-FED-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M03, F15.S02.M03, F15.S01.M01, F11.S02.M01, F11.S01.M02, F01.S03.M01, F16.S02.M02, F16.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

@@ -22,7 +22,7 @@
 
 **Budgets**
 - Fast gate at most 10 min p95; install warm at most 60 s; PWA build at most 90 s; e2e smoke at most 90 s.
-- Nightly workflow at most 60 min total.
+- Nightly workflow at most 60 min total; weekly soak at most 90 min; release workflow at most 90 min.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -35,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S03.M02, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M02, F17.S01.M03, F17.S01.M04, F17.S02.M01, F17.S02.M02, F17.S02.M03, F17.S03.M02, F17.S03.M03, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,6 +1,6 @@
 # PS-137-04 — Commands, queries and events: Unit testing
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M01 Unit testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/unit-conventions` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M01 Unit testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/unit-conventions` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -38,6 +38,8 @@ _None._
 | QUALITY_UNIT_PACKAGE_UNTESTED | 422 | no | package with sources has no test files (exit 2) |
 | QUALITY_UNIT_TEST_TIMEOUT | 422 | no | a test exceeded the 5 s timeout (exit 1) |
 | QUALITY_UNIT_NODE_IMPORT_IN_CORE | 422 | no | isomorphic core code imports a Node-only module (exit 3) |
+| QUALITY_UNIT_QUARANTINE_INVALID | 422 | no | quarantine entry malformed, longer than 14 days, or a skip marker outside tests/quarantine.yaml (lint exit 3) |
+| QUALITY_UNIT_PUBLIC_LEAK | 422 | no | a P3-marked L3 or L4 fixture value or a cell finer than precision 5 reached a public, search or federated output (exit 1) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -62,4 +64,4 @@ $ pnpm test:unit packages/money -t TEST-PS-137-09.T01
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-ID-001, CTR-MNY-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-TST-001, CTR-ID-001, CTR-MNY-001, CTR-OBS-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, F15.S02.M03, F15.S02.M02, F16.S01.M01, F16.S02.M01, F11.S01.M03, F09.S03.M03, F06.S02.M01. Predecessor: [domain_schema.md](domain_schema.md).

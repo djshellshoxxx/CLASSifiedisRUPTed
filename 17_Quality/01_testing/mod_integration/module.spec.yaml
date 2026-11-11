@@ -121,7 +121,7 @@ processes:
     note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
     example: |-
       $ pnpm test:integration --flow payments_claims
-        TEST-PS-135-09.T08 crypto claim reorg depth 2 returns to pending   OK  (1.4 s)
+        TEST-PS-135-09.T17 crypto claim reorg depth 2 returns to pending_confirmation   OK  (1.4 s)
         steps: commerce.payment.claimed -> commerce.payment.confirming -> commerce.payment.confirmed -> commerce.payment.reorged -> commerce.payment.confirming (pending) -> commerce.payment.finalized
         deal: completed only after final per both verifiers (6/6) and payee-signed payment_ack (verification.source chain)
         outbox drained: yes

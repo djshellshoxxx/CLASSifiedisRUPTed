@@ -79,7 +79,7 @@ processes:
       - formatMoney, formatMoneyParts, formatApprox and parseMoneyInput return Err(I18N_MONEY_SPEC_MISMATCH), never a string, when money.currency differs from the CurrencyDef code, and Err(COMMERCE_CURRENCY_UNKNOWN) when the caller found no CurrencyDef for the code.
     rules:
       - "V01 | amount is canonical per F09.S03.M03 parseMinor and matches ^0$ or ^-?[1-9][0-9]{0,37}$ (1 to 38 digits, no leading zeros, no '-0') | COMMERCE_MONEY_INVALID"
-      - "V02 | spec is an F09.S03.M01 CurrencyDef with kind fiat and decimals 0 to 18 or kind crypto and decimals 0 to 36 | I18N_MONEY_EXPONENT_INVALID"
+      - "V02 | spec is an F09.S03.M01 CurrencyDef with kind fiat and decimals 0 to 18 or kind crypto and decimals 0 to 36 (the range rule of F09.S03.M01 V03, same common code) | VALIDATION_FAILED"
       - "V03 | parsed text has no more fraction digits than spec.decimals (F09.S03.M03 parseDecimal) | COMMERCE_MONEY_PRECISION_LOSS"
       - "V04 | parsed minor-unit value has at most 38 digits (F09.S03.M03 bound) | COMMERCE_MONEY_OVERFLOW"
       - "V05 | quote label has a source of 1 to 80 plain-text characters, sourceKind provider, manual or derived, valid RFC 3339 asOf and expiresAt with asOf not after expiresAt, status issued, expired or revoked, and issuerDisplay when sourceKind is manual or the source is not a catalog adapter ID | I18N_QUOTE_LABEL_INVALID"
@@ -115,7 +115,6 @@ processes:
     events_produced: []
     events_consumed: []
     errors:
-      - "I18N_MONEY_EXPONENT_INVALID | 422 | no | CurrencyDef decimals missing or outside 0 to 18 (fiat) or 0 to 36 (crypto)"
       - "I18N_MONEY_TOO_LARGE | 422 | no | typed amount exceeds the caller maximum"
       - "I18N_QUOTE_LABEL_INVALID | 422 | no | quote label malformed, missing source or time, or provenance fields inconsistent for an approximate value"
       - "I18N_MONEY_SPEC_MISMATCH | 422 | no | money.currency differs from the CurrencyDef code passed in"
@@ -200,7 +199,7 @@ processes:
       - "T01 | unit | 01.R01,01.R02,02.R01 | golden strings for the fixture amounts and CurrencyDefs in en, de, fr, es | Ok strings equal reviewed goldens; 5 minor units shows 0.05; -5 keeps sign"
       - "T02 | property | 01.R02,03.R01,06.R01,09.R02 | random bigint amounts 1..38 digits, fiat decimals 0..18 and crypto decimals 0..36, all shipped locales (10 000 runs nightly) | digits extracted from formatToParts without group separators equal the input digits exactly"
       - "T03 | unit | 01.R02,06.R02,02.R03 | amount 9007199254740993 compared with a Number-based formatter | module output exact; naive Number output differs (documented counter-example)"
-      - "T04 | unit | 02.R02,02.R03,02.R05,03.R01,04.R02 | each rule V01–V12 violated, including '-0', '01', a 39-digit amount, ETH with decimals 37, and a JPY amount with the EUR CurrencyDef | the F09.S03.M03, F09.S03.M01 or I18N_ code of the rule returned as Err; I18N_MONEY_SPEC_MISMATCH for JPY with EUR from formatMoney, formatApprox and parseMoneyInput; no string produced"
+      - "T04 | unit | 02.R02,02.R03,02.R05,03.R01,04.R02 | each rule V01–V12 violated, including '-0', '01', a 39-digit amount, ETH with decimals 37, and a JPY amount with the EUR CurrencyDef | the F09.S03.M03, F09.S03.M01, common VALIDATION_FAILED (V02, ETH with decimals 37) or I18N_ code of the rule returned as Err; I18N_MONEY_SPEC_MISMATCH for JPY with EUR from formatMoney, formatApprox and parseMoneyInput; no string produced"
       - "T05 | unit | 06.R02,03.R03 | force the BigInt part-substitution path by stubbing resolvedOptions; run the startup self-test; then make the decimal-string path disagree on one sample | identical output on 20 samples including negatives with zero whole part; on disagreement the BigInt path is used for the rest of the session and the dev warning i18n.money.selftest_disagreement is logged"
       - "T06 | unit | 02.R03,02.R05,06.R03 | BTC 8, ETH 18, USDC 6, the 36-decimal asset and EUR with their CurrencyDefs; code XYZ with spec null | registered codes unknown to Intl use decimal style plus isolated code; currencyName returns CurrencyDef.name for crypto and the Intl plural name for fiat; XYZ returns Err(COMMERCE_CURRENCY_UNKNOWN) and the price component renders 'amount unavailable, unknown currency XYZ'; no RangeError; never blank"
       - "T07 | unit | 04.R01,04.R02,04.R03,05.R01,05.R02,05.R03 | inspect exports, calls to vault, relay or network, and authorization hooks | pure typed functions returning Result; no events or commands; no I/O"

@@ -6,8 +6,8 @@
 
 ## Requirements
 
-- **PS-112-05.R01** The library performs no authorization and has no roles; it runs in the browser under the unlocked local principal and on relays when rendering text.
-- **PS-112-05.R02** It reads no vault data itself; callers pass in the Money and the registry spec.
+- **PS-112-05.R01** The library performs no authorization and has no roles; it runs in the browser under the unlocked local principal.
+- **PS-112-05.R02** It reads no vault data itself; callers pass in the Money, the F09.S03.M01 CurrencyDef, the QuoteLabel and the display preference.
 - **PS-112-05.R03** Formatted strings are derived from data the viewer is already allowed to see and add no new disclosure.
 
 ## Specification
@@ -20,8 +20,8 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-112-09.T07 | unit | PS-112-04.R01, PS-112-04.R02, PS-112-04.R03, PS-112-05.R01, PS-112-05.R02, PS-112-05.R03 | inspect exports, calls to vault, relay or network, and authorization hooks | pure typed functions; no events or commands; no I/O |
+| TEST-PS-112-09.T07 | unit | PS-112-04.R01, PS-112-04.R02, PS-112-04.R03, PS-112-05.R01, PS-112-05.R02, PS-112-05.R03 | inspect exports, calls to vault, relay or network, and authorization hooks | pure typed functions returning Result; no events or commands; no I/O |
 
 ## Dependencies
 
-Module depends on: F14.S02.M01, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F14.S02.M01, F09.S03.M01, F09.S03.M02, F09.S03.M03, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

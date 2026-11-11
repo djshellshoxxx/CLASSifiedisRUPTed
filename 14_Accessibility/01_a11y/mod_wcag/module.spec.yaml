@@ -67,7 +67,7 @@ processes:
       - "V04 | each waiver has rule, exactly one target (route, file glob or component), reason, owner and expiry within 90 days of creation and is not expired | I18N_A11Y_WAIVER_INVALID"
       - "V05 | the release checklist has a passed result with date, device and owner for every manual criterion and every recorded manual test of F14 | I18N_A11Y_CHECKLIST_INCOMPLETE"
       - "V06 | no horizontal scroll at 320 CSS px width and 400 percent zoom equivalent, and text spacing overrides do not clip content | I18N_A11Y_REFLOW"
-      - "V07 | on the vault unlock, recovery-kit restore and backup export and import screens, passphrase inputs carry autocomplete current-password (existing secret) or new-password (new secret), no handler cancels paste, drop or input events, a show/hide toggle exists, and recovery offers kit import by file or QR in addition to typing | I18N_A11Y_AUTH_ASSIST"
+      - "V07 | on the vault unlock, recovery-kit restore and backup export and import screens, passphrase inputs carry autocomplete current-password (existing secret) or new-password (new secret), no handler cancels paste, drop or input events, a show/hide toggle exists, and the recovery-kit restore screen accepts the kit by file chooser or QR scan and the 24 words by pasting the whole phrase, in addition to typing | I18N_A11Y_AUTH_ASSIST"
   workflow_state_machine:
     requirements:
       - The gate runs as a pipeline of install, build, route discovery, axe runs, contrast check, authentication-assistance check, report and gate decision, and any failing step fails the build.

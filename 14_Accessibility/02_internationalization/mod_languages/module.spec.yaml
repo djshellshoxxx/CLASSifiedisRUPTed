@@ -25,7 +25,7 @@ non_responsibilities:
   - Sending push alerts and emails (F13.S01.M01, F13.S01.M02); this module only supplies t() for the device-side push text and the generic email templates.
   - Translation of user-generated content; listings and messages are shown in the language their authors wrote them.
   - "Future: community translation workflow, machine translation of user content, and shipped catalogs for ar, he and fa; MVP verifies RTL layout with the ar-XB pseudolocale only."
-depends_on: [F15.S04.M03, F15.S03.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001]
+depends_on: [F15.S04.M03, F15.S03.M01, F15.S01.M02, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001]
 user_stories:
   - As a German speaker, I see the whole app in German, including plurals such as "1 Angebot" and "3 Angebote".
   - As a user whose browser prefers de-AT, I get German even though only de is shipped.

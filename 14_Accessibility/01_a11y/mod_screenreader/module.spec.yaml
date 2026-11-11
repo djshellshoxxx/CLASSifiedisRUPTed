@@ -35,7 +35,7 @@ edge_cases:
   - A hostile peer causes 1 000 distinct incoming-offer notices within 1 s; the region queue holds at most 3, overflow collapses them into one '{count} updates' summary under the caller's coalesce key, and at most 4 announcements are made in total.
   - Money with a large value of 123456789012 minor units in a locale with grouping; the spoken name says the full amount with the currency name, not a truncated figure.
   - BTC 12345 minor units is spoken as 0.00012345 with the registry name Bitcoin; a code missing from the registry is spoken as 'amount unavailable, unknown currency XYZ', never as raw minor-unit digits.
-  - An approximate converted price is shown; the spoken name includes "approximately", the same provenance wording as the visual label (quote from, manual rate by, unverified source or pinned rate agreed by all parties), the quote time (UX-4) and 'expired quote' when the visual label shows it.
+  - An approximate converted price is shown; the spoken name includes "approximately", the same provenance wording as the visual label (quote from, manual rate by, unverified source or pinned rate agreed by all parties), the quote time (UX-4) and 'expired quote' or 'revoked quote' when the visual label shows it.
   - Error text arrives after the field lost focus; the error is associated by aria-describedby and announced once.
   - A received listing photo has no alt text and is not marked decorative; the component renders 'Photo 2 of 5, no description' locally; only on the user's own listings does the editor flag the photo for the author.
   - The locale is right to left; landmarks and reading order follow the DOM order, which matches the visual order.
@@ -77,7 +77,7 @@ processes:
       - "V01 | each page has exactly one main landmark and one h1, headings do not skip levels, and repeated landmark types have unique accessible names | I18N_A11Y_LANDMARKS"
       - "V02 | every form control has an accessible name and errors are linked by aria-describedby with aria-invalid set | I18N_A11Y_FORM_LABEL"
       - "V03 | icon-only buttons and links have an accessible name from visible text or aria-label | I18N_A11Y_NAME_MISSING"
-      - "V04 | lint: every <Photo> call site passes alt and decorative props, and alt is a string of at most 140 characters that may be empty only when decorative is true | I18N_A11Y_ALT_TEXT"
+      - "V04 | lint: every <Photo> call site passes alt and decorative props, and a literal alt string in source is at most 140 characters and empty only when decorative is true (alt values from records are checked by the owning module at publish, not at build time) | I18N_A11Y_ALT_TEXT"
       - "V05 | status changes use the announcer, assertive is used only for blocking errors, and no region announces more than once per 2 s | I18N_A11Y_LIVE_REGION"
       - "V06 | Money, distance, time and sync-state values rendered visually have a matching spoken name from the helpers | I18N_A11Y_SPOKEN_VALUE"
   workflow_state_machine:
@@ -116,7 +116,7 @@ processes:
       - "I18N_A11Y_LANDMARKS | 400 | no | landmark or heading structure rule failed"
       - "I18N_A11Y_FORM_LABEL | 400 | no | form control lacks a name or error association"
       - "I18N_A11Y_NAME_MISSING | 400 | no | interactive element without accessible name"
-      - "I18N_A11Y_ALT_TEXT | 400 | no | Photo call site without alt and decorative props or with alt longer than 140 characters"
+      - "I18N_A11Y_ALT_TEXT | 400 | no | Photo call site without alt and decorative props, or with a literal alt string longer than 140 characters"
       - "I18N_A11Y_LIVE_REGION | 400 | no | live region misuse or announcement flood"
       - "I18N_A11Y_SPOKEN_VALUE | 400 | no | value displayed without a spoken name"
     example: |

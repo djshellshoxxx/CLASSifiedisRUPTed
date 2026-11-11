@@ -20,8 +20,9 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-111-09.T08 | abuse | PS-111-05.R01, PS-111-05.R02, PS-111-05.R03, PS-111-07.R01, PS-111-07.R03 | PR that edits waivers.yaml or disables an axe rule with one reviewer | CI requires two CODEOWNERS approvals; rule disabling in config rejected |
+| TEST-PS-111-09.T08 | abuse | PS-111-05.R01, PS-111-05.R02, PS-111-07.R01, PS-111-07.R03 | PR that edits waivers.yaml, the excluded states of routes.yaml or disables an axe rule with one reviewer | CI requires two CODEOWNERS approvals; rule disabling in config rejected |
+| TEST-PS-111-09.T10 | unit | PS-111-06.R01, PS-111-07.R01, PS-111-07.R02, PS-111-05.R03 | run twice on the same commit; scan reports for page text or user data; regenerate fixtures from their seeds | identical findings; reports contain selectors and rule ids only; regenerated fixtures are byte-identical to the committed ones and contain only synthetic data |
 
 ## Dependencies
 
-Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, F16.S02.M01, F07.S01.M03, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

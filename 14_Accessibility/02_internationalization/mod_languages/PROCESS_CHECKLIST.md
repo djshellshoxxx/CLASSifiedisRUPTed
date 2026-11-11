@@ -8,7 +8,7 @@
 - [x] [PS-113-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped
 - [x] [PS-113-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-113-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped
-- [x] [PS-113-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 3 requirements, tests mapped
+- [x] [PS-113-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 4 requirements, tests mapped
 - [x] [PS-113-08 Observability and performance](observability_performance.md) — 3 requirements, tests mapped
 - [x] [PS-113-09 Contract and acceptance tests](contract_and_acceptance_tests.md) — 3 requirements, tests mapped
 - [x] [PS-113-10 Import, export, backup and rollback](import_export_backup_rollback.md) — 3 requirements, tests mapped

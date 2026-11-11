@@ -18,11 +18,11 @@
 - ci_i18n_catalog_gzip_bytes{locale} (CI artifact)
 
 **Logs**
-- dev-only console.warn i18n.missing {locale, key} — no param values; production writes the key to local diagnostics only.
+- dev-only console.warn i18n.missing {locale, key} — no param values; production writes {key, locale} as a P0 entry through the F15.S03.M01 logger into its in-memory ring buffer only.
 
 **Budgets**
 - t() p95 ≤ 0.05 ms; locale switch ≤ 300 ms after catalog load.
-- Catalog ≤ 30 KiB gzip; en inline in the main bundle within the 150 KiB initial JS budget (OBS-5).
+- Catalog ≤ 30 KiB gzip; all four production catalogs ≤ 120 KiB gzip in the precache; en inline in the main bundle within the 150 KiB initial JS budget (OBS-5).
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -34,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S04.M03, F15.S03.M01, F15.S01.M02, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

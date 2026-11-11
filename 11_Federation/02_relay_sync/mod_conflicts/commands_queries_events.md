@@ -8,7 +8,7 @@
 
 - **PS-086-04.R01** The module exposes detect, resolve and read operations plus the synchronous is_frozen check; detect is an internal vault or relay command and resolve is a review action.
 - **PS-086-04.R02** Each command emits its events in the same local transaction as the state change.
-- **PS-086-04.R03** The module consumes account move, identity document and peer suspension events to recompute the author's listed relays and review windows, and deletion events to pseudonymize evidence.
+- **PS-086-04.R03** The module consumes account move, identity document and peer suspension events to recompute the author's listed relays and review windows; retained evidence is pseudonymized only in its DeletionPort pseudonymize step, and privacy.deletion.completed is a notification only that never triggers pseudonymization (N6a).
 - **PS-086-04.R04** Domain modules that act on commitments (F01.S04.M01 offers, F02 proposals, F01.S03.M01 reservations, F08.S02.M02 consent, F09 deals, F11.S03.M03 moves) consume federation.conflict.detected and resolved and call is_frozen before acting; these are N-note obligations recorded for their owners.
 
 ## Specification
@@ -42,7 +42,7 @@
 | `federation.account.moved` | recompute the author's listed relays from the verified move and portable document for open public_projection conflicts of that author before auto-resolution |
 | `identity.portable_doc.published` | origin received: refresh the listed relays of the author used by origin-wins for open public_projection conflicts |
 | `federation.peer.suspended` | extend the 7-day review window of public_projection conflicts whose candidates came from that peer by 7 days |
-| `privacy.deletion.completed` | pseudonymize the deleted principal's DID in retained ConflictRecords kept as RET-EVIDENCE and delete open commitment records of that principal's own vault (N6) |
+| `privacy.deletion.completed` | notification only (N6a): mark the deletion closed in local diagnostics; the deleted principal's DID in retained RET-EVIDENCE ConflictRecords was already replaced by the pseudonym in this module's DeletionPort pseudonymize step and the open commitment records of that principal's own vault were deleted in its purge step, so nothing is signed, pseudonymized, deleted or sent to a relay here |
 
 ### Module errors
 
@@ -75,6 +75,7 @@ federation.conflict.resolve { conflictId: "0192f3b4-...", expectedRevision: 1, d
 | TEST-PS-086-09.T08 | integration | PS-086-04.R03 | account moved event and a new portable document for the author while a public conflict is open | listed relays recomputed before the 7-day decision |
 | TEST-PS-086-09.T12 | chaos | PS-086-06.R03, PS-086-04.R04 | kill process between conflict write and event; consumer unavailable for 90 s; domain module tries to act during that window | freeze and candidate quarantine committed with the detection; the domain action is refused through is_frozen; event delivered after restart; UI warning shown above 60 s lag |
 | TEST-PS-086-09.T19 | unit | PS-086-01.R04, PS-086-04.R04 | each registry predicate: consents on one subject with different digests, overlapping reservations to different holders, two deal obligation digests, two moves with different toRelay, plus non-conflicting pairs | detect is called exactly for the conflicting pairs and freezeScope names the subject |
+| TEST-PS-086-09.T23 | unit | PS-086-07.R04, PS-086-07.R01, PS-086-04.R03 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone; log capture for a commitment conflict | sections and plans returned; the pseudonymize step replaces the author DID in retained records with exactly that pseudonym and a second run changes nothing; the purge step deletes the principal's open commitment records; privacy.deletion.completed changes no record; logs hold IDs only |
 
 ## Dependencies
 

@@ -38,7 +38,7 @@ See the module test table below (all processes).
 | TEST-PS-089-09.T16 | integration | PS-089-10.R01, PS-089-10.R02, PS-089-10.R03 | export rules, import into fresh vault | rules round trip as written; imported-source rules return to pending_review |
 | TEST-PS-089-09.T17 | unit | PS-089-01.R04, PS-089-02.R01 | content_hash rules in sha256- and blob:sha256- form; envelope whose payload hash is H1 and that references blob B1; malformed blob value | both forms validate and match the contentHashes computed by F11.S01.M02; the malformed value VALIDATION_FAILED |
 | TEST-PS-089-09.T18 | integration | PS-089-02.R04 | reject author and cid rules on Bad plus a reject peer rule on P; tombstone, move and move_cancel from Bad via peer B and via peer P | via B evaluate returns allow with bypassed true; via P refused by the peer rule |
-| TEST-PS-089-09.T19 | unit | PS-089-07.R01, PS-089-07.R04, PS-089-01.R02 | export, deletion and retention ports called by F10; log capture; privacy.deletion.completed | rules only in the owner's personal section; deletion plan and purge counts returned; author values absent from logs; rules deleted after completion |
+| TEST-PS-089-09.T19 | unit | PS-089-07.R01, PS-089-07.R04, PS-089-01.R02 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize); log capture; privacy.deletion.completed delivered alone | rules only in the owner's personal section; deletion plan and purge counts returned; the purge step deletes the principal's local and personal_block rules and pseudonymize returns count 0; author values absent from logs; privacy.deletion.completed changes no rule |
 
 ## Acceptance criteria
 

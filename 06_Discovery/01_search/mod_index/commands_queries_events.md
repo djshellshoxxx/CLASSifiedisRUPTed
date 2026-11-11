@@ -41,7 +41,7 @@
 | Type | Effect |
 |---|---|
 | `bazaar.listing.published` | vault, own listings only: load the principal's own signed projection by statementCid, check it (V01-V05) and upsert with origin own; on a relay this event never occurs because relay ingestion arrives as federation.record.accepted |
-| `federation.record.accepted` | types classrup.bazaar.listing/v1, classrup.services.offering/v1 and classrup.rentals.offering/v1 only: load the MirrorView by cid through F11.S01.M02 federation.record.get, re-check the signer with F11.S01.M01 roleFor and the signature with F11.S01.M03 (V03), then upsert the listing document with barterAcceptable, inStock and want.minCondition (V15), or enrich it from an offering projection keyed by listingId (V11, V13, V14); origin and provenance come from the payload sourceKind and receivedFromRelay only - in a vault sourceKind import gives origin imported, and peer_relay, mailbox or direct give origin fetched with receivedFromRelay, when present, added to provenanceRelays; on a relay sourceKind hosted_device or peer_relay gives origin relay_published after the tenant checks (V07, V12); records with sourceKind local or local true are skipped because bazaar.listing.published indexes them; a newer version of a mirrored record (recordKey, version, supersededRecordId) replaces the document only when it is newer (V04) |
+| `federation.record.accepted` | types classrup.bazaar.listing/v1, classrup.services.offering/v1 and classrup.rentals.offering/v1 only: load the MirrorView by cid through F11.S01.M02 federation.record.get, re-check the signer with F11.S01.M01 roleFor and the signature with F11.S01.M03 (V03), then upsert the listing document with barterAcceptable, inStock and want.minCondition (V15), or enrich it from an offering projection keyed by listingId (V11, V13, V14); origin and provenance come from the payload sourceKind and receivedFromRelay only - in a vault sourceKind import gives origin imported, and peer_relay, mailbox or direct give origin fetched with receivedFromRelay, when present, added to provenanceRelays; on a relay sourceKind hosted_device or peer_relay gives origin relay_published after the tenant checks (V07, V12) and, for listing projections, the in-process operator pack evaluation (V16); records with sourceKind local or local true are skipped because bazaar.listing.published indexes them; a newer version of a mirrored record (recordKey, version, supersededRecordId) replaces the document only when it is newer (V04) |
 | `bazaar.listing.edited` | own listing: reload the own projection and update the document if the source revision is newer |
 | `bazaar.listing.unpublished` | own listing: remove the document with reason unpublished |
 | `bazaar.listing.expired` | own listing: remove the document with reason expired |
@@ -79,6 +79,7 @@
 | DISCOVERY_INDEX_CAP | 409 | no | document cap reached; vault eviction applied, or on a relay the newest projection beyond the tenant maxIndexedListingsPerPublisher refused as author_cap |
 | DISCOVERY_SOURCE_REMOVED | 409 | no | the source was removed for a reason a republish cannot undo (tombstoned, deleted, author_cap, or hosting_policy before reversal) |
 | DISCOVERY_PROMOTION_CLAIM_NOT_FINAL | 409 | no | the linked payment claim is not final or not acknowledged by this relay's operator |
+| DISCOVERY_POLICY_BLOCKED | 422 | no | on a relay, the operator's prohibited-item rule pack (F18.S01.M02 evaluate) returned verdict block for the listing projection; the previous document stays unchanged |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -91,6 +92,7 @@ event federation.record.accepted { recordId: "0192f3a9-…", cid: "sha256-Qm…"
 -> federation.record.get { cid } -> MirrorView, roleFor ok, signature verifies, geoCell "u4pr" (L1), price 45000 EUR, inStock true, barterAcceptable false
 -> emits discovery.index.updated { documentId: "0192f3b0-…", sourceKind: "listing", op: "upsert", geoCell: "u4pr", origin: "fetched", inStock: true, barterAcceptable: false, firstSeenAt: "2026-11-04T10:00:01.000Z" }
 relay: TenantPort.limits(tenantId) -> { maxIndexedListingsPerPublisher: 100, allowedCurrencies: ["EUR"] }; a CHF-priced projection -> refused FEDERATION_CURRENCY_NOT_ALLOWED
+relay: governance.prohibited_rule.evaluate { kind: "sell", categoryId: "0192f3a4-1111-7000-8000-0000000000c1", title: "Fake designer bag replica", description: "…", tags: [] } -> { verdict: "block", matches: [{ ruleKey: "counterfeit_goods", … }], packsDigest: "sha256-UGFj…" } -> refused DISCOVERY_POLICY_BLOCKED, previous document unchanged
 vault command: discovery.search_document.rebuild { "scope": "all" }  -> { "rebuildId": "0192f3c1-…", "startedAt": "2026-11-04T10:00:00.000Z", "status": "started" }
 relay command: discovery.search_document.set_promotion { "sourceKey": { "authorDid": "did:key:z6Mk…", "sourceId": "0192f3a4-…" }, "until": "2026-11-11T10:00:00.000Z", "claimRef": { "claimId": "0192f3d1-…", "dealId": "0192f3d0-…" } }
 -> 200 { "documentId": "0192f3b0-…", "promotedUntil": "2026-11-11T10:00:00.000Z", "revision": 5 }
@@ -117,4 +119,4 @@ relay query: discovery.search_document.list_by_cell { "cells4": ["u4pr", "u4px"]
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

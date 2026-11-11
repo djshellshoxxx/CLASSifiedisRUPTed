@@ -74,7 +74,7 @@ F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR
 | PS-097-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-097-02 | [Validation rules](validation_rules.md) | 3 |
 | PS-097-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-097-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-097-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-097-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-097-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-097-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -86,6 +86,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T20 pass in CI.
 - On the labelled corpus, recall ≥ 80% and false-positive rate ≤ 2% at score threshold 50.
 - No heuristic result ever causes removal, suspension or ban without a human or published rule in F12.S02.M01.

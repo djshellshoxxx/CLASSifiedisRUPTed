@@ -11,6 +11,7 @@
 - **PS-119-01.R03** The memory, IndexedDB and SQLite adapters share one row model so data round-trips identically, including JSON normalization and UTF-8 binary ordering of index values.
 - **PS-119-01.R04** A MediaBlob is stored by content address blob:sha256-<base64url> with size, content type, privacy class and encryption flag, and its holders are the records that reference it.
 - **PS-119-01.R05** A dead_letter row holds consumer, eventId, tenant, type, the envelope, attempts, the error code, dead_at, replay_count (INTEGER NOT NULL DEFAULT 0) and last_replayed_at (nullable), and replay_count and last_replayed_at are kept across requeue (dead to retry) and re-dead-lettering until the row is deleted on delivery or purge.
+- **PS-119-01.R06** The relay SQLite adapter attaches the database file named by its option encryptedBlobsPath (the relay composition passes <RELAY_DATA_DIR>/blobs_enc.sqlite) as schema blobs_enc on every connection and keeps the ciphertext of every encrypted MediaBlob (encrypted true) in blobs_enc.blob_bytes keyed (tenant, ref), while its main.blobs row holds ref, size, content type, privacy, encrypted = 1 and createdAt with zero-length bytes and its holders stay in main.blob_refs; P0 plaintext blobs stay entirely in main, and the IndexedDB and memory adapters keep all bytes in their blobs store.
 
 ## Specification
 
@@ -85,7 +86,7 @@ Schema `classrup.platform.media_blob/v1` · storage **relay+device** · privacy 
 |---|---|
 | tenantId | uuidv7 — vault or relay tenant |
 | ref | string — blob:sha256-<base64url of SHA-256 of bytes> |
-| bytes | bytes — metadata stripped by F10.S02.M03 in the vault; ciphertext when encrypted; stored exactly as received, never re-encoded |
+| bytes | bytes — metadata stripped by F10.S02.M03 in the vault; ciphertext when encrypted, which a relay keeps in blobs_enc.blob_bytes with zero-length main.blobs.bytes; stored exactly as received, never re-encoded |
 | size | int — ≤ 5 242 880 bytes and ≤ the TenantPort limit (maxUploadBytes on a relay, LocalSettings.localLimits.maxLocalAttachmentBytes in the vault) |
 | contentType | string — lowercase type/subtype |
 | privacy | enum — P0 \| P1 \| P2 \| P3; a relay accepts P0 plaintext or ciphertext only |
@@ -98,6 +99,7 @@ Schema `classrup.platform.media_blob/v1` · storage **relay+device** · privacy 
 - The blob is deleted in the transaction that removes its last holder; an encrypted blob deletion reports shred so the owner deletes the per-object key.
 - Storing identical bytes with a more public class lowers the stored class; it is never raised implicitly.
 - On a relay a plaintext image blob is stored only after the registered verifyImageClean reported it clean, and the stored bytes are byte-identical to the received bytes whose hash the signed listing references.
+- On a relay no main.blobs row with encrypted = 1 holds bytes of non-zero length; its ciphertext exists at most once, in blobs_enc.blob_bytes under the same (tenant, ref).
 
 ### Storage DDL
 
@@ -124,11 +126,18 @@ CREATE TABLE blobs (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL
   content_type TEXT NOT NULL, privacy TEXT NOT NULL, encrypted INTEGER NOT NULL, created_at TEXT NOT NULL,
   PRIMARY KEY (tenant, ref)) WITHOUT ROWID;
 CREATE TABLE blob_refs (tenant TEXT NOT NULL, ref TEXT NOT NULL, holder TEXT NOT NULL, PRIMARY KEY (tenant, ref, holder)) WITHOUT ROWID;
+-- relay SQLite adapter only: ATTACH DATABASE '<encryptedBlobsPath>' AS blobs_enc on every connection, PRAGMA blobs_enc.journal_mode=WAL
+CREATE TABLE blobs_enc.blob_bytes (tenant TEXT NOT NULL, ref TEXT NOT NULL, bytes BLOB NOT NULL CHECK (length(bytes) <= 5242880),
+  PRIMARY KEY (tenant, ref));
+-- main.blobs rows with encrypted = 1 hold X'' as bytes on a relay; their ciphertext is the blobs_enc.blob_bytes row with the same key.
 CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL) WITHOUT ROWID;
 -- kernel:0003_dead_letter_replay: ALTER TABLE dead_letter ADD COLUMN replay_count INTEGER NOT NULL DEFAULT 0;
 --   ALTER TABLE dead_letter ADD COLUMN last_replayed_at TEXT; CREATE INDEX dead_letter_dead_at ON dead_letter(dead_at);
 -- kernel:0004_drop_sync_outbox: DROP TABLE sync_outbox (created by kernel:0001_base, no longer read or written;
 --   shipped one release after the last release that used it, SCH-5 contract step).
+-- kernel:0005_encrypted_blob_store: CREATE TABLE blobs_enc.blob_bytes; then in batches of 100 rows, each one transaction with
+--   PRAGMA main.secure_delete=ON: INSERT INTO blobs_enc.blob_bytes SELECT tenant, ref, bytes FROM main.blobs WHERE encrypted = 1
+--   AND length(bytes) > 0; UPDATE main.blobs SET bytes = X'' for the same rows (zeroes the freed main pages).
 -- F15.S01.M01 OutboxEntry rows are records rows (type 'platform.outbox_entry'); storage has no sync outbox table.
 -- idempotency table: see F15.S02.M02. IndexedDB uses one object store per table with the same row shapes.
 ```
@@ -141,6 +150,7 @@ CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, checksum TEXT NOT NULL, app
 | TEST-PS-119-09.T04 | integration | PS-119-01.R02, PS-119-03.R01, PS-119-04.R03, PS-119-06.R03, PS-119-09.R02 | two aggregates with a failing first delivery, duplicate delivery, eight failures, requeue; pending query semantics per adapter | per-aggregate order kept; duplicate skipped; dead letter at attempt 8; requeued events delivered |
 | TEST-PS-119-09.T05 | contract | PS-119-01.R05, PS-119-03.R02, PS-119-04.R06, PS-119-07.R02 | dead-letter an event, requeue it, fail 8 more times, requeue again, requeue twice in a row, disable the consumer of a third requeued event, leave a fourth undelivered 7 days, deliver a fifth, purge at dead_at + 30 days | replay_count 1 then 2 with last_replayed_at kept on re-dead-lettering; second requeue CONFLICT_STATE; FEATURE_DISABLED and EXPIRED returns keep replay_count; delivered row deleted; purge removes only dead rows older than 30 days |
 | TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
+| TEST-PS-119-09.T23 | integration | PS-119-01.R06, PS-119-07.R05 | relay SQLite adapter with encryptedBlobsPath puts 3 encrypted blobs carrying the canary and 2 P0 blobs, then node:sqlite backup() of writerConnection() runs; scan relay.sqlite, its WAL, the backup copy and blobs_enc.sqlite; repeat the puts on IndexedDB and memory | canary only in blobs_enc.sqlite and its WAL; every main.blobs row with encrypted = 1 has zero-length bytes; refs, sizes, privacy and holders in main; P0 bytes in main; IndexedDB and memory keep all bytes in their blobs store |
 
 ## Dependencies
 

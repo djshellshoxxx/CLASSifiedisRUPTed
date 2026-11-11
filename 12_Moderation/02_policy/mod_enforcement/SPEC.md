@@ -48,10 +48,11 @@ Relay-side moderation. Moderators of one relay work a case queue built from rece
 - A suspended key wants to appeal; appeal filing, own-action reads and own-evidence reads stay allowed and cannot be listed as restricted capabilities.
 - F04.S02.M03 confirms an auction void while a report case about the same auction is open; record_host_policy attaches to that case instead of opening a second one, records the action with source auction_review and returns its actionId; a retry with the same reviewId returns the same actionId.
 - An auction document was already removed from the relay index at close; the host-policy remove_from_index is still recorded with its statement of reasons, and its index effect is a no-op.
+- The relay operator uploads a prohibited-goods pack (F18.S01.M02 relay_upload) that retires a rule cited, through a prohibited_goods policy rule, by an action on an open case; the case gets a policy-change review flag, the action stays until a moderator reverts it, and a vault-scope copy of the event changes nothing.
 
 ## UX and accessibility
 
-- Case queue: filter by status, source, reason, age, assignee; deadline and appeal badges; reporter identities hidden unless the case view is opened.
+- Case queue: filter by status, source, reason, age, assignee; deadline, appeal and policy-change review badges; reporter identities hidden unless the case view is opened.
 - Case view: reports grouped by target, evidence snapshots (F12.S01.M02), signals summary, rule picker showing only versions in force, list of actions already applied on the case, action form with expiry and facts summary, close case with outcome.
 - Operator 'Open case' form: subject key, target type (including account), target id, reason, optional snapshots.
 - Action confirmation dialog: preview of the statement of reasons exactly as the subject will see it.
@@ -84,7 +85,7 @@ F12.S02.M03, F12.S01.M01, F12.S01.M02, F12.S03.M03, F06.S01.M01, F08.S01.M01, F0
 | PS-096-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-096-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-096-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-096-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-096-04 | [Commands, queries and events](commands_queries_events.md) | 10 |
 | PS-096-05 | [Authorization and capabilities](authorization_capabilities.md) | 6 |
 | PS-096-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-096-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -96,6 +97,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T31 pass in CI.
+- All tests T01–T33 pass in CI.
 - No action exists without in-force rule IDs, facts summary and a retrievable signed statement of reasons.
 - No moderation path produces any effect outside the issuing relay, and no federation tombstone is ever produced; statements say so.

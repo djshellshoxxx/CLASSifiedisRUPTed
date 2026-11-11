@@ -40,7 +40,8 @@ Schema `classrup.security.incident/v1` · storage **relay** · privacy **P3** ·
 | resolvedAt? | timestamp — RFC 3339 UTC |
 | closedAt? | timestamp — RFC 3339 UTC |
 | notificationDecision? | enum — notify_users \| not_required \| pending |
-| notificationDueAt? | timestamp — detectedAt + the breach notice period of the active F18.S01.M01 jurisdiction profile, 72 h by default |
+| notificationDueAt? | timestamp — detectedAt + effective.breachNotificationHours hours (24..720, default 72) of F18.S01.M01 governance.jurisdiction_profile.resolve at open, set when affectedDataClasses include a class above P1; later profile changes do not move it |
+| breachNoticeBasis? | object — { sources: [{ profileRef: ProfileRef { publisherId, code }, version }] (resolve sources for field breachNotificationHours, max 3), breachNotificationHours: int 24..720, fallback: boolean } — the resolve result notificationDueAt was computed from |
 | noticeStatementCid? | string — content id of the signed incident notice |
 | noticeDelivered | int — mailboxes whose delivery reached transport_acknowledged or better, 0 when no notice |
 | noticePending | int — mailboxes still prepared or failed, 0 when no notice |
@@ -80,8 +81,9 @@ CREATE TRIGGER security_incident_timeline_delete BEFORE DELETE ON security_incid
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-131-09.T01 | unit | PS-131-01.R01, PS-131-01.R02, PS-131-01.R03, PS-131-02.R01 | open SEV2 key_compromise with valid input under the 48 h jurisdiction profile | Incident stored detected, severity history has one entry, notificationDueAt = detectedAt + 48 h when data classes are above P1 |
+| TEST-PS-131-09.T01 | unit | PS-131-01.R01, PS-131-01.R02, PS-131-01.R03, PS-131-02.R01 | open SEV2 key_compromise with valid input under the 48 h resolve stub | Incident stored detected, severity history has one entry, notificationDueAt = detectedAt + 48 h when data classes are above P1 |
 | TEST-PS-131-09.T10 | abuse | PS-131-07.R03, PS-131-01.R04 | 201 operator commands in an hour; UPDATE of a timeline row's text; second redaction of a redacted row; DELETE of a row while the incident exists | RATE_LIMITED; trigger aborts each change |
+| TEST-PS-131-09.T20 | contract | PS-131-04.R07, PS-131-01.R01 | open with affectedDataClasses [P2] against the 48 h resolve stub; the same against the no-hosting-profile stub; open with affectedDataClasses [P0]; hosting profile version 4 with 24 h activated while the first incident is open | resolve called on the relay without a profileId and its result read from effective.breachNotificationHours; notificationDueAt = detectedAt + 48 h with breachNoticeBasis sources [{profileRef {KP, eu_de}, version 3}] and fallback false; detectedAt + 72 h with fallback true; no notificationDueAt and no resolve call for P0 only; the stored due time unchanged after version 4 |
 
 ## Dependencies
 

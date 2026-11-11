@@ -23,7 +23,7 @@
 - Accepted mirrors: RET-STANDARD; listing mirrors are also purged 35 days after the payload expiresAt.
 - Tombstone stubs: at least max(180 days, target type maxAge) after appliedAt; pending_target tombstones at most 180 days; relay_removal advisories 180 days; rejected-envelope log rows 30 days.
 - Quarantined records: until discard, release or conflict resolution; dropped after 30 days unless an open ConflictRecord holds them.
-- Participant statements in a vault follow the retention of the domain record that references them (RET-EVIDENCE for commitments) and are pseudonymized on deletion.
+- Participant statements in a vault follow the retention of the domain record that references them (RET-EVIDENCE for commitments) and are pseudonymized only in this module's DeletionPort pseudonymize step on deletion, never on privacy.deletion.completed (N6a).
 
 **Threats and controls**
 

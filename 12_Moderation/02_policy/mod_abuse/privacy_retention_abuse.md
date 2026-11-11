@@ -30,6 +30,7 @@
 | T04 | Rule text used to smuggle active content | texts are plain text with inert links, length capped |
 | T05 | Moderator cites a scheduled rule to bypass the notice period | check_citable allows only versions in force at the decision time |
 | T06 | Operator labels a restrictive change non_restrictive to skip notice | V08 derives the class from allowed actions, severity and family |
+| T07 | A forged, foreign or equivocated governance decision injects a rule | only relay-scope decisions that F18.S02.M01 relay_upload verified for this relay's operator are drafted (V11), digests are checked, conflicted outcomes discard drafts, and drafts never publish by themselves |
 
 **Abuse controls**
 - Operator publish rate limited to 20 rule versions per 24 h (F12.S03.M03 window_counter class policy.publish); all operator actions audit-logged (F16.S01.M01).
@@ -45,4 +46,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M02, F18.S02.M01, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

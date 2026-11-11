@@ -30,6 +30,7 @@
 | T04 | Remote payload with executable or HTML content | inbound strings are plain text; mirror view escapes at render; links shown as text |
 | T05 | Signer-role confusion: a relay key used as a user author, or a user key presented for a relay role | V10 resolves relay and user roles through separate resolvers; tests per registry entry include relay-key-as-author and user-key-as-relay negatives (T16, T19) |
 | T06 | Activity-pattern inference from exact public timestamps | publicTime floors every public payload timestamp and createdAt to the UTC hour (V12, F10.S02.M03); order inside the hour comes from version members and per-chain seq only |
+| T07 | Governance capture: a publisher decides its own proposal, adds a decider key just before deciding, or one operator compiles and reviews its own transparency report | delegated roles need an authority-list entry first listed at least 14 d before the proposal relay receipt and an author different from the publisher; the reviewer must be another operator key than the draft's compiler (V13) |
 
 **Abuse controls**
 - Per-author publish rate cap 60 statements/hour enforced by F11.S01.M02 through F12.S03.M03 rate limits.

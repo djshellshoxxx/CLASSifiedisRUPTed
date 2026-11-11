@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Graduated per-key limits that a relay applies only to resources it can observe itself: index writes of signed public projections it hosts (listings_per_day becomes index_writes_per_day), mailbox puts to recipient mailboxes the sender has not written to before, and bids on auctions it hosts. Limits rise with the key's age since the relay's own first observation of it and with completed dealings counted only from completion statements that both parties voluntarily submit, drop by a fixed factor at medium or high risk and lift again as soon as the level drops (friction, never a ban), go to 0 while a restrict_feature action covers them, and can be overridden by that relay's moderators with a reason and an expiry. Offers and cycle proposals travel end to end encrypted between vaults, so caps on them are vault-local UX guards in F12.S03.M03. Limits exist only per relay; a key's standing on one relay says nothing about another, and the vault never reports limits to anyone.
+Graduated per-key limits that a relay applies only to resources it can observe itself: index writes of signed public projections it hosts (listings_per_day becomes index_writes_per_day), mailbox puts to recipient mailboxes the sender has not written to before, bids on auctions it hosts, and governance comments it accepts for a policy proposal (F18.S02.M01) from keys it first observed less than 7 days ago. Limits rise with the key's age since the relay's own first observation of it and with completed dealings counted only from completion statements that both parties voluntarily submit, drop by a fixed factor at medium or high risk and lift again as soon as the level drops (friction, never a ban), go to 0 while a restrict_feature action covers them, and can be overridden by that relay's moderators with a reason and an expiry. Offers and cycle proposals travel end to end encrypted between vaults, so caps on them are vault-local UX guards in F12.S03.M03. Limits exist only per relay; a key's standing on one relay says nothing about another, and the vault never reports limits to anyone.
 
 ## Responsibilities
 
@@ -14,6 +14,7 @@ Graduated per-key limits that a relay applies only to resources it can observe i
 - Derive tiers (new, established, trusted) from relay-clock time since first observation and completed dealings counted from voluntarily submitted two-party completion statements, using documented thresholds.
 - Answer limit checks for the relay command bus in-process, using F12.S03.M03 flow buckets the relay itself consumed and never caller-supplied counts.
 - Apply the risk multiplier (medium 0.75, high 0.5, never below 1) on every level rise and drop, action restrictions mapped from restricted capabilities, and moderator overrides with reason, bound and expiry, and emit moderation.limit.changed.
+- [object Object]
 
 ## Not responsible for
 
@@ -28,6 +29,7 @@ Graduated per-key limits that a relay applies only to resources it can observe i
 - As a relay moderator, I can raise a long-standing seller's limit for 30 days with a recorded reason.
 - As a member whose limit was lowered by a risk level, I see the reason, and the limit returns as soon as the level drops.
 - As a member, I may submit a completion statement both of us signed to count a deal towards my tier, knowing this tells the relay that we dealt.
+- As a new member of a relay, I can comment once on each open policy proposal during my first 7 days there, and I see that this cap lifts when my key is 7 days old on that relay.
 
 ## Edge cases
 
@@ -40,6 +42,8 @@ Graduated per-key limits that a relay applies only to resources it can observe i
 - A caller passes currentCount 0 for a key that already used its limit; the field is refused with VALIDATION_FAILED and only the relay's own count is used.
 - Two keys of the same person sign completion statements to each other to farm tier; counting refuses counterparties linked to the submitter's principal, counterparties first seen less than 7 days ago and more than one counted completion per pair in 30 days.
 - A restrict_feature action covering federation.record.ingest is overturned on appeal; moderation.action.reverted clears the restriction and the limit returns with cause action_reverted.
+- A key first seen 2 days ago posts a second comment on the same proposal; it is refused with RATE_LIMITED and retryAfterMs up to the key's 7-day mark, while its first comment on another proposal is accepted.
+- Thirty keys first seen today each comment once on one proposal; the first 25 are accepted, the 26th and later get RATE_LIMITED from the proposal-wide new-key cap, and a key first seen 8 days ago is neither counted nor capped by it.
 
 ## UX and accessibility
 
@@ -71,10 +75,10 @@ F12.S03.M03, F07.S02.M01, F16.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-098-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-098-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-098-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-098-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-098-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-098-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-098-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-098-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-098-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-098-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -86,6 +90,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T22 pass in CI.
 - No limit change is ever silent: each has a cause visible to the member on their limits screen.
 - Effective values follow the published tier table, multipliers and restriction rule exactly, and no relay limit relies on a count the limited party supplied.

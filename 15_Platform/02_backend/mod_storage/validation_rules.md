@@ -11,6 +11,7 @@
 - **PS-119-02.R03** Acquiring a lease held by another holder until expiresAt returns PRECONDITION_FAILED, and renewing an expired lease returns EXPIRED.
 - **PS-119-02.R04** A blob larger than its effective limit returns PAYLOAD_TOO_LARGE, where the limit is 5 MiB lowered by the TenantPort that F15.S04.M03 registers (limits(tenantId).maxUploadBytes on a relay, LocalSettings.localLimits.maxLocalAttachmentBytes in the vault, both at most 5242880) and is 5 MiB when no TenantPort is registered; a malformed content type or ref returns VALIDATION_FAILED, and relay storage rejects non-P0 plaintext blobs.
 - **PS-119-02.R05** On a relay every plaintext image blob put (content type image/*) runs the verifyImageClean verifier that the relay composition registers for F10.S02.M03 and is refused with the verifier's PRIVACY_METADATA_GPS_PRESENT (defined by F10.S02.M03) when not clean, a put whose bytes do not hash to the caller's expectedRef (the ref the signed listing references) returns VALIDATION_FAILED, and a relay adapter without a registered verifier refuses image puts with INTERNAL (fail closed); storage never re-encodes or substitutes bytes.
+- **PS-119-02.R06** A relay SQLite adapter opened without encryptedBlobsPath, or whose blobs_enc attach or schema check failed, refuses every encrypted blob put with INTERNAL (fail closed) and never writes ciphertext into schema main, while P0 plaintext puts and all other storage operations keep working.
 
 ## Specification
 
@@ -29,6 +30,7 @@
 | V11 | when the caller names expectedRef, SHA-256 of the received bytes equals it; storage never substitutes other bytes | VALIDATION_FAILED |
 | V12 | a relay image blob put finds a registered verifyImageClean verifier (the verifier's own not-clean code passes through unchanged) | INTERNAL |
 | V13 | the IndexedDB database version on disk is at most the code's version; a VersionError opens nothing | UNSUPPORTED_SCHEMA_VERSION |
+| V14 | an encrypted blob put on the relay SQLite adapter finds schema blobs_enc attached with table blob_bytes; ciphertext is never written to main.blobs.bytes | INTERNAL |
 
 ## Verification
 
@@ -38,6 +40,7 @@
 | TEST-PS-119-09.T03 | contract | PS-119-02.R03, PS-119-03.R03, PS-119-05.R03 | acquire, competing acquire, non-holder release, renew, expiry, late renew, re-acquire | PRECONDITION_FAILED, EXPIRED, fence 1 then 2 then 3 |
 | TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
 | TEST-PS-119-09.T19 | contract | PS-119-02.R04, PS-119-02.R05, PS-119-04.R05, PS-119-07.R04 | relay tenant maxUploadBytes 3 MiB with a 4 MiB P0 photo, vault maxLocalAttachmentBytes 1 MiB with a 2 MiB photo, no TenantPort with a 5 MiB photo; relay image puts that the verifier reports clean and not clean, a put whose bytes differ from expectedRef, an image put with no verifier registered | PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE, stored; clean bytes stored byte-identical with ref equal to expectedRef; PRIVACY_METADATA_GPS_PRESENT with nothing stored; VALIDATION_FAILED; INTERNAL; no re-encode call exists |
+| TEST-PS-119-09.T24 | contract | PS-119-02.R06, PS-119-04.R08 | relay SQLite adapter without encryptedBlobsPath puts an encrypted and a P0 blob; with blobs_enc, copy only relay.sqlite to a new data dir, open it, get and info the encrypted blob, put the same ciphertext again, then detach its last holder | INTERNAL for the encrypted put with nothing written to main and the P0 blob stored; NOT_FOUND and bytesPresent false after the main-only copy; the re-put writes the ciphertext and get returns it byte-identical; the last detach deletes both rows in one transaction with shred true |
 
 ## Dependencies
 

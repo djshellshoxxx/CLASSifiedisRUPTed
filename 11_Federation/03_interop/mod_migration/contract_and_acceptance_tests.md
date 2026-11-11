@@ -43,12 +43,13 @@ See the module test table below (all processes).
 | TEST-PS-090-09.T21 | integration | PS-090-02.R02 | observer V3 receives a move signed by a key not listed in P's portable document | ignored: no announced record, no account.moved, no redirect or fetch-hint change; FEDERATION_MOVE_SIGNER_INVALID recorded locally |
 | TEST-PS-090-09.T22 | abuse | PS-090-02.R04 | observer V3 receives a move whose announcedAt claims 25 h ago with no old relay receipt; R1 receives the same move straight from a hosted device | V3 holds it for a full 24 h from its first receipt and a K2 veto at 23 h cancels it; R1 refuses it with VALIDATION_FAILED |
 | TEST-PS-090-09.T23 | integration | PS-090-04.R04, PS-090-03.R04 | two moves for P with different targets reach V3 | federation.conflict.detect called with statementClass commitment and subjectRef move:P; both held with no redirect; a drop_all resolution cancels both |
-| TEST-PS-090-09.T24 | unit | PS-090-07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed | migration section exported; deletion plan returned; retained records pseudonymized |
+| TEST-PS-090-09.T24 | unit | PS-090-07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone | migration section exported; deletion plan returned; the pseudonymize step replaces the DID in retained records with exactly that pseudonym and a second run changes nothing; privacy.deletion.completed changes no record |
 | TEST-PS-090-09.T25 | integration | PS-090-02.R01 | K1 revoked in a newer portable document after the move was announced but before V3's effectiveAt | the promotion re-check cancels the move; no account.moved emitted |
+| TEST-PS-090-09.T26 | integration | PS-090-07.R05, PS-090-03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step |
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
 - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
 - Bridge documents exist and are marked Future.

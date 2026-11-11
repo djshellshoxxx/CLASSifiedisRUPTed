@@ -14,13 +14,13 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Relay X, relay_operator O, admin A, tenant operator T, moderator M, peer P, jurisdiction profile stub with a 48 h breach notice, F08.S01.M01 mailbox stub, injected event streams, fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Relay X, relay_operator O, admin A, tenant operator T, moderator M, peer P, F18.S01.M01 governance.jurisdiction_profile.resolve stub returning effective.breachNotificationHours 48 for the hosting ProfileRef {publisherId KP, code eu_de} version 3 and a second stub with no hosting profile returning 72 with fallback true, F08.S01.M01 mailbox stub, injected event streams, fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-131-09.T01 | unit | PS-131-01.R01, PS-131-01.R02, PS-131-01.R03, PS-131-02.R01 | open SEV2 key_compromise with valid input under the 48 h jurisdiction profile | Incident stored detected, severity history has one entry, notificationDueAt = detectedAt + 48 h when data classes are above P1 |
+| TEST-PS-131-09.T01 | unit | PS-131-01.R01, PS-131-01.R02, PS-131-01.R03, PS-131-02.R01 | open SEV2 key_compromise with valid input under the 48 h resolve stub | Incident stored detected, severity history has one entry, notificationDueAt = detectedAt + 48 h when data classes are above P1 |
 | TEST-PS-131-09.T02 | unit | PS-131-02.R02, PS-131-02.R03 | each rule V01–V08 violated | documented error code and nothing stored; secret-like text rejected |
 | TEST-PS-131-09.T03 | property | PS-131-03.R01, PS-131-03.R02 | random command sequences on one incident | only declared transitions succeed; closed never changes; timeline length never decreases |
 | TEST-PS-131-09.T04 | integration | PS-131-03.R03, PS-131-08.R03 | injected clock past SEV1 15-minute acknowledgement and 60-minute containment targets | SLA breach timeline entries and metrics; status unchanged |
@@ -36,13 +36,14 @@ See the module test table below (all processes).
 | TEST-PS-131-09.T14 | integration | PS-131-10.R01, PS-131-10.R02, PS-131-10.R03 | export incidents, import to fresh relay, restore backup | records round-trip without redacted text; imported open incidents become triaged history with a note |
 | TEST-PS-131-09.T15 | integration | PS-131-03.R04 | 25 SEV3 detections in one hour; 30 SEV2 peer key compromise detections and one SEV1 in the same hour | first 20 handled normally and the other 5 appended to one detection_overflow SEV2 incident; all SEV2 and the SEV1 handled without cap |
 | TEST-PS-131-09.T16 | integration | PS-131-04.R03 | platform.relay_identity.rotated revoked compromised; one relay_hosted user key compromised; five within one hour; a VAPID key compromised; security.role.assigned with breakGlass; security.role.revoked with lastAdmin; three admin changes in 24 hours; two admin changes | SEV1 key_compromise relay_identity; no incident; one SEV3 key_compromise user_keys; SEV2 key_compromise; SEV1 privilege_change; SEV1 privilege_change; SEV3 privilege_change; no incident |
-| TEST-PS-131-09.T17 | abuse | PS-131-05.R02 | vault receives a notice signed by an unknown key; by a successor relayId named in its relay's key revocation; by the key of the relay it uses | first quarantined by F11.S01.M02; second shown as unverified until confirmed out of band and not acted on; third shown with the relay name and no local data change |
+| TEST-PS-131-09.T17 | abuse | PS-131-05.R02 | vault receives a notice signed by an unknown key; by a successor relayId named in its relay's key revocation; by a successor relayId known only through a restore announcement naming the old relayId after a certificate-only revocation; by the key of the relay it uses | first quarantined by F11.S01.M02; second and third shown as unverified until confirmed out of band and not acted on; fourth shown with the relay name and no local data change |
 | TEST-PS-131-09.T18 | integration | PS-131-07.R02 | retention sweep 2 years after closure; an incident under legal hold at that time | incident and timeline rows purged; held incident kept until privacy.legal_hold.released |
 | TEST-PS-131-09.T19 | contract | PS-131-04.R05, PS-131-07.R01 | event payload classification and subscription scan across modules | both events P3 with no user content; no federation or notification module consumes security.incident.* |
+| TEST-PS-131-09.T20 | contract | PS-131-04.R07, PS-131-01.R01 | open with affectedDataClasses [P2] against the 48 h resolve stub; the same against the no-hosting-profile stub; open with affectedDataClasses [P0]; hosting profile version 4 with 24 h activated while the first incident is open | resolve called on the relay without a profileId and its result read from effective.breachNotificationHours; notificationDueAt = detectedAt + 48 h with breachNoticeBasis sources [{profileRef {KP, eu_de}, version 3}] and fallback false; detectedAt + 72 h with fallback true; no notificationDueAt and no resolve call for P0 only; the stored due time unchanged after version 4 |
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T20 pass in CI.
 - No SEV1 or SEV2 incident can be closed without a postmortem reference and a notification decision, and no detection of SEV1 or SEV2 is ever capped.
 - Detection hooks open at most one incident per category and scope and respect their thresholds, and timeline rows change only through one audited redaction.
 

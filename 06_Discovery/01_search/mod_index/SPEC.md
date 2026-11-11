@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Builds a full-text (SQLite FTS5) search index over signed public projections of listings, enriched by the signed service-offering, rental-offering and auction statements that refer to the same listing. The same code runs in two places: a local index inside the user's browser vault over the user's own published listings and over projections the vault fetched from relays or imported (received as federation.record.accepted after F11 verification), and an optional relay index over projections ingested by that relay through F11 federation.record.ingest. Only P0 fields and a location cell of at most geohash precision 5 (L0 none, L1 four characters, L2 five characters) are indexed, and only after the author's Ed25519 signature over the projection verifies. The index is derived data: it is rebuilt from retained signed projections, and a signed tombstone or an unpublish removes the text at once. Relay-side decisions (hosting policy, relay_removal advisories, relay-sold promotion, tenant limits) affect only that relay's index or, in a vault, only the copies received from that relay; no relay decision reaches a user's own listings.
+Builds a full-text (SQLite FTS5) search index over signed public projections of listings, enriched by the signed service-offering, rental-offering and auction statements that refer to the same listing. The same code runs in two places: a local index inside the user's browser vault over the user's own published listings and over projections the vault fetched from relays or imported (received as federation.record.accepted after F11 verification), and an optional relay index over projections ingested by that relay through F11 federation.record.ingest. Only P0 fields and a location cell of at most geohash precision 5 (L0 none, L1 four characters, L2 five characters) are indexed, and only after the author's Ed25519 signature over the projection verifies. The index is derived data: it is rebuilt from retained signed projections, and a signed tombstone or an unpublish removes the text at once. Relay-side decisions (hosting policy including the relay operator's prohibited-item rule pack, relay_removal advisories, relay-sold promotion, tenant limits) affect only that relay's index or, in a vault, only the copies received from that relay; no relay decision reaches a user's own listings.
 
 ## Responsibilities
 
@@ -18,6 +18,7 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 - On a relay only, set and clear relay-sold promotion (promotedUntil) from an operator command bound to a final or operator-acknowledged payment claim (FLOW-01 steps 3 and 4).
 - On a relay only, refuse a projection any of whose currency codes is outside the tenant allowedCurrencies (F15.S04.M03 TenantPort, the same code set F11.S01.M02 V19 checks at intake), and serve with each cell-feed item the ReceiptPort.issue receipt that F11.S01.M02 federation.record.ingest returned for that envelope; the index signs no receipt, index acceptance or acknowledgement of its own.
 - Index barterAcceptable, inStock and want.minCondition from the verified listing projection as typed filter columns, and keep the highest offering version per offeringId (services payload seq, FED-3; rentals payload revision) for enrichment.
+- On a relay only, evaluate every listing projection admitted to the relay index in-process with F18.S01.M02 governance.prohibited_rule.evaluate against the relay's own operator pack applied through governance.prohibited_rule.relay_upload, refuse it on a block verdict (relay hosting policy, CAP-9, ADR-0016 decision 8) and never evaluate in a vault.
 
 ## Not responsible for
 
@@ -55,6 +56,7 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 - services.offering.published with seq 3 arrives before a delayed one with seq 2, and a key re-sign later republishes the same content as seq 4; seq 2 is ignored as stale and seq 4 only replaces projectionCid and version in offeringRef.
 - A remote seller's projection says inStock false; the document stays searchable with inStock false and a filter inStock true excludes it, while a wanted listing's want.minCondition is indexed so sellers can filter the wants their item's condition satisfies.
 - bazaar.listing.closed arrives with payload { listingId, ownerId, closeReason } and no closedWithRef; the index reads only listingId and ownerId and relies on the preceding bazaar.listing.unpublished for the removal.
+- A peer relay forwards a listing whose title matches a block rule of this relay operator's pack (applied through governance.prohibited_rule.relay_upload); the relay index refuses it with DISCOVERY_POLICY_BLOCKED and an earlier indexed revision stays unchanged, a review or allow_with_notice verdict admits it, and the same projection is indexed unchanged in vaults and on relays whose packs allow it; a later relay_upload that would block an indexed listing removes nothing by itself, and the operator removes it only through a remove_from_index moderation action.
 
 ## UX and accessibility
 
@@ -79,14 +81,14 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 
 ## Dependencies
 
-F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001
+F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
 | PS-045-01 | [Domain schema](domain_schema.md) | 7 |
-| PS-045-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-045-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-045-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
 | PS-045-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-045-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -100,7 +102,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T35 pass in CI.
+- All tests T01-T36 pass in CI.
 - A newly published listing is searchable on a relay within 5 seconds p95 and a tombstoned one is gone within 5 seconds p95.
 - No indexed row contains a geohash longer than 5 characters, an unsigned projection or any P1-P4 field (privacy suite).
 - A relay decision never removes an own or imported document from a vault (abuse suite).

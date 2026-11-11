@@ -45,7 +45,7 @@ Bidders place bids on an open auction through the auction's host relay. A bid is
 - Host relay becomes unreachable; bidding is disabled with a clear message (no offline queue, because order and time are decided by the host).
 - Proxy resolution reaches a currency exponent boundary (JPY); increments are whole yen and proxy prices never fall between minor units.
 - A bid is delayed in transport or held back by the host and arrives after its signed notAfter; the host refuses it with EXPIRED, and a receipt whose hostTime is after notAfter is rejected by the vault as host misbehaviour evidence.
-- A key the host knows is revoked (a device revocation statement or the identity document it holds) signs a bid; refused with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE.
+- A key the host knows is revoked (a classrup.security.keyrevocation/v1 statement, the single device revocation type owned by F16.S02.M02, or the identity document it holds) signs a bid; refused with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE.
 - The leader of an auction whose reserve was not met is shown lost at close, never won; won comes only from auctions.auction.won naming this bidder.
 - The host stops answering; with no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h the bidder's live bids show host did not report a result, and a later valid result still applies.
 - The bidder has blocked the seller (or holds the seller's block); the bidder vault refuses to sign the bid with BLOCKED_PARTY and sends nothing.

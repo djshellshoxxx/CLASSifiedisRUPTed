@@ -15,7 +15,7 @@
 - **export:** Section moderation.reports in classrup-export/v1 through ExportSectionPort: one line per report (reportId, relayId, targetType, reasonCode, disclosure, syncState, status, outcome, receipts, link and outcome statements); details included because it is the user's own data, message keys never included; section moderation.advisory lists subscriptions; section moderation.hides lists LocalHide rows.
 - **import:** LocalHide rows import as-is for the importing principal (duplicates by target or author skipped). Reports import as read-only history with status withdrawn unless a verified relay link statement shows an open case, in which case they import as linked history; no statements are re-sent; conflicting IDs are rejected.
 - **backup:** Vault export is the backup; relay SQLite backups (CTR-IOX-001 IOX-3) hold only report headers, sealed bodies and receipts, and losing a relay loses no vault data.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; reason code and target type additions are tolerated as other by older readers.
+- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields; target type additions are tolerated as other by older readers; the 12 reason codes are frozen within v1 because F18.S02.M02 binds them, so a new code needs a v2 report schema, and older readers show a v2 code they cannot read as other.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

@@ -36,13 +36,16 @@ See the module test table below (all processes).
 | TEST-PS-095-09.T14 | e2e | PS-095-01.R02, PS-095-04.R01 | mobile visitor reads policy offline after first visit | cached policy shown with fetch date; axe zero serious issues |
 | TEST-PS-095-09.T15 | integration | PS-095-02.R04, PS-095-02.R02 | fresh relay Z adopts the seed set as initial with effectiveAt = publication; relay X publishes a restrictive v2 with 3 days notice, a non_restrictive text fix with immediate effect, a new rule version 1 labelled non_restrictive, and an initial version | Z's rules in force at once; NOTICE_TOO_SHORT; text fix in force at once; VALIDATION_FAILED; VALIDATION_FAILED |
 | TEST-PS-095-09.T16 | integration | PS-095-03.R04, PS-095-04.R04 | v2 scheduled for next week; check_citable for v2 now and after effectiveAt, and for v1 after v2 takes effect | scheduled and not citable; in_force and citable; v1 superseded and not citable for later decisions while still readable |
+| TEST-PS-095-09.T17 | integration | PS-095-04.R05, PS-095-02.R05, PS-095-03.R05 | relay-scope decided events for platform_policy: approved with proposedChange for POL-FRAUD-001 and new POL-SCAM-001 delivered twice, a vault-scope copy, a prohibited_rule target, a digest mismatch, a publisher that is not an operator key of the relay, then conflicted for the approved proposal | one draft per (decisionCid, ruleId) with governanceRef built without a get call; the copy, the other target, the mismatch and the foreign publisher create nothing; conflicted discards the unpublished drafts with reason governance_conflicted; nothing is published |
+| TEST-PS-095-09.T18 | integration | PS-095-04.R06, PS-095-01.R05, PS-095-02.R02 | draft with prohibitedRuleRef { publisherId P, ruleKey counterfeit_goods }, with an unknown ruleKey and with a ruleId of another key; relay-scope prohibited_rule.changed retired for (P, counterfeit_goods) and a vault-scope copy; check_citable for the dependent version | stored; VALIDATION_FAILED twice; prohibitedRefStatus retired and flag set in the review table while the version row is unchanged; copy ignored; citable false |
+| TEST-PS-095-09.T19 | contract | PS-095-04.R05, PS-095-04.R06, PS-095-10.R04 | F18.S02.M01 decided-event fixture (outcomes approved, rejected and conflicted, scope relay and vault) and F18.S01.M02 changed-event fixture against this module's consumer schema; v1 rows with a string prohibitedRuleRef through the expand step | every documented payload field is read as specified; string refs resolve to { publisherId, ruleKey, ruleId } or are flagged for review |
 
 ## Acceptance criteria
 
-- All tests T01–T16 pass in CI.
+- All tests T01–T19 pass in CI.
 - Published rule versions are immutable and every action's citation resolves to the exact text in force at decision time.
 - Seed set of 12 rule families is available for adoption in a fresh relay, and restrictive changes always give 14 days' notice.
 
 ## Dependencies
 
-Module depends on: F18.S01.M02, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M02, F18.S02.M01, F16.S02.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

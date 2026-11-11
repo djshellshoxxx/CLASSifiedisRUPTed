@@ -15,7 +15,7 @@
 - **export:** Section moderation.limits in classrup-export/v1 (vault, ExportSectionPort): last known limits per relay with fetched time; relay operator export lists AccountLimit rows without override reasons about others.
 - **import:** Vault import stores limits as historical context only; relay restore recomputes tier, multiplier and restrictions from first-seen, counted completions, the latest risk event and active actions.
 - **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3).
-- **migration rollback:** Expand step maps listings_per_day to index_writes_per_day and new_conversations_per_day to new_mailbox_recipients_per_day, and drops open_offers and open_cycle_proposals rows (now F12.S03.M03 local guards); rollback is safe because older readers ignore new optional fields and unknown limit keys are not enforced but logged.
+- **migration rollback:** Expand step maps listings_per_day to index_writes_per_day and new_conversations_per_day to new_mailbox_recipients_per_day, and drops open_offers and open_cycle_proposals rows (now F12.S03.M03 local guards); new_key_comments_per_proposal is an additive limit key that needs no data migration; rollback is safe because older readers ignore new optional fields and unknown limit keys are not enforced but logged.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

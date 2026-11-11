@@ -44,7 +44,7 @@
 |---|---|
 | `identity.block.added` | when the blocked party has a did:key, create or keep a personal_block author rule with action hide (created -> active) so federated content from that author is hidden reversibly |
 | `identity.block.removed` | remove the matching personal_block hide rule; F11.S01.M02 then returns the hidden records to accepted |
-| `privacy.deletion.completed` | vault: delete the deleted principal's remaining local and personal_block rules after its DeletionPort plan ran (N6) |
+| `privacy.deletion.completed` | notification only (N6a): the deleted principal's local and personal_block rules were already deleted in this module's DeletionPort purge step, so nothing is deleted, pseudonymized, signed or sent to a relay here |
 
 ### Module errors
 

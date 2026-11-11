@@ -21,9 +21,9 @@ Initial **prepared**; terminal **cancelled**, **closed**.
 |---|---|---|
 | prepared -> announced | federation.migration.announce signed with a device key active ≥ 24 h, copy step ≥ 99 percent | produces classrup.federation.move/v1 through F11.S01.M02 publish and queues it to old relay, new relay and peers |
 | prepared -> announced | federation.migration.receive_move of a verified observed move | effectiveAt computed on this receiver's clock (V04, V08); conflicting moves call federation.conflict.detect and set conflictId |
-| prepared -> cancelled | federation.migration.cancel or account deletion requested | no statement |
+| prepared -> cancelled | federation.migration.cancel, or this module's DeletionPort sign step at deletion execution (never on privacy.deletion.requested) | no statement |
 | announced -> effective | this receiver's effectiveAt reached with no valid veto, the signer key still active on re-check (V01) and no open conflict for the subject | emits federation.account.moved; old relay starts redirect for 180 days |
-| announced -> cancelled | valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, or federation.conflict.resolved drop_all for the subject | produces classrup.federation.move_cancel/v1 for own moves |
+| announced -> cancelled | valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, federation.conflict.resolved drop_all for the subject, or this module's DeletionPort sign step at deletion execution for an own move | produces classrup.federation.move_cancel/v1 for own moves, in the deletion case signed before any key is revoked |
 | effective -> closed | redirectUntil reached | old relay removes redirect |
 
 ```mermaid
@@ -31,9 +31,9 @@ stateDiagram-v2
   [*] --> prepared
   prepared --> announced: federation.migration.announce signed with a device key active ≥ 24 h, copy step ≥ 99 percent
   prepared --> announced: federation.migration.receive_move of a verified observed move
-  prepared --> cancelled: federation.migration.cancel or account deletion requested
+  prepared --> cancelled: federation.migration.cancel, or this module's DeletionPort sign step at deletion execution (never on privacy.deletion.requested)
   announced --> effective: this receiver's effectiveAt reached with no valid veto, the signer key still active on re-check (V01) and no open conflict for the subject
-  announced --> cancelled: valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, or federation.conflict.resolved drop_all for the subject
+  announced --> cancelled: valid veto from another device key of the subject, cancel by the signer, signer key revoked before effectiveAt, federation.conflict.resolved drop_all for the subject, or this module's DeletionPort sign step at deletion execution for an own move
   effective --> closed: redirectUntil reached
   cancelled --> [*]
   closed --> [*]
@@ -55,6 +55,7 @@ stateDiagram-v2
 | TEST-PS-090-09.T13 | abuse | PS-090-03.R01 | replay of an old move statement after a newer effective move | rejected by cid dedup and the cool-down; no move back |
 | TEST-PS-090-09.T17 | a11y | PS-090-03.R01 | operate wizard, countdown and veto prompt by keyboard and screen reader | steps announced in order prepared, announced, effective; countdown text milestones announced; targets ≥ 44 px |
 | TEST-PS-090-09.T23 | integration | PS-090-04.R04, PS-090-03.R04 | two moves for P with different targets reach V3 | federation.conflict.detect called with statementClass commitment and subjectRef move:P; both held with no redirect; a drop_all resolution cancels both |
+| TEST-PS-090-09.T26 | integration | PS-090-07.R05, PS-090-03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step |
 
 ## Dependencies
 

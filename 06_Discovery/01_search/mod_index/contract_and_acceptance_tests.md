@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Tenant T, author A with did:key keypair, signed projections L1..L5 (one with an L1 cell u4pr, one with a 5000-code-point description and condition poor), F01 and F03 event fixtures, relays A and B, fixed clock 2026-11-04T10:00:00Z, fake projection reader, fake claim reader, TenantPort stub with configurable maxIndexedListingsPerPublisher and allowedCurrencies, F11 ingest double returning ReceiptPort.issue receipts, relay and vault harnesses sharing the same package.
+**Fixtures:** Tenant T, author A with did:key keypair, signed projections L1..L5 (one with an L1 cell u4pr, one with a 5000-code-point description and condition poor), F01 and F03 event fixtures, relays A and B, fixed clock 2026-11-04T10:00:00Z, fake projection reader, fake claim reader, TenantPort stub with configurable maxIndexedListingsPerPublisher and allowedCurrencies, F11 ingest double returning ReceiptPort.issue receipts, F18.S01.M02 evaluate double holding relay operator packs 41 and 42 (counterfeit_goods block, age_restricted_goods review, used_electronics_notice allow_with_notice), relay and vault harnesses sharing the same package.
 
 ## Verification
 
@@ -55,14 +55,15 @@ See the module test table below (all processes).
 | TEST-PS-045-09.T33 | integration | PS-045-01.R07, PS-045-02.R01 | services.offering.published with seq 1, seq 3, a delayed seq 2, a key re-sign seq 4 with unchanged content, and a remote offering with a 4-character serviceAreaCell | offeringRef.version 1, then 3, unchanged by seq 2 (DISCOVERY_SOURCE_STALE), then 4 with the new projectionCid and unchanged text; geoCell equals the 5-character serviceAreaCell; the 4-character area refused with DISCOVERY_PROJECTION_INVALID |
 | TEST-PS-045-09.T34 | integration | PS-045-02.R04, PS-045-04.R06 | relay tenant with maxIndexedListingsPerPublisher 2 and allowedCurrencies [EUR] from the TenantPort stub; an author's 3 EUR listings arrive through federation.record.ingest, a peer relay forwards a CHF listing, then the limit is lowered to 1 and list_by_cell is read | third listing refused with stub author_cap and DISCOVERY_INDEX_CAP; CHF listing refused with FEDERATION_CURRENCY_NOT_ALLOWED; lowering removes nothing; feed items carry the ReceiptPort.issue receipt of the ingest response; the index signs no receipt, index acceptance or acknowledgement |
 | TEST-PS-045-09.T35 | integration | PS-045-03.R04, PS-045-04.R02 | relay index receives federation.tombstone.applied with kind relay_removal, issuerKind origin_relay and advisory true for relayId of this relay and of another relay; a vault receives the same advisory; own bazaar.listing.closed { listingId, ownerId, closeReason } before and after bazaar.listing.unpublished | this relay's advisory removes the document with hosting_policy and the other relay's changes nothing; the vault drops only that provenance; closed removes a still active own document with reason unpublished and is a no-op after unpublish; a payload without closedWithRef is accepted |
+| TEST-PS-045-09.T36 | integration | PS-045-02.R05, PS-045-02.R04 | relay with operator pack 41 applied through governance.prohibited_rule.relay_upload: a peer-forwarded listing matching counterfeit_goods (block), a newer revision of an indexed listing matching it, listings matching age_restricted_goods (review) and used_electronics_notice (allow_with_notice), an author at maxIndexedListingsPerPublisher minus one sending the blocked listing first, an evaluate error; then pack 42 blocking an indexed listing followed by a rebuild; the blocked projection fetched into a vault | evaluate called in-process with { kind, categoryId, title, description, tags } and no profileRefs; block refused with DISCOVERY_POLICY_BLOCKED and the earlier revision stays indexed; review and allow_with_notice admitted; the blocked listing uses no author cap slot; evaluate error admits nothing and retries; pack 42 and the rebuild remove nothing; the vault indexes it without calling evaluate |
 
 ## Acceptance criteria
 
-- All tests T01-T35 pass in CI.
+- All tests T01-T36 pass in CI.
 - A newly published listing is searchable on a relay within 5 seconds p95 and a tombstoned one is gone within 5 seconds p95.
 - No indexed row contains a geohash longer than 5 characters, an unsigned projection or any P1-P4 field (privacy suite).
 - A relay decision never removes an own or imported document from a vault (abuse suite).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

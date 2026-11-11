@@ -26,7 +26,7 @@
 | V09 | inbound thread-open: the statement's threadId equals the derivation of its own contextTenantId, contextType, contextId, participants and generation | COMMS_THREAD_OPEN_REJECTED |
 | V10 | receiving vault cap: at most 5 pending requests per unknown DID and 100 in total; excess statements are dropped silently | RATE_LIMITED |
 | V11 | accept_request and decline_request target a thread in status request | CONFLICT_STATE |
-| V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when signed by a device key of the departing participant that F16.S02.M02 reports active at receipt | VALIDATION_FAILED |
+| V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when its payload holds exactly the F10.S01.M04 allowlist of its kind (departure - requestId, signedAt, kind, effectiveAt, recourse none) with no DID or thread ID, and ext.signerKey is a device key of the envelope author that F16.S02.M02 reports active at receipt or revoked with reason account_deleted with the notice cid in finalCids (finalListed true); the departing DID is always the envelope author (CTR-FED-001 FED-7) | VALIDATION_FAILED |
 
 ## Verification
 

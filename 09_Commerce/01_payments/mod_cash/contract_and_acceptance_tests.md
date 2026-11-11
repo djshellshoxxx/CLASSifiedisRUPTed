@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Two vaults A (payer) and B (payee) with a Deal for EUR 45.00 allowing cash; jurisdiction profile with cash limit EUR 1 000.00; fixed clock 2026-11-04T10:00:00Z.
+**Fixtures:** Two vaults A (payer) and B (payee) with a Deal for EUR 45.00 allowing cash; a governance.jurisdiction_profile.resolve stub for the selected ProfileRef {publisherId P, code eu_de} version 3 returning effective.cashLimits [{amountMinor: 100000, currency: EUR}]; fixed clock 2026-11-04T10:00:00Z.
 
 ## Verification
 
@@ -40,10 +40,11 @@ See the module test table below (all processes).
 | TEST-PS-067-09.T18 | unit | PS-067-08.R03 | show standard and elevated guidance and trigger a cash limit rejection | classrup_commerce_cash_guidance_shown_total{level} and classrup_commerce_cash_limit_rejections_total increase in local diagnostics |
 | TEST-PS-067-09.T19 | integration | PS-067-07.R04 | export, deletion and retention purge driven by F10 | section commerce.cash_terms exported; privacy.deletion.completed pseudonymizes the principal; RetentionPurgePort purges after RET-EVIDENCE; every field carries an F10.S02.M02 class |
 | TEST-PS-067-09.T20 | abuse | PS-067-07.R05 | blocked payee sends a terms statement; 10 000 fresh dids send terms statements | blocked statement dropped silently; quarantine stays within 500 entries or 5 MiB and non-party statements are dropped once it is full |
+| TEST-PS-067-09.T21 | contract | PS-067-02.R05, PS-067-02.R02 | resolve stub returns cashLimits [EUR 1 000.00, USD 500.00] with sources naming {P, eu_de} version 3; cash obligations of EUR 2 500.00, EUR 1 000.00 and GBP 5 000.00; then a fallback resolve with empty cashLimits | resolve called with the vault's selected ProfileRefs and no profile id; EUR 2 500.00 refused with COMMERCE_CASH_LIMIT_EXCEEDED and details {limit EUR 1 000.00, profileRef {P, eu_de}, profileVersion 3}; EUR 1 000.00 and GBP 5 000.00 allowed with no FX conversion; fallback allows every amount |
 
 ## Acceptance criteria
 
-- All tests T01 to T20 pass in CI.
+- All tests T01 to T21 pass in CI.
 - A cash claim can reach acknowledged but never confirmed or final, and no UI text implies verification.
 - Safety guidance is displayed for every cash claim and never blocks on its own.
 - Accepted cash terms are never replaced without the payer's signed acceptance of newer terms.

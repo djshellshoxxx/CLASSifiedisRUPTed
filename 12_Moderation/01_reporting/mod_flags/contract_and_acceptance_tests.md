@@ -49,10 +49,11 @@ See the module test table below (all processes).
 | TEST-PS-094-09.T27 | contract | PS-094-04.R07, PS-094-01.R06, PS-094-03.R05, PS-094-02.R02 | hide author A and listing L2 of author B, file a report with hideLocally on L3, subscribe to a hide-mode advisory on L4; F06.S01.M02 and F06.S02.M03 contract fixtures call filterHidden and isHidden; unhide A; withdraw the L3 report; hide the local principal | items of A, L2, L3 and L4 dropped with by local_hide or advisory; after unhide the items of A return at the next call; L3 stays hidden after withdrawal; VALIDATION_FAILED for self; no index document removed and nothing leaves the vault |
 | TEST-PS-094-09.T28 | integration | PS-094-04.R08, PS-094-02.R02 | report message M metadata-only, with a redacted disclosure (phone removed) and with an unredacted disclosure; then force K onto the redacted disclosure | header targetCid equals messageCid and the metadata carries the signed envelope without wrapped keys; no K in the first two; the third seals K and the relay records commitment verified; the forced case returns PRECONDITION_FAILED |
 | TEST-PS-094-09.T29 | abuse | PS-094-07.R06 | F12 privacy suite after hides and unhides: scan sync outbox, relay requests, federation payloads, logs and notifications; export and delete the vault | no LocalHide field appears anywhere outside the vault; section moderation.hides exported; rows deleted with the vault |
+| TEST-PS-094-09.T30 | contract | PS-094-04.R09 | compare the reasonCode enum of the moderation.report.received schema with the F18.S02.M02 reports_received dimension fixture; a schema fixture that adds a thirteenth code within v1 | identical 12 values; the added code fails the contract check |
 
 ## Acceptance criteria
 
-- All tests T01–T29 pass in CI.
+- All tests T01–T30 pass in CI.
 - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
 - The UI never shows sent, acknowledged, linked or resolved before the matching verified state is reached.
 

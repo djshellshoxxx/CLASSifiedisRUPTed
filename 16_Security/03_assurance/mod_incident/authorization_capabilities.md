@@ -31,7 +31,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-131-09.T07 | abuse | PS-131-05.R01, PS-131-05.R03 | moderator M, tenant operator T and a member read incidents; the system hook actor tries triage | FORBIDDEN or NOT_FOUND; FORBIDDEN |
-| TEST-PS-131-09.T17 | abuse | PS-131-05.R02 | vault receives a notice signed by an unknown key; by a successor relayId named in its relay's key revocation; by the key of the relay it uses | first quarantined by F11.S01.M02; second shown as unverified until confirmed out of band and not acted on; third shown with the relay name and no local data change |
+| TEST-PS-131-09.T17 | abuse | PS-131-05.R02 | vault receives a notice signed by an unknown key; by a successor relayId named in its relay's key revocation; by a successor relayId known only through a restore announcement naming the old relayId after a certificate-only revocation; by the key of the relay it uses | first quarantined by F11.S01.M02; second and third shown as unverified until confirmed out of band and not acted on; fourth shown with the relay name and no local data change |
 
 ## Dependencies
 

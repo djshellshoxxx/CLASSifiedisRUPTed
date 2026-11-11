@@ -9,7 +9,8 @@
 - **PS-090-07.R01** A move statement reveals the old and new relay of a pseudonymous did:key, which is public by design and stated in the wizard.
 - **PS-090-07.R02** A stolen device key must not silently move an account, so a 24 h veto window on each receiver's clock, a 24 h minimum key age and a 30-day cool-down limit the damage, and the UI says when only one device key exists and no veto is possible.
 - **PS-090-07.R03** The move never transfers private data between relays; the vault re-establishes mailboxes and encrypted material itself.
-- **PS-090-07.R04** The module registers the N6 ports (ExportSectionPort for the migration history, DeletionPort, RetentionPurgePort for RET-EVIDENCE records), classifies fields with F10.S02.M02 and pseudonymizes retained records on privacy.deletion.completed.
+- **PS-090-07.R04** During a deletion grace period the module takes only reversible actions, so copy and announce of the open own migration are refused with PRIVACY_DELETION_PENDING through privacy.deletion.assert_not_pending and continue unchanged after privacy.deletion.cancelled, while cancelling the migration and signing its move_cancel happen only in the DeletionPort sign step at execution.
+- **PS-090-07.R05** The module registers the N6 ports (ExportSectionPort for the migration history, DeletionPort, RetentionPurgePort for RET-EVIDENCE records) and classifies fields with F10.S02.M02; its DeletionPort sign step cancels the open own migration and signs move_cancel for an announced one, its pseudonymize step (pseudonymize(ctx{requestId, pseudonym}), the only call that receives the pseudonym) replaces the principal's DID in retained own MigrationRecords, and privacy.deletion.completed is a notification only (N6a).
 
 ## Specification
 
@@ -45,7 +46,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-090-09.T03 | abuse | PS-090-02.R01, PS-090-07.R02 | own announce signed by a revoked key, by an unlisted key and by a key added 1 h earlier | FEDERATION_MOVE_SIGNER_INVALID for each |
 | TEST-PS-090-09.T11 | abuse | PS-090-07.R01, PS-090-07.R02, PS-090-07.R03 | inspect move statement and UI with a single device key | no private data in statement; UI states that no veto is possible; no mailbox contents moved |
 | TEST-PS-090-09.T12 | abuse | PS-090-07.R02, PS-090-02.R01 | second move after 10 days; 4th move statement in 90 days | FEDERATION_MOVE_COOLDOWN; rate limit |
-| TEST-PS-090-09.T24 | unit | PS-090-07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed | migration section exported; deletion plan returned; retained records pseudonymized |
+| TEST-PS-090-09.T24 | unit | PS-090-07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone | migration section exported; deletion plan returned; the pseudonymize step replaces the DID in retained records with exactly that pseudonym and a second run changes nothing; privacy.deletion.completed changes no record |
+| TEST-PS-090-09.T26 | integration | PS-090-07.R05, PS-090-03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step |
 
 ## Dependencies
 

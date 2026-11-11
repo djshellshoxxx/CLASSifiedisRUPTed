@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-092-09.T21 | integration | PS-092-02.R04, PS-092-06.R04 | first delivery on day 29 with the receipt lost and a retry on day 32; same appealId with a changed digest; appeal forwarded to relay Y | stored receipt returned on day 32; IDEMPOTENCY_KEY_REUSED; relay Y refuses with FORBIDDEN |
 | TEST-PS-092-09.T22 | integration | PS-092-07.R04 | ExportSectionPort run, then privacy.deletion.completed in the vault with keepEvidence true and false; relay DeletionPort applied | section moderation.appeals exported; vault appeals deleted or pseudonymized; relay copy pseudonymized and retained |
 | TEST-PS-092-09.T23 | integration | PS-092-04.R02 | vault receives a verified appealdecision/v1 and one with a forged signature | local moderation.appeal.decided derived with origin vault and actor.kind federated; forged one quarantined; F12.S02.M01 ignores the vault-origin event |
+| TEST-PS-092-09.T24 | contract | PS-092-04.R05 | compare the outcome and origin enums of the moderation.appeal.decided schema and the relay-local moderation.appeal.filed schema with the F18.S02.M02 dimension fixture; a moot closure; a schema fixture that adds an outcome within v1 | identical values (upheld, overturned, reduced; relay, vault); no decided event for moot; the added outcome fails the contract check |
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No appeal is ever decided by a moderator whose principal made the original decision, is the subject or reported the case (property and abuse tests).
 - The 30-day window is always computed from the relay-signed statement time against the relay's receive time, and expiry or a moderator revert never shows the appellant an overturned outcome.
 

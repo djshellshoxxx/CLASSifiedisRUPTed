@@ -1,6 +1,6 @@
 # PS-143-04 — Commands, queries and events: Release gates
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -42,9 +42,10 @@ _None._
 | QUALITY_GATE_WAIVER_EXPIRED | 422 | no | a waiver is expired or longer than 14 days (exit 1) |
 | QUALITY_GATE_SPEC | 422 | no | spec check has errors or NO-GO (exit 1) |
 | QUALITY_GATE_COMPAT | 422 | no | compat report missing, stale, from another commit or showing a QUALITY_COMPAT_* failure or failed browser cell (exit 1) |
-| QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine, manual checklist or mapping review commit lacks code-owner approval (exit 1) |
+| QUALITY_GATE_WAIVER_UNAPPROVED | 422 | no | waiver, quarantine, manual checklist, mapping review or governance bundle manifest commit lacks code-owner approval (exit 1) |
 | QUALITY_GATE_MANUAL_MISSING | 422 | no | a level manual test row has no signed passing checklist for this release commit (exit 1) |
 | QUALITY_GATE_TRACE_MAPPING | 422 | no | a test-to-requirement mapping shares no key term with the requirement and has no valid approved mapping review (exit 1) |
+| QUALITY_GATE_GOVERNANCE_BUNDLE | 422 | no | a bundled governance seed pack has an invalid signature, a signer other than the release-pinned project publisher key or a cid other than its reviewed packCid (exit 1), or its manifest, review entry or file is missing (exit 2) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -60,6 +61,7 @@ $ pnpm gates:release --version 0.3.0
   a11y          serious 0, critical 0  PASS
   budgets       relay OBS-4 PASS (reports/load.json), PWA OBS-5 LCP 1.9 s INP 140 ms CLS 0.03 JS 131 KiB PASS (reports/pwa-budgets.json)
   compat        0 QUALITY_COMPAT_* failures; automated cells pass; manual Safari and iOS checklist signed  PASS
+  governance    3/3 bundled packs (taxonomy core-1, rule pack, generic profile) signed by the project publisher key; cids match the 0.3.0 review by @governance-owner  PASS
   changelog     0.3.0 present  PASS
   verdict GO  (reports/gates.json)
 ```
@@ -72,4 +74,4 @@ $ pnpm gates:release --version 0.3.0
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F17.S03.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F17.S03.M03, CTR-FED-001, F18.S01.M01, F18.S01.M02, F18.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

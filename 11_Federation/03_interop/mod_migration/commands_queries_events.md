@@ -18,8 +18,8 @@
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
 | `federation.migration.prepare` | federation.migration.prepare | [vault-local command] { kind: account\|relay, toRelay: relayId or baseUrl } | { migrationId, status: prepared, publicRecords, tombstones } | FEDERATION_MOVE_COOLDOWN, FEDERATION_MOVE_TARGET_INVALID, CONFLICT_STATE, FEATURE_DISABLED |  | yes (Idempotency-Key) |
-| `federation.migration.copy` | federation.migration.copy | [vault-local command; routes copies through F11.S02.M01 into the F15.S01.M01 sync outbox] { migrationId, expectedRevision } | { migrationId, revision, copyProgress } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE |  | yes (Idempotency-Key) |
-| `federation.migration.announce` | federation.migration.announce | [vault-local command; produces signed statement classrup.federation.move/v1 through F11.S01.M02 publish] { migrationId, expectedRevision } | { migrationId, revision, moveCid, effectiveAt } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_COOLDOWN |  | yes (Idempotency-Key) |
+| `federation.migration.copy` | federation.migration.copy | [vault-local command; routes copies through F11.S02.M01 into the F15.S01.M01 sync outbox] { migrationId, expectedRevision } | { migrationId, revision, copyProgress } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, PRIVACY_DELETION_PENDING |  | yes (Idempotency-Key) |
+| `federation.migration.announce` | federation.migration.announce | [vault-local command; produces signed statement classrup.federation.move/v1 through F11.S01.M02 publish] { migrationId, expectedRevision } | { migrationId, revision, moveCid, effectiveAt } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_COOLDOWN, PRIVACY_DELETION_PENDING |  | yes (Idempotency-Key) |
 | `federation.migration.cancel` | federation.migration.cancel | [vault-local command; produces signed statement classrup.federation.move_cancel/v1 when announced] { migrationId, expectedRevision } | { migrationId, revision, status: cancelled } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_MOVE_VETO_INVALID |  | yes (Idempotency-Key) |
 | `federation.migration.receive_move` | federation.migration.receive | [vault-local or relay command; consumes statements classrup.federation.move/v1 and move_cancel/v1 accepted by F11.S01.M02, with the receipt context { firstReceivedAt, source, oldRelayReceipt? }] { statement: Envelope } | { migrationId, status, effectiveAt, conflictId? } | FED_SIGNATURE_INVALID, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_VETO_INVALID, FEDERATION_KEY_MISMATCH, VALIDATION_FAILED | federation.account.moved | yes (Idempotency-Key) |
 
@@ -45,8 +45,9 @@
 | `federation.delivery.failed` | increase copyProgress.failed for the migration's copy entries |
 | `federation.conflict.detected` | subjectRef move:<subject>: set conflictId and hold every announced move of that subject; no redirect is activated |
 | `federation.conflict.resolved` | subjectRef move:<subject>: drop_all cancels the held moves; superseded keeps only the move named by supersededByCid, which then follows its own window |
-| `privacy.deletion.requested` | cancel the open own migration and send tombstones to both relays |
-| `privacy.deletion.completed` | pseudonymize the deleted principal's DID in retained own MigrationRecords (RET-EVIDENCE) (N6) |
+| `privacy.deletion.requested` | reversible only (N6a): show the open own migration as paused; copy and announce call F10.S01.M04 privacy.deletion.assert_not_pending and are refused with PRIVACY_DELETION_PENDING; nothing is cancelled, signed, purged or sent to a relay |
+| `privacy.deletion.cancelled` | clear the paused notice; the open own migration continues from its unchanged state |
+| `privacy.deletion.completed` | notification only (N6a): the open own migration was cancelled in this module's DeletionPort sign step and retained own MigrationRecords (RET-EVIDENCE) were pseudonymized in its pseudonymize step, so nothing is signed, pseudonymized or sent to a relay here |
 
 ### Module errors
 

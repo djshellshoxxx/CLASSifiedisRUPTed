@@ -13,6 +13,7 @@
 - **PS-119-04.R05** Blob storage offers put (with optional expectedRef), get, info, attach and detach, applies the TenantPort size limit and the relay image verifier on put, and repositories that declare blob refs keep reference counts in step with record writes.
 - **PS-119-04.R06** Dead letters offer list(consumer?, limit), requeue(consumer, eventId), the 7-day and disabled-consumer return to dead run by the dispatcher, and purge(before) that deletes dead letters whose dead_at is before the cutoff and whose event is not currently requeued; F15.S03.M03 platform.deadletter.replay and its purge schedule use them.
 - **PS-119-04.R07** Storage treats relayId and destination values as opaque strings in the canonical form F15.S02.M01 defines (relayId 'relay:' plus 26 lowercase base32 characters of SHA-256 of the genesis key; destinations '<relayId>', '<relayId>/mailbox/<mailboxId>', '<relayId>/index/<indexName>', '<relayId>/auction/<auctionId>' or 'direct:<did>') and never derives, normalizes or rewrites them in data or index values.
+- **PS-119-04.R08** On a relay, blob get of an encrypted blob reads blobs_enc.blob_bytes and returns NOT_FOUND when the ciphertext is absent there (after a restore from an F15.S03.M02 backup of schema main, or a power loss between the two file commits), info then reports bytesPresent false, a put of the same ciphertext writes it again instead of counting a duplicate, and detaching the last holder deletes the main.blobs row and the blobs_enc.blob_bytes row in the same transaction(fn).
 
 ## Specification
 
@@ -57,6 +58,8 @@ repo.query({ where: { listing: lid, status: 'made' }, orderBy: 'status', limit: 
 → ok { items: StoredRecord[], nextCursor? }
 relay: scope(tx).blobs.put(bytes, { contentType: 'image/webp', privacy: 'P0', expectedRef })
 → ok { ref: 'blob:sha256-Qm3…' } | err PAYLOAD_TOO_LARGE (tenant maxUploadBytes) | err PRIVACY_METADATA_GPS_PRESENT
+relay: scope(tx).blobs.put(ciphertext, { contentType: 'application/octet-stream', privacy: 'P2', encrypted: true, expectedRef })
+→ main.blobs row (bytes X'') + blobs_enc.blob_bytes row; blobs.info(ref) → { size, encrypted: true, bytesPresent: true }
 F15.S03.M03: tx.deadLetters.requeue('search.indexer', eventId) → replay_count 1, last_replayed_at now
 ```
 
@@ -72,6 +75,7 @@ F15.S03.M03: tx.deadLetters.requeue('search.indexer', eventId) → replay_count 
 | TEST-PS-119-09.T18 | contract | PS-119-04.R04 | enqueue a platform.outbox_entry record inside a domain transaction that then fails, then one that commits; inspect adapter tables, object stores and the storage public API | entry and domain record roll back and commit together; no sync_outbox table or object store, no sync sender, SyncTransport or recordPeerAck exported |
 | TEST-PS-119-09.T19 | contract | PS-119-02.R04, PS-119-02.R05, PS-119-04.R05, PS-119-07.R04 | relay tenant maxUploadBytes 3 MiB with a 4 MiB P0 photo, vault maxLocalAttachmentBytes 1 MiB with a 2 MiB photo, no TenantPort with a 5 MiB photo; relay image puts that the verifier reports clean and not clean, a put whose bytes differ from expectedRef, an image put with no verifier registered | PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE, stored; clean bytes stored byte-identical with ref equal to expectedRef; PRIVACY_METADATA_GPS_PRESENT with nothing stored; VALIDATION_FAILED; INTERNAL; no re-encode call exists |
 | TEST-PS-119-09.T22 | contract | PS-119-04.R07 | store records whose data and index values hold canonical relayId and destination strings on each adapter, query by destination and round-trip through export and restore | byte-identical strings, UTF-8 binary order kept, nothing derived or rewritten |
+| TEST-PS-119-09.T24 | contract | PS-119-02.R06, PS-119-04.R08 | relay SQLite adapter without encryptedBlobsPath puts an encrypted and a P0 blob; with blobs_enc, copy only relay.sqlite to a new data dir, open it, get and info the encrypted blob, put the same ciphertext again, then detach its last holder | INTERNAL for the encrypted put with nothing written to main and the P0 blob stored; NOT_FOUND and bytesPresent false after the main-only copy; the re-put writes the ciphertext and get returns it byte-identical; the last detach deletes both rows in one transaction with shred true |
 
 ## Dependencies
 

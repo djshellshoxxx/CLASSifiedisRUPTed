@@ -16,7 +16,7 @@ Conversation threads bound to a context (listing, proposal, cycle, booking, rent
 - Enforce the local principal's own blocks at thread creation and on block events (direct threads archive in the blocker's vault, group threads hide the blocked party from the blocker); nothing changes and nothing is signalled in the blocked party's vault.
 - Store per-participant mute settings (off, 1 h, 8 h, 24 h, until unmuted) that notification routing reads.
 - Produce and verify the signed thread-open statement classrup.comms.thread_open/v1, check the signer's entitlement per context type, and hold statements from unknown senders as message requests with status request until the user accepts or declines them.
-- Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement and register the F10 privacy ports for the local user's own threads (N6).
+- Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement of kind departure, taking the departing DID from the envelope author (CTR-FED-001 FED-7) and never from the payload, and register the F10 privacy ports for the local user's own threads (N6).
 
 ## Not responsible for
 
@@ -42,7 +42,7 @@ Conversation threads bound to a context (listing, proposal, cycle, booking, rent
 - A cycle participant leaves; they can no longer fetch new messages but keep what was already delivered to their device.
 - A cycle grows beyond 12 participants; the 13th join is refused with COMMS_THREAD_PARTICIPANT_LIMIT and the cycle owner module decides how to react.
 - Listing is archived or removed; threads stay open for 14 days for pending questions then archive automatically.
-- A participant deletes their account; their vault sends a signed classrup.privacy.deletion_notice/v1 before its keys are destroyed and receiving vaults set leftAt and show a deleted-member label; without a notice the participant simply stays silent.
+- A participant deletes their account; their vault sends one signed classrup.privacy.deletion_notice/v1 of kind departure before its keys are destroyed; its payload names no DID and no thread, so receiving vaults take the departing DID from the envelope author, set leftAt on every thread in which that DID is a current participant and show a deleted-member label; a notice that arrives after the account_deleted key revocation is still accepted when its cid is listed in finalCids; without a notice the participant simply stays silent.
 - A, B and C join cycle X in different orders; each vault derives the same threadId from (contextTenantId, cycle, X, generation 1) on its first mutiny.party.joined, so their messages decrypt and verify in each other's vaults.
 - A archived the listing thread locally and opens a new one while a message from B for the old thread is in flight; A's new thread has generation 2, B's vault archives generation 1 with reason superseded, and the in-flight message is re-homed into the new thread instead of dropped.
 - An unknown DID sends 6 thread-open statements and 120 other unknown DIDs send one each; the receiving vault keeps 5 requests per unknown DID and 100 in total and drops the rest silently.

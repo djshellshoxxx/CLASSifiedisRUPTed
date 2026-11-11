@@ -48,7 +48,7 @@ _None._
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | COMMERCE_CASH_NOT_ALLOWED | 422 | no | the obligation does not allow cash or the Deal is not open |
-| COMMERCE_CASH_LIMIT_EXCEEDED | 422 | no | obligation exceeds the cash limit of the active jurisdiction profile |
+| COMMERCE_CASH_LIMIT_EXCEEDED | 422 | no | obligation exceeds the effective.cashLimits entry in its currency from governance.jurisdiction_profile.resolve; details {limit: Money, profileRef, profileVersion} |
 | COMMERCE_CASH_TERMS_UNACCEPTED | 409 | no | the claim does not name the payer-accepted terms in force |
 | COMMERCE_CASH_HINT_PRIVATE | 422 | no | hint appears to contain a stored private address |
 

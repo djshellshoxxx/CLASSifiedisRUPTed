@@ -43,7 +43,7 @@ stateDiagram-v2
 ### Timeouts and scheduled transitions
 
 - SLA sweep every 60 s: SEV1 acknowledgement 15 minutes and containment 60 minutes; SEV2 acknowledgement 1 hour and containment 4 hours; SEV3 acknowledgement 1 working day; SEV4 acknowledgement 5 working days.
-- Notification decision due 24 hours after detection for incidents with affected data classes above P1, and notification due time from the jurisdiction profile, 72 hours after detection by default.
+- Notification decision due 24 hours after detection for incidents with affected data classes above P1, and notification due time detectedAt + effective.breachNotificationHours of F18.S01.M01 governance.jurisdiction_profile.resolve (24..720 hours, 72 by default).
 - Postmortem due 7 days after resolution for SEV1 and SEV2.
 - Hook cap window: rolling 1 hour, 20 SEV3 or SEV4 hook detections per relay; SEV1 and SEV2 are not counted against the cap.
 

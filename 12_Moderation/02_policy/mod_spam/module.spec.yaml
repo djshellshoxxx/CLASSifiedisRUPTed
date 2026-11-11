@@ -84,6 +84,7 @@ processes:
       - The relay index-intake hook passes the projection text before indexing, and the store's own first observation of a key (identity.session.started on a relay, federation.record.accepted in a vault) starts the new-key window; identity.account.created is never used for other keys.
       - moderation.spam.detected carries the subject did:key (a pseudonymous public key, P2, never leaving the store per EVT-8) so F12.S02.M01, F12.S03.M02 and F12.S03.M03 act on the same key, and hashing is used only inside the indexes and logs.
       - In author_presign mode the query reads the author's own local publication history, writes nothing and emits nothing, and its output contract is the one F01.S01.M03 tests against (N19).
+      - "The mode enum of moderation.spam.detected (relay_intake, vault_filter) is a stable v1 vocabulary bound by the F18.S02.M02 transparency dimension spam_detected (relay_intake only, throttled when a throttle is present) and its contract test T22; author_presign never appears in the event, and adding, renaming or removing a mode is a breaking change that needs a new major event schema (CTR-SCH-001 SCH-3) coordinated with F18.S02.M02."
     queries:
       - name: moderation.spam.evaluate
         capability: moderation.spam.evaluate
@@ -181,8 +182,9 @@ processes:
       - "T17 | contract | 04.R05 | F01.S01.M03 contract fixture evaluates a draft in author_presign mode before signing | output has score, heuristics, rulesVersion and degraded; no event and no index row written"
       - "T18 | unit | 01.R02,01.R04,07.R02 | inspect index rows after evaluations on relays X and Y; injected clock 31 days later | only hashes and counters; key hashes differ between X and Y; entries expired"
       - "T19 | abuse | 07.R03 | legitimate seller posts 12 variant listings in an hour | signal and at most a 1 hour throttle; no removal or suspension"
+      - "T20 | contract | 04.R06 | compare the mode enum and throttle field of the moderation.spam.detected schema with the F18.S02.M02 spam_detected dimension fixture; author_presign evaluation; a schema fixture that adds a mode within v1 | identical values (relay_intake, vault_filter) and throttle optional; no event for author_presign; the added mode fails the contract check"
     acceptance:
-      - All tests T01–T19 pass in CI.
+      - All tests T01–T20 pass in CI.
       - On the labelled corpus, recall ≥ 80% and false-positive rate ≤ 2% at score threshold 50.
       - No heuristic result ever causes removal, suspension or ban without a human or published rule in F12.S02.M01.
   import_export_backup_rollback:

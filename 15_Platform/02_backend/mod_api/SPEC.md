@@ -6,14 +6,15 @@
 
 ## Purpose
 
-The kernel command bus shared by every feature package (ADR-0002, amended by ADR-0016). It runs in-process inside the user's vault (IndexedDB, actor = unlocked local principal) and, wrapped by a node:http adapter, inside an optional self-hosted relay for relay commands only. It owns the definition API (defineCommand, defineQuery, defineSubscriber, defineEvent, defineMachine, defineErrors), the dispatch pipeline (feature flag, relay read-only containment, authentication, tenant status, rate limit, strict validation, authorization, idempotency, handler in one transaction, transactional outbox, idempotent response, audit), UUIDv7 identifiers, the clock port, typed errors with problem+json rendering, and relay access tokens issued by challenge-response. Ports owned downstream reach the bus by inverted registration at composition: TenantPort (F15.S04.M03, which also supplies LocalSettings.vaultId as the vault's dispatch-context tenantId) and ContainmentPort (the relay read-only switch of F16.S03.M03). It holds no domain data of its own except IdempotencyRecord and relay access tokens.
+The kernel command bus shared by every feature package (ADR-0002, amended by ADR-0016). It runs in-process inside the user's vault (IndexedDB, actor = unlocked local principal) and, wrapped by a node:http adapter, inside an optional self-hosted relay for relay commands only. It owns the definition API (defineCommand, defineQuery, defineSubscriber, defineEvent, defineMachine, defineErrors), the dispatch pipeline (feature flag, relay read-only containment, authentication, tenant status, rate limit, strict validation, authorization, idempotency, handler in one transaction, transactional outbox, idempotent response, audit), UUIDv7 identifiers (millisecond and monotonic for private records, hour-floored for IDs that appear in public projections, CTR-ID-001 ID-8) with the cid string form of CTR-FED-001 FED-7 (ID-9), the clock port, typed errors with problem+json rendering, and relay access tokens issued by challenge-response. Ports owned downstream reach the bus by inverted registration at composition: TenantPort (F15.S04.M03, which also supplies LocalSettings.vaultId as the vault's dispatch-context tenantId) and ContainmentPort (the relay read-only switch of F16.S03.M03). It holds no domain data of its own except IdempotencyRecord and relay access tokens.
 
 ## Responsibilities
 
 - Provide the definition API and a registry that rejects duplicate or malformed command, query and consumer names at startup.
 - Run every command through one pipeline in the order flag, read-only (relay), authn, tenant (TenantPort), rate limit, validation, authorize, idempotency, handler in transaction, outbox, idempotent response, audit.
 - Store IdempotencyRecord rows for 24 h and replay the original status and body for the same key and request hash (CTR-IDM-001 IDM-1).
-- Generate and validate UUIDv7 identifiers with a monotonic counter and reject IDs more than 24 h in the future (CTR-ID-001).
+- Generate and validate UUIDv7 identifiers - millisecond with a monotonic counter for private records, hour-floored with random remaining bits for records whose IDs appear in public projections (ID-8) - and reject IDs more than 24 h in the future (CTR-ID-001).
+- Validate cid strings in the CTR-FED-001 FED-7 form that supersedes the payload-only cid of ID-3 (ID-9), without computing cids itself.
 - Map every failure to a CTR-ERR-001 AppError and render RFC 9457 problem+json on the relay HTTP surface.
 - Expose only relay-surface definitions over HTTP; vault definitions are reachable only in-process.
 - Issue, resolve and revoke relay access tokens by challenge-response (CTR-CAP-001 sessions, CAP-10).
@@ -28,6 +29,7 @@ The kernel command bus shared by every feature package (ADR-0002, amended by ADR
 - Storage adapters, outbox delivery and media blobs (F15.S02.M03); the vault sync outbox of OutboxEntry records and its sender (F15.S01.M01, N24).
 - Logs, metrics and readiness (F15.S03.M01); the relay process, configuration and shutdown, and the public media route GET /media/v1/* served before the bus with its own cache headers (F15.S02.M01).
 - Device key cryptography; signature verification is injected through SignatureVerifier (F16.S02.M03).
+- Computing cids and signing envelopes (F11.S01.M03 cidOf and signEnvelope per CTR-FED-001 FED-7; no depends_on edge, because the kernel only validates the cid string shape) and choosing which records are public (each owning module mints their IDs with the hour-floored generator, for example through F10.S02.M03 publicRecordId).
 - Tenant status, tenant limits and LocalSettings including vaultId (F15.S04.M03 registers TenantPort with the bus and owns PLATFORM_TENANT_SUSPENDED; no depends_on edge, because F15.S04.M03 depends on this module through F15.S02.M01).
 - The containment switch contract, the read-only sentinel <RELAY_DATA_DIR>/containment/read_only and its exemption list by exact command ID (F16.S03.M03 owns them and SECURITY_READ_ONLY_MODE; the relay composition registers ContainmentPort; no depends_on edge, because F16.S03.M03 reaches this module through F11.S03.M01 and F10.S01.M04).
 
@@ -47,6 +49,7 @@ The kernel command bus shared by every feature package (ADR-0002, amended by ADR
 - A remote caller names a vault-only command; NOT_FOUND is returned so the vault surface is not enumerable.
 - An idempotency record survives a restore from an older backup; it is ignored once its expiresAt has passed.
 - A login nonce is replayed or used after 120 s; UNAUTHENTICATED is returned and the nonce stays consumed.
+- A public projection arrives with a record ID minted by the millisecond generator; the publicId validator returns VALIDATION_FAILED with field code NOT_HOUR_FLOORED, because the exact creation time would leak.
 - The HTTP body is 300 KiB or not JSON; PAYLOAD_TOO_LARGE or PLATFORM_BUS_UNSUPPORTED_MEDIA_TYPE is returned before parsing.
 - The relay is in read-only mode; bazaar.listing.publish returns SECURITY_READ_ONLY_MODE with 503 and Retry-After 300 without reaching its handler, while identity.session.revoke (exempt) and every query still run.
 - A member writes to a relay tenant that its operator suspended; the TenantPort stage returns PLATFORM_TENANT_SUSPENDED after authentication, while reads of that tenant and writes to other tenants succeed.
@@ -76,8 +79,8 @@ F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-117-01 | [Domain schema](domain_schema.md) | 3 |
-| PS-117-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-117-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-117-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-117-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-117-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-117-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
@@ -91,6 +94,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T29 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
+- All tests T01–T31 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
 - No failure path leaves records, outbox events or idempotency records behind (T11, T25).
 - A duplicate submission never executes twice within 24 h (T10, T12).

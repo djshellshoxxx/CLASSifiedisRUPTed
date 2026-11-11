@@ -11,7 +11,7 @@ The host relay of an auction keeps the seller and the seller's linked keys from 
 ## Responsibilities
 
 - Own ShillCheck records on the host - one per denied or flagged evaluation - with the verdict, reason codes, evidence type, score and scoring version.
-- Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations in-process from host-held F07 data through identity.portable_doc.key_set, find_by_key and key_status, identity.attestation.list_linkage and identity.session.linked_keys.
+- Provide the synchronous eligibility check used by the bid transaction (F04.S01.M02) with p95 ≤ 40 ms, reading linkage and known key revocations (classrup.security.keyrevocation/v1, the single device revocation type owned by F16.S02.M02) in-process from host-held F07 data through identity.portable_doc.key_set, find_by_key and key_status, identity.attestation.list_linkage and identity.session.linked_keys.
 - Compute an asynchronous shill score with scoring table shill-v1 from consumed host-local auctions.bid.* and auction result events after each placed bid, and emit auctions.shill.suspected at score 60 or more.
 - Keep the linkage evidence private - the bidder gets a generic denial, the seller sees nothing, the reviewers see evidence types and ids.
 - Confirm or dismiss each check only from the per-check outcomes in auctions.review.closed.

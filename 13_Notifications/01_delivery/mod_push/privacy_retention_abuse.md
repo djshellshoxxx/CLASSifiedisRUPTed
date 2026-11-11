@@ -7,14 +7,14 @@
 ## Requirements
 
 - **PS-104-07.R01** Payloads are content-free and RFC 8291 encrypted to the browser, so the push service sees only the endpoint, size, time and an opaque per-subscription Topic, and for vault-originated alerts the relay sees only a sealed box it cannot open.
-- **PS-104-07.R02** The push endpoint and keys form a P2 service copy for the single selected relay, sealed in transit, encrypted at rest and erased at expiry, revocation or registered withdrawal; the push service provider can link the endpoint to the browser vendor, which the explainer states.
+- **PS-104-07.R02** The push endpoint and keys form a P3-equivalent service copy for the single selected relay under CTR-PRV-001 PRV-10, sealed in transit, encrypted at rest and erased at expiry, revocation or registered withdrawal, always within 24 h; the push service provider can link the endpoint to the browser vendor, which the explainer states.
 - **PS-104-07.R03** Pseudonymity is not anonymity because the relay links a DID to a push endpoint, and users choose the relay.
 - **PS-104-07.R04** Endpoints must be on the push-service origin allowlist and are re-resolved and re-checked on every send, so a user-chosen endpoint can neither reach internal addresses nor pause sending for other users.
 
 ## Specification
 
 **Data classification**
-- PushSubscription relay copy: P2 for the selected relay only (disclosed service copy under the notify_push channel consent, PRV-5 participant rule; channel-identifier amendment requested from F10); endpoint, keys and topic key encrypted at rest.
+- PushSubscription relay copy: P3-equivalent at the selected relay only (disclosed service copy of the channel identifiers under the granted notify_push consent, CTR-PRV-001 PRV-10); endpoint, keys and topic key encrypted at rest, used only for content-free notifications, never federated or exported, erased within 24 h of withdrawal or removal.
 - PushSubscription vault target: P3 in the vault; contains no endpoint or keys; exported only in the user's own export.
 - Push payload: content-free; sealed box opaque to relay and push service, or hook data the relay already holds; Topic opaque per subscription.
 - VAPID private key: P4 relay secret in RelayKeyStorePort, never exported; public key P0, registered in F16.S02.M02.
@@ -48,7 +48,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-104-09.T10 | abuse | PS-104-07.R01, PS-104-07.R02, PS-104-07.R03, PS-104-07.R04 | inspect database, logs, events and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection |
+| TEST-PS-104-09.T10 | abuse | PS-104-07.R01, PS-104-07.R02, PS-104-07.R03, PS-104-07.R04, PS-104-01.R02 | inspect database, field classification, logs, events, exports and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; the relay copy secret is classified P3 (CTR-PRV-001 PRV-10) and absent from exports and federation; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection |
 | TEST-PS-104-09.T11 | abuse | PS-104-06.R04, PS-104-07.R04 | an attacker endpoint returns 401 to every send; then subscriptions of 5 distinct users on one allowlisted origin return 403 within 5 minutes | first case only the attacker's subscription accrues failures and others keep sending; second case operator alert and a 15-minute pause for that origin only |
 | TEST-PS-104-09.T16 | contract | PS-104-02.R04, PS-104-07.R01 | property over 10 000 collapse tags of 1..64 valid characters and two users with the same tag | every Topic matches ^[A-Za-z0-9_-]{1,32}$; the two users' Topics differ; no Topic equals or contains the tag |
 | TEST-PS-104-09.T21 | e2e | PS-104-07.R02, PS-104-07.R03 | open the permission explainer and the push settings before and after enabling | text names the relay that receives the endpoint, says the push service sees only an opaque topic and can link the endpoint to the browser vendor, and that the relay links the pseudonym to the endpoint |

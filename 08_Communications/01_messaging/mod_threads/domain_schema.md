@@ -27,7 +27,7 @@ Schema `classrup.comms.thread/v1` · storage **device** · privacy **P2** · ret
 | contextId? | uuidv7 — ref to the owning context record; absent only for direct |
 | generation | int — 1.. ; increments only when a new thread replaces a locally archived thread with the same derivation key |
 | threadKeyHash | string — SHA-256 hex of the derivation key without generation; indexed |
-| participants | array — 2..12 items { did, role: owner\|member, joinedAtClaim, leftAt?, departedByNotice?; the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean } |
+| participants | array — 2..12 items { did, role: owner\|member, joinedAtClaim, leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean } |
 | openStatementCid? | string — sha256 cid of the signed thread-open statement that created or mirrored this thread |
 | origin | enum — local \| mirrored |
 | receivedAt? | timestamp — local clock when a mirrored thread was accepted |

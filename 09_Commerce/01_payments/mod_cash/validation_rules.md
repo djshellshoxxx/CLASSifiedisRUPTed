@@ -10,6 +10,7 @@
 - **PS-067-02.R02** The cash method rule validates allowed methods, jurisdiction limits and term acceptance before a claim is created.
 - **PS-067-02.R03** Guidance never blocks a claim; only the listed rules do.
 - **PS-067-02.R04** Incoming terms statements are checked by the StatementHandlerPort handler for signer role (payee for terms, payer for accept and decline), the referenced proposal and revision, and blocks, before any state change.
+- **PS-067-02.R05** The jurisdiction cash limit is read at every check from governance.jurisdiction_profile.resolve of F18.S01.M01 with the vault's selected ProfileRefs {publisherId, code} (the query default, never a profile id) as effective.cashLimits - Money[] holding the minimum per currency across the selected profiles; the obligation amount is compared only with the entry in its own currency through F09.S03.M03, no FX conversion is made, no limit applies when no entry has that currency, and a rejection records the profileRef and version that sources names for cashLimits.
 
 ## Specification
 
@@ -18,7 +19,7 @@
 | V01 | obligation exists, cash is in allowedMethods and Deal is open | COMMERCE_CASH_NOT_ALLOWED |
 | V02 | handoverHint is at most 120 code points and plain text | VALIDATION_FAILED |
 | V03 | actor is the obligation payee when proposing and the payer when accepting or declining | FORBIDDEN |
-| V04 | obligation amount is at most the jurisdiction cash limit when a limit is configured | COMMERCE_CASH_LIMIT_EXCEEDED |
+| V04 | obligation amount is at most the entry of effective.cashLimits (governance.jurisdiction_profile.resolve over the vault's selected ProfileRefs) in the obligation's currency; no FX conversion, and no limit applies when no entry has that currency | COMMERCE_CASH_LIMIT_EXCEEDED |
 | V05 | when the in-force terms have receiptRequired true, the cash claim signs their termsCid and those terms were accepted by the payer; a proposal not yet accepted never applies to a claim | COMMERCE_CASH_TERMS_UNACCEPTED |
 | V06 | handoverHint does not match a stored private home-address pattern | COMMERCE_CASH_HINT_PRIVATE |
 | V07 | at most 1 proposal per obligation per hour | RATE_LIMITED |
@@ -34,6 +35,7 @@
 | TEST-PS-067-09.T02 | unit | PS-067-02.R02 | each rule V01 to V10 violated in turn | documented error code and nothing stored |
 | TEST-PS-067-09.T16 | integration | PS-067-04.R04, PS-067-02.R04 | vault B ingests cash_terms signed by the payer, an accept signed by the payee, a duplicate and a valid terms statement | first two quarantined with signer_not_payee or signer_not_payer; duplicate is a no-op; the valid one applied once |
 | TEST-PS-067-09.T17 | unit | PS-067-02.R03 | cash claim above the elevated guidance threshold with the guidance dismissed unread | claim allowed; guidance shown but never blocks; only V01, V04 and V05 can refuse a claim |
+| TEST-PS-067-09.T21 | contract | PS-067-02.R05, PS-067-02.R02 | resolve stub returns cashLimits [EUR 1 000.00, USD 500.00] with sources naming {P, eu_de} version 3; cash obligations of EUR 2 500.00, EUR 1 000.00 and GBP 5 000.00; then a fallback resolve with empty cashLimits | resolve called with the vault's selected ProfileRefs and no profile id; EUR 2 500.00 refused with COMMERCE_CASH_LIMIT_EXCEEDED and details {limit EUR 1 000.00, profileRef {P, eu_de}, profileVersion 3}; EUR 1 000.00 and GBP 5 000.00 allowed with no FX conversion; fallback allows every amount |
 
 ## Dependencies
 

@@ -51,10 +51,12 @@ See the module test table below (all processes).
 | TEST-PS-096-09.T29 | contract | PS-096-01.R05, PS-096-04.R06 | apply remove_from_index on listing L with targetCid, apply on an account case, then revert both; inspect events and statements with the F06.S01.M01 and F01.S01.M03 contract fixtures | applied and reverted carry targetRef { listing, L, cid } or { account, subjectKey } and caseSource; reasons/v1 and reversal/v1 carry relayId, actionId and targetRef with the listingId and projection statementCid; the index fixture removes only L's document; the publication fixture binds each notice to one delivery |
 | TEST-PS-096-09.T30 | contract | PS-096-04.R07 | action.applied and action.reverted delivered to the F07.S02.M02 and F06.S01.M01 relay runtime fixtures and derived in a subject vault | relay copies stop and resume serving only the targetRef item; no vault record changes on either origin |
 | TEST-PS-096-09.T31 | integration | PS-096-01.R06, PS-096-04.R08 | the host-policy action is appealed through F12.S01.M03 and overturned | moderation.appeal.decided carries the actionId the hosting module stored; the action is reverted with appeal_overturned and a reversal statement; the reviewer's principal differs from proposer and decider |
+| TEST-PS-096-09.T32 | integration | PS-096-04.R09 | relay-scope governance.prohibited_rule.changed retired for (P, counterfeit_goods) delivered twice while open case C1 has an action citing POL-PROH-001@1 (prohibitedRuleRef P, counterfeit_goods) and case C2 citing the same rule is resolved; a vault-scope copy of the event | C1 flagged once with reason prohibited_rule_changed; C2 unchanged; the copy is ignored; no action reverted or changed |
+| TEST-PS-096-09.T33 | contract | PS-096-04.R10 | compare the kind and origin enums of the moderation.action.applied and moderation.action.reverted schemas with the F18.S02.M02 dimension fixture; a schema fixture that adds a kind within v1 | identical values (four kinds, relay and vault); the added kind fails the contract check |
 
 ## Acceptance criteria
 
-- All tests T01–T31 pass in CI.
+- All tests T01–T33 pass in CI.
 - No action exists without in-force rule IDs, facts summary and a retrievable signed statement of reasons.
 - No moderation path produces any effect outside the issuing relay, and no federation tombstone is ever produced; statements say so.
 

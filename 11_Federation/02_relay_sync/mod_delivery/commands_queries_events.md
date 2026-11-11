@@ -69,9 +69,9 @@ Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
 ```
 vault: federation.record.accepted { cid: "sha256-Qm...", type: "classrup.bazaar.listing/v1", audience: "public", local: true }
--> federation.outbox.enqueue { cid, destinations: [ { kind: "selected_relay", relayId: "relay:home.example" } ] } -> F15 entry prepared ("Saved on this device")
-F15 deliver -> FederationTransportPort: POST https://home.example/fed/v1/inbox (batch of 1, RFC 9421 device-key signature) -> receipt outcome accepted -> F15 completed ("Relay received")
-participants offer -> MailboxPort.put { mailboxId, wrapper: { v: 1, mailboxId, ciphertext, size, sentAt } } -> receipt -> F15 transport_acknowledged; seller vault signs ack -> federation.outbox.acknowledge -> F15 peer_accepted ("Recipient confirmed")
+-> federation.outbox.enqueue { cid, destinations: [ { kind: "selected_relay", relayId: "relay:home.example" } ] } -> F15 entry prepared (sync.state.prepared)
+F15 deliver -> FederationTransportPort: POST https://home.example/fed/v1/inbox (batch of 1, RFC 9421 device-key signature) -> receipt outcome accepted -> F15 completed (sync.state.completed)
+participants offer -> MailboxPort.put { mailboxId, wrapper: { v: 1, mailboxId, ciphertext, size, sentAt } } -> receipt -> F15 transport_acknowledged; seller vault signs ack -> federation.outbox.acknowledge -> F15 peer_accepted (sync.state.peer_accepted)
 relay: PeerOutbox to relay:7k3mqxw2a9b4c5d6e7f8g9h0jk prepared -> relay_receipt {relayId, keyId, destination, digest = sentDigest, cid, receivedAt, epoch 0, seq 88122, sig} outcome accepted -> transport_acknowledged -> delivered
 relay: sentinel federation_off created -> prepared entries paused (federation_killed) -> sentinel removed -> prepared -> dispatched
 ```

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells the truth about how far each one got. On a relay it owns PeerOutbox, the relay-to-relay push of public records accepted from devices the relay hosts to allowlisted peers (one hop, never re-forwarding what came from a peer), behind flag F11. In the vault it routes each locally authored statement into the F15.S01.M01 sync outbox, which owns the vault-side states and limits, and provides the transport adapter that outbox calls: batching to the user's selected relays over POST /fed/v1/inbox with RFC 9421 device-key signatures, delivery of participant statements as sealed wrappers through the MailboxPort backed by F08.S01.M01 comms.mailbox.put (with a sender put proof), fetch and ack, and verification of classrup.platform.relay_receipt/v1 receipts and of recipients' signed acknowledgements. Public statements end at the relay that received them ('Relay received'); only a verified recipient acknowledgement reads 'Recipient confirmed'. Batches hold at most 100 envelopes and 4 MiB, retries use exponential backoff with full jitter, and pull catch-up uses a cursor. Delivery is never claimed beyond the state actually reached.
+Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells the truth about how far each one got. On a relay it owns PeerOutbox, the relay-to-relay push of public records accepted from devices the relay hosts to allowlisted peers (one hop, never re-forwarding what came from a peer), behind flag F11. In the vault it routes each locally authored statement into the F15.S01.M01 sync outbox, which owns the vault-side states and limits, and provides the transport adapter that outbox calls: batching to the user's selected relays over POST /fed/v1/inbox with RFC 9421 device-key signatures, delivery of participant statements as sealed wrappers through the MailboxPort backed by F08.S01.M01 comms.mailbox.put (with a sender put proof), fetch and ack, and verification of classrup.platform.relay_receipt/v1 receipts and of recipients' signed acknowledgements. Public statements end at the relay that received them (F15.S01.M01 state completed, shown with the shared catalog key sync.state.completed); only a verified recipient acknowledgement reaches peer_accepted (sync.state.peer_accepted), and this module has no wording of its own. Batches hold at most 100 envelopes and 4 MiB, retries use exponential backoff with full jitter, and pull catch-up uses a cursor. Delivery is never claimed beyond the state actually reached.
 
 ## Responsibilities
 
@@ -20,7 +20,7 @@ Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells 
 
 ## Not responsible for
 
-- Vault outbox states, expiry, attempt limits and the per-statement status chips (F15.S01.M01 owns OutboxEntry and its lifecycle; this module supplies the transport adapter and the wording map).
+- Vault outbox states, expiry, attempt limits, the per-statement status chips and their text (F15.S01.M01 owns OutboxEntry, its lifecycle and the shared catalog keys sync.state.<value>; this module supplies the transport adapter and maps its transport outcomes to F15.S01.M01 states, whose text comes only from those keys).
 - Envelope verification, storage and signing of acknowledgements on receipt (F11.S01.M02).
 - Peer allowlist, keys and quota values (F11.S03.M01).
 - Block rules (F11.S03.M02).
@@ -32,14 +32,14 @@ Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells 
 
 ## User stories
 
-- As a seller on a train, I publish a listing offline and later see it move from 'Saved on this device' to 'Queued' and then 'Relay received' once my relay signs a receipt; a public listing never claims more than that.
-- As a buyer, I send an offer and see 'Recipient confirmed' only after the seller's vault signed an acknowledgement of exactly that offer, and 'Relay received, recipient not confirmed' if it never does.
+- As a seller on a train, I publish a listing offline and later see it move from sync.state.prepared ('Saved on this device only, waiting to send') to sync.state.sending and then sync.state.completed ('Delivered to relay <display name>, no peer confirmation needed') once my relay signs a receipt; a public listing never claims more than that.
+- As a buyer, I send an offer and see sync.state.peer_accepted ('Confirmed by peer') only after the seller's vault signed an acknowledgement of exactly that offer, and the sync.state.transport_acknowledged text ('Delivered to relay <display name>, peer has not confirmed') if it never does.
 - As a user whose relay is down, I see delivery unknown rather than delivered, and I can retry or choose another relay.
 - As a relay operator, I can see per-peer queue depth, failures and quota use.
 
 ## Edge cases
 
-- Relay returns a receipt but the buyer's vault never sends an acknowledgement; the F15 entry stays transport_acknowledged and after 30 days ends as 'Relay received, recipient not confirmed', never as failed.
+- Relay returns a receipt but the buyer's vault never sends an acknowledgement; the F15 entry stays transport_acknowledged and after 30 days ends expired with expiredOutcome unconfirmed, still shown with the sync.state.transport_acknowledged text, never as failed.
 - Destination relay returns 429; the entry waits for retryAfterMs and does not burn an attempt.
 - Peer is suspended while 500 PeerOutbox entries are queued; those entries are paused, none are sent, and they resume on federation.peer.reinstated or are cancelled on federation.peer.removed.
 - A tombstone is queued behind its target record for the same peer; the tombstone is sent after the record unless the record is still prepared, in which case both are cancelled and the tombstone is sent only if the record had already reached that peer.
@@ -54,13 +54,13 @@ Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells 
 
 ## UX and accessibility
 
-- Delivery wording map used by the F15.S01.M01 status chip for federation statements: 'Saved on this device' (local committed or prepared), 'Queued' (sending), 'Relay received' (relay receipt; final for public statements), 'Recipient confirmed' (verified recipient acknowledgement, participant statements only), 'Relay received, recipient not confirmed' (receipt but no acknowledgement until expiry), 'Failed - retry'; times labelled as relay time or your device time.
+- Delivery wording map for federation statements, pointing only to the shared catalog keys sync.state.<value> that the F15.S01.M01 status chip and F14.S01.M02 spokenSync use (no module-local strings): statement stored but not yet enqueued = sync.state.local_committed; F15 prepared = sync.state.prepared; sending = sync.state.sending; verified relay receipt for a participants statement = sync.state.transport_acknowledged; verified relay receipt for a public statement (final) = sync.state.completed; verified recipient acknowledgement (participants only) = sync.state.peer_accepted; conflict = sync.state.conflict; failed = sync.state.failed; expired with expiredOutcome unconfirmed = the sync.state.transport_acknowledged text; expired unsent = sync.state.expired; discarded = sync.state.discarded; {transport} names the relay display name; times labelled as relay time or your device time.
 - Sync settings: selected relays with health, queue depth from F15.S01.M01, last success, buttons 'Retry now' and 'Remove relay'.
 - Relay operator peers view: PeerOutbox queue depth, paused count, failure ratio and quota use per peer.
 
 **States:** loading; empty; prepared; transport-acknowledged; delivered; paused; failed; cancelled; recipient-unresolved
 
-**Accessibility:** Delivery chips use text plus icon and an accessible name such as 'Relay received, recipient not yet confirmed'.; State changes are announced through an aria-live polite region, at most one announcement per 5 s.; Retry and remove buttons are ≥ 44×44 px with names that include the relay name.
+**Accessibility:** Delivery chips use text plus icon and take their accessible name from the same sync.state.<value> key as their visible text (for example sync.state.transport_acknowledged 'Delivered to relay <display name>, peer has not confirmed'), identical to the F14.S01.M02 spokenSync string.; State changes are announced through an aria-live polite region, at most one announcement per 5 s.; Retry and remove buttons are ≥ 44×44 px with names that include the relay name.
 
 ## Owned data
 
@@ -97,5 +97,5 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 ## Acceptance criteria
 
 - All tests T01–T31 pass in CI.
-- The UI never shows a delivery state beyond the one recorded, and a public statement never shows 'Recipient confirmed' (e2e and unit tests).
+- The UI never shows a delivery state beyond the one recorded, renders delivery text only from the sync.state.<value> catalog keys, and a public statement never shows sync.state.peer_accepted (e2e and unit tests).
 - A relay cannot cause peer_accepted without a recipient's signature, and every PeerOutbox entry is terminal by its expiresAt (abuse and property tests).

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Web Push delivery through a relay the user selected. The vault holds the authoritative push target record for each device (relay, device key, label, enabled flag, relay subscription reference and status mirror); the browser holds the endpoint and keys. The relay holds only a disclosed service copy of the subscription (RFC 8030 endpoint plus RFC 8291 keys), sent sealed to the relay key under the notify_push channel consent, classified P2 for that one relay and erased when the withdrawal is registered there. The relay owns its VAPID key pair (RFC 8292) through RelayKeyStorePort and registers the public key with purpose vapid in F16.S02.M02. Payloads are content-free: a sealed box the relay cannot open for vault-originated alerts, a hook payload with only data the relay hook already holds, or a digest count; the Topic header is an opaque per-subscription HMAC. Subscriptions are created only after a registered channel consent (F13.S02.M03), expire on 404 and 410, and sends are gated by F13.S02.M01. Without a relay that offers push the feature is disabled and in-app notifications still work.
+Web Push delivery through a relay the user selected. The vault holds the authoritative push target record for each device (relay, device key, label, enabled flag, relay subscription reference and status mirror); the browser holds the endpoint and keys. The relay holds only a disclosed service copy of the subscription (RFC 8030 endpoint plus RFC 8291 keys), disclosed under the CTR-PRV-001 PRV-10 notification channel exception: sent sealed to the relay key under the granted notify_push consent, stored P3-equivalent by that one relay and erased when the withdrawal is registered there. The relay owns its VAPID key pair (RFC 8292) through RelayKeyStorePort and registers the public key with purpose vapid in F16.S02.M02. Payloads are content-free: a sealed box the relay cannot open for vault-originated alerts, a hook payload with only data the relay hook already holds, or a digest count; the Topic header is an opaque per-subscription HMAC. Subscriptions are created only after a registered channel consent (F13.S02.M03), expire on 404 and 410, and sends are gated by F13.S02.M01. Without a relay that offers push the feature is disabled and in-app notifications still work.
 
 ## Responsibilities
 
@@ -62,7 +62,7 @@ Web Push delivery through a relay the user selected. The vault holds the authori
 
 ## Owned data
 
-- `PushSubscription` (classrup.notify.push_subscription/v1, P2, RET-STANDARD)
+- `PushSubscription` (classrup.notify.push_subscription/v1, P3, RET-STANDARD)
 - `PushSubscription` (classrup.notify.push_target/v1, P3, RET-STANDARD)
 
 ## Interfaces

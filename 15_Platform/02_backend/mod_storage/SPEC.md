@@ -6,7 +6,7 @@
 
 ## Purpose
 
-The kernel storage port used by every module in the vault and on relays (ADR-0016). One unit-of-work API (transaction(fn) committing on ok, rolling back on err or exception) over a single row model with three adapters that pass one contract suite: IndexedDB for the browser vault (one database per vault whose version is bumped only for object-store or index changes), node:sqlite (WAL, BEGIN IMMEDIATE, busy_timeout 5000, and the walAutocheckpoint 0 option that leaves checkpoints to the F15.S03.M02 archiver) for relays, and memory for tests. It provides typed repositories with optimistic concurrency and up to four indexed fields, the local transactional outbox with an at-least-once dispatcher and per-consumer inbox, dead letters with replay counters and the list, requeue and purge primitives behind F15.S03.M03 replay, local leases, content-addressed media blobs with reference counting, tenant upload limits and relay-side verifyImageClean, and forward-only recorded migrations (CTR-SCH-001). It is only the persistence primitive of the vault sync outbox: F15.S01.M01 OutboxEntry rows are ordinary records of type platform.outbox_entry written inside the caller's transaction(fn), and storage has no sync outbox table, state machine or sender of its own (N24).
+The kernel storage port used by every module in the vault and on relays (ADR-0016). One unit-of-work API (transaction(fn) committing on ok, rolling back on err or exception) over a single row model with three adapters that pass one contract suite: IndexedDB for the browser vault (one database per vault whose version is bumped only for object-store or index changes), node:sqlite (WAL, BEGIN IMMEDIATE, busy_timeout 5000, and the walAutocheckpoint 0 option that leaves checkpoints to the F15.S03.M02 archiver) for relays, and memory for tests. It provides typed repositories with optimistic concurrency and up to four indexed fields, the local transactional outbox with an at-least-once dispatcher and per-consumer inbox, dead letters with replay counters and the list, requeue and purge primitives behind F15.S03.M03 replay, local leases, content-addressed media blobs with reference counting, tenant upload limits and relay-side verifyImageClean (on a relay the ciphertext of encrypted blobs lives in the separate attached store blobs_enc while blob metadata stays in schema main, so F15.S03.M02 backups of main never hold attachment ciphertext), and forward-only recorded migrations (CTR-SCH-001). It is only the persistence primitive of the vault sync outbox: F15.S01.M01 OutboxEntry rows are ordinary records of type platform.outbox_entry written inside the caller's transaction(fn), and storage has no sync outbox table, state machine or sender of its own (N24).
 
 ## Responsibilities
 
@@ -17,7 +17,8 @@ The kernel storage port used by every module in the vault and on relays (ADR-001
 - Store MediaBlob bytes by content address (blob:sha256-<base64url>, at most 5 MiB and at most the tenant limit read through the TenantPort that F15.S04.M03 registers), run verifyImageClean on relay receipt, store exactly the received bytes and delete a blob with its last referencing record.
 - Provide local leases (acquire compare-and-set, renew, release, expiry, fencing counter) inside one vault or relay (IDM-3, IDM-8).
 - Apply and record forward-only migrations, refuse to start when a recorded kernel migration checksum differs, and bump the IndexedDB version only for object-store or index changes with a pre-upgrade snapshot that N-1 code can restore after a VersionError.
-- Offer the SQLite adapter option walAutocheckpoint 0 and the writer connection to the registered F15.S03.M02 checkpointer so that only the backup archiver checkpoints the relay WAL.
+- Offer the SQLite adapter option walAutocheckpoint 0 and the writer connection to the registered F15.S03.M02 checkpointer so that only the backup archiver checkpoints the WAL of the relay's main database.
+- Keep, in the relay SQLite adapter, the ciphertext of every encrypted MediaBlob in the separate database attached as schema blobs_enc, with metadata rows and holders in schema main, so that F15.S03.M02 can back up schema main without attachment ciphertext.
 
 ## Not responsible for
 
@@ -25,7 +26,9 @@ The kernel storage port used by every module in the vault and on relays (ADR-001
 - Statement signing, verification and peer acknowledgement validation (F11.S01.M02, F16.S02.M03); storage has no sync sender, SyncTransport port or recordPeerAck primitive.
 - The vault sync outbox - OutboxEntry records, their single state machine, per-destination delivery, peer acknowledgements, the PWA outbox UI, conflict prompts and persistence requests (F15.S01.M01, N24); storage persists those records like any other.
 - Metadata stripping and re-encoding of media and the verifyImageClean implementation (F10.S02.M03) and encryption of private media (F08.S01.M03); storage receives prepared bytes, calls the verifier registered on a relay and never re-encodes or substitutes bytes.
-- Relay backups, WAL archiving, checkpoints and restore drills (F15.S03.M02, F15.S03.M03); dead-letter replay as an operator command and the 3-replay limit (F15.S03.M03).
+- Relay backups, WAL archiving, checkpoints of schema main and restore drills (F15.S03.M02, F15.S03.M03), which never snapshot, archive or checkpoint blobs_enc; dead-letter replay as an operator command and the 3-replay limit (F15.S03.M03).
+- Expiring attachment rows whose ciphertext is absent after a relay restore or crash (F08.S01.M03 reconciliation sweep, using blobs.info bytesPresent).
+- Bundle-level checks of the vault restore flow (IOX-2) - manifest signature and section hashes, multi-part set linkage by setId and the part-1 manifest hash, and the F10.S01.M04 privacy.deletion.ledger_check guard - which run before any owning module calls repo.restore; repo.restore is a per-record primitive that knows no bundle, manifest or principal.
 - Tenant status, tenant limits and LocalSettings (F15.S04.M03 registers TenantPort with storage at composition; no depends_on edge, because F15.S04.M03 depends on this module).
 - The canonical relayId, keyId and destination strings (defined by F15.S02.M01; storage treats them as opaque strings, with no depends_on edge because F15.S02.M01 depends on this module).
 
@@ -51,6 +54,9 @@ The kernel storage port used by every module in the vault and on relays (ADR-001
 - A relay tenant has maxUploadBytes 3 MiB and a 4 MiB P0 photo is put; PAYLOAD_TOO_LARGE is returned although the platform maximum is 5 MiB.
 - An old client uploads a photo that still carries GPS tags; the relay verifier reports it as not clean, storage returns PRIVACY_METADATA_GPS_PRESENT, stores nothing and never re-encodes the bytes.
 - App release N-1 opens a vault that release N upgraded with a new object store; IndexedDB throws VersionError, storage opens nothing and returns UNSUPPORTED_SCHEMA_VERSION with the pre-upgrade snapshot offered for restore.
+- A relay is restored from an F15.S03.M02 backup of schema main, so its encrypted attachment blobs have metadata rows but no ciphertext in blobs_enc; get returns NOT_FOUND and info reports bytesPresent false, and F08.S01.M03 expires those attachment rows.
+- A relay SQLite adapter is opened without encryptedBlobsPath or the blobs_enc attach fails; encrypted blob puts are refused with INTERNAL and no ciphertext is ever written into schema main, while P0 puts still work.
+- Power is lost while a transaction writes an encrypted blob to both database files, and only blobs_enc keeps the change; the orphan sweep deletes the blobs_enc row that has no main.blobs row.
 
 ## UX and accessibility
 
@@ -80,22 +86,23 @@ F15.S03.M01, CTR-ID-001, CTR-SCH-001, CTR-IDM-001, CTR-EVT-001, CTR-ERR-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-119-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-119-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-119-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-119-02 | [Validation rules](validation_rules.md) | 6 |
 | PS-119-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-119-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
+| PS-119-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-119-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
-| PS-119-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
-| PS-119-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
+| PS-119-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 6 |
+| PS-119-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-119-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-119-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
-| PS-119-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 4 |
+| PS-119-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 5 |
 
 Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/kernel/src/storage/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI for memory, SQLite and IndexedDB adapters.
+- All tests T01–T26 pass in CI for memory, SQLite and IndexedDB adapters.
 - No failure path leaves records, events, OutboxEntry records, dead letters or blob references inconsistent (T02, T08, T17, T18).
 - A poison event never blocks other aggregates, lands in dead letters after 8 attempts and keeps its replay_count across requeue and re-dead-lettering (T04, T05, T10).
-- Relays store only clean or encrypted media byte-identical to the signed ref within the tenant limit, and storage never checkpoints while the archiver is registered (T19, T20).
+- Relays store only clean or encrypted media byte-identical to the signed ref within the tenant limit, and storage never checkpoints schema main while the archiver is registered (T19, T20, T25).
+- On a relay no attachment ciphertext exists in schema main, its WAL or a backup copy of it (T23, T24, T26).

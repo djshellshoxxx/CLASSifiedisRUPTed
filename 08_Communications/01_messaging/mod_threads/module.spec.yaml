@@ -18,7 +18,7 @@ responsibilities:
   - Enforce the local principal's own blocks at thread creation and on block events (direct threads archive in the blocker's vault, group threads hide the blocked party from the blocker); nothing changes and nothing is signalled in the blocked party's vault.
   - Store per-participant mute settings (off, 1 h, 8 h, 24 h, until unmuted) that notification routing reads.
   - Produce and verify the signed thread-open statement classrup.comms.thread_open/v1, check the signer's entitlement per context type, and hold statements from unknown senders as message requests with status request until the user accepts or declines them.
-  - Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement and register the F10 privacy ports for the local user's own threads (N6).
+  - Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement of kind departure, taking the departing DID from the envelope author (CTR-FED-001 FED-7) and never from the payload, and register the F10 privacy ports for the local user's own threads (N6).
 non_responsibilities:
   - Message storage, encryption and delivery (F08.S01.M01).
   - The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05); each context owner registers a ThreadContextPort {exists, isParty, roster, isClosed} for its context type, and F03.S02.M01, F05.S01.M01 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F08.S01.M01 (port registration avoids the cycle).
@@ -39,7 +39,7 @@ edge_cases:
   - A cycle participant leaves; they can no longer fetch new messages but keep what was already delivered to their device.
   - A cycle grows beyond 12 participants; the 13th join is refused with COMMS_THREAD_PARTICIPANT_LIMIT and the cycle owner module decides how to react.
   - Listing is archived or removed; threads stay open for 14 days for pending questions then archive automatically.
-  - A participant deletes their account; their vault sends a signed classrup.privacy.deletion_notice/v1 before its keys are destroyed and receiving vaults set leftAt and show a deleted-member label; without a notice the participant simply stays silent.
+  - A participant deletes their account; their vault sends one signed classrup.privacy.deletion_notice/v1 of kind departure before its keys are destroyed; its payload names no DID and no thread, so receiving vaults take the departing DID from the envelope author, set leftAt on every thread in which that DID is a current participant and show a deleted-member label; a notice that arrives after the account_deleted key revocation is still accepted when its cid is listed in finalCids; without a notice the participant simply stays silent.
   - A, B and C join cycle X in different orders; each vault derives the same threadId from (contextTenantId, cycle, X, generation 1) on its first mutiny.party.joined, so their messages decrypt and verify in each other's vaults.
   - A archived the listing thread locally and opens a new one while a message from B for the old thread is in flight; A's new thread has generation 2, B's vault archives generation 1 with reason superseded, and the in-flight message is re-homed into the new thread instead of dropped.
   - An unknown DID sends 6 thread-open statements and 120 other unknown DIDs send one each; the receiving vault keeps 5 requests per unknown DID and 100 in total and drops the rest silently.
@@ -76,7 +76,7 @@ processes:
           - "contextId?: uuidv7 — ref to the owning context record; absent only for direct"
           - "generation: int — 1.. ; increments only when a new thread replaces a locally archived thread with the same derivation key"
           - "threadKeyHash: string — SHA-256 hex of the derivation key without generation; indexed"
-          - "participants: array — 2..12 items { did, role: owner|member, joinedAtClaim, leftAt?, departedByNotice?; the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean }"
+          - "participants: array — 2..12 items { did, role: owner|member, joinedAtClaim, leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean }"
           - "openStatementCid?: string — sha256 cid of the signed thread-open statement that created or mirrored this thread"
           - "origin: enum — local | mirrored"
           - "receivedAt?: timestamp — local clock when a mirrored thread was accepted"
@@ -113,7 +113,7 @@ processes:
       - "V09 | inbound thread-open: the statement's threadId equals the derivation of its own contextTenantId, contextType, contextId, participants and generation | COMMS_THREAD_OPEN_REJECTED"
       - "V10 | receiving vault cap: at most 5 pending requests per unknown DID and 100 in total; excess statements are dropped silently | RATE_LIMITED"
       - "V11 | accept_request and decline_request target a thread in status request | CONFLICT_STATE"
-      - "V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when signed by a device key of the departing participant that F16.S02.M02 reports active at receipt | VALIDATION_FAILED"
+      - "V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when its payload holds exactly the F10.S01.M04 allowlist of its kind (departure - requestId, signedAt, kind, effectiveAt, recourse none) with no DID or thread ID, and ext.signerKey is a device key of the envelope author that F16.S02.M02 reports active at receipt or revoked with reason account_deleted with the notice cid in finalCids (finalListed true); the departing DID is always the envelope author (CTR-FED-001 FED-7) | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - A Thread is active, or in request until the local user accepts it, until archived; archived is terminal and a new conversation after an archive is a new thread of the next generation.
@@ -143,8 +143,8 @@ processes:
       - All commands are vault-local; create additionally produces the signed statement classrup.comms.thread_open/v1, and archive, mute, accept_request and decline_request never leave the device.
       - Roster changes made from context events are internal and are not a public command; they emit no extra events.
       - The module consumes context, block and identity events and applies verified classrup.privacy.deletion_notice/v1 statements to keep threads consistent.
-      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.thread_open/v1 { threadId, contextTenantId, contextType, contextId?, generation, participants[] } signed by a device key of createdBy; the module verifies classrup.privacy.deletion_notice/v1 owned by F10.S01.M04 (signer: a device key of the departing DID)."
-      - The module registers ExportSectionPort (section comms.threads), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort with F10 (N6); DeletionPort.execute archives the user's threads with reason account_deleted and purges rosters while the keys still exist, and the module does not consume privacy.deletion.completed.
+      - "Statements are registered with F11.S01.M01 (N2): classrup.comms.thread_open/v1 { threadId, contextTenantId, contextType, contextId?, generation, participants[] } signed by a device key of createdBy; the module verifies classrup.privacy.deletion_notice/v1 owned by F10.S01.M04 (signer role principal: the envelope author is the departing DID per CTR-FED-001 FED-7 and ext.signerKey one of its device keys; the departure payload is exactly { requestId, signedAt, kind: departure, effectiveAt, recourse: none } and never repeats the DID), reads the departing DID only from the envelope author and applies a departure notice to every local thread in which that DID has an entry with leftAt unset, setting leftAt to the local receipt time and departedByNotice to the notice cid; a notice of kind commitment changes no thread."
+      - The module registers ExportSectionPort (section comms.threads), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort with F10 (N6); DeletionPort.plan lists the counterparties of the local user's threads as noticeRecipients [{ did, mailboxId, relayId }] so F10.S01.M04 seals its single departure notice to each, DeletionPort.execute archives the user's threads with reason account_deleted and purges rosters while the keys still exist, and the module does not consume privacy.deletion.completed.
     commands:
       - name: comms.thread.create
         capability: comms.thread.create
@@ -299,7 +299,7 @@ processes:
       - "T17 | integration | 01.R05,04.R03 | three vaults A, B, C receive mutiny.party.joined for cycle X in different orders and then exchange messages | all derive the same threadId; C verifies and decrypts A's message bound to that threadId"
       - "T18 | integration | 03.R04,06.R01 | A archives the listing thread, opens a new one (generation 2) while B has a message in flight for generation 1 | B's vault archives generation 1 with reason superseded; the in-flight message is re-homed into generation 2 and shown"
       - "T19 | abuse | 02.R04,07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent"
-      - "T20 | integration | 04.R04,04.R05,07.R04 | A's account deletion runs DeletionPort.execute; later B's verified deletion notice reaches A's peers | A's threads archived account_deleted before keys are destroyed; peers set leftAt for B with a deleted-member label; registry lists thread_open with signer role"
+      - "T20 | integration | 04.R04,04.R05,07.R04 | A's account deletion runs DeletionPort.plan and execute; later B's departure notice (envelope author B, payload without any DID) reaches C once signed by an active key of B and once after B's account_deleted revocation listing its cid in finalCids; a notice correctly signed by B whose payload adds a did field; a commitment-kind notice from B | A's plan lists A's thread counterparties as noticeRecipients and A's threads are archived account_deleted before keys are destroyed; C sets leftAt and departedByNotice for B, read from the envelope author, on every thread where B is a current participant, with a deleted-member label, for both deliveries; the notice with a did field is rejected VALIDATION_FAILED; the commitment notice changes no thread; registry lists thread_open with signer role"
       - "T21 | unit | 01.R04 | attempt to change contextType, contextId or generation of a stored thread, and accept a thread-open whose threadId does not match its derivation | CONFLICT_STATE for the change; COMMS_THREAD_OPEN_REJECTED for the mismatch"
     acceptance:
       - All tests T01 to T21 pass in CI.

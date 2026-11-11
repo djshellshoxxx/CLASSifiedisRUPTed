@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-102-07.R01** The email address is P3 in the vault and a P2 service copy at the selected relay (sealed in transit, encrypted at rest), never in events, logs or exports to others, and erased at the relay within 24 hours of removal or a registered consent withdrawal.
+- **PS-102-07.R01** The email address is P3 in the vault and a P3-equivalent service copy at the selected relay under CTR-PRV-001 PRV-10 (sealed in transit, encrypted at rest), never in events, logs, federation or exports to others, and erased at the relay with its locale within 24 hours of removal or a registered consent withdrawal.
 - **PS-102-07.R02** Emails contain no listing, message, name or amount content and carry only a generic subject and a link to the app origin; the operator and mail providers still learn that the address received a ClassRup email.
 - **PS-102-07.R03** Pseudonymity is not anonymity because email links an identity to a DID at the operator, so consent text says this plainly.
 - **PS-102-07.R04** The relay cannot be used to mail arbitrary addresses, because verification mail is limited per (user, address), per user, per IP prefix and relay-wide, and no user can exhaust another user's verification quota.
@@ -16,12 +16,12 @@
 
 **Data classification**
 - EmailAddress vault target: P3 in the vault; exported only in the user's own export.
-- EmailAddress relay copy: P2 for the selected relay only (disclosed service copy under the notify_email channel consent, PRV-5 participant rule; channel-identifier amendment requested from F10); masked form for the owner.
+- EmailAddress relay copy: P3-equivalent at the selected relay only (disclosed service copy of the channel identifiers address and locale under the granted notify_email consent, CTR-PRV-001 PRV-10); masked form for the owner; never federated or exported.
 - EmailDelivery: P2 delivery kind, template key and timing only; no category.
 - Verification tokens: P3, stored as hashes; unsubscribe tokens are derived by F13.S02.M03 and never stored here.
 
 **Retention**
-- EmailAddress relay copy: RET-STANDARD until removal; ciphertext erased within 24 hours of removal or registered withdrawal.
+- EmailAddress relay copy: RET-STANDARD until removal; ciphertext and locale erased within 24 hours of removal or registered withdrawal (CTR-PRV-001 PRV-10).
 - EmailAddress vault target: RET-STANDARD; address deleted within 24 hours of disable or vault-local withdrawal.
 - EmailDelivery rows: RET-SHORT (30 days).
 
@@ -48,7 +48,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-102-09.T09 | abuse | PS-102-07.R01, PS-102-07.R02, PS-102-07.R03, PS-102-09.R03 | inspect vault, relay database, logs, events and exports | address only in the vault target and relay ciphertext; no content in emails; consent text names what the operator learns |
+| TEST-PS-102-09.T09 | abuse | PS-102-07.R01, PS-102-07.R02, PS-102-07.R03, PS-102-09.R03, PS-102-01.R01 | inspect vault, relay database, field classification, logs, events, federation outbox and exports | address only in the vault target and relay ciphertext; the relay copy is classified P3 (CTR-PRV-001 PRV-10) and absent from federation and exports; no content in emails; consent text names what the operator learns |
 | TEST-PS-102-09.T16 | abuse | PS-102-07.R04, PS-102-02.R02 | one DID loops add and remove over 10 addresses; 50 DIDs from one /24 each add an address; a victim V verifies alex@example.org after attacker U requested 5 links for it | per-user and per-prefix limits return RATE_LIMITED; relay-wide cap alert at 80 percent; V still receives its verification mail |
 | TEST-PS-102-09.T17 | abuse | PS-102-07.R05, PS-102-05.R04 | forged DSN at the plain bounce address quoting a real Message-ID; DSN with a wrong VERP tag; ARF report from an unknown source; unsigned webhook | each refused NOTIFY_EMAIL_REPORT_UNVERIFIED; address stays verified; consent unchanged |
 | TEST-PS-102-09.T19 | e2e | PS-102-07.R03, PS-102-05.R03, PS-102-07.R02 | open the email settings, the opt-in sheet and the example email preview | text says the relay operator can read the address it sends to, that email links the address to the pseudonym at that operator, and the preview shows only the generic subject and app link |

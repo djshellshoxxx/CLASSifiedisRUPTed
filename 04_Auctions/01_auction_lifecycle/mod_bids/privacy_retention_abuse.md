@@ -51,7 +51,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-033-09.T12 | integration | PS-033-01.R02, PS-033-07.R01 | inspect events, logs, errors, exports of other users and the F10.S02.M02 classification map | no maximum, bidder key or nonce anywhere outside the bidder vault and the host; the three fields annotated P3 in the vault and P2 with the host as only participant; the bid envelope part is encrypted to hostKeyId |
 | TEST-PS-033-09.T19 | integration | PS-033-07.R02 | one bidder bids on auctions A and A2 on the same host | the two aliases differ and cannot be matched without the per-auction host secrets |
 | TEST-PS-033-09.T23 | integration | PS-033-07.R04 | export, account deletion and push consent withdrawn | section auctions.bids present; bidderId pseudonymized; pushOptIn false and no host push |
-| TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a device revocation statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
+| TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a classrup.security.keyrevocation/v1 statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
 | TEST-PS-033-09.T26 | abuse | PS-033-02.R01, PS-033-07.R03 | a key of tier new places its 21st bid of the day across auctions on host H; the limits check stub fails | MODERATION_ACCOUNT_LIMIT_REACHED with params.resetsAt from the in-process F12.S03.M04 check after RateLimitPort.consume; the failing stub gives DEPENDENCY_UNAVAILABLE; nothing stored |
 
 ## Dependencies

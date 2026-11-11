@@ -78,7 +78,7 @@ F12.S02.M01, F12.S01.M01, F12.S01.M02, F12.S02.M03, F07.S02.M01, F08.S01.M01, F1
 | PS-092-01 | [Domain schema](domain_schema.md) | 4 |
 | PS-092-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-092-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-092-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-092-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-092-05 | [Authorization and capabilities](authorization_capabilities.md) | 5 |
 | PS-092-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-092-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -90,6 +90,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T23 pass in CI.
+- All tests T01–T24 pass in CI.
 - No appeal is ever decided by a moderator whose principal made the original decision, is the subject or reported the case (property and abuse tests).
 - The 30-day window is always computed from the relay-signed statement time against the relay's receive time, and expiry or a moderator revert never shows the appellant an overturned outcome.

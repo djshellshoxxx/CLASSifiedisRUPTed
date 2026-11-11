@@ -1,6 +1,6 @@
 # PS-143-09 — Contract and acceptance tests: Release gates
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -14,7 +14,7 @@
 
 See the module test table below (all processes).
 
-**Fixtures:** Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); a test row whose covers lists a requirement it shares no key term with, with no review, with an approved review and with a review whose text hash is stale; fixed commit SHA a1b2c3d.
+**Fixtures:** Synthetic repos: full coverage, one gap, one skipped test, a duplicate ID, an expired waiver, one undefined error code (spec NO-GO), a manual row with and without a signed checklist, an active and an expired quarantine entry, a waiver commit without code-owner approval; recorded audit JSON (critical, high, moderate, unavailable); reports/compat.json variants (clean, QUALITY_COMPAT_BREAKING_CHANGE, failed automated cell, missing manual cell); reports/pwa-budgets.json variants (INP 140 ms, INP 250 ms); a test row whose covers lists a requirement it shares no key term with, with no review, with an approved review and with a review whose text hash is stale; governance bundle fixtures with project publisher key KP and developer key KD: the three bundled packs signed by KP with reviewed cids, a rule pack edited after review, a generic profile signed by KD, a pack with a broken signature, a manifest without the 0.3.0 review entry and a manifest listing two packs; fixed commit SHA a1b2c3d.
 
 ## Verification
 
@@ -42,6 +42,8 @@ See the module test table below (all processes).
 | TEST-PS-143-09.T20 | unit | PS-143-02.R06 | test rows covering a requirement with a shared key term, with no shared key term and no review, with no shared key term and an approved mapping review, and with a review whose text hash is stale after the requirement text changed | shared key term counts; no overlap without review and stale review fail with QUALITY_GATE_TRACE_MAPPING and do not count; approved matching review counts and is listed in the report |
 | TEST-PS-143-09.T21 | unit | PS-143-02.R06 | key term extraction on texts with stopwords, short tokens, plural and ing forms, error codes and mixed case | only tokens of 4 or more characters outside tools/gates/stopwords.txt remain, case-folded and with the trailing s, es, ed or ing removed; error codes stay single tokens; same input gives the same terms |
 | TEST-PS-143-09.T22 | abuse | PS-143-02.R06, PS-143-05.R02 | mapping review commit without code-owner approval, then the same review with approval | unapproved review fails with QUALITY_GATE_WAIVER_UNAPPROVED and the mapping is not counted; approved review counts and its approver is printed from git metadata |
+| TEST-PS-143-09.T23 | unit | PS-143-02.R07 | governance bundle fixtures: three packs signed by KP with reviewed cids, rule pack edited after review, generic profile signed by KD, broken signature, manifest without the release review entry, manifest listing two packs, no manifest | clean set passes and the report lists each pack with its cid and reviewer; every other case fails with QUALITY_GATE_GOVERNANCE_BUNDLE, the missing manifest, entry and pack cases with exit 2 |
+| TEST-PS-143-09.T24 | abuse | PS-143-02.R07, PS-143-05.R02 | a commit changing projectPublisherDid to KD and re-recording the review entries without code-owner approval, then the same commit with approval | unapproved commit fails with QUALITY_GATE_WAIVER_UNAPPROVED naming the committer and the packs are not accepted; the approved commit is printed with its approver from git metadata |
 
 ## Acceptance criteria
 
@@ -51,7 +53,8 @@ See the module test table below (all processes).
 - The gate report is attached to every release and waivers expire within 14 days.
 - A spec NO-GO, a compatibility failure, a missing compat report or a missing manual checklist blocks the release.
 - A test-to-requirement mapping without a shared key term and without a valid approved mapping review does not count as coverage and blocks the release.
+- A bundled governance seed pack that is not signed by the release-pinned project publisher key, or whose cid differs from the code-owner approved release review, blocks the release.
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F17.S03.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-TST-001, CTR-OBS-001, CTR-SCH-001, F17.S01.M01, F17.S01.M04, F17.S02.M01, F17.S03.M03, CTR-FED-001, F18.S01.M01, F18.S01.M02, F18.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

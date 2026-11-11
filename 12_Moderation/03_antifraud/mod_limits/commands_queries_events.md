@@ -11,6 +11,7 @@
 - **PS-098-04.R03** The module consumes risk level rises and drops, enforcement action applied and reverted events and relay session starts to keep multiplier, restriction and first-seen current, and consumes no vault-local deal or account events.
 - **PS-098-04.R04** restrictedCapabilities of moderation.action.applied are mapped to limit keys by the documented capability-to-limit table (federation.record.ingest, comms.mailbox.put to a new recipient, auctions.bid.place), and other capabilities never change limits.
 - **PS-098-04.R05** Completion submission verifies every party signature on the deal_completion/v1 body, counts it once per key, and never learns amounts or obligations.
+- **PS-098-04.R06** The relay bus calls moderation.accountlimit.check in-process before F18.S02.M01 governance.policy_comment.accept (N18) with limitKey new_key_comments_per_proposal and scopeRef the proposal statement cid; for a key first seen less than 7 days ago the check consumes F12.S03.M03 class governance.policy_comment.new_key (per key and proposal, limitOverride the effective value) and, only when that allows, governance.policy_comment.new_key.proposal (25 per proposal); F18.S02.M01 lists no depends_on edge to this module because the bus injects the check.
 
 ## Specification
 
@@ -26,7 +27,7 @@
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `moderation.accountlimit.check` | moderation.accountlimit.check | { subjectKey, limitKey, cost?: 1 } | { allowed, effectiveValue, used, resetsAt, reasons[] } | VALIDATION_FAILED, MODERATION_ACCOUNT_LIMIT_REACHED |
+| `moderation.accountlimit.check` | moderation.accountlimit.check | { subjectKey, limitKey, cost?: 1, scopeRef?: proposal statement cid (required for new_key_comments_per_proposal) } | { allowed, effectiveValue, used, resetsAt, retryAfterMs?, reasons[] } | VALIDATION_FAILED, MODERATION_ACCOUNT_LIMIT_REACHED, RATE_LIMITED |
 | `moderation.accountlimit.list_mine` | moderation.accountlimit.read_own | { includeAdjustments?: boolean } | { items: { limitKey, tier, effectiveValue, used, adjustments[], nextTier? }[] } |  |
 
 ### Events produced
@@ -65,6 +66,9 @@ query moderation.accountlimit.check  (in-process relay bus call before federatio
 POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderator token)
 { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "index_writes_per_day", "overrideValue": 30, "reason": "Shop with long trading history on this relay", "expiresInMs": 2592000000 }
 -> 200 { "accountLimitId": "0192f410-aaaa-7000-8000-00000000000a", "effectiveValue": 30, "revision": 2 }
+query moderation.accountlimit.check  (in-process relay bus call before governance.policy_comment.accept from a key first seen 2 days ago)
+{ "subjectKey": "did:key:z6MkNewMemberExample", "limitKey": "new_key_comments_per_proposal", "scopeRef": "sha256-Pr0p..." }
+-> denied as 429 RATE_LIMITED { "retryAfterMs": 432000000, "reasons": ["new key: 1 comment per proposal until 7 days after first seen; 25 per proposal from new keys"] }
 ```
 
 ## Verification
@@ -77,6 +81,8 @@ POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderat
 | TEST-PS-098-09.T16 | integration | PS-098-03.R04, PS-098-04.R04 | restrict_feature with restrictedCapabilities [federation.record.ingest, auctions.bid.place, bazaar.offer.receive] for 7 days, overturned after 2 days; another such action reaches expiry | index_writes and bids 0 while active, new recipients unchanged, bazaar.offer.receive ignored; restored with cause action_reverted; second restored with cause action_expired |
 | TEST-PS-098-09.T17 | abuse | PS-098-04.R05, PS-098-07.R04 | submit_completion: valid B–C statement; same completionCid again; one signature invalid; submitter not a party; A with counterparty first seen 2 days ago; second B–C completion within 30 days; A–D completion | counted once; duplicate returns the stored result; FORBIDDEN twice; PRECONDITION_FAILED with counterparty_too_new, pair_counted_recently and same_principal; no amount ever stored |
 | TEST-PS-098-09.T19 | integration | PS-098-04.R03 | identity.session.started relay_token for a new key delivered twice; a first verified signed request from another key without a session | firstSeenAt set once from the relay's own observation for each; no identity.account.created or commerce.deal.completed consumer exists |
+| TEST-PS-098-09.T21 | integration | PS-098-01.R05, PS-098-02.R05, PS-098-04.R06 | key A (first seen 2 days ago) comments twice on proposal P1 and once on P2; 30 keys first seen today comment once each on P3; key B (first seen 40 days ago) comments on P3; a check without scopeRef; clock advanced to A's 7-day mark | A: first on P1 allowed, second RATE_LIMITED with retryAfterMs to the 7-day mark, P2 allowed; P3: 25 allowed and the rest RATE_LIMITED; B neither counted nor capped; VALIDATION_FAILED; after the mark A is not capped by this module |
+| TEST-PS-098-09.T22 | contract | PS-098-04.R06, PS-098-01.R04 | F18.S02.M01 accept fixture through the relay bus: 200 fresh keys from one /24 each comment once on one proposal; F18.S02.M01 depends_on inspected | at most 25 accepted and every refusal is RATE_LIMITED; no depends_on edge from F18.S02.M01 to this module |
 
 ## Dependencies
 

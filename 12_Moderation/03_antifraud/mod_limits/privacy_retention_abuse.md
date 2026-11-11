@@ -34,11 +34,13 @@
 | T05 | Forged currentCount from the limited party's vault | checks take no counts; usage is the relay's own bucket state |
 | T06 | Tier farming with self-signed completions between own keys | principal linkage check, 7-day counterparty age and one counted completion per pair per 30 days |
 | T07 | Overturned restriction keeps a limit at 0 | revert and expiry clear actionRestriction; until lapses even without the event |
+| T08 | Sybil keys flood the comment period of a policy proposal | keys first seen less than 7 days ago get 1 comment per proposal and 25 per proposal in total, on top of the per-key and per-prefix comment classes of F12.S03.M03 |
 
 **Abuse controls**
 - Override command limited to 30 per 24 h per moderator via F12.S03.M03.
 - Completion submissions limited to 20 per 24 h per key via F12.S03.M03.
 - Tier promotion requires both age and counted completions, so farming one is insufficient.
+- Governance comments from keys first seen less than 7 days ago: 1 per key per proposal and 25 per proposal (new_key_comments_per_proposal).
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 

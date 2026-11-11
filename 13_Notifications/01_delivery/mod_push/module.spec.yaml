@@ -4,8 +4,9 @@ summary: >-
   Web Push delivery through a relay the user selected. The vault holds the authoritative push target record for each
   device (relay, device key, label, enabled flag, relay subscription reference and status mirror); the browser holds
   the endpoint and keys. The relay holds only a disclosed service copy of the subscription (RFC 8030 endpoint plus
-  RFC 8291 keys), sent sealed to the relay key under the notify_push channel consent, classified P2 for that one
-  relay and erased when the withdrawal is registered there. The relay owns its VAPID key pair (RFC 8292) through
+  RFC 8291 keys), disclosed under the CTR-PRV-001 PRV-10 notification channel exception: sent sealed to the relay key
+  under the granted notify_push consent, stored P3-equivalent by that one relay and erased when the withdrawal is
+  registered there. The relay owns its VAPID key pair (RFC 8292) through
   RelayKeyStorePort and registers the public key with purpose vapid in F16.S02.M02. Payloads are content-free: a
   sealed box the relay cannot open for vault-originated alerts, a hook payload with only data the relay hook already
   holds, or a digest count; the Topic header is an opaque per-subscription HMAC. Subscriptions are created only after
@@ -60,7 +61,7 @@ processes:
   domain_schema:
     requirements:
       - A relay PushSubscription service copy stores the user DID, the ID of the device key that created it, the push endpoint URL, the browser public key p256dh (65 bytes) and auth secret (16 bytes), the content encoding aes128gcm, a per-subscription topic key, status, counters and the registered consent reference, with tenant and revision per CTR-ID-001.
-      - The relay copy is a disclosed service copy, P2 for the single relay named in the granted notify_push channel consent (CTR-PRV-001 PRV-5 participant rule, with the channel-identifier amendment requested from F10); the subscribe body is sealed to that relay's published key, endpoint, keys and topic key are encrypted at rest, never exported, evented, logged or federated, and erased when the withdrawal is registered at that relay, and the relay copy is never authoritative because the vault record and the browser rebuild it.
+      - The relay copy is a disclosed service copy under the CTR-PRV-001 PRV-10 notification channel exception - only the channel identifiers endpoint, p256dh, auth and the per-subscription topic key, held by the single relay named in the granted notify_push consent (F10.S01.M01) and stored there P3-equivalent; the subscribe body is sealed to that relay's published key, endpoint, keys and topic key are encrypted at rest, used only for content-free notifications (CTR-EVT-001 EVT-4), never exported, evented, logged or federated, and erased in the same transaction as the registered withdrawal, unsubscribe or expiry and so within the PRV-10 24 h bound, and the relay copy is never authoritative because the vault record and the browser rebuild it.
       - "Push payloads are content-free JSON of at most 1 024 bytes in exactly one of three forms: sealed {v, urg, s} for vault-originated alerts, whose box s opens only on the target device to {v, tpl, ref, ck}; hook {v, urg, tpl, ref?, ck?} carrying only data the dispatching relay hook already holds; and digest {v, urg, tpl: notify.tpl.system.digest, n}."
       - The vault push target record is the authoritative user-owned record per device - relayId, deviceKeyId, deviceLabel, enabled, the relay subscriptionId, a status mirror and the consent reference - while the browser PushManager holds the endpoint and keys, so the vault stores neither and rebuilds the relay copy from the record and a fresh browser subscription.
       - The relay VAPID key pair is owned by this module through RelayKeyStorePort (private key in the relay key file store, mode 0600, never in SQLite, logs, events or exports), and every VAPID public key is registered with purpose vapid in F16.S02.M02, which also records its revocation.
@@ -68,7 +69,7 @@ processes:
       - name: PushSubscription
         schema: classrup.notify.push_subscription/v1
         storage: relay
-        privacy: P2
+        privacy: P3
         retention: RET-STANDARD
         fields:
           - "id: uuidv7 — subscriptionId, primary key"
@@ -306,11 +307,11 @@ processes:
   privacy_retention_abuse:
     requirements:
       - Payloads are content-free and RFC 8291 encrypted to the browser, so the push service sees only the endpoint, size, time and an opaque per-subscription Topic, and for vault-originated alerts the relay sees only a sealed box it cannot open.
-      - The push endpoint and keys form a P2 service copy for the single selected relay, sealed in transit, encrypted at rest and erased at expiry, revocation or registered withdrawal; the push service provider can link the endpoint to the browser vendor, which the explainer states.
+      - The push endpoint and keys form a P3-equivalent service copy for the single selected relay under CTR-PRV-001 PRV-10, sealed in transit, encrypted at rest and erased at expiry, revocation or registered withdrawal, always within 24 h; the push service provider can link the endpoint to the browser vendor, which the explainer states.
       - Pseudonymity is not anonymity because the relay links a DID to a push endpoint, and users choose the relay.
       - Endpoints must be on the push-service origin allowlist and are re-resolved and re-checked on every send, so a user-chosen endpoint can neither reach internal addresses nor pause sending for other users.
     data:
-      - "PushSubscription relay copy: P2 for the selected relay only (disclosed service copy under the notify_push channel consent, PRV-5 participant rule; channel-identifier amendment requested from F10); endpoint, keys and topic key encrypted at rest."
+      - "PushSubscription relay copy: P3-equivalent at the selected relay only (disclosed service copy of the channel identifiers under the granted notify_push consent, CTR-PRV-001 PRV-10); endpoint, keys and topic key encrypted at rest, used only for content-free notifications, never federated or exported, erased within 24 h of withdrawal or removal."
       - "PushSubscription vault target: P3 in the vault; contains no endpoint or keys; exported only in the user's own export."
       - "Push payload: content-free; sealed box opaque to relay and push service, or hook data the relay already holds; Topic opaque per subscription."
       - "VAPID private key: P4 relay secret in RelayKeyStorePort, never exported; public key P0, registered in F16.S02.M02."
@@ -363,7 +364,7 @@ processes:
       - "T07 | abuse | 05.R01,05.R02,05.R03 | send called by an external client; subscribe signed by an unknown key; list by another user; inspect the relay database and key store | refused or NOT_FOUND; no private key or endpoint exposed; VAPID private key only in RelayKeyStorePort"
       - "T08 | integration | 06.R01,06.R03 | subscribe twice with the same endpoint; send to a user with 3 subscriptions where one returns 410 | one subscription; others delivered; failure isolated"
       - "T09 | chaos | 06.R03 | relay restart mid-send | unfinished attempts retried once; no duplicate beyond Topic collapse"
-      - "T10 | abuse | 07.R01,07.R02,07.R03,07.R04 | inspect database, logs, events and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection"
+      - "T10 | abuse | 07.R01,07.R02,07.R03,07.R04,01.R02 | inspect database, field classification, logs, events, exports and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; the relay copy secret is classified P3 (CTR-PRV-001 PRV-10) and absent from exports and federation; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection"
       - "T11 | abuse | 06.R04,07.R04 | an attacker endpoint returns 401 to every send; then subscriptions of 5 distinct users on one allowlisted origin return 403 within 5 minutes | first case only the attacker's subscription accrues failures and others keep sending; second case operator alert and a 15-minute pause for that origin only"
       - "T12 | load | 08.R01,08.R02,08.R03 | 200 pushes per second for 5 minutes to the fake service with an injected multi-user rejection | p95 ≤ 500 ms, metrics exported, origin pause alert fires"
       - "T13 | unit | 09.R01 | traceability tool run | every PS-104 requirement maps to a passing test"

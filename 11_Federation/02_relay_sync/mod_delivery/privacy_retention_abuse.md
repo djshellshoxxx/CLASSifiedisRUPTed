@@ -27,7 +27,7 @@
 | ID | Threat | Control |
 |---|---|---|
 | T01 | Flood a peer with traffic through delivery | per-destination quota 6000 envelopes/hour and 10 batches/minute; batch ≤ 100; backoff with full jitter |
-| T02 | Relay lies that a recipient accepted | peer_accepted requires an ack signed by a recipient named in the statement; a relay receipt only yields transport_acknowledged and, for public statements, 'Relay received' |
+| T02 | Relay lies that a recipient accepted | peer_accepted requires an ack signed by a recipient named in the statement; a relay receipt only yields transport_acknowledged (sync.state.transport_acknowledged) and, for public statements, completed (sync.state.completed) |
 | T03 | Replay of captured batches | cid dedup at receiver, RFC 9421 created window 300 s and nonce = batchId, Idempotency-Key |
 | T04 | Metadata leakage to destination (timing correlation, IP of user, who writes to whom) | random 0-5 s delay on relay pushes, no client IP forwarded by relays, vault connects only to user-selected relays, sealed-sender mailbox wrappers |
 | T05 | Participant statement pushed to a public peer or relay inbox by mistake | V03 and V11 refuse it; contract test enforces it |

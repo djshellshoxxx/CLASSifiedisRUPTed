@@ -35,6 +35,7 @@
 | T06 | One relay's hosting decision removes a listing from vaults, including the author's own listing and copies from other relays (signer-role confusion on tombstones) | branch on the kind and issuerKind of federation.tombstone.applied; a relay_removal advisory only drops that relay's provenance in a vault, removes nothing on other relays and never touches own or imported documents (ADR-0016 decisions 3 and 8, FED-9) |
 | T07 | Author undoes a hosting-policy removal or a tombstone by editing or resubmitting | sticky removedReason guard (V08) and 180-day stubs after purge |
 | T08 | Relay operator shows unlabelled promotion or promotion without a final or acknowledged claim | promotion only through set_promotion bound to a final or acknowledged claim, cleared on reorg or expiry, promoted flag exported to rankers which cap and label it |
+| T09 | Content the relay operator's prohibited-item pack blocks reaches the relay index through peer forwarding or a hosted key | V16 in-process governance.prohibited_rule.evaluate against the operator pack applied through relay_upload on every admitted listing projection; the refusal affects only that relay (CAP-9, ADR-0016 decision 8) and a pack change removes nothing already indexed |
 
 **Abuse controls**
 - Per-author active cap on a relay equal to the tenant maxIndexedListingsPerPublisher (default 100, newest refused with removedReason author_cap), tenant allowedCurrencies on every relay index write, and relay hosting-policy removal with a statement of reasons; vault users hide content or authors locally through F12.S01.M01 at query time.
@@ -55,4 +56,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F01.S01.M03, F11.S01.M01, F11.S01.M02, F11.S01.M03, F09.S01.M01, F12.S03.M03, F15.S04.M03, F18.S01.M02, F10.S01.M02, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

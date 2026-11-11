@@ -10,6 +10,7 @@
 - **PS-092-04.R02** Receive emits moderation.appeal.filed on the relay after it verifies the signed statement, decide emits moderation.appeal.decided, and the appellant's vault derives its own moderation.appeal.decided from the verified decision statement (EVT-9).
 - **PS-092-04.R03** The module consumes action events to open the 30-day window and to close open appeals as moot when the action is reverted by a moderator or expires, and consumes role revocations to reassign reviewers.
 - **PS-092-04.R04** Statements are classrup.moderation.appeal/v1 and appealwithdrawal/v1 (signed by the appellant) and appealreceipt/v1, appealstatus/v1, appealdecision/v1 and appealmoot/v1 (signed by the relay key only).
+- **PS-092-04.R05** The outcome enum (upheld, overturned, reduced) and the origin enum (relay, vault) of moderation.appeal.decided, and the relay-local moderation.appeal.filed event, are a stable v1 vocabulary bound by the F18.S02.M02 transparency dimensions appeals_filed and appeals_decided and its contract test T22; moot closures never produce moderation.appeal.decided, and adding, renaming or removing a value is a breaking change that needs a new major event schema (CTR-SCH-001 SCH-3) coordinated with F18.S02.M02.
 
 ## Specification
 
@@ -80,6 +81,7 @@ relay POST /api/v1/cmd/moderation.appeal.decide (reviewer M2, principal unrelate
 | TEST-PS-092-09.T06 | integration | PS-092-04.R03, PS-092-03.R04 | action.applied then action.reverted by moderator_decision before the decision; another action reaches expiry with an appeal in_review | deadline stored; first appeal moot with action_reverted, second moot with action_expired; appealmoot statements issued; no moderation.appeal.decided and no second revert; vault shows Closed as moot, never overturned |
 | TEST-PS-092-09.T15 | e2e | PS-092-01.R02, PS-092-04.R01 | mobile appellant files offline and reconnects | appeal reaches the relay, timeline shows honest states, axe zero serious issues |
 | TEST-PS-092-09.T23 | integration | PS-092-04.R02 | vault receives a verified appealdecision/v1 and one with a forged signature | local moderation.appeal.decided derived with origin vault and actor.kind federated; forged one quarantined; F12.S02.M01 ignores the vault-origin event |
+| TEST-PS-092-09.T24 | contract | PS-092-04.R05 | compare the outcome and origin enums of the moderation.appeal.decided schema and the relay-local moderation.appeal.filed schema with the F18.S02.M02 dimension fixture; a moot closure; a schema fixture that adds an outcome within v1 | identical values (upheld, overturned, reduced; relay, vault); no decided event for moot; the added outcome fails the contract check |
 
 ## Dependencies
 

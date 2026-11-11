@@ -12,6 +12,7 @@
 - **PS-131-04.R04** security.incident.redact_entry clears one timeline row's text, stores its hash and writes an audit entry (F16.S01.M01), and nothing else can change a timeline row.
 - **PS-131-04.R05** Incident events are P3, relay-local, never federated and never used to trigger notifications; users receive only the signed incident notice.
 - **PS-131-04.R06** Incident notices are classrup.security.incident_notice/v1 CTR-FED-001 envelopes with author = relay did:key, registered with signer role relay in F11.S01.M01 (N2), signed through F16.S02.M03 and F11.S01.M03 and sealed to affected mailboxes through F08.S01.M01.
+- **PS-131-04.R07** security.incident.open, for an incident whose affectedDataClasses include a class above P1, calls governance.jurisdiction_profile.resolve of F18.S01.M01 on the relay, where profileRefs defaults to the relay's hosting profile named by ProfileRef {publisherId, code} (applied through relay_upload), and in the same transaction sets notificationDueAt = detectedAt + effective.breachNotificationHours (24..720; 72 from the bundled generic profile with fallback true when no hosting profile or value resolves) and stores breachNoticeBasis from the resolve sources; profiles are never referenced by profileId and later profile activations do not move a stored due time.
 
 ## Specification
 
@@ -85,6 +86,7 @@ admin: security.incident.redact_entry { "incidentId": "0192f440-…", "entrySeq"
 | TEST-PS-131-09.T11 | integration | PS-131-07.R01, PS-131-04.R04 | secret pasted into annotate; admin redacts an existing entry; relay_operator tries to redact | SECURITY_INCIDENT_SECRET_IN_TEXT; text NULL, redacted_hash set and an F16.S01.M01 audit entry written; FORBIDDEN |
 | TEST-PS-131-09.T16 | integration | PS-131-04.R03 | platform.relay_identity.rotated revoked compromised; one relay_hosted user key compromised; five within one hour; a VAPID key compromised; security.role.assigned with breakGlass; security.role.revoked with lastAdmin; three admin changes in 24 hours; two admin changes | SEV1 key_compromise relay_identity; no incident; one SEV3 key_compromise user_keys; SEV2 key_compromise; SEV1 privilege_change; SEV1 privilege_change; SEV3 privilege_change; no incident |
 | TEST-PS-131-09.T19 | contract | PS-131-04.R05, PS-131-07.R01 | event payload classification and subscription scan across modules | both events P3 with no user content; no federation or notification module consumes security.incident.* |
+| TEST-PS-131-09.T20 | contract | PS-131-04.R07, PS-131-01.R01 | open with affectedDataClasses [P2] against the 48 h resolve stub; the same against the no-hosting-profile stub; open with affectedDataClasses [P0]; hosting profile version 4 with 24 h activated while the first incident is open | resolve called on the relay without a profileId and its result read from effective.breachNotificationHours; notificationDueAt = detectedAt + 48 h with breachNoticeBasis sources [{profileRef {KP, eu_de}, version 3}] and fallback false; detectedAt + 72 h with fallback true; no notificationDueAt and no resolve call for P0 only; the stored due time unchanged after version 4 |
 
 ## Dependencies
 

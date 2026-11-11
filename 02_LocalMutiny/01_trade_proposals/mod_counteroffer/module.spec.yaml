@@ -134,7 +134,7 @@ processes:
       - name: mutiny.revision.create
         capability: mutiny.revision.create
         input: "{ subjectType, subjectId, expectedHeadRevisionNo (0 for initial), reason, legIds[], compensationLegIds[]?, acceptedImbalances[]?, normalizationId?, settlementCurrency?, consentDeadline?, executionWindowMs? } — vault command; produces statement classrup.mutiny.proposal_revision/v1 signed by the author"
-        output: "{ revisionId, revisionNo, contentHash, consentDigestHex, syncState: local_committed | prepared }"
+        output: "{ revisionId, revisionNo, contentHash (ID-3 cid, the subjectRevisionHash consents carry), syncState: local_committed | prepared }"
         errors: [VALIDATION_FAILED, CONFLICT_STATE, CONFLICT_REVISION, MUTINY_REVISION_LIMIT, MUTINY_REVISION_AUTHOR_INVALID, MUTINY_REVISION_TURN, MUTINY_REVISION_MATERIAL_FORBIDDEN, MUTINY_REVISION_REFERENCE_INVALID, MUTINY_DEADLINE_INVALID, MUTINY_REVISION_FORK, MUTINY_REVISION_HASH_MISMATCH, RATE_LIMITED]
         emits: [mutiny.proposal.revised]
         idempotent: true

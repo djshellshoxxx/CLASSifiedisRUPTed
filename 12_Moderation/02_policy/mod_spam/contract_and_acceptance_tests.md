@@ -39,10 +39,11 @@ See the module test table below (all processes).
 | TEST-PS-097-09.T17 | contract | PS-097-04.R05 | F01.S01.M03 contract fixture evaluates a draft in author_presign mode before signing | output has score, heuristics, rulesVersion and degraded; no event and no index row written |
 | TEST-PS-097-09.T18 | unit | PS-097-01.R02, PS-097-01.R04, PS-097-07.R02 | inspect index rows after evaluations on relays X and Y; injected clock 31 days later | only hashes and counters; key hashes differ between X and Y; entries expired |
 | TEST-PS-097-09.T19 | abuse | PS-097-07.R03 | legitimate seller posts 12 variant listings in an hour | signal and at most a 1 hour throttle; no removal or suspension |
+| TEST-PS-097-09.T20 | contract | PS-097-04.R06 | compare the mode enum and throttle field of the moderation.spam.detected schema with the F18.S02.M02 spam_detected dimension fixture; author_presign evaluation; a schema fixture that adds a mode within v1 | identical values (relay_intake, vault_filter) and throttle optional; no event for author_presign; the added mode fails the contract check |
 
 ## Acceptance criteria
 
-- All tests T01–T19 pass in CI.
+- All tests T01–T20 pass in CI.
 - On the labelled corpus, recall ≥ 80% and false-positive rate ≤ 2% at score threshold 50.
 - No heuristic result ever causes removal, suspension or ban without a human or published rule in F12.S02.M01.
 

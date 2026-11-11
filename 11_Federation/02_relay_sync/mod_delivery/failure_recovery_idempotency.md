@@ -15,7 +15,7 @@
 - **idempotency:** batchId is also the Idempotency-Key (24 h replay window at the receiver) and the request nonce; PeerOutbox entries are unique per (cid, destination) while active; vault routing is idempotent per (cid, destination) in F15.S01.M01.
 - **concurrency:** One dispatcher per destination (a lock inside the relay process; Web Lock in the vault through F15.S01.M01); entries are leased for 60 s while a batch is in flight and the lease expires automatically if the process or tab stops.
 - **retries:** PeerOutbox: IDM-4 backoff within a round, then rounds at 1 min, 15 min, 1 h, 6 h and 24 h; 429 uses retryAfterMs without counting an attempt. Vault: F15.S01.M01 retry rules; the adapter reports retryable codes and retryAfterMs.
-- **offline:** Statements commit locally and F15 entries enter prepared; the outbox drains on reconnect in creation order; the UI shows 'Saved on this device' or 'Queued' until a receipt arrives.
+- **offline:** Statements commit locally and F15 entries enter prepared; the outbox drains on reconnect in creation order; the UI shows sync.state.prepared or sync.state.sending until a receipt arrives.
 - **partial failure:** A batch response lists per-envelope outcomes; accepted, duplicate, hidden and quarantined advance to delivered (relay) or completed (vault public), buffered stay transport_acknowledged until expiry, rejected fail with the receiver's code; a batch timeout leaves all entries prepared with attempts incremented.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).

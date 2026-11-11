@@ -88,7 +88,7 @@ F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F1
 | PS-094-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-094-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-094-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-094-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-094-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-094-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-094-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-094-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
@@ -100,6 +100,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T29 pass in CI.
+- All tests T01–T30 pass in CI.
 - No response, event, notification or export visible to the reported party contains the reporter key (privacy suite).
 - The UI never shows sent, acknowledged, linked or resolved before the matching verified state is reached.

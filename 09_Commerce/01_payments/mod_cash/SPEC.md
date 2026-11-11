@@ -6,12 +6,12 @@
 
 ## Purpose
 
-Defines the rules that apply when a Deal obligation is paid in cash: the payee must acknowledge receipt, an optional bilateral receipt can be agreed, and the UI shows safety guidance for in-person cash handover. Cash terms are a small signed agreement between the payee and the payer stored in both vaults; default terms (acknowledgement required, no receipt) are in force from the moment the Deal opens, and a payee proposal replaces them only when the payer signs its acceptance. This module plugs into F09.S01.M01 through the MethodRulePort, which signs the in-force termsCid into every cash claim, and through the StatementHandlerPort, which delivers the counterparty's terms statements. It never verifies cash; the strongest state a cash claim can reach is acknowledged by the payee, and the platform never touches the money.
+Defines the rules that apply when a Deal obligation is paid in cash: the payee must acknowledge receipt, an optional bilateral receipt can be agreed, and the UI shows safety guidance for in-person cash handover. Cash terms are a small signed agreement between the payee and the payer stored in both vaults; default terms (acknowledgement required, no receipt) are in force from the moment the Deal opens, and a payee proposal replaces them only when the payer signs its acceptance. This module plugs into F09.S01.M01 through the MethodRulePort, which signs the in-force termsCid into every cash claim, and through the StatementHandlerPort, which delivers the counterparty's terms statements. The jurisdiction cash limit is read at evaluation time from governance.jurisdiction_profile.resolve of F18.S01.M01 as effective.cashLimits: Money[] over the vault's selected ProfileRefs, compared in the obligation's own currency with no FX conversion. It never verifies cash; the strongest state a cash claim can reach is acknowledged by the payee, and the platform never touches the money.
 
 ## Responsibilities
 
 - Own CashTerms per Deal obligation - acknowledgement requirement (always true), optional bilateral receipt, handover guidance key and an optional public-place hint - with default terms entering as accepted when the Deal opens.
-- Implement the cash MethodRulePort - reject cash claims on obligations that do not allow cash or exceed a jurisdiction cash limit, and return the termsCid of the in-force terms for F09.S01.M01 to sign into the claim.
+- Implement the cash MethodRulePort - reject cash claims on obligations that do not allow cash or exceed the jurisdiction cash limit, read from governance.jurisdiction_profile.resolve of F18.S01.M01 over the vault's selected ProfileRefs as effective.cashLimits (Money[], the minimum per currency, no FX conversion), and return the termsCid of the in-force terms for F09.S01.M01 to sign into the claim.
 - Produce and verify the signed statements classrup.commerce.cash_terms/v1 (payee), classrup.commerce.cash_terms_accept/v1 (payer) and classrup.commerce.cash_terms_decline/v1 (payer), and ingest them through the StatementHandlerPort of F09.S01.M01.
 - Show safety guidance (public place, daytime, count together, counterfeit check, no home address) keyed to amount thresholds and never block on guidance alone.
 - Own the cash receipt prompt after acknowledgement when the in-force terms require receipts; F09.S02.M01 only signs and verifies the receipts.
@@ -34,13 +34,15 @@ Defines the rules that apply when a Deal obligation is paid in cash: the payee m
 ## Edge cases
 
 - Payee proposes new cash terms after the payer already claimed; the existing claim keeps the termsCid it was signed with, the accepted terms stay in force, and the new terms apply only to claims made after the payer accepts them.
-- Jurisdiction profile sets a cash limit of 1 000.00 EUR and the obligation is 2 500.00 EUR; the cash method is refused for that obligation with COMMERCE_CASH_LIMIT_EXCEEDED.
+- governance.jurisdiction_profile.resolve returns effective.cashLimits [1 000.00 EUR] for the selected ProfileRef and the obligation is 2 500.00 EUR; the cash method is refused for that obligation with COMMERCE_CASH_LIMIT_EXCEEDED naming the supplying ProfileRef and version.
 - The payer never answers the terms proposal; after 7 days the proposal expires and the prior accepted terms (the defaults unless the payer accepted others) stay in force.
 - The payer declines a proposal; the decline is signed, the proposal ends as declined and the prior accepted terms stay in force.
 - Handover hint contains what looks like a street address with a house number; the UI warns and the hint is rejected if it matches a home address pattern the user stored as private.
 - Statement terms arrive from a party who is not the payee of the obligation; ingest quarantines it with reason signer_not_payee.
 - Terms statements arrive from a party the receiver has blocked; they are dropped silently (N7).
 - Offline - terms are proposed locally and wait in the sync outbox; the UI shows prepared, not agreed.
+- effective.cashLimits holds only [500.00 USD] and the obligation is 5 000.00 GBP; no limit applies to the GBP obligation, because limits are compared only in the obligation's own currency and are never converted with FX rates.
+- Two selected profiles set 1 000.00 EUR and 3 000.00 EUR; resolve returns the minimum 1 000.00 EUR and that limit applies; nothing is selected and resolve falls back to the generic profile without a cash limit, so no limit applies.
 
 ## UX and accessibility
 
@@ -72,7 +74,7 @@ F09.S01.M01, F09.S02.M01, F09.S03.M03, F18.S01.M01, F07.S02.M02, F11.S01.M01, F1
 | ID | Process | Requirements |
 |---|---|---|
 | PS-067-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-067-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-067-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-067-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-067-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-067-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -86,7 +88,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T20 pass in CI.
+- All tests T01 to T21 pass in CI.
 - A cash claim can reach acknowledged but never confirmed or final, and no UI text implies verification.
 - Safety guidance is displayed for every cash claim and never blocks on its own.
 - Accepted cash terms are never replaced without the payer's signed acceptance of newer terms.

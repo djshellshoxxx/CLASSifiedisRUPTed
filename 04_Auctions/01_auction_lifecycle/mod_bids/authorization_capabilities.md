@@ -30,7 +30,7 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-033-09.T10 | abuse | PS-033-05.R01, PS-033-05.R02, PS-033-05.R03 | bid signed by another key; bid without host acceptance; public query | VALIDATION_FAILED or AUCTIONS_HOST_NOT_ACCEPTED; public data contains aliases only |
-| TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a device revocation statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
+| TEST-PS-033-09.T24 | abuse | PS-033-05.R02, PS-033-07.R01 | a key revoked by a classrup.security.keyrevocation/v1 statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail |
 
 ## Dependencies
 

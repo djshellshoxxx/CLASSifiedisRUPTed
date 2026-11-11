@@ -15,7 +15,7 @@ Moves a principal's user-selected home relay (the relay it lists first and deliv
 - Enforce a 24 h veto window on each receiver's clock, a cool-down of one move per 30 days, a 24 h minimum key age and a 180-day redirect on the old relay.
 - Verify inbound move statements from other principals and relays, open a commitment conflict through F11.S02.M03 for conflicting moves, and emit federation.account.moved only for statements that verify and become effective on this receiver.
 - Provide the redirect lookup GET /fed/v1/moved?author=did on relays and document the ActivityPub and AT Protocol mappings as Future work.
-- Register the N6 privacy ports for the migration history.
+- Register the N6 privacy ports for the migration history, with a F10.S01.M04 DeletionPort whose sign step cancels the open own migration (signing move_cancel for an announced one) and whose pseudonymize step, the only call that receives the pseudonym, pseudonymizes retained MigrationRecords; privacy.deletion.completed is a notification only (N6a).
 
 ## Not responsible for
 
@@ -44,7 +44,7 @@ Moves a principal's user-selected home relay (the relay it lists first and deliv
 - New relay unreachable or refuses the account; migration stays prepared or announced, redirect is not activated, the old relay stays the selected delivery relay and the user can cancel.
 - Two move statements for the same did with different targets; F11.S02.M03 opens a commitment conflict for move:subject, both moves are held and no redirect is activated.
 - Relay move statement signed by a different key than the pinned relay key; dropped with FEDERATION_KEY_MISMATCH and counted only against the sender that signed the delivering request, never against the relay it names.
-- The user deletes the account during a pending move; the move is cancelled and tombstones are sent to both relays.
+- The user requests account deletion during a pending move; during the grace period copy and announce are refused with PRIVACY_DELETION_PENDING and the wizard shows the migration paused, a cancelled deletion lets it continue unchanged, and at execution this module's DeletionPort sign step cancels the move (signing move_cancel when it was announced) while the F11.S01.M02 sign step signs the tombstones that go to both relays.
 - Move whose announcedAt claims a time more than 10 minutes in the receiver's future; refused as VALIDATION_FAILED since timestamps are claims.
 
 ## UX and accessibility
@@ -67,7 +67,7 @@ Moves a principal's user-selected home relay (the relay it lists first and deliv
 - Commands: `federation.migration.prepare`, `federation.migration.copy`, `federation.migration.announce`, `federation.migration.cancel`, `federation.migration.receive_move`
 - Queries: `federation.migration.get`, `federation.migration.redirect`
 - Emits: `federation.account.moved`
-- Consumes: `identity.portable_doc.published`, `identity.device_key.revoked`, `federation.delivery.failed`, `federation.conflict.detected`, `federation.conflict.resolved`, `privacy.deletion.requested`, `privacy.deletion.completed`
+- Consumes: `identity.portable_doc.published`, `identity.device_key.revoked`, `federation.delivery.failed`, `federation.conflict.detected`, `federation.conflict.resolved`, `privacy.deletion.requested`, `privacy.deletion.cancelled`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -83,7 +83,7 @@ F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S02.M03, F11.S03.M01, F0
 | PS-090-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
 | PS-090-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-090-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-090-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
+| PS-090-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
 | PS-090-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-090-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-090-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
@@ -92,7 +92,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
 - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
 - Bridge documents exist and are marked Future.

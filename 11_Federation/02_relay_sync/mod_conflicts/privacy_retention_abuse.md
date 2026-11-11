@@ -9,7 +9,7 @@
 - **PS-086-07.R01** Conflict records hold cids, provenance and public payload diffs only; commitment conflicts reference participant statements by cid, never store plaintext and never exist on a relay.
 - **PS-086-07.R02** A relay operator sees only public projections and therefore resolves only public_projection conflicts on that relay.
 - **PS-086-07.R03** Attackers must not be able to freeze someone else's trade with unsigned or role-less statements.
-- **PS-086-07.R04** The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort), classifies fields with F10.S02.M02 and pseudonymizes the author DID of retained conflict evidence on privacy.deletion.completed.
+- **PS-086-07.R04** The module registers the N6 ports (ExportSectionPort, DeletionPort, RetentionPurgePort) and classifies fields with F10.S02.M02; its DeletionPort pseudonymize step (pseudonymize(ctx{requestId, pseudonym}), the only call that receives the pseudonym) replaces the deleted principal's DID in retained RET-EVIDENCE conflict records, its purge step deletes the open commitment records of that principal's own vault, and privacy.deletion.completed is a notification only (N6a).
 - **PS-086-07.R05** Forks are attributed to the author; after 20 open conflicts the author's further envelopes are quarantined, and forwarding relays are never penalized for an author's equivocation.
 
 ## Specification
@@ -20,7 +20,7 @@
 - Candidate payloads stay in F11.S01.M02 under their own class.
 
 **Retention**
-- RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized on account deletion.
+- RET-EVIDENCE (2 years after resolution) so a trade dispute can show what was received and when; pseudonymized in the DeletionPort pseudonymize step on account deletion.
 
 **Threats and controls**
 
@@ -46,7 +46,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-086-09.T10 | abuse | PS-086-07.R03, PS-086-01.R04 | attacker signs a statement as a non-participant for a victim's proposal | quarantined by F11.S01.M02 V14, no conflict opened, trade not frozen |
 | TEST-PS-086-09.T13 | integration | PS-086-07.R02, PS-086-02.R05 | relay harness: operator calls resolve on a public conflict and on a commitment conflict id injected into the relay store; inspect relay storage | first succeeds with audit; second FORBIDDEN; relay holds no commitment record and no plaintext |
 | TEST-PS-086-09.T22 | abuse | PS-086-07.R05 | malicious author forks 21 times, each fork delivered through two honest relays | the 21st returns FEDERATION_CONFLICT_AUTHOR_LIMIT and quarantines the author's later envelopes; detected events carry no peer blame and no peer health changes |
-| TEST-PS-086-09.T23 | unit | PS-086-07.R04, PS-086-07.R01 | export, deletion and retention ports called by F10; privacy.deletion.completed; log capture for a commitment conflict | sections and plans returned; author DID pseudonymized in retained records; logs hold IDs only |
+| TEST-PS-086-09.T23 | unit | PS-086-07.R04, PS-086-07.R01, PS-086-04.R03 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone; log capture for a commitment conflict | sections and plans returned; the pseudonymize step replaces the author DID in retained records with exactly that pseudonym and a second run changes nothing; the purge step deletes the principal's open commitment records; privacy.deletion.completed changes no record; logs hold IDs only |
 
 ## Dependencies
 

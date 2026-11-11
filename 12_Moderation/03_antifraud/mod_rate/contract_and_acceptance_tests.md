@@ -42,10 +42,11 @@ See the module test table below (all processes).
 | TEST-PS-099-09.T20 | property | PS-099-03.R05, PS-099-03.R04 | random arrivals against a class with 20 per minute and longWindow 200 per hour, and against center_new over 3 days with a salt rotation at each midnight; center_seen probes for repeated and new cells | never more than 20 in any minute or 200 in any hour; never more than 5 new centers in any 24 h across rotations; previous salt kept 24 h then destroyed; a repeated cell is refused by the probe and costs nothing in center_new |
 | TEST-PS-099-09.T21 | chaos | PS-099-06.R03 | counter store down during proximity searches | read.proximity.query.* allowed at half rate in memory; read.proximity.center_new returns RATE_LIMITED for 30 seconds |
 | TEST-PS-099-09.T22 | integration | PS-099-04.R08, PS-099-01.R05, PS-099-02.R04 | request.default at 120 per minute; one request consuming three classes; anonymous caller; set request.default to 5 and to 1500; tenant migration with requestRatePerMinutePerKey 300 | the request charges request.default once; the 121st request in a minute is RATE_LIMITED whatever its class; anonymous charged by prefix; VALIDATION_FAILED twice; expand step writes limit 300 periodMs 60000 |
+| TEST-PS-099-09.T23 | contract | PS-099-04.R09, PS-099-01.R04 | F18.S02.M01, F18.S01.M01, F18.S01.M02, F18.S01.M03 and F18.S02.M02 contract fixtures through the relay bus: 11 comments in an hour from one key first seen 40 days ago, spread over three proposals; 31 comments in 24 h from 31 such keys of one /24; an 11th prohibited-rule upload in 24 h with taxonomy and profile uploads below 10; a 6th transparency upload; a 21st counter snapshot; counter store down during comment intake | 11th RATE_LIMITED; 31st RATE_LIMITED for the prefix; only the prohibited-rule upload refused; 6th upload and 21st snapshot RATE_LIMITED; comment intake RATE_LIMITED for 30 seconds while the store is down |
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - Concurrent requests never exceed burst plus rate × elapsed time, and window counters never exceed their limit across salt rotations (property tests).
 - No raw IP address or actor key is ever persisted or logged by this module.
 

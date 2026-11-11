@@ -105,7 +105,7 @@ stateDiagram-v2
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-102-09.T04 | property | PS-102-03.R01, PS-102-03.R02, PS-102-03.R03 | random sequences of add, verify, authenticated bounces, remove, withdrawal and expiry | terminal states never change; queued deliveries cancel on removal and withdrawal; ciphertext erased within 24 h |
+| TEST-PS-102-09.T04 | property | PS-102-03.R01, PS-102-03.R02, PS-102-03.R03 | random sequences of add, verify, authenticated bounces, remove, withdrawal and expiry | terminal states never change; queued deliveries cancel on removal and withdrawal; ciphertext and locale erased within 24 h |
 | TEST-PS-102-09.T06 | integration | PS-102-04.R03, PS-102-03.R03 | relay-local notify.channel.opted_out for email to the relay instance; vault-local opted_out, privacy.deletion.requested and privacy.deletion.completed to the vault instance | relay cancels queued deliveries and erases ciphertext; vault target removed; deletion request only shows paused and erases nothing; completed signs nothing |
 | TEST-PS-102-09.T10 | integration | PS-102-03.R05, PS-102-02.R04 | one authenticated hard bounce, a second within 72 h, 3 authenticated soft bounces, one signed provider event, a complaint from the configured feedback loop, a bounce for a settled delivery | bouncing only after the thresholds; complaint registers a withdrawal via unsubscribe_link; settled row unchanged while the address becomes bouncing and notify.email.bounced is emitted |
 | TEST-PS-102-09.T15 | integration | PS-102-03.R04 | relay copy becomes bouncing; vault runs sync_status at app open | vault target becomes bouncing and vault-local notify.email.bounced is emitted once; the inbox shows notify.tpl.security.email_stopped |

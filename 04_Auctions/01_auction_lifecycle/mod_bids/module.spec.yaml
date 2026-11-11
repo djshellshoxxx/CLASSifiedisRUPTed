@@ -40,7 +40,7 @@ edge_cases:
   - Host relay becomes unreachable; bidding is disabled with a clear message (no offline queue, because order and time are decided by the host).
   - Proxy resolution reaches a currency exponent boundary (JPY); increments are whole yen and proxy prices never fall between minor units.
   - A bid is delayed in transport or held back by the host and arrives after its signed notAfter; the host refuses it with EXPIRED, and a receipt whose hostTime is after notAfter is rejected by the vault as host misbehaviour evidence.
-  - A key the host knows is revoked (a device revocation statement or the identity document it holds) signs a bid; refused with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE.
+  - A key the host knows is revoked (a classrup.security.keyrevocation/v1 statement, the single device revocation type owned by F16.S02.M02, or the identity document it holds) signs a bid; refused with the generic AUCTIONS_BIDDER_NOT_ELIGIBLE.
   - The leader of an auction whose reserve was not met is shown lost at close, never won; won comes only from auctions.auction.won naming this bidder.
   - The host stops answering; with no result or cancel by scheduledEndsAt plus 60 minutes plus 72 h the bidder's live bids show host did not report a result, and a later valid result still applies.
   - The bidder has blocked the seller (or holds the seller's block); the bidder vault refuses to sign the bid with BLOCKED_PARTY and sends nothing.
@@ -123,7 +123,7 @@ processes:
       - "V04 | a bid with a visible amount has amount at least startPrice when no bid exists, otherwise currentPrice plus the increment of the tier containing currentPrice; a max-only update is exempt | AUCTIONS_BID_TOO_LOW"
       - "V05 | maxAmount, when present, is at least amount when amount is present, in the auction currency and within limits; a max-only update carries maxAmount | VALIDATION_FAILED"
       - "V06 | a new maxAmount for a bidder who already has a maximum is not lower than it | AUCTIONS_MAX_DECREASE"
-      - "V07 | F04.S02.M01 check returns allow for the bidder, including that the host knows no revocation of the bidder key | AUCTIONS_BIDDER_NOT_ELIGIBLE"
+      - "V07 | F04.S02.M01 check returns allow for the bidder, including that the host holds no classrup.security.keyrevocation/v1 statement (single device revocation type, owned by F16.S02.M02) and no identity document marking the bidder key revoked | AUCTIONS_BIDDER_NOT_ELIGIBLE"
       - "V08 | RateLimitPort.consume (F12.S03.M03) allows the bid - at most 10 bids per minute per bidder per auction, 200 bids per bidder per auction, and 5 000 entries per auction | AUCTIONS_BID_LIMIT"
       - "V09 | retraction is requested more than 12 hours before currentEndsAt, is the bidder's first retraction on this auction, and targets the bidder's winning bid | AUCTIONS_RETRACT_NOT_ALLOWED"
       - "V10 | host time is at or before the signed notAfter, and notAfter is at most 60 s after createdAtClaim | EXPIRED"
@@ -364,7 +364,7 @@ processes:
       - "T21 | contract | 04.R04 | F11.S01.M01 registry entries for the five statements; receipt signed by a key other than the host key in the terms | roles resolve as declared; quarantined with AUCTIONS_RECEIPT_INVALID"
       - "T22 | integration | 04.R05,04.R02 | B1 is outbid by B2's proxy | the host delivers bid_outbid to B1's mailbox and calls notify.notification.dispatch once with a template key only; B1's vault derives auctions.bid.outbid with actor.kind federated"
       - "T23 | integration | 07.R04 | export, account deletion and push consent withdrawn | section auctions.bids present; bidderId pseudonymized; pushOptIn false and no host push"
-      - "T24 | abuse | 05.R02,07.R01 | a key revoked by a device revocation statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail"
+      - "T24 | abuse | 05.R02,07.R01 | a key revoked by a classrup.security.keyrevocation/v1 statement the host holds signs a bid | AUCTIONS_BIDDER_NOT_ELIGIBLE with no detail"
       - "T25 | integration | 03.R04 | host silent after the auction end | winning and outbid bids show host_silent after the deadline; a later result moves them to won or lost"
       - "T26 | abuse | 02.R01,07.R03 | a key of tier new places its 21st bid of the day across auctions on host H; the limits check stub fails | MODERATION_ACCOUNT_LIMIT_REACHED with params.resetsAt from the in-process F12.S03.M04 check after RateLimitPort.consume; the failing stub gives DEPENDENCY_UNAVAILABLE; nothing stored"
       - "T27 | integration | 04.R06,04.R02 | first bid and 30 more bids within 60 s on auction A; one seller copy replayed and one delivered out of order | the seller vault gets one copy at once and coalesced copies at most once per 60 s; it derives auctions.bid.placed with listingId, sellerId, seq and bidCount, without bidderId or bidId, actor.kind federated; the out-of-order copy is stored as history without an event; edit_lock answers locked"

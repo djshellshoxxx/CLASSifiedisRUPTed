@@ -11,6 +11,7 @@
 - **PS-097-04.R03** The relay index-intake hook passes the projection text before indexing, and the store's own first observation of a key (identity.session.started on a relay, federation.record.accepted in a vault) starts the new-key window; identity.account.created is never used for other keys.
 - **PS-097-04.R04** moderation.spam.detected carries the subject did:key (a pseudonymous public key, P2, never leaving the store per EVT-8) so F12.S02.M01, F12.S03.M02 and F12.S03.M03 act on the same key, and hashing is used only inside the indexes and logs.
 - **PS-097-04.R05** In author_presign mode the query reads the author's own local publication history, writes nothing and emits nothing, and its output contract is the one F01.S01.M03 tests against (N19).
+- **PS-097-04.R06** The mode enum of moderation.spam.detected (relay_intake, vault_filter) is a stable v1 vocabulary bound by the F18.S02.M02 transparency dimension spam_detected (relay_intake only, throttled when a throttle is present) and its contract test T22; author_presign never appears in the event, and adding, renaming or removing a mode is a breaking change that needs a new major event schema (CTR-SCH-001 SCH-3) coordinated with F18.S02.M02.
 
 ## Specification
 
@@ -63,6 +64,7 @@ event moderation.spam.detected { "subjectKey": "did:key:z6MkPosterExample", "mod
 | TEST-PS-097-09.T06 | integration | PS-097-04.R03, PS-097-06.R01 | relay index-intake hook with projection text; identity.session.started delivered twice; federation.record.accepted for a listing in a vault with fold on | evaluated before indexing; first observation recorded once; vault filter folds the listing; no identity.account.created consumer exists |
 | TEST-PS-097-09.T16 | contract | PS-097-04.R04 | spam.detected with throttle at score 85 delivered to F12.S03.M03, F12.S03.M02 and F12.S02.M01 contract fixtures | the posting key's write bucket gets penalty 0.25, a spam_detected signal is recorded for subjectKey and a case is opened for the same subjectKey |
 | TEST-PS-097-09.T17 | contract | PS-097-04.R05 | F01.S01.M03 contract fixture evaluates a draft in author_presign mode before signing | output has score, heuristics, rulesVersion and degraded; no event and no index row written |
+| TEST-PS-097-09.T20 | contract | PS-097-04.R06 | compare the mode enum and throttle field of the moderation.spam.detected schema with the F18.S02.M02 spam_detected dimension fixture; author_presign evaluation; a schema fixture that adds a mode within v1 | identical values (relay_intake, vault_filter) and throttle optional; no event for author_presign; the added mode fails the contract check |
 
 ## Dependencies
 

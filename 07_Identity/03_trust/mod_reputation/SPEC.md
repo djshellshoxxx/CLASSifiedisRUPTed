@@ -10,7 +10,7 @@ Reviews and reputation computed locally from signed statements. When a transacti
 
 ## Responsibilities
 
-- Sign and send per-pair review tickets when a local opening event arrives for a context the principal takes part in, and receive and store the counterparties' tickets in a pending ReviewWindow.
+- Sign and send per-pair review tickets when a local opening event arrives for a context the principal takes part in (for Deals commerce.deal.opened, with completion tickets on commerce.deal.completed), and receive and store the counterparties' tickets in a pending ReviewWindow; tickets never travel inside a producer's opening statement.
 - Open the ReviewWindow (30 days) when an outcome event carrying the N3 fields arrives and the completion statements behind its completionCid verify in this vault, label it completed, disputed or cancelled, and quarantine it when a required field or statement is missing rather than guessing.
 - Create, sign, withdraw and receive reviews; accept a received review only if its signer key is not revoked in the author's latest verified document at receipt (and quarantine it when a revocation learned later took effect before first sight) and its proof carries the subject's ticket naming the author and the pair.
 - Sign and store reviews, review tickets and withdrawal tombstones only through the F11.S01.M01 StatementPublisherPort (publish and issueTombstone, implemented by F11.S01.M02).
@@ -19,7 +19,7 @@ Reviews and reputation computed locally from signed statements. When a transacti
 
 ## Not responsible for
 
-- Producing opening and completion evidence and its events; the owning transaction modules emit them with the N3 fields (F09, F02, F03, F05).
+- Producing opening and completion evidence and its events; the owning transaction modules emit them with the N3 fields (F09, F02, F03, F05), and their opening statements carry no review tickets (F09.S01.M01 lists issuing or requiring them as its non-responsibility), because this module signs the tickets itself.
 - Attestations such as 'met in person' (F07.S03.M02) and relay-side hosting of review copies (relay hosting policy only).
 - Identity proofing or deduplication of persons; no module can prove two DIDs are the same or different people.
 - Future: commit-reveal double-blind reviews, vouching graphs, portable reputation proofs across relays, reputation-aware ranking.

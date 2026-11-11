@@ -31,6 +31,7 @@
 | T04 | Oversized or non-JSON bodies exhausting the relay | 256 KiB limit checked from Content-Length and while streaming; JSON-only media type |
 | T05 | Stolen relay access token reuse | opaque 256-bit token stored hashed, idle and absolute expiry, revoke command, never placed in URLs or logs |
 | T06 | Login replay with an observed signature | nonce single use with 120 s TTL; the signed message binds relayId and nonce |
+| T07 | Activity timing inferred from millisecond UUIDv7 IDs in public projections | hour-floored generator for public-projection IDs and the publicId validator (ID-8); ordering inside an hour comes from the envelope seq, never from the ID |
 
 **Abuse controls**
 - RateLimitPort runs before validation for every command and query, so floods of invalid requests are throttled too.

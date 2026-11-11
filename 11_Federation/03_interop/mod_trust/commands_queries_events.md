@@ -54,7 +54,7 @@
 | `federation.conflict.detected` | only when the conflict's author is the pinned relay key of a peer (equivocation signed by that relay): lower its health by 20 and suspend with reason equivocation on the second such conflict within 24 h; author forks, commitment conflicts and key_compromise records are ignored |
 | `federation.delivery.failed` | transport reasons (timeout, unreachable, 5xx) lower the destination peer's health by 1 per entry (max 10 per hour); reason receipt_equivocation (two receipts signed by the peer key for one cid with different outcomes) lowers it by 20; per-envelope rejections by the peer's own policy are ignored |
 | `platform.flag.changed` | when F11 turns off, freeze health scores and mark peer_relay peers dormant; selected_relay peers are unaffected |
-| `privacy.deletion.completed` | vault: delete the deleted principal's selected-relay list after the DeletionPort plan ran; relay peer records hold no user data and are unchanged |
+| `privacy.deletion.completed` | notification only (N6a): the deleted principal's selected-relay list was already deleted in this module's DeletionPort purge step and relay peer records hold no user data, so nothing is deleted, pseudonymized, signed or sent to a relay here |
 
 ### Module errors
 

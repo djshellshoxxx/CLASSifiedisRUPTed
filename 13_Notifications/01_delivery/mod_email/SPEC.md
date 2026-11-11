@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Optional email notifications, available only through a relay whose operator offers email and only after the user gave explicit channel consent (F13.S02.M03). The user's vault holds the authoritative email target (the cleartext address as P3, locale, relay and a status mirror). The relay holds a disclosed service copy of the address, sent sealed to the relay key under the notify_email channel consent, encrypted at rest, P2 for that one relay and erased when the withdrawal is registered there. The relay sends minimal emails from a fixed template registry through an EmailTransportPort (SMTP adapter or a dev log adapter): a generic subject, a generic body with a link that opens the app, no listing, message or amount content, RFC 8058 one-click unsubscribe headers from UnsubscribeTokenPort of F13.S02.M03 and a VERP return path. Bounce and complaint reports are accepted only when authenticated. Verification uses a 128-bit token valid for 24 hours. If no relay offers email, the feature stays off and in-app and push notifications are unaffected.
+Optional email notifications, available only through a relay whose operator offers email and only after the user gave explicit channel consent (F13.S02.M03). The user's vault holds the authoritative email target (the cleartext address as P3, locale, relay and a status mirror). The relay holds a disclosed service copy of the address and locale under the CTR-PRV-001 PRV-10 notification channel exception, sent sealed to the relay key under the granted notify_email consent, encrypted at rest, stored P3-equivalent by that one relay and erased when the withdrawal is registered there. The relay sends minimal emails from a fixed template registry through an EmailTransportPort (SMTP adapter or a dev log adapter): a generic subject, a generic body with a link that opens the app, no listing, message or amount content, RFC 8058 one-click unsubscribe headers from UnsubscribeTokenPort of F13.S02.M03 and a VERP return path. Bounce and complaint reports are accepted only when authenticated. Verification uses a 128-bit token valid for 24 hours. If no relay offers email, the feature stays off and in-app and push notifications are unaffected.
 
 ## Responsibilities
 
@@ -60,7 +60,7 @@ Optional email notifications, available only through a relay whose operator offe
 
 ## Owned data
 
-- `EmailAddress` (classrup.notify.email_address/v1, P2, RET-STANDARD)
+- `EmailAddress` (classrup.notify.email_address/v1, P3, RET-STANDARD)
 - `EmailAddress` (classrup.notify.email_target/v1, P3, RET-STANDARD)
 - `EmailDelivery` (classrup.notify.email_delivery/v1, P2, RET-SHORT)
 

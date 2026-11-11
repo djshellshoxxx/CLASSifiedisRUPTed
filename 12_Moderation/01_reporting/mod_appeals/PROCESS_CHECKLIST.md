@@ -5,7 +5,7 @@
 - [x] [PS-092-01 Domain schema](domain_schema.md) — 4 requirements, tests mapped
 - [x] [PS-092-02 Validation rules](validation_rules.md) — 4 requirements, tests mapped
 - [x] [PS-092-03 Workflow state machine](workflow_state_machine.md) — 5 requirements, tests mapped
-- [x] [PS-092-04 Commands, queries and events](commands_queries_events.md) — 4 requirements, tests mapped
+- [x] [PS-092-04 Commands, queries and events](commands_queries_events.md) — 5 requirements, tests mapped
 - [x] [PS-092-05 Authorization and capabilities](authorization_capabilities.md) — 5 requirements, tests mapped
 - [x] [PS-092-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 4 requirements, tests mapped
 - [x] [PS-092-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 4 requirements, tests mapped

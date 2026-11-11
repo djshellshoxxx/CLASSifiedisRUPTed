@@ -40,10 +40,12 @@ See the module test table below (all processes).
 | TEST-PS-098-09.T18 | integration | PS-098-07.R05 | ExportSectionPort run in a vault holding cached limit snapshots, then privacy.deletion.completed; relay DeletionPort plan | section moderation.limits exported; cached snapshots deleted; relay plan lists rows for deletion after 30 days |
 | TEST-PS-098-09.T19 | integration | PS-098-04.R03 | identity.session.started relay_token for a new key delivered twice; a first verified signed request from another key without a session | firstSeenAt set once from the relay's own observation for each; no identity.account.created or commerce.deal.completed consumer exists |
 | TEST-PS-098-09.T20 | abuse | PS-098-07.R01, PS-098-07.R04 | F12 privacy suite: inspect federation payloads, public projections, relay logs, events and member exports after limit changes and counted completions | no AccountLimit field appears in federation payloads, public projections or logs; no amounts, obligations or deal context appear; limit.changed carries no counterparty key |
+| TEST-PS-098-09.T21 | integration | PS-098-01.R05, PS-098-02.R05, PS-098-04.R06 | key A (first seen 2 days ago) comments twice on proposal P1 and once on P2; 30 keys first seen today comment once each on P3; key B (first seen 40 days ago) comments on P3; a check without scopeRef; clock advanced to A's 7-day mark | A: first on P1 allowed, second RATE_LIMITED with retryAfterMs to the 7-day mark, P2 allowed; P3: 25 allowed and the rest RATE_LIMITED; B neither counted nor capped; VALIDATION_FAILED; after the mark A is not capped by this module |
+| TEST-PS-098-09.T22 | contract | PS-098-04.R06, PS-098-01.R04 | F18.S02.M01 accept fixture through the relay bus: 200 fresh keys from one /24 each comment once on one proposal; F18.S02.M01 depends_on inspected | at most 25 accepted and every refusal is RATE_LIMITED; no depends_on edge from F18.S02.M01 to this module |
 
 ## Acceptance criteria
 
-- All tests T01–T20 pass in CI.
+- All tests T01–T22 pass in CI.
 - No limit change is ever silent: each has a cause visible to the member on their limits screen.
 - Effective values follow the published tier table, multipliers and restriction rule exactly, and no relay limit relies on a count the limited party supplied.
 

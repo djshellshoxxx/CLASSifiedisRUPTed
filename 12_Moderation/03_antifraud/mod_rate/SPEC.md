@@ -18,6 +18,7 @@ Rate limiting through the RateLimitPort used by the kernel command bus. On a rel
 - Provide vault-local UX guards from the same code (flow guards and stock guards such as open offers and open cycle proposals), configured by the user and never sent to anyone.
 - Own the per-tenant default request rate policy (built-in class request.default, which replaces the requestRatePerMinutePerKey limit F15.S04.M03 dropped from the tenant record) and charge it once per relay request on top of the request's own class.
 - Accept capability classes registered by their owner modules with defaults through RatePolicyRegistry.register (for example the shared proximity budget classes read.proximity.query.anonymous, read.proximity.query.token, read.proximity.center_seen and read.proximity.center_new, defined once in F06.S02.M03), seed tenant RatePolicy rows from those defaults and honour the fail mode each registration locks.
+- [object Object]
 
 ## Not responsible for
 
@@ -47,6 +48,8 @@ Rate limiting through the RateLimitPort used by the kernel command bus. On a rel
 - The counter store is down while a proximity search arrives; read.proximity.query.* fall back to the in-memory half rate like other read classes, but read.proximity.center_new is registered fail closed and returns RATE_LIMITED for 30 seconds, so a store outage never opens trilateration.
 - A caller reaches 5 new search centers at 23:50 and the daily salt rotates at 00:00; the next new center at 00:10 is still refused because the 24 h window reads counters under the current and the previous salt, and the previous salt is kept 24 h after rotation.
 - A relay migrates from a tenant record that held requestRatePerMinutePerKey 300; the expand step writes a request.default policy row with limit 300 and periodMs 60000, and later changes go through moderation.ratepolicy.set.
+- 200 fresh keys from one /24 each comment once on one proposal within an hour; governance.policy_comment.accept.prefix admits at most 30 per 24 h for the prefix and the F12.S03.M04 new-key cap admits at most 25 per proposal, so at most 25 comments are accepted and the rest get RATE_LIMITED.
+- An operator key uploads an 11th prohibited-rule pack in 24 h while its taxonomy and profile uploads are still below their limits; only governance.prohibited_rule.relay_upload refuses, because each upload type has its own class.
 
 ## UX and accessibility
 
@@ -81,7 +84,7 @@ F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR
 | PS-099-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-099-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-099-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-099-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-099-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-099-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-099-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-099-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
@@ -93,6 +96,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T22 pass in CI.
+- All tests T01–T23 pass in CI.
 - Concurrent requests never exceed burst plus rate × elapsed time, and window counters never exceed their limit across salt rotations (property tests).
 - No raw IP address or actor key is ever persisted or logged by this module.

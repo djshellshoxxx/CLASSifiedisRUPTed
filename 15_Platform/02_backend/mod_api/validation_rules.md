@@ -9,6 +9,7 @@
 - **PS-117-02.R01** Command and query input is parsed strictly with zod; unknown keys, missing fields and type errors return VALIDATION_FAILED with fields [{path, code}] using stable UPPER_SNAKE codes.
 - **PS-117-02.R02** Shared validators exist for UUIDv7, RFC 3339 UTC millisecond timestamps, strings bounded in code points and the Money shape {amount integer string, currency 3 to 10 uppercase}.
 - **PS-117-02.R03** Idempotent commands require an Idempotency-Key that is a UUIDv7; a missing or malformed key returns VALIDATION_FAILED on field idempotencyKey and a key from the future returns ID_TIMESTAMP_SKEW.
+- **PS-117-02.R04** Shared validators publicId() and cid() exist - publicId accepts only lowercase UUIDv7 values whose embedded timestamp is a whole UTC hour (field code NOT_HOUR_FLOORED otherwise) and cid accepts only "sha256-" followed by 43 base64url characters without padding (field code INVALID_CID otherwise) - and both fail with VALIDATION_FAILED.
 
 ## Specification
 
@@ -23,6 +24,8 @@
 | V07 | the name is registered and reachable from the caller's surface (vault definitions are local only) | NOT_FOUND |
 | V08 | a reused key carries the same request hash as the stored record | IDEMPOTENCY_KEY_REUSED |
 | V09 | If-Match, when present, is a positive integer revision | VALIDATION_FAILED |
+| V10 | a field declared with publicId() holds a UUIDv7 whose embedded timestamp is a multiple of 3600000 ms (ID-8) | VALIDATION_FAILED |
+| V11 | a field declared with cid() matches sha256- followed by 43 base64url characters without padding (ID-9, FED-7) | VALIDATION_FAILED |
 
 ## Verification
 
@@ -32,6 +35,8 @@
 | TEST-PS-117-09.T04 | unit | PS-117-02.R01 | unknown, missing, mistyped and too long fields | VALIDATION_FAILED with UNKNOWN_FIELD, REQUIRED, INVALID_TYPE, TOO_BIG paths |
 | TEST-PS-117-09.T05 | unit | PS-117-02.R02 | uuidv7, timestamp, code-point string and Money validators with good and bad values | documented field codes; emoji counted as one code point |
 | TEST-PS-117-09.T16 | unit | PS-117-02.R03 | idempotent command without key, with v4 key and with a key 25 h ahead | REQUIRED, INVALID_UUIDV7, ID_TIMESTAMP_SKEW |
+| TEST-PS-117-09.T30 | property | PS-117-01.R04, PS-117-02.R04, PS-117-09.R03 | hourFlooredUuidV7 at 14:00:00.000Z and 14:59:59.999Z, 100 000 IDs in one hour and 200 random instants; publicId() with a millisecond ID, an hour-floored ID, an hour-floored v4 value and an hour-floored ID 25 h ahead | embedded time 14:00:00.000Z for both instants; version 7 and variant 10; all IDs unique with no ordering asserted; NOT_HOUR_FLOORED, accepted, INVALID_UUIDV7 and ID_TIMESTAMP_SKEW |
+| TEST-PS-117-09.T31 | unit | PS-117-01.R05, PS-117-02.R04 | cid() with the golden FED-7 cids of tests/fixtures/federation/envelope-golden.json, a padded value, a hex digest, a 42-character digest and an uppercase prefix; static scan of kernel exports and repository definitions | golden cids accepted; the others VALIDATION_FAILED with INVALID_CID; the kernel exports no cid computation and no repository keys records by cid |
 
 ## Dependencies
 

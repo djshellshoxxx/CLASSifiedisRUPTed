@@ -16,7 +16,7 @@ Detects forked or equivocating signed statements, quarantines them and drives re
 - Apply the origin-wins policy to public projections after 7 days without review, keeping the candidate first received from a relay listed in the author's latest verified portable document, and record that this is a policy choice, not proof.
 - Record resolution (keep one cid or drop_all for public projections; drop_all or superseded by a statement signed by every required signer for commitments) and emit federation.conflict.resolved with candidateCids, statementClass and freezeScope.
 - Attribute forks to the author with an author-level limit of 20 open conflicts, after which the author's further envelopes are quarantined; forwarding relays are never blamed.
-- Register the N6 privacy ports and pseudonymize retained conflict evidence after principal deletion.
+- Register the N6 privacy ports and pseudonymize retained conflict evidence only in its F10.S01.M04 DeletionPort pseudonymize step, the only call that receives the pseudonym, never on privacy.deletion.completed (N6a).
 
 ## Not responsible for
 

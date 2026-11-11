@@ -9,7 +9,7 @@
 - **PS-091-07.R01** Peer records contain no user data; they hold relay identity, quotas and health only.
 - **PS-091-07.R02** A user's selected relays are vault data; only relays the user marks 'List in my identity document' (at most 5) are published in the portable identity document (F07.S02.M01, P0, readable by anyone who holds the document), unlisted relays are never shared with other users or relays, and the user is told which metadata a relay can observe (mailbox ID, size, time, IP).
 - **PS-091-07.R03** Pseudonymity is not anonymity, so the relay chooser states that a relay sees the IP address of connecting devices and the did:key of each author.
-- **PS-091-07.R04** The module registers the N6 ports (ExportSectionPort for the selected-relay list, DeletionPort, RetentionPurgePort for RET-AUDIT peers) and classifies fields with F10.S02.M02.
+- **PS-091-07.R04** The module registers the N6 ports (ExportSectionPort for the selected-relay list, DeletionPort whose purge step deletes the principal's selected-relay list and which retains nothing to pseudonymize, RetentionPurgePort for RET-AUDIT peers) and classifies fields with F10.S02.M02; privacy.deletion.completed is a notification only (N6a).
 
 ## Specification
 
@@ -47,7 +47,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-091-09.T07 | integration | PS-091-04.R03, PS-091-07.R01, PS-091-09.R02 | peer P forwards 6 envelopes with invalid signatures, then two conflicts among statements signed by P's relay key within 24 h | health drops by 25 (cap) then 20; suspension with reason equivocation and federation.peer.suspended emitted |
 | TEST-PS-091-09.T12 | abuse | PS-091-07.R01, PS-091-07.R02, PS-091-01.R02 | inspect peer rows, logs, federation payloads and the relay chooser; toggle 'List in my identity document' on for one relay and off for another | no user data in peer rows; chooser states IP and did:key visibility and exactly which relays the identity document publishes; only the listed relay appears in the next portable document |
 | TEST-PS-091-09.T13 | abuse | PS-091-02.R04, PS-091-07.R03 | 11 outbound proposals in an hour; 6 inbound offers in a day from one /24; an 8193-byte offer; an offer self-signed by a different key; quota breach 10 times | rate limit on the 11th and the 6th, PAYLOAD_TOO_LARGE, FED_SIGNATURE_INVALID with nothing stored; health reduced by 2 per 10 breaches |
-| TEST-PS-091-09.T22 | unit | PS-091-07.R04 | export, deletion and retention ports called by F10; privacy.deletion.completed in a vault | selected-relay section exported without secrets; list deleted; relay peers untouched |
+| TEST-PS-091-09.T22 | unit | PS-091-07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize); privacy.deletion.completed delivered alone in a vault | selected-relay section exported without secrets; the purge step deletes the list and pseudonymize returns count 0; privacy.deletion.completed changes nothing; relay peers untouched |
 
 ## Dependencies
 

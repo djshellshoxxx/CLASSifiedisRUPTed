@@ -21,10 +21,10 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-088-09.T01 | integration | PS-088-01.R01, PS-088-01.R02, PS-088-04.R01 | relay R1 accepts a public listing from a hosted device key and dispatches it to peer R2 | PeerOutbox entry prepared, then transport_acknowledged with verified receipt, then delivered; payload not copied into the entry |
-| TEST-PS-088-09.T02 | unit | PS-088-02.R01, PS-088-02.R03 | enqueue with unknown cid, invalid destination, participants audience to peer_relay, public audience to a recipient mailbox | NOT_FOUND, FEDERATION_PEER_NOT_ALLOWED, FEDERATION_DESTINATION_INVALID twice |
+| TEST-PS-088-09.T02 | unit | PS-088-02.R01, PS-088-02.R03 | enqueue with unknown cid, invalid destination, participants audience to peer_relay, public audience to a recipient mailbox, a community statement (classrup.governance.policy_comment/v1) to a selected relay and to a peer relay | NOT_FOUND, FEDERATION_PEER_NOT_ALLOWED, FEDERATION_DESTINATION_INVALID for each of the last four |
 | TEST-PS-088-09.T03 | abuse | PS-088-02.R02, PS-088-07.R01 | relay returns a forged receipt and a forged acknowledgement signed by a non-recipient | FEDERATION_RECEIPT_INVALID; state does not advance |
 | TEST-PS-088-09.T04 | property | PS-088-03.R01, PS-088-03.R02 | random event sequences (receipt, outcome, failure, pause, reinstate, remove, cancel) with the clock advanced to expiresAt | states only advance along declared transitions; terminal states fixed; every entry is terminal by expiresAt |
-| TEST-PS-088-09.T05 | e2e | PS-088-03.R03, PS-088-01.R03, PS-088-01.R04 | vault publishes a listing offline, reconnects, gets a receipt; sends an offer that the recipient acknowledges; sends another offer never acknowledged for 30 days | chips read Saved on this device, Queued, Relay received for the listing (never Recipient confirmed); Recipient confirmed only after the ack; Relay received, recipient not confirmed after the F15 expiry; receipt times labelled relay time |
+| TEST-PS-088-09.T05 | e2e | PS-088-03.R03, PS-088-01.R03, PS-088-01.R04 | vault publishes a listing offline, reconnects, gets a receipt; sends an offer that the recipient acknowledges; sends another offer never acknowledged for 30 days | chips render only the catalog keys sync.state.prepared, sync.state.sending and sync.state.completed for the listing (never sync.state.peer_accepted); sync.state.peer_accepted only after the ack; the sync.state.transport_acknowledged text after the F15 expiry with expiredOutcome unconfirmed; no module-local string is rendered; receipt times labelled relay time |
 | TEST-PS-088-09.T06 | integration | PS-088-04.R03 | author tombstone for a record delivered to R2; consent federation_publish withdrawn with entries prepared | tombstone queued to R2 only; prepared public entries cancelled and tombstones requested for delivered ones |
 | TEST-PS-088-09.T07 | contract | PS-088-04.R01, PS-088-04.R02, PS-088-09.R03 | each command, the pull query, the transport adapter and the delivery.failed event | inputs, outputs, receipts and acknowledgements validate against registry schemas |
 | TEST-PS-088-09.T08 | abuse | PS-088-05.R01, PS-088-05.R02, PS-088-05.R03 | other vault reads routes; peer without allowlist pulls; non-operator reads relay stats | NOT_FOUND or FEDERATION_PEER_NOT_ALLOWED or FORBIDDEN |
@@ -55,7 +55,7 @@ See the module test table below (all processes).
 ## Acceptance criteria
 
 - All tests T01–T31 pass in CI.
-- The UI never shows a delivery state beyond the one recorded, and a public statement never shows 'Recipient confirmed' (e2e and unit tests).
+- The UI never shows a delivery state beyond the one recorded, renders delivery text only from the sync.state.<value> catalog keys, and a public statement never shows sync.state.peer_accepted (e2e and unit tests).
 - A relay cannot cause peer_accepted without a recipient's signature, and every PeerOutbox entry is terminal by its expiresAt (abuse and property tests).
 
 ## Dependencies

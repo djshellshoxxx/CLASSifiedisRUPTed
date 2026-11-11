@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Library that maps locally owned P0 records (listings, public profiles, service offerings, rental offerings and rental busy blocks) to unsigned federation envelope drafts and maps verified inbound envelope payloads back to read-only mirror views. Every timestamp of a public draft, including the envelope createdAt, is floored to the UTC hour with F10.S02.M03 publicTime, and readers order records by version member or per-chain seq, never by time. Each portable record type has a field allowlist; anything not on the allowlist and anything above class P0 is refused, and location is snapped to its L2 cell (geohash 5) and checked with F06.S02.M01 assertPublicCell on the way out and on the way in. Signing, seq allocation and storage are done by F11.S01.M02 through the StatementPublisherPort declared here. It runs in the user's browser vault (ADR-0016) and in relays for validating inbound public projections. It also holds the statement-type registry (N2): for every envelope type the audience, the signer role a receiver must verify, how that role is resolved (user roles only through the author's portable identity document, relay roles only through pinned or self-certifying relay keys), the payload schema, the optional subject key and commitment predicate, the maximum age, the acknowledger and the privacy class. Its roleFor is the implementation of the F16.S01.M01 RoleResolverPort that the vault composition root injects into authorizeStatement.
+Library that maps locally owned P0 records (listings, public profiles, service offerings, rental offerings and rental busy blocks) to unsigned federation envelope drafts and maps verified inbound envelope payloads back to read-only mirror views. Every timestamp of a public draft, including the envelope createdAt, is floored to the UTC hour with F10.S02.M03 publicTime, and readers order records by version member or per-chain seq, never by time. Each portable record type has a field allowlist; anything not on the allowlist and anything above class P0 is refused, and location is snapped to its L2 cell (geohash 5) and checked with F06.S02.M01 assertPublicCell on the way out and on the way in. Signing, seq allocation and storage are done by F11.S01.M02 through the StatementPublisherPort declared here. It runs in the user's browser vault (ADR-0016) and in relays for validating inbound public projections. It also holds the statement-type registry (N2): for every envelope type the audience, the signer role a receiver must verify, how that role is resolved (user roles only through the author's portable identity document, delegated governance roles additionally through the publisher's verified authority list, relay roles only through pinned or self-certifying relay keys), the payload schema, the optional subject key and commitment predicate, the maximum age, the acknowledger and the privacy class. Its roleFor is the implementation of the F16.S01.M01 RoleResolverPort that the vault composition root injects into authorizeStatement.
 
 ## Responsibilities
 
@@ -23,7 +23,7 @@ Library that maps locally owned P0 records (listings, public profiles, service o
 - Persisting, deduplicating or ordering envelopes and allocating seq and prev (F11.S01.M02 mod_records, F11.S02.M02 mod_dedup).
 - Choosing which peers receive a record (F11.S02.M01 mod_delivery and F11.S03.M01 mod_trust).
 - Geohash encoding and the L2 cell check itself (F06.S02.M01 assertPublicCell).
-- Resolving keys: user roles are resolved by an injected portable-document resolver (F07.S02.M01) and relay roles by injected relay-key resolvers (pinned keys in F11.S03.M01, relay key history of F15.S02.M01), all bound at composition so this library has no dependency cycle.
+- Resolving keys: user roles are resolved by an injected portable-document resolver (F07.S02.M01), relay roles by injected relay-key resolvers (pinned keys in F11.S03.M01, relay key history of F15.S02.M01), delegated governance roles by the delegations resolver over verified authority lists (registered by F18.S02.M01) and relay operator context roles by the operatorKeys resolver over the relay's latest verified tenant_config (registered by F15.S04.M03), all bound at composition by inverted registration so this library has no dependency cycle.
 - Deciding whether an incoming statement is acted on (F16.S01.M01 authorizeStatement, called by F11.S01.M02); this module only supplies roleFor through the RoleResolverPort bound at vault composition.
 - Future: ActivityPub Note/Offer and AT Protocol lexicon mappings (documented in F11.S03.M03, not implemented).
 - Future: federating reviews, offers, proposals or any P1-P4 data relay to relay; participant statements travel only as sealed mailbox envelopes and are never mapped here.
@@ -51,6 +51,9 @@ Library that maps locally owned P0 records (listings, public profiles, service o
 - A rental busy block runs 10:20 to 11:40; the busy-blocks draft carries 10:00 to 12:00 (start floored, end raised to the next full hour) so a published busy interval never shrinks.
 - A service offering carries a credential with evidenceAttachmentId; the projection omits the member and keeps label, issuer and year, while providerTimeZone, the projection seq, prev and publishedAt are exported.
 - A vault receives classrup.bazaar.negotiation_accept/v1; the registry resolves it as an alias of classrup.comms.consent/v1 and verifies it with the consent entry's role, schema and predicate.
+- A classrup.governance.policy_decision/v1 is signed by a key that the publisher's authority list first named as decider 10 days before the proposal's relay receipt, or by the publisher's own key, or arrives in a vault where no delegations resolver is registered; roleFor resolves no delegated role and the receiving path quarantines it with FEDERATION_SIGNER_ROLE_INVALID.
+- A classrup.governance.transparency_report/v1 is signed by the operator key that also compiled the embedded transparency_draft/v1, or by a key missing from operatorKeys of the relay's latest verified tenant_config; roleFor resolves no reviewer role and the report is quarantined with FEDERATION_SIGNER_ROLE_INVALID.
+- A peer relay offers a classrup.governance.policy_comment/v1 (audience community) on POST /fed/v1/inbox; F11.S01.M02 V10 refuses it because only audience public envelopes travel relay to relay, and the comment stays readable only to members of its hosting relay.
 
 ## UX and accessibility
 
@@ -77,7 +80,7 @@ F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CT
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-083-01 | [Domain schema](domain_schema.md) | 10 |
+| PS-083-01 | [Domain schema](domain_schema.md) | 12 |
 | PS-083-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-083-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-083-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
@@ -92,6 +95,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T28 pass in CI, including the signer-role tests T16, T19 and T28.
+- All tests T01–T30 pass in CI, including the signer-role tests T16, T19, T28 and T29.
 - No P1-P4 field, exact coordinate or home address appears in any draft, and no inbound cell finer than L2 is accepted (privacy suite on fixtures).
 - A public record whose owner has not opted in can never produce a signed statement.

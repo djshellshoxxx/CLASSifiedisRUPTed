@@ -10,6 +10,7 @@
 - **PS-119-07.R02** Outbox rows are pruned after 7 days and idempotency rows after 24 h; dead letters are purged 30 days after dead_at (RET-SHORT) by the purge primitive that F15.S03.M03 schedules, and a requeued event is not purged until it is delivered or dead again.
 - **PS-119-07.R03** Dead letters and inbox rows store the error code only, never exception messages with payload content.
 - **PS-119-07.R04** Relay blob storage accepts only P0 plaintext that the registered verifyImageClean reported clean (for images) or ciphertext, stores exactly the received bytes, and deletes a blob with its last reference so removed listings do not leave photos behind.
+- **PS-119-07.R05** Attachment ciphertext on a relay exists only in blobs_enc, which storage never hands to the backup archiver (writerConnection() backups copy schema main, the only schema whose WAL the F15.S03.M02 checkpointer archives), so a deleted attachment cannot return from a relay backup, and the kernel:0005 move runs with PRAGMA main.secure_delete=ON so later snapshots of main hold none of the moved ciphertext in freed pages.
 
 ## Specification
 
@@ -18,6 +19,7 @@
 - OutboxEvent: class declared per event type; local to one vault or relay.
 - InboxEntry and dead letters: IDs, types, attempts, error codes, replay_count and last_replayed_at.
 - MediaBlob: P0 public media, P2 as ciphertext, P3 only in the vault; metadata stripped before storage.
+- blobs_enc.blob_bytes: ciphertext of encrypted MediaBlobs only, relay-local in a separate database file, never in a backup snapshot or WAL segment.
 - IndexedDB pre-upgrade snapshot: a copy of the vault database on the same device with the same classes; never uploaded.
 
 **Retention**
@@ -37,6 +39,7 @@
 | T05 | Lease theft by a stale holder | compare-and-set on holder and expiry; fencing counter for downstream checks |
 | T06 | Silent loss of WAL frames before archiving | wal_autocheckpoint=0 on every relay connection and no storage checkpoint while F15.S03.M02 is the registered checkpointer |
 | T07 | Substituted media bytes under a signed listing ref | expectedRef check against SHA-256 of the received bytes; no re-encode path exists on a relay |
+| T08 | Attachment ciphertext copied into relay backups or WAL segments | ciphertext only in the attached blobs_enc file, zero-length main bytes for encrypted rows, fail closed without blobs_enc (V14), no storage checkpoint of main, secure_delete during the kernel:0005 move |
 
 **Abuse controls**
 - Blob size cap 5 MiB lowered by the tenant limit, and query limit 500, bound per-request work.
@@ -53,6 +56,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-119-09.T10 | integration | PS-119-07.R01, PS-119-07.R03, PS-119-08.R03 | consumer fails 8 times for an event with a private name | inbox dead with code only; one warn log with consumer, type and code; no payload text in outbox logs |
 | TEST-PS-119-09.T17 | contract | PS-119-01.R04, PS-119-02.R04, PS-119-04.R05, PS-119-05.R02, PS-119-07.R04 | put, dedupe, oversize, bad type, plaintext P2 on relay, shared photos across two listings, rollback, last removal, encrypted detach, orphan sweep, privacy lowering on each adapter | content address format; refcounts 2 then 1; blob deleted with last holder; shred true; relay rejects plaintext P2 |
 | TEST-PS-119-09.T19 | contract | PS-119-02.R04, PS-119-02.R05, PS-119-04.R05, PS-119-07.R04 | relay tenant maxUploadBytes 3 MiB with a 4 MiB P0 photo, vault maxLocalAttachmentBytes 1 MiB with a 2 MiB photo, no TenantPort with a 5 MiB photo; relay image puts that the verifier reports clean and not clean, a put whose bytes differ from expectedRef, an image put with no verifier registered | PAYLOAD_TOO_LARGE, PAYLOAD_TOO_LARGE, stored; clean bytes stored byte-identical with ref equal to expectedRef; PRIVACY_METADATA_GPS_PRESENT with nothing stored; VALIDATION_FAILED; INTERNAL; no re-encode call exists |
+| TEST-PS-119-09.T23 | integration | PS-119-01.R06, PS-119-07.R05 | relay SQLite adapter with encryptedBlobsPath puts 3 encrypted blobs carrying the canary and 2 P0 blobs, then node:sqlite backup() of writerConnection() runs; scan relay.sqlite, its WAL, the backup copy and blobs_enc.sqlite; repeat the puts on IndexedDB and memory | canary only in blobs_enc.sqlite and its WAL; every main.blobs row with encrypted = 1 has zero-length bytes; refs, sizes, privacy and holders in main; P0 bytes in main; IndexedDB and memory keep all bytes in their blobs store |
 
 ## Dependencies
 

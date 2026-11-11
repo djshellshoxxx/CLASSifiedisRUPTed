@@ -7,8 +7,9 @@ summary: >-
   inside an optional self-hosted relay for relay commands only. It owns the definition API (defineCommand,
   defineQuery, defineSubscriber, defineEvent, defineMachine, defineErrors), the dispatch pipeline (feature flag,
   relay read-only containment, authentication, tenant status, rate limit, strict validation, authorization,
-  idempotency, handler in one transaction, transactional outbox, idempotent response, audit), UUIDv7 identifiers,
-  the clock port, typed errors with problem+json rendering, and relay access tokens issued by challenge-response.
+  idempotency, handler in one transaction, transactional outbox, idempotent response, audit), UUIDv7 identifiers
+  (millisecond and monotonic for private records, hour-floored for IDs that appear in public projections, CTR-ID-001
+  ID-8) with the cid string form of CTR-FED-001 FED-7 (ID-9), the clock port, typed errors with problem+json rendering, and relay access tokens issued by challenge-response.
   Ports owned downstream reach the bus by inverted registration at composition: TenantPort (F15.S04.M03, which
   also supplies LocalSettings.vaultId as the vault's dispatch-context tenantId) and ContainmentPort (the relay
   read-only switch of F16.S03.M03). It holds no domain data of its own except IdempotencyRecord and relay access
@@ -17,7 +18,8 @@ responsibilities:
   - Provide the definition API and a registry that rejects duplicate or malformed command, query and consumer names at startup.
   - Run every command through one pipeline in the order flag, read-only (relay), authn, tenant (TenantPort), rate limit, validation, authorize, idempotency, handler in transaction, outbox, idempotent response, audit.
   - Store IdempotencyRecord rows for 24 h and replay the original status and body for the same key and request hash (CTR-IDM-001 IDM-1).
-  - Generate and validate UUIDv7 identifiers with a monotonic counter and reject IDs more than 24 h in the future (CTR-ID-001).
+  - Generate and validate UUIDv7 identifiers - millisecond with a monotonic counter for private records, hour-floored with random remaining bits for records whose IDs appear in public projections (ID-8) - and reject IDs more than 24 h in the future (CTR-ID-001).
+  - Validate cid strings in the CTR-FED-001 FED-7 form that supersedes the payload-only cid of ID-3 (ID-9), without computing cids itself.
   - Map every failure to a CTR-ERR-001 AppError and render RFC 9457 problem+json on the relay HTTP surface.
   - Expose only relay-surface definitions over HTTP; vault definitions are reachable only in-process.
   - Issue, resolve and revoke relay access tokens by challenge-response (CTR-CAP-001 sessions, CAP-10).
@@ -30,6 +32,7 @@ non_responsibilities:
   - Storage adapters, outbox delivery and media blobs (F15.S02.M03); the vault sync outbox of OutboxEntry records and its sender (F15.S01.M01, N24).
   - Logs, metrics and readiness (F15.S03.M01); the relay process, configuration and shutdown, and the public media route GET /media/v1/* served before the bus with its own cache headers (F15.S02.M01).
   - Device key cryptography; signature verification is injected through SignatureVerifier (F16.S02.M03).
+  - Computing cids and signing envelopes (F11.S01.M03 cidOf and signEnvelope per CTR-FED-001 FED-7; no depends_on edge, because the kernel only validates the cid string shape) and choosing which records are public (each owning module mints their IDs with the hour-floored generator, for example through F10.S02.M03 publicRecordId).
   - Tenant status, tenant limits and LocalSettings including vaultId (F15.S04.M03 registers TenantPort with the bus and owns PLATFORM_TENANT_SUSPENDED; no depends_on edge, because F15.S04.M03 depends on this module through F15.S02.M01).
   - The containment switch contract, the read-only sentinel <RELAY_DATA_DIR>/containment/read_only and its exemption list by exact command ID (F16.S03.M03 owns them and SECURITY_READ_ONLY_MODE; the relay composition registers ContainmentPort; no depends_on edge, because F16.S03.M03 reaches this module through F11.S03.M01 and F10.S01.M04).
 depends_on: [F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001]
@@ -46,6 +49,7 @@ edge_cases:
   - A remote caller names a vault-only command; NOT_FOUND is returned so the vault surface is not enumerable.
   - An idempotency record survives a restore from an older backup; it is ignored once its expiresAt has passed.
   - A login nonce is replayed or used after 120 s; UNAUTHENTICATED is returned and the nonce stays consumed.
+  - A public projection arrives with a record ID minted by the millisecond generator; the publicId validator returns VALIDATION_FAILED with field code NOT_HOUR_FLOORED, because the exact creation time would leak.
   - The HTTP body is 300 KiB or not JSON; PAYLOAD_TOO_LARGE or PLATFORM_BUS_UNSUPPORTED_MEDIA_TYPE is returned before parsing.
   - The relay is in read-only mode; bazaar.listing.publish returns SECURITY_READ_ONLY_MODE with 503 and Retry-After 300 without reaching its handler, while identity.session.revoke (exempt) and every query still run.
   - A member writes to a relay tenant that its operator suspended; the TenantPort stage returns PLATFORM_TENANT_SUSPENDED after authentication, while reads of that tenant and writes to other tenants succeed.
@@ -57,8 +61,10 @@ processes:
   domain_schema:
     requirements:
       - An IdempotencyRecord stores tenantId, actor, command name, idempotency key, requestHash (SHA-256 of canonical JSON of the raw input), response status, response JSON body, createdAt and expiresAt.
-      - All identifiers are lowercase canonical UUIDv7 values generated from WebCrypto randomness with a monotonic counter inside one millisecond; IDs more than 24 h ahead of the receiver clock are rejected with ID_TIMESTAMP_SKEW.
+      - All identifiers are lowercase canonical UUIDv7 values generated from WebCrypto randomness, private-record IDs by the millisecond generator with a monotonic counter inside one millisecond and public-projection IDs as 01.R04 states; IDs more than 24 h ahead of the receiver clock are rejected with ID_TIMESTAMP_SKEW.
       - IdempotencyRecord rows expire 24 h after creation; lookups ignore expired rows and a purge removes them.
+      - The kernel offers a second generator, hourFlooredUuidV7(nowMs), for records whose IDs appear in public projections (P0, CTR-ID-001 ID-8) - its 48-bit timestamp is nowMs floored to the UTC hour (nowMs minus nowMs mod 3600000) and rand_a and rand_b (74 bits) are fresh WebCrypto randomness with no counter, so IDs of one hour are unique with overwhelming probability but carry no order - and F10.S02.M03 publicRecordId(now) returns exactly this form; the monotonicity guarantee of 01.R02 applies only to the millisecond generator.
+      - A cid is "sha256-" plus base64url without padding of SHA-256 of JCS(envelope minus sig and cid) as CTR-FED-001 FED-7 defines it (CTR-ID-001 ID-9, superseding the payload-only cid of ID-3); the kernel exports no cid computation of its own (F11.S01.M03 cidOf computes it), validates only the string form and never uses a cid as a record primary key or an idempotency key.
     entities:
       - name: IdempotencyRecord
         schema: classrup.platform.idempotency_record/v1
@@ -91,6 +97,7 @@ processes:
       - Command and query input is parsed strictly with zod; unknown keys, missing fields and type errors return VALIDATION_FAILED with fields [{path, code}] using stable UPPER_SNAKE codes.
       - Shared validators exist for UUIDv7, RFC 3339 UTC millisecond timestamps, strings bounded in code points and the Money shape {amount integer string, currency 3 to 10 uppercase}.
       - Idempotent commands require an Idempotency-Key that is a UUIDv7; a missing or malformed key returns VALIDATION_FAILED on field idempotencyKey and a key from the future returns ID_TIMESTAMP_SKEW.
+      - Shared validators publicId() and cid() exist - publicId accepts only lowercase UUIDv7 values whose embedded timestamp is a whole UTC hour (field code NOT_HOUR_FLOORED otherwise) and cid accepts only "sha256-" followed by 43 base64url characters without padding (field code INVALID_CID otherwise) - and both fail with VALIDATION_FAILED.
     rules:
       - "V01 | input matches the definition's strict zod schema; unknown keys are rejected | VALIDATION_FAILED"
       - "V02 | Idempotency-Key present and a lowercase UUIDv7 for idempotent commands | VALIDATION_FAILED"
@@ -101,6 +108,8 @@ processes:
       - "V07 | the name is registered and reachable from the caller's surface (vault definitions are local only) | NOT_FOUND"
       - "V08 | a reused key carries the same request hash as the stored record | IDEMPOTENCY_KEY_REUSED"
       - "V09 | If-Match, when present, is a positive integer revision | VALIDATION_FAILED"
+      - "V10 | a field declared with publicId() holds a UUIDv7 whose embedded timestamp is a multiple of 3600000 ms (ID-8) | VALIDATION_FAILED"
+      - "V11 | a field declared with cid() matches sha256- followed by 43 base64url characters without padding (ID-9, FED-7) | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - defineMachine rejects at definition time any terminal state with an outgoing transition, any ambiguous (from, event) pair and an initial state that does not occur in the table.
@@ -218,6 +227,7 @@ processes:
       - "T04 | Oversized or non-JSON bodies exhausting the relay | 256 KiB limit checked from Content-Length and while streaming; JSON-only media type"
       - "T05 | Stolen relay access token reuse | opaque 256-bit token stored hashed, idle and absolute expiry, revoke command, never placed in URLs or logs"
       - "T06 | Login replay with an observed signature | nonce single use with 120 s TTL; the signed message binds relayId and nonce"
+      - "T07 | Activity timing inferred from millisecond UUIDv7 IDs in public projections | hour-floored generator for public-projection IDs and the publicId validator (ID-8); ordering inside an hour comes from the envelope seq, never from the ID"
     abuse_controls:
       - "RateLimitPort runs before validation for every command and query, so floods of invalid requests are throttled too."
       - "Audit records every deny, which feeds relay abuse review (F12.S03) without payload content."
@@ -246,7 +256,7 @@ processes:
     fixtures: "createTestKernel(): fake clock at 2026-11-04T10:00:00.000Z, deterministic UUIDv7 (seed 1), memory storage, role-table or allow-all authz, collected events, audit and logs; sample module F99.S01.M01 in packages/kernel/src/testing/sample-module.ts."
     tests:
       - "T01 | unit | 01.R02 | generate and parse UUIDv7 values | lowercase canonical v7 with variant 10; uppercase, braces, v4 and wrong variant are rejected with INVALID_UUIDV7"
-      - "T02 | property | 01.R02,09.R03 | random clock steps including bursts and regressions, 200 runs, plus 100 000 IDs in one millisecond | IDs unique and strictly increasing per generator"
+      - "T02 | property | 01.R02,09.R03 | random clock steps including bursts and regressions, 200 runs, plus 100 000 IDs in one millisecond | IDs unique and strictly increasing per millisecond generator"
       - "T03 | unit | 01.R02,02.R03 | IDs 24 h and 24 h + 1 ms ahead of the receiver clock | first accepted, second ID_TIMESTAMP_SKEW"
       - "T04 | unit | 02.R01 | unknown, missing, mistyped and too long fields | VALIDATION_FAILED with UNKNOWN_FIELD, REQUIRED, INVALID_TYPE, TOO_BIG paths"
       - "T05 | unit | 02.R02 | uuidv7, timestamp, code-point string and Money validators with good and bad values | documented field codes; emoji counted as one code point"
@@ -267,15 +277,17 @@ processes:
       - "T20 | unit | 08.R01 | ok, replayed and rejected commands | counters per outcome and a duration histogram series rendered"
       - "T21 | unit | 08.R03 | one command with a private title | one log line with ts, level, msg, correlationId, module, code, durationMs first; title absent from logs"
       - "T22 | load | 08.R02 | 500 sequential idempotent commands on a SQLite WAL file | p95 ≤ 50 ms"
-      - "T23 | unit | 09.R01 | traceability scan of kernel test titles | every PS-117 test ID T01–T29 appears in a test title"
+      - "T23 | unit | 09.R01 | traceability scan of kernel test titles | every PS-117 test ID T01–T31 appears in a test title"
       - "T24 | unit | 09.R02 | static scan of kernel sources | no node: import outside node.ts, the SQLite adapter and the HTTP adapter"
       - "T25 | integration | 04.R03 | command emits an event, then a deliveryEligible and a non-eligible definition enqueue through a stub F15.S01.M01 OutboxPort | event in outbox and sink after commit only; eligible OutboxEntry record committed with the command; non-eligible INTERNAL"
       - "T26 | integration | 04.R05,05.R04 | challenge, forged signature, login, nonce replay, expired nonce, idle expiry, revoke, and the same through the relay commands | tokens issued and stored hashed; all bad proofs UNAUTHENTICATED; revoked token rejected"
       - "T27 | integration | 04.R06 | ContainmentPort stub reports read-only; over node:http dispatch bazaar.listing.publish, platform.access_token.login, identity.session.revoke, security.containment.set and a query; then the sentinel goes off; then start a relay composition without ContainmentPort and a vault dispatch | non-exempt commands 503 SECURITY_READ_ONLY_MODE with Retry-After 300 and their handlers never run; exempt command IDs and the query run; writes accepted within 1 s after off; startup fails without the port; vault unaffected"
       - "T28 | integration | 04.R07 | TenantPort stub with T1 suspended and T2 active: member command on T1, query on T1, operator configure on T1, command on T2; vault composition with LocalSettings.vaultId V1 dispatches a command, then a context with another tenantId | PLATFORM_TENANT_SUSPENDED 403 after authentication and before rate limiting; query and configure decided by the port; T2 ok; vault records and idempotency rows carry tenantId V1; foreign tenantId INTERNAL"
       - "T29 | integration | 07.R03 | GET /media/v1/sha256-X through the relay server with the F15.S02.M01 media route registered, then a bus command and a bus problem response | media response Cache-Control public, max-age=31536000, immutable and no no-store; every bus response Cache-Control no-store with nosniff and deny-all CSP"
+      - "T30 | property | 01.R04,02.R04,09.R03 | hourFlooredUuidV7 at 14:00:00.000Z and 14:59:59.999Z, 100 000 IDs in one hour and 200 random instants; publicId() with a millisecond ID, an hour-floored ID, an hour-floored v4 value and an hour-floored ID 25 h ahead | embedded time 14:00:00.000Z for both instants; version 7 and variant 10; all IDs unique with no ordering asserted; NOT_HOUR_FLOORED, accepted, INVALID_UUIDV7 and ID_TIMESTAMP_SKEW"
+      - "T31 | unit | 01.R05,02.R04 | cid() with the golden FED-7 cids of tests/fixtures/federation/envelope-golden.json, a padded value, a hex digest, a 42-character digest and an uppercase prefix; static scan of kernel exports and repository definitions | golden cids accepted; the others VALIDATION_FAILED with INVALID_CID; the kernel exports no cid computation and no repository keys records by cid"
     acceptance:
-      - All tests T01–T29 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
+      - All tests T01–T31 pass in CI on Node 22 and the isomorphic scan finds no node-scheme import in the core.
       - No failure path leaves records, outbox events or idempotency records behind (T11, T25).
       - A duplicate submission never executes twice within 24 h (T10, T12).
   import_export_backup_rollback:

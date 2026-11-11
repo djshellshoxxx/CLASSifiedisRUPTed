@@ -33,6 +33,7 @@
 | T05 | Operator disables limits | bounded ranges (V01), locked fail modes (V03), all policy changes audit-logged and visible in the public relay policy |
 | T06 | Long-window limits reset at salt rotation | dual-epoch lookup until the previous epoch leaves the window |
 | T07 | Vault-supplied counts used to bypass relay limits | relay limits count only requests the relay itself received; stock guards exist only in scope local |
+| T08 | Sybil keys flood a governance comment period or an operator key floods statement uploads | per-key and per-prefix comment classes, the F12.S03.M04 new-key caps (1 comment per key and 25 per proposal from keys first seen less than 7 days ago), per-type upload classes and failMode closed for all governance classes |
 
 **Abuse controls**
 - Tenant-wide cap per capability class (default 2 000 requests per minute per class on a 2 vCPU relay) protects availability when many keys act together.

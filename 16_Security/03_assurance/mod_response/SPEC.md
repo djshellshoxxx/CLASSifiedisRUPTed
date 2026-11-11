@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Incident response runbooks kept under docs/security/response, written for a relay operator and for users who hold their own keys, and the two relay-local containment switches. Runbooks cover key compromise (a user's device key through the F07 identity flow; a relay's identity key through its pre-signed revocation certificate and a new identity), relay breach with a user notice whose data inventory is generated from the module specs, personal data leak notification, the relay-wide read-only switch, the federation kill switch that stops only relay-to-relay traffic, compromise of the static distributor or release signing key, and the blameless postmortem template. Each runbook has trigger, roles, numbered steps with time targets, verification and communication text. The switches are set with security.containment.set by a relay_operator or admin of that relay (or from the host when the database is down), take effect only on that relay, and never reach other relays or users' vaults. Procedures are practiced in drills and checked by a documentation linter. No claim of external audit or certification is made.
+Incident response runbooks kept under docs/security/response, written for a relay operator and for users who hold their own keys, and the two relay-local containment switches. Runbooks cover key compromise (a user's device key through the F07 identity flow; a relay's identity key revoked by the compromised key itself naming its successor while the key file is readable, otherwise through its pre-signed revocation certificate, and a new identity), relay breach with a user notice whose data inventory is generated from the module specs, personal data leak notification, the relay-wide read-only switch, the federation kill switch that stops only relay-to-relay traffic, compromise of the static distributor or release signing key, and the blameless postmortem template. Each runbook has trigger, roles, numbered steps with time targets, verification and communication text. The switches are set with security.containment.set by a relay_operator or admin of that relay (or from the host when the database is down), take effect only on that relay, and never reach other relays or users' vaults. Procedures are practiced in drills and checked by a documentation linter. No claim of external audit or certification is made.
 
 ## Responsibilities
 
@@ -25,7 +25,8 @@ Incident response runbooks kept under docs/security/response, written for a rela
 
 ## User stories
 
-- As a relay operator who suspects the relay identity key leaked, I follow RB-01 and revoke it with the pre-signed certificate, start a new identity within the time targets, and users see the signed notice from the new relay marked unverified until they confirm its fingerprint through a second channel.
+- As a relay operator who suspects the relay identity key leaked, I follow RB-01 and revoke it with the key itself while its key file is still readable, so the revocation names the successor relayId, or with the pre-signed certificate when it is not, start a new identity within the time targets, and users see the signed notice from the new relay marked unverified until they confirm its fingerprint through a second channel.
+- As a member of a relay whose key file was lost with the key, I see the new relay's restore announcement name the old relay although the certificate revocation names no successor, and I still confirm the new fingerprint out of band before my vault uses it.
 - As a relay operator under attack, I switch the relay to read-only in under 5 minutes and everything users already hold on their devices stays usable.
 - As an operator after a data leak, I follow RB-03 to decide and record notification within the due times and send a plain notice to affected users that lists exactly the data classes the relay held.
 
@@ -35,6 +36,7 @@ Incident response runbooks kept under docs/security/response, written for a rela
 - The relay database is unavailable so roles cannot be checked; classrup-relay containment read-only on --local writes the sentinel with host filesystem access, records the OS user and reason, and the audit entry is appended at the next start.
 - Federation kill switch applied while outbound deliveries are in flight; in-flight batches finish or abort within 60 seconds and queued deliveries stay in the outbox up to 7 days, while mailboxes, consent and publishing on the relay keep working.
 - Users are offline for days; RB-03 and RB-01 notices wait in mailboxes with the relay-signed issue time, and the runbook states that offline users learn later and revocation lag exists.
+- The compromised relay key file is deleted or unreadable (fails checkSecretFile); RB-01 falls back to platform.relay_identity.revoke with useCertificate true, whose revocation carries no successorRelayId, and the operator announces the new fingerprint out of band before users reroute, because only the new identity's relay_restore announcement links the two identities.
 - Static distributor compromise is suspected but unconfirmed; RB-06 prescribes a safe default of pausing update activation by publishing a signed hold statement and advising users not to update, without declaring a breach prematurely.
 - A runbook references a capability, command or error code that was renamed; the documentation linter fails the CI job with the runbook ID and the missing reference.
 - The relay restarts while read-only is active; the sentinel file survives the restart and the relay comes up read-only; an environment value RELAY_CONTAINMENT_READ_ONLY=1 left set re-applies the switch at start and startup warns about it.
@@ -64,7 +66,7 @@ _No persisted entities (library/view module)._
 
 ## Dependencies
 
-F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
+F16.S03.M02, F16.S03.M01, F16.S02.M02, F16.S01.M01, F11.S03.M01, F15.S02.M01, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 

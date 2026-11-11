@@ -8,7 +8,7 @@
 
 - **PS-088-03.R01** PeerOutbox entries advance only along prepared, transport_acknowledged and delivered, and never move backward or skip a state they did not reach.
 - **PS-088-03.R02** Delivered, failed and cancelled are terminal and every entry is terminal by its expiresAt; failed entries can be re-queued only by creating a new entry through an operator retry.
-- **PS-088-03.R03** The UI maps each state to wording that claims no more than the state proves; a relay receipt reads 'Relay received' and only a verified recipient acknowledgement reads 'Recipient confirmed'.
+- **PS-088-03.R03** The UI renders each vault delivery state only through the F15.S01.M01 shared catalog keys sync.state.<value>, which claim no more than the state proves; a relay receipt shows sync.state.completed for a public statement or sync.state.transport_acknowledged for a participants statement, and only a verified recipient acknowledgement shows sync.state.peer_accepted.
 - **PS-088-03.R04** Paused entries resume on federation.peer.reinstated or when flag F11 turns on, and are cancelled on federation.peer.removed or at expiry.
 - **PS-088-03.R05** A verified relay restore announcement of the destination peer that covers an entry's receipt returns a transport_acknowledged entry to prepared and re-queues a delivered entry as a new prepared entry, both resent under the same cid.
 
@@ -21,7 +21,7 @@ Initial **prepared**; terminal **delivered**, **failed**, **cancelled**.
 | Transition | Trigger | Guard / effect |
 |---|---|---|
 | prepared -> transport_acknowledged | destination returned a verified receipt for the cid | stores transportReceipt |
-| transport_acknowledged -> delivered | receipt outcome accepted, duplicate, hidden or quarantined, or expiresAt reached with outcome buffered (audience public: the destination relay is the final hop) | UI 'Relay received'; RET-SHORT starts |
+| transport_acknowledged -> delivered | receipt outcome accepted, duplicate, hidden or quarantined, or expiresAt reached with outcome buffered (audience public: the destination relay is the final hop) | operator view shows delivered; RET-SHORT starts |
 | prepared -> failed | receiver returned a non-retryable per-envelope code, 6 attempts per round times 5 rounds exhausted, or expiresAt reached | emits federation.delivery.failed |
 | prepared -> paused | federation.peer.suspended for the destination, flag F11 turned off, or the containment sentinel federation_off appears (V13) | pausedReason peer_suspended, flag_off or federation_killed; no attempts while paused |
 | paused -> prepared | federation.peer.reinstated for that relayId, flag F11 turned on, or the sentinel removed, for entries paused for that reason | nextAttemptAt = now |
@@ -53,14 +53,14 @@ stateDiagram-v2
 - Relay: each peer's published key history and restore announcements (F15.S02.M01 /.well-known/classrup-relay.json) are re-read at most every 6 h and immediately after a receipt fails V05; a covered delivered entry is re-queued as a new prepared entry with the same cid.
 - Relay: the containment sentinel is read before every dispatch batch and at least every 1 s while entries are paused for federation_killed; paused entries still expire at expiresAt (7 days).
 - Vault: a delivery-outcome sweep on every F15.S01.M01 delivery tick reads platform.outbox.list for federation entries and emits federation.delivery.failed once per entry that reached failed or expired, remembered by entryId.
-- Vault-side expiry (7 days unsent, 30 days waiting for an acknowledgement) is F15.S01.M01's; this module only supplies the wording for its outcomes.
+- Vault-side expiry (7 days unsent, 30 days waiting for an acknowledgement) is F15.S01.M01's; this module only reports its transport outcomes, whose text is the F15.S01.M01 catalog key sync.state.<value> of the state reached.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-088-09.T04 | property | PS-088-03.R01, PS-088-03.R02 | random event sequences (receipt, outcome, failure, pause, reinstate, remove, cancel) with the clock advanced to expiresAt | states only advance along declared transitions; terminal states fixed; every entry is terminal by expiresAt |
-| TEST-PS-088-09.T05 | e2e | PS-088-03.R03, PS-088-01.R03, PS-088-01.R04 | vault publishes a listing offline, reconnects, gets a receipt; sends an offer that the recipient acknowledges; sends another offer never acknowledged for 30 days | chips read Saved on this device, Queued, Relay received for the listing (never Recipient confirmed); Recipient confirmed only after the ack; Relay received, recipient not confirmed after the F15 expiry; receipt times labelled relay time |
+| TEST-PS-088-09.T05 | e2e | PS-088-03.R03, PS-088-01.R03, PS-088-01.R04 | vault publishes a listing offline, reconnects, gets a receipt; sends an offer that the recipient acknowledges; sends another offer never acknowledged for 30 days | chips render only the catalog keys sync.state.prepared, sync.state.sending and sync.state.completed for the listing (never sync.state.peer_accepted); sync.state.peer_accepted only after the ack; the sync.state.transport_acknowledged text after the F15 expiry with expiredOutcome unconfirmed; no module-local string is rendered; receipt times labelled relay time |
 | TEST-PS-088-09.T11 | integration | PS-088-03.R01, PS-088-09.R02 | batch of 100 with 3 rejected and 2 buffered | 95 delivered, 3 failed with receiver codes, 2 transport_acknowledged and delivered at expiry |
 | TEST-PS-088-09.T12 | integration | PS-088-03.R02 | 6 attempts x 5 rounds exhausted | entry failed and federation.delivery.failed emitted once |
 | TEST-PS-088-09.T18 | integration | PS-088-03.R04 | peer suspended with 500 entries, then reinstated; another peer removed; flag F11 off then on | paused entries return to prepared on reinstate; removed peer's entries cancelled; flag on resumes flag_off entries |

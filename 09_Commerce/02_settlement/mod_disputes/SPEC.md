@@ -17,7 +17,7 @@ A shared dispute case for any context that has parties and evidence: payment cla
 - Run the case clock (7 days response, 14 days evidence, 7 days proposal validity, 30 days inactivity lapse) and emit dispute events.
 - Provide the intake used by services disputes (F03.S02.M03) and by the payment-disputed prompt, without opening cases automatically.
 - Resolve contexts through the DisputeContextPort {resolve(contextRef) -> {parties[{did, role}], contextCid}} registered by F09.S01.M01 (deal, payment_claim), F02.S03.M04 (cycle), F03.S02.M03 (booking), F05.S01.M02 (rental_deposit) and F05.S02.M03 (rental_damage).
-- Route attachment evidence through F15.S02.M03 MediaBlob refs (≤ 5 MiB), stripped by F10.S02.M03 before encryption and sent as end-to-end encrypted attachments (FLOW-10 format, per-object key) through the injected AttachmentTransportPort, which the vault composition binds to the F08.S01.M01 mailbox adapter.
+- Route attachment evidence through F15.S02.M03 MediaBlob refs (≤ 5 MiB), stripped by F10.S02.M03 before encryption and sent as end-to-end encrypted attachments (FLOW-10 format, per-object key) through the injected AttachmentTransportPort, which F08.S01.M03 implements by inverted registration at vault composition (F08.S01.M03 depends on this module, never the reverse).
 - Carry an advisory, non-executable disposition in outcomes and in commerce.dispute.resolved, and publish the default mapping from outcome types for deal and payment_claim contexts.
 - Keep statements of an open case from blocked parties as evidence and allow a case against a blocked party.
 

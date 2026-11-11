@@ -15,7 +15,7 @@
 - **export:** Section moderation.appeals in classrup-export/v1 through ExportSectionPort: appeal, attachment hashes, receipts, status, decision and moot statements; relay appeal packets for the appellant include the evidence snapshot the decision relied on and never the reviewer key.
 - **import:** Decided and moot appeals import as read-only history after signature verification; pending appeals import as withdrawn history to avoid duplicates; conflicting IDs are rejected.
 - **backup:** Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) holds relay-side appeal records including reviewer keys, which never leave the relay.
-- **migration rollback:** Additive fields only in v1 (relayId, statementDigest, mootReason, reducedTo, reassignCount, mootNoticeCid); rollback is safe because older readers ignore new optional fields and unknown outcomes display as 'decided'.
+- **migration rollback:** Additive fields only in v1 (relayId, statementDigest, mootReason, reducedTo, reassignCount, mootNoticeCid); rollback is safe because older readers ignore new optional fields; the decided outcome and origin enums are frozen within v1 because F18.S02.M02 binds them, so a new outcome needs a v2 event schema, and older readers show a v2 outcome they cannot read as 'decided'.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

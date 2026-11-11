@@ -436,7 +436,7 @@ processes:
       - "Accepted mirrors: RET-STANDARD; listing mirrors are also purged 35 days after the payload expiresAt."
       - "Tombstone stubs: at least max(180 days, target type maxAge) after appliedAt; pending_target tombstones at most 180 days; relay_removal advisories 180 days; rejected-envelope log rows 30 days."
       - "Quarantined records: until discard, release or conflict resolution; dropped after 30 days unless an open ConflictRecord holds them."
-      - "Participant statements in a vault follow the retention of the domain record that references them (RET-EVIDENCE for commitments) and are pseudonymized on deletion."
+      - "Participant statements in a vault follow the retention of the domain record that references them (RET-EVIDENCE for commitments) and are pseudonymized only in this module's DeletionPort pseudonymize step on deletion, never on privacy.deletion.completed (N6a)."
     threats:
       - "T01 | Forged provenance or capture of an author by the first relay that forwards it | the signature and registry role are the only proof of authorship; no origin binding and no trust on first use; receivedFromRelay and via are display-only; where to fetch comes from the author-signed portable document"
       - "T02 | Replay of an old valid envelope to resurrect deleted content | cid dedup, tombstone stubs kept at least as long as the target type's maxAge, V08 rejects envelopes older than the type's maxAge"

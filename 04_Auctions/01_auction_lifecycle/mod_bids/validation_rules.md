@@ -21,7 +21,7 @@
 | V04 | a bid with a visible amount has amount at least startPrice when no bid exists, otherwise currentPrice plus the increment of the tier containing currentPrice; a max-only update is exempt | AUCTIONS_BID_TOO_LOW |
 | V05 | maxAmount, when present, is at least amount when amount is present, in the auction currency and within limits; a max-only update carries maxAmount | VALIDATION_FAILED |
 | V06 | a new maxAmount for a bidder who already has a maximum is not lower than it | AUCTIONS_MAX_DECREASE |
-| V07 | F04.S02.M01 check returns allow for the bidder, including that the host knows no revocation of the bidder key | AUCTIONS_BIDDER_NOT_ELIGIBLE |
+| V07 | F04.S02.M01 check returns allow for the bidder, including that the host holds no classrup.security.keyrevocation/v1 statement (single device revocation type, owned by F16.S02.M02) and no identity document marking the bidder key revoked | AUCTIONS_BIDDER_NOT_ELIGIBLE |
 | V08 | RateLimitPort.consume (F12.S03.M03) allows the bid - at most 10 bids per minute per bidder per auction, 200 bids per bidder per auction, and 5 000 entries per auction | AUCTIONS_BID_LIMIT |
 | V09 | retraction is requested more than 12 hours before currentEndsAt, is the bidder's first retraction on this auction, and targets the bidder's winning bid | AUCTIONS_RETRACT_NOT_ALLOWED |
 | V10 | host time is at or before the signed notAfter, and notAfter is at most 60 s after createdAtClaim | EXPIRED |

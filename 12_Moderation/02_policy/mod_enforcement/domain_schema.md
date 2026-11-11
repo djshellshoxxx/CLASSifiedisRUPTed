@@ -35,6 +35,7 @@ Schema `classrup.moderation.case/v1` · storage **relay** · privacy **P2** · r
 | status | enum — open \| assigned \| resolved |
 | outcome? | enum — actioned \| no_action \| duplicate \| content_removed_by_owner |
 | notes | string[] — internal notes, each ≤ 2000 code points, max 100 |
+| reviewFlags? | object[] — up to 20 { reason: prohibited_rule_changed, publisherId, ruleKey, ruleId, change: activated\|retired\|emergency_expired, citedRuleRef, flaggedAt } set from relay-scope governance.prohibited_rule.changed; shown as a queue badge until the case is resolved; never change an action |
 | revision | int — CTR-ID-001 ID-4 |
 | openedAt | timestamp — RFC 3339 UTC, relay clock |
 | closedAt? | timestamp — RFC 3339 UTC |

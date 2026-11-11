@@ -1,45 +1,55 @@
 id: F13.S01.M02
 scope: MVP
 summary: >-
-  Optional email notifications, available only through a relay whose operator offers email and only after the
-  user gave explicit channel consent (F13.S02.M03). The relay holds the verified email address as a P3 secret
-  (encrypted at rest) and sends minimal templated emails through an EmailTransportPort (SMTP adapter or a dev log
-  adapter): a generic subject, a generic body with a link that opens the app, no listing, message or amount
-  content, and RFC 8058 one-click unsubscribe headers. Verification uses a 128-bit token valid for 24 hours.
-  If no relay offers email, the feature stays off and in-app and push notifications are unaffected.
+  Optional email notifications, available only through a relay whose operator offers email and only after the user
+  gave explicit channel consent (F13.S02.M03). The user's vault holds the authoritative email target (the cleartext
+  address as P3, locale, relay and a status mirror). The relay holds a disclosed service copy of the address, sent
+  sealed to the relay key under the notify_email channel consent, encrypted at rest, P2 for that one relay and erased
+  when the withdrawal is registered there. The relay sends minimal emails from a fixed template registry through an
+  EmailTransportPort (SMTP adapter or a dev log adapter): a generic subject, a generic body with a link that opens the
+  app, no listing, message or amount content, RFC 8058 one-click unsubscribe headers from UnsubscribeTokenPort of
+  F13.S02.M03 and a VERP return path. Bounce and complaint reports are accepted only when authenticated. Verification
+  uses a 128-bit token valid for 24 hours. If no relay offers email, the feature stays off and in-app and push
+  notifications are unaffected.
 responsibilities:
-  - Own the EmailAddress record (address, status, verification token hash) and the EmailDelivery record (template, status, attempts) at the relay.
-  - Add, verify and remove addresses through signed requests from the user's registered device and a public verification link.
-  - Send templated emails through EmailTransportPort with List-Unsubscribe and List-Unsubscribe-Post headers, SPF, DKIM and DMARC alignment required of the operator, and retries on temporary failures.
-  - Process bounces and complaints so that a hard bounce or 3 soft bounces in 7 days mark the address bouncing and stop sends.
-  - Emit notify.email.sent and notify.email.bounced without addresses in payloads.
+  - Own the vault email target (classrup.notify.email_target/v1), the relay EmailAddress service copy (classrup.notify.email_address/v1) and the relay EmailDelivery record (classrup.notify.email_delivery/v1); the vault record is authoritative and the relay copy is rebuilt from it.
+  - Run the vault commands enable, disable and sync_status that check privacy.consent.check for notify_email and the registered channel consent, seal the address to the relay key, and mirror relay status into the vault.
+  - Add, verify and remove addresses at the relay through sealed requests signed by an active device key and a public verification link.
+  - Send emails from the fixed email template registry through EmailTransportPort with List-Unsubscribe and List-Unsubscribe-Post headers from UnsubscribeTokenPort, a VERP return path per delivery, SPF, DKIM and DMARC alignment required of the operator, and retries on temporary failures.
+  - Accept only authenticated bounce and complaint reports, mark an address bouncing only on the documented bounce thresholds, and turn a verified complaint into a registered withdrawal through F13.S02.M03.
+  - Emit relay-local notify.email.sent and notify.email.bounced, and the vault-local notify.email.bounced when the vault learns that delivery stopped, without addresses in any payload.
 non_responsibilities:
-  - Deciding when and whether to send (F13.S02.M01) and consent and unsubscribe tokens (F13.S02.M03).
-  - Message content; templates are generic and localized by key, and no user content is ever placed in an email.
-  - Operating mail servers; the operator supplies the SMTP relay or provider configuration.
+  - Deciding when and whether to send (F13.S02.M01) and channel consent, its registration and unsubscribe tokens (F13.S02.M03).
+  - Message content; templates are generic and localized by key with F14.S02.M01, and no user content is ever placed in an email.
+  - Operating mail servers; the operator supplies the SMTP relay or provider configuration, feedback-loop sources and webhook keys.
   - Marketing or bulk email; none is sent by the platform.
+  - Blocks (N7) do not apply because this module never acts on counterparty statements.
   - "Future: DKIM key rotation tooling, S/MIME or OpenPGP-encrypted emails, per-category digest emails."
-depends_on: [F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
   - As a member, I can add my email on a relay that offers email, verify it by link, and receive only generic alerts that tell me to open the app.
   - As a member, I can unsubscribe from any email with one click.
-  - As a member, I can remove my address and know the relay deletes it within 24 hours.
+  - As a member, I can remove my address and know the relay erases its copy within 24 hours while my own vault keeps the record until I delete it.
+  - As a member, I see in the app when email delivery to my address stopped.
   - As a relay operator, I can run with the log adapter in development and an SMTP adapter in production.
 edge_cases:
-  - Verification link clicked after 24 hours; the relay returns EXPIRED and the app offers to send a new link, limited to 5 per day.
+  - Verification link clicked after 24 hours; the relay returns EXPIRED and the app offers to send a new link within the per-user and per-address limits.
   - Verification link clicked twice; the second click returns success without change.
-  - Address already used by another user at the same relay; the new request is accepted but verification mail is not sent twice to the same address within 1 hour and the verified owner sees nothing, so addresses cannot be enumerated.
+  - Address already used by another user at the same relay; the request is accepted with the same response, verification limits are counted per (user, address), and neither user can exhaust the other's quota or learn that the address exists.
   - Mailbox full or temporary 4xx; delivery retries 3 times over 6 hours, then fails without marking the address bouncing.
-  - Hard bounce 5.1.1; address becomes bouncing at once and the in-app inbox shows that email delivery stopped.
-  - Spam complaint feedback; treated as unsubscribe and the consent is withdrawn through the opt module.
+  - One authenticated hard bounce 5.1.1; the counter increments; a second within 72 hours, or one signed provider hard-bounce event, marks the address bouncing, and on its next sync the vault emits notify.email.bounced and the inbox shows that email delivery stopped.
+  - A bounce arrives for a delivery that already settled after 72 hours; the delivery row stays settled but the address counters and the verified to bouncing transition still apply.
+  - A forged DSN quoting a guessed Message-ID arrives at the relay's plain bounce address, or an ARF report from an unknown source; both are refused with NOTIFY_EMAIL_REPORT_UNVERIFIED and change nothing.
+  - Spam complaint from a configured feedback-loop source; treated as a one-click unsubscribe, the consent withdrawal is registered through F13.S02.M03 with via unsubscribe_link and queued deliveries are cancelled.
+  - One DID loops add, remove and add for many addresses, or 50 fresh DIDs from one /24 add addresses; per-user and per-IP-prefix limits refuse further verification mail and the relay-wide cap alerts the operator.
   - Relay has no EmailTransportPort configured; every email command returns FEATURE_DISABLED and the app hides the email option for that relay.
   - Address contains an internationalized domain; it is normalized to punycode for sending and stored in normalized form.
 ux:
   screens:
-    - "Email settings: relay name, address field, status (Not verified, Verified, Delivery stopped), Send verification link, Remove address, explanation of what is sent."
+    - "Email settings: relay name, address field, status (Not verified, Verified, Delivery stopped, Paused while deletion is pending), Send verification link, Remove address, and the statement that the relay operator can read the address it sends to."
     - "Verification landing page served by the relay: Email verified or link expired, with an Open app button; works without JavaScript."
     - "Example email preview showing the generic subject and body."
-  states: [loading, not-offered, no-address, unverified, verified, bouncing, removed, sending-verification, offline]
+  states: [loading, not-offered, no-address, unverified, verified, bouncing, removed, paused, sending-verification, offline]
   a11y:
     - Address input has a visible label, autocomplete=email and inputmode=email, and errors are announced politely.
     - Verification page uses semantic headings and works without JavaScript.
@@ -47,108 +57,183 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - An EmailAddress stores the normalized address encrypted at rest with a lookup hash, status, verification token hash and expiry, bounce counters and consent reference; it is a P3 secret held only at the relay.
-      - An EmailDelivery stores the template key, category, status, attempts, a transport message ID and times, never the address in clear and never any user content.
-      - Emails carry a generic subject and body from a template registry (at most 12 templates in the MVP), a link to the app origin without identifiers, and one-click unsubscribe headers.
+      - A relay EmailAddress service copy stores the normalized address encrypted at rest with a lookup hash, the locale, status, verification token hash and expiry, bounce counters, the creating device key and the registered consent reference; it is P2 for the single relay named in the granted notify_email channel consent (PRV-5 participant rule, with the channel-identifier amendment requested from F10).
+      - An EmailDelivery stores the delivery kind, the template key from the fixed email registry, status, attempts, the transport Message-ID, the VERP tag and times, never the address in clear, never a notification category and never any user content.
+      - Emails carry a generic subject and body from the fixed email template registry (notify.tpl.email.verify, notify.tpl.email.notice, notify.tpl.email.security_notice, notify.tpl.email.activity and notify.tpl.email.digest, at most 12 templates), a link to the app origin without identifiers, and RFC 8058 one-click unsubscribe headers whose URL comes from UnsubscribeTokenPort of F13.S02.M03.
+      - The vault email target is the authoritative user-owned record - the cleartext normalized address (P3), locale, relayId, the relay emailAddressId and a status mirror - while the relay copy is a disclosed service copy, sealed to the relay key in transit, never authoritative, and rebuilt from the vault record after a relay loss or a vault import.
     entities:
       - name: EmailAddress
         schema: classrup.notify.email_address/v1
         storage: relay
-        privacy: P3
+        privacy: P2
         retention: RET-STANDARD
         fields:
-          - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — tenant scope"
-          - "userDid: did:key — owner"
-          - "addressCipher: bytes — AES-256-GCM encrypted normalized address, ≤ 254 characters plaintext"
-          - "addressHash: bytes — HMAC-SHA256 with a relay secret, for uniqueness checks"
+          - "id: uuidv7 — emailAddressId, primary key"
+          - "tenantId: uuidv7 — relay tenant scope"
+          - "userDid: did:key — owner principal"
+          - "createdByKeyId: string — device key ID that signed the add request"
+          - "addressCipher?: bytes — AES-256-GCM encrypted normalized address, ≤ 254 characters plaintext; absent after erasure"
+          - "addressHash: bytes — HMAC-SHA256 with a relay secret, for per-(user, address) limits and uniqueness"
+          - "locale: string — BCP 47 locale from the add request, used to render the generic templates"
           - "status: enum — unverified | verified | bouncing | removed"
-          - "consentId: uuidv7 — ref F13.S02.M03 ChannelConsent for email at this relay; must be granted"
+          - "consentId: uuidv7 — email ChannelConsent registered at this relay (F13.S02.M03); must be granted"
+          - "consentStatementCid: string — cid of the registered channel consent statement"
           - "verifyTokenHash?: bytes — SHA-256 of a 128-bit token"
           - "verifyExpiresAt?: timestamp — issued time + 24 h"
-          - "verificationsSentToday: int — 0..5"
-          - "hardBounceCount: int — 0..1"
-          - "softBounces7d: int — soft bounces in the last 7 days"
+          - "hardBounces72h: int — authenticated hard bounces in the last 72 hours"
+          - "softBounces7d: int — authenticated soft bounces in the last 7 days"
           - "verifiedAt?: timestamp — relay clock"
+          - "removedAt?: timestamp — relay clock"
           - "createdAt: timestamp — relay clock, RFC 3339 UTC"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
           - At most one non-removed address per user and relay.
-          - status verified implies verifiedAt is set and a granted ChannelConsent for email exists.
+          - status verified implies verifiedAt is set and a granted email ChannelConsent is registered at this relay.
           - The cleartext address is never returned by a query, event or log; the owner sees only a masked form such as a***@example.org.
+          - status removed implies addressCipher is absent within 24 hours of removedAt.
+      - name: EmailAddress
+        schema: classrup.notify.email_target/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — emailTargetId, primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "userDid: did:key — local principal"
+          - "relayId: string — canonical self-certifying relayId (F15.S02.M01) of the email relay"
+          - "relayHost: string — display hint only"
+          - "address: string — normalized address, ≤ 254 characters, P3, vault only"
+          - "locale: string — BCP 47 locale chosen by the user (F14.S02.M01)"
+          - "emailAddressId?: uuidv7 — relay copy once accepted"
+          - "status: enum — pending | unverified | verified | bouncing | removed (mirror of the relay copy)"
+          - "consentId: uuidv7 — local email ChannelConsent for relayId"
+          - "lastStatusSyncAt?: timestamp — local clock of the last notify.email.get_mine result"
+          - "endedAt?: timestamp — local clock of removal"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one non-removed email target per relayId.
+          - status mirrors the relay copy only as last synced; the UI labels it with lastStatusSyncAt.
+          - status other than pending implies privacy.consent.check for notify_email at relayId returned granted when the address was sent.
       - name: EmailDelivery
         schema: classrup.notify.email_delivery/v1
         storage: relay
         privacy: P2
         retention: RET-SHORT
         fields:
-          - "id: uuidv7 — primary key"
-          - "emailAddressId: uuidv7 — ref EmailAddress"
+          - "id: uuidv7 — deliveryId, primary key"
+          - "emailAddressId: uuidv7 — ref EmailAddress relay copy"
           - "userDid: did:key — recipient"
-          - "templateKey: string — notify.tpl.<category>.<name> or notify.tpl.email.verify"
-          - "category: enum — offers | cycles | messages | auctions | bookings | moderation | security | system"
-          - "status: enum — queued | sent | settled | bounced | failed"
+          - "kind: enum — verify | notice | security_notice | activity | digest"
+          - "templateKey: string — notify.tpl.email.<kind> from the fixed email registry"
+          - "dispatchRef?: string — gate deferred ID or dispatch ID, for dedupe"
+          - "status: enum — queued | sent | settled | bounced | failed | cancelled"
           - "attempts: int — 0..3"
           - "transportMessageId?: string — Message-ID header value, ≤ 255 characters"
+          - "verpTag: string — first 16 characters of base64url(HMAC-SHA256(relay VERP key, deliveryId)) in the return path"
           - "bounceKind?: enum — hard | soft | complaint"
+          - "bounceSource?: enum — dsn | provider_webhook | feedback_loop"
+          - "cancelReason?: enum — address_removed | consent_withdrawn | deletion"
           - "queuedAt: timestamp — relay clock"
           - "sentAt?: timestamp — relay clock"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - A delivery references only an address with status verified (verification mail excepted) and never contains the address in clear.
-          - status bounced implies bounceKind is set.
+          - A delivery references only an address with status verified (kind verify excepted) and never contains the address in clear.
+          - status bounced implies bounceKind and bounceSource are set.
           - At most 3 attempts per delivery.
   validation_rules:
     requirements:
-      - Address input is validated for syntax, length and domain before storage and before any verification mail.
-      - Sends are validated for consent, address status, template and rate before the transport port is called.
+      - Address input is validated for syntax, length and domain in the vault and again at the relay before storage and before any verification mail.
+      - Sends are validated for registered consent, address status, delivery kind and per-address, per-user, per-IP-prefix and relay-wide limits before the transport port is called.
       - Every violation maps to one stable error code.
+      - Bounce and complaint reports are accepted only when authenticated, namely a DSN received at the VERP return address whose HMAC tag matches one delivery and that quotes its Message-ID, or a complaint from a configured feedback-loop source or a signed provider webhook.
     rules:
       - "V01 | address is at most 254 characters, has one @, a local part of at most 64 characters, a domain with at least one dot, no control characters and no display name | NOTIFY_EMAIL_ADDRESS_INVALID"
       - "V02 | the domain is not on the relay's disposable-domain blocklist and is not a local or reserved domain | NOTIFY_EMAIL_ADDRESS_INVALID"
-      - "V03 | the user has a granted unexpired ChannelConsent for email at this relay | PRECONDITION_FAILED"
+      - "V03 | a granted unexpired email ChannelConsent of the user is registered at this relay and named in the request | PRECONDITION_FAILED"
       - "V04 | verification token hash matches and verifyExpiresAt is in the future | EXPIRED"
-      - "V05 | at most 5 verification emails per address per day and 1 per address per 60 seconds | RATE_LIMITED"
-      - "V06 | templateKey is in the registry and the payload contains no free text | VALIDATION_FAILED"
-      - "V07 | address status is verified for category mail and the daily cap of 20 emails per address is not exceeded | NOTIFY_EMAIL_NOT_DELIVERABLE"
+      - "V05 | per (userDid, addressHash) at most 1 verification email per hour and 5 per day, counted per user so another user cannot exhaust them | RATE_LIMITED"
+      - "V06 | templateKey is one of the fixed email registry keys and the payload contains no free text | VALIDATION_FAILED"
+      - "V07 | address status is verified for every kind other than verify and the daily cap of 20 emails per address is not exceeded | NOTIFY_EMAIL_NOT_DELIVERABLE"
       - "V08 | the relay has an EmailTransportPort configured | FEATURE_DISABLED"
+      - "V09 | RateLimitPort.consume (F12.S03.M03) allows - per user at most 3 distinct addresses and 5 verification emails per day; per IP prefix (/24 IPv4, /48 IPv6) at most 20 add calls per day; relay-wide at most 500 verification emails per hour by default, with an operator alert at 80 percent | RATE_LIMITED"
+      - "V10 | add, remove and get_mine are signed (classrup/relay-request/v1) by a device key of userDid that F16.S02.M02 reports active at receipt time, signed before any revocationEffectiveFrom | UNAUTHENTICATED"
+      - "V11 | a bounce report is a DSN at a VERP address whose tag verifies and whose Message-ID matches that delivery, or a signed provider webhook event; a complaint comes from a configured feedback-loop source or a signed provider webhook | NOTIFY_EMAIL_REPORT_UNVERIFIED"
   workflow_state_machine:
     requirements:
-      - An EmailAddress moves unverified to verified to bouncing to removed; removed is terminal and a returning user adds the address again as a new record.
-      - An EmailDelivery moves queued to sent to settled or bounced, or queued to failed; settled, bounced and failed are terminal.
-      - Removal erases the address ciphertext within 24 hours and cancels queued deliveries.
+      - An EmailAddress relay copy moves unverified to verified to bouncing to removed; removed is terminal and a returning user adds the address again as a new record.
+      - An EmailDelivery moves queued to sent to settled or bounced, queued to failed, or queued to cancelled; settled, bounced, failed and cancelled are terminal, and a bounce for a settled delivery leaves that row unchanged but still applies the address transition and emits notify.email.bounced.
+      - Removal, a registered email consent withdrawal or the deletion withdrawal registered at the relay erase the address ciphertext within 24 hours and cancel queued deliveries.
+      - When the vault learns from notify.email.get_mine on sync that its address became bouncing, it updates the vault email target and emits vault-local notify.email.bounced, which the inbox routes to the security notice template notify.tpl.security.email_stopped.
+      - Verified to bouncing requires two authenticated hard bounces within 72 hours, three authenticated soft bounces within 7 days, or one signed provider hard-bounce event, so a single forged or stray report cannot cut off security email.
     machines:
       - entity: EmailAddress
         initial: unverified
         terminal: [removed]
         transitions:
           - "unverified -> verified | notify.email.verify with valid token | verifiedAt set; token erased"
-          - "verified -> bouncing | hard bounce, complaint or 3 soft bounces in 7 days | sends stop; in-app notice created by the app on next sync"
-          - "bouncing -> unverified | user re-submits the same address | new verification token issued"
-          - "unverified -> removed | notify.email.remove, consent withdrawn, 7 days without verification | ciphertext erased"
-          - "verified -> removed | notify.email.remove, consent withdrawn, account deletion | ciphertext erased"
-          - "bouncing -> removed | notify.email.remove or consent withdrawn | ciphertext erased"
+          - "verified -> bouncing | 2 authenticated hard bounces in 72 h, 3 authenticated soft bounces in 7 days, or 1 signed provider hard-bounce event, including reports for settled deliveries | sends stop; emits notify.email.bounced (relay-local)"
+          - "bouncing -> unverified | user re-submits the same address through notify.email.add | new verification token issued; counters reset"
+          - "unverified -> removed | notify.email.remove, relay-local notify.channel.opted_out for email, or 7 days without verification | ciphertext erased; queued deliveries cancelled"
+          - "verified -> removed | notify.email.remove, relay-local notify.channel.opted_out for email (settings, unsubscribe link, complaint, expiry, deletion withdrawal) | ciphertext erased; queued deliveries cancelled"
+          - "bouncing -> removed | notify.email.remove or relay-local notify.channel.opted_out for email | ciphertext erased"
+      - entity: EmailAddress vault target
+        initial: pending
+        terminal: [removed]
+        transitions:
+          - "pending -> unverified | relay notify.email.add accepted | emailAddressId stored"
+          - "unverified -> verified | notify.email.sync_status reports verified | status mirrored"
+          - "verified -> bouncing | notify.email.sync_status reports bouncing | emits notify.email.bounced (vault-local)"
+          - "bouncing -> unverified | user re-submits the address | relay add called again"
+          - "pending -> removed | notify.email.disable, vault-local notify.channel.opted_out for email, or relay refusal | address deleted from the vault within 24 h"
+          - "unverified -> removed | notify.email.disable or vault-local notify.channel.opted_out | relay remove queued; address deleted from the vault within 24 h"
+          - "verified -> removed | notify.email.disable or vault-local notify.channel.opted_out | relay remove queued; address deleted from the vault within 24 h"
+          - "bouncing -> removed | notify.email.disable or vault-local notify.channel.opted_out | relay remove queued; address deleted from the vault within 24 h"
       - entity: EmailDelivery
         initial: queued
-        terminal: [settled, bounced, failed]
+        terminal: [settled, bounced, failed, cancelled]
         transitions:
           - "queued -> sent | EmailTransportPort accepts the message | emits notify.email.sent"
           - "queued -> failed | 3 failed attempts over 6 h or permanent refusal at submission | failure reason stored"
-          - "sent -> bounced | bounce or complaint report | address status updated; emits notify.email.bounced"
-          - "sent -> settled | 72 h without bounce | delivery row kept until retention"
+          - "queued -> cancelled | address removed, registered consent withdrawal or deletion withdrawal | no send; cancelReason stored"
+          - "sent -> bounced | authenticated bounce or complaint for this delivery within 72 h | address counters updated; emits notify.email.bounced"
+          - "sent -> settled | 72 h without bounce | row kept until retention; later reports update only the address"
     timeouts:
       - "Unverified addresses are removed 7 days after creation."
       - "Verification tokens expire after 24 hours."
-      - "Delivery retries at 5 minutes, 1 hour and 6 hours after the first attempt."
+      - "Delivery retries at 5 minutes, 1 hour and 6 hours after the first attempt; deliveries settle 72 hours after sending."
+      - "The vault runs notify.email.sync_status at app open, every 6 hours while open and on each service-worker wake."
   commands_queries_events:
     requirements:
-      - All commands are relay commands; add and remove are signed by a registered device key and driven from the vault UI, verify is a public token link, send and report_bounce are relay internal.
-      - Each send and bounce emits its event in the same SQLite transaction as the status change.
-      - The module consumes consent, deletion and opt-out events to stop sending and remove data.
+      - The vault exposes enable, disable and sync_status commands and a local view; the relay exposes the sealed add, remove and get_mine requests signed by an active device key, the public token verify link, and the internal send and report_bounce commands.
+      - Each relay send, bounce and cancellation is recorded and emits its relay-local event in the same SQLite transaction as the status change, and the vault-local notify.email.bounced is emitted in the IndexedDB transaction that updates the email target.
+      - The relay instance consumes relay-local channel consent events to erase addresses and cancel deliveries; the vault instance consumes vault-local channel consent events, privacy.deletion.requested (pause only) and privacy.deletion.completed.
+      - Unsubscribe URLs come from UnsubscribeTokenPort.urlFor(consentId) of F13.S02.M03 at render time, so every email carries a working token without storing it, and a verified complaint calls RelayWithdrawalPort.withdraw(consentId, unsubscribe_link) of the same module.
+      - The module registers ExportSectionPort (section notify.email), DeletionPort (purge step) and RetentionPurgePort (kinds notify.email_target and notify.email_delivery) with F10 (N6), annotates every field with its F10.S02.M02 class, calls privacy.consent.check for notify_email before enable, and routes every limit through RateLimitPort of F12.S03.M03 (N18).
     commands:
+      - name: notify.email.enable
+        capability: notify.email.enable
+        input: "[vault command; requires privacy.consent.check {purpose: notify_email, relayId} granted and the local email ChannelConsent registered; stores the email target, seals {address, locale} to the relay's published key and calls notify.email.add] { relayId, address, locale }"
+        output: "{ emailTargetId, emailAddressId?, status: pending|unverified, maskedAddress, verifyExpiresAt? }"
+        errors: [VALIDATION_FAILED, NOTIFY_EMAIL_ADDRESS_INVALID, PRECONDITION_FAILED, RATE_LIMITED, FEATURE_DISABLED, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: notify.email.disable
+        capability: notify.email.disable
+        input: "[vault command; marks the email target removed, queues notify.email.remove in the F15.S01.M01 sync outbox and deletes the address from the vault within 24 h] { emailTargetId, expectedRevision }"
+        output: "{ emailTargetId, status: removed, revision, relaySync: prepared|transport_acknowledged|done }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: notify.email.sync_status
+        capability: notify.email.sync_status
+        input: "[vault command run at app open, every 6 h while open and on service-worker wake; calls notify.email.get_mine and updates the email target] { relayId }"
+        output: "{ emailTargetId, status, changed: boolean }"
+        errors: [NOT_FOUND, DEPENDENCY_UNAVAILABLE]
+        emits: [notify.email.bounced]
+        idempotent: true
       - name: notify.email.add
         capability: notify.email.add
-        input: "[relay command, signed by a registered device key] { address, locale }"
+        input: "[relay command; request signed by an active device key of userDid (classrup/relay-request/v1); body sealed to the relay's published key] { consentId, sealed: { address, locale } }"
         output: "{ emailAddressId, status: unverified, maskedAddress, verifyExpiresAt }"
         errors: [VALIDATION_FAILED, NOTIFY_EMAIL_ADDRESS_INVALID, PRECONDITION_FAILED, RATE_LIMITED, FEATURE_DISABLED, UNAUTHENTICATED]
         emits: []
@@ -162,107 +247,142 @@ processes:
         idempotent: true
       - name: notify.email.remove
         capability: notify.email.remove
-        input: "[relay command, signed by a registered device key] { emailAddressId, expectedRevision }"
+        input: "[relay command; request signed by an active device key of the address owner] { emailAddressId }"
         output: "{ emailAddressId, status: removed }"
-        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        errors: [NOT_FOUND, UNAUTHENTICATED, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: notify.email.send
         capability: notify.email.send
-        input: "[relay internal command called by the F13.S02.M01 gate] { userDid, templateKey, category, locale }"
+        input: "[relay internal command called only by the F13.S02.M01 gate; locale comes from the EmailAddress copy] { userDid, kind: notice|security_notice|activity|digest, dispatchRef }"
         output: "{ deliveryId, status: queued|sent }"
         errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_EMAIL_NOT_DELIVERABLE, RATE_LIMITED, FEATURE_DISABLED, DEPENDENCY_UNAVAILABLE]
         emits: [notify.email.sent]
         idempotent: true
       - name: notify.email.report_bounce
         capability: notify.email.report_bounce
-        input: "[relay internal command from the transport adapter] { transportMessageId, kind: hard|soft|complaint, diagnosticCode? }"
-        output: "{ deliveryId, status: bounced, addressStatus }"
-        errors: [NOT_FOUND, VALIDATION_FAILED]
+        input: "[relay internal command from the transport adapter after authentication] { transportMessageId, verpTag?, kind: hard|soft|complaint, source: dsn|provider_webhook|feedback_loop, providerSignature?, diagnosticCode? }"
+        output: "{ deliveryId, deliveryStatus, addressStatus }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, NOTIFY_EMAIL_REPORT_UNVERIFIED]
         emits: [notify.email.bounced]
         idempotent: true
     queries:
       - name: notify.email.get_mine
         capability: notify.email.read_own
-        input: "[relay query signed by a device key] {}"
+        input: "[relay query signed by an active device key of the user] {}"
         output: "{ emailAddressId?, maskedAddress?, status, lastDeliveryAt? }"
-        errors: [UNAUTHENTICATED, FEATURE_DISABLED]
+        errors: [UNAUTHENTICATED, FEATURE_DISABLED, RATE_LIMITED]
+      - name: notify.email.get_local
+        capability: notify.email.read_local
+        input: "[vault query] { relayId? }"
+        output: "{ items: [{ emailTargetId, relayHost, maskedAddress, status, lastStatusSyncAt?, paused: boolean }] }"
+        errors: []
+    note: >-
+      Execution sites (ADR-0016): enable, disable, sync_status and get_local run in the vault; add, verify, remove,
+      get_mine, send and report_bounce run on the relay. No statement is produced; relay requests are signed with a
+      device key (classrup/relay-request/v1) and checked against F16.S02.M02 key status, with principal resolution
+      through F07.S02.M01. Unsubscribe headers use UnsubscribeTokenPort.urlFor(consentId) and verified complaints use
+      RelayWithdrawalPort.withdraw(consentId, unsubscribe_link), both in-process relay ports of F13.S02.M03. The VERP
+      return path is bounce+<deliveryId>.<verpTag>@<relay mail domain>. paused in get_local is derived from
+      privacy.deletion.assert_not_pending of F10.S01.M04 and stores nothing. Privacy ports (N6): ExportSectionPort
+      section notify.email with schema classrup.notify.email_target/v1 (the user's own P3 address); DeletionPort plan
+      {willDelete: email targets, willPseudonymize: none, blockers: none} and step purge, which deletes the vault
+      targets (relay copies are erased when the F13.S02.M03 sign-step withdrawal is registered at each relay);
+      RetentionPurgePort kinds notify.email_target (RET-STANDARD, anchorField endedAt, purge after 24 h) and
+      notify.email_delivery (relay, RET-SHORT, anchorField queuedAt). Every field is classified with F10.S02.M02.
     events_produced:
-      - {type: notify.email.sent, privacy: P2, payload: "{ deliveryId, userDid, templateKey, category, attempt }"}
-      - {type: notify.email.bounced, privacy: P2, payload: "{ deliveryId, userDid, kind, addressStatus }"}
+      - {type: notify.email.sent, privacy: P2, payload: "{ deliveryId, userDid, kind, attempt } — relay-local"}
+      - {type: notify.email.bounced, privacy: P2, payload: "{ emailAddressId, userDid, relayId, kind: hard|soft|complaint|unknown, addressStatus, deliveryId? (relay-local only), origin: relay|vault } — relay-local from report_bounce; vault-local from sync_status when the mirrored status becomes bouncing"}
     events_consumed:
-      - {type: notify.channel.opted_out, effect: "when the channel is email, cancel queued deliveries and remove the address within 24 hours"}
-      - {type: notify.channel.opted_in, effect: "when the channel is email, enable the add command for the user at this relay"}
-      - {type: privacy.deletion.requested, effect: "remove the address and cancel queued deliveries within 24 hours"}
+      - {type: notify.channel.opted_out, effect: "relay instance (relay-local event from notify.channel.register, notify.channel.unsubscribe, RelayWithdrawalPort or the expiry sweep): when channel is email, cancel queued deliveries, mark the address removed and erase the ciphertext at once and at the latest within 24 hours; vault instance (vault-local event): mark the email target for relayId removed and delete the address within 24 hours"}
+      - {type: notify.channel.opted_in, effect: "relay instance: allow add for userDid at this relay once the consent is registered; vault instance: offer Add address for relayId"}
+      - {type: privacy.deletion.requested, effect: "vault instance: reversible pause only - show the email channel as paused; nothing is erased and nothing is sent to the relay; the pause is derived from privacy.deletion.assert_not_pending, so a cancelled request resumes without any undo"}
+      - {type: privacy.deletion.completed, effect: "vault instance: notification only; confirm that the DeletionPort purge step removed every email target; nothing is signed and no relay is called"}
     errors:
       - "NOTIFY_EMAIL_ADDRESS_INVALID | 422 | no | address syntax is invalid or the domain is blocked"
       - "NOTIFY_EMAIL_NOT_DELIVERABLE | 409 | no | address is not verified, is bouncing, or the daily cap of 20 emails was reached"
+      - "NOTIFY_EMAIL_REPORT_UNVERIFIED | 422 | no | a bounce or complaint report lacks a valid VERP tag and Message-ID match, a configured feedback-loop source or a provider signature"
     example: |
-      POST /api/v1/relay/notify.email.add
+      vault command notify.email.enable { "relayId": "relay:k3n7v2…", "address": "alex@example.org", "locale": "en" }
+      -> privacy.consent.check { purpose: notify_email, relayId } granted; email channel consent registered
+      POST /api/v1/relay/notify.email.add   (signed classrup/relay-request/v1 by device key …#d2)
       Idempotency-Key: 0192f3b6-0000-7000-8000-000000000001
-      { "address": "alex@example.org", "locale": "en" }
+      { "consentId": "0192f3b0-2222-7000-8000-000000000001", "sealed": "<HPKE box of {address, locale}>" }
       201 { "emailAddressId": "0192f3b6-1111-7000-8000-000000000001", "status": "unverified", "maskedAddress": "a***@example.org", "verifyExpiresAt": "2026-11-05T10:00:00.000Z" }
-      outgoing email (template notify.tpl.offers.made)
+      outgoing email (kind notice, template notify.tpl.email.notice)
       Subject: You have a new notification on ClassRup
-      List-Unsubscribe: <https://relay.example/u/…>
+      Return-Path: bounce+0192f3b6-3333-7000-8000-000000000001.Qx8dK2mPz0aR4tYu@mail.relay.example
+      List-Unsubscribe: <https://relay.example/u/0192f3b0-2222-7000-8000-000000000001.mN3…>
       List-Unsubscribe-Post: List-Unsubscribe=One-Click
       Body: Open the ClassRup app to see it. https://app.example/
   authorization_capabilities:
     requirements:
-      - Relay policy lets only a registered device key of the user add, remove and read its own address, and only with granted email consent.
+      - Relay policy lets only an active device key of the user add, remove and read its own address, and only with a granted email consent registered at that relay.
       - Verification is open to the holder of the unguessable token; send and bounce handling are internal to the relay and cannot be called by clients.
       - Relay operators can access ciphertext of addresses only through the transport adapter at send time; the UI states that the operator can read the address.
+      - Bounce and complaint reports reach report_bounce only from the transport adapter after authentication, so no outside party can mark an address bouncing or withdraw a consent.
     capabilities:
-      - "notify.email.add | registered relay device | relay policy; request signed by a device key of the user; granted unexpired email consent; one address per user"
-      - "notify.email.verify | anonymous | relay public by unguessable token; 10 attempts per minute per IP"
-      - "notify.email.remove | registered relay device | address.userDid matches the signing device's user"
+      - "notify.email.enable | local principal | vault policy; privacy.consent.check notify_email granted for relayId; local email ChannelConsent registered"
+      - "notify.email.disable | local principal | vault policy; email target belongs to this vault"
+      - "notify.email.sync_status | local principal | vault policy; own email targets only"
+      - "notify.email.read_local | local principal | vault policy; own email targets only"
+      - "notify.email.add | registered relay device | relay policy; request signed by an active device key of userDid; granted unexpired email consent registered here; one address per user"
+      - "notify.email.verify | anonymous | relay public by unguessable token; 10 attempts per minute per IP prefix through RateLimitPort"
+      - "notify.email.remove | registered relay device | signing key is an active device key of address.userDid; another user's address answers NOT_FOUND (ERR-4)"
       - "notify.email.send | relay service | relay internal; caller is the F13.S02.M01 gate"
-      - "notify.email.report_bounce | relay service | relay internal; transport adapter only"
-      - "notify.email.read_own | registered relay device | device key of the address owner"
+      - "notify.email.report_bounce | relay service | relay internal; transport adapter only, after VERP, feedback-loop or webhook authentication"
+      - "notify.email.read_own | registered relay device | active device key of the address owner"
   failure_recovery_idempotency:
     requirements:
-      - Add, verify and remove are idempotent; send is idempotent per (userDid, templateKey, dedupe window of 10 minutes).
+      - Enable, disable, add, verify and remove are idempotent, and send is idempotent per dispatchRef with a 10-minute dedupe window.
       - Transport failures retry 3 times over 6 hours with the Message-ID unchanged so duplicate submissions collapse at the receiver.
       - A relay restart resumes queued deliveries from the database and never sends a delivery already marked sent.
-    idempotency: "Relay commands require Idempotency-Key with 24 h replay window; add is naturally idempotent on addressHash for the user; verify is idempotent on token; send dedupes on (userDid, templateKey) for 10 minutes; bounce reports are idempotent on transportMessageId."
-    concurrency: "Status changes use compare-and-set on revision inside one SQLite transaction; the daily cap counter is updated in the same transaction as the delivery insert; concurrent verifies resolve to one verified transition."
-    retries: "Transport submission retries at 5 min, 1 h and 6 h with jitter on temporary errors; permanent errors fail at once; verification emails are not auto-retried beyond the 5 per day cap."
-    offline: "The vault queues add and remove requests until online; sends are relay-side and do not depend on the vault; if the relay cannot reach the SMTP adapter deliveries stay queued up to 6 hours and then fail while the inbox is unaffected."
-    partial_failure: "If SMTP accepts but the status update fails, the delivery may be submitted again once with the same Message-ID; if verification mail submission fails the address stays unverified and the user may request another link."
+    idempotency: "Relay commands require Idempotency-Key with a 24 h replay window; add is naturally idempotent on addressHash for the user; verify is idempotent on token; send dedupes on dispatchRef for 10 minutes; bounce reports are idempotent on (transportMessageId, kind, source); vault enable is idempotent on (relayId, address)."
+    concurrency: "Status changes use compare-and-set on revision inside one SQLite transaction; the daily cap counter is updated in the same transaction as the delivery insert; concurrent verifies resolve to one verified transition; in the vault a Web Lock per relay serializes enable, disable and sync_status."
+    retries: "Transport submission retries at 5 min, 1 h and 6 h with jitter on temporary errors; permanent errors fail at once; verification emails are not auto-retried beyond the limits of V05 and V09; the vault retries relay calls through the sync outbox."
+    offline: "The vault queues relay add and remove requests in the sync outbox until online and shows the address as pending; sends are relay-side and do not depend on the vault; if the relay cannot reach the SMTP adapter deliveries stay queued up to 6 hours and then fail while the inbox is unaffected."
+    partial_failure: "If SMTP accepts but the status update fails, the delivery may be submitted again once with the same Message-ID; if verification mail submission fails the address stays unverified and the user may request another link; if the relay lost its copy the vault re-adds the address from its email target after user confirmation."
   privacy_retention_abuse:
     requirements:
-      - Email address is P3, stored encrypted, never in events, logs or exports to others, and deleted within 24 hours of removal, consent withdrawal or deletion request.
+      - The email address is P3 in the vault and a P2 service copy at the selected relay (sealed in transit, encrypted at rest), never in events, logs or exports to others, and erased at the relay within 24 hours of removal or a registered consent withdrawal.
       - Emails contain no listing, message, name or amount content and carry only a generic subject and a link to the app origin; the operator and mail providers still learn that the address received a ClassRup email.
       - Pseudonymity is not anonymity because email links an identity to a DID at the operator, so consent text says this plainly.
+      - The relay cannot be used to mail arbitrary addresses, because verification mail is limited per (user, address), per user, per IP prefix and relay-wide, and no user can exhaust another user's verification quota.
+      - Forged DSN or ARF reports are refused, so third parties can neither stop a victim's security email nor withdraw the victim's consent.
     data:
-      - "EmailAddress: P3 at the relay only; masked form for the owner."
-      - "EmailDelivery: P2 template key and timing only."
-      - "Verification and unsubscribe tokens: P3, stored as hashes."
+      - "EmailAddress vault target: P3 in the vault; exported only in the user's own export."
+      - "EmailAddress relay copy: P2 for the selected relay only (disclosed service copy under the notify_email channel consent, PRV-5 participant rule; channel-identifier amendment requested from F10); masked form for the owner."
+      - "EmailDelivery: P2 delivery kind, template key and timing only; no category."
+      - "Verification tokens: P3, stored as hashes; unsubscribe tokens are derived by F13.S02.M03 and never stored here."
     retention:
-      - "EmailAddress: RET-STANDARD until removal; ciphertext erased within 24 hours of removal."
+      - "EmailAddress relay copy: RET-STANDARD until removal; ciphertext erased within 24 hours of removal or registered withdrawal."
+      - "EmailAddress vault target: RET-STANDARD; address deleted within 24 hours of disable or vault-local withdrawal."
       - "EmailDelivery rows: RET-SHORT (30 days)."
     threats:
-      - "T01 | Address enumeration through verification emails | same response whether or not the address exists elsewhere, 1 mail per address per hour, 5 per day"
-      - "T02 | Relay used to spam third parties | verification only after signed request from a consented user, 5 per day per address, 20 emails per day per address, domain blocklist, operator abuse controls"
-      - "T03 | Email content leaks private data | templates are generic with no free text; template registry reviewed; test asserts no user content fields"
+      - "T01 | Address enumeration through verification emails | same response whether or not the address exists elsewhere; limits counted per (user, address)"
+      - "T02 | Relay used to spam third parties | sealed request from a consented user with an active device key, per-(user, address) limits of 1 per hour and 5 per day, at most 3 distinct addresses and 5 verification mails per user per day, 20 adds per IP prefix per day, relay-wide hourly cap with operator alert, domain blocklist"
+      - "T03 | Email content leaks private data | fixed generic templates with no free text; template registry reviewed; test asserts no user content fields"
       - "T04 | Phishing imitating notifications | emails carry only the app origin link, DKIM, SPF and DMARC alignment are required by operator checklist, users are told the app never asks for passwords by email"
-      - "T05 | Bounce storms damaging operator reputation | hard bounce stops sends at once; 3 soft bounces in 7 days stop sends; complaints withdraw consent"
+      - "T05 | Bounce storms damaging operator reputation | bouncing thresholds stop sends; complaints withdraw consent"
       - "T06 | Address theft from database | AES-256-GCM encryption with relay key, HMAC hash for lookup, key in relay key store"
+      - "T07 | Forged DSN or ARF report cuts off a victim's security email or withdraws their consent | VERP tag with HMAC per delivery and Message-ID match, complaints only from configured feedback-loop sources or signed webhooks, two hard bounces in 72 h or one signed provider event before bouncing"
+      - "T08 | Sybil did:key identities multiply verification mail | per-IP-prefix and relay-wide limits through RateLimitPort in addition to per-user limits"
     abuse_controls:
-      - "Rate limits of 5 verification mails per address per day, 20 emails per address per day, 10 verification attempts per minute per IP."
-      - "Operator can disable the email feature or block a domain on that relay."
+      - "Through RateLimitPort (F12.S03.M03): 1 verification mail per (user, address) per hour and 5 per day, 3 distinct addresses and 5 verification mails per user per day, 20 adds per IP prefix per day, 500 verification mails per relay per hour, 20 emails per address per day, 10 verification attempts per minute per IP prefix."
+      - "Operator can disable the email feature, block a domain on that relay, and configure feedback-loop sources and webhook keys."
   observability_performance:
     requirements:
       - Sends, bounces and queue depth are measured per CTR-OBS-001 with no addresses in logs.
       - Send submission p95 ≤ 500 ms to the transport and the relay can submit 50 emails per second.
       - Bounce rate above 5 percent over 1 hour raises an operator alert.
     metrics:
-      - "classrup_notify_email_deliveries_total{status=sent|settled|bounced|failed}"
+      - "classrup_notify_email_deliveries_total{status=sent|settled|bounced|failed|cancelled}"
       - "classrup_notify_email_bounce_ratio (gauge, alert > 0.05 over 1 h)"
       - "classrup_notify_email_queue_depth (gauge)"
       - "classrup_notify_email_verify_total{outcome=ok|expired|invalid}"
+      - "classrup_notify_email_reports_rejected_total{source} (alert on spikes)"
     logs:
-      - "info email.sent {deliveryIdHash, templateKey, correlationId} — no address, no subject beyond key."
+      - "info email.sent {deliveryIdHash, kind, correlationId} — no address, no subject beyond the template key."
     budgets:
       - "submission p95 ≤ 500 ms; add/verify/remove p95 ≤ 300 ms at 20 req/s."
       - "50 emails per second sustained for 5 minutes on the log adapter."
@@ -270,34 +390,39 @@ processes:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Contract tests use the dev log adapter and a fake SMTP server and verify headers, bodies and bounce handling.
-      - Privacy tests assert that no address appears outside encrypted storage and no user content appears in any email.
-    fixtures: "Relay R with EmailTransportPort (fake SMTP and log adapter), user U with granted email consent, addresses alex@example.org and a blocked disposable domain, fixed clock 2026-11-04T10:00:00Z."
+      - Privacy tests assert that no address appears outside the vault target and encrypted relay storage and no user content appears in any email.
+      - The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues, a keyboard and screen-reader walk-through and a no-JavaScript run of the verification page.
+    fixtures: "Relay R with EmailTransportPort (fake SMTP, log adapter, VERP key, one configured feedback-loop source and a provider webhook key), F16.S02.M02 registry double, users U and V with registered email consent, addresses alex@example.org and a blocked disposable domain, a /24 with 50 fresh DIDs, fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01,02.R02 | add valid, invalid and disposable-domain addresses | valid stored encrypted with masked output; invalid refused NOTIFY_EMAIL_ADDRESS_INVALID"
-      - "T02 | unit | 02.R03,01.R03 | each rule V01 to V08 violated in turn | documented error code returned and nothing sent"
-      - "T03 | contract | 01.R03,04.R02 | send a template email through the fake SMTP server | subject and body are generic, contain app origin link only, headers List-Unsubscribe and List-Unsubscribe-Post present, DKIM-signed by the adapter, no user content"
-      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of add, verify, bounce, remove, expiry | terminal states never change; bounce stops sends; removal erases ciphertext within 24 h"
-      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs and event payloads validate against registry schemas"
-      - "T06 | integration | 04.R03 | channel opted out, deletion requested | queued deliveries cancelled, address removed within 24 h"
-      - "T07 | abuse | 05.R01,05.R02,05.R03 | add by unknown key; verify with guessed token; external call to send; operator query for cleartext | refused or masked; no cleartext available except in adapter at send time"
-      - "T08 | integration | 06.R01,06.R02,06.R03 | verify twice, retry on 4xx, crash after SMTP accept | one verified transition, 3 attempts max, one repeated submission with same Message-ID"
-      - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect database, logs, events, exports; 6th verification mail in a day; 21st email in a day | no address outside encrypted storage; RATE_LIMITED and NOTIFY_EMAIL_NOT_DELIVERABLE"
-      - "T10 | integration | 07.R03,02.R03 | hard bounce, 3 soft bounces, complaint | address bouncing and sends stop; complaint withdraws email consent"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | add valid, invalid and disposable-domain addresses through vault enable and the relay | valid stored encrypted at the relay with masked output and locale; invalid refused NOTIFY_EMAIL_ADDRESS_INVALID in the vault and at the relay"
+      - "T02 | unit | 02.R03,02.R02 | each rule V01 to V11 violated in turn | documented error code returned and nothing sent"
+      - "T03 | contract | 01.R03,04.R04,09.R02 | send every template kind through the fake SMTP server | subject and body generic with the app origin link only; List-Unsubscribe URL from UnsubscribeTokenPort works on POST; List-Unsubscribe-Post and VERP Return-Path present; DKIM-signed; no user content"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of add, verify, authenticated bounces, remove, withdrawal and expiry | terminal states never change; queued deliveries cancel on removal and withdrawal; ciphertext erased within 24 h"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query executes in its environment | outputs and event payloads validate against registry schemas; relay events in the SQLite transaction and the vault event in the IndexedDB transaction of the change"
+      - "T06 | integration | 04.R03,03.R03 | relay-local notify.channel.opted_out for email to the relay instance; vault-local opted_out, privacy.deletion.requested and privacy.deletion.completed to the vault instance | relay cancels queued deliveries and erases ciphertext; vault target removed; deletion request only shows paused and erases nothing; completed signs nothing"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | add by unknown key; verify with guessed token; external call to send; operator query for cleartext | refused or masked; no cleartext available except in the adapter at send time"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | verify twice, retry on 4xx, crash after SMTP accept, dispatchRef repeated | one verified transition, 3 attempts max, one repeated submission with the same Message-ID, one delivery per dispatchRef"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect vault, relay database, logs, events and exports | address only in the vault target and relay ciphertext; no content in emails; consent text names what the operator learns"
+      - "T10 | integration | 03.R05,02.R04 | one authenticated hard bounce, a second within 72 h, 3 authenticated soft bounces, one signed provider event, a complaint from the configured feedback loop, a bounce for a settled delivery | bouncing only after the thresholds; complaint registers a withdrawal via unsubscribe_link; settled row unchanged while the address becomes bouncing and notify.email.bounced is emitted"
       - "T11 | load | 08.R01,08.R02,08.R03 | 50 emails per second for 5 minutes with 6 percent injected bounces | latency within budget and bounce alert fires"
-      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-102 requirement maps to a passing test"
-      - "T13 | integration | 10.R01,10.R02,10.R03 | export from vault, restore relay from backup | export has no addresses; restored unverified addresses older than 7 days removed; verified ones require a send probe"
-      - "T14 | a11y | 04.R01 | settings screen and verification page with screen reader and without JavaScript | labelled input, page works, zero serious axe issues"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run and log scan | every PS-102 requirement maps to a passing test; no address in any log line"
+      - "T13 | integration | 10.R01,10.R02,10.R03,01.R04 | export from the vault; restore the relay from a backup that lacks the address; import the export into a fresh vault | export holds the email target with the cleartext address and no relay copy; restore fails stale queued deliveries; the vault offers re-add from its target and re-verification after confirmation"
+      - "T14 | a11y | 09.R04 | settings screen and verification page with screen reader, keyboard and without JavaScript | labelled input, page works, zero serious axe issues"
+      - "T15 | integration | 03.R04 | relay copy becomes bouncing; vault runs sync_status at app open | vault target becomes bouncing and vault-local notify.email.bounced is emitted once; the inbox shows notify.tpl.security.email_stopped"
+      - "T16 | abuse | 07.R04,02.R02 | one DID loops add and remove over 10 addresses; 50 DIDs from one /24 each add an address; a victim V verifies alex@example.org after attacker U requested 5 links for it | per-user and per-prefix limits return RATE_LIMITED; relay-wide cap alert at 80 percent; V still receives its verification mail"
+      - "T17 | abuse | 07.R05,05.R04 | forged DSN at the plain bounce address quoting a real Message-ID; DSN with a wrong VERP tag; ARF report from an unknown source; unsigned webhook | each refused NOTIFY_EMAIL_REPORT_UNVERIFIED; address stays verified; consent unchanged"
+      - "T18 | integration | 04.R05,01.R04 | DeletionPort plan and purge, export section and retention purge with F10 registry doubles; enable with privacy.consent.check not granted | purge deletes the vault targets; section notify.email exported; delivery rows purged after 30 days; enable refused PRECONDITION_FAILED before anything is sealed"
     acceptance:
-      - All tests T01 to T14 pass in CI.
-      - No email is sent without verified address and granted consent, and each email carries one-click unsubscribe headers.
+      - All tests T01 to T18 pass in CI.
+      - No email is sent without a verified address and a granted registered consent, and each email carries one-click unsubscribe headers and a VERP return path.
       - Emails contain no listing, message, name or amount content in any test.
-      - Addresses never appear in logs, events, exports or query results.
+      - Addresses never appear in logs, events, relay exports or query results, and no unauthenticated report changes an address or a consent.
   import_export_backup_rollback:
     requirements:
-      - A user's vault export contains only the email channel state and masked address, never the cleartext address.
-      - Relay restore from backup keeps encrypted addresses, drops queued deliveries older than 6 hours and revalidates consent before any send.
-      - Schema changes follow expand and contract; new templates are additive keys in the registry.
-    export: "Section notify.email in classrup-export/v1; one line with relay, masked address and status (schema classrup.notify.email_address/v1 reduced projection)."
-    import: "Nothing re-creates an address; after import the user must add and verify the address again at the chosen relay."
-    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) contains encrypted addresses; the encryption key is stored outside the backup; on restore queued deliveries older than 6 hours are failed."
+      - A user's vault export contains the email target with the cleartext address as the user's own P3 data, the relay, locale and status, and never the relay copy.
+      - Relay restore from backup keeps encrypted addresses, fails queued deliveries older than 6 hours and revalidates the registered consent before any send; when the relay lost the copy, the vault re-adds the address from its email target after user confirmation.
+      - Schema changes follow expand and contract; new templates are additive keys in the fixed registry.
+    export: "Section notify.email in classrup-export/v1 through ExportSectionPort; one line per email target (schema classrup.notify.email_target/v1)."
+    import: "Email targets import with status pending; nothing is sent until the user confirms re-adding at the chosen relay, which requires verification again."
+    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) contains encrypted addresses; the encryption key is stored outside the backup; on restore queued deliveries older than 6 hours are failed; the vault export is the user's backup (IOX-6)."
     migration_rollback: "Additive fields and templates only in v1; rollback is safe because older relays ignore unknown templates and keep sending the registered ones."

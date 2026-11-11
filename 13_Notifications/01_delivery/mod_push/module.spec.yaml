@@ -1,44 +1,56 @@
 id: F13.S01.M01
 scope: MVP
 summary: >-
-  Web Push delivery through a user-selected relay. The relay owns the VAPID key pair (RFC 8292), stores the
-  user's browser push subscriptions (RFC 8030 endpoint plus RFC 8291 encryption keys) and sends content-free
-  payloads: a reference, a template key, a collapse key and a version, encrypted for the browser with aes128gcm.
-  The push service and the operator never receive message text, names or amounts. Subscriptions are created only
-  after channel consent (F13.S02.M03), expired on 404 and 410 responses, and sends are gated by F13.S02.M01.
-  Without a relay that offers push the feature is disabled and in-app notifications still work.
+  Web Push delivery through a relay the user selected. The vault holds the authoritative push target record for each
+  device (relay, device key, label, enabled flag, relay subscription reference and status mirror); the browser holds
+  the endpoint and keys. The relay holds only a disclosed service copy of the subscription (RFC 8030 endpoint plus
+  RFC 8291 keys), sent sealed to the relay key under the notify_push channel consent, classified P2 for that one
+  relay and erased when the withdrawal is registered there. The relay owns its VAPID key pair (RFC 8292) through
+  RelayKeyStorePort and registers the public key with purpose vapid in F16.S02.M02. Payloads are content-free: a
+  sealed box the relay cannot open for vault-originated alerts, a hook payload with only data the relay hook already
+  holds, or a digest count; the Topic header is an opaque per-subscription HMAC. Subscriptions are created only after
+  a registered channel consent (F13.S02.M03), expire on 404 and 410, and sends are gated by F13.S02.M01. Without a
+  relay that offers push the feature is disabled and in-app notifications still work.
 responsibilities:
-  - Own the PushSubscription record at the relay (endpoint, p256dh key, auth secret, status, failure counters) and its lifecycle.
-  - Expose the relay VAPID public key and accept signed subscribe and unsubscribe requests from registered device keys, with the vault command that obtains the subscription from the browser PushManager.
-  - Send payloads with web-push 3.6.7 using VAPID JWT (ES256, 12 h expiry), aes128gcm encryption, TTL, Urgency and Topic headers, with content-free JSON of at most 1 024 bytes.
-  - Handle push service responses (201, 404, 410, 413, 429, 5xx, 400, 401, 403) with expiry, retry and alerting rules.
-  - Emit notify.push.sent and notify.push.failed per attempt outcome without endpoint or user content in the payload.
+  - Own the vault push target record (classrup.notify.push_target/v1) per device and the relay PushSubscription service copy (classrup.notify.push_subscription/v1) with their lifecycles; the vault record is authoritative and the relay copy is rebuilt from it.
+  - Run the vault commands enable and disable that drive the browser PushManager, check privacy.consent.check for notify_push and the registered channel consent, seal the subscription to the relay key and call the relay.
+  - Accept sealed subscribe, unsubscribe and list requests signed by a device key that F16.S02.M02 reports active, and serve the public VAPID key.
+  - Own VAPID private-key storage and rotation through RelayKeyStorePort and register each VAPID public key with purpose vapid in F16.S02.M02.
+  - Send payloads with web-push 3.6.7 using a VAPID JWT (ES256, 12 h expiry), aes128gcm encryption, TTL, Urgency and an opaque Topic header, to allowlisted push-service origins only, with the endpoint address re-resolved and re-checked on every send.
+  - Handle push service responses (201, 404, 410, 413, 429, 5xx, 400, 401, 403) per subscription, and pause an origin only on a multi-user VAPID rejection pattern.
+  - Emit relay-local notify.push.sent and notify.push.failed per attempt outcome without endpoint, collapse key, reference or user content.
 non_responsibilities:
-  - Deciding whether to send now or later and the urgent bypass (F13.S02.M01) and consent (F13.S02.M03).
-  - Choosing what an alert says; the service worker renders local text from the template key and the vault's own data (F13.S01.M03 and F14 localization).
+  - Deciding whether to send now or later, the urgent bypass and what to seal (F13.S02.M01), and channel consent and its registration (F13.S02.M03).
+  - Choosing what an alert says; the service worker opens the sealed box or reads the hook template key and renders local text with t() (F14.S02.M01), and routing happens in F13.S01.M03.
   - Email (F13.S01.M02) and the in-app inbox (F13.S01.M03).
-  - Relay-owned VAPID private key storage and rotation operations (F16.S02.M01 key lifecycle for relay keys).
+  - Key status, revocation lists and the registry of the VAPID public key (F16.S02.M02); device key labels (F07.S01.M01 device keys), which the vault joins locally and never sends to the relay.
+  - Blocks (N7) do not apply because this module never acts on counterparty statements; block filtering happens in routing (F13.S01.M03).
   - "Future: Declarative Web Push, per-device payload localization, native app tokens (APNs, FCM) behind a provider port."
-depends_on: [F13.S02.M03, F16.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F13.S02.M03, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
 user_stories:
-  - As a member, I can enable push on my phone for the relay I chose and I see which relay will send alerts.
+  - As a member, I can enable push on my phone for the relay I chose and I see which relay will send alerts and what it learns.
   - As a member, I get an alert that says only that something needs my attention and tapping it opens the right screen inside the app.
   - As a member, I can disable push on one device without touching my other devices.
+  - As a member whose phone was stolen, I revoke its device key and its push subscription stops at once.
   - As a relay operator, I can see that subscriptions expire automatically and that no content passes through my push sends.
 edge_cases:
   - Browser reports a subscription expiration time; the relay stores it and stops sending after that time.
-  - Push service returns 410 Gone; the subscription is marked expired at once and the vault is told to prompt re-enabling on next open.
+  - Push service returns 410 Gone; the subscription is expired at once and the vault learns it from notify.push.list_mine on next open and shows Re-enable push.
   - Push service returns 429 with Retry-After 120; the send is retried once after the delay, then dropped with outcome throttled.
-  - Payload would exceed 1 024 bytes because of a long reference; it is rejected as a programmer error and never truncated.
-  - VAPID JWT is rejected with 401 or 403; the relay raises an operator alert, does not expire subscriptions and stops sending for 15 minutes.
-  - Same user has 10 subscriptions and tries an 11th; the oldest unused subscription is replaced after explicit confirmation, otherwise PUSH_SUBSCRIPTION_LIMIT.
+  - Payload would exceed 1 024 bytes because of a long sealed box; it is rejected as a programmer error and never truncated.
+  - One subscription's endpoint returns 401 or 403; only that subscription's failure counter increments and sending to every other subscription continues.
+  - Subscriptions of 5 distinct users on fcm.googleapis.com are rejected with 403 within 5 minutes; the relay raises an operator alert and pauses sends to that origin only for 15 minutes.
+  - An attacker registers an endpoint on their own server; subscribe is refused with NOTIFY_PUSH_ENDPOINT_REJECTED because the origin is not on the push-service allowlist.
+  - The DNS name of an allowlisted endpoint later resolves to 10.0.0.5 (rebinding); the send is refused before connecting and counted as a failure of that subscription.
+  - Same user has 10 subscriptions and tries an 11th; the oldest unused subscription is replaced after explicit confirmation, otherwise NOTIFY_PUSH_SUBSCRIPTION_LIMIT.
   - User revokes browser notification permission; the next send returns 410 or 404 and the subscription expires.
-  - Relay rotates its VAPID key; existing subscriptions bound to the old key stop working and the vault re-subscribes on next open, which is shown as Re-enable push.
+  - The device key that created a subscription is revoked; the relay revokes that subscription and refuses later subscribe, unsubscribe and list requests signed by the key with UNAUTHENTICATED.
+  - Relay rotates its VAPID key; existing subscriptions keep working with the retained old key for up to 30 days while vaults re-subscribe on open; a compromised key is revoked at once and its subscriptions expire.
 ux:
   screens:
-    - "Push settings: relay name, per-device list with device label, last success time, Enable on this device, Disable, and test notification button."
-    - "Permission prompt explainer shown before the browser prompt: what the relay sees (push endpoint), that alerts are content-free, how to turn it off."
-    - "Re-enable banner when a subscription expired."
+    - "Push settings: relay name, per-device list with the device label known to this vault, last success time, Enable on this device, Disable, and test notification button."
+    - "Permission prompt explainer shown before the browser prompt: the relay receives this browser's push endpoint (sealed in transit, encrypted at rest, erased when you turn push off), the push service sees only an opaque topic, alerts are content-free, and how to turn it off."
+    - "Re-enable banner when a subscription expired, and a note that while the vault is locked alerts show only generic text."
   states: [loading, not-supported, permission-default, permission-denied, subscribing, active, expired-reenable, relay-unavailable, offline]
   a11y:
     - Settings controls are native buttons and switches with labels that include the device name.
@@ -47,193 +59,287 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A PushSubscription stores the user DID, device ID, the push endpoint URL, the browser public key p256dh (65 bytes) and auth secret (16 bytes), the content encoding aes128gcm, status, counters and consent reference, with tenant and revision per CTR-ID-001.
-      - The endpoint and keys are P3 secrets (the endpoint is a bearer capability to wake that browser) held only at the selected relay, encrypted at rest with the relay storage key, never exported to other users and never placed in events.
-      - Payloads are content-free JSON {v, ref, tpl, ck, urg} of at most 1 024 bytes before encryption, where ref is a type plus opaque ID, tpl a template key, ck a collapse key and urg normal or high.
+      - A relay PushSubscription service copy stores the user DID, the ID of the device key that created it, the push endpoint URL, the browser public key p256dh (65 bytes) and auth secret (16 bytes), the content encoding aes128gcm, a per-subscription topic key, status, counters and the registered consent reference, with tenant and revision per CTR-ID-001.
+      - The relay copy is a disclosed service copy, P2 for the single relay named in the granted notify_push channel consent (CTR-PRV-001 PRV-5 participant rule, with the channel-identifier amendment requested from F10); the subscribe body is sealed to that relay's published key, endpoint, keys and topic key are encrypted at rest, never exported, evented, logged or federated, and erased when the withdrawal is registered at that relay, and the relay copy is never authoritative because the vault record and the browser rebuild it.
+      - "Push payloads are content-free JSON of at most 1 024 bytes in exactly one of three forms: sealed {v, urg, s} for vault-originated alerts, whose box s opens only on the target device to {v, tpl, ref, ck}; hook {v, urg, tpl, ref?, ck?} carrying only data the dispatching relay hook already holds; and digest {v, urg, tpl: notify.tpl.system.digest, n}."
+      - The vault push target record is the authoritative user-owned record per device - relayId, deviceKeyId, deviceLabel, enabled, the relay subscriptionId, a status mirror and the consent reference - while the browser PushManager holds the endpoint and keys, so the vault stores neither and rebuilds the relay copy from the record and a fresh browser subscription.
+      - The relay VAPID key pair is owned by this module through RelayKeyStorePort (private key in the relay key file store, mode 0600, never in SQLite, logs, events or exports), and every VAPID public key is registered with purpose vapid in F16.S02.M02, which also records its revocation.
     entities:
       - name: PushSubscription
         schema: classrup.notify.push_subscription/v1
         storage: relay
-        privacy: P3
+        privacy: P2
         retention: RET-STANDARD
         fields:
-          - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — tenant scope"
-          - "userDid: did:key — owner"
-          - "deviceId: uuidv7 — registered device that created it"
-          - "endpoint: url — https only, ≤ 2 048 characters, P3 secret"
-          - "p256dh: bytes — 65 bytes uncompressed P-256 point, base64url"
-          - "auth: bytes — 16 bytes, base64url"
+          - "id: uuidv7 — subscriptionId, primary key"
+          - "tenantId: uuidv7 — relay tenant scope"
+          - "userDid: did:key — owner principal"
+          - "createdByKeyId: string — device key ID that signed the subscribe request; revocation of this key revokes the subscription"
+          - "secret: bytes — AES-256-GCM ciphertext of { endpoint (https, ≤ 2 048 chars), p256dh (65 bytes), auth (16 bytes), topicKey (32 random bytes) } under the relay storage key"
+          - "endpointHash: bytes — HMAC-SHA256 of the endpoint with a relay secret, for uniqueness"
+          - "pushOrigin: string — allowlisted push-service origin of the endpoint, for example https://fcm.googleapis.com"
           - "contentEncoding: enum — aes128gcm (RFC 8291)"
           - "expirationTime?: timestamp — from the browser subscription, if provided"
-          - "consentId: uuidv7 — ref F13.S02.M03 ChannelConsent for push at this relay; must be granted"
+          - "consentId: uuidv7 — ChannelConsent for push registered at this relay (F13.S02.M03); must be granted"
+          - "consentStatementCid: string — cid of the registered channel consent statement"
           - "vapidKeyId: string — id of the relay VAPID key the subscription was created with"
           - "status: enum — active | expired | revoked"
-          - "failureCount: int — consecutive transient failures, reset on success"
+          - "failureCount: int — consecutive failures including 401 and 403 of this subscription, reset on success"
+          - "firstFailureAt?: timestamp — relay clock, start of the current failure streak"
           - "lastSuccessAt?: timestamp — relay clock"
-          - "lastFailureAt?: timestamp — relay clock"
+          - "endedAt?: timestamp — relay clock of the terminal transition"
           - "createdAt: timestamp — relay clock, RFC 3339 UTC"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - At most 10 active subscriptions per user and relay and at most one per (userDid, endpoint hash).
-          - status active implies a granted unexpired ChannelConsent for push exists and vapidKeyId equals a current relay key.
-          - endpoint, p256dh and auth are never returned by any query, event or log.
+          - At most 10 active subscriptions per user and relay and at most one per (userDid, endpointHash).
+          - status active implies a registered granted unexpired push ChannelConsent, an active createdByKeyId per F16.S02.M02 and a vapidKeyId held in RelayKeyStorePort.
+          - secret is erased in the same transaction as the transition to expired or revoked; endpoint, keys and topic key are never returned by any query, event or log.
+      - name: PushSubscription
+        schema: classrup.notify.push_target/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — pushTargetId, primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "userDid: did:key — local principal"
+          - "relayId: string — canonical self-certifying relayId (F15.S02.M01) of the selected relay"
+          - "relayHost: string — display hint only, never used for matching"
+          - "deviceKeyId: string — this device's key that signs the relay requests"
+          - "deviceLabel: string — 1..60 characters, vault only, never sent to the relay"
+          - "enabled: boolean — user choice on this device"
+          - "subscriptionId?: uuidv7 — relay subscription once accepted"
+          - "vapidKeyId?: string — VAPID key the browser subscription is bound to"
+          - "consentId: uuidv7 — local ChannelConsent for push at relayId"
+          - "status: enum — pending | active | disabled | expired"
+          - "lastSyncedAt?: timestamp — local clock of the last notify.push.list_mine result"
+          - "endedAt?: timestamp — local clock of disable or expiry"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one non-ended push target per (relayId, deviceKeyId).
+          - The record never contains the endpoint, p256dh or auth; the browser PushManager is their only holder on the device.
+          - status active implies a granted local push ChannelConsent and privacy.consent.check for notify_push at relayId returning granted.
     sql: |
       CREATE TABLE notify_push_subscription (
-        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_did TEXT NOT NULL, device_id TEXT NOT NULL,
-        endpoint_hash TEXT NOT NULL, status TEXT NOT NULL, failure_count INTEGER NOT NULL DEFAULT 0,
-        last_success_at TEXT, revision INTEGER NOT NULL, secret BLOB NOT NULL);
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_did TEXT NOT NULL, created_by_key_id TEXT NOT NULL,
+        endpoint_hash TEXT NOT NULL, push_origin TEXT NOT NULL, status TEXT NOT NULL, failure_count INTEGER NOT NULL DEFAULT 0,
+        first_failure_at TEXT, last_success_at TEXT, consent_id TEXT NOT NULL, vapid_key_id TEXT NOT NULL,
+        ended_at TEXT, revision INTEGER NOT NULL, secret BLOB);
       CREATE UNIQUE INDEX notify_push_endpoint ON notify_push_subscription(user_did, endpoint_hash);
       CREATE INDEX notify_push_user_active ON notify_push_subscription(user_did, status);
+      CREATE INDEX notify_push_key ON notify_push_subscription(created_by_key_id, status);
   validation_rules:
     requirements:
-      - Subscribe input is validated for endpoint, keys, consent and limits before storage.
-      - Send input is validated for payload shape and size before encryption.
+      - Subscribe input is validated for signer key status, endpoint origin, keys, registered consent and limits before storage.
+      - Send input is validated for payload form, size and Topic derivation before encryption, and the endpoint address is re-resolved, pinned and re-checked on every send.
       - Every violation maps to one stable error code.
+      - The Topic header never carries a collapse key or reference; it is the first 32 characters of base64url(HMAC-SHA256(per-subscription topicKey, collapseTag)), so the push service sees an opaque value that differs between subscriptions and between users even for the same event.
     rules:
-      - "V01 | endpoint is https, at most 2 048 characters and its host is not a private, loopback or link-local address | VALIDATION_FAILED"
+      - "V01 | endpoint is https, at most 2 048 characters, its origin is on the push-service allowlist (default fcm.googleapis.com, updates.push.services.mozilla.com, web.push.apple.com and hosts under notify.windows.com; operator override per relay) and its host resolves only to public addresses | NOTIFY_PUSH_ENDPOINT_REJECTED"
       - "V02 | p256dh decodes to 65 bytes starting with 0x04 and auth decodes to 16 bytes | VALIDATION_FAILED"
-      - "V03 | the user has a granted unexpired ChannelConsent for push at this relay | PRECONDITION_FAILED"
+      - "V03 | a granted unexpired push ChannelConsent of the user is registered at this relay (F13.S02.M03) and its consentId is named in the request | PRECONDITION_FAILED"
       - "V04 | the user has fewer than 10 active subscriptions at this relay | NOTIFY_PUSH_SUBSCRIPTION_LIMIT"
-      - "V05 | payload JSON is at most 1 024 bytes and contains only the keys v, ref, tpl, ck, urg | PAYLOAD_TOO_LARGE"
-      - "V06 | tpl matches notify.tpl.<category>.<name> and ck is at most 32 base64url characters for the Topic header | VALIDATION_FAILED"
-      - "V07 | subscribe is signed by a registered device key of the user and the relay VAPID key id is current | UNAUTHENTICATED"
-      - "V08 | a user subscribes at most 10 times per day per relay | RATE_LIMITED"
+      - "V05 | payload JSON is at most 1 024 bytes before RFC 8291 encryption | PAYLOAD_TOO_LARGE"
+      - "V06 | collapseTag is 1..64 characters of A-Z a-z 0-9 - _ . and the derived Topic matches ^[A-Za-z0-9_-]{1,32}$; hook and digest tpl match notify.tpl.<category>.<name> from the template registry | VALIDATION_FAILED"
+      - "V07 | subscribe, unsubscribe and list are signed (classrup/relay-request/v1) by a device key of userDid that F16.S02.M02 reports active at the relay receipt time, the signing time is not after the key's revocationEffectiveFrom, and vapidKeyId is held in RelayKeyStorePort | UNAUTHENTICATED"
+      - "V08 | RateLimitPort.consume (F12.S03.M03) allows the call - 10 subscribe calls per user per day per relay and 60 list calls per user per hour | RATE_LIMITED"
+      - "V09 | the payload has exactly the keys of one form - sealed {v, urg, s} with at most 10 boxes, one per target deviceKeyId with an active subscription; hook {v, urg, tpl, ref?, ck?}; digest {v, urg, tpl, n} | VALIDATION_FAILED"
+      - "V10 | at send time the endpoint host is resolved, the connection is pinned to a resolved address that is not private, loopback, link-local or unique-local, and redirects are not followed | NOTIFY_PUSH_ENDPOINT_REJECTED"
   workflow_state_machine:
     requirements:
-      - A PushSubscription starts active and ends expired or revoked; both are terminal and re-enabling creates a new subscription.
-      - A 404 or 410 from the push service expires the subscription immediately; other failures only increment the counter and expire after 5 consecutive failures over at least 24 hours.
-      - Withdrawal of push consent revokes all subscriptions of the user at that relay.
+      - A relay PushSubscription starts active and ends expired or revoked; both are terminal, secrets are erased at the transition, and re-enabling creates a new subscription.
+      - A 404 or 410 from the push service expires the subscription immediately; transient failures and 401 or 403 rejections of that one subscription only increment its counter and expire it after 5 consecutive failures over at least 24 hours.
+      - A push consent withdrawal registered at the relay (relay-local notify.channel.opted_out) and a revocation of the device key that created the subscription revoke it at that relay, and the vault-local notify.channel.opted_out disables the push target on the device.
+      - The vault push target moves from pending to active and ends disabled or expired; the vault learns relay-side expiry from notify.push.list_mine on app open and shows Re-enable push.
     machines:
       - entity: PushSubscription
         initial: active
         terminal: [expired, revoked]
         transitions:
-          - "active -> expired | push service 404 or 410, expirationTime reached, 5 consecutive failures over 24 h, or VAPID key retired | endpoint and keys erased; emits notify.push.failed with reason gone"
-          - "active -> revoked | notify.push.unsubscribe by owner device, or push consent withdrawn | endpoint and keys erased"
+          - "active -> expired | push service 404 or 410, expirationTime reached, 5 consecutive failures over at least 24 h, failed restore probe, or its VAPID key retired or revoked | secret erased; emits notify.push.failed with reason gone"
+          - "active -> revoked | notify.push.unsubscribe by a device key of the owner, relay-local notify.channel.opted_out for push, or security.key.revoked for createdByKeyId | secret erased in the same transaction"
+      - entity: PushSubscription vault target
+        initial: pending
+        terminal: [disabled, expired]
+        transitions:
+          - "pending -> active | notify.push.subscribe accepted by the relay | subscriptionId and vapidKeyId stored"
+          - "pending -> disabled | notify.push.disable, vault-local notify.channel.opted_out, or subscribe refused | PushManager.unsubscribe called"
+          - "active -> disabled | notify.push.disable or vault-local notify.channel.opted_out | PushManager.unsubscribe called; relay unsubscribe queued in the sync outbox"
+          - "active -> expired | notify.push.list_mine reports expired or revoked, or the browser subscription disappeared | Re-enable push shown; a new target is created on re-enable"
     timeouts:
-      - "Expired and revoked rows are purged 30 days after the transition; secrets are erased at the transition."
-      - "Subscriptions with no successful send and no user activity for 90 days are probed once and expired if the probe fails."
+      - "Expired and revoked relay rows are purged 30 days after the transition; secrets are erased at the transition."
+      - "Relay subscriptions with no successful send for 90 days are probed once and expired if the probe fails."
+      - "Subscriptions bound to a VAPID key retired by scheduled rotation expire 30 days after the rotation."
   commands_queries_events:
     requirements:
-      - The relay exposes subscribe, unsubscribe and an internal send command, plus a public VAPID key query; the vault exposes enable and disable commands that drive the browser PushManager and call the relay.
-      - Each send attempt emits exactly one of notify.push.sent or notify.push.failed in the same transaction as the counter update.
-      - The module consumes consent and preference events to revoke subscriptions and stay consistent.
+      - The relay exposes the sealed subscribe, unsubscribe and list requests, the internal send command, the public VAPID key query and an operator VAPID rotation command; the vault exposes enable, disable and a local view that drive the browser PushManager and call the relay.
+      - Each send attempt emits exactly one relay-local notify.push.sent or notify.push.failed in the same SQLite transaction as the counter update, without endpoint, collapse key or reference, and without a template key for sealed sends.
+      - The relay instance consumes relay-local channel consent events and key revocations, and the vault instance consumes vault-local channel consent events and privacy.deletion.completed, as labelled per environment under events_consumed.
+      - No signed statement is produced; subscribe, unsubscribe and list are signed relay requests (classrup/relay-request/v1) whose subscribe body is sealed to the relay's published key, and the VAPID public key is registered with F16.S02.M02 purpose vapid.
+      - The module registers ExportSectionPort (section notify.push), DeletionPort (purge step) and RetentionPurgePort (kind notify.push_target) with F10 (N6), annotates every field with its F10.S02.M02 class, calls privacy.consent.check for notify_push before enable, and routes every limit through RateLimitPort of F12.S03.M03 (N18).
     commands:
       - name: notify.push.enable
         capability: notify.push.enable
-        input: "[vault command; calls PushManager.subscribe with the relay VAPID key then relay command notify.push.subscribe] { relayId, deviceLabel }"
-        output: "{ subscriptionId, status: active, syncState }"
-        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_PUSH_SUBSCRIPTION_LIMIT, DEPENDENCY_UNAVAILABLE, FEATURE_DISABLED]
+        input: "[vault command; requires privacy.consent.check {purpose: notify_push, relayId} granted and the local push ChannelConsent registered (F13.S02.M03); calls PushManager.subscribe with the relay VAPID key, seals {endpoint, keys, expirationTime} to the relay's published key and calls notify.push.subscribe] { relayId, deviceLabel }"
+        output: "{ pushTargetId, subscriptionId?, status: pending|active }"
+        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_PUSH_SUBSCRIPTION_LIMIT, NOTIFY_PUSH_ENDPOINT_REJECTED, DEPENDENCY_UNAVAILABLE, FEATURE_DISABLED]
+        emits: []
+        idempotent: true
+      - name: notify.push.disable
+        capability: notify.push.disable
+        input: "[vault command; calls PushManager.unsubscribe on this device, marks the push target disabled and queues notify.push.unsubscribe in the F15.S01.M01 sync outbox] { pushTargetId, expectedRevision }"
+        output: "{ pushTargetId, status: disabled, revision, relaySync: prepared|transport_acknowledged|done }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
         emits: []
         idempotent: true
       - name: notify.push.subscribe
         capability: notify.push.subscribe
-        input: "[relay command, request signed by a registered device key] { deviceId, endpoint, keys: { p256dh, auth }, expirationTime?, vapidKeyId }"
+        input: "[relay command; request signed by a device key of userDid (classrup/relay-request/v1); body sealed to the relay's published key] { consentId, vapidKeyId, sealed: { endpoint, keys: { p256dh, auth }, expirationTime? } }"
         output: "{ subscriptionId, status: active, relayReceiptAt }"
-        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_PUSH_SUBSCRIPTION_LIMIT, UNAUTHENTICATED, RATE_LIMITED, FEATURE_DISABLED]
+        errors: [VALIDATION_FAILED, NOTIFY_PUSH_ENDPOINT_REJECTED, PRECONDITION_FAILED, NOTIFY_PUSH_SUBSCRIPTION_LIMIT, UNAUTHENTICATED, RATE_LIMITED, FEATURE_DISABLED]
         emits: []
         idempotent: true
       - name: notify.push.unsubscribe
         capability: notify.push.unsubscribe
-        input: "[vault command and relay command, signed by the owning device key] { subscriptionId, expectedRevision }"
-        output: "{ subscriptionId, status: revoked, revision }"
-        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        input: "[relay command; request signed by a device key of the subscription owner] { subscriptionId }"
+        output: "{ subscriptionId, status: revoked }"
+        errors: [NOT_FOUND, UNAUTHENTICATED, RATE_LIMITED]
         emits: []
         idempotent: true
       - name: notify.push.send
         capability: notify.push.send
-        input: "[relay internal command called by the F13.S02.M01 gate] { userDid, ref?, tpl, ck?, urg: normal|high, ttlSeconds? }"
+        input: "[relay internal command called only by the F13.S02.M01 gate] { userDid, form: sealed|hook|digest, boxes?: [{ deviceKeyId, s }] (sealed, ≤ 10), hook?: { tpl, ref?, ck? }, n? (digest), collapseTag, urg: normal|high, ttlSeconds? }"
         output: "{ attempted, delivered, expired }"
-        errors: [VALIDATION_FAILED, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE, PRECONDITION_FAILED]
+        errors: [VALIDATION_FAILED, PAYLOAD_TOO_LARGE, NOTIFY_PUSH_ENDPOINT_REJECTED, DEPENDENCY_UNAVAILABLE, PRECONDITION_FAILED]
         emits: [notify.push.sent, notify.push.failed]
+        idempotent: true
+      - name: notify.push.rotate_key
+        capability: notify.push.rotate_key
+        input: "[relay operator command; RelayKeyStorePort generates a new P-256 pair, the public key is registered with F16.S02.M02 purpose vapid and the old key is kept for 30 days, or revoked at once when compromised] { reason: scheduled|compromised }"
+        output: "{ vapidKeyId, previousVapidKeyId, keyRecordId }"
+        errors: [FORBIDDEN, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: []
         idempotent: true
     queries:
       - name: notify.push.get_key
         capability: notify.push.read_key
         input: "[relay public query] {}"
         output: "{ vapidKeyId, applicationServerKey (65-byte P-256 public key, base64url), contact }"
-        errors: [FEATURE_DISABLED]
+        errors: [FEATURE_DISABLED, RATE_LIMITED]
       - name: notify.push.list_mine
         capability: notify.push.read_own
-        input: "[relay query signed by a device key] {}"
-        output: "{ items: [{ subscriptionId, deviceId, deviceLabel, status, lastSuccessAt }] } (no endpoint, no keys)"
-        errors: [UNAUTHENTICATED]
+        input: "[relay query signed by a device key of the user] {}"
+        output: "{ items: [{ subscriptionId, deviceKeyId, status, lastSuccessAt }] } (no endpoint, no keys, no labels)"
+        errors: [UNAUTHENTICATED, RATE_LIMITED]
+      - name: notify.push.get_local
+        capability: notify.push.read_local
+        input: "[vault query; joins this vault's push targets and the cached notify.push.list_mine result with device labels known locally (F07.S01.M01 device keys)] { relayId? }"
+        output: "{ items: [{ pushTargetId?, deviceKeyId, deviceLabel, status, lastSuccessAt? }] }"
+        errors: []
+    note: >-
+      Execution sites (ADR-0016): enable, disable and get_local run in the vault; subscribe, unsubscribe, list_mine,
+      send, get_key and rotate_key run on the relay. No statement is produced; the relay requests are signed with a
+      device key (classrup/relay-request/v1) and verified against F16.S02.M02 key status at receipt time, with principal
+      resolution through the portable identity document of F07.S02.M01. Sealed payload boxes are produced by
+      F13.S02.M01 with the F08.S01.M01 envelope construction to the target device's x25519 agreement key; the relay
+      treats them as opaque bytes. Topic = first 32 characters of base64url(HMAC-SHA256(topicKey, collapseTag)), where
+      collapseTag is opaque for sealed sends and HMAC-SHA256(relay tag secret, ck) for hook sends. RelayKeyStorePort
+      {generate, sign(vapidKeyId, jwt), retire, revoke} keeps VAPID private keys in the relay key file store. Privacy
+      ports (N6): ExportSectionPort section notify.push with schema classrup.notify.push_target/v1; DeletionPort plan
+      {willDelete: push targets of this vault, willPseudonymize: none, blockers: none} and step purge, which calls
+      PushManager.unsubscribe and deletes the targets (relay copies are erased when the F13.S02.M03 sign-step withdrawal
+      is registered at each relay); RetentionPurgePort kind notify.push_target, class RET-STANDARD, anchorField endedAt,
+      purge 30 days after the end. Every field is classified with F10.S02.M02.
     events_produced:
-      - {type: notify.push.sent, privacy: P2, payload: "{ subscriptionId, userDid, tpl, httpStatus, attempt }"}
-      - {type: notify.push.failed, privacy: P2, payload: "{ subscriptionId, userDid, tpl, reason: gone|throttled|transient|vapid_rejected|too_large|no_subscription, httpStatus?, attempt }"}
+      - {type: notify.push.sent, privacy: P2, payload: "{ subscriptionId, userDid, form: sealed|hook|digest, tpl? (hook and digest forms only), httpStatus, attempt } — relay-local"}
+      - {type: notify.push.failed, privacy: P2, payload: "{ subscriptionId, userDid, form, tpl? (hook and digest forms only), reason: gone|throttled|transient|rejected|endpoint_rejected|origin_paused|too_large|no_subscription, httpStatus?, attempt } — relay-local"}
     events_consumed:
-      - {type: notify.channel.opted_out, effect: "revoke all active push subscriptions of the user at this relay when the channel is push"}
-      - {type: notify.channel.opted_in, effect: "enable the subscribe command for the user at this relay"}
-      - {type: security.key.revoked, effect: "if the revoked key is the relay VAPID key, expire subscriptions bound to it and require re-subscription"}
+      - {type: notify.channel.opted_out, effect: "relay instance (relay-local event from notify.channel.register, notify.channel.unsubscribe or the expiry sweep): when channel is push, revoke every active subscription of userDid at this relay and erase its secret in the same transaction; vault instance (vault-local event): disable this device's push target for relayId and call PushManager.unsubscribe"}
+      - {type: notify.channel.opted_in, effect: "relay instance: allow subscribe for userDid at this relay once the consent is registered; vault instance: offer Enable on this device for relayId"}
+      - {type: security.key.revoked, effect: "relay instance: when keyId equals a createdByKeyId, revoke the subscriptions created by that device key and refuse its later requests; when keyId equals a vapidKeyId (purpose vapid confirmed with security.keyrecord.get_status because the payload carries no purpose), expire the subscriptions bound to it so vaults re-subscribe"}
+      - {type: privacy.deletion.completed, effect: "vault instance: notification only; confirm that the DeletionPort purge step removed every push target; nothing is signed and no relay is called"}
     errors:
       - "NOTIFY_PUSH_SUBSCRIPTION_LIMIT | 409 | no | the user already has 10 active push subscriptions at this relay"
+      - "NOTIFY_PUSH_ENDPOINT_REJECTED | 422 | no | the push endpoint origin is not on the push-service allowlist or its host resolves to a private, loopback or link-local address"
     example: |
-      POST /api/v1/relay/notify.push.subscribe
+      vault command notify.push.enable { "relayId": "relay:k3n7v2…", "deviceLabel": "Alex phone" }
+      -> privacy.consent.check { purpose: notify_push, relayId } granted; channel consent registered; PushManager.subscribe(applicationServerKey)
+      POST /api/v1/relay/notify.push.subscribe   (signed classrup/relay-request/v1 by device key …#d2)
       Idempotency-Key: 0192f3b5-0000-7000-8000-000000000001
-      { "deviceId": "0192f3b5-1111-7000-8000-000000000001", "endpoint": "https://push.example/send/…", "keys": { "p256dh": "BNc…", "auth": "tBH…" }, "vapidKeyId": "vapid-2026-11" }
+      { "consentId": "0192f3b0-1111-7000-8000-000000000001", "vapidKeyId": "vapid-2026-11", "sealed": "<HPKE box of {endpoint, keys}>" }
       201 { "subscriptionId": "0192f3b5-2222-7000-8000-000000000001", "status": "active", "relayReceiptAt": "2026-11-04T10:00:00.000Z" }
-      relay send (outbound to push service)
-      POST https://push.example/send/…   TTL: 86400   Urgency: normal   Topic: offer-0192f3a5   Content-Encoding: aes128gcm
+      relay send (outbound to an allowlisted push service; address re-resolved and pinned)
+      POST https://fcm.googleapis.com/fcm/send/…   TTL: 86400   Urgency: high   Topic: q8Zt3kR0bWm1xY7aP2cV9nL4sD6fG8hJ   Content-Encoding: aes128gcm
       Authorization: vapid t=<ES256 JWT exp +12h>, k=<applicationServerKey>
-      body (encrypted RFC 8291) of {"v":1,"ref":{"type":"offer","id":"0192f3a5-…"},"tpl":"notify.tpl.offers.made","ck":"offer-0192f3a5","urg":"normal"}
-      -> 201 Created
+      body (RFC 8291) of {"v":1,"urg":"high","s":"<box sealed by device A to device B's agreement key>"}
+      -> 201 Created; service worker on device B opens s -> {"v":1,"tpl":"notify.tpl.security.device_added","ref":null,"ck":"…"}
   authorization_capabilities:
     requirements:
-      - Relay policy lets only a registered device key of the user subscribe, unsubscribe and list that user's subscriptions, and only after push consent is granted.
+      - Relay policy lets only a device key of the user that F16.S02.M02 reports active at the relay receipt time subscribe, unsubscribe and list that user's subscriptions, and only after a granted push consent is registered at that relay.
       - The internal send command is callable only by the gate of F13.S02.M01 inside the relay; no external client can trigger a send directly.
-      - The VAPID public key is public; the private key never leaves the relay key store and is never logged.
+      - The VAPID public key is public; the private key never leaves RelayKeyStorePort and is never logged, and rotation is a relay operator action.
+      - A revoked device key loses its subscriptions and every later request it signs is refused with UNAUTHENTICATED, including requests signed after its revocationEffectiveFrom that arrive late.
     capabilities:
-      - "notify.push.enable | local principal | vault policy; push consent granted at the chosen relay; browser permission granted"
-      - "notify.push.subscribe | registered relay device | relay policy; request signed by a device key of the user; granted unexpired push consent; fewer than 10 subscriptions"
-      - "notify.push.unsubscribe | registered relay device | subscription.userDid matches the signing device's user"
+      - "notify.push.enable | local principal | vault policy; privacy.consent.check notify_push granted for relayId; local push ChannelConsent registered; browser permission granted"
+      - "notify.push.disable | local principal | vault policy; push target belongs to this vault"
+      - "notify.push.read_local | local principal | vault policy; own push targets only"
+      - "notify.push.subscribe | registered relay device | relay policy; request signed by a device key of userDid active per F16.S02.M02 at receipt time; granted unexpired push consent registered here; fewer than 10 subscriptions"
+      - "notify.push.unsubscribe | registered relay device | signing key is an active device key of subscription.userDid; another user's subscription answers NOT_FOUND (ERR-4)"
       - "notify.push.send | relay service | relay internal; caller is the F13.S02.M01 gate"
-      - "notify.push.read_key | anonymous | relay public read; 60 requests per minute per IP"
-      - "notify.push.read_own | registered relay device | device key of the subscription owner"
+      - "notify.push.read_key | anonymous | relay public read; 60 requests per minute per IP prefix through RateLimitPort"
+      - "notify.push.read_own | registered relay device | active device key of the subscription owner"
+      - "notify.push.rotate_key | relay operator | relay operator role from F16.S01.M01 role assignments on this relay only"
   failure_recovery_idempotency:
     requirements:
-      - Subscribe is idempotent on (userDid, endpoint hash) and send attempts are idempotent through the Topic header and per-attempt IDs.
+      - Subscribe is idempotent on (userDid, endpointHash) and send attempts are idempotent per (subscriptionId, dispatch reference) and collapse at the push service through the opaque Topic header.
       - Transient failures (429, 5xx, timeouts) retry with backoff and honor Retry-After, up to 3 attempts within 10 minutes; permanent failures never retry.
       - A relay restart loses no accepted sends because attempts are recorded before transmission and unfinished attempts are retried once on start.
-    idempotency: "Relay commands require Idempotency-Key with 24 h replay window; subscribe is naturally idempotent on endpoint hash; send is deduplicated by (subscriptionId, tpl, ck) within 10 minutes and by the Topic header at the push service."
-    concurrency: "Each send updates counters with compare-and-set on revision in one SQLite transaction; concurrent subscribes for the same endpoint resolve through the unique index; the 10-subscription limit is checked inside the same transaction."
-    retries: "Backoff 5 s, 30 s, 120 s with jitter for 429 (honoring Retry-After up to 300 s), 5xx and network errors; 3 attempts maximum; 400, 401, 403 are not retried and raise operator alerts; 404 and 410 expire the subscription."
-    offline: "Subscriptions are created only online; sends are relay-side and do not depend on the vault being online; if the device is offline the push service stores the message for the TTL of 86 400 s (3 600 s for urgent security alerts) and drops it afterwards."
-    partial_failure: "If a user has several subscriptions each is attempted independently and per-subscription outcomes are recorded; a failure on one device never affects others; if the push service is unreachable the in-app inbox is unaffected."
+      - Sending to a push-service origin pauses for 15 minutes only when subscriptions of at least 5 distinct users on that allowlisted origin are rejected with 401 or 403 within 5 minutes, which indicates a VAPID problem; a single subscription's rejection never pauses sends to others.
+    idempotency: "Relay commands require Idempotency-Key with a 24 h replay window; subscribe is naturally idempotent on endpointHash for the user; send is deduplicated by (subscriptionId, collapseTag) within 10 minutes and by the Topic header at the push service; enable and disable are idempotent on the push target."
+    concurrency: "Each send updates counters with compare-and-set on revision in one SQLite transaction; concurrent subscribes for the same endpoint resolve through the unique index; the 10-subscription limit is checked inside the same transaction; in the vault two tabs serialize enable and disable with a Web Lock per relay."
+    retries: "Backoff 5 s, 30 s, 120 s with jitter for 429 (honoring Retry-After up to 300 s), 5xx and network errors; 3 attempts maximum; 400 is not retried; 401 and 403 count as a failure of that subscription and are not retried; 404 and 410 expire the subscription; the origin pause applies only on the multi-user rejection pattern."
+    offline: "Subscriptions are created only online; disable works offline, unsubscribes the browser at once and queues the relay unsubscribe in the sync outbox; sends are relay-side; if the device is offline the push service stores the message for the TTL of 86 400 s (3 600 s for urgent security alerts) and drops it afterwards."
+    partial_failure: "Each of a user's subscriptions is attempted independently and per-subscription outcomes are recorded; a failure on one device never affects others; if the push service is unreachable the in-app inbox is unaffected; if the relay lost its copy the vault rebuilds it from the push target record after user confirmation."
   privacy_retention_abuse:
     requirements:
-      - Payloads are content-free and encrypted end to end to the browser per RFC 8291, so the push service sees only metadata (endpoint, size, time, Topic) and the relay operator sees reference and template key only.
-      - The push endpoint is a P3 bearer secret stored encrypted and erased at expiry or revocation; the push service provider can link the endpoint to the browser vendor, which the explainer states.
+      - Payloads are content-free and RFC 8291 encrypted to the browser, so the push service sees only the endpoint, size, time and an opaque per-subscription Topic, and for vault-originated alerts the relay sees only a sealed box it cannot open.
+      - The push endpoint and keys form a P2 service copy for the single selected relay, sealed in transit, encrypted at rest and erased at expiry, revocation or registered withdrawal; the push service provider can link the endpoint to the browser vendor, which the explainer states.
       - Pseudonymity is not anonymity because the relay links a DID to a push endpoint, and users choose the relay.
+      - Endpoints must be on the push-service origin allowlist and are re-resolved and re-checked on every send, so a user-chosen endpoint can neither reach internal addresses nor pause sending for other users.
     data:
-      - "PushSubscription: P3 (endpoint, keys) at the selected relay only."
-      - "Push payload: content-free reference, template key, collapse key; P2 reference semantic."
-      - "VAPID private key: P4 relay secret, never exported."
+      - "PushSubscription relay copy: P2 for the selected relay only (disclosed service copy under the notify_push channel consent, PRV-5 participant rule; channel-identifier amendment requested from F10); endpoint, keys and topic key encrypted at rest."
+      - "PushSubscription vault target: P3 in the vault; contains no endpoint or keys; exported only in the user's own export."
+      - "Push payload: content-free; sealed box opaque to relay and push service, or hook data the relay already holds; Topic opaque per subscription."
+      - "VAPID private key: P4 relay secret in RelayKeyStorePort, never exported; public key P0, registered in F16.S02.M02."
     retention:
-      - "Active subscriptions: RET-STANDARD until revoked or expired; secrets erased at the terminal transition."
-      - "Send logs and delivery counters: RET-SHORT (30 days) without endpoint."
+      - "Relay subscriptions: RET-STANDARD until revoked or expired; secrets erased at the terminal transition; rows purged 30 days later."
+      - "Vault push targets: RET-STANDARD; purged 30 days after disable or expiry through RetentionPurgePort kind notify.push_target."
+      - "Send logs and delivery counters: RET-SHORT (30 days) without endpoint, topic or collapse data."
     threats:
-      - "T01 | Push service or network observer reads alert content | content-free payload and RFC 8291 aes128gcm encryption; tests assert absence of text fields"
-      - "T02 | Subscription endpoint theft lets an attacker spam a browser | endpoint is stored encrypted, erased on expiry, sends require the relay VAPID signature so the endpoint alone cannot send"
-      - "T03 | Abuse of the relay as a push spammer | send is internal and gated; consent and category checks; 120 dispatches per user per hour"
-      - "T04 | VAPID key compromise | key rotation procedure with new vapidKeyId, old subscriptions expire and are re-created, operator alert on 401 or 403 spikes"
-      - "T05 | SSRF through attacker-chosen endpoint | https-only, host must resolve to public addresses, redirects not followed, 10 s timeout, allowlist of known push service domains optional per relay"
-      - "T06 | Relay learns user to endpoint mapping | disclosed, user selects the relay, self-hosting is supported, subscription deleted on revocation"
+      - "T01 | Push service or network observer reads alert content | content-free payload, sealed box for vault alerts and RFC 8291 aes128gcm encryption; tests assert absence of text fields"
+      - "T02 | Subscription endpoint theft lets an attacker spam a browser | endpoint stored encrypted, erased on expiry, sends require the relay VAPID signature so the endpoint alone cannot send"
+      - "T03 | Abuse of the relay as a push spammer | send is internal and gated; consent and category checks; 120 dispatches per user per hour through RateLimitPort"
+      - "T04 | VAPID key compromise | RelayKeyStorePort rotation with a new vapidKeyId, revocation in F16.S02.M02, bound subscriptions expire and vaults re-subscribe, operator alert on multi-user 401 or 403 patterns"
+      - "T05 | SSRF and DNS rebinding through an attacker-chosen endpoint | origin allowlist by default, address resolved and pinned on every send, private, loopback, link-local and unique-local ranges refused, redirects not followed, 10 s timeout"
+      - "T06 | Relay learns user to endpoint mapping | disclosed in the explainer, user selects the relay, self-hosting supported, copy erased on registered withdrawal"
+      - "T07 | A user registers an endpoint answering 401 or 403 to pause push for everyone | rejection counts against that subscription only; origin pause needs 5 distinct users on an allowlisted origin within 5 minutes"
+      - "T08 | Collapse keys in the Topic header link users at the push service | Topic is an HMAC under a per-subscription key of an opaque collapse tag, so two users never share a Topic"
+      - "T09 | A stolen device key keeps its subscription or re-subscribes | security.key.revoked revokes subscriptions created by the key and V07 refuses its later requests"
     abuse_controls:
-      - "Per-user limit of 10 subscriptions and 10 subscribe calls per day; send rate limited by the gate."
-      - "Relay operators can block device keys or users on that relay only."
+      - "Per-user limit of 10 subscriptions and 10 subscribe calls per day, 60 list calls per hour, 60 key reads per minute per IP prefix, all through RateLimitPort (F12.S03.M03); send rate limited by the gate."
+      - "Relay operators can block device keys or users on that relay only and override the push-service origin allowlist."
   observability_performance:
     requirements:
-      - Send outcomes, latencies and expirations are measured per CTR-OBS-001 with no endpoints or payloads in logs.
+      - Send outcomes, latencies and expirations are measured per CTR-OBS-001 with no endpoints, topics or payloads in logs.
       - Send p95 ≤ 500 ms to a healthy push service and the relay can send 200 pushes per second.
-      - Alerts fire on VAPID rejections and failure ratios.
+      - Alerts fire on multi-user VAPID rejection patterns, origin pauses and failure ratios.
     metrics:
-      - "classrup_notify_push_sends_total{outcome=ok|gone|throttled|transient|vapid_rejected|too_large}"
+      - "classrup_notify_push_sends_total{outcome=ok|gone|throttled|transient|rejected|endpoint_rejected|origin_paused|too_large}"
       - "classrup_notify_push_subscriptions{status}"
       - "classrup_notify_push_send_latency_ms (histogram)"
-      - "classrup_notify_push_vapid_rejected_total (alert at > 0 for 5 minutes)"
+      - "classrup_notify_push_origin_paused_total (alert at > 0)"
     logs:
-      - "info push.sent {subscriptionIdHash, tpl, httpStatus, correlationId} — no endpoint, no keys, no payload."
+      - "info push.sent {subscriptionIdHash, form, httpStatus, correlationId} — no endpoint, keys, topic, collapse tag or payload."
     budgets:
       - "send p95 ≤ 500 ms; subscribe p95 ≤ 300 ms at 50 req/s."
       - "200 pushes per second sustained for 5 minutes with p95 ≤ 500 ms."
@@ -242,34 +348,40 @@ processes:
       - Every requirement of this module is covered by at least one automated test.
       - Protocol tests use a fake push service that decrypts RFC 8291 messages and validates RFC 8030 and RFC 8292 headers.
       - Contract tests check commands, events and payload shape against the schema registry.
-    fixtures: "Relay R with VAPID key vapid-2026-11, fake push service P accepting aes128gcm, user U with granted push consent, browser key pairs generated from fixed seeds, fixed clock 2026-11-04T10:00:00Z."
+      - The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues and a keyboard and screen-reader walk-through.
+    fixtures: "Relay R with VAPID key vapid-2026-11 in a test RelayKeyStorePort, fake push service P on an allowlisted test origin accepting aes128gcm, fake DNS resolver, F16.S02.M02 registry double with active and revoked device keys, users U1 and U2 with registered push consent, browser key pairs from fixed seeds, fixed clock 2026-11-04T10:00:00Z."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01,02.R02 | subscribe with valid and malformed endpoint and keys | valid stored encrypted; invalid refused VALIDATION_FAILED; secrets absent from queries"
-      - "T02 | unit | 02.R03,02.R01 | each rule V01 to V08 violated in turn including private-IP endpoint and 11th subscription | documented error code returned and nothing stored"
-      - "T03 | contract | 01.R03,04.R01,09.R02 | send a normal offers alert | fake push service decrypts payload with only keys v, ref, tpl, ck, urg; headers TTL 86400, Urgency normal, Topic, Content-Encoding aes128gcm; VAPID JWT valid ES256 with exp ≤ 12 h"
-      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of subscribe, send outcomes (201, 404, 410, 429, 500), unsubscribe, consent withdrawal | expired and revoked never change; 410 expires at once; 5 failures over 24 h expire"
-      - "T05 | integration | 04.R02,06.R02 | push service returns 429 with Retry-After 120 then 201 | one retry after 120 s, one notify.push.sent event, attempts recorded"
-      - "T06 | integration | 04.R03,03.R03 | channel opted out and VAPID key revoked events delivered | subscriptions revoked or expired and secrets erased"
-      - "T07 | abuse | 05.R01,05.R02,05.R03 | send called by external client; subscribe signed by unknown key; list by another user; inspect key store | refused; no private key or endpoint exposed"
-      - "T08 | integration | 06.R01,06.R03 | subscribe twice with same endpoint, send to user with 3 subscriptions where one returns 410 | one subscription; others delivered; failure isolated"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | subscribe with valid and malformed sealed bodies | valid stored with secret encrypted and pushOrigin set; malformed refused VALIDATION_FAILED; secrets absent from every query"
+      - "T02 | unit | 02.R03,02.R01 | each rule V01 to V10 violated in turn including an off-allowlist origin, private-IP endpoint and 11th subscription | documented error code returned and nothing stored or sent"
+      - "T03 | contract | 01.R03,02.R02,04.R01,09.R02,09.R03 | send a sealed, a hook and a digest payload; run every command, query and event of this module | fake push service decrypts exactly the keys of each form; headers TTL, Urgency, Topic and Content-Encoding aes128gcm; VAPID JWT valid ES256 with exp ≤ 12 h; inputs, outputs and event payloads validate against the schema registry entries"
+      - "T04 | property | 03.R01,03.R02 | random sequences of subscribe, send outcomes (201, 401, 403, 404, 410, 429, 500) and unsubscribe | expired and revoked never change; 410 expires at once; 5 failures over 24 h expire; 401 and 403 affect only that subscription"
+      - "T05 | integration | 04.R02,06.R02 | push service returns 429 with Retry-After 120 then 201 | one retry after 120 s, one notify.push.sent with form and no tpl for sealed, attempts recorded"
+      - "T06 | integration | 04.R03,03.R03,01.R02 | relay-local notify.channel.opted_out for push and security.key.revoked for the VAPID key delivered to the relay instance; vault-local opted_out to the vault instance | relay subscriptions revoked or expired with secrets erased in the same transaction; vault target disabled and PushManager.unsubscribe called"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | send called by an external client; subscribe signed by an unknown key; list by another user; inspect the relay database and key store | refused or NOT_FOUND; no private key or endpoint exposed; VAPID private key only in RelayKeyStorePort"
+      - "T08 | integration | 06.R01,06.R03 | subscribe twice with the same endpoint; send to a user with 3 subscriptions where one returns 410 | one subscription; others delivered; failure isolated"
       - "T09 | chaos | 06.R03 | relay restart mid-send | unfinished attempts retried once; no duplicate beyond Topic collapse"
-      - "T10 | abuse | 07.R01,07.R02,07.R03 | inspect database, logs, events and metrics; SSRF endpoint attempts to 169.254.169.254 and redirects | no endpoint or payload outside encrypted storage; SSRF blocked"
-      - "T11 | abuse | 07.R03,06.R02 | VAPID rejected 401 | operator alert raised, no subscription expired, sends paused 15 minutes"
-      - "T12 | load | 08.R01,08.R02,08.R03 | 200 pushes per second for 5 minutes to fake service | p95 ≤ 500 ms, metrics exported, alert rule fires on injected VAPID rejection"
-      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-104 requirement maps to a passing test"
-      - "T14 | integration | 10.R01,10.R02,10.R03 | export from vault, restore relay from backup, rotate VAPID key | export has no endpoints; restored subscriptions are re-verified or expired; rotation expires old-key subscriptions"
-      - "T15 | a11y | 04.R01 | push settings and permission explainer with screen reader and keyboard | controls labelled, states announced, zero serious axe issues"
+      - "T10 | abuse | 07.R01,07.R02,07.R03,07.R04 | inspect database, logs, events and metrics; endpoint at 169.254.169.254; an allowlisted host re-resolving to 10.0.0.5 at send time (DNS rebinding); a redirecting endpoint | no endpoint, topic key or payload outside encrypted storage; each blocked endpoint refused with NOTIFY_PUSH_ENDPOINT_REJECTED without a connection"
+      - "T11 | abuse | 06.R04,07.R04 | an attacker endpoint returns 401 to every send; then subscriptions of 5 distinct users on one allowlisted origin return 403 within 5 minutes | first case only the attacker's subscription accrues failures and others keep sending; second case operator alert and a 15-minute pause for that origin only"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 200 pushes per second for 5 minutes to the fake service with an injected multi-user rejection | p95 ≤ 500 ms, metrics exported, origin pause alert fires"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-104 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export from the vault, restore the relay from backup, vault import into a fresh device, scheduled VAPID rotation | export has push targets without endpoints; restored subscriptions are probed or expired; import rebuilds the relay copy only after confirmation; old-key subscriptions keep working 30 days then expire"
+      - "T15 | a11y | 09.R04 | push settings, permission explainer and re-enable banner with screen reader and keyboard | controls labelled with the device name, explainer read before the prompt, result announced, zero serious axe issues"
+      - "T16 | contract | 02.R04,07.R01 | property over 10 000 collapse tags of 1..64 valid characters and two users with the same tag | every Topic matches ^[A-Za-z0-9_-]{1,32}$; the two users' Topics differ; no Topic equals or contains the tag"
+      - "T17 | abuse | 05.R04,03.R03 | device key K is revoked in F16.S02.M02; K then signs subscribe, list and unsubscribe; a request signed before revocationEffectiveFrom arrives late | the subscription created by K is revoked; every later request refused UNAUTHENTICATED; the late pre-revocation request is refused because the key is no longer active"
+      - "T18 | unit | 01.R04,03.R04,04.R04 | enable, disable and expiry discovered by list_mine in the vault; inspect the push target record and the outgoing request | target moves pending, active, then disabled or expired; record holds no endpoint or keys; subscribe body is sealed and the request carries no device label"
+      - "T19 | integration | 01.R05,04.R05,05.R03 | operator rotates the VAPID key; DeletionPort plan and purge, export section and retention purge with F10 registry doubles | new key registered with purpose vapid in F16.S02.M02; private key never leaves RelayKeyStorePort; purge removes targets and calls PushManager.unsubscribe; section notify.push exported; targets purged 30 days after endedAt"
+      - "T20 | contract | 04.R05,02.R01 | enable with privacy.consent.check returning not granted, and with the channel consent not yet registered; 11th subscribe call in a day | PRECONDITION_FAILED before any browser prompt; RATE_LIMITED from RateLimitPort"
     acceptance:
-      - All tests T01 to T15 pass in CI.
-      - Decrypted push payloads in tests contain only the keys v, ref, tpl, ck and urg and never text, names or amounts.
-      - Endpoints and keys never appear in logs, events, exports or query results.
-      - VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests.
+      - All tests T01 to T20 pass in CI.
+      - Decrypted push payloads in tests contain only the keys of the sealed, hook or digest form and never text, names or amounts, and sealed boxes open only on the target device.
+      - Endpoints, keys and topic keys never appear in logs, events, exports or query results, and the vault record never holds them.
+      - VAPID JWT expiry is at most 12 hours and signed with ES256 in all tests, and the VAPID private key exists only in RelayKeyStorePort.
   import_export_backup_rollback:
     requirements:
-      - A user's vault export contains push settings (relay, device labels, enabled state) but never endpoints or keys.
-      - Relay restore from backup re-verifies subscriptions by a probe and expires the ones that fail; imported vaults must re-enable push on each device.
+      - A user's vault export contains the push target records (relay, device key, device label, enabled, status) and never endpoints or keys, which only the browser and the relay copy hold.
+      - On relay restore subscriptions are re-verified by a probe and failing ones expire; on vault import, or when a relay lost its copy, the vault rebuilds the relay copy from the push target record and a fresh browser subscription after user confirmation.
       - Schema changes follow expand and contract; new content encodings are additive behind the contentEncoding field.
-    export: "Section notify.push in classrup-export/v1; one line per subscription without endpoint and keys (schema classrup.notify.push_subscription/v1 reduced projection)."
-    import: "Nothing re-creates subscriptions; the app shows Re-enable push per device after import."
-    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) holds encrypted secrets; on restore every subscription older than 7 days is probed and expired on failure."
-    migration_rollback: "Additive fields only in v1; rollback is safe because older relays ignore unknown fields and subscriptions continue to work with aes128gcm."
+    export: "Section notify.push in classrup-export/v1 through ExportSectionPort; one line per push target (schema classrup.notify.push_target/v1); no relay copy is exported."
+    import: "Push targets import as expired; the app shows Re-enable push per relay and re-creates the relay copy with a new browser subscription only after the user confirms."
+    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) holds encrypted secrets; on restore every subscription older than 7 days is probed and expired on failure; the vault export is the user's backup (IOX-6)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older relays ignore unknown fields and subscriptions continue to work with aes128gcm; retained VAPID keys are kept through a rollback."

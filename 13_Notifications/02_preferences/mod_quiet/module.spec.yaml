@@ -1,46 +1,57 @@
 id: F13.S02.M01
 scope: MVP
 summary: >-
-  The dispatch gate for outbound notification channels and the owner of deferral. For every alert that would
-  leave the in-app inbox (a local operating-system alert while the app runs, a push through the user's relay,
-  or an email through a relay that offers it) the gate checks channel consent, the category-by-channel matrix and
-  the quiet-hours schedule. Outside quiet hours it sends at once; inside quiet hours it stores a content-free
-  DeferredNotification (reference and template key only) and releases it at the end of the window with up to 5
-  minutes of random jitter and digest collapsing. The urgent security class bypasses quiet hours but never
-  bypasses consent. The gate runs in the vault for local alerts and on the relay for push and email.
+  The dispatch gate for outbound notification channels and the owner of deferral, running in two places. In the vault
+  it receives every routing decision of F13.S01.M03 through NotificationDispatchPort and decides, per channel, the local
+  operating-system alert (os_alert) and whether to ask the user's relay for push or email; it evaluates mute, the
+  category matrix, channel consent (privacy.consent.check plus the registered channel consent) and quiet hours locally,
+  and seals push content for the user's other devices so the relay receives only the user DID, channel, urgency, an
+  opaque collapse tag, an optional release time and boxes it cannot open. On the relay it gates those sealed requests
+  and the in-process hooks of relay services (mailbox arrival wake-ups, auction host, cycle matching, moderation),
+  using only the registered channel consent, the mirrored matrix and the mirrored schedule. Outside quiet hours it sends
+  at once; inside quiet hours it defers and releases at window end with up to 5 minutes of jitter and digest
+  collapsing. The urgent security class bypasses quiet hours but never bypasses consent. Each event has a single alert
+  producer per channel.
 responsibilities:
-  - Own the DeferredNotification record (channel, category, template key, reference, release time, status) in the vault for local alerts and at the relay for push and email.
-  - Implement the single decision procedure consent, category preference, urgency, quiet hours, then send or defer or drop, identically in the vault and on the relay.
-  - Release deferred items at the end of the quiet window with jitter of 0 to 300 s, collapse items with the same collapse key and replace more than 5 pending items for one user by one digest alert.
-  - Re-evaluate deferred items when the schedule, a channel consent or a preference changes, and cancel items the user already read in the app.
-  - Enforce the urgent security class rule, namely only category security may be urgent and urgent alerts skip quiet hours and the digest, and are still subject to consent and the security category switch for that channel.
+  - Own the vault DeferredNotification (classrup.notify.deferred/v1) and the relay DeferredNotification (classrup.notify.deferred_relay/v1); the relay record never holds a reference, template key or collapse key of a vault-originated alert.
+  - Implement NotificationDispatchPort for F13.S01.M03 and the single decision order caller authentication, deletion pause, mute, collapse, consent or browser permission, matrix cell, single-producer arrival rule, urgency, quiet hours, rate - identical in vault and relay where both apply.
+  - Seal vault-originated push content per target device to its x25519 agreement key and derive opaque collapse tags, so relays and push services cannot read or link alerts.
+  - Release deferred items at the end of the quiet window with jitter of 0 to 300 s in batch loops, collapse items with the same collapse key or tag and replace more than 5 due items for one user and channel by one digest alert.
+  - Re-evaluate deferred items when the schedule, a channel consent or a preference changes, cancel items the user already read through the relay command notify.notification.cancel, and re-defer items whose checks cannot be read.
+  - Enforce the urgent security class rule - only category security may be urgent, and urgent alerts skip quiet hours and the digest but are still subject to consent and the security cell of that channel.
 non_responsibilities:
   - Schedule definition and DST evaluation (F13.S02.M02 provides isQuiet and nextQuietEnd).
-  - Channel consent (F13.S02.M03), matrix (F13.S02.M04), subscriptions and the Web Push protocol (F13.S01.M01), email transport (F13.S01.M02), inbox rows (F13.S01.M03).
-  - Deciding what an event means for notification content; the routing table is in F13.S01.M03.
+  - Channel consent (F13.S02.M03), matrix (F13.S02.M04), subscriptions and the Web Push protocol (F13.S01.M01), email transport (F13.S01.M02), inbox rows and the routing table (F13.S01.M03).
+  - Block filtering, which F13.S01.M03 applies through F07.S02.M02 before any decision reaches this gate; relay hooks carry no counterparty data and the service worker routes wake-ups through F13.S01.M03.
   - Do-not-disturb of the operating system; the gate cannot override device-level focus modes.
   - "Future: per-category quiet windows, adaptive digest timing, delivery-time optimization."
-depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
+depends_on: [F13.S02.M02, F13.S02.M03, F13.S02.M04, F13.S01.M01, F13.S01.M02, F13.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F16.S02.M02, F07.S02.M01, F15.S01.M01, F12.S03.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001]
 user_stories:
   - As a member, I do not get a push at 03:00 about a new offer and I see a single summary when my quiet hours end.
-  - As a member, I still get a push when a new device key is added to my account at 03:00.
-  - As a member, I do not get an email for a category I switched off.
+  - As a member, I still get a push on my other devices when a new device key is added to my account at 03:00.
+  - As a member, I do not get an email for a category I switched off, and a muted thread never alerts me.
   - As a member, I see in the app inbox everything that was held back, because the inbox is never deferred.
+  - As a member in a cycle with others on the same relay, I know the relay cannot tell from my alerts who else is in it.
 edge_cases:
-  - Quiet window ends at 07:00 and 2 000 users have deferred items; releases are spread over 0 to 300 s of jitter to avoid a thundering herd on the push service.
-  - User changes quiet hours while items are deferred; release times are recomputed from the new schedule at once, and items now outside quiet hours are released within 60 s.
-  - User reads the notification in the app while its push is deferred; the deferred item is cancelled and no push is sent.
-  - Channel consent is withdrawn while items are deferred; all deferred items for that channel are dropped with reason no_consent.
+  - Quiet window ends at 07:00 and 2 000 users have deferred items; releases are spread over 0 to 300 s of jitter and the sweep loops in batches of 500 bounded by the push budget.
+  - User changes quiet hours while items are deferred; vault items are recomputed at once and relay items when the relay-local notify.quiet_hours.changed of the mirror arrives; items now outside quiet hours are released within 60 s with reason schedule_changed.
+  - User reads the notification in the app while its push is deferred at the relay; the vault calls notify.notification.cancel with the dispatch ID and no push is sent.
+  - Channel consent is withdrawn while items are deferred; vault items for that channel are dropped with reason no_consent and the relay drops its items when the withdrawal is registered there.
   - A deferred item reaches 24 hours of age because the schedule was changed to be always quiet; it is dropped with reason expired and remains visible in the in-app inbox.
   - Urgent security alert while no push consent exists; nothing is pushed and the in-app notification and, if the user enabled email and it is verified, email are used.
-  - Release time falls in a new quiet window of the next day because of consecutive windows; the item moves to the end of the later window but never beyond 24 hours.
-  - Relay clock differs from the user's clock by 40 seconds; the relay uses its own clock with the user's schedule and the difference is tolerated within the 60 s re-evaluation tolerance.
+  - An offer arrives through a relay mailbox while the app is closed; the mailbox hook sends one content-free activity wake, the service worker routes the offer in the vault and shows the alert only if the offers push cell is on and the thread is not muted; the vault does not ask the relay for a second push.
+  - The auction host pushes an outbid alert and puts the bid_outbid statement into the mailbox 2 seconds later; the mailbox wake is collapsed because a push reached the user in the last 60 s.
+  - The relay has no preference mirror for a user; the hook gate applies the versioned default matrix, so the activity wake is sent and no urgent security push is dropped for that reason.
+  - The preference store cannot be read during a vault decision; the item is re-deferred for 5 minutes up to 3 times, then dropped for push and email and kept in the inbox.
+  - A deletion request is pending; non-security decisions are held without sending anything to relays, and cancelling the request resumes normal dispatch without any undo.
+  - Relay clock differs from the user's clock by 40 seconds; the relay uses its own clock with the mirrored schedule and the difference is tolerated within the 60 s re-evaluation tolerance.
 ux:
   screens:
-    - "Inbox shows all notifications with a small icon Held until quiet hours end on items whose push or email was deferred."
-    - "Quiet hours screen (F13.S02.M02) links to a Held notifications list showing counts per category, not contents."
+    - "Inbox shows all notifications with a small icon Held until quiet hours end on items whose OS alert, push or email was deferred."
+    - "Quiet hours screen (F13.S02.M02) links to a Held notifications list showing counts per category and channel, not contents."
     - "Digest alert text such as 5 new notifications waiting, opens the inbox."
-  states: [loading, none-held, held, releasing, released, dropped, cancelled, offline]
+    - "Notification settings note: while the vault is locked, wake-up alerts show only generic text and cannot apply per-category choices or thread mute."
+  states: [loading, none-held, held, releasing, released, dropped, cancelled, paused-deletion, offline]
   a11y:
     - Held indicator has text alternative Held until 07:00 and is not conveyed by icon alone.
     - Digest alerts use plain text titles that screen readers announce without markup.
@@ -48,196 +59,300 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A DeferredNotification stores the user DID, channel (os_alert, push or email), category, template key, a content-free reference (type and opaque ID), collapse key, the decision time, the release time, jitter, status and expiry, with tenant and revision per CTR-ID-001.
-      - Deferred items contain no message text, no names, no amounts and no schedule; they are P2 only because the reference reveals that an event of a kind happened, and they live at most 24 hours (RET-EPHEMERAL).
+      - A vault DeferredNotification stores the user DID, channel (os_alert, push or email), category, template key, a content-free reference, collapse key, the linked inbox row, the relay dispatch handle, decision and release times, jitter, attempt, count, status and expiry, with tenant and revision per CTR-ID-001, and it never leaves the device.
+      - A relay DeferredNotification holds no reference, template key or collapse key for vault-originated items - only the user DID, channel, urgency normal, sealed boxes it cannot open, an opaque collapse tag and the vault's dispatch ID - while hook items hold only the category, template key and reference that the dispatching relay hook already holds; both are P2, contain no content or schedule and live at most 24 hours (RET-EPHEMERAL).
       - Only urgency normal is stored as deferred; urgent security alerts are never deferred, so no urgent deferred record exists.
+      - The digest template notify.tpl.system.digest is generated only by the gate, carries a count and no reference, uses the template class system that callers cannot submit, and is governed by the matrix cells of the items it replaces rather than by a cell of its own.
     entities:
       - name: DeferredNotification
         schema: classrup.notify.deferred/v1
-        storage: relay+device
+        storage: device
         privacy: P2
         retention: RET-EPHEMERAL
         fields:
           - "id: uuidv7 — primary key"
-          - "tenantId: uuidv7 — tenant scope"
-          - "userDid: did:key — recipient"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "userDid: did:key — recipient, the local principal"
           - "channel: enum — os_alert | push | email"
           - "category: enum — offers | cycles | messages | auctions | bookings | moderation | security"
           - "templateKey: string — notify.tpl.<category>.<name>, ≤ 80 characters"
-          - "ref?: object — { type: enum listing|offer|proposal|cycle|thread|auction|booking|rental|deal|case|account, id: uuidv7 }"
+          - "ref?: object — { type, id } as in the inbox row"
           - "collapseKey?: string — ≤ 64 characters, items with equal key collapse into one"
-          - "notificationId?: uuidv7 — local inbox row for os_alert and cancel on read"
-          - "deferredAt: timestamp — decision time on the deciding clock"
+          - "notificationId?: uuidv7 — local inbox row, for cancel on read"
+          - "relayId?: string — relay for push and email items"
+          - "dispatchId?: uuidv7 — handle sent to the relay with a handed-off item, used by notify.notification.cancel"
+          - "deferredAt: timestamp — decision time on the local clock"
           - "releaseAt: timestamp — quiet window end plus jitter"
           - "jitterMs: int — 0..300 000 chosen uniformly at random"
-          - "status: enum — deferred | released | dropped | cancelled"
-          - "dropReason?: enum — no_consent | category_off | expired | superseded_by_digest | channel_unavailable"
-          - "cancelReason?: enum — read_in_app | schedule_changed_not_quiet | user_cancelled"
+          - "attempt: int — 0..3 re-deferrals after unreadable checks"
+          - "count: int — 1..9999 collapsed decisions"
+          - "status: enum — deferred | handed_off | released | dropped | cancelled"
+          - "dropReason?: enum — no_consent | category_off | muted | expired | superseded_by_digest | channel_unavailable | gate_unreadable | app_closed"
+          - "cancelReason?: enum — read_in_app | preference_changed | user_cancelled"
+          - "releaseReason?: enum — window_end | schedule_changed | retry"
           - "expiresAt: timestamp — deferredAt + 24 h"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - releaseAt is at or after the end of the quiet window that was active at deferredAt and never later than deferredAt + 24 h.
+          - releaseAt is at or after the end of the quiet window active at deferredAt and never later than expiresAt.
           - A record never carries free text and urgency urgent never reaches status deferred.
-          - At most 200 deferred records exist per user and channel; further items collapse into the digest.
+          - status handed_off implies channel push or email, relayId and dispatchId are set and the relay accepted the item.
+      - name: DeferredNotification
+        schema: classrup.notify.deferred_relay/v1
+        storage: relay
+        privacy: P2
+        retention: RET-EPHEMERAL
+        fields:
+          - "id: uuidv7 — deferredId, primary key"
+          - "tenantId: uuidv7 — relay tenant scope"
+          - "userDid: did:key — recipient"
+          - "channel: enum — push | email"
+          - "origin: enum — vault | hook"
+          - "hookSource?: enum — mailbox | auction_host | cycle_match | moderation (hook only)"
+          - "category?: enum — offers | cycles | messages | auctions | bookings | moderation | activity (hook only)"
+          - "hookPayload?: object — { tpl, ref?, ck? } with only data the hook already holds (hook only)"
+          - "boxes?: bytes — sealed boxes per target device, ≤ 10 × 600 bytes, opaque (vault origin push only)"
+          - "emailKind?: enum — notice | security_notice | activity"
+          - "dispatchId?: uuidv7 — vault-chosen handle for cancel (vault origin only)"
+          - "collapseTag: string — 22..64 base64url characters, opaque"
+          - "deferredAt: timestamp — relay clock"
+          - "releaseAt: timestamp — quiet window end per the relay mirror, or the vault notBefore, plus jitter"
+          - "jitterMs: int — 0..300 000"
+          - "attempt: int — 0..3"
+          - "status: enum — deferred | released | dropped | cancelled"
+          - "dropReason?: enum — no_consent | category_off | expired | superseded_by_digest | channel_unavailable | gate_unreadable | collapsed"
+          - "cancelReason?: enum — read_in_app | preference_changed | user_cancelled"
+          - "releaseReason?: enum — window_end | schedule_changed | retry"
+          - "expiresAt: timestamp — deferredAt + 24 h"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - origin vault implies category, hookPayload and every reference, template key and collapse key are absent.
+          - At most 200 deferred records per user and channel; further items collapse into the digest.
+          - releaseAt is never later than expiresAt and status released, dropped or cancelled never changes again.
   validation_rules:
     requirements:
-      - Dispatch requests are validated for template, category, reference and urgency before the gate decides.
-      - The gate procedure is deterministic, side-effect free until the decision is applied, and applies the same order everywhere.
+      - Dispatch requests are validated per mode (vault routing decision, sealed relay dispatch, relay hook) for template, category, reference, sealed boxes and urgency before the gate decides.
+      - The gate procedure is deterministic and side-effect free until the decision is applied, and applies one order everywhere - caller authentication, deletion pause for non-security, mute, collapse, channel consent or browser permission, matrix cell, single-producer arrival rule, urgency, quiet hours, rate.
       - Every violation maps to one stable error code.
+      - os_alert needs browser Notification permission and follows the inApp column of the matrix because an OS alert is the local alert of an inbox row; push and email need the channel consent and their own columns; muted items are dropped for all three channels; collapse updates never dispatch again and only raise the count of a deferred item.
+      - Each event has a single alert producer per channel - events that arrived through a relay mailbox are pushed only by the relay mailbox hook (category activity) and the vault never requests push for them, while locally raised and direct-file events are pushed only by the vault path and email for them is requested only by the vault.
     rules:
-      - "V01 | templateKey matches notify.tpl.<category>.<name>, category is one of the seven, and ref contains only type and opaque ID | VALIDATION_FAILED"
-      - "V02 | urgency urgent is allowed only for category security, otherwise it is treated as normal and flagged | VALIDATION_FAILED"
-      - "V03 | the caller is a registered device of the user (self wake) or a relay service hook, and the user has a granted unexpired channel consent for push or email | PRECONDITION_FAILED"
-      - "V04 | the matrix allows the category on the channel (F13.S02.M04 resolve) | NOTIFY_CATEGORY_DISABLED"
+      - "V01 | vault and hook modes - templateKey matches notify.tpl.<category>.<name>, category is a matrix category (activity only from the mailbox hook), ref holds only type and opaque ID; sealed mode carries no category, template or ref; category system only for gate-generated digests | VALIDATION_FAILED"
+      - "V02 | urgency is normal or urgent; urgent on a category other than security is downgraded to normal and counted in classrup_notify_urgent_downgraded_total, which is a normalization and never a rejection; only an unknown urgency value fails | VALIDATION_FAILED"
+      - "V03 | push and email only - in the vault privacy.consent.check {purpose notify_push or notify_email, relayId} is granted and the local ChannelConsent is granted and registered; at the relay a granted unexpired ChannelConsent of userDid for the channel is registered (privacy.consent.check is vault in-process only); os_alert needs no ChannelConsent | PRECONDITION_FAILED"
+      - "V04 | the matrix allows the category on the channel - in the vault notify.preference.check for every channel with os_alert following inApp; at the relay notify.preference.resolve for hook items, which applies the versioned default matrix when no mirror exists | NOTIFY_CATEGORY_DISABLED"
       - "V05 | release time does not exceed deferredAt plus 24 hours | NOTIFY_DEFER_EXPIRED"
-      - "V06 | a relay accepts at most 120 dispatch requests per user per hour and 30 per minute per caller | RATE_LIMITED"
-      - "V07 | collapseKey is at most 64 characters of the set a-z A-Z 0-9 - _ . | VALIDATION_FAILED"
+      - "V06 | RateLimitPort.consume (F12.S03.M03) allows at most 120 dispatch requests per user per hour and 30 per minute per caller at a relay | RATE_LIMITED"
+      - "V07 | collapseKey is at most 64 characters of a-z A-Z 0-9 - _ . and collapseTag is 22..64 base64url characters | VALIDATION_FAILED"
+      - "V08 | relay dispatch, cancel and list requests are signed (classrup/relay-request/v1) by a device key of userDid that F16.S02.M02 reports active at receipt time, or are in-process relay hook calls | UNAUTHENTICATED"
+      - "V09 | the signing key is valid but belongs to a principal other than userDid; refused before any lookup of userDid, so nothing about the target is revealed | FORBIDDEN"
+      - "V10 | sealed push mode carries 1..10 boxes, each for a deviceKeyId of userDid with an active subscription at this relay and each at most 600 bytes; sealed email mode carries no boxes | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
-      - A DeferredNotification starts deferred and ends released, dropped or cancelled; all three are terminal and are never reopened.
-      - Release happens only when the clock passes releaseAt and a fresh consent, category and quiet-hours check still allows sending.
-      - Changing the schedule, consent or matrix triggers re-evaluation of all deferred items of the user within 60 seconds.
+      - A DeferredNotification ends released, dropped or cancelled, all terminal and never reopened; the vault record passes through handed_off while the relay holds its sealed item.
+      - Release happens only when the clock passes releaseAt and a fresh consent, matrix and quiet-hours check still allows sending; a check that cannot be read, or a time still quiet at releaseAt, re-defers with attempt + 1, bounded by expiresAt.
+      - Changing the schedule, consent or matrix re-evaluates all deferred items of the user within 60 seconds - items no longer quiet are released with reason schedule_changed, items no longer allowed are dropped, and relay items are re-evaluated on the relay-local events of the mirror and registration commands.
+      - More than 5 items for one user and channel due in one sweep are replaced by one digest alert carrying the count, and the replaced items are dropped with reason superseded_by_digest.
     machines:
       - entity: DeferredNotification
         initial: deferred
         terminal: [released, dropped, cancelled]
         transitions:
-          - "deferred -> released | release sweep at releaseAt and gate passes | channel send command invoked; emits notify.notification.released"
-          - "deferred -> dropped | consent withdrawn, category off, 24 h expiry, or replaced by digest | dropReason stored"
-          - "deferred -> cancelled | notify.notification.read for the linked notification, or schedule changed so the time is no longer quiet and the item is sent immediately as released | cancelReason stored"
+          - "deferred -> released | vault sweep at releaseAt, or re-evaluation after a schedule change finds the time no longer quiet, and the gate passes | os_alert shown or push/email requested from the relay now; digest when more than 5 are due; emits notify.notification.released with reason window_end, schedule_changed or retry"
+          - "deferred -> handed_off | push or email item accepted by the relay with notBefore = releaseAt | dispatchId stored; the relay holds only sealed bytes and the tag"
+          - "deferred -> deferred | schedule, consent or preference change that keeps the item allowed, unreadable gate input, or still quiet at releaseAt | releaseAt recomputed, attempt + 1, never beyond expiresAt"
+          - "deferred -> dropped | consent withdrawn, category off, muted, 24 h expiry, replaced by digest, 3 unreadable attempts, or app closed at release for os_alert | dropReason stored; inbox row unaffected"
+          - "deferred -> cancelled | notify.notification.read for the linked row or user cancel | cancelReason read_in_app or user_cancelled"
+          - "handed_off -> released | releaseAt + 300 s passed | delivery belongs to the relay and the UI shows its status as unknown; emits notify.notification.released"
+          - "handed_off -> cancelled | notify.notification.read or preference change, and notify.notification.cancel acknowledged | cancelReason read_in_app or preference_changed"
+          - "handed_off -> dropped | local channel consent withdrawn | the relay drops its item when the withdrawal is registered there; dropReason no_consent"
+      - entity: DeferredNotification relay record
+        initial: deferred
+        terminal: [released, dropped, cancelled]
+        transitions:
+          - "deferred -> released | relay sweep at releaseAt, or relay-local notify.quiet_hours.changed shows the time no longer quiet, and the gate passes | notify.push.send or notify.email.send called; emits notify.notification.released"
+          - "deferred -> deferred | relay-local quiet_hours.changed still quiet, unreadable mirror or consent row, or still quiet at releaseAt per the mirror | releaseAt recomputed, attempt + 1, bounded by expiresAt"
+          - "deferred -> dropped | relay-local notify.channel.opted_out, hook item category off on relay-local notify.preference.changed, 24 h expiry, digest, collapse or 3 unreadable attempts | dropReason stored"
+          - "deferred -> cancelled | notify.notification.cancel signed by an active device key of userDid | cancelReason stored; nothing is sent"
     timeouts:
-      - "Release sweep every 30 s on the relay and every 30 s in the running vault."
+      - "Release sweep every 30 s on the relay and every 30 s in the running vault; each sweep loops over batches of 500 until no item with releaseAt ≤ now remains."
       - "Items are dropped with reason expired 24 h after deferredAt."
+      - "Unreadable gate input re-defers for 5 minutes, at most 3 times."
   commands_queries_events:
     requirements:
-      - Dispatch is a command usable by relay hooks and by the vault; it applies the gate and returns the decision sent, deferred or dropped.
-      - Release is an internal command run by the sweep; both emit their events in the same transaction as the record change.
-      - The module consumes inbox, schedule, consent and preference events to cancel or recompute deferred items.
+      - Dispatch is one command with three modes - the vault mode receives routing decisions through NotificationDispatchPort, the sealed relay mode receives requests signed by a device key of the user, and the hook mode receives in-process calls from relay hooks (mailbox put, auction host, cycle matching, moderation).
+      - Release is an internal sweep in both environments and cancel is a relay command signed by a device key; release emits its event in the same transaction as the record change.
+      - The vault instance consumes vault-local inbox, schedule, consent, preference and deletion events, and the relay instance consumes the relay-local consent, quiet-hours and preference events emitted by the registration and mirror commands, as labelled per environment under events_consumed.
+      - For vault-originated push the gate seals {v, tpl, ref, ck} per target device with the F08.S01.M01 envelope construction to that device's x25519 agreement key and sends the relay only {userDid, channel, urgency, dispatchId, notBefore?, collapseTag, boxes}; email requests carry no box and select a generic template by urgency.
+      - When notify.notification.read arrives the vault cancels its local items and calls the relay command notify.notification.cancel for items it handed off, so a deferred push is never sent for a notification already read.
+      - The module registers ExportSectionPort (section notify.deferred, counts only), DeletionPort (purge step) and RetentionPurgePort (kind notify.deferred) with F10 (N6), classifies every field with F10.S02.M02, calls privacy.consent.check in the vault, holds non-security decisions while privacy.deletion.assert_not_pending reports a pending deletion, and routes limits through RateLimitPort (N18).
     commands:
       - name: notify.notification.dispatch
         capability: notify.notification.dispatch
-        input: "[relay command for push and email, vault command for os_alert; callers are relay hooks or a registered device of the user] { userDid, channel, category, templateKey, ref?, collapseKey?, urgency?: normal|urgent, notificationId? }"
-        output: "{ decision: sent|deferred|dropped, deferredId?, releaseAt?, reason? }"
-        errors: [VALIDATION_FAILED, PRECONDITION_FAILED, NOTIFY_CATEGORY_DISABLED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
+        input: "[vault mode: in-process NotificationDispatchPort.route { sourceEventId, notificationId?, category, templateKey, ref?, collapseKey?, urgency, muted, arrival: mailbox|direct|local, collapsed }; sealed relay mode: relay command signed by an active device key of userDid { userDid, channel: push|email, urgency: normal|urgent, dispatchId, notBefore?, collapseTag, boxes?: [{ deviceKeyId, s }] }; hook mode: in-process relay call { userDid, channel: push, category, templateKey, ref?, collapseKey?, hookSource: mailbox|auction_host|cycle_match|moderation }]"
+        output: "{ decision: sent|deferred|dropped, perChannel?: [{ channel, decision, reason? }] (vault mode), deferredId?, releaseAt?, reason? }"
+        errors: [VALIDATION_FAILED, UNAUTHENTICATED, FORBIDDEN, PRECONDITION_FAILED, NOTIFY_CATEGORY_DISABLED, RATE_LIMITED, DEPENDENCY_UNAVAILABLE]
         emits: [notify.notification.deferred]
         idempotent: true
       - name: notify.notification.release
         capability: notify.notification.release
-        input: "[internal sweep, relay or vault] { now, batchSize ≤ 500 }"
-        output: "{ released, dropped, cancelled }"
+        input: "[internal sweep in the relay and in the running vault] { now, batchSize ≤ 500 }"
+        output: "{ released, dropped, redeferred, digests }"
         errors: [DEPENDENCY_UNAVAILABLE]
         emits: [notify.notification.released]
+        idempotent: true
+      - name: notify.notification.cancel
+        capability: notify.notification.cancel
+        input: "[relay command signed by an active device key of userDid] { userDid, dispatchIds: uuidv7[1..50], reason: read_in_app|preference_changed|user_cancelled }"
+        output: "{ cancelled, alreadyFinal }"
+        errors: [VALIDATION_FAILED, UNAUTHENTICATED, FORBIDDEN, RATE_LIMITED]
+        emits: []
         idempotent: true
     queries:
       - name: notify.notification.list_deferred
         capability: notify.notification.read_deferred
-        input: "[vault query, or relay query signed by device key] { channel?, limit ≤ 100 }"
-        output: "{ counts: [{ category, channel, count }], items: DeferredNotification[] }"
-        errors: []
+        input: "[vault query; or relay query signed by an active device key of the owner, which returns counts only] { channel?, limit ≤ 100 }"
+        output: "{ counts: [{ category?, channel, count }], items?: DeferredNotification[] (vault only) }"
+        errors: [UNAUTHENTICATED]
+    note: >-
+      Execution sites (ADR-0016): vault mode, the vault sweep and the vault list run in the vault (also inside the service
+      worker); sealed mode, hook mode, the relay sweep, cancel and the relay list run on the relay. Vault decision per
+      channel - os_alert: inApp cell (security always), Notification permission, app or service worker running, quiet
+      hours from the local schedule; push: not for arrival mailbox, push cell, privacy.consent.check notify_push and the
+      registered ChannelConsent, target devices are the principal's other active device keys with an active
+      subscription per the cached notify.push.list_mine; email: email cell, privacy.consent.check notify_email, verified
+      email target. Deferred push and email are handed to the relay at once with notBefore so they survive the app
+      closing. collapseTag = first 22 characters of base64url(HMAC-SHA256(tag key derived by HKDF from the dispatching
+      device's agreement key, userDid || collapseKey)), so two users never share a tag. Hook mode - the mailbox hook
+      always uses category activity and template notify.tpl.activity.wake and is collapsed when any push reached the
+      user in the last 60 s; the mailbox hook also evaluates the activity email cell (default off) and queues at most
+      one activity notice per user per 6 hours; other hooks may carry only the auction, cycle suggestion or moderation
+      identifiers the relay already holds. Relays never see privacy.consent.check; they rely only on the registered
+      channel consent whose statement carries the F10 consent ID and purpose. No statement is produced; requests are
+      signed relay requests checked against F16.S02.M02. Privacy ports (N6): ExportSectionPort section notify.deferred
+      (counts per category and channel only); DeletionPort plan {willDelete: vault deferred rows, willPseudonymize: none,
+      blockers: none} and step purge; RetentionPurgePort kind notify.deferred, class RET-EPHEMERAL, anchorField
+      expiresAt. Every field is classified with F10.S02.M02.
     events_produced:
-      - {type: notify.notification.deferred, privacy: P2, payload: "{ deferredId, userDid, channel, category, templateKey, releaseAt }"}
-      - {type: notify.notification.released, privacy: P2, payload: "{ deferredId, userDid, channel, category, digest: boolean, count }"}
+      - {type: notify.notification.deferred, privacy: P2, payload: "{ deferredId, userDid, channel, category? (absent for vault-origin relay items), releaseAt, side: vault|relay } — no template key, reference or collapse key"}
+      - {type: notify.notification.released, privacy: P2, payload: "{ deferredId, userDid, channel, category?, digest: boolean, count, reason: window_end|schedule_changed|retry, side: vault|relay }"}
     events_consumed:
-      - {type: notify.notification.created, effect: "vault path: for the local principal evaluate the os_alert channel with the gate, and request push or email dispatch from the user's relay for channels with consent"}
-      - {type: notify.notification.read, effect: "cancel deferred items linked to the notification with reason read_in_app"}
-      - {type: notify.quiet_hours.changed, effect: "recompute releaseAt for deferred items of the user and send those no longer in quiet hours within 60 s"}
-      - {type: notify.channel.opted_out, effect: "drop deferred items of that channel with reason no_consent"}
-      - {type: notify.preference.changed, effect: "drop deferred items of categories now switched off for the channel with reason category_off"}
+      - {type: notify.notification.read, effect: "vault instance: cancel deferred items linked to the notification with reason read_in_app and call notify.notification.cancel at the relay for its handed_off items"}
+      - {type: notify.quiet_hours.changed, effect: "vault instance (vault-local): recompute releaseAt of local items and release within 60 s those no longer quiet with reason schedule_changed; relay instance (relay-local event of notify.quiet_hours.mirror): the same for the user's relay items using the newly applied mirror"}
+      - {type: notify.channel.opted_out, effect: "vault instance: drop local items of that channel and relay with reason no_consent; relay instance (relay-local event of the registration, unsubscribe or expiry sweep): drop the user's relay items of that channel"}
+      - {type: notify.preference.changed, effect: "vault instance: drop local items whose category is now off for their channel (os_alert by inApp) and cancel handed_off items of those categories at the relay with reason preference_changed; relay instance (relay-local event of notify.preference.mirror): drop hook items of categories now off"}
+      - {type: privacy.deletion.requested, effect: "vault instance: reversible pause only - while privacy.deletion.assert_not_pending reports a pending deletion, non-security decisions are held and nothing is sent to relays; nothing is erased, and because the pause is derived from the guard a cancelled request resumes without any undo"}
+      - {type: privacy.deletion.completed, effect: "vault instance: notification only; confirm that the DeletionPort purge step removed every vault deferred row; nothing is signed and no relay is called"}
     errors:
       - "NOTIFY_CATEGORY_DISABLED | 409 | no | the matrix does not allow this category on this channel for the user"
       - "NOTIFY_DEFER_EXPIRED | 410 | no | the item was deferred for 24 hours and was dropped"
     example: |
-      POST /api/v1/relay/notify.notification.dispatch
+      vault: NotificationDispatchPort.route { "sourceEventId": "0192f3b7-…", "category": "security", "templateKey": "notify.tpl.security.device_added", "urgency": "urgent", "arrival": "local", "muted": false, "collapsed": false }
+      -> os_alert sent; push: seal {v, tpl, ref: null, ck} to device B's agreement key; email: security cell on, verified
+      POST /api/v1/relay/notify.notification.dispatch   (signed classrup/relay-request/v1 by device key …#d1)
       Idempotency-Key: 0192f3b4-0000-7000-8000-000000000001
-      { "userDid": "did:key:z6Mk…", "channel": "push", "category": "offers", "templateKey": "notify.tpl.offers.made", "ref": { "type": "offer", "id": "0192f3a5-1111-7000-8000-000000000001" }, "collapseKey": "offer-0192f3a5" }
-      202 { "decision": "deferred", "deferredId": "0192f3b4-2222-7000-8000-000000000001", "releaseAt": "2026-11-05T06:02:41.000Z" }
-      POST /api/v1/relay/notify.notification.dispatch   { …, "category": "security", "templateKey": "notify.tpl.security.device_added", "urgency": "urgent" }
+      { "userDid": "did:key:z6Mk…", "channel": "push", "urgency": "urgent", "dispatchId": "0192f3b4-1111-7000-8000-000000000001", "collapseTag": "Vq3xK9mZ0aR4tYuPq2wE1c", "boxes": [ { "deviceKeyId": "…#d2", "s": "<sealed>" } ] }
       200 { "decision": "sent" }
+      relay hook (mailbox put for an offer at 03:00 local): { "userDid": "did:key:z6Mk…", "channel": "push", "category": "activity", "templateKey": "notify.tpl.activity.wake", "hookSource": "mailbox" }
+      -> { "decision": "deferred", "deferredId": "0192f3b4-2222-7000-8000-000000000001", "releaseAt": "2026-11-05T12:02:41.000Z" }
+      vault reads the notification -> POST notify.notification.cancel { "userDid": "did:key:z6Mk…", "dispatchIds": ["0192f3b4-3333-…"], "reason": "read_in_app" } -> { "cancelled": 1, "alreadyFinal": 0 }
   authorization_capabilities:
     requirements:
-      - Relay policy lets only relay-internal hooks (mailbox arrival, hosted auction events) and registered devices of the same user call dispatch for that user; arbitrary clients cannot trigger pushes for others.
-      - Vault policy lets the local principal's own event consumers dispatch local alerts; the gate never reads message content because none is passed.
-      - Users read their own deferred counts; relay operators can see counts and references of consenting users as part of operating the relay, which is disclosed.
+      - Relay policy lets only in-process relay hooks and active device keys of the target user call dispatch, cancel and list for that user; a valid device key of another principal is refused with FORBIDDEN and an unsigned or revoked-key request with UNAUTHENTICATED.
+      - Vault policy lets the local principal's routing consumers dispatch through NotificationDispatchPort and the vault sweep release local alerts; the gate never reads message content because none is passed.
+      - Users read their own deferred counts; relay operators can see counts, timing and hook categories of consenting users but never the contents of sealed boxes, which is disclosed.
     capabilities:
-      - "notify.notification.dispatch | relay service, registered relay device | relay policy; caller is a relay hook or a device key of the target user; consent and matrix checked by the gate"
-      - "notify.notification.release | relay service | internal scheduler only"
-      - "notify.notification.read_deferred | local principal | owner of the deferred items, or device key of the owner at the relay"
+      - "notify.notification.dispatch | local principal, registered relay device, relay service | vault mode: routing consumers of the unlocked local principal (os_alert decisions and vault-originated push or email requests); sealed mode: active device key of userDid per F16.S02.M02; hook mode: in-process relay hook; consent and matrix checked by the gate"
+      - "notify.notification.release | local principal, relay service | vault sweep inside the running vault of the local principal; relay internal scheduler"
+      - "notify.notification.cancel | registered relay device | active device key of userDid; only items of that user"
+      - "notify.notification.read_deferred | local principal, registered relay device | owner of the deferred items in the vault; at the relay an active device key of the owner, counts only"
   failure_recovery_idempotency:
     requirements:
-      - Dispatch is idempotent on (userDid, channel, templateKey, ref, collapseKey) within 10 minutes so hook retries never double-send.
+      - Dispatch is idempotent on dispatchId for sealed requests, on (userDid, channel, templateKey, ref, collapseKey) within 10 minutes for hook calls, and on sourceEventId in the vault, so retries never double-send.
       - Release is idempotent per deferred item; a crash after the send but before the status update causes at most one repeated send which the push Topic and email Message-ID collapse.
-      - The gate never fails open, so if consent, preference or schedule cannot be read, the item is deferred for 5 minutes and retried, and after 3 failures it is dropped for push and email and kept in the inbox.
-    idempotency: "Relay commands require Idempotency-Key with a 24 h replay window and a natural dedupe key (userDid, channel, templateKey, ref, collapseKey) for 10 minutes; release is idempotent on deferredId."
-    concurrency: "Each decision runs in one SQLite transaction on the relay (BEGIN IMMEDIATE) and one IndexedDB transaction in the vault; release uses compare-and-set on status deferred; no distributed lock is used."
-    retries: "Callers retry network errors with backoff base 1 s, factor 2, cap 60 s, max 6 attempts; the send step retries per F13.S01.M01 and F13.S01.M02 rules; failed gate reads retry every 5 minutes up to 3 times."
-    offline: "In the vault the os_alert gate works offline; push and email depend on the relay, and if the relay is unreachable the inbox still shows everything and delivery status for those channels is unknown."
-    partial_failure: "If push succeeds but the status update fails, the item is sent again once and collapsed by Topic; if release finds the relay channel down the item is retried with backoff and dropped after 24 hours without losing the inbox entry."
+      - The gate never fails open - if consent, preference or schedule cannot be read, the item is re-deferred for 5 minutes, and after 3 failures it is dropped for push and email and kept in the inbox; when no preference mirror exists the relay applies the versioned default matrix, so urgent security is never dropped for lack of a mirror.
+    idempotency: "Relay commands require Idempotency-Key with a 24 h replay window; sealed dispatch dedupes on dispatchId, hook dispatch on (userDid, channel, templateKey, ref, collapseKey) for 10 minutes, vault decisions on sourceEventId; cancel is idempotent per dispatchId; release is idempotent on deferredId."
+    concurrency: "Each decision runs in one SQLite transaction on the relay (BEGIN IMMEDIATE) and one IndexedDB transaction in the vault; release and cancel use compare-and-set on status deferred; tabs and the service worker serialize the vault gate with a Web Lock; no distributed lock is used."
+    retries: "Vault requests to the relay go through the F15.S01.M01 sync outbox with backoff base 1 s, factor 2, cap 60 s, max 6 attempts for live alerts; the send step retries per F13.S01.M01 and F13.S01.M02 rules; unreadable gate input re-defers every 5 minutes up to 3 times."
+    offline: "In the vault the os_alert gate works offline; push and email depend on the relay, and if the relay is unreachable the inbox still shows everything, deferred push and email wait in the sync outbox and delivery status for those channels is unknown."
+    partial_failure: "If push succeeds but the status update fails, the item is sent again once and collapsed by Topic; if release finds the relay channel down the item is re-deferred and dropped after 24 hours without losing the inbox entry; if a cancel cannot reach the relay before releaseAt, the alert may still be sent and the inbox already shows it read."
   privacy_retention_abuse:
     requirements:
-      - Deferred items carry only a template key, a reference and timing, never content, and are erased on release, drop, cancel or after 24 hours.
+      - Deferred items carry only template key, reference and timing in the vault and, for vault-originated items, only sealed bytes, an opaque tag and timing at the relay; they never carry content and are erased on release, drop, cancel or after 24 hours.
       - The quiet-hours mirror is used only for evaluation and is never written into deferred records.
       - Urgent bypass is limited to the security category so that quiet hours cannot be abused to push promotional content, and the platform sends no promotional content.
+      - The relay can neither read sealed payloads nor link participants of one cycle, thread or booking, because references, template keys and collapse keys of vault-originated alerts never appear in relay records, events, logs or push headers and collapse tags are keyed per dispatching device.
     data:
-      - "DeferredNotification: P2, content-free reference and timing."
+      - "DeferredNotification vault record: P2, content-free reference and timing, vault only."
+      - "DeferredNotification relay record: P2; vault-origin items sealed bytes, opaque tag and timing only; hook items only data the hook already holds."
       - "Decision logs: counts only, no DIDs."
     retention:
       - "Deferred records: RET-EPHEMERAL (24 h) and deleted on terminal states within 1 hour."
     threats:
-      - "T01 | Attacker floods a victim with pushes to defeat quiet hours | only relay hooks and the victim's own devices may dispatch, 120 per user per hour, collapse keys and digesting above 5 pending items"
-      - "T02 | Misuse of urgent class to bypass quiet hours | urgent accepted only for category security and only from fixed templates; other categories requesting urgent are treated as normal and counted"
-      - "T03 | Release stampede at window end | jitter 0 to 300 s and batch size 500 per sweep"
-      - "T04 | Gate bug sends without consent | single procedure with consent first, tests that no send occurs without consent on any path, fail-closed on read errors"
+      - "T01 | Attacker floods a victim with pushes to defeat quiet hours | only relay hooks and the victim's own active device keys may dispatch, 120 per user per hour through RateLimitPort, collapse and digesting above 5 due items"
+      - "T02 | Misuse of urgent class to bypass quiet hours | urgent accepted only for category security; other categories requesting urgent are downgraded to normal and counted"
+      - "T03 | Release stampede at window end | jitter 0 to 300 s, batch loops of 500 bounded by the 200 per second push budget"
+      - "T04 | Gate bug sends without consent | single procedure with consent before matrix, tests that no send occurs without consent on any path, fail-closed on read errors"
       - "T05 | Timing correlation reveals user's quiet hours to a network observer | pushes after quiet hours are jittered and the observer cannot see which category; the relay operator can see timing, which is disclosed"
+      - "T06 | Relay rebuilds private graphs (who is in a cycle) from shared identifiers in dispatches | sealed boxes, no ref, template key or collapse key at the relay for vault-originated alerts, per-device collapse tags, per-subscription Topic HMAC"
+      - "T07 | Duplicate alerts for one event (hook and vault both push) | single producer per channel by arrival path; mailbox wakes collapse within 60 s after any push"
+      - "T08 | Stolen device key cancels or floods alerts for its owner | V08 checks key status at receipt time in F16.S02.M02; revoked keys get UNAUTHENTICATED"
     abuse_controls:
-      - "Rate limits of 120 dispatches per user per hour and 30 per minute per caller."
+      - "Rate limits of 120 dispatches per user per hour and 30 per minute per caller through RateLimitPort (F12.S03.M03); cancel limited to 60 per user per hour."
       - "Relay operators can disable dispatch hooks from a source under their hosting policy."
   observability_performance:
     requirements:
       - Relay gate decisions and release lag are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
-      - A gate decision completes in p95 ≤ 20 ms excluding the channel send, and release processes 10 000 items in ≤ 10 s.
-      - Release lag after the window end is alerting when it exceeds 600 s.
+      - A gate decision completes in p95 ≤ 20 ms excluding the channel send, and each release sweep loops over batches of 500 until no item with releaseAt ≤ now remains, bounded by the push send budget of 200 per second.
+      - The expected release lag is at most 300 s jitter + 30 s sweep granularity + due items ÷ 200 s, and an alert fires when the observed lag exceeds that bound by more than 60 s.
     metrics:
       - "classrup_notify_gate_decisions_total{channel,decision=sent|deferred|dropped,reason} (relay)"
       - "classrup_notify_deferred_depth (gauge, relay)"
-      - "classrup_notify_release_lag_ms (histogram, relay)"
-      - "classrup_notify_urgent_bypass_total (relay)"
+      - "classrup_notify_release_lag_ms (histogram, relay) and classrup_notify_release_lag_bound_ms (gauge, relay)"
+      - "classrup_notify_urgent_bypass_total and classrup_notify_urgent_downgraded_total (relay)"
     logs:
-      - "relay info gate.decision {userHash, channel, decision, reason, correlationId} — no template keys beyond category."
+      - "relay info gate.decision {userHash, channel, origin, decision, reason, correlationId} — no template keys, references, collapse keys or tags."
     budgets:
       - "decision p95 ≤ 20 ms; dispatch API p95 ≤ 300 ms at 100 req/s."
-      - "release 10 000 items ≤ 10 s; jitter distribution uniform within 5 percent over 10 000 samples."
+      - "10 000 due items drain in ≤ 60 s at 200 sends per second; jitter distribution uniform within 5 percent over 10 000 samples."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Contract tests check commands and event payloads against the schema registry.
       - DST and urgent bypass behaviors are covered with golden fixtures that reuse the F13.S02.M02 schedule fixtures.
-    fixtures: "User U in America/New_York with quiet window 22:00 to 07:00 daily, push and email consent granted, matrix defaults, relay R with fake push and email senders, fixed clocks per test, golden transitions 2026-03-08 and 2026-11-01."
+      - The screens listed under ux meet the listed a11y items, verified by an axe scan with zero serious issues and a keyboard and screen-reader walk-through.
+    fixtures: "User U in America/New_York with quiet window 22:00 to 07:00 daily, devices A and B, push and email consent granted and registered, privacy.consent.check double, matrix defaults, relay R with fake push and email senders and an F16.S02.M02 registry double, users U and W in one cycle on relay R, fixed clocks per test, golden transitions 2026-03-08 and 2026-11-01."
     tests:
-      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | dispatch normal offers alert at 03:00 local | deferred record with only templateKey, ref and timing; no text fields; release at 07:00 plus jitter"
-      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V07 violated in turn | documented error code returned and nothing sent"
-      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of dispatch, schedule changes, consent changes, reads and clock jumps | terminal states never change; no send without consent; nothing deferred beyond 24 h; urgent never deferred"
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | vault decision for a normal offers alert at 03:00 local arriving direct | vault record with templateKey, ref and timing; relay record holds only sealed boxes, tag and timing; release at 07:00 plus jitter"
+      - "T02 | unit | 02.R03,02.R01 | each rule V01 and V03 to V10 violated in turn, and V02 with urgency critical | documented error code returned and nothing sent"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of dispatch, schedule changes, consent changes, reads, read failures and clock jumps | terminal states never change; no send without consent; nothing deferred beyond 24 h; urgent never deferred; re-deferral bounded by expiresAt"
       - "T04 | integration | 03.R02 | night of 2026-03-08 and 2026-11-01 New York | release at 07:00 local on both, i.e. 11:00 UTC and 12:00 UTC, plus jitter ≤ 300 s"
-      - "T05 | contract | 04.R01,04.R02,09.R02 | dispatch, release, list_deferred execute | outputs and event payloads validate against registry schemas"
-      - "T06 | integration | 04.R03 | quiet_hours.changed, channel.opted_out, preference.changed and notification.read events delivered | deferred items recomputed, dropped or cancelled with documented reasons"
-      - "T07 | integration | 01.R03,02.R02 | urgent security alert at 03:00 with push consent; urgent offers alert; urgent security with no consent | first sent immediately; second treated as normal and deferred; third not sent"
-      - "T08 | abuse | 05.R01,05.R02,05.R03 | dispatch by a stranger for another user; replay of a hook call; operator reads deferred records | FORBIDDEN or NOT_FOUND; one send; records content-free"
-      - "T09 | integration | 06.R01,06.R02 | same dispatch retried 5 times; crash after send before status update | one send, or one repeated send collapsed by Topic and Message-ID"
-      - "T10 | chaos | 06.R03 | preference store unavailable during gate | fail closed: deferred 5 minutes then dropped after 3 attempts; inbox entry unaffected"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | dispatch in all three modes, release, cancel and list_deferred execute | outputs and event payloads validate against registry schemas; events carry no template key, reference or collapse key"
+      - "T06 | integration | 04.R03,03.R03 | vault-local quiet_hours.changed, channel.opted_out, preference.changed and notification.read; relay-local quiet_hours.changed, opted_out and preference.changed from the mirror and registration commands | items recomputed, released with reason schedule_changed, dropped or cancelled with documented reasons in each environment"
+      - "T07 | integration | 01.R03,02.R02,06.R03 | urgent security alert at 03:00 with push consent; urgent offers alert; urgent security with no consent; relay with no preference mirror for a hook | first sent immediately; second downgraded to normal, counted and deferred; third not pushed; hook decided by the default matrix"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | dispatch and cancel signed by a valid device key of user W for user U; unsigned dispatch; replay of a hook call; operator reads relay deferred records | FORBIDDEN exactly for W's key; UNAUTHENTICATED for the unsigned request; one send for the replay; records hold no readable content"
+      - "T09 | integration | 06.R01,06.R02 | same sealed dispatch retried 5 times with one dispatchId; crash after send before status update | one send, or one repeated send collapsed by Topic and Message-ID"
+      - "T10 | chaos | 06.R03 | preference store unavailable during a vault decision | re-deferred 5 minutes, dropped after 3 attempts; inbox entry unaffected"
       - "T11 | abuse | 07.R01,07.R02,07.R03 | 121st dispatch in an hour; inspect deferred records and logs | RATE_LIMITED; no content or schedule in records"
-      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 users with deferred items released at one window end; 100 dispatch per second | decision p95 ≤ 20 ms, release lag ≤ 600 s, jitter uniform"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 users with deferred items released at one window end; 10 000 due items; 100 dispatch per second | decision p95 ≤ 20 ms; 10 000 items drain in ≤ 60 s; lag ≤ 300 s + 30 s + backlog ÷ 200 s; jitter uniform; lag alert fires only when the bound is exceeded by 60 s"
       - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-108 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export deferred counts, restore relay from backup | deferred records past expiry are dropped on restore and none are sent twice"
+      - "T15 | abuse | 07.R04,04.R04 | U and W in one cycle both receive cycle alerts dispatched from their vaults through relay R; capture R's database, logs, events and push headers | no cycleId, threadId, template key or collapse key appears; U's and W's tags, Topics and boxes share no identifier; R cannot open the boxes"
+      - "T16 | integration | 02.R04,02.R05 | muted thread message; collapse update for a deferred item; offer arriving by mailbox while the app is closed; locally raised security event; os_alert with in-app off for offers | muted dropped on all channels; collapse raises the count without a second dispatch; no vault push for the mailbox offer while the hook wake is sent once; vault push sealed for device B; no os_alert for offers"
+      - "T17 | integration | 04.R05,03.R01 | push handed off with notBefore 07:00; user reads the row at 06:30 | notify.notification.cancel acknowledged; vault item cancelled; relay sends nothing"
+      - "T18 | integration | 03.R04,01.R04 | 7 items for one user due in one sweep at the relay and in the vault | one digest alert notify.tpl.system.digest with count 7 and no reference; the 7 items dropped with superseded_by_digest; digest sent only because at least one replaced item's cell is still on"
+      - "T19 | integration | 04.R06 | deletion requested, then cancelled on day 13; DeletionPort plan and purge, export section and retention purge with F10 doubles | during grace non-security decisions held and no relay request sent; after cancel dispatch resumes with no undo; purge removes vault rows; section notify.deferred has counts only"
+      - "T20 | a11y | 09.R04 | inbox held indicator, held list and digest alert with screen reader and keyboard | held text alternative read, table headers announced, zero serious axe issues"
     acceptance:
-      - All tests T01 to T14 pass in CI.
-      - No send occurs on any path without a granted unexpired channel consent.
+      - All tests T01 to T20 pass in CI.
+      - No send occurs on any path without a granted unexpired channel consent, and no muted item alerts on any channel.
       - Urgent bypass works only for category security and is visible in metrics.
-      - Released times match the golden DST fixtures to within the 300 s jitter.
+      - Released times match the golden DST fixtures to within the 300 s jitter, and relay captures never contain references, template keys or collapse keys of vault-originated alerts.
   import_export_backup_rollback:
     requirements:
       - Deferred records are operational and short-lived, so a user's vault export contains no deferred items, only the counts since the last export in diagnostics.
-      - Relay restore from backup drops deferred records older than 24 hours and rechecks consent before any release.
+      - Relay restore from backup drops deferred records older than 24 hours and rechecks the registered consent before any release.
       - Schema changes follow expand and contract; new channels or categories are additive and ignored by older relays.
-    export: "No section for deferred items; the vault diagnostics export includes counts per category and channel (schema classrup.notify.deferred/v1 counts only)."
+    export: "Section notify.deferred in classrup-export/v1 through ExportSectionPort with counts per category and channel only (schema classrup.notify.deferred/v1 counts projection)."
     import: "Nothing is imported; deferred state is rebuilt from new events."
-    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) may contain deferred rows; on restore all rows older than 24 h are dropped and consent is rechecked before release."
+    backup: "Relay SQLite backup (CTR-IOX-001 IOX-3, IOX-7) may contain deferred relay rows; on restore all rows older than 24 h are dropped and consent is rechecked before release."
     migration_rollback: "Additive fields only in v1; rollback is safe because deferred rows live at most 24 hours and unknown fields are ignored."

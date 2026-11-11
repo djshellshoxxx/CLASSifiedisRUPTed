@@ -129,6 +129,7 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
         options.message('Immutable proposal signed and saved. No consent or reservation was created. Participants have one hour to consent, followed by a one-day execution window.'); await refresh();
       })); suggestions.append(article);
     }
+    summary.textContent = `${result.suggestions.length} matching suggestions found; no consent, reservation or inventory commitment was created. ${graph.rejected} wants excluded. Suggestions are local and may change.`;
   }
 
   async function refresh(): Promise<void> {

@@ -26,6 +26,8 @@
     "status": "node tools/status/status.mjs"
   },
   "devDependencies": {
+    "@classrup/discovery": "workspace:*",
+    "@classrup/i18n": "workspace:*",
     "@types/node": "22.20.5",
     "fast-check": "4.10.2",
     "typescript": "7.0.2",

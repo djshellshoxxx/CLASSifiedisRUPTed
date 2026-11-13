@@ -10,5 +10,8 @@
     "@classrup/kernel": "workspace:*",
     "zod": "4.6.7"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "description": "Locale negotiation, translation and exact currency display for ClassRup.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

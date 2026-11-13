@@ -1,5 +1,6 @@
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
+import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
@@ -84,16 +85,28 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTM
 function button(text: string, fn: () => Promise<void>) {
   const output = node('button', text); output.addEventListener('click', () => { void action(fn); }); return output;
 }
-function card(title: string, description: string, detail: string) {
+// The alpha editor declares CAD amounts in cents. Other signed currency codes may
+// be custom, so keep their exact minor units until the currency registry is available.
+const listingCurrency = { code: 'CAD', exponent: 2, kind: 'iso' } as const;
+function card(title: string, description: string, detail: string, value?: MoneyValue) {
   const article = node('article'); article.className = 'card';
-  article.append(node('h3', title), node('p', description), node('p', detail)); return article;
+  article.append(node('h3', title), node('p', description));
+  if (value) {
+    const formatted = value.currency === listingCurrency.code
+      ? formatMoney(value, listingCurrency, navigator.language, { display: 'code' })
+      : undefined;
+    const amount = formatted?.ok ? formatted.value : `${value.amount} minor units (${value.currency})`;
+    article.append(node('p', `Declared value: ${amount}`));
+  }
+  article.append(node('p', detail));
+  return article;
 }
 async function refresh(): Promise<void> {
   const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })) }).parse(await query('bazaar.listing.list', {}));
   const list = element('listings'); list.replaceChildren();
   if (!page.items.length) list.append(node('p', 'No listings yet. Save your first local draft above.'));
   for (const item of page.items) {
-    const article = card(item.data.title, item.data.description, `${item.data.status} · revision ${item.revision} · ${item.data.barterOptIn ? 'barter enabled' : 'barter disabled'}`);
+    const article = card(item.data.title, item.data.description, `${item.data.status} · revision ${item.revision} · ${item.data.barterOptIn ? 'barter enabled' : 'barter disabled'}`, item.data.value);
     const actions = node('div'); actions.className = 'actions';
     if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Publish signed file', async () => {
       const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.publish', { listingId: item.id, expectedRevision: item.revision }));
@@ -120,7 +133,7 @@ async function refreshPeers(): Promise<void> {
     const retained = value as RetainedListing;
     const p = retained.projection;
     if (!p) continue;
-    list.append(card(p.title, p.description, `Peer-signed · ${p.regionCell} · expires ${p.expiresAt} · observed ${retained.observedAt}`));
+    list.append(card(p.title, p.description, `Peer-signed · ${p.regionCell} · expires ${p.expiresAt} · observed ${retained.observedAt}`, p.value));
   }
   if (!data.items.length) list.append(node('p', 'No matching retained peer listings. Import a signed file to start.'));
   if (data.staleOrExcluded) list.append(node('p', `${data.staleOrExcluded} expired, conflicted or filtered records excluded.`));
@@ -165,7 +178,7 @@ element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
   void action(async () => {
     await command('bazaar.listing.create', { listingId: ids.next(), title: String(data.get('title')), description: String(data.get('description')),
       kind: data.get('kind'), condition: data.get('condition'), categoryId: CATEGORY, regionCell: data.get('region'),
-      value: { amount: String(data.get('amount')), currency: 'CAD' }, barterOptIn: data.get('barter') === 'on' });
+      value: { amount: String(data.get('amount')), currency: listingCurrency.code }, barterOptIn: data.get('barter') === 'on' });
     form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
   });
 });

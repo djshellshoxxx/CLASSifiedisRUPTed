@@ -17,10 +17,10 @@ async function unlock(page: Page, name: string) {
   await expect(page.locator('#workspace')).toBeVisible();
   await expect(page.locator('#status')).toHaveText(/Vault unlocked/);
 }
-async function listing(page: Page, title: string) {
+async function listing(page: Page, title: string, amount = '12500') {
   await page.getByLabel('Title', { exact: true }).fill(title);
   await page.getByLabel('Description', { exact: true }).fill('A locally persisted item, available for an explicit exchange.');
-  await page.getByLabel('Declared value').fill('12500');
+  await page.getByLabel('Declared value').fill(amount);
   await page.getByLabel('Allow this listing').check();
   await page.getByRole('button', { name: 'Save local draft' }).click();
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
@@ -30,7 +30,11 @@ test('real persisted identity/listing and isolated peer signed-file exchange', a
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const alice = await create(page, 'alice');
-  await listing(page, '<img src=x onerror=alert(1)> Guitar');
+  // This minor-unit amount would lose a cent if converted to a JavaScript number.
+  const amount = '900719925474099301';
+  const display = /Declared value: CAD\s*9,007,199,254,740,993\.01/;
+  await listing(page, '<img src=x onerror=alert(1)> Guitar', amount);
+  await expect(page.locator('#listings')).toContainText(display, { timeout: 4000 });
   const published = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Publish signed file' }).click();
   const download = await published;
@@ -53,6 +57,7 @@ test('real persisted identity/listing and isolated peer signed-file exchange', a
     await expect(peer.locator('#listings')).toContainText('No listings yet');
     await peer.locator('#peer-file').setInputFiles({ name: 'alice-listing.json', mimeType: 'application/json', buffer: Buffer.from(signed) });
     await expect(peer.locator('#peers')).toContainText('Guitar');
+    await expect(peer.locator('#peers')).toContainText(display);
     await expect(peer.locator('#status')).toContainText('verified and retained');
     // Repeat the exact same upload; the file input must reset and processing must stay idempotent.
     await peer.locator('#peer-file').setInputFiles({ name: 'alice-listing.json', mimeType: 'application/json', buffer: Buffer.from(signed) });

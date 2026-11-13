@@ -46,8 +46,12 @@ describe('constraints on random corpora', () => {
       const ids = pages.flat().map(i => i.documentId);
       if (new Set(ids).size !== ids.length) return false;
       if (ids.length !== list.length || [...ids].sort().join() !== list.map(x => x.documentId).sort().join()) return false;
+      const remaining = new Map(list.map(item => [item.documentId, item.authorDid]));
       for (const page of pages) {
         if (page.length > c.pageSize) return false;
+        const singleSeller = new Set(remaining.values()).size === 1;
+        if (page.some(item => item.onlySeller) && !singleSeller) return false;
+        for (const item of page) remaining.delete(item.documentId);
         for (const [author, n] of authorsOf(page)) {
           if (n > FAIRNESS_CONSTANTS.maxPerAuthorPerPage && !page.filter(i => i.authorDid === author).every(i => keys(i).includes(EXPLAIN_KEYS.onlySeller))) return false;
         }
@@ -59,8 +63,13 @@ describe('constraints on random corpora', () => {
   it('TEST-PS-050-09.T02 promoted results per page never exceed floor(0.2 * page size) and each carries a promoted explanation key', () => {
     fc.assert(fc.property(corpus, c => {
       const list = build(c, true);
+      const paidIds = new Set(list.filter(item => item.promoted).map(item => item.documentId));
+      if (c.pageSize < 5 && paidIds.size) {
+        return !rerank(list, { pageSize: c.pageSize }, opts).ok;
+      }
       for (const page of allPages(list, c.pageSize)) {
-        const promoted = page.filter(i => i.promoted);
+        const promoted = page.filter(i => paidIds.has(i.documentId));
+        if (page.some(i => i.promoted !== paidIds.has(i.documentId))) return false;
         if (promoted.length > Math.floor(c.pageSize / 5)) return false;
         if (!promoted.every(i => keys(i).includes(EXPLAIN_KEYS.promoted))) return false;
         if (page.some(i => !i.promoted && keys(i).includes(EXPLAIN_KEYS.promoted))) return false;
@@ -70,8 +79,11 @@ describe('constraints on random corpora', () => {
   });
 
   it('TEST-PS-050-09.T05 200 runs of the same input are identical and windowed paging never repeats or drops a result', () => {
+    const fixed = build({ n: 35, authors: 10, seed: 715, promoShare: 0.3 }, true);
+    const expected = allPages(fixed);
+    for (let runNumber = 0; runNumber < 200; runNumber++) expect(allPages(fixed)).toEqual(expected);
     fc.assert(fc.property(corpus, c => {
-      const list = build(c, true);
+      const list = build(c, c.pageSize >= 5);
       const a = allPages(list, c.pageSize);
       const b = allPages(list, c.pageSize);
       if (JSON.stringify(a) !== JSON.stringify(b)) return false;
@@ -109,6 +121,22 @@ describe('new-author slots', () => {
     expect(page[0]?.documentId).toBe('d0100');
     expect(page[0]?.newAuthorSlot).toBe(true);
     expect(page.filter(i => i.newAuthorSlot)).toHaveLength(1);
+  });
+
+  it.each([[0, 1], [1, 3], [3, 8]])('keeps the relevance order of already highly ranked new authors at %i and %i', (a, b) => {
+    const list = sorted(Array.from({ length: 25 }, (_, id) => ({
+      id, author: String(id), score: 1 - id / 100, fresh: id === a || id === b,
+    })));
+    const page = run(list).items;
+    expect(page.map(item => item.documentId)).toEqual(list.slice(0, 20).map(item => item.documentId));
+    expect(page.filter(item => item.newAuthorSlot).map(item => item.documentId))
+      .toEqual([list[a]?.documentId, list[b]?.documentId]);
+  });
+
+  it('does not reserve a slot for a future first-seen timestamp or one exactly 30 days old', () => {
+    const list = sorted([{ id: 1, author: 'a', score: 1 }, { id: 2, author: 'b', score: 0.9 }]);
+    const times = [iso(NOW + DAY), iso(NOW - 30 * DAY)];
+    expect(run(list.map((item, index) => ({ ...item, authorFirstSeenAt: times[index] }))).stats.newAuthorSlotsFilled).toBe(0);
   });
 
   it('a promoted new-author item counts once for the promoted cap and does not consume a slot', () => {
@@ -200,15 +228,35 @@ describe('page rules', () => {
     expect(mp.some(i => keys(i).includes(EXPLAIN_KEYS.onlySeller))).toBe(false);
   });
 
-  it('demotes excess promoted results to the next page and shows no promoted label on pages smaller than 5', () => {
+  it('keeps the per-author cap on short multi-seller pages, then relaxes it when only one seller remains', () => {
+    const list = sorted(Array.from({ length: 20 }, (_, id) => ({
+      id, author: id < 14 ? 'a' : 'b', score: 1 - id / 100,
+    })));
+    const pages = allPages(list);
+    expect(pages.map(page => page.length)).toEqual([6, 6, 8]);
+    for (const page of pages.slice(0, 2)) {
+      expect([...authorsOf(page).values()]).toEqual([3, 3]);
+      expect(page.some(item => item.onlySeller)).toBe(false);
+    }
+    expect(pages[2]?.every(item => item.onlySeller && keys(item).includes(EXPLAIN_KEYS.onlySeller))).toBe(true);
+    expect(new Set(pages.flat().map(item => item.documentId)).size).toBe(list.length);
+  });
+
+  it('demotes excess promoted results to the next page and rejects paid scores for a zero promotion quota', () => {
     const list = sorted(Array.from({ length: 40 }, (_, i) => ({ id: i, author: `a${i % 20}`, score: 1 - i * 0.01, promoted: i < 8 })));
     const [p1, p2] = allPages(list);
     expect(p1?.filter(i => i.promoted)).toHaveLength(4);
     expect(p2?.filter(i => i.promoted)).toHaveLength(4);
     expect(p1?.slice(0, 4).map(i => i.promoted)).toEqual([true, true, true, true]);
-    const small = allPages(list, 4);
-    expect(small.flat()).toHaveLength(40);
-    expect(small.flat().some(i => i.promoted || keys(i).includes(EXPLAIN_KEYS.promoted))).toBe(false);
+    for (const pageSize of [1, 2, 3, 4]) {
+      expect(rerank(list, { pageSize }, opts)).toMatchObject({
+        ok: false, error: { code: 'VALIDATION_FAILED', fields: [{ path: 'pageSize', code: 'PROMOTED_QUOTA_ZERO' }] },
+      });
+      // This fixture is rescored organically: score is independent of the original promoted flag.
+      const organic = list.map(item => ({ ...item, promoted: false }));
+      expect(allPages(organic, pageSize).flat().map(item => item.documentId))
+        .toEqual(organic.map(item => item.documentId));
+    }
   });
 
   it('builds explanations from score components as message keys with parameters', () => {
@@ -230,10 +278,13 @@ describe('page rules', () => {
 });
 
 describe('purity and exports', () => {
-  it('TEST-PS-050-09.T10 repeated calls after a thrown error and concurrent calls share no state and return the same result', async () => {
+  it('TEST-PS-050-09.T10 repeat and concurrent calls after an invalid request share no state and return the same result', async () => {
     const list = Object.freeze(sorted(Array.from({ length: 60 }, (_, i) => ({ id: i, author: `a${i % 9}`, score: 1 - i * 0.01, promoted: i % 7 === 0, fresh: i % 5 === 0 }))));
     const baseline = JSON.stringify(rerank(list, {}, opts));
-    expect(() => rerank({ length: 1 } as never, {}, opts)).toThrow();
+    expect(rerank({ length: 1 } as never, {}, opts)).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    expect(rerank([], null as never, opts)).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    expect(rerank([], {}, undefined as never)).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    expect(rerank(list, {}, { ...opts, promotionEnabled: 'false' } as never)).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
     expect(rerank([null], {}, opts).ok).toBe(false);
     expect(JSON.stringify(rerank(list, {}, opts))).toBe(baseline);
     const results = await Promise.all(Array.from({ length: 20 }, async () => JSON.stringify(rerank(list, {}, opts))));

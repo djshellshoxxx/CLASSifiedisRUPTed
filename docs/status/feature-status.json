@@ -1,12 +1,12 @@
 {
   "totals": {
     "modules": 148,
-    "withRuntime": 14,
-    "withPassingTests": 3,
+    "withRuntime": 18,
+    "withPassingTests": 7,
     "declared": 688,
-    "implemented": 5,
+    "implemented": 8,
     "requirements": 4510,
-    "covered": 99
+    "covered": 190
   },
   "features": [
     {
@@ -74,12 +74,12 @@
       "slug": "discovery",
       "title": "Local discovery",
       "modules": 8,
-      "withRuntime": 2,
-      "withPassingTests": 0,
+      "withRuntime": 4,
+      "withPassingTests": 2,
       "declared": 18,
-      "implemented": 0,
+      "implemented": 3,
       "requirements": 240,
-      "covered": 0
+      "covered": 46
     },
     {
       "id": "F07",
@@ -170,12 +170,12 @@
       "slug": "i18n",
       "title": "Accessibility and localization",
       "modules": 5,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 2,
+      "withPassingTests": 2,
       "declared": 0,
       "implemented": 0,
       "requirements": 150,
-      "covered": 0
+      "covered": 45
     },
     {
       "id": "F15",
@@ -1174,28 +1174,26 @@
       "id": "F06.S03.M01",
       "title": "Relevance ranking",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "interface-complete",
       "declared": 3,
-      "implemented": 0,
-      "missing": [
-        "discovery.ranking_config.publish",
-        "discovery.ranking_config.rollback",
-        "discovery.ranking_config.get_active"
-      ],
+      "implemented": 3,
+      "missing": [],
       "requirements": 30,
-      "covered": 0,
-      "sources": []
+      "covered": 22,
+      "sources": [
+        "packages/discovery/src/ranking/relevance/index.ts"
+      ]
     },
     {
       "id": "F06.S03.M02",
       "title": "Ranking fairness",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 24,
       "sources": []
     },
     {
@@ -2257,24 +2255,24 @@
       "id": "F14.S02.M01",
       "title": "Languages",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 23,
       "sources": []
     },
     {
       "id": "F14.S02.M02",
       "title": "Currency display",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 22,
       "sources": []
     },
     {

@@ -16,8 +16,8 @@ None. The caller supplies the clock value (`now`) and whether the index sells pr
 - Candidates carry an extra required `firstSeenAt` (document first seen) beyond the spec's input list, needed for the documented tie-break check (V04). Candidates beyond the 200 window are validated but never returned.
 - Slot positions are 0-based: 5 and 12 for 20 results; other sizes use base floor(n/4) with step 7n/20, limited to fit. A new author who ranks above its slot position keeps its natural position (the slot is not used to demote it).
 - The "page's top score" is the score of the first remaining candidate when the page is built.
-- Pages smaller than 5 have promoted cap 0: promoted flags are then not shown as promoted (no label, no promoted key) so no result is dropped.
-- When the cap is relaxed, every item of an author exceeding 3 on that page carries `only_seller`.
+- For pages of 1–4 the promotion quota is zero. Score the query with promotion disabled before calling `rerank` at these sizes. A paid candidate in the top 200 returns `VALIDATION_FAILED` with field `pageSize` and reason `PROMOTED_QUOTA_ZERO` because its supplied score may include a boost. Organic snapshots support every size from 1 through 50.
+- A page with several remaining sellers can be short. The three-per-author cap relaxes only when the unconsumed window contains exactly one seller and the resulting page includes more than three of their listings. Those listings carry `only_seller`.
 - V03: the spec says the flag is "ignored and recorded" and also lists the error; the error is returned (per test row T04).
 - Explanation keys are derived from the supplied `components` (optional `matchField`, `distanceBucket`, `ageDays`, `defaultRanking`); `recent` is added when `recency >= 0.5`.
 
@@ -27,6 +27,6 @@ None. The caller supplies the clock value (`now`) and whether the index sells pr
 ## Limits
 Sybil gaming of new-author slots cannot be detected here; only the 2-per-page limit, the 50 percent ratio and the 30 day window bound it (as stated in the spec).
 
-## Status at pause (2026-11-11)
+## Review and verification
 
-Implemented and self-validated by the implementing agent. **Not independently reviewed:** the owner paused the project before the review, fix and verification stages ran. Re-run on the implementation commit by the integration lane: `typecheck`, `deps:check` and `spec:check` pass (0 errors); this lane's tests: 34 passed, 0 failed, 0 skipped. The module is not yet exported from the package entry point and is not wired into the PWA.
+The November 12 review reproduced reversed high-scoring newcomers, missing paid labels at page sizes 1–4 and incorrect single-seller explanations. Regression tests cover each case and the 30-day eligibility cutoff. The randomized checks use the input seller and promotion fields to validate the output across pages. The discovery package exports `rerank`. Connecting it to the search screen remains open.

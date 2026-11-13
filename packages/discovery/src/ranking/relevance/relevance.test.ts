@@ -4,7 +4,7 @@ import { canonicalJson, defineCommand, z, type Actor, type SignedEnvelope } from
 import { createTestKernel } from '@classrup/kernel/testing';
 import { createHash, generateKeyPairSync, sign as edSign, verify as edVerify, createPublicKey } from 'node:crypto';
 import {
-  DEFAULT_RANKING_CONFIG, DEFAULT_RANKING_PARAMS, activateConfig, distanceBucketBetweenCells, distanceBucketForKm, explainComponents, rankCandidates, rankingConfigDefinitions,
+  DEFAULT_RANKING_CONFIG, DEFAULT_RANKING_PARAMS, distanceBucketBetweenCells, distanceBucketForKm, explainComponents, rankCandidates, rankingConfigDefinitions,
   rankingConfigSchema, rankingConfigVaultDefinitions, rankingStatementPayloadSchema, readRankingConfigStatement, score, toScoringConfig, type RankingConfigOptions, type ScoreContext,
 } from './index.ts';
 
@@ -247,7 +247,7 @@ describe('statements, authorization and idempotency', () => {
     expect(read.value).toMatchObject({ configId: o2.configId, version: 3, relayId: 'relay-a', promotionBoost: 0.2, reasonNote: 'more promotion headroom' });
     const verified = await verifyEnvelope(a.statement, { now: k.clock.now() });
     expect(verified.type).toBe('classrup.discovery.ranking_config/v1');
-    expect(verified.seq).toBe(3);
+    expect(verified.seq).toBe(2);
     expect(verified.cid).toBe(o2.statementCid);
     const events = k.events.filter(e => e.type === 'discovery.ranking_config.published');
     expect(events).toHaveLength(2);
@@ -283,6 +283,26 @@ describe('statements, authorization and idempotency', () => {
     expect(a.ok && (a.value.value as { history: unknown[] }).history).toHaveLength(1);
   });
 
+  it('rejects a correctly signed successor with the wrong sequence or previous CID', async () => {
+    const { options, operator } = setup();
+    for (const wrongField of ['seq', 'prev']) {
+      const k = createTestKernel();
+      const defs = rankingConfigDefinitions({
+        ...options,
+        signStatement: (type, payload, seq, prev) => options.signStatement(
+          type, payload, seq === 2 && wrongField === 'seq' ? seq + 1 : seq,
+          seq === 2 && wrongField === 'prev' ? 'different-cid' : prev,
+        ),
+      });
+      k.registry.add(...defs.all);
+      const publish = (expectedActiveVersion: number) => k.cmd(defs.publish.name, { ...params(), expectedActiveVersion }, { actor: operator });
+      expect((await publish(1)).ok).toBe(true);
+      expect(await publish(2)).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+      expect(await k.ask(defs.getActive.name, {})).toMatchObject({ ok: true, value: { value: { active: { version: 2 } } } });
+      expect(k.events).toHaveLength(1);
+    }
+  });
+
   it('TEST-PS-051-09.T08 replayed Idempotency-Key returns the original response; an aborted activation leaves exactly one active version', async () => {
     const { k, operator, options, active } = setup();
     const body = { ...params(), expectedActiveVersion: 1 };
@@ -295,10 +315,15 @@ describe('statements, authorization and idempotency', () => {
     expect((await active(true)).history).toHaveLength(2);
     expect(k.events.filter(e => e.type === 'discovery.ranking_config.published')).toHaveLength(1);
     // crash after the new version is inserted and the old one retired, before the transaction commits
+    const interruptedPublish = rankingConfigDefinitions(options).publish;
     k.registry.add(defineCommand({ name: 'test.ranking.crash', module: 'F06.S03.M01', capability: 'test.ranking.crash', idempotent: true, input: z.strictObject({}),
-      async handler(ctx) { await activateConfig(ctx, options, { params: DEFAULT_RANKING_PARAMS, reasonNote: undefined, expectedActiveVersion: 2 }); throw new Error('crash'); } }));
+      async handler(ctx) {
+        const result = await interruptedPublish.handler(ctx, { ...DEFAULT_RANKING_PARAMS, expectedActiveVersion: 2 });
+        if (!result.ok) return result;
+        throw new Error('crash');
+      } }));
     const crashed = await k.cmd('test.ranking.crash', {}, { actor: operator });
-    expect(crashed.ok).toBe(false);
+    expect(crashed).toMatchObject({ ok: false, error: { code: 'INTERNAL' } });
     const a = await active(true);
     expect(a.active.version).toBe(2);
     expect(a.history?.filter(h => h.status === 'active')).toHaveLength(1);
@@ -313,12 +338,14 @@ describe('statements, authorization and idempotency', () => {
     expect(!eleventh.ok && eleventh.error.code).toBe('RATE_LIMITED');
     expect(!eleventh.ok && eleventh.error.retryAfterMs).toBeGreaterThan(0);
     expect((await active()).active.version).toBe(11);
-    k.clock.advance(DAY + 1000);
+    k.clock.advance(DAY - 1);
+    expect(await publish({}, 11)).toMatchObject({ ok: false, error: { code: 'RATE_LIMITED', retryAfterMs: 1 } });
+    k.clock.advance(1);
     expect((await publish({}, 11)).ok).toBe(true);
     const a = await active();
     const tampered = structuredClone(a.statement) as { payload: { promotionBoost: number } };
     tampered.payload.promotionBoost = 0.25;
-    const bad = await readRankingConfigStatement(tampered, options.verifyStatement);
+    const bad = await readRankingConfigStatement(tampered, options.verifyStatement, { relayAuthor: identity.principal });
     expect(bad.ok).toBe(false);
     const wrongKey = await readRankingConfigStatement(a.statement, options.verifyStatement, { relayAuthor: 'did:key:z6MkSomebodyElse' });
     expect(!wrongKey.ok && wrongKey.error.code).toBe('FORBIDDEN');
@@ -348,6 +375,34 @@ describe('statements, authorization and idempotency', () => {
 });
 
 describe('vault', () => {
+  it('always reads its bundled configuration even with relay publication records in its tenant', async () => {
+    const { options, operator } = setup();
+    const vault = rankingConfigVaultDefinitions();
+    const relay = rankingConfigDefinitions(options);
+    const k = createTestKernel({ definitions: [relay.publish, ...vault.all] });
+    const publish = await k.cmd(relay.publish.name, { ...params({ recencyHalfLifeDays: 85 }), expectedActiveVersion: 1 }, { actor: operator });
+    expect(publish.ok).toBe(true);
+    const r = await k.ask(vault.getActive.name, { includeHistory: true });
+    expect(r).toMatchObject({ ok: true, value: { value: {
+      active: { version: 1, origin: 'bundled', recencyHalfLifeDays: 14 },
+      history: [{ version: 1, origin: 'bundled' }],
+    } } });
+    if (!r.ok) throw new Error(r.error.code);
+    expect(r.value.value).not.toHaveProperty('statement');
+    expect(await k.ask(vault.getActive.name, {}, { actor: { kind: 'anonymous' } })).toMatchObject({
+      ok: false, error: { code: 'UNAUTHENTICATED' },
+    });
+  });
+
+  it('protects the nested bundled ranking parameters from accidental changes by consumers', () => {
+    for (const field of ['weights', 'bm25', 'distanceWeights'] as const) {
+      expect(Object.isFrozen(DEFAULT_RANKING_PARAMS[field])).toBe(true);
+      expect(Object.isFrozen(DEFAULT_RANKING_CONFIG[field])).toBe(true);
+    }
+    expect(Reflect.set(DEFAULT_RANKING_CONFIG.weights, 'text', 0)).toBe(false);
+    expect(DEFAULT_RANKING_PARAMS.weights.text).toBe(0.6);
+  });
+
   it('TEST-PS-051-09.T12 a vault without relay config uses the bundled default and the explanation says default ranking', async () => {
     const k = createTestKernel();
     const defs = rankingConfigVaultDefinitions();

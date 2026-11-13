@@ -74,13 +74,17 @@ function before(a: FairnessCandidate, b: FairnessCandidate): boolean {
   return a.documentId < b.documentId;
 }
 
-interface Entry { readonly c: FairnessCandidate; readonly index: number; readonly shown: boolean; }
-interface Built { readonly entries: { e: Entry; slot: boolean }[]; readonly stats: FairnessStats; readonly cappedAuthors: Set<string>; }
+interface Entry { readonly c: FairnessCandidate; readonly index: number; }
+interface Built { readonly entries: { e: Entry; slot: boolean }[]; readonly stats: FairnessStats; readonly onlySeller: boolean; }
 
 function buildPage(pool: Entry[], pageSize: number, now: number): Built {
   const cap = promotedCap(pageSize);
   const top = (pool[0] as Entry).c.score;
-  const isNewAuthor = (c: FairnessCandidate): boolean => now - Date.parse(c.authorFirstSeenAt) < C.newAuthorWindowDays * DAY_MS;
+  const isNewAuthor = (c: FairnessCandidate): boolean => {
+    const age = now - Date.parse(c.authorFirstSeenAt);
+    return age >= 0 && age < C.newAuthorWindowDays * DAY_MS;
+  };
+  const singleSeller = pool.every(entry => entry.c.authorDid === pool[0]?.c.authorDid);
   const perAuthor = new Map<string, number>();
   const used = (a: string): number => perAuthor.get(a) ?? 0;
   const take = (a: string): void => { perAuthor.set(a, used(a) + 1); };
@@ -89,40 +93,41 @@ function buildPage(pool: Entry[], pageSize: number, now: number): Built {
   const slotItems: Entry[] = [];
   for (const e of pool) {
     if (slotItems.length >= slots) break;
-    if (e.shown || !isNewAuthor(e.c) || e.c.score < C.newAuthorMinScoreRatio * top || used(e.c.authorDid) >= C.maxPerAuthorPerPage) continue;
+    if (e.c.promoted || !isNewAuthor(e.c) || e.c.score < C.newAuthorMinScoreRatio * top || used(e.c.authorDid) >= C.maxPerAuthorPerPage) continue;
     slotItems.push(e); take(e.c.authorDid);
   }
   const chosen = new Set(slotItems);
   const regular: Entry[] = [];
-  let promos = slotItems.filter(e => e.shown).length;
-  let authorCapped = 0; let promotedDemoted = 0;
-  const authorSkipped: Entry[] = [];
+  let promos = 0;
+  let authorCapped = 0;
+  let promotedDemoted = 0;
   for (const e of pool) {
     if (regular.length + slotItems.length >= pageSize) break;
     if (chosen.has(e)) continue;
-    if (used(e.c.authorDid) >= C.maxPerAuthorPerPage) { authorCapped++; authorSkipped.push(e); continue; }
-    if (e.shown && promos >= cap) { promotedDemoted++; continue; }
-    if (e.shown) promos++;
-    take(e.c.authorDid); regular.push(e); chosen.add(e);
-  }
-  // Relax the author cap only when nobody else is left to fill the page.
-  const cappedAuthors = new Set<string>();
-  if (regular.length + slotItems.length < pageSize) {
-    for (const e of authorSkipped) {
-      if (regular.length + slotItems.length >= pageSize) break;
-      if (e.shown && promos >= cap) continue;
-      if (e.shown) promos++;
-      take(e.c.authorDid); regular.push(e); chosen.add(e);
+    if (!singleSeller && used(e.c.authorDid) >= C.maxPerAuthorPerPage) {
+      authorCapped++;
+      continue;
     }
-    for (const [a, n] of perAuthor) if (n > C.maxPerAuthorPerPage) cappedAuthors.add(a);
+    if (e.c.promoted && promos >= cap) {
+      promotedDemoted++;
+      continue;
+    }
+    if (e.c.promoted) promos++;
+    take(e.c.authorDid);
+    regular.push(e);
   }
-  regular.sort((a, b) => a.index - b.index);
-  const out: { e: Entry; slot: boolean }[] = regular.map(e => ({ e, slot: false }));
+
+  const out = regular.map(e => ({ e, slot: false }));
   const positions = newAuthorSlotPositions(pageSize);
-  const placed = slotItems.map((e, i) => ({ e, target: Math.min(positions[i] as number, regular.filter(r => r.index < e.index).length) }))
-    .sort((a, b) => a.target - b.target || a.e.index - b.e.index);
-  for (const p of placed) out.splice(Math.min(p.target, out.length), 0, { e: p.e, slot: true });
-  return { entries: out, stats: { authorCapped, newAuthorSlotsFilled: slotItems.length, promotedDemoted }, cappedAuthors };
+  for (const [i, e] of slotItems.entries()) {
+    // All earlier reserved items precede this one in relevance order.
+    const naturalPosition = i + regular.filter(r => r.index < e.index).length;
+    out.splice(Math.min(positions[i] as number, naturalPosition), 0, { e, slot: true });
+  }
+  return {
+    entries: out, onlySeller: singleSeller && out.length > C.maxPerAuthorPerPage,
+    stats: { authorCapped, newAuthorSlotsFilled: slotItems.length, promotedDemoted },
+  };
 }
 
 function explainFor(c: FairnessCandidate, shown: boolean, slot: boolean, onlySeller: boolean): ExplainEntry[] {
@@ -143,6 +148,9 @@ function explainFor(c: FairnessCandidate, shown: boolean, slot: boolean, onlySel
  * repeats or drops a result. Candidates beyond the 200 window are not part of the result.
  */
 export function rerank(candidates: readonly unknown[], pageParams: PageParams, options: RerankOptions): Result<RerankResult, AppError> {
+  if (!Array.isArray(candidates)) return err(invalid('candidates', 'INVALID_TYPE'));
+  if (!options || typeof options.promotionEnabled !== 'boolean') return err(invalid('promotionEnabled', 'INVALID_TYPE'));
+  if (!pageParams || typeof pageParams !== 'object' || Array.isArray(pageParams)) return err(invalid('pageParams', 'INVALID_TYPE'));
   if (!Number.isFinite(options.now)) return err(invalid('now', 'NOT_FINITE'));
   const pageSize = pageParams.pageSize ?? C.defaultPageSize;
   const position = pageParams.windowPosition ?? 0;
@@ -161,16 +169,17 @@ export function rerank(candidates: readonly unknown[], pageParams: PageParams, o
   for (let i = 1; i < list.length; i++) if (!before(list[i - 1] as FairnessCandidate, list[i] as FairnessCandidate)) return err(fairnessErrors.make('FAIRNESS_INPUT_UNSORTED', { params: { index: i } }));
   const window = list.slice(0, C.windowSize);
   if (window.length === 0) return position === 0 ? ok({ items: [], nextWindowPosition: null, stats: { authorCapped: 0, newAuthorSlotsFilled: 0, promotedDemoted: 0 } }) : err(invalid('windowPosition', 'OUT_OF_WINDOW'));
-  // With a promoted cap of zero (pages under 5 results) a promoted flag cannot be shown at all, so it is not shown as promoted.
-  const showPromoted = promotedCap(pageSize) > 0;
-  let pool: Entry[] = window.map((c, index) => ({ c, index, shown: c.promoted && showPromoted }));
+  // Paid scores cannot be made organic by clearing their labels. The caller can rescore
+  // with promotion disabled before requesting a page that has no promoted slots.
+  if (promotedCap(pageSize) === 0 && window.some(c => c.promoted)) return err(invalid('pageSize', 'PROMOTED_QUOTA_ZERO'));
+  let pool: Entry[] = window.map((c, index) => ({ c, index }));
   let start = 0;
   while (pool.length > 0) {
     const built = buildPage(pool, pageSize, options.now);
     if (start === position) {
       const items = built.entries.map(({ e, slot }) => {
-        const onlySeller = built.cappedAuthors.has(e.c.authorDid);
-        return { documentId: e.c.documentId, authorDid: e.c.authorDid, score: e.c.score, promoted: e.shown, newAuthorSlot: slot, onlySeller, explain: explainFor(e.c, e.shown, slot, onlySeller) };
+        const onlySeller = built.onlySeller;
+        return { documentId: e.c.documentId, authorDid: e.c.authorDid, score: e.c.score, promoted: e.c.promoted, newAuthorSlot: slot, onlySeller, explain: explainFor(e.c, e.c.promoted, slot, onlySeller) };
       });
       const used = new Set(built.entries.map(x => x.e));
       const next = start + built.entries.length;

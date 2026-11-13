@@ -78,27 +78,40 @@ function loadActive(ctx: { tx: { repo: CommandContext['tx']['repo'] }; tenantId:
 
 /**
  * Atomically retires the active version and inserts the new one in the caller's command transaction.
- * Exported for tests of atomicity; callers outside this module use the commands.
  */
-export async function activateConfig(ctx: CommandContext, options: RankingConfigOptions, args: { params: RankingParams; reasonNote: string | undefined; expectedActiveVersion: number }): Promise<Result<{ configId: string; version: number; statementCid: string }, AppError>> {
+async function activateConfig(ctx: CommandContext, options: RankingConfigOptions, args: { params: RankingParams; reasonNote: string | undefined; expectedActiveVersion: number }): Promise<Result<{ configId: string; version: number; statementCid: string }, AppError>> {
   const active = loadActive(ctx);
   if (!active.ok) return active;
   if (active.value.data.version !== args.expectedActiveVersion) return err(appError('CONFLICT_REVISION'));
   const repo = ctx.tx.repo(rankingConfigRepo);
   const nowMs = ctx.clock.now();
   const now = new Date(nowMs).toISOString();
-  const recent = repo.query({ where: { activatedAt: { gte: new Date(nowMs - DAY_MS).toISOString() } }, orderBy: 'activatedAt', dir: 'asc', limit: MAX_PUBLICATIONS_PER_24H });
+  const recent = repo.query({ where: { activatedAt: { gt: new Date(nowMs - DAY_MS).toISOString() } }, orderBy: 'activatedAt', dir: 'asc', limit: MAX_PUBLICATIONS_PER_24H });
   if (!recent.ok) return recent;
   const first = recent.value.items[0];
   if (recent.value.items.length >= MAX_PUBLICATIONS_PER_24H && first) return err(appError('RATE_LIMITED', { retryAfterMs: Math.max(1, Date.parse(first.data.activatedAt) + DAY_MS - nowMs) }));
   const version = active.value.data.version + 1;
   const configId = ctx.ids.next();
   const payload: RankingStatementPayload = { configId, version, relayId: options.relayId, ...args.params, ...(args.reasonNote !== undefined ? { reasonNote: args.reasonNote } : {}), activatedAt: now };
+  // The bundled version has no statement. Start the signed chain at 1 and link each subsequent publication.
+  const previousCid = active.value.data.statementCid ?? null;
+  let seq = 1;
+  if (previousCid !== null) {
+    const previous = ctx.tx.repo(rankingStatementRepo).get(previousCid);
+    const previousSeq = previous?.data.envelope.seq;
+    if (typeof previousSeq !== 'number' || !Number.isSafeInteger(previousSeq) || previousSeq < 1 || previousSeq >= Number.MAX_SAFE_INTEGER) {
+      return err(appError('INTERNAL'));
+    }
+    seq = previousSeq + 1;
+  }
   let envelope: SignedEnvelope;
   try {
-    envelope = structuredClone(await options.signStatement(RANKING_CONFIG_STATEMENT_TYPE, payload, version, active.value.data.statementCid ?? null));
+    envelope = structuredClone(await options.signStatement(RANKING_CONFIG_STATEMENT_TYPE, payload, seq, previousCid));
     const verified = await options.verifyStatement(envelope);
-    if (verified.author !== options.relayAuthor || verified.type !== RANKING_CONFIG_STATEMENT_TYPE || verified.cid !== envelope.cid || canonicalJson(verified.payload) !== canonicalJson(payload)) return err(appError('FORBIDDEN'));
+    if (verified.author !== options.relayAuthor || verified.type !== RANKING_CONFIG_STATEMENT_TYPE || verified.cid !== envelope.cid
+        || verified.seq !== seq || envelope.prev !== previousCid || canonicalJson(verified.payload) !== canonicalJson(payload)) {
+      return err(appError('FORBIDDEN'));
+    }
   } catch { return err(appError('DEPENDENCY_UNAVAILABLE')); }
   const retired = { ...active.value.data, status: 'retired' as const, retiredAt: now, updatedAt: now };
   const prev = active.value.record;
@@ -122,16 +135,19 @@ const reasonOf = (v: unknown): Result<string | undefined, AppError> => {
 };
 const forbidden = (ctx: CommandContext, options: RankingConfigOptions): boolean => ctx.actor.kind !== 'user' || !options.isOperator(ctx.actor.id, options.relayId);
 
-function activeQuery() {
+function activeQuery(surface: 'vault' | 'relay') {
   return defineQuery({
-    name: 'discovery.ranking_config.get_active', module: 'F06.S03.M01', capability: 'discovery.ranking_config.read_public', auth: 'public', surface: 'both',
+    name: 'discovery.ranking_config.get_active', module: 'F06.S03.M01', capability: 'discovery.ranking_config.read_public', auth: surface === 'vault' ? 'required' : 'public', surface,
     input: z.strictObject({ includeHistory: z.boolean().optional() }),
     handler(ctx, input) {
+      const bundled: RankingConfigView = { id: BUNDLED_CONFIG_ID, revision: 1, ...bundledData(ctx.tenantId) };
+      if (surface === 'vault') return ok({ active: bundled, ...(input.includeHistory ? { history: [bundled] } : {}) });
       const repo = ctx.tx.repo(rankingConfigRepo);
       const page = repo.query({ where: { status: 'active' }, limit: 2 });
       if (!page.ok) return page;
+      if (page.value.items.length > 1) return err(appError('INTERNAL'));
       const rec = page.value.items[0];
-      const active: RankingConfigView = rec ? { id: rec.id, revision: rec.revision, ...rec.data } : { id: BUNDLED_CONFIG_ID, revision: 1, ...bundledData(ctx.tenantId) };
+      const active: RankingConfigView = rec ? { id: rec.id, revision: rec.revision, ...rec.data } : bundled;
       const st = active.statementCid ? ctx.tx.repo(rankingStatementRepo).get(active.statementCid) : undefined;
       const out: { active: RankingConfigView; statement?: SignedEnvelope; history?: RankingConfigView[] } = { active, ...(st ? { statement: st.data.envelope } : {}) };
       if (input.includeHistory) {
@@ -144,9 +160,9 @@ function activeQuery() {
   });
 }
 
-/** Vault registration: only the public read, which returns the bundled default (a vault has no relay publication commands). */
+/** Vault registration: only the principal's read, which returns the bundled default (a vault has no relay publication commands). */
 export function rankingConfigVaultDefinitions() {
-  const getActive = activeQuery();
+  const getActive = activeQuery('vault');
   return { getActive, all: [getActive] as const };
 }
 
@@ -181,19 +197,19 @@ export function rankingConfigDefinitions(options: RankingConfigOptions) {
       return activateConfig(ctx, options, { params: params.value, reasonNote: reason.value, expectedActiveVersion: input.expectedActiveVersion });
     },
   });
-  const getActive = activeQuery();
+  const getActive = activeQuery('relay');
   return { publish, rollback, getActive, all: [publish, rollback, getActive] as const };
 }
 
 /**
- * Client-side check of a relay's published statement before display: signature, type, schema and (optionally) the expected relay key.
+ * Client-side check of a relay's published statement before display: signature, type, schema and the selected relay's key.
  * The result is for display only; a vault never applies a relay config to its own local ranking.
  */
-export async function readRankingConfigStatement(envelope: unknown, verify: (e: unknown) => Promise<VerifiedStatement>, expected: { relayAuthor?: string } = {}): Promise<Result<RankingStatementPayload, AppError>> {
+export async function readRankingConfigStatement(envelope: unknown, verify: (e: unknown) => Promise<VerifiedStatement>, expected: { relayAuthor: string }): Promise<Result<RankingStatementPayload, AppError>> {
   let verified: VerifiedStatement;
   try { verified = await verify(structuredClone(envelope)); } catch { return err(appError('VALIDATION_FAILED')); }
   if (verified.type !== RANKING_CONFIG_STATEMENT_TYPE) return err(appError('VALIDATION_FAILED'));
-  if (expected.relayAuthor !== undefined && verified.author !== expected.relayAuthor) return err(appError('FORBIDDEN'));
+  if (!expected?.relayAuthor || verified.author !== expected.relayAuthor) return err(appError('FORBIDDEN'));
   const parsed = rankingStatementPayloadSchema.safeParse(verified.payload);
   return parsed.success ? ok(parsed.data) : err(invalidConfig(parsed.error.issues));
 }

@@ -29,8 +29,9 @@ export const reasonNoteSchema = boundedString({ max: 280 });
 export interface ScoringConfig extends RankingParams { readonly origin: 'bundled' | 'relay_published'; readonly version: number; }
 
 export const DEFAULT_RANKING_PARAMS: RankingParams = Object.freeze({
-  weights: { text: 0.6, recency: 0.25, distance: 0.15 }, bm25: { titleWeight: 5, bodyWeight: 1, k: 3 }, recencyHalfLifeDays: 14,
-  distanceWeights: { lt5: 1, '5_10': 0.85, '10_25': 0.65, '25_50': 0.4, gt50: 0.2 }, promotionBoost: 0.15,
+  weights: Object.freeze({ text: 0.6, recency: 0.25, distance: 0.15 }),
+  bm25: Object.freeze({ titleWeight: 5, bodyWeight: 1, k: 3 }), recencyHalfLifeDays: 14,
+  distanceWeights: Object.freeze({ lt5: 1, '5_10': 0.85, '10_25': 0.65, '25_50': 0.4, gt50: 0.2 }), promotionBoost: 0.15,
 });
 export const DEFAULT_RANKING_CONFIG: ScoringConfig = Object.freeze({ ...DEFAULT_RANKING_PARAMS, origin: 'bundled' as const, version: 1 });
 

@@ -15,5 +15,9 @@
     "@classrup/i18n": "workspace:*",
     "@classrup/governance": "workspace:*"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "description": "Exact, stateless money precision primitives; other commerce workflows remain specification-only.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./valuation/precision": "./src/valuation/precision/index.ts"
+  }
 }

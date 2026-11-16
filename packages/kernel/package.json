@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./node": "./src/node.ts",
     "./browser": "./src/browser.ts",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./errors": "./src/errors/index.ts"
   },
   "engines": {
     "node": ">=22.18.0"

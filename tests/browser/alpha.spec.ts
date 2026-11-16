@@ -317,8 +317,23 @@ test('listing edits preserve exact amounts, publish public fields, and clear dra
   await expect(page.locator('#listings')).not.toContainText('Unsubmitted edit');
 });
 
-test('encrypted backup restores listings and identity into a new empty vault', async ({ page }) => {
+test('encrypted backup restores listings, identity and private coarse area into a new empty vault', async ({ page }) => {
   const principal = await create(page, 'source');
+  const home = page.getByLabel('Home area tile (5-character geohash)', { exact: true });
+  const visibility = page.getByLabel('Area visible when you copy it to a new listing', { exact: true });
+  await home.fill('u4pru');
+  await visibility.selectOption('L1');
+  await page.getByRole('button', { name: 'Save area preferences', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('Area preferences saved privately');
+  const listingArea = page.locator('#listing-form [name="region"]');
+  await expect(listingArea).toHaveValue('c2b2');
+  await page.getByRole('button', { name: 'Use visible area for new listing', exact: true }).click();
+  await expect(listingArea).toHaveValue('u4pr');
+  await page.getByRole('button', { name: 'Use saved area for regional search', exact: true }).click();
+  await expect(page.locator('#search-area')).toHaveValue('u4pru');
+  await visibility.selectOption('L0');
+  await page.getByRole('button', { name: 'Save area preferences', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Use visible area for new listing', exact: true })).toBeHidden();
   await listing(page, 'Backup-only lamp');
   await page.locator('#backup-password').fill(password);
   const pending = page.waitForEvent('download', { timeout: 20000 });
@@ -327,9 +342,11 @@ test('encrypted backup restores listings and identity into a new empty vault', a
   if (!path) throw new Error('Backup download has no path');
   const backup = await readFile(path);
   expect(backup.toString()).not.toContain('Backup-only lamp');
+  expect(backup.toString()).not.toContain('"homeCell5"');
   expect(backup.toString()).not.toContain(password);
   await expect(page.locator('#backup-password')).toHaveValue('');
   await page.getByRole('button', { name: 'Lock vault' }).click();
+  await expect(page.locator('#location-preferences')).toBeEmpty();
   await page.locator('#access details summary').click();
   await page.locator('[name="restore-name"]').fill('restored');
   await page.locator('[name="restore-password"]').fill(password);
@@ -339,9 +356,18 @@ test('encrypted backup restores listings and identity into a new empty vault', a
   await expect(page.locator('#status')).toContainText('Backup restored');
   expect(await page.locator('#principal').textContent()).toBe(principal);
   await expect(page.locator('#listings')).toContainText('Backup-only lamp');
+  await expect(home).toHaveValue('u4pru');
+  await expect(visibility).toHaveValue('L0');
+  await expect(page.getByRole('button', { name: 'Use visible area for new listing', exact: true })).toBeHidden();
   await page.reload();
   await unlock(page, 'restored');
   await expect(page.locator('#listings')).toContainText('Backup-only lamp');
+  await expect(home).toHaveValue('u4pru');
+  await page.getByRole('button', { name: 'Clear saved area', exact: true }).click();
+  await expect(home).toHaveValue('');
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'restored');
+  await expect(home).toHaveValue('');
 });
 
 test('archive signs a withdrawal, survives encrypted backup and restores unpublished', async ({ page }) => {

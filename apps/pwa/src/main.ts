@@ -10,15 +10,17 @@ import { listingHistory } from './listing-history.ts';
 import { listingClosure } from './listing-closure.ts';
 import { createListingMaintenance } from './listing-maintenance.ts';
 import { mountListingEditor } from './listing-editor.ts';
+import { mountLocationPreferences } from './location-preferences.ts';
 import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
 import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
+  ...locationBackupCodecs(backupCodec),
   ...localNotificationBackupCodecs(backupCodec),
   ...barterCodecs,
   archiveBackupCodec,
@@ -68,6 +70,7 @@ let notifications: ReturnType<typeof mountNotifications> | undefined;
 let notificationOutbox: OutboxDispatcher | undefined;
 let lastNotificationSweep = 0;
 let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
+let locationPreferences: ReturnType<typeof mountLocationPreferences> | undefined;
 let sessionProtection: ReturnType<typeof protectVaultSession> | undefined;
 let closingSession: Promise<void> | undefined;
 let storageCloseFailed = false;
@@ -273,7 +276,8 @@ async function connect(session: UnlockedVault): Promise<void> {
   });
   const barterRuntime = createBarterRuntime(session);
   const notifyDefinitions = localNotificationDefinitions({ localPrincipal: () => session.principal, isBlocked: barterRuntime.isBlocked, isThreadMuted: () => false });
-  const registry = createRegistry().add(...definitions.all, ...discoveryDefinitions({ verifyEnvelope }).all, ...barterRuntime.definitions, ...notifyDefinitions.all);
+  const registry = createRegistry().add(...definitions.all, ...discoveryDefinitions({ verifyEnvelope }).all,
+    ...locationDefinitions({ localPrincipal: () => session.principal }).all, ...barterRuntime.definitions, ...notifyDefinitions.all);
   bus = createBus({ registry, storage: session.storage,
     clock: createSystemClock(), ids,
     authz: { authorize: (actor, _capability, _resource, context) => context.tenantId === session.principal && actor.kind === 'user' && actor.id === session.principal && unlocked === session ? { allow: true } : { allow: false, code: 'FORBIDDEN' } },
@@ -289,6 +293,22 @@ async function connect(session: UnlockedVault): Promise<void> {
   notifications = mountNotifications({ container: element('notifications'), command, query, action: vaultAction, message: sessionMessage, synchronize: syncNotifications });
   listingEditor?.destroy();
   listingEditor = mountListingEditor({ container: element('listing-editor'), command, action: vaultAction, message: sessionMessage, saved: refresh });
+  locationPreferences?.destroy();
+  const locationView = mountLocationPreferences({ container: element('location-preferences'), command, query, action: vaultAction, message: sessionMessage,
+    geolocation: navigator.geolocation,
+    applyToListing(cell) {
+      if (unlocked !== session) return;
+      const input = element<HTMLFormElement>('listing-form').elements.namedItem('region') as HTMLInputElement;
+      input.value = cell; input.focus();
+      sessionMessage('Coarse area copied into your new listing form. Review it before saving or publishing.');
+    },
+    applyToSearch(cell) {
+      if (unlocked !== session) return;
+      const input = element<HTMLInputElement>('search-area'); input.value = cell; input.focus();
+      sessionMessage('Home region copied into the local search form. Select Apply search to use it.');
+    },
+  });
+  locationPreferences = locationView;
   listingMaintenance?.dispose();
   listingMaintenance = createListingMaintenance({ command, isActive: () => unlocked === session,
     onStatus(status) {
@@ -307,8 +327,10 @@ async function connect(session: UnlockedVault): Promise<void> {
     maintenanceQueued = true;
     void vaultAction(refresh).finally(() => { maintenanceQueued = false; });
   }, 60_000);
-  await syncNotifications();
-  await refresh(); sessionMessage('Vault unlocked. Local changes are persisted in this browser.');
+  await runForSession(session, () => unlocked, syncNotifications);
+  await runForSession(session, () => unlocked, () => locationView.refresh());
+  await runForSession(session, () => unlocked, refresh);
+  sessionMessage('Vault unlocked. Local changes are persisted in this browser.');
 }
 function clearLocalViews() {
   sessionProtection?.dispose(); sessionProtection = undefined;
@@ -318,6 +340,7 @@ function clearLocalViews() {
   element('listing-maintenance-status').textContent = '';
   resetListingPage();
   listingEditor?.destroy(); listingEditor = undefined;
+  locationPreferences?.destroy(); locationPreferences = undefined;
   notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
   element('notification-delivery-status').textContent = '';
 }

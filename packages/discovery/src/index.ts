@@ -19,3 +19,5 @@ export {
   type CompiledFilter, type Filter, type FilterPorts, type ValidatedFilter,
 } from './search/filter/index.ts';
 export { localSearchOptionsSchema, type LocalSearchOptions } from './search/local-options.ts';
+export { locationDefinitions, locationBackupCodecs, locationSettingRepo, locationSettingSchema, locationUpdated,
+  publicLocationCell, type LocationSetting, type LocationView, type PublicLocationLevel } from './geoprivacy/location/index.ts';

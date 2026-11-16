@@ -2,8 +2,10 @@ import { createUuidV7Generator, type StoredRecord } from '../../../packages/kern
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
 import { publicKeyFromDid } from '../../../packages/identity/src/index.ts';
 import { type UnlockedVault } from '../../../packages/vault/src/index.ts';
-import { admitSignedGraph, discoverCycles, prepareProposal, parseWant, WANT_TYPE, PROPOSAL_TYPE, CONSENT_TYPE, RESERVATION_TYPE, WITHDRAWAL_TYPE, coordinationRepo, type CoordinationState } from '../../../packages/mutiny/src/index.ts';
+import { prepareProposal, parseWant, WANT_TYPE, PROPOSAL_TYPE, CONSENT_TYPE, RESERVATION_TYPE, WITHDRAWAL_TYPE, coordinationRepo, type CoordinationState } from '../../../packages/mutiny/src/index.ts';
 import type { BarterInputs, MatchingPolicy } from './barter-runtime.ts';
+import { createMatchingWorkerClient, MatchingWorkerError } from './matching-worker-client.ts';
+import type { MatchingInput, MatchingOutcome } from './matching-worker-protocol.ts';
 
 export interface BarterMountOptions {
   readonly container: HTMLElement;
@@ -28,6 +30,7 @@ const ids = createUuidV7Generator();
 export function mountBarter(options: BarterMountOptions): { refresh(): Promise<void>; destroy(): void } {
   const { container, session } = options;
   let destroyed = false;
+  const matching = createMatchingWorkerClient();
   let inputs: BarterInputs | undefined;
   const root = node('section');
   root.setAttribute('aria-label', 'Local barter coordination');
@@ -44,8 +47,12 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
     for (const principal of blockedOwners) publicKeyFromDid(principal);
     const current = { enabled: trust.checked, blockedOwners }; options.setMatchingPolicy(current); return current;
   };
-  trust.addEventListener('change', () => run(async () => { policy(); }));
-  blocked.addEventListener('change', () => run(async () => { policy(); }));
+  const policyChanged = (): void => {
+    matching.cancel(); suggestions.replaceChildren();
+    run(async () => { policy(); });
+  };
+  trust.addEventListener('change', policyChanged);
+  blocked.addEventListener('change', policyChanged);
   const wantForm = node('form');
   const offered = node('select'); offered.required = true;
   const requested = node('select'); requested.required = true;
@@ -60,7 +67,17 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
   const suggestions = node('div');
   const coordinations = node('div');
   const holds = node('div');
-  const run = (fn: () => Promise<void>) => { void options.action(async () => { if (destroyed) throw new Error('This vault is locked'); await fn(); }); };
+  const run = (fn: () => Promise<void>) => { void options.action(async () => {
+    if (destroyed) throw new Error('This vault is locked');
+    try { await fn(); }
+    catch (error) {
+      if (error instanceof MatchingWorkerError && error.code === 'CANCELLED' && !destroyed) {
+        options.message('Matching was cancelled. No proposal or inventory commitment was created.');
+        return;
+      }
+      throw error;
+    }
+  }); };
   const button = (label: string, fn: () => Promise<void>): HTMLButtonElement => {
     const b = node('button', label); b.type = 'button'; b.addEventListener('click', () => run(fn)); return b;
   };
@@ -108,14 +125,28 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
     });
   });
 
+  async function match(input: MatchingInput): Promise<MatchingOutcome> {
+    // Added after the outer action disabled its existing buttons, so this remains
+    // operable while the background task is pending and does not join that queue.
+    const cancel = node('button', 'Cancel matching'); cancel.type = 'button';
+    cancel.addEventListener('click', () => { cancel.disabled = true; matching.cancel(); });
+    root.append(cancel);
+    try { return await matching.run(input); }
+    catch (error) {
+      if (!destroyed) summary.textContent = 'Matching stopped. Discover again to retry.';
+      throw error;
+    } finally { cancel.remove(); }
+  }
+
   async function discover(): Promise<void> {
     if (!trust.checked) throw new Error('Explicitly choose whether to include unfamiliar signing identities before discovery.');
     inputs = await load();
     const now = Date.now();
-    const graph = await admitSignedGraph(inputs.listingStatements, inputs.wantStatements, { now, localPrincipal: session.principal, optedIn: true, includeUnknownIdentities: true, blockedOwners: policy().blockedOwners });
-    const result = await discoverCycles(graph.edges, { now, localPrincipal: session.principal });
+    summary.textContent = 'Matching signed records in the background…';
+    const outcome = await match({ listingStatements: inputs.listingStatements, wantStatements: inputs.wantStatements, options: { now, localPrincipal: session.principal, optedIn: true, includeUnknownIdentities: true, blockedOwners: policy().blockedOwners } });
+    const { result } = outcome;
     live(); suggestions.replaceChildren(node('h3', 'Suggestions — no commitment'));
-    suggestions.append(node('p', `${result.suggestions.length} suggestions; ${graph.rejected} wants excluded; search cutoff: ${result.stats.truncated}. Time-limited results can vary between devices.`));
+    suggestions.append(node('p', `${result.suggestions.length} suggestions; ${outcome.rejected} wants excluded; search cutoff: ${result.stats.truncated}. Time-limited results can vary between devices.`));
     for (const suggestion of result.suggestions) {
       const article = node('article'); article.className = 'card';
       article.append(node('h4', `${suggestion.legs.length}-party cycle`));
@@ -123,16 +154,16 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
       for (const leg of suggestion.legs) description.append(node('li', `${short(leg.giverId)} gives item ${leg.inventoryItemId} to ${short(leg.receiverId)} (${leg.valueMinor} minor units ${leg.currency}).`));
       article.append(description, button('Propose this exact cycle', async () => {
         const fresh = await load(); const createdAt = Date.now();
-        const latest = await admitSignedGraph(fresh.listingStatements, fresh.wantStatements, { now: createdAt, localPrincipal: session.principal, optedIn: trust.checked, includeUnknownIdentities: trust.checked, blockedOwners: policy().blockedOwners });
-        const latestResult = await discoverCycles(latest.edges, { now: createdAt, localPrincipal: session.principal });
-        if (!latestResult.suggestions.some(s => s.cycleKey === suggestion.cycleKey)) throw new Error('This suggestion is no longer admissible. Discover again.');
+        const latest = await match({ listingStatements: fresh.listingStatements, wantStatements: fresh.wantStatements, options: { now: createdAt, localPrincipal: session.principal, optedIn: trust.checked, includeUnknownIdentities: trust.checked, blockedOwners: policy().blockedOwners } });
+        live();
+        if (!latest.result.suggestions.some(s => s.cycleKey === suggestion.cycleKey)) throw new Error('This suggestion is no longer admissible. Discover again.');
         const proposal = await prepareProposal({ subjectId: ids.next(), coordinatorId: session.principal, revisionNo: 1, previousHash: null, legs: suggestion.legs, createdAt, consentDeadline: createdAt + 3600000, executionWindowMs: 86400000 }, createdAt);
         const envelope = await signed(PROPOSAL_TYPE, proposal.snapshot); await ingest(envelope);
         options.download(`proposal-${proposal.snapshot.subjectId}.json`, envelope);
         options.message('Immutable proposal signed and saved. No consent or reservation was created. Participants have one hour to consent, followed by a one-day execution window.'); await refresh();
       })); suggestions.append(article);
     }
-    summary.textContent = `${result.suggestions.length} matching suggestions found; no consent, reservation or inventory commitment was created. ${graph.rejected} wants excluded. Suggestions are local and may change.`;
+    summary.textContent = `${result.suggestions.length} matching suggestions found; no consent, reservation or inventory commitment was created. ${outcome.rejected} wants excluded. Suggestions are local and may change.`;
   }
 
   async function refresh(): Promise<void> {
@@ -217,5 +248,5 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
     if (state.status === 'frozen') article.append(node('p', 'Conflicting signed commitments froze this coordination. Review the evidence and explicitly negotiate a new proposal; no winner is chosen automatically.'));
     coordinations.append(article);
   }
-  return { refresh, destroy() { destroyed = true; options.setMatchingPolicy({ enabled: false, blockedOwners: [] }); inputs = undefined; container.replaceChildren(); } };
+  return { refresh, destroy() { destroyed = true; matching.dispose(); options.setMatchingPolicy({ enabled: false, blockedOwners: [] }); inputs = undefined; container.replaceChildren(); } };
 }

@@ -124,8 +124,10 @@ test('build failure preserves prior output and successful build removes stale as
   assert.equal(await fs.readFile(path.join(root, 'dist/index.html'), 'utf8'), 'previous');
   await fs.writeFile(path.join(root, 'apps/pwa/index.html'), '<h1>Build fixture</h1><script src="./app.js" type="module"></script>');
   await fs.writeFile(path.join(root, 'apps/pwa/src/main.ts'), 'document.body.dataset.ready = "yes";');
+  await fs.writeFile(path.join(root, 'apps/pwa/src/matching-worker.ts'), 'self.onmessage = () => self.postMessage("worker ready");');
   await build(root);
   assert.match(await fs.readFile(path.join(root, 'dist/app.js'), 'utf8'), /ready/);
+  assert.match(await fs.readFile(path.join(root, 'dist/matching-worker.js'), 'utf8'), /worker ready/);
   await assert.rejects(fs.access(path.join(root, 'dist/obsolete.js')));
   await fs.writeFile(path.join(root, 'apps/pwa/src/main.ts'), 'this is invalid typescript !');
   await assert.rejects(build(root));

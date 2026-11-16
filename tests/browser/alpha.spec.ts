@@ -79,13 +79,14 @@ test('unlock performs local expiry and later archive without automatically expor
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
   const downloads: string[] = [];
   page.on('download', file => downloads.push(file.suggestedFilename()));
-  await page.clock.fastForward(31 * 86_400_000);
+  // The vault is closed: move wall time without a month-long timer tick.
+  await page.clock.setSystemTime(await page.evaluate(() => Date.now() + 31 * 86_400_000));
   await unlock(page, 'lifecycle-sweep');
   await expect(page.locator('#listings')).toContainText('expired');
   await expect(page.locator('#listing-maintenance-status')).toContainText('1 expired');
   await expect(page.getByRole('button', { name: 'Download signed withdrawal', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
-  await page.clock.fastForward(30 * 86_400_000);
+  await page.clock.setSystemTime(await page.evaluate(() => Date.now() + 30 * 86_400_000));
   await unlock(page, 'lifecycle-sweep');
   await expect(page.locator('#listings')).toContainText('archived');
   await expect(page.getByRole('button', { name: 'Restore listing', exact: true })).toBeVisible();
@@ -299,8 +300,8 @@ test('listing edits preserve exact amounts, publish public fields, and clear dra
   await page.getByLabel('Edit title', { exact: true }).fill('Revised guitar');
   await page.getByLabel('Edit condition', { exact: true }).selectOption('good');
   await page.getByRole('button', { name: 'Save listing changes', exact: true }).click();
-  const history = page.locator('#listings > article > details');
-  await history.locator('summary').first().click();
+  const history = page.locator('#listings > article > details').filter({ has: page.getByText('Local revision history', { exact: true }) });
+  await history.getByText('Local revision history', { exact: true }).click();
   await history.getByRole('button', { name: 'Load revision history', exact: true }).click();
   await expect(history.getByRole('status')).toHaveText('2 local revision snapshots loaded.');
   await expect(history).toContainText('Material change');

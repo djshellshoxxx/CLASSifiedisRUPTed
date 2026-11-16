@@ -19,7 +19,7 @@ export type ListingRevision = z.output<typeof listingRevisionSchema>;
 export const listingRevisionRepo = defineRepo({ type: 'bazaar.listing_revision', schema: listingRevisionSchema,
   indexes: { listing: data => data.listingId, number: data => String(data.revisionNo).padStart(16, '0') } });
 const revisionErrors = defineErrors({ BAZAAR_EDIT_REVISION_LIMIT: { status: 409, retryable: false } });
-const edited = defineEvent('bazaar.listing.edited', 1, 'P1', z.strictObject({ listingId: uuidv7(), ownerId: z.string(), revision: z.int(), status: z.enum(['draft', 'published', 'unpublished', 'archived']), material: z.boolean(), changedFields: z.array(fieldSchema), source: z.literal('owner_edit') }));
+const edited = defineEvent('bazaar.listing.edited', 1, 'P1', z.strictObject({ listingId: uuidv7(), ownerId: z.string(), revision: z.int(), status: listingSchema.shape.status, material: z.boolean(), changedFields: z.array(fieldSchema), source: z.literal('owner_edit') }));
 
 export function changedPublicFields(before: Listing, after: Listing): Array<typeof publicEditFields[number]> {
   return publicEditFields.filter(field => canonicalJson(before[field]) !== canonicalJson(after[field]));

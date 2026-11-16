@@ -27,6 +27,71 @@ async function listing(page: Page, title: string, amount = '12500') {
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
+test('idle vault lock clears private views and preserves saved listings', async ({ page }) => {
+  await page.clock.install();
+  await create(page, 'idle-lock');
+  await listing(page, 'Saved before idle lock');
+  await page.getByLabel('Title', { exact: true }).fill('Private unsaved draft');
+  await page.getByLabel('Lock after inactivity').selectOption('1');
+  await page.clock.fastForward(60_001);
+  await expect(page.locator('#workspace')).toBeHidden();
+  await expect(page.locator('#status')).toContainText('locked after inactivity');
+  await expect(page.locator('#principal')).toBeEmpty();
+  await expect(page.locator('#listings')).toBeEmpty();
+  await unlock(page, 'idle-lock');
+  await expect(page.locator('#listings')).toContainText('Saved before idle lock');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Lock after inactivity')).toHaveValue('15');
+});
+
+test('owner closes a listing and can download its verified withdrawal after reopening', async ({ page }) => {
+  await create(page, 'closure');
+  await listing(page, 'Finished guitar');
+  const publication = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Publish signed file', exact: true }).click();
+  await publication;
+  await page.getByText('Close this listing', { exact: true }).click();
+  await page.getByLabel('Closure reason').selectOption('sold');
+  await page.getByLabel('I confirm this listing is finished.').check();
+  const withdrawal = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Confirm closure', exact: true }).click();
+  const first = await withdrawal;
+  const firstPath = await first.path();
+  if (!firstPath) throw new Error('Withdrawal download is missing');
+  const signed = await readFile(firstPath, 'utf8');
+  await expect(page.locator('#listings')).toContainText('closed');
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'closure');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download signed withdrawal', exact: true }).click();
+  const secondPath = await (await again).path();
+  if (!secondPath) throw new Error('Re-downloaded withdrawal is missing');
+  expect(await readFile(secondPath, 'utf8')).toBe(signed);
+});
+
+test('unlock performs local expiry and later archive without automatically exporting', async ({ page }) => {
+  await page.clock.install();
+  await create(page, 'lifecycle-sweep');
+  await listing(page, 'Aging listing');
+  const publication = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Publish signed file', exact: true }).click();
+  await publication;
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  const downloads: string[] = [];
+  page.on('download', file => downloads.push(file.suggestedFilename()));
+  await page.clock.fastForward(31 * 86_400_000);
+  await unlock(page, 'lifecycle-sweep');
+  await expect(page.locator('#listings')).toContainText('expired');
+  await expect(page.locator('#listing-maintenance-status')).toContainText('1 expired');
+  await expect(page.getByRole('button', { name: 'Download signed withdrawal', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await page.clock.fastForward(30 * 86_400_000);
+  await unlock(page, 'lifecycle-sweep');
+  await expect(page.locator('#listings')).toContainText('archived');
+  await expect(page.getByRole('button', { name: 'Restore listing', exact: true })).toBeVisible();
+  expect(downloads).toEqual([]);
+});
+
 test('local listing contents and identifiers stay encrypted on disk across lock and unlock', async ({ page }) => {
   const principal = await create(page, 'encrypted-disk');
   const title = 'Private disk encryption canary';

@@ -1,5 +1,6 @@
-import { archiveDefinitions, archiveErrors, recordArchive } from './archive.ts';
-export { archiveRecordRepo, archiveRecordSchema, RESTORE_WINDOW_MS } from './archive.ts';
+import { archiveDefinitions } from './archive.ts';
+import { listingLifecycleDefinitions } from './lifecycle.ts';
+export { archiveRecordRepo, archiveRecordSchema, RESTORE_WINDOW_MS, AUTO_ARCHIVE_AFTER_MS } from './archive.ts';
 import { appError, canonicalJson, defineCommand, defineEvent, defineQuery, err, ok, timestamp, uuidv7, z, type CommandContext, type QueryContext, type SignedEnvelope, type StoredRecord } from '@classrup/kernel';
 import { publicListingSchema, tombstoneSchema, type PublicListingProjection, type VerifiedStatement } from '@classrup/discovery';
 
@@ -126,32 +127,28 @@ export function bazaarDefinitions(options: BazaarOptions) {
       if (!pub.ok) return pub; emitChange(ctx, saved.value, 'unpublished'); return ok({ listing: saved.value, envelope: signed.value });
     },
   });
-  const archive = defineCommand({ name: 'bazaar.listing.archive', module: 'F01.S01.M04', capability: 'bazaar.listing.archive', idempotent: true,
-    input: z.strictObject({ listingId: uuidv7(), expectedRevision: z.int().min(1) }),
-    async handler(ctx, input) {
-      const found = owned(ctx, input.listingId); if (!found.ok) return found;
-      const record = found.value;
-      if (record.revision !== input.expectedRevision) return err(appError('CONFLICT_REVISION'));
-      if (record.data.status === 'archived') return err(appError('CONFLICT_STATE'));
-      if (held(ctx, record.id)) return err(archiveErrors.make('BAZAAR_ARCHIVE_HOLD_ACTIVE'));
-      let envelope: SignedEnvelope | undefined;
-      if (record.data.status === 'published') {
-        const payload = { target: record.data.publicationCid, reason: 'owner', listingId: record.id, ownerId: record.data.ownerId, revision: record.revision + 1 };
-        const signed = await sign('classrup.alpha.tombstone/v1', payload, nextSeq(ctx, record.data.publicationCid), record.data.ownerId, record.data.publicationCid ?? null);
-        if (!signed.ok) return signed;
-        envelope = signed.value;
-        const pub = ctx.tx.repo(publicationRepo).put(envelope.cid, { envelope, listingId: record.id }, { expectedRevision: 0 });
-        if (!pub.ok) return pub;
-      }
-      const { expiresAt: _expiry, ...data } = record.data;
-      const saved = ctx.tx.repo(listingRepo).put(record.id, { ...data, status: 'archived', ...(envelope ? { publicationCid: envelope.cid } : {}) }, { expectedRevision: record.revision });
-      if (!saved.ok) return saved;
-      const archived = recordArchive(ctx, saved.value); if (!archived.ok) return archived;
-      emitChange(ctx, saved.value, 'archived');
-      return ok({ ...archived.value, ...(envelope ? { envelope } : {}) });
-    },
+  const endings = listingLifecycleDefinitions({ emitChange,
+    endPublication: (ctx, record, reason) => sign('classrup.alpha.tombstone/v1',
+      { target: record.data.publicationCid, reason, listingId: record.id, ownerId: record.data.ownerId, revision: record.revision + 1 },
+      nextSeq(ctx, record.data.publicationCid), record.data.ownerId, record.data.publicationCid ?? null),
   });
+  const { archive, close, expire, sweep } = endings;
   const get = defineQuery({ name: 'bazaar.listing.get', module: 'F01.S01.M01', capability: 'bazaar.listing.read', input: z.strictObject({ listingId: uuidv7() }), handler: (ctx, input) => owned(ctx, input.listingId) });
+  const publication = defineQuery({ name: 'bazaar.listing.publication', module: 'F01.S01.M03', capability: 'bazaar.listing.read',
+    input: z.strictObject({ listingId: uuidv7() }), async handler(ctx, input) {
+      const found = owned(ctx, input.listingId); if (!found.ok) return found;
+      const cid = found.value.data.publicationCid;
+      if (!cid) return err(appError('NOT_FOUND'));
+      const current = ctx.tx.repo(publicationRepo).get(cid);
+      if (!current || current.data.listingId !== input.listingId || current.data.envelope.cid !== cid) return err(appError('VALIDATION_FAILED'));
+      try {
+        await validatePublicationRecord(current.data, options.verifyProjection);
+        const verified = await options.verifyProjection(current.data.envelope);
+        const expectedType = found.value.data.status === 'published' ? 'classrup.bazaar.listing/v1' : 'classrup.alpha.tombstone/v1';
+        if (verified.author !== found.value.data.ownerId || verified.type !== expectedType) return err(appError('VALIDATION_FAILED'));
+      } catch { return err(appError('VALIDATION_FAILED')); }
+      return ok({ envelope: structuredClone(current.data.envelope) });
+    } });
   const list = defineQuery({ name: 'bazaar.listing.list', module: 'F01.S01.M01', capability: 'bazaar.listing.read', input: z.strictObject({ cursor: z.string().max(2000).optional() }),
     handler(ctx, input) { if (ctx.actor.kind !== 'user') return err(appError('FORBIDDEN')); return ctx.tx.repo(listingRepo).query({ where: { owner: ctx.actor.id }, dir: 'desc', limit: 50, ...input }); },
   });
@@ -187,7 +184,8 @@ export function bazaarDefinitions(options: BazaarOptions) {
   });
   const history = listingHistoryDefinitions();
   const lifecycle = archiveDefinitions();
-  return { create, edit, publish, unpublish, archive, get, list, reserve, release, history, lifecycle, all: [create, edit, publish, unpublish, archive, get, list, reserve, release, ...history.all, ...lifecycle.all] as const };
+  return { create, edit, publish, unpublish, archive, close, expire, sweep, get, list, publication, reserve, release, history, lifecycle,
+    all: [create, edit, publish, unpublish, get, list, publication, reserve, release, ...endings.all, ...history.all, ...lifecycle.all] as const };
 }
 
 /** Local single-item promise only; never implies a remote/global inventory lock. */

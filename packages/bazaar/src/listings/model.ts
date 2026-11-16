@@ -10,7 +10,7 @@ export const fields = {
   privateNotes: boundedString({ max: 2000 }).default(''),
 };
 export const listingSchema = z.strictObject({ ...fields, ownerId: z.string(), kind: z.enum(['sell', 'wanted', 'giveaway']),
-  status: z.enum(['draft', 'published', 'unpublished', 'archived']), onHand: z.int().min(0).max(1),
+  status: z.enum(['draft', 'published', 'unpublished', 'expired', 'closed', 'archived']), onHand: z.int().min(0).max(1),
   publicationCid: z.string().optional(), expiresAt: timestamp().optional(),
 });
 export type Listing = z.output<typeof listingSchema>;

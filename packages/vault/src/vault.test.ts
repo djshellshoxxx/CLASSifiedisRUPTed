@@ -2,12 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryStorage, defineRepo, z, ok } from '@classrup/kernel';
 import { vaultFromStorage, backupCodec, openVault } from './vault.ts';
 import { IDBFactory } from 'fake-indexeddb';
+import { VaultUnlockRateLimitError } from './session-policy.ts';
 
 const passphrase = 'a sufficiently long test passphrase';
 const note = defineRepo({ type: 'test.note', schema: z.strictObject({ text: z.string() }), indexes: { text: d => d.text } });
 const codecs = [backupCodec(note)];
 
 describe('vault composition', () => {
+  it('retains failed-unlock backoff when the application closes and reopens the same vault', async () => {
+    const indexedDB = new IDBFactory();
+    const original = await openVault({ name: 'unlock-backoff', indexedDB });
+    const session = await original.create(passphrase);
+    await session.lock();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const vault = await openVault({ name: 'unlock-backoff', indexedDB });
+      await expect(vault.unlock('short')).rejects.toThrow('12–1024');
+      await vault.close();
+    }
+    const blocked = await openVault({ name: 'unlock-backoff', indexedDB });
+    await expect(blocked.unlock(passphrase)).rejects.toThrow(VaultUnlockRateLimitError);
+    expect(await blocked.isInitialized()).toBe(true);
+    await blocked.close();
+  }, 30000);
   it('survives IndexedDB close/reopen, gates locked storage, and atomically restores signed encrypted records', async () => {
     const indexedDB = new IDBFactory();
     const first = await openVault({ name: 'test-vault', indexedDB, codecs });

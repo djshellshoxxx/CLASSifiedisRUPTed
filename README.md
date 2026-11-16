@@ -22,14 +22,16 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 
 ## Implemented scope and limits
 
-- Owner archive/recovery records with a 90-day local-clock restore window, signed withdrawals for published archives, encrypted-backup support, and newest-first owner listing pagination. Restore returns listings as unpublished. Automated expiry, closure and purge are unfinished; archives created before recovery tracking have no inferred deadline.
+- Owner archive/recovery records with a 90-day local-clock restore window, signed withdrawals, encrypted-backup support and owner listing pagination. Owners can close listings with a reason and download their current verified signed file again. While unlocked, bounded maintenance expires publications and archives closed/expired listings after 30 days. Restore returns listings unpublished. Complete purge remains unfinished; legacy archives have no invented deadline.
 - Owner-only local listing history with hashed public-field snapshots, publication-status labels, material-change markers, pagination and backup support. New history begins with this version; published editing and buyer reconfirmation remain unfinished.
-- Ed25519 identities, encrypted signing-key storage, explicit lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault.
+- Ed25519 identities, encrypted signing-key storage, lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault. Sessions default to a 15-minute idle lock (configurable 1–60) and lock after five minutes hidden. Local unlock backoff survives reopening within the same page; it is not an offline guessing defense.
 - Single-item listing lifecycle, exact minor-unit values, signed public projections, explicit file exchange, retained peer verification and revision/fork checks.
 - Browser editing for draft/unpublished listings, preserving exact values and private notes. Saving an edit never publishes it; published items must be explicitly unpublished first.
 - Bounded deterministic barter graph enumeration, independently checked against small-graph oracles; signed alpha proposal, consent and reservation state transitions with explicit consistency limits.
 - Local inbox for accepted signed barter updates, with read controls, preferences, retry status and encrypted-backup support. No push/email delivery is configured.
 - Terminal installation/configuration diagnostics, static browser build, public-asset-only offline cache and cross-platform CI definitions.
+- Exact money arithmetic, rational conversion and allocation as a headless 38-digit library, independently checked against Python vectors. Existing alpha wire amounts retain their previous bounds; this library does not add payment settlement.
+- An opt-in signed-consent core with revision/participant/wording binding and monotonic revocation. Its product adapters, backup codecs and quarantine are pending, so it is not enabled in the PWA.
 
 Signing keys, exported backups and local domain rows are encrypted. Existing plaintext vaults migrate atomically after successful unlock. Storage uses authenticated row encryption, opaque row keys and an authenticated inventory; table names, row counts and ciphertext sizes remain visible. Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.
 

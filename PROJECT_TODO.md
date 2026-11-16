@@ -7,6 +7,10 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [x] Qualify and merge consolidated alpha PR #37 after successful Alpha verification and six CLI platform jobs.
 - [x] Qualify and merge encrypted domain persistence, migration and tamper detection through PR #38.
 - [ ] Finish platform qualification and merge owner listing history PR #39.
+- [x] Implement owner closure, signed expiry, bounded unlocked-vault maintenance, and verified withdrawal re-download; browser qualification remains pending.
+- [x] Implement session idle/hidden lock, local unlock backoff and stale-result/export guards; canonical device/session recovery remains pending.
+- [x] Implement exact-money arithmetic and signed-consent foundations with fresh independent review.
+- [ ] Qualify money performance on its specified target; wire consent adapters, wording UI, backup validation and quarantine before enabling it in the PWA.
 - [ ] Complete remaining encrypted-storage load/rotation/recovery contracts after the implemented row-encryption and migration slice.
 - [ ] Finish canonical identity/device rotation, revocation and recovery contracts.
 - [ ] Finish published editing and material-change offer reconfirmation after the owner history slice; complete kind-specific terms, quantity/variant inventory and media workflows.

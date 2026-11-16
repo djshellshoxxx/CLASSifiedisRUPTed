@@ -7,3 +7,12 @@ export function createActionQueue() {
     return result;
   };
 }
+
+/** A queued workspace action belongs only to the exact unlocked session that accepted it. */
+export function bindActionsToSession<T>(enqueue: (action: () => Promise<void>) => Promise<void>, current: () => T | undefined) {
+  return (action: () => Promise<void>): Promise<void> => {
+    const session = current();
+    if (session === undefined) return Promise.resolve();
+    return enqueue(async () => { if (current() === session) await action(); });
+  };
+}

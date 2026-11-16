@@ -35,10 +35,11 @@ export function mountNotifications(ports: InboxPorts) {
   const count = node('p'); count.id = 'notification-count'; count.setAttribute('role', 'status'); count.setAttribute('aria-live', 'polite');
   const filterLabel = node('label', 'Show notifications');
   const filter = node('select'); filter.id = 'notification-filter';
+  filterLabel.htmlFor = filter.id;
   for (const [value, text] of [['unread', 'Unread'], ['all', 'All notifications']]) {
     const option = node('option', text); option.value = value!; filter.append(option);
   }
-  filterLabel.append(filter);
+  const filterField = node('div'); filterField.append(filterLabel, filter);
   const list = node('div'); list.className = 'cards'; list.id = 'notification-list';
   const actions = node('div'); actions.className = 'actions';
   function run(fn: () => Promise<void>): void {
@@ -85,7 +86,7 @@ export function mountNotifications(ports: InboxPorts) {
   filter.addEventListener('change', () => run(async () => { resetPage(); await refresh(); }));
   ports.container.replaceChildren(title, count,
     node('p', 'Updates come from signed barter evidence accepted by this vault. Review the current exchange before acting. No push or email is sent.'),
-    filterLabel, list, actions, settings, node('p', 'Notifications expire after 30 days. Turning off barter updates removes unread barter notifications.'));
+    filterField, list, actions, settings, node('p', 'Notifications expire after 30 days. Turning off barter updates removes unread barter notifications.'));
   function resetPage() { cursor = undefined; history.length = 0; }
   async function refresh() {
     const request = ++generation;

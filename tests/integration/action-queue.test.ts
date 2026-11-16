@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createActionQueue } from '../../apps/pwa/src/action-queue.ts';
+import { bindActionsToSession, createActionQueue } from '../../apps/pwa/src/action-queue.ts';
 
 it('processes rapid imports in order and does not discard the file after a failing import', async () => {
   const queue = createActionQueue();
@@ -14,4 +14,24 @@ it('processes rapid imports in order and does not discard the file after a faili
   release(); await first; await rejection;
   expect(await third).toBe('retained');
   expect(calls).toEqual(['first', 'first done', 'tampered', 'third']);
+});
+
+it('drops old-session actions after lock or same-principal re-unlock while preserving current work', async () => {
+  const queue = createActionQueue();
+  let session: { principal: string } | undefined = { principal: 'alice' };
+  const action = bindActionsToSession(queue, () => session);
+  const calls: string[] = [];
+  await action(async () => { calls.push('current'); });
+  let release!: () => void;
+  const blocked = queue(() => new Promise<void>(resolve => { release = resolve; }));
+  await Promise.resolve();
+  const oldEditor = action(async () => { calls.push('old editor'); });
+  const lock = queue(async () => { session = undefined; });
+  const oldListing = action(async () => { calls.push('old listing'); });
+  session = { principal: 'alice' };
+  release(); await blocked; await oldEditor; await lock; await oldListing;
+  await action(async () => { calls.push('locked'); });
+  session = { principal: 'bob' };
+  await action(async () => { calls.push('new vault'); });
+  expect(calls).toEqual(['current', 'new vault']);
 });

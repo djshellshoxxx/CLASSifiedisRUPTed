@@ -3,7 +3,8 @@ import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
 import { mountNotifications } from './notifications.ts';
 import { drainNotificationDelivery } from './notification-delivery.ts';
-import { createActionQueue } from './action-queue.ts';
+import { bindActionsToSession, createActionQueue } from './action-queue.ts';
+import { mountListingEditor } from './listing-editor.ts';
 import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
@@ -44,6 +45,7 @@ let barter: ReturnType<typeof mountBarter> | undefined;
 let notifications: ReturnType<typeof mountNotifications> | undefined;
 let notificationOutbox: OutboxDispatcher | undefined;
 let lastNotificationSweep = 0;
+let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
   if (!value) throw new Error(`Missing interface element: ${id}`);
@@ -64,6 +66,7 @@ function action(fn: () => Promise<void>): Promise<void> {
     finally { buttons.forEach(({ button, disabled }) => { button.disabled = disabled; }); }
   });
 }
+const vaultAction = bindActionsToSession(action, () => unlocked);
 function current() {
   if (!unlocked || !bus) throw new Error('Unlock your vault first.');
   return { vault: unlocked, bus, context: { actor: { kind: 'user' as const, id: unlocked.principal, roles: ['member'] }, tenantId: unlocked.principal } };
@@ -113,7 +116,7 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTM
   const output = document.createElement(tag); if (text !== undefined) output.textContent = text; return output;
 }
 function button(text: string, fn: () => Promise<void>) {
-  const output = node('button', text); output.addEventListener('click', () => { void action(fn); }); return output;
+  const output = node('button', text); output.addEventListener('click', () => { void vaultAction(fn); }); return output;
 }
 // The alpha editor declares CAD amounts in cents. Other signed currency codes may
 // be custom, so keep their exact minor units until the currency registry is available.
@@ -138,6 +141,7 @@ async function refresh(): Promise<void> {
   for (const item of page.items) {
     const article = card(item.data.title, item.data.description, `${item.data.status} · revision ${item.revision} · ${item.data.barterOptIn ? 'barter enabled' : 'barter disabled'}`, item.data.value);
     const actions = node('div'); actions.className = 'actions';
+    if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Edit listing', async () => { listingEditor?.open(item); }));
     if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Publish signed file', async () => {
       const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.publish', { listingId: item.id, expectedRevision: item.revision }));
       const verified = await verifyEnvelope(response.envelope);
@@ -185,15 +189,18 @@ async function connect(session: UnlockedVault): Promise<void> {
     origin: `vault:${session.principal}` });
   element('access').hidden = true; element('workspace').hidden = false; element('principal').textContent = session.principal;
   barter?.destroy();
-  barter = mountBarter({ container: element('barter'), session, command, query, action, message, download, refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
+  barter = mountBarter({ container: element('barter'), session, command, query, action: vaultAction, message, download, refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
   notificationOutbox = createOutboxDispatcher({ registry, storage: session.storage, clock: createSystemClock(), ids, origin: `vault:${session.principal}` });
   lastNotificationSweep = 0;
   notifications?.destroy();
-  notifications = mountNotifications({ container: element('notifications'), command, query, action, message, synchronize: syncNotifications });
+  notifications = mountNotifications({ container: element('notifications'), command, query, action: vaultAction, message, synchronize: syncNotifications });
+  listingEditor?.destroy();
+  listingEditor = mountListingEditor({ container: element('listing-editor'), command, action: vaultAction, message, saved: refresh });
   await syncNotifications();
   await refresh(); message('Vault unlocked. Local changes are persisted in this browser.');
 }
-function clearNotifications() {
+function clearLocalViews() {
+  listingEditor?.destroy(); listingEditor = undefined;
   notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
   element('notification-delivery-status').textContent = '';
 }
@@ -208,13 +215,13 @@ element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
       vault = await openVault({ name, codecs });
       await connect(submitter?.value === 'create' ? await vault.create(passphrase) : await vault.unlock(passphrase));
     }
-    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearNotifications(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; throw error; }
+    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; throw error; }
     finally { (form.elements.namedItem('passphrase') as HTMLInputElement).value = ''; }
   });
 });
-element('lock').addEventListener('click', () => { void action(async () => {
+element('lock').addEventListener('click', () => { void vaultAction(async () => {
   const session = unlocked; barter?.destroy(); barter = undefined; unlocked = undefined; bus = undefined;
-  clearNotifications();
+  clearLocalViews();
   element('workspace').hidden = true; element('access').hidden = false;
   element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
   element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
@@ -223,7 +230,7 @@ element('lock').addEventListener('click', () => { void action(async () => {
 }); });
 element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const data = new FormData(form);
-  void action(async () => {
+  void vaultAction(async () => {
     await command('bazaar.listing.create', { listingId: ids.next(), title: String(data.get('title')), description: String(data.get('description')),
       kind: data.get('kind'), condition: data.get('condition'), categoryId: CATEGORY, regionCell: data.get('region'),
       value: { amount: String(data.get('amount')), currency: listingCurrency.code }, barterOptIn: data.get('barter') === 'on' });
@@ -233,7 +240,7 @@ element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
 element<HTMLInputElement>('peer-file').addEventListener('change', event => { const input = event.currentTarget as HTMLInputElement;
   const file = input.files?.[0];
   const session = unlocked;
-  void action(async () => {
+  void vaultAction(async () => {
     try {
       if (!session || unlocked !== session) throw new Error('Unlock the original vault and select the file again.');
       await command('discovery.listing.retain', { envelope: await readFile(file, MAX_ENVELOPE_BYTES) });
@@ -249,17 +256,17 @@ function resetPeerSearch(): void {
 element<HTMLFormElement>('peer-search-form').addEventListener('submit', event => {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
-  void action(async () => {
+  void vaultAction(async () => {
     const next = parsePeerSearch(new FormData(form));
     const previous = appliedPeerSearch;
     appliedPeerSearch = next;
     try { await refreshPeers(); } catch (error) { appliedPeerSearch = previous; throw error; }
   });
 });
-element('reset-peer-search').addEventListener('click', () => { void action(async () => {
+element('reset-peer-search').addEventListener('click', () => { void vaultAction(async () => {
   resetPeerSearch(); await refreshPeers();
 }); });
-element('backup').addEventListener('click', () => { void action(async () => {
+element('backup').addEventListener('click', () => { void vaultAction(async () => {
   const password = element<HTMLInputElement>('backup-password');
   try { download('classrup-encrypted-backup.json', await current().vault.exportBackup(password.value)); message('Encrypted backup downloaded. Keep its passphrase separately.'); }
   finally { password.value = ''; }
@@ -271,7 +278,7 @@ element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
     const input = element<HTMLInputElement>('restore-file');
     const vault = await openVault({ name, codecs });
     try { const backup = await readFile(input.files?.[0], 24 * 1024 * 1024); await connect(await vault.restoreBackup(backup, passphrase)); form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.'); }
-    catch (error) { await vault.close(); barter?.destroy(); barter = undefined; clearNotifications(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
+    catch (error) { await vault.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
     finally { input.value = ''; (form.elements.namedItem('restore-password') as HTMLInputElement).value = ''; }
   });
 });

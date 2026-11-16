@@ -18,11 +18,12 @@ async function unlock(page: Page, name: string) {
   await expect(page.locator('#status')).toHaveText(/Vault unlocked/);
 }
 async function listing(page: Page, title: string, amount = '12500') {
-  await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Description', { exact: true }).fill('A locally persisted item, available for an explicit exchange.');
-  await page.getByLabel('Declared value').fill(amount);
-  await page.getByLabel('Allow this listing').check();
-  await page.getByRole('button', { name: 'Save local draft' }).click();
+  const form = page.locator('#listing-form');
+  await form.getByLabel('Title', { exact: true }).fill(title);
+  await form.getByLabel('Description', { exact: true }).fill('A locally persisted item, available for an explicit exchange.');
+  await form.getByLabel('Declared value').fill(amount);
+  await form.getByLabel('Allow this listing').check();
+  await form.getByRole('button', { name: 'Save local draft' }).click();
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
@@ -168,6 +169,43 @@ test('local notification preferences survive reload, backup and lock without ext
   await page.getByRole('button', { name: 'Save notification preferences' }).click();
   await expect(page.locator('#status')).toHaveText('Local notification preferences saved.');
   await expect(page.locator('#notification-delivery-status')).toBeEmpty();
+});
+
+test('listing edits preserve exact amounts, publish public fields, and clear drafts on lock', async ({ page }) => {
+  await create(page, 'editor');
+  await listing(page, 'Original guitar', '900719925474099301');
+  await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
+  await page.getByLabel('Edit title', { exact: true }).fill('Cancelled change');
+  await page.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+  await expect(page.locator('#listings')).toContainText('Original guitar');
+  await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
+  await page.getByLabel('Edit title', { exact: true }).fill('Edited guitar');
+  await page.getByLabel('Edit condition', { exact: true }).selectOption('fair');
+  await page.getByLabel('Edit declared value (minor units)', { exact: true }).fill('900719925474099302');
+  await page.getByLabel('Private listing notes', { exact: true }).fill('Private seller detail');
+  await page.getByRole('button', { name: 'Save listing changes', exact: true }).click();
+  await expect(page.locator('#listing-editor')).toBeHidden();
+  await expect(page.locator('#listings')).toContainText('Edited guitar');
+  await expect(page.locator('#listings')).toContainText(/CAD\s*9,007,199,254,740,993\.02/);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Publish signed file', exact: true }).click();
+  const path = await (await pending).path();
+  if (!path) throw new Error('Missing signed listing');
+  const signed = await readFile(path, 'utf8');
+  expect(signed).toContain('Edited guitar');
+  expect(signed).toContain('900719925474099302');
+  expect(JSON.parse(signed).payload.condition).toBe('fair');
+  expect(signed).not.toContain('Private seller detail');
+  await expect(page.getByRole('button', { name: 'Edit listing', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Unpublish', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
+  await expect(page.getByLabel('Private listing notes', { exact: true })).toHaveValue('Private seller detail');
+  await page.getByLabel('Edit title', { exact: true }).fill('Unsubmitted edit');
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await expect(page.locator('#listing-editor')).toBeEmpty();
+  await page.reload(); await unlock(page, 'editor');
+  await expect(page.locator('#listings')).toContainText('Edited guitar');
+  await expect(page.locator('#listings')).not.toContainText('Unsubmitted edit');
 });
 
 test('encrypted backup restores listings and identity into a new empty vault', async ({ page }) => {

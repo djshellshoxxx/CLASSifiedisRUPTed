@@ -209,6 +209,10 @@ element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
   const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
   const data = new FormData(form); const name = String(data.get('vault')); const passphrase = String(data.get('passphrase'));
   void action(async () => {
+    if (unlocked) {
+      (form.elements.namedItem('passphrase') as HTMLInputElement).value = '';
+      throw new Error('Lock the current vault before opening another one.');
+    }
     let vault: Awaited<ReturnType<typeof openVault>> | undefined;
     try {
       if (!globalThis.isSecureContext || !crypto.subtle) throw new Error('Open this application on localhost or HTTPS to use browser cryptography.');
@@ -273,13 +277,23 @@ element('backup').addEventListener('click', () => { void vaultAction(async () =>
 }); });
 element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget as HTMLFormElement;
+  const data = new FormData(form); const name = String(data.get('restore-name')); const passphrase = String(data.get('restore-password'));
+  const input = element<HTMLInputElement>('restore-file'); const file = input.files?.[0];
   void action(async () => {
-    const data = new FormData(form); const name = String(data.get('restore-name')); const passphrase = String(data.get('restore-password'));
-    const input = element<HTMLInputElement>('restore-file');
-    const vault = await openVault({ name, codecs });
-    try { const backup = await readFile(input.files?.[0], 24 * 1024 * 1024); await connect(await vault.restoreBackup(backup, passphrase)); form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.'); }
-    catch (error) { await vault.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
-    finally { input.value = ''; (form.elements.namedItem('restore-password') as HTMLInputElement).value = ''; }
+    if (unlocked) {
+      if (input.files?.[0] === file) input.value = '';
+      (form.elements.namedItem('restore-password') as HTMLInputElement).value = '';
+      throw new Error('Lock the current vault before restoring a backup.');
+    }
+    let vault: Awaited<ReturnType<typeof openVault>> | undefined;
+    try {
+      vault = await openVault({ name, codecs });
+      const backup = await readFile(file, 24 * 1024 * 1024);
+      await connect(await vault.restoreBackup(backup, passphrase));
+      form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.');
+    }
+    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
+    finally { if (input.files?.[0] === file) input.value = ''; (form.elements.namedItem('restore-password') as HTMLInputElement).value = ''; }
   });
 });
 function networkStatus() { element('network').textContent = navigator.onLine ? 'Local mode · no relay configured. Files are shared only when you choose.' : 'Offline · local records remain available. Peer freshness cannot be confirmed.'; }

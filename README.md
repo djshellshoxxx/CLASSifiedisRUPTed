@@ -2,7 +2,7 @@
 
 Local-first classifieds and cyclic barter, with user-held identities and optional relays. The browser vault is the product; a server account is not required.
 
-**Development alpha, not a completed milestone or production release.** This branch adds real domain implementations and a browser composition on top of the Stage 3/4 kernel. Automated domain tests and builds are separate from browser acceptance; see the [integration ledger](planning/LOCAL_ALPHA_20261109.md) for exact evidence and blockers.
+**Development alpha, not a completed milestone or production release.** This branch adds real domain implementations and a browser composition on top of the Stage 3/4 kernel. Automated domain tests and builds are separate from browser acceptance; see the [current project status](docs/status/PROJECT_STATUS.md) for evidence and blockers.
 
 ## Run from a terminal
 
@@ -24,7 +24,9 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 
 - Ed25519 identities, encrypted signing-key storage, explicit lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault.
 - Single-item listing lifecycle, exact minor-unit values, signed public projections, explicit file exchange, retained peer verification and revision/fork checks.
+- Browser editing for draft/unpublished listings, preserving exact values and private notes. Saving an edit never publishes it; published items must be explicitly unpublished first.
 - Bounded deterministic barter graph enumeration, independently checked against small-graph oracles; signed alpha proposal, consent and reservation state transitions with explicit consistency limits.
+- Local inbox for accepted signed barter updates, with read controls, preferences, retry status and encrypted-backup support. No push/email delivery is configured.
 - Terminal installation/configuration diagnostics, static browser build, public-asset-only offline cache and cross-platform CI definitions.
 
 Signing keys and exported backups are encrypted. **Local domain records are not encrypted at rest.** Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.

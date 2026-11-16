@@ -1,7 +1,7 @@
 {
   "totals": {
     "modules": 148,
-    "withRuntime": 30,
+    "withRuntime": 31,
     "withPassingTests": 19,
     "declared": 688,
     "implemented": 8,
@@ -206,7 +206,7 @@
       "slug": "quality",
       "title": "Quality engineering",
       "modules": 10,
-      "withRuntime": 2,
+      "withRuntime": 3,
       "withPassingTests": 0,
       "declared": 0,
       "implemented": 0,
@@ -2144,7 +2144,9 @@
       ],
       "requirements": 30,
       "covered": 23,
-      "sources": []
+      "sources": [
+        "packages/notify/src/local.ts"
+      ]
     },
     {
       "id": "F13.S02.M01",
@@ -2698,7 +2700,7 @@
       "id": "F17.S03.M03",
       "title": "Compatibility",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],

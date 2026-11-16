@@ -244,10 +244,38 @@ test('concurrent tabs cannot both acquire a vault writer', async ({ page, contex
   await second.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(second.locator('#error')).toBeVisible();
   await expect(second.locator('#workspace')).toBeHidden();
+  await expect(second.locator('[name="passphrase"]')).toHaveValue('');
+  await second.locator('#access details summary').click();
+  await second.locator('[name="restore-name"]').fill('shared');
+  await second.locator('[name="restore-password"]').fill(password);
+  await second.locator('#restore-file').setInputFiles({ name: 'unused-backup.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+  await second.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await expect(second.locator('#error')).toBeVisible();
+  await expect(second.locator('[name="restore-password"]')).toHaveValue('');
+  await expect(second.locator('#restore-file')).toHaveValue('');
   await listing(page, 'First writer remains valid');
   await page.getByRole('button', { name: 'Lock vault' }).click();
   await unlock(second, 'shared');
   await expect(second.locator('#listings')).toContainText('First writer remains valid');
+});
+
+test('rapid duplicate vault submissions preserve the first active session', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[name="vault"]').fill('duplicate');
+  await page.locator('[name="passphrase"]').fill(password);
+  await page.locator('#unlock-form').evaluate(formNode => {
+    const form = formNode as HTMLFormElement;
+    const submitter = form.querySelector<HTMLButtonElement>('button[value="create"]')!;
+    form.requestSubmit(submitter); form.requestSubmit(submitter);
+  });
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.locator('#error')).toHaveText('Lock the current vault before opening another one.');
+  await expect(page.locator('[name="passphrase"]')).toHaveValue('');
+  await listing(page, 'Duplicate submission kept this vault');
+  await expect(page.locator('#error')).toBeHidden();
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'duplicate');
+  await expect(page.locator('#listings')).toContainText('Duplicate submission kept this vault');
 });
 
 test('mobile layout stays within viewport and exposes keyboard error feedback', async ({ page }, testInfo) => {

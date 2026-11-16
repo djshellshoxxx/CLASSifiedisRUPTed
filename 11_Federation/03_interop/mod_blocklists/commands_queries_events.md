@@ -73,5 +73,6 @@ Payloads contain IDs, enum values and timestamps only. Event retention follows C
 3. Check path emits no events; TEST-PS-089-04-04 passes.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - PENDING CTR-SCH-001: `blocklist.*` event schemas.
 - OPEN (CTR-FED-001): distribution format. Default: signed events (PROVISIONAL, D01).

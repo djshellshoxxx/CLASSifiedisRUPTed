@@ -1,35 +1,53 @@
 # PS-004-01 — domain schema
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_publish. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001 (`lst_`, `acc_`, `cas_`, `evt_`), CTR-EVT-001, CTR-SCH-001, CTR-PRV-001. **Pending:** PENDING CTR-LST-001 (listing aggregate schema, owner F01), PENDING CTR-REG-001 (region-cell registry).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-004-01. **Owner:** [01_LocalBazaar/01_listings/mod_publish](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_publish. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-004-01.R01 | No publish table. Publish state is fields on the `lst_` aggregate, changed only by events with `aggregate_type = listing` under an `expected_revision` check. | MVP |
+| PS-004-01.R02 | `state` ∈ {`draft`, `published`, `held_review`} in this module. `archived` and `expired` belong to mod_archive; this module treats them as not publishable (`PUB.INVALID_STATE`). | MVP |
+| PS-004-01.R03 | `published_at` and `expires_at` are set only by a transition into `published`, server-set, UTC, millisecond precision. `expires_at = published_at + duration_days`. | MVP |
+| PS-004-01.R04 | `region_cell` holds a registered cell ID only. It never holds a coordinate, street or postal address. | MVP |
+| PS-004-01.R05 | `hold` is non-null iff `state = held_review`. `hold` holds a reason code and a time. No free text, moderator identity or case detail. | MVP |
+| PS-004-01.R06 | `listing.published` payload max class ≤ LOCATION_COARSE. No PRIVATE_PERSONAL or higher field in any publish event. | MVP |
 
-## Purpose and scope
-Define the domain schema process for publish within 01_listings. Do not assume implementation or successful external settlement.
+## Data / schema
+```json
+{
+  "listing_id": "lst_<26> (ulid class, F01)",
+  "owner_ref": "acc_<26> (PSEUDONYMOUS; owner view; public sees prf_ view only)",
+  "revision": "integer >= 1 (PUBLIC)",
+  "listing_kind": "open enum: sell | wanted | giveaway (PUBLIC)",
+  "state": "enum: draft | published | held_review (PSEUDONYMOUS; non-published states owner-only)",
+  "title": "string 1..120 UTF-8, trimmed (PUBLIC; PII scan at publish)",
+  "price": "null | {amount_minor: decimal string ^(0|[1-9][0-9]{0,18})$, currency: ISO 4217, exponent: int 0..3} (PUBLIC, PROVISIONAL; null iff listing_kind = giveaway)",
+  "region_cell": "registered cell ID; ASSUMPTION pattern ^[A-Z]{2}-[A-Z0-9]{2,3}-[A-Z0-9]{2,4}$ (LOCATION_COARSE)",
+  "duration_days": "enum 7 | 14 | 30 | 60 | 90, default 30 (ASSUMPTION; PSEUDONYMOUS)",
+  "published_at": "RFC3339 UTC ms | null (PUBLIC)",
+  "expires_at": "RFC3339 UTC ms | null (PUBLIC)",
+  "media_status": "enum none | pending | clean | rejected (PSEUDONYMOUS)",
+  "hold": "null | {reason_code: enum risk_review | personal_data_suspected | media_review | report_open, placed_at: RFC3339 UTC ms} (PSEUDONYMOUS; owner view)",
+  "schema_version": "1.0.0"
+}
+```
 
-## Requirements to specify
-- [ ] PS-004-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-004-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-004-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+Provenance: every transition records `actor_ref` (`acc_` owner, `mod_` moderator, or `sys_` for server-internal transitions) and `provenance.source_kind` (CTR-EVT-001). Retention: listing record and publish events RET-ACC; hold reason on the listing until cleared (PS-004-07).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Open points
+- OPEN-1 `price` class. CTR-SCH-001 example classes `price` as FINANCIAL_EVIDENCE; CTR-FED-001 example emits `price` under max class PUBLIC. Default PUBLIC (PROVISIONAL, D03 unit rules; F10 must decide before approval).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Assumptions & open decisions
+- ASSUMPTION: `duration_days` set and default 30.
+- PROVISIONAL (D05 default, unapproved): `region_cell` is a coarse registered cell.
+- PROVISIONAL (D03 default, unapproved): integer minor units with expiry-free `amount_minor` strings.
+- PROVISIONAL (D07 default, unapproved): RET-ACC for listing fields.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-004-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Tests
+- TEST-PS-004-01-01 (schema): valid fixture passes; fixtures with float price, non-registered cell or coordinate in `region_cell` fail.
+- TEST-PS-004-01-02 (lint): every field has one data class (CTR-PRV-001 R01); no SECRET class in event schemas.
+- TEST-PS-004-01-03 (invariant): `hold` non-null iff `state = held_review`; `expires_at - published_at = duration_days` in ms.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema fixtures in TEST-PS-004-01-01 and -03 pass in CI.
+2. OPEN-1 resolved by F10 before status moves past SPEC-DRAFT-COMPLETE.
+3. No field outside the listed set is written by this module.

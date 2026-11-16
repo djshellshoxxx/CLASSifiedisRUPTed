@@ -63,6 +63,7 @@ Gauge `blocklist_entries_active` by `target_kind` and `scope`. Budgets in PS-089
 3. Uniqueness key holds under concurrent imports; TEST-PS-089-01-03 passes.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - PENDING CTR-ID-001: prefix `blk` (class ulid, owner F11). Not yet in registry.
 - PENDING CTR-SCH-001: `blocklist.entry` 1.0.0 and `blocklist.*` event schemas.
 - PENDING F12: reason-code registry and split of decision authority. CTR-FED-001 names F12 as distributor of blocklists.

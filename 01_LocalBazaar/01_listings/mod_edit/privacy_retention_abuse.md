@@ -32,7 +32,11 @@ Error responses name keys, never values (PS-003-02 R01, R08).
 See [authorization_capabilities.md](authorization_capabilities.md).
 
 ## Failure, idempotency, concurrency, offline
+See [failure_recovery_idempotency.md](failure_recovery_idempotency.md) (PS-003-06).
 Offline queue held on device only. See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See Requirements R01–R08 above; this file is the authoritative source for the topic.
 
 ## Observability & budgets
 No actor or listing ID as metric label. See [observability_performance.md](observability_performance.md).

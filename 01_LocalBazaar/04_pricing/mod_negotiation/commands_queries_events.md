@@ -44,7 +44,7 @@ Capability per command as listed; matrix in [PS-010-05](authorization_capabiliti
 Retry and timeout rules: [PS-010-06](failure_recovery_idempotency.md). Event envelope integrity (hash chain, signatures not required for local events): CTR-EVT-001 R05 and R08.
 
 ## Privacy, retention, abuse
-Events carry no free text, no coordinates, no contact data (CTR-EVT-001 R06). `max_data_class` = PSEUDONYMOUS, or PUBLIC for `negotiation.voided` (listing reference only). Payloads ≤ 64 KiB (CTR-EVT-001 R12); this module's payloads are ≤ 4 KiB.
+Events carry no free text, no coordinates, no contact data (CTR-EVT-001 R06). `max_data_class` = PSEUDONYMOUS for all seven event types (IDs and state only; `negotiation.voided` included). Payloads ≤ 64 KiB (CTR-EVT-001 R12); this module's payloads are ≤ 4 KiB.
 
 ## Observability & budgets
 Command latency p95 ≤ 300 ms and p99 ≤ 800 ms for `neg.open`, `neg.counter`, `neg.accept` (ASSUMPTION). Query `neg.list` (50 items) p95 ≤ 250 ms.

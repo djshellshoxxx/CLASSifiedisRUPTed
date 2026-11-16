@@ -59,7 +59,7 @@ Not defined here. See PS-011-08.
 
 ## Tests
 - TEST-PS-011-01-01 (lint): schema has exactly the fields above; no free-text or location field.
-- TEST-PS-011-01-02 (unit): amount decimal-string pattern accepts `0` only where rejected by R01 of PS-011-02; rejects floats and leading zeros.
+- TEST-PS-011-01-02 (unit): amount decimal-string pattern accepts canonical amounts; rejects `0`, floats, leading zeros and more than 39 digits.
 - TEST-PS-011-01-03 (contract): every field carries one CTR-PRV-001 class (CTR-PRV-001 R01).
 - TEST-PS-011-01-04 (lint): no field typed as integer for an entity ID (CTR-ID-001 TEST-08).
 

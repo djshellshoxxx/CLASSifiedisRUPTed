@@ -45,6 +45,10 @@ Not applicable. Guards that depend on state are listed in [PS-010-03](workflow_s
 | NEG.OPEN_EXISTS | false | conflict / 409 | err.neg.open_exists | none |
 | NEG.ACTIVE_LIMIT | false | unprocessable_state / 422 | err.neg.active_limit | none |
 | NEG.TERMS_HASH_MISMATCH | false | conflict / 409 | err.neg.terms_hash_mismatch | none |
+| NEG.NOT_YOUR_TURN | false | conflict / 409 | err.neg.not_your_turn | none |
+| NEG.WINDOW_CLOSED | false | conflict / 409 | err.neg.window_closed | none |
+| NEG.INVALID_TRANSITION | false | conflict / 409 | err.neg.invalid_transition | from-state and command only |
+| NEG.FEATURE_DISABLED | true | unavailable / 503 | err.neg.feature_disabled | none; `retry_after_ms` optional |
 
 No diagnostic includes listing titles, amounts, names or account IDs (CTR-ERR-001 R06).
 

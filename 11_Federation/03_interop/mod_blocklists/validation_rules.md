@@ -55,6 +55,7 @@ Diagnostics carry code, field path and `blk_` ID only (PS-089-07). Validation lo
 3. Rejected values never appear in responses or logs; TEST-PS-089-02-04 passes.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - ASSUMPTION: 180-day peer expiry cap; 365-day local cap (F10 to confirm).
 - PROVISIONAL (D01 default, unapproved): inbound events validated against signature and schema before import.
 - PENDING F12: reason enum values.

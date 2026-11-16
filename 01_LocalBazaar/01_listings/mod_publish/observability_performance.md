@@ -1,35 +1,53 @@
-# PS-004-08 — observability performance
+# PS-004-08 — observability and performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_publish. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (commit latency, rejections metric), CTR-ERR-001 (error metrics, BT-01 alert), CTR-PRV-001 (log redaction, R03, R09), CTR-ID-001 (log ID rules). **Pending:** PENDING CTR-MOD-001 (risk verdict latency).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-004-08. **Owner:** [01_LocalBazaar/01_listings/mod_publish](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_publish. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-004-08.R01 | `lst.publish` server p95 ≤ 300 ms, including commit ≤ 150 ms (ASSUMPTION). | MVP |
+| PS-004-08.R02 | V0–V11 p95 ≤ 5 ms; PII scan p95 ≤ 20 ms for 4000 characters (ASSUMPTION). | MVP |
+| PS-004-08.R03 | Discovery index lag p95 ≤ 60 s from T1 (ASSUMPTION). | MVP |
+| PS-004-08.R04 | Metric labels never include `listing_id`, `owner_ref`, `region_cell` or free text (cardinality and CTR-PRV R09). | MVP |
+| PS-004-08.R05 | Logs carry request_id, command, listing_id, revision, state, code and timing. Never title, description, price or matched PII text. | MVP |
 
-## Purpose and scope
-Define the observability performance process for publish within 01_listings. Do not assume implementation or successful external settlement.
+## Metrics
+| Metric | Type | Labels | Use |
+|---|---|---|---|
+| `pub_publish_total` | counter | outcome (published, held, error), code | Throughput and error mix |
+| `pub_publish_latency_ms` | histogram | outcome | p95 budget (R01) |
+| `pub_held_total` | counter | reason_code | Hold rate by cause |
+| `pub_risk_timeout_total` | counter | none | Fail-closed frequency |
+| `pub_hold_age_seconds` | histogram | reason_code | F12 SLA (72 h) |
+| `pub_index_lag_seconds` | histogram | none | Outbox to index lag |
+| `pub_idempotent_replay_total` | counter | none | Retry health |
+| `pub_revision_conflict_total` | counter | none | Concurrency pressure (CTR-EVT) |
 
-## Requirements to specify
-- [ ] PS-004-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-004-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-004-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Alerts
+| Condition | Severity | Owner role |
+|---|---|---|
+| Hold rate > 25% of attempts over 1 h (ASSUMPTION) | warn | Trust and Safety Lead (F12) |
+| Any PUB code > 5% of responses for 5 min (CTR-ERR BT-01) | page | Marketplace Lead (F01) |
+| Risk timeout rate > 2% over 15 min | warn | Platform Lead (F15) |
+| Email, phone or address pattern in publish logs | page; zero tolerance (CTR-PRV-001) | Privacy Lead (F10) |
+| Held listing older than 72 h | warn | Trust and Safety Lead (F12) |
+| Index lag p95 > 60 s over 15 min | warn | Platform Lead (F15) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Budgets and load
+- Throughput target: 50 publish commits per second per regional shard (ASSUMPTION).
+- Client-side: state change visible ≤ 1 s after response on a 4G profile (ASSUMPTION).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Assumptions & open decisions
+- ASSUMPTION: latency budgets above; load target above.
+- PROVISIONAL (D05 default, unapproved): metrics and logs carry cell IDs only where permitted by CTR-PRV-001.
+- PROVISIONAL (D07 default, unapproved): operational logs RET-OPS, 30 days maximum.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-004-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Tests
+- TEST-PS-004-08-01 (perf): load test at 50 commits/s meets R01 and R02 budgets.
+- TEST-PS-004-08-02 (lint): metric label set contains no forbidden key (R04).
+- TEST-PS-004-08-03 (log capture): publish with PII and price in title produces logs with neither (R05, CTR-PRV TEST-03).
+- TEST-PS-004-08-04 (alert): injected PII pattern in a log line fires the page alert within 1 min.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets in R01–R03 met in the seeded load run.
+2. TEST-PS-004-08-02 and -03 pass in CI; zero forbidden labels or log fields.
+3. Alerts in the table are wired and tested.

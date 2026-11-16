@@ -54,6 +54,7 @@ Failure logs carry codes, `blk_` IDs and counts only. Deferred payloads are held
 3. Crash recovery produces exactly one export; TEST-PS-089-06-06 passes.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - ASSUMPTION: timeouts, backoff and 24 h deferral window.
 - PROVISIONAL (D01 default, unapproved): replay protection via CTR-FED-001 dedupe and `expires_at`.
 - D08 not applicable (see R05).

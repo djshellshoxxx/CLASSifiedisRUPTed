@@ -14,7 +14,7 @@ Giveaway is a listing type for items offered at zero consideration. A giver publ
 Process specifications (all 10 in the inventory below). In scope: giveaway listing extension rules, claim lifecycle, claim queries, giver and claimant views, expiry and rollback. Out of scope: listing publication and archive (F01 mod_publish, mod_archive), messaging (F08), reporting and case handling (F12), disputes over item condition (F09 pattern, Future).
 
 ## Public interfaces
-Commands and queries `giveaway.claim.*` and events `giveaway_claim.*` in [commands_queries_events](mod_giveaway/commands_queries_events.md). Errors `GIVE.*` in [validation_rules](mod_giveaway/validation_rules.md). Listing reads use F01 `lst_` IDs.
+Commands and queries `giveaway.claim.*` and events `giveaway_claim.*` in [commands_queries_events](commands_queries_events.md). Errors `GIVE.*` in [validation_rules](validation_rules.md). Listing reads use F01 `lst_` IDs.
 
 ## Relationships, dependencies and integration
 Upstream: F01 listing record (`lst_`, PENDING CTR-LST-001); F07 identity and `acc_`/`prf_` views; F16 capabilities; F10 retention and classes. Downstream: F13 generic notifications; F12 reports on bait listings; F08 coordination threads (no claim text stored here); F15 flags and observability; F11 listing federation. Integration uses reserve/reopen commands on F01 through an outbox with idempotent retries.
@@ -36,13 +36,13 @@ No platform custody of items or money.
 All 10 process specs reach approved status; contract IDs resolved (PENDING CTR-LST-001, gcl_ registry); privacy and abuse review by F10 and F12; race and replay tests pass; rollback drill passes.
 
 ## Required process specification inventory
-- [x] [domain_schema.md](mod_giveaway/domain_schema.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [validation_rules.md](mod_giveaway/validation_rules.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [workflow_state_machine.md](mod_giveaway/workflow_state_machine.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [commands_queries_events.md](mod_giveaway/commands_queries_events.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [authorization_capabilities.md](mod_giveaway/authorization_capabilities.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [failure_recovery_idempotency.md](mod_giveaway/failure_recovery_idempotency.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [privacy_retention_abuse.md](mod_giveaway/privacy_retention_abuse.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [observability_performance.md](mod_giveaway/observability_performance.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [contract_and_acceptance_tests.md](mod_giveaway/contract_and_acceptance_tests.md) — SPEC-DRAFT-COMPLETE (pending approval)
-- [x] [import_export_backup_rollback.md](mod_giveaway/import_export_backup_rollback.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [domain_schema.md](domain_schema.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [validation_rules.md](validation_rules.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [commands_queries_events.md](commands_queries_events.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [observability_performance.md](observability_performance.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — SPEC-DRAFT-COMPLETE (pending approval)

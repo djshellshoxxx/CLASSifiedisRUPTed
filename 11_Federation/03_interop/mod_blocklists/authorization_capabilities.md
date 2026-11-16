@@ -66,6 +66,7 @@ Decision records hold outcome and reason code only (CTR-CAP-001 R13). Repeated D
 3. Dual control and self-approval rules hold; TEST-PS-089-05-03 and -04 pass.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - ASSUMPTION: dual control for federate activation and rollback (F16 to confirm).
 - PENDING F16: purpose registry value `blocklist_case_review`.
-- PROVISIONAL (D10 is not applicable to this module; no user keys involved).
+- D10 not applicable: this module holds no user-controlled keys.

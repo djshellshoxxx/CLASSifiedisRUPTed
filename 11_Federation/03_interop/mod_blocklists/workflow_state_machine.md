@@ -60,6 +60,7 @@ Transition events carry `blk_` ID, status and codes only.
 3. Rollback leaves zero `active` entries from the rolled-back batch; TEST-PS-089-03-06 passes.
 
 ## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md). Labels below are PROVISIONAL (default, unapproved) where marked.
 - ASSUMPTION: dual control for federate scope (F16 to confirm).
 - PROVISIONAL (D01 default, unapproved): imported entries never activate without local acceptance.
 - D08 not applicable: blocklist writes are online-only.

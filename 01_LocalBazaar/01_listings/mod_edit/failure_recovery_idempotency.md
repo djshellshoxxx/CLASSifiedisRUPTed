@@ -31,6 +31,9 @@ Retryable only for `SYS.UNAVAILABLE`, `SYS.RATE_LIMITED` (after the window) and 
 ## Authorization
 Queued edits are re-authorized at commit. Revocation makes them fail (CTR-CAP-001 revocation propagation).
 
+## Failure, idempotency, concurrency, offline
+See Requirements R01–R08 above; this file is the authoritative source for the topic.
+
 ## Privacy, retention, abuse
 Offline queue lives on the owner's device only. Queue cleared on logout. See [privacy_retention_abuse.md](privacy_retention_abuse.md).
 

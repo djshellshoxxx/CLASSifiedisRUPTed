@@ -185,10 +185,6 @@ processes:
       - {type: privacy.consent.withdrawn, effect: "cancel prepared federation entries for the withdrawn purpose and request tombstones for delivered ones"}
       - {type: platform.flag.changed, effect: "pause peer_relay entries when F11 turns off; vault to relay entries are unaffected"}
     errors:
-      - "FEDERATION_PEER_NOT_ALLOWED | 403 | no | destination or sender is not a selected relay, listed mailbox or active allowlisted peer"
-      - "FEDERATION_BATCH_TOO_LARGE | 413 | no | more than 100 envelopes or body over 4194304 bytes"
-      - "FEDERATION_QUOTA_EXCEEDED | 429 | yes | destination quota exceeded; retryAfterMs set"
-      - "FEDERATION_NOT_ACCEPTED | 422 | no | destination refused by local policy; reason intentionally generic"
       - "FEDERATION_DESTINATION_INVALID | 422 | no | destination kind does not match the statement audience or flag state"
       - "FEDERATION_RECEIPT_INVALID | 422 | no | receipt or acknowledgement signature or cid check failed"
     example: |

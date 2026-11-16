@@ -55,7 +55,6 @@
 |---|---|---|---|
 | AUCTIONS_RESULT_NOT_VOIDABLE | 409 | no | result has an acknowledged or final payment, is completed, or is not in a voidable state |
 | AUCTIONS_REVIEW_DUPLICATE | 409 | no | an open review for this auction and trigger kind already exists |
-| AUCTIONS_RESULT_INVALID | 422 | no | void statement signature or host key check failed; quarantined |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

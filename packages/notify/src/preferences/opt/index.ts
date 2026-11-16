@@ -336,13 +336,19 @@ export function optDefinitions(options: ChannelOptions) {
   };
 
   async function withdrawMatching(ctx: ConsumerContext, via: WithdrawnVia, pick: (d: ChannelConsent) => boolean): Promise<Result<void, AppError>> {
-    const page = ctx.tx.repo(consentRepo).query({ where: { owner: options.localPrincipal() }, limit: 500 });
-    if (!page.ok) return page;
-    for (const rec of page.value.items) {
-      if (effective(rec.data, ctx.clock.now()) !== 'granted' || !pick(rec.data)) continue;
-      const done = await withdrawLocal(ctx, rec, via);
-      if (!done.ok) return done;
-    }
+    let cursor: string | undefined;
+    do {
+      // Owner and ID ordering are stable while withdrawal changes status: historical rows
+      // must not hide an active consent beyond the first page.
+      const page = ctx.tx.repo(consentRepo).query({ where: { owner: options.localPrincipal() }, limit: 500, ...(cursor ? { cursor } : {}) });
+      if (!page.ok) return page;
+      for (const rec of page.value.items) {
+        if (effective(rec.data, ctx.clock.now()) !== 'granted' || !pick(rec.data)) continue;
+        const done = await withdrawLocal(ctx, rec, via);
+        if (!done.ok) return done;
+      }
+      cursor = page.value.nextCursor;
+    } while (cursor);
     return ok(undefined);
   }
   const onPrivacyWithdrawn = defineSubscriber({ name: 'notify.channel_privacy_withdrawn', module: MODULE, events: [privacyWithdrawn], deliveryEligible: true,

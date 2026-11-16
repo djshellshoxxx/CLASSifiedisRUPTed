@@ -197,7 +197,6 @@ processes:
     errors:
       - "AUCTIONS_RESULT_NOT_VOIDABLE | 409 | no | result has an acknowledged or final payment, is completed, or is not in a voidable state"
       - "AUCTIONS_REVIEW_DUPLICATE | 409 | no | an open review for this auction and trigger kind already exists"
-      - "AUCTIONS_RESULT_INVALID | 422 | no | void statement signature or host key check failed; quarantined"
     example: |
       shill flag score 90 -> auctions.review.open { "auctionId": "0192f400-0002-…", "trigger": { "kind": "shill_suspected", "ref": "0192f420-0001-…" } }
       -> { "reviewId": "0192f430-0001-…", "status": "opened", "merged": false }

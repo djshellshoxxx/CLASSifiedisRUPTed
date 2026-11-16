@@ -52,7 +52,6 @@
 | FEDERATION_BLOCK_SELF | 422 | no | a peer rule cannot target this relay |
 | FEDERATION_BLOCKLIST_TOO_LARGE | 413 | no | list has more than 10000 entries |
 | FEDERATION_BLOCK_LIMIT | 409 | no | 100000 rules per tenant reached |
-| FED_SIGNATURE_INVALID | 400 | no | blocklist statement signature check failed |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

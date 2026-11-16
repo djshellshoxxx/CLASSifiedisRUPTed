@@ -168,6 +168,10 @@ export function parsePng(b: Uint8Array): Analysis {
   let idat = 0;
   let iend = false;
   let first = true;
+  let colorType = -1;
+  let paletteEntries = 0;
+  let transparency = false;
+  let endedIdat = false;
   while (pos < b.length) {
     const len = rd32be(b, pos);
     if (len > 0x7fffffff) return { ok: false, reason: 'malformed' };
@@ -177,14 +181,33 @@ export function parsePng(b: Uint8Array): Analysis {
     const crc = rd32be(b, pos + 8 + len);
     const chunk = slice(b, pos, pos + 12 + len);
     pos += 12 + len;
+    const isFirst = first;
     if (first) {
       if (type !== 'IHDR' || len !== 13) return { ok: false, reason: 'malformed' };
       first = false;
+      colorType = rd8(data, 9);
+      const depths: Record<number, readonly number[]> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
+      if (!depths[colorType]?.includes(rd8(data, 8)) || rd8(data, 10) !== 0 || rd8(data, 11) !== 0 || rd8(data, 12) > 1) return { ok: false, reason: 'malformed' };
       width = rd32be(data, 0);
       height = rd32be(data, 4);
       const d = checkDims(width, height);
       if (d !== 'ok') return { ok: false, reason: d };
     }
+    // Validate structural chunk boundaries before whitelisting their bytes. A valid CRC
+    // alone cannot make duplicate headers or arbitrary IEND payloads safe containers.
+    if (type === 'IHDR' && !isFirst) return { ok: false, reason: 'malformed' };
+    if (type === 'PLTE') {
+      if (paletteEntries || idat || transparency || colorType === 0 || colorType === 4 || len === 0 || len > 768 || len % 3 !== 0) return { ok: false, reason: 'malformed' };
+      paletteEntries = len / 3;
+    }
+    if (type === 'tRNS') {
+      if (transparency || idat || !(colorType === 0 ? len === 2 : colorType === 2 ? len === 6 : colorType === 3 && paletteEntries > 0 && len > 0 && len <= paletteEntries)) return { ok: false, reason: 'malformed' };
+      transparency = true;
+    }
+    if (type === 'IDAT' && (endedIdat || (colorType === 3 && paletteEntries === 0))) return { ok: false, reason: 'malformed' };
+    if (idat && type !== 'IDAT') endedIdat = true;
+    if (type === 'IEND' && len !== 0) return { ok: false, reason: 'malformed' };
+    if (!PNG_KEEP.has(type) && type[0] === type[0]?.toUpperCase()) return { ok: false, reason: 'malformed' };
     if (type === 'acTL' || type === 'fcTL' || type === 'fdAT') return { ok: false, reason: 'animated' };
     if (PNG_KEEP.has(type)) {
       if (crc32([slice(chunk, 4, 8), data]) !== crc) return { ok: false, reason: 'malformed' };

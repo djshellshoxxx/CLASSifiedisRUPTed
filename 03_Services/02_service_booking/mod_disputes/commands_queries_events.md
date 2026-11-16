@@ -47,7 +47,6 @@
 | SERVICES_DISPUTE_WINDOW_CLOSED | 409 | no | more than 30 days since the booking end, last milestone activity or cancellation |
 | SERVICES_DISPUTE_DUPLICATE | 409 | no | a dispute for this scope already exists |
 | SERVICES_DISPUTE_LIMIT | 409 | no | three disputes already exist for this booking |
-| SERVICES_STATEMENT_INVALID | 422 | no | dispute notice signature or signer role is invalid; quarantined |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

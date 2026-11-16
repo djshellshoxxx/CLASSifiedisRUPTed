@@ -53,7 +53,6 @@
 | AUCTIONS_NOT_OPEN | 409 | no | auction is not open at host time (not started, closed or past its end) |
 | AUCTIONS_BID_TOO_LOW | 409 | no | amount is below the next minimum bid; params.minNextBid gives it |
 | AUCTIONS_MAX_DECREASE | 409 | no | a proxy maximum cannot be lowered |
-| AUCTIONS_BIDDER_NOT_ELIGIBLE | 403 | no | bidder cannot bid on this auction; no reason is disclosed |
 | AUCTIONS_BID_LIMIT | 409 | no | per-bidder or per-auction bid limit reached |
 | AUCTIONS_RETRACT_NOT_ALLOWED | 409 | no | retraction window, count or target rule not satisfied |
 

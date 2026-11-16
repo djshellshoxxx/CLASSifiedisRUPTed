@@ -35,9 +35,7 @@ _None._
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | DISCOVERY_CENTER_TOO_PRECISE | 422 | no | center cell is finer than allowed for this caller |
-| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius is below 5 km, not an allowed value, or below the anonymous minimum |
 | DISCOVERY_CENTER_REQUIRED | 422 | no | no center was supplied and no home cell is stored |
-| DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -60,4 +58,4 @@ relay query: POST /api/v1/query/discovery.proximity.search { "centerCell5": "u4p
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, F06.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F06.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001, F06.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

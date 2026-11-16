@@ -57,12 +57,10 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| SERVICES_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined |
 | SERVICES_SUBMISSION_STALE | 409 | no | statement names a submission cid that is not the latest |
 | SERVICES_CHANGE_LIMIT | 409 | no | three change rounds already used for this milestone |
 | SERVICES_BOOKING_NOT_ACTIVE | 409 | no | booking is not confirmed or in progress, or is disputed or cancelled |
 | SERVICES_MILESTONE_ORDER | 409 | no | an earlier milestone is not yet approved |
-| SERVICES_MILESTONE_SUM_MISMATCH | 422 | no | milestone amounts do not sum to the booking total |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

@@ -25,11 +25,11 @@ export const notificationRepo = defineRepo({ type: 'notify.notification', schema
   status: d => d.status, category: d => d.category, created: d => d.createdAt,
   collapse: d => (d.status === 'unread' && d.collapseKey ? `${d.templateKey}\u0001${d.collapseKey}` : null),
 } });
-const seenRepo = defineRepo({ type: 'notify.notification_seen', schema: z.strictObject({ notificationId: z.string().nullable(), at: timestamp() }), indexes: { at: d => d.at } });
-const dayRepo = defineRepo({ type: 'notify.notification_day', schema: z.strictObject({ count: z.int().min(0) }), indexes: {} });
+export const seenRepo = defineRepo({ type: 'notify.notification_seen', schema: z.strictObject({ notificationId: z.string().nullable(), at: timestamp() }), indexes: { at: d => d.at } });
+export const dayRepo = defineRepo({ type: 'notify.notification_day', schema: z.strictObject({ count: z.int().min(0) }), indexes: {} });
 const diagSchema = z.strictObject({ created: z.int().min(0), collapsed: z.int().min(0), read: z.int().min(0), dropped: z.int().min(0), hidden: z.int().min(0), total: z.int().min(0) });
 type Diagnostics = z.output<typeof diagSchema>;
-const diagRepo = defineRepo({ type: 'notify.notification_diag', schema: diagSchema, indexes: {} });
+export const diagRepo = defineRepo({ type: 'notify.notification_diag', schema: diagSchema, indexes: {} });
 const ZERO: Diagnostics = { created: 0, collapsed: 0, read: 0, dropped: 0, hidden: 0, total: 0 };
 
 export const notificationCreated = defineEvent('notify.notification.created', 1, 'P2', z.strictObject({

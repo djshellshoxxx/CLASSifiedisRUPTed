@@ -409,3 +409,28 @@ it('keeps local and relay withdrawal available after the daily change budget is 
   expect((await pump(e)).every(c => c === 'ok')).toBe(true);
   expect((await dumpOf(e.relay)).find(x => x.id === push.consentId)?.status).toBe('withdrawn');
 });
+
+it.each(['privacy.consent.withdrawn', 'privacy.deletion.requested'] as const)('withdraws active consents beyond 500 historical records for %s', async type => {
+  const e = await setup();
+  const seed = defineCommand({ name: 'test.history.seed', module: 'F99.S01.M01', capability: 'test.history.seed', idempotent: false,
+    input: z.strictObject({}), handler(ctx) {
+      for (let i = 0; i < 501; i++) {
+        const result = ctx.tx.repo(consentRepo).put(ctx.ids.next(), {
+          userDid: e.user.did, relayId: R, channel: 'push', status: 'withdrawn', privacyConsentId: 'pc-1',
+          grantedAtClaim: e.vault.clock.iso(), expiresAt: new Date(ctx.clock.now() + 365 * 86_400_000).toISOString(),
+          statementCid: `historical-${i}`, withdrawnAtClaim: e.vault.clock.iso(), withdrawnVia: 'settings',
+        }, { expectedRevision: 0 });
+        if (!result.ok) return result;
+      }
+      return ok(null);
+    } });
+  e.vault.registry.add(seed);
+  val(await e.vault.cmd('test.history.seed', {}, { actor: e.actor }));
+  const active = val<Out>(await optIn(e));
+  val(await e.vault.cmd('test.privacy.emit', { type, ...(type === 'privacy.consent.withdrawn' ? { consentId: 'pc-1' } : {}) }, { actor: e.actor }));
+  await e.vault.drainOutbox();
+  const record = await e.vault.storage.read(tx => tx.records.get<{ status: string; withdrawnVia: string }>(e.vault.tenantId, consentRepo.type, active.consentId));
+  expect(record?.data.status).toBe('withdrawn');
+  expect(record?.data.withdrawnVia).toBe(type === 'privacy.consent.withdrawn' ? 'privacy_withdrawal' : 'account_deletion');
+  expect((await vaultSync(e)).map(s => (s.envelope['payload'] as { status: string }).status)).toEqual(['granted', 'withdrawn']);
+});

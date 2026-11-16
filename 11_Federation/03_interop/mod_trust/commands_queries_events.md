@@ -56,7 +56,6 @@
 | FEDERATION_PEER_URL_INVALID | 422 | no | base URL is not https on 443, resolves to a non-public address or redirects |
 | FEDERATION_KEY_MISMATCH | 409 | no | peer key differs from the pinned key without a valid rotation statement |
 | FEDERATION_PEER_LIMIT | 409 | no | 200 peers per tenant reached or relay id already present |
-| FED_SIGNATURE_INVALID | 400 | no | peer statement signature check failed |
 | FEDERATION_PEER_NOT_ALLOWED | 403 | no | key id does not resolve to an active peer |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).

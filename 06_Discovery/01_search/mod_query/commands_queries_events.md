@@ -46,8 +46,6 @@
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
 | DISCOVERY_QUERY_INVALID | 422 | no | query text exceeds limits or contains no usable term after sanitization |
-| DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type |
-| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value |
 | DISCOVERY_SAVED_SEARCH_LIMIT | 409 | no | 25 saved searches already exist |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
@@ -71,4 +69,4 @@ vault command: discovery.saved_search.create { "name": "Road bikes", "queryText"
 
 ## Dependencies
 
-Module depends on: F06.S01.M01, F06.S01.M03, F06.S02.M03, F06.S03.M01, F06.S03.M02, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S01.M01, F06.S01.M03, F06.S02.M03, F06.S03.M01, F06.S03.M02, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001, F06.S02.M01. Predecessor: [domain_schema.md](domain_schema.md).

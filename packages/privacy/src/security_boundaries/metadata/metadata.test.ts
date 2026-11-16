@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { concat } from './bytes.ts';
-import { makeJpeg, makePng, makeWebp, residualMarkers, SCAN_DATA } from './test-fixtures.ts';
+import { makeJpeg, makePng, makeWebp, pngChunk, residualMarkers, SCAN_DATA } from './test-fixtures.ts';
 import {
   metadataErrors, orderKey, outboundLinkPolicy, publicTime, rateLimitKey, sanitizeImportedImage, stripImage, truncateIp, userAgentFamily, verifyImageClean,
 } from './index.ts';
@@ -98,6 +98,30 @@ describe('image stripping (corpus of generated files)', () => {
 });
 
 describe('image error handling', () => {
+  it('rejects malformed PNG critical chunks even when their CRCs are valid', async () => {
+    const png = makePng();
+    const signatureAndHeader = png.subarray(0, 33);
+    const header = png.subarray(8, 33);
+    const pixels = png.subarray(33, png.length - 12);
+    const end = png.subarray(-12);
+    const cases = [
+      concat([signatureAndHeader, pixels, pngChunk('IEND', ascii('private address'))]),
+      concat([signatureAndHeader, header, pixels, end]),
+      concat([signatureAndHeader, pixels, header, end]),
+      concat([signatureAndHeader, pngChunk('ABCD', ascii('private address')), pixels, end]),
+      concat([signatureAndHeader, pixels, pngChunk('tEXt', ascii('x')), pixels, end]),
+      concat([signatureAndHeader, pngChunk('PLTE', Uint8Array.of(1, 2)), pixels, end]),
+      concat([signatureAndHeader, pngChunk('tRNS', Uint8Array.of(1)), pixels, end]),
+      concat([signatureAndHeader, pixels, pngChunk('PLTE', Uint8Array.of(1, 2, 3)), end]),
+    ];
+    for (const bytes of cases) {
+      expect(verifyImageClean(bytes).clean).toBe(false);
+      expect(codeOf(await stripImage(bytes))).toBe('PRIVACY_METADATA_IMAGE_UNSUPPORTED');
+    }
+    // Consecutive pixel chunks remain valid; the sanitizer does not need a pixel decoder.
+    expect(verifyImageClean(concat([signatureAndHeader, pixels, pixels, end])).clean).toBe(true);
+  });
+
   it('TEST-PS-080-09.T03 animated WebP, 12 MiB file, truncated file and polyglot give documented outcomes', async () => {
     const animated = await stripImage(makeWebp({ animated: true }));
     expect(codeOf(animated)).toBe('PRIVACY_METADATA_IMAGE_UNSUPPORTED');

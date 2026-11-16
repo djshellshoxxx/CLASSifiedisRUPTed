@@ -46,7 +46,6 @@
 |---|---|---|---|
 | FEDERATION_CONFLICT_INVALID_RESOLUTION | 422 | no | decision does not match the candidates or lacks a verified superseding statement |
 | FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE | 409 | no | commitments need a person or a renegotiated signed statement |
-| FED_SIGNATURE_INVALID | 400 | no | a candidate signature failed verification |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

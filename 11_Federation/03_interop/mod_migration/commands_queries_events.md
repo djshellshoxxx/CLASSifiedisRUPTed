@@ -53,8 +53,6 @@
 | FEDERATION_MOVE_COOLDOWN | 409 | no | the subject moved less than 30 days ago |
 | FEDERATION_MOVE_TARGET_INVALID | 422 | no | target relay is not a confirmed active relay or equals the current relay |
 | FEDERATION_MOVE_VETO_INVALID | 403 | no | veto not signed by another registered device key or outside the veto window |
-| FED_SIGNATURE_INVALID | 400 | no | move statement signature check failed |
-| FEDERATION_KEY_MISMATCH | 409 | no | relay move not signed by the pinned relay key |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

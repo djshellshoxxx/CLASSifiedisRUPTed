@@ -14,7 +14,7 @@ non_responsibilities:
   - Index maintenance (F06.S01.M01), filter compilation (F06.S01.M03), proximity guards (F06.S02.M03), scoring (F06.S03.M01) and diversity (F06.S03.M02).
   - Delivering alerts to the user; notification channels are F13 and local notification only.
   - "Future: relay-side saved-search matching with private set intersection, saved-search sync between the user's devices through an encrypted mailbox."
-depends_on: [F06.S01.M01, F06.S01.M03, F06.S02.M03, F06.S03.M01, F06.S03.M02, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F06.S01.M01, F06.S01.M03, F06.S02.M03, F06.S03.M01, F06.S03.M02, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001, F06.S02.M01]
 user_stories:
   - As a buyer, I type words and quoted phrases and get relevant results, including from my local index while offline.
   - As a buyer, I save a search for a bike under 300 EUR within 10 km and get a local alert when a new matching listing is indexed.
@@ -152,8 +152,6 @@ processes:
       - {type: privacy.deletion.completed, effect: "delete all saved searches on vault erase"}
     errors:
       - "DISCOVERY_QUERY_INVALID | 422 | no | query text exceeds limits or contains no usable term after sanitization"
-      - "DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type"
-      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value"
       - "DISCOVERY_SAVED_SEARCH_LIMIT | 409 | no | 25 saved searches already exist"
     example: |
       vault query: discovery.search.query { "q": "road bike \"56 cm\"", "filters": { "priceMax": { "amount": "30000", "currency": "EUR" } }, "near": { "centerCell5": "u4pru", "radiusKm": 10 }, "source": "both" }

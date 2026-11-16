@@ -54,7 +54,6 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined |
 | RENTALS_DAMAGE_WINDOW | 409 | no | claim or response is outside its allowed window |
 | RENTALS_DAMAGE_NO_BASIS | 422 | no | reports show no worsened or missing item, or the claimed basis differs from the recomputed one |
 | RENTALS_DAMAGE_EXCEEDS_VALUE | 422 | no | total claimed is above the owner's declared value |

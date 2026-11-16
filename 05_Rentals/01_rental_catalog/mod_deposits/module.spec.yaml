@@ -219,7 +219,6 @@ processes:
       - {type: rentals.return.attested, effect: "start the 7 day owner decision clock"}
       - {type: rentals.damage.resolved, effect: "prefill a forfeit claim amount from an accepted or resolved damage claim; the owner still signs the claim"}
     errors:
-      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
       - "RENTALS_DEPOSIT_DUPLICATE | 409 | no | live deposit terms already exist for this reservation"
       - "RENTALS_DEPOSIT_TERMS_STALE | 409 | no | agreement names terms that are not current"
       - "RENTALS_FORFEIT_EXCEEDS_DEPOSIT | 422 | no | forfeit amount is higher than the funded deposit"

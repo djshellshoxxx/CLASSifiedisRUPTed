@@ -35,7 +35,6 @@ _None._
 | DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range, of the wrong type or unknown |
 | DISCOVERY_FILTER_CURRENCY_REQUIRED | 422 | no | price filter without a currency |
 | DISCOVERY_FILTER_CENTER_REQUIRED | 422 | no | distance filter without a search center |
-| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 

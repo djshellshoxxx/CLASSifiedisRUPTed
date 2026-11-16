@@ -190,8 +190,6 @@ processes:
       - {type: rentals.deposit.funded, effect: "keep the deposit pending until it is released or forfeited"}
       - {type: rentals.deposit.released, effect: "mark the deposit settled and re-evaluate closure"}
     errors:
-      - "RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
-      - "RENTALS_REPORT_STALE | 409 | no | attestation names a return report cid that is not the latest"
       - "RENTALS_FEE_ADJUST_INVALID | 422 | no | a late fee can only be lowered or waived"
     example: |
       renter vault: rentals.return.report { "reservationId": "0192f500-0002-…", "checklist": [{ "id": "tent-body", "label": "Tent body", "condition": "ok" }],

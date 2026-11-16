@@ -17,7 +17,7 @@ non_responsibilities:
   - Full-text queries and saved searches (F06.S01.M02) and scoring (F06.S03).
   - Global user suspension or global rate limits; limits are per relay policy (CAP-9) and the vault has none.
   - "Future: per-query differential-privacy noise on result counts, proof-of-work tickets for anonymous callers, cross-relay shared abuse signals."
-depends_on: [F06.S02.M01, F06.S01.M01, F06.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001]
+depends_on: [F06.S02.M01, F06.S01.M01, F06.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001, CTR-FLG-001, F06.S01.M03]
 user_stories:
   - As a buyer, I browse items within 10 km of my area and see '5-10 km' badges, not exact distances.
   - As a buyer on a relay, I can change my browse area a few times per day but not hundreds of times.
@@ -89,9 +89,7 @@ processes:
     note: Query-only module with no events; abuse patterns are reported to the relay's local moderation port as signals, not as catalog events.
     errors:
       - "DISCOVERY_CENTER_TOO_PRECISE | 422 | no | center cell is finer than allowed for this caller"
-      - "DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius is below 5 km, not an allowed value, or below the anonymous minimum"
       - "DISCOVERY_CENTER_REQUIRED | 422 | no | no center was supplied and no home cell is stored"
-      - "DISCOVERY_FILTER_INVALID | 422 | no | a filter value is out of range or of the wrong type"
     example: |
       relay query: POST /api/v1/query/discovery.proximity.search { "centerCell5": "u4pru", "radiusKm": 10, "limit": 20 }
       200 { "items": [{ "documentId": "0192f3b0-…", "title": "Trek road bike 56cm", "distanceBucket": "5_10", "geoCell5": "u4prv" }], "areaChangesRemaining": 4 }

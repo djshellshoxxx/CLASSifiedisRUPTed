@@ -57,12 +57,7 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| FED_SIGNATURE_INVALID | 400 | no | envelope signature or cid check failed (CTR-FED-001 FED-2) |
-| FEDERATION_REQUEST_SIGNATURE_INVALID | 401 | no | relay request signature, digest or date check failed |
-| FEDERATION_PAYLOAD_INVALID | 422 | no | payload has members outside the allowlist or exceeds size limits |
-| FEDERATION_NOT_OPTED_IN | 403 | no | the owner has not enabled federation for this record |
 | FEDERATION_SIGNER_ROLE_INVALID | 422 | no | signer key does not hold the role this statement type requires; statement quarantined |
-| FEDERATION_PEER_NOT_ALLOWED | 403 | no | sender is not an active allowlisted peer relay or registered device key |
 | FEDERATION_BATCH_TOO_LARGE | 413 | no | more than 100 envelopes, body over 4194304 bytes or envelope over 262144 bytes |
 | FEDERATION_QUOTA_EXCEEDED | 429 | yes | peer exceeded its envelope or batch quota; retryAfterMs set |
 | FEDERATION_NOT_ACCEPTED | 422 | no | envelope refused by local policy; reason intentionally generic |

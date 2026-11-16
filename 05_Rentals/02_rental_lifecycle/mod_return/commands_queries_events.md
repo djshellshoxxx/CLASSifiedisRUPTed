@@ -53,8 +53,6 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined |
-| RENTALS_REPORT_STALE | 409 | no | attestation names a return report cid that is not the latest |
 | RENTALS_FEE_ADJUST_INVALID | 422 | no | a late fee can only be lowered or waived |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).

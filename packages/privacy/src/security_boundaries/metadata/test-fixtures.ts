@@ -82,7 +82,7 @@ export function makeJpeg(o: JpegOptions = {}): Uint8Array {
   return concat(parts);
 }
 
-function pngChunk(type: string, data: Uint8Array): Uint8Array {
+export function pngChunk(type: string, data: Uint8Array): Uint8Array {
   const t = ascii(type);
   return concat([be32(data.length), t, data, be32(crc32([t, data]))]);
 }
@@ -105,7 +105,7 @@ export interface PngOptions {
 export function makePng(o: PngOptions = {}): Uint8Array {
   const w = o.width ?? 32;
   const h = o.height ?? 16;
-  const ihdr = concat([be32(w), be32(h), Uint8Array.of(8, 6, 0, 0, 0)]);
+  const ihdr = concat([be32(w), be32(h), Uint8Array.of(8, o.trns ? 2 : 6, 0, 0, 0)]);
   const parts: Uint8Array[] = [Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), pngChunk('IHDR', ihdr)];
   if (o.icc) parts.push(pngChunk('iCCP', concat([ascii('icc\0\0'), new Uint8Array(8)])));
   if (o.text) parts.push(pngChunk('tEXt', ascii('Author\0Jane Example, 12 Main Street')));
@@ -113,7 +113,7 @@ export function makePng(o: PngOptions = {}): Uint8Array {
   if (o.exif) parts.push(pngChunk('eXIf', exifTiff(o.exif)));
   if (o.time) parts.push(pngChunk('tIME', Uint8Array.of(7, 234, 11, 4, 10, 0, 0)));
   if (o.animated) parts.push(pngChunk('acTL', Uint8Array.of(0, 0, 0, 2, 0, 0, 0, 0)));
-  if (o.trns) parts.push(pngChunk('tRNS', Uint8Array.of(1, 2, 3)));
+  if (o.trns) parts.push(pngChunk('tRNS', Uint8Array.of(0, 1, 0, 2, 0, 3)));
   const idat = pngChunk('IDAT', o.idat ?? Uint8Array.of(0x78, 0x9c, 1, 2, 3, 4));
   if (o.badCrc) idat[idat.length - 1] = (idat[idat.length - 1] as number) ^ 0xff;
   parts.push(idat, pngChunk('IEND', new Uint8Array(0)));

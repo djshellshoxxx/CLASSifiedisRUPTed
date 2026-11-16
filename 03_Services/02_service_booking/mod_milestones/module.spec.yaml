@@ -179,12 +179,10 @@ processes:
       - {type: services.dispute.opened, effect: "freeze the milestones in dispute scope"}
       - {type: commerce.dispute.resolved, effect: "leave disputed according to the resolution outcome"}
     errors:
-      - "SERVICES_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined"
       - "SERVICES_SUBMISSION_STALE | 409 | no | statement names a submission cid that is not the latest"
       - "SERVICES_CHANGE_LIMIT | 409 | no | three change rounds already used for this milestone"
       - "SERVICES_BOOKING_NOT_ACTIVE | 409 | no | booking is not confirmed or in progress, or is disputed or cancelled"
       - "SERVICES_MILESTONE_ORDER | 409 | no | an earlier milestone is not yet approved"
-      - "SERVICES_MILESTONE_SUM_MISMATCH | 422 | no | milestone amounts do not sum to the booking total"
     example: |
       provider vault services.milestone.submit { "milestoneId": "0192f3d0-0001-…", "expectedRevision": 1,
         "deliverables": [{ "attachmentId": "0192f3d0-00a1-…", "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "name": "report.pdf" }], "note": "Phase 1 done." }

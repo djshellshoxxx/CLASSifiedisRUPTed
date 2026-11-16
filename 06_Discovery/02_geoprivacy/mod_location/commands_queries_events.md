@@ -49,8 +49,6 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| DISCOVERY_PRECISION_FORBIDDEN | 422 | no | cell finer than L2 offered for storage as public level |
-| DISCOVERY_COORD_INVALID | 422 | no | latitude or longitude is not a finite in-range value |
 | DISCOVERY_HOME_CHANGE_LIMIT | 429 | no | home region was changed 3 times in 24 hours |
 | DISCOVERY_SHARE_TTL_INVALID | 422 | no | share duration is not allowed or exceeds 24 hours |
 | DISCOVERY_SHARE_LIMIT | 409 | no | 5 active outgoing shares exist or one is already active for this recipient and context |

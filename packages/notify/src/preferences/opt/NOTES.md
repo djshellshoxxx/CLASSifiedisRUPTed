@@ -45,3 +45,5 @@ Implemented and self-validated by the implementing agent. **Not independently re
 Reviewed and consolidated with package entry-point exports. The combined privacy and notification suites pass 78 tests; repository typechecking and dependency checks pass. These are module APIs, not a claim of finished PWA, relay scheduling, codec, or backup integration. The limitations and unclaimed test rows above remain open.
 
 Regression fixes: future-dated grants are refused; relay withdrawals must match the stored user and channel; local and relay revocations remain available after the daily change budget is exhausted. Revocations still increment the budget when space remains, but exhaustion only rejects new grants.
+
+The privacy-withdrawal and account-deletion subscribers now paginate across all owner records. A regression seeds 501 historical consents before an active consent and confirms both event paths revoke the later consent and enqueue its signed withdrawal.

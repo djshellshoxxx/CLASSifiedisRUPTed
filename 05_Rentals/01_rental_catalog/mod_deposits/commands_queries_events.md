@@ -58,7 +58,6 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined |
 | RENTALS_DEPOSIT_DUPLICATE | 409 | no | live deposit terms already exist for this reservation |
 | RENTALS_DEPOSIT_TERMS_STALE | 409 | no | agreement names terms that are not current |
 | RENTALS_FORFEIT_EXCEEDS_DEPOSIT | 422 | no | forfeit amount is higher than the funded deposit |

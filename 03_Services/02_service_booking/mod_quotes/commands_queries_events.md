@@ -62,8 +62,6 @@
 | SERVICES_OFFERING_NOT_BOOKABLE | 409 | no | offering is not published, withdrawn, or the provider key differs |
 | SERVICES_QUOTE_NOT_ACCEPTABLE | 409 | no | quote is superseded, withdrawn, expired or the signed cid differs |
 | SERVICES_MILESTONE_SUM_MISMATCH | 422 | no | milestone amounts do not sum exactly to the quote total |
-| SERVICES_SLOT_UNAVAILABLE | 409 | no | the proposed slot is taken, expired or not generated in the provider vault |
-| SERVICES_HOLD_LIMIT | 409 | no | provider vault already has the maximum number of active holds for this client |
 | SERVICES_REQUEST_LIMIT | 409 | no | client already has the maximum number of open requests |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).

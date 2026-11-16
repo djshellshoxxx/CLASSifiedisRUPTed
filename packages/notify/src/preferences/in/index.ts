@@ -34,7 +34,7 @@ export type NotificationPreference = z.output<typeof preferenceSchema>;
 export const preferenceRepo = defineRepo({ type: 'notify.preference', schema: preferenceSchema, indexes: {} });
 const stateRepo = defineRepo({ type: 'notify.pref_state', schema: z.strictObject({ mirrorSeq: z.int().min(0), lastMirrorCid: z.string().optional() }), indexes: {} });
 const channelRepo = defineRepo({ type: 'notify.pref_channel', schema: z.strictObject({ relayIds: z.array(z.string().max(253)).max(32) }), indexes: {} });
-const counterRepo = defineRepo({ type: 'notify.pref_counter', schema: z.strictObject({ count: z.int().min(0) }), indexes: {} });
+export const counterRepo = defineRepo({ type: 'notify.pref_counter', schema: z.strictObject({ count: z.int().min(0) }), indexes: {} });
 const mirrorSchema = z.strictObject({ userDid: z.string(), seq: z.int().min(1), cid: z.string(), cells: z.array(z.strictObject({ category: z.enum(CATEGORIES), push: z.boolean(), email: z.boolean() })).length(7), receiptAt: timestamp() });
 export const mirrorRepo = defineRepo({ type: 'notify.pref_mirror', schema: mirrorSchema, indexes: {} });
 

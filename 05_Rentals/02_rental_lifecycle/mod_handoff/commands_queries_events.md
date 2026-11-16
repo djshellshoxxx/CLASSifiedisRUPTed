@@ -48,7 +48,6 @@
 
 | Code | HTTP | Retryable | Meaning |
 |---|---|---|---|
-| RENTALS_STATEMENT_INVALID | 422 | no | signature, signer role or referenced cid check failed; statement quarantined |
 | RENTALS_HANDOFF_WINDOW | 409 | no | outside 2 hours before to 24 hours after the reservation start |
 | RENTALS_REPORT_STALE | 409 | no | statement names a report cid that is not the latest or comes from the author |
 | RENTALS_CHANGE_LIMIT | 409 | no | five change rounds already used |

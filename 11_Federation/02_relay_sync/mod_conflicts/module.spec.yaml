@@ -150,7 +150,6 @@ processes:
     errors:
       - "FEDERATION_CONFLICT_INVALID_RESOLUTION | 422 | no | decision does not match the candidates or lacks a verified superseding statement"
       - "FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE | 409 | no | commitments need a person or a renegotiated signed statement"
-      - "FED_SIGNATURE_INVALID | 400 | no | a candidate signature failed verification"
     example: |
       federation.conflict.detect { kind: "fork_seq", author: "did:key:z6Mk...", seq: 7, statementClass: "public_projection", candidates: [env1, env2] }
       -> { conflictId: "0192f3b0-...", status: "open", freezeScope: [] }   emits federation.conflict.detected

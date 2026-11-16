@@ -64,7 +64,7 @@ describe('kernel spec consistency', () => {
       .filter((rel) => /from ['"]node:|import\(['"]node:/.test(readFileSync(join(SRC, rel), 'utf8')));
     expect(offenders).toEqual([]);
     const pkg = JSON.parse(readFileSync(join(SRC, '..', 'package.json'), 'utf8')) as { exports: Record<string, string> };
-    expect(pkg.exports).toEqual({ '.': './src/index.ts', './node': './src/node.ts', './browser': './src/browser.ts', './testing': './src/testing/index.ts' });
+    expect(pkg.exports).toEqual({ '.': './src/index.ts', './node': './src/node.ts', './browser': './src/browser.ts', './testing': './src/testing/index.ts', './errors': './src/errors/index.ts' });
   });
 
   it('TEST-PS-119-09.T16 inbox and sync-outbox machines equal the PS-119-03 transition tables', () => {
